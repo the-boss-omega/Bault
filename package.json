@@ -1,0 +1,32 @@
+{
+  "name": "bault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bault — collectibles vaulting & marketplace platform (modular monolith monorepo)",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @bault/api dev",
+    "dev:worker": "pnpm --filter @bault/worker dev",
+    "dev:web": "pnpm --filter @bault/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:integration": "vitest run --project integration",
+    "test:concurrency": "vitest run --project concurrency",
+    "test:property": "vitest run --project property",
+    "test:contract": "vitest run --project contract"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

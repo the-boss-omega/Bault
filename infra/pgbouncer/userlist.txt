@@ -1,0 +1,4 @@
+; PgBouncer auth file (placeholder). Format: "username" "password-or-scram-hash".
+; Real credentials are provisioned by hand / secret management, never committed.
+; The docker-compose service authenticates via env vars instead of this file.
+"bault" "bault"

@@ -1,0 +1,71 @@
+name: CI
+
+# Runs on every push and pull request. Gates: lint, typecheck, and the four
+# mandated test suites. A real PostgreSQL service is provided because integration,
+# concurrency, and property suites exercise actual DB transactions and locks.
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bault
+          POSTGRES_PASSWORD: bault
+          POSTGRES_DB: bault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bault -d bault"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # CI talks straight to Postgres (no PgBouncer needed for tests).
+      DATABASE_URL: postgres://bault:bault@localhost:5432/bault
+      DIRECT_DATABASE_URL: postgres://bault:bault@localhost:5432/bault
+      SESSION_COOKIE_SECRET: ci-test-secret-value-1234567890
+      STORAGE_ENDPOINT: http://localhost:9000
+      STORAGE_REGION: eu-central
+      STORAGE_BUCKET: bault-images
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Test suites run separately so a failure names the exact invariant that broke.
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Concurrency tests (no double-sale / single owner)
+        run: pnpm test:concurrency
+
+      - name: Property tests (balance == sum ledger)
+        run: pnpm test:property
+
+      - name: Contract tests (payment & shipping adapters)
+        run: pnpm test:contract

@@ -1,0 +1,54 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { DRIZZLE } from '../../db/db.module';
+import type { Database } from '../../db/client';
+import { generateToken, hashToken } from '../../shared/tokens';
+import { loginSession, userAccount } from './acc.schema';
+import type { AuthUser } from '../sec/auth-context';
+
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Session lifecycle (T031). Sessions are opaque tokens; only their hash is stored
+ * (Principle IX). `create` mints a session for a user; `resolve` turns a raw
+ * cookie value into an AuthUser (used by SessionAuthGuard); `revoke` signs out.
+ */
+@Injectable()
+export class SessionService {
+  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+
+  async create(userId: string): Promise<{ rawToken: string; expiresAt: Date }> {
+    const rawToken = generateToken();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    await this.db
+      .insert(loginSession)
+      .values({ userId, tokenHash: hashToken(rawToken), expiresAt });
+    return { rawToken, expiresAt };
+  }
+
+  /** Validate a raw session token → AuthUser, or null if invalid/expired/revoked. */
+  async resolve(rawToken: string): Promise<AuthUser | null> {
+    const [row] = await this.db
+      .select({
+        userId: loginSession.userId,
+        expiresAt: loginSession.expiresAt,
+        revokedAt: loginSession.revokedAt,
+        role: userAccount.role,
+        status: userAccount.status,
+      })
+      .from(loginSession)
+      .innerJoin(userAccount, sql`${userAccount.id}::text = ${loginSession.userId}`)
+      .where(and(eq(loginSession.tokenHash, hashToken(rawToken)), isNull(loginSession.revokedAt)))
+      .limit(1);
+
+    if (!row || row.expiresAt.getTime() < Date.now()) return null;
+    return { id: row.userId, role: row.role, status: row.status };
+  }
+
+  async revoke(rawToken: string): Promise<void> {
+    await this.db
+      .update(loginSession)
+      .set({ revokedAt: new Date() })
+      .where(eq(loginSession.tokenHash, hashToken(rawToken)));
+  }
+}

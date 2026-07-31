@@ -1,0 +1,57 @@
+# Local development dependencies (T006).
+# Brings up the single source of truth (PostgreSQL) behind PgBouncer, plus
+# S3-compatible object storage (MinIO) for item images.
+#
+#   docker compose -f infra/docker-compose.yml up -d
+#
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bault
+      POSTGRES_PASSWORD: bault
+      POSTGRES_DB: bault
+    command:
+      # WAL settings that enable point-in-time recovery later (T132). Safe defaults for dev.
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+    ports:
+      - "5432:5432" # direct connection: migrations (drizzle-kit) + pg-boss worker
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bault -d bault"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DATABASE_URL: "postgres://bault:bault@postgres:5432/bault"
+      POOL_MODE: transaction # required by the modular monolith's short transactions
+      MAX_CLIENT_CONN: "500"
+      DEFAULT_POOL_SIZE: "20"
+      AUTH_TYPE: scram-sha-256
+    ports:
+      - "6432:5432" # pooled connection: host 6432 -> PgBouncer listener inside container
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  miniodata:

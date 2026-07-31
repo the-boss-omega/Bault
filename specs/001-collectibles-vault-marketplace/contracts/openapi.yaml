@@ -1,0 +1,485 @@
+openapi: 3.1.0
+info:
+  title: Collectibles Vaulting & Marketplace Platform API
+  version: 0.1.0
+  description: >
+    REST contract for the modular-monolith backend (12 modules: ACC, INV, CST, VLT, MKT, PAY,
+    PRC, SHP, DIS, ADM, NOT, SEC). Representative endpoints per module; the exhaustive per-process
+    list is generated from NestJS decorators. Money is always integer minor units + currency.
+    See README.md for auth, RBAC/field-level PII, idempotency, concurrency, and confirmation rules.
+servers:
+  - url: /api/v1
+
+tags:
+  - name: ACC
+  - name: INV
+  - name: CST
+  - name: VLT
+  - name: MKT
+  - name: PAY
+  - name: PRC
+  - name: SHP
+  - name: DIS
+  - name: ADM
+  - name: NOT
+  - name: SEC
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string }
+      description: Required on payment-affecting and trade endpoints. Replays return the original result.
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 50, maximum: 200 }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: integer, description: minor units }
+        currency: { type: string, description: ISO 4217 }
+    Item:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        serial_number: { type: string }
+        barcode: { type: string }
+        type_class: { type: string }
+        description: { type: string }
+        condition_grade: { type: string }
+        lifecycle_state:
+          type: string
+          enum: [received, stored, listed, on-hold, sold, shipped, donated, consigned]
+        bin_id: { type: string, format: uuid, nullable: true }
+        hold_flag: { type: boolean }
+    Listing:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        item_id: { type: string, format: uuid }
+        seller_id: { type: string, format: uuid }
+        asking_price: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [active, sold, removed] }
+    Offer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        listing_id: { type: string, format: uuid }
+        buyer_id: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [pending, accepted, rejected, countered] }
+        parent_offer_id: { type: string, format: uuid, nullable: true }
+    Transaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [sale, swap, transfer, consignment] }
+        item_ids: { type: array, items: { type: string, format: uuid } }
+        buyer_id: { type: string, format: uuid, nullable: true }
+        seller_id: { type: string, format: uuid, nullable: true }
+        price: { $ref: '#/components/schemas/Money' }
+        fee: { $ref: '#/components/schemas/Money' }
+        executed_at: { type: string, format: date-time }
+    LedgerRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [purchase, sale_credit, fee, service_charge, credit_topup, withdrawal, interest]
+        amount: { $ref: '#/components/schemas/Money' }
+        direction: { type: string, enum: [debit, credit] }
+        occurred_at: { type: string, format: date-time }
+    ConfirmationChallenge:
+      type: object
+      properties:
+        confirmation_token: { type: string }
+        expires_at: { type: string, format: date-time }
+  responses:
+    Conflict:
+      description: Concurrency or state conflict (e.g., item no longer available, on hold)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Not permitted (role, self-dealing, suspended account)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+security:
+  - sessionCookie: []
+
+paths:
+  # ---------------- ACC ----------------
+  /auth/register:
+    post:
+      tags: [ACC]
+      security: []
+      summary: Register a new account (pending-verification, assigns unique intake ID)
+      responses: { '201': { description: Created; verification email sent } }
+  /auth/verify-email:
+    post:
+      tags: [ACC]
+      security: []
+      summary: Consume a single-use, time-limited verification token to activate the account
+      responses:
+        '200': { description: Account activated }
+        '410': { description: Token expired or consumed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/login:
+    post:
+      tags: [ACC]
+      security: []
+      summary: Sign in; issues httpOnly session cookie
+      responses:
+        '200': { description: Session established }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /auth/logout:
+    post: { tags: [ACC], summary: Revoke the current session, responses: { '204': { description: Signed out } } }
+  /auth/password/reset-request:
+    post: { tags: [ACC], security: [], summary: Email a one-time password-reset link, responses: { '202': { description: Sent if account exists } } }
+  /auth/password/reset:
+    post: { tags: [ACC], security: [], summary: Set a new password using a single-use token, responses: { '200': { description: Password changed } } }
+  /auth/password/change:
+    post: { tags: [ACC], summary: Change password (current + new), effective immediately, responses: { '200': { description: Changed } } }
+  /me/profile:
+    get: { tags: [ACC], summary: Get own profile, responses: { '200': { description: Profile } } }
+    patch: { tags: [ACC], summary: Update own profile details, responses: { '200': { description: Updated } } }
+
+  # ---------------- INV ----------------
+  /intake/packages:
+    post:
+      tags: [INV]
+      summary: Receive an inbound package routed by intake ID; opens a batch if batch-type
+      responses: { '201': { description: Package received } }
+  /intake/items:
+    post:
+      tags: [INV]
+      summary: Create an item record (type, description, condition, photo, serial, barcode); assign owner + bin; first custody event; auto intake charge
+      responses: { '201': { description: Item created, content: { application/json: { schema: { $ref: '#/components/schemas/Item' } } } } }
+  /intake/items/{itemId}:
+    patch:
+      tags: [INV]
+      summary: Correct item fields (full field-level change history preserved)
+      parameters: [{ name: itemId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Corrected } }
+  /intake/batches/{batchId}/split:
+    post:
+      tags: [INV]
+      summary: Split a batch into individually tracked items (custody event per item)
+      parameters: [{ name: batchId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '201': { description: Items created } }
+
+  # ---------------- CST ----------------
+  /custody/items/{itemId}/relocate:
+    post:
+      tags: [CST]
+      summary: Move item to a bin by scan-item/scan-shelf; logs custody event
+      parameters: [{ name: itemId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Relocated } }
+  /custody/items/{itemId}/hold:
+    post: { tags: [CST], summary: Place a hold (blocks trading/shipping), responses: { '200': { description: Hold placed } } }
+    delete: { tags: [CST], summary: Release a hold, responses: { '200': { description: Hold released } } }
+  /custody/items/{itemId}/history:
+    get:
+      tags: [CST]
+      summary: Item custody + field-change history
+      parameters: [{ name: itemId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: History } }
+  /custody/reconcile:
+    post: { tags: [CST], summary: Inventory reconciliation run, responses: { '200': { description: Reconciliation result } } }
+
+  # ---------------- VLT ----------------
+  /vault/items:
+    get:
+      tags: [VLT]
+      summary: List items currently owned by the caller (portfolio search/filter)
+      parameters:
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: filter[type], in: query, schema: { type: string } }
+        - { name: filter[condition], in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: free-text search }
+      responses: { '200': { description: Owned items } }
+  /vault/items/{itemId}:
+    get:
+      tags: [VLT]
+      summary: Full item card (details, images, condition, history)
+      parameters: [{ name: itemId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Item card, content: { application/json: { schema: { $ref: '#/components/schemas/Item' } } } } }
+
+  # ---------------- MKT ----------------
+  /marketplace/listings:
+    get:
+      tags: [MKT]
+      security: []
+      summary: Browse/search/filter active listings
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: Listings } }
+    post:
+      tags: [MKT]
+      summary: List a stored, unheld item at an asking price
+      responses:
+        '201': { description: Listing created, content: { application/json: { schema: { $ref: '#/components/schemas/Listing' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /marketplace/listings/{listingId}:
+    get:
+      tags: [MKT]
+      security: []
+      summary: Listing detail (images, condition, price)
+      parameters: [{ name: listingId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Listing, content: { application/json: { schema: { $ref: '#/components/schemas/Listing' } } } } }
+    patch:
+      tags: [MKT]
+      summary: Reprice an active listing
+      parameters: [{ name: listingId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Repriced } }
+  /marketplace/listings/{listingId}/remove:
+    post:
+      tags: [MKT]
+      summary: Remove a listing (irreversible — returns a confirmation challenge)
+      parameters: [{ name: listingId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Confirmation required, content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmationChallenge' } } } } }
+  /marketplace/listings/{listingId}/remove/confirm:
+    post: { tags: [MKT], summary: Confirm listing removal, parameters: [{ name: listingId, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Removed } } }
+  /marketplace/listings/{listingId}/purchase:
+    post:
+      tags: [MKT]
+      summary: Atomic direct purchase (lock item+listing, charge buyer, credit seller net fee, transfer ownership, irreversible record). Blocks self-purchase.
+      parameters:
+        - { name: listingId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '201': { description: Purchased, content: { application/json: { schema: { $ref: '#/components/schemas/Transaction' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /marketplace/listings/{listingId}/offers:
+    post:
+      tags: [MKT]
+      summary: Submit an offer (never on own listing); notifies seller
+      parameters: [{ name: listingId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '201': { description: Offer created, content: { application/json: { schema: { $ref: '#/components/schemas/Offer' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /marketplace/offers/{offerId}/respond:
+    post:
+      tags: [MKT]
+      summary: Seller accepts (→ purchase at offer price), rejects, or counters; buyer emailed
+      parameters:
+        - { name: offerId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses: { '200': { description: Offer updated } }
+  /marketplace/swaps:
+    post: { tags: [MKT], summary: Propose a swap (offered/requested item sets), responses: { '201': { description: Swap proposed } } }
+  /marketplace/swaps/{swapId}/approve:
+    post:
+      tags: [MKT]
+      summary: Approve a swap; executes only on dual consent (mutual ownership transfer, irreversible)
+      parameters:
+        - { name: swapId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses: { '200': { description: Approved or executed } }
+  /marketplace/transfers:
+    post:
+      tags: [MKT]
+      summary: Gift transfer to another user (no consideration); requires recipient approval + confirmation
+      responses: { '200': { description: Confirmation required, content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmationChallenge' } } } } }
+  /marketplace/transfers/{transferId}/approve:
+    post:
+      tags: [MKT]
+      summary: Recipient approves the gift transfer; records ownership change
+      parameters:
+        - { name: transferId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses: { '200': { description: Transferred } }
+
+  # ---------------- PAY ----------------
+  /finance/wallet:
+    get:
+      tags: [PAY]
+      summary: Wallet balance (derived = sum of ledger records)
+      responses: { '200': { description: Balance, content: { application/json: { schema: { $ref: '#/components/schemas/Money' } } } } }
+  /finance/wallet/topups:
+    post:
+      tags: [PAY]
+      summary: Load credits via external payment provider (token only); ledger record on settle
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '201': { description: Top-up initiated } }
+  /finance/ledger:
+    get:
+      tags: [PAY]
+      summary: Auditable ledger for the caller
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: Ledger, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LedgerRecord' } } } } } }
+  /finance/charges:
+    get: { tags: [PAY], summary: List auto-generated charges for the caller, responses: { '200': { description: Charges } } }
+  /finance/withdrawals:
+    post:
+      tags: [PAY]
+      summary: Request withdrawal to external account (irreversible — returns confirmation challenge)
+      responses: { '200': { description: Confirmation required, content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmationChallenge' } } } } }
+  /finance/withdrawals/{withdrawalId}/confirm:
+    post:
+      tags: [PAY]
+      summary: Confirm and execute withdrawal; writes withdrawal ledger record
+      parameters:
+        - { name: withdrawalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200': { description: Withdrawal executed }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ---------------- PRC ----------------
+  /pricing/rules:
+    get: { tags: [PRC], summary: List pricing rules, responses: { '200': { description: Rules } } }
+    post:
+      tags: [PRC]
+      summary: Create an effective-dated pricing rule (admin; full attribution)
+      responses: { '201': { description: Created }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /pricing/rules/{ruleId}:
+    patch:
+      tags: [PRC]
+      summary: Supersede/update a pricing rule (admin; recorded with effective date + admin identity)
+      parameters: [{ name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Updated } }
+
+  # ---------------- SHP ----------------
+  /shipping/shipments:
+    post:
+      tags: [SHP]
+      summary: Create an outbound shipment for one or more items and a destination
+      responses: { '201': { description: Shipment created } }
+  /shipping/shipments/{shipmentId}/rates:
+    get:
+      tags: [SHP]
+      summary: Carrier rates & service levels via external provider (rush flag optional)
+      parameters: [{ name: shipmentId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Rates } }
+  /shipping/shipments/{shipmentId}/select-rate:
+    post: { tags: [SHP], summary: Select carrier/service (user or operator); auto shipping charge, parameters: [{ name: shipmentId, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Selected } } }
+  /shipping/shipments/{shipmentId}/dispatch:
+    post:
+      tags: [SHP]
+      summary: Operator scan-verified pack/label/dispatch; items → shipped with custody events; records tracking number
+      parameters: [{ name: shipmentId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Dispatched }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /shipping/shipments/{shipmentId}:
+    get:
+      tags: [SHP]
+      summary: Track shipment status and tracking number
+      parameters: [{ name: shipmentId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Shipment status } }
+
+  # ---------------- DIS ----------------
+  /services/requests:
+    post:
+      tags: [DIS]
+      summary: Create a service request (photography, grading, donation, consignment, warehouse-transfer, batch-split); billable
+      responses: { '201': { description: Request created } }
+  /services/requests/{requestId}:
+    get: { tags: [DIS], summary: Service request status (incl. grading/consignment workflow), parameters: [{ name: requestId, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Status } } }
+    patch:
+      tags: [DIS]
+      summary: Operator updates service status / attaches result (e.g., received grade, external sale outcome)
+      parameters: [{ name: requestId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Updated }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /services/requests/{requestId}/confirm:
+    post:
+      tags: [DIS]
+      summary: Confirm an irreversible service (e.g., donation) before execution
+      parameters: [{ name: requestId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Confirmed and executed } }
+
+  # ---------------- ADM ----------------
+  /admin/users:
+    get: { tags: [ADM], summary: List/search users (admin), responses: { '200': { description: Users }, '403': { $ref: '#/components/responses/Forbidden' } } }
+  /admin/users/{userId}:
+    patch:
+      tags: [ADM]
+      summary: Change role / set status (suspend, reactivate, close)
+      parameters: [{ name: userId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Updated } }
+  /admin/users/{userId}/support-view:
+    get:
+      tags: [ADM]
+      summary: Support view into a user's items and transactions
+      parameters: [{ name: userId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Support data } }
+  /admin/disputes:
+    post: { tags: [ADM], summary: Open a dispute on a contested transaction, responses: { '201': { description: Opened } } }
+  /admin/disputes/{disputeId}:
+    patch:
+      tags: [ADM]
+      summary: Investigate / rule / document a dispute
+      parameters: [{ name: disputeId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Updated } }
+  /admin/banners:
+    get: { tags: [ADM], summary: List dashboard banners, responses: { '200': { description: Banners } } }
+    post: { tags: [ADM], summary: Create a banner, responses: { '201': { description: Created } } }
+  /admin/banners/{bannerId}:
+    patch: { tags: [ADM], summary: Update a banner, parameters: [{ name: bannerId, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+    delete: { tags: [ADM], summary: Remove a banner, parameters: [{ name: bannerId, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '204': { description: Removed } } }
+  /admin/storage-fee-runs:
+    post:
+      tags: [ADM]
+      summary: Trigger a bulk storage-fee run (auto charges per pricing table; records run metadata + charged accounts)
+      responses: { '202': { description: Run enqueued } }
+  /admin/inventory-reports:
+    post:
+      tags: [ADM]
+      summary: Generate an inventory report (cut by shelf/owner/condition/item class)
+      responses: { '201': { description: Report generated } }
+
+  # ---------------- NOT ----------------
+  /notifications:
+    get:
+      tags: [NOT]
+      summary: List the caller's notifications (in-app)
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: Notifications } }
+  /notifications/preferences:
+    get: { tags: [NOT], summary: Get per-event-type notification preferences, responses: { '200': { description: Preferences } } }
+    put: { tags: [NOT], summary: Update notification preferences, responses: { '200': { description: Updated } } }
+
+  # ---------------- SEC ----------------
+  /audit/records:
+    get:
+      tags: [SEC]
+      summary: Query the immutable audit log (admin); actor/action/target/timestamp
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses: { '200': { description: Audit records }, '403': { $ref: '#/components/responses/Forbidden' } }
+
+  # ---------------- Webhooks (provider → platform) ----------------
+  /webhooks/payment:
+    post:
+      tags: [PAY]
+      security: []
+      summary: Signed, idempotent payment-provider events (top-up settled, payout paid, charge failed)
+      responses: { '204': { description: Processed } }
+  /webhooks/shipping:
+    post:
+      tags: [SHP]
+      security: []
+      summary: Carrier tracking updates (optional; worker polling also refreshes)
+      responses: { '204': { description: Processed } }

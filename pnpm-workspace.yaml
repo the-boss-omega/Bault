@@ -1,0 +1,6 @@
+# Declares which folders pnpm treats as workspace packages.
+# Every app and package below is installed together and can depend on one another
+# by name (e.g. "@bault/config") instead of by relative path.
+packages:
+  - "apps/*"
+  - "packages/*"

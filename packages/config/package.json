@@ -1,0 +1,20 @@
+{
+  "name": "@bault/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared environment/secret loading and validation for all Bault apps.",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
