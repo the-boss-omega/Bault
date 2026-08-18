@@ -7,9 +7,11 @@ export const JobName = {
   OUTBOX_DISPATCH: 'outbox.dispatch', // T128
   STORAGE_FEE_RUN: 'storage-fee.run', // T120
   INTEREST_ACCRUAL: 'interest.accrual', // T069
+  WALLET_SUSPENSION: 'wallet.suspension-sweep', // debt threshold → suspend / reinstate
   TRACKING_REFRESH: 'shipment.tracking-refresh', // T107
   LEDGER_INVARIANT_CHECK: 'ledger.invariant-check', // T070
   IMAGE_SYNC: 'image.sync', // T133
+  SHIPMENT_EXPIRY: 'shipment.expiry-sweep', // unpaid shipments release their items
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];

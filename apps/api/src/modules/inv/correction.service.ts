@@ -4,6 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { item, itemChangeHistory } from '../cst/cst.schema';
+import { isKnownItemClass } from './item-classes';
 
 /** Fields an operator may correct. Owner/lifecycle/bin changes go through CST. */
 const CORRECTABLE = new Set(['description', 'conditionGrade', 'typeClass']);
@@ -29,6 +30,13 @@ export class CorrectionService {
       for (const patch of patches) {
         if (!CORRECTABLE.has(patch.field)) {
           throw AppError.validation(`Field not correctable: ${patch.field}`);
+        }
+        // Intake enforces the taxonomy, so correction has to as well — otherwise
+        // the vocabulary has a hole and an item can be edited back into free
+        // text after being received under a known class. This is also the path
+        // by which a pre-taxonomy item gets a real class.
+        if (patch.field === 'typeClass' && !isKnownItemClass(patch.value)) {
+          throw AppError.validation(`Unknown item class "${patch.value}"`);
         }
         const oldValue = (current as Record<string, unknown>)[patch.field];
         await tx

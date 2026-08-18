@@ -1,0 +1,193 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "ex8-102",
+    "name": "Rayquaza ex",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "102",
+    "printed_number_format": "102/107",
+    "set_id": "ex8",
+    "set_name": "EX Deoxys",
+    "dataset_set_name": "Deoxys",
+    "series": "EX",
+    "release_date": "2005/02/01",
+    "release_year": 2005,
+    "ptcgo_set_code": "DX",
+    "printed_set_size": 107,
+    "database_set_total_including_secrets_or_subsets": 108
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "Basic",
+      "ex"
+    ],
+    "level": null,
+    "rarity_as_listed_by_dataset": "Rare Holo EX",
+    "collector_variant": "Pokémon-ex ultra rare",
+    "finish_description": "Holofoil Pokémon-ex",
+    "era": "EX era"
+  },
+  "gameplay": {
+    "hp": "100",
+    "types": [
+      "Colorless"
+    ],
+    "evolves_from": null,
+    "evolves_to": [],
+    "abilities": [
+      {
+        "name": "Dragon Boost",
+        "text": "Once during your turn, when you put Rayquaza ex from your hand onto your Bench, you may move any number of basic Energy cards attached to your Pokémon to Rayquaza ex.",
+        "type": "Poké-Power"
+      }
+    ],
+    "ancient_trait": null,
+    "attacks": [
+      {
+        "name": "Spiral Blast",
+        "cost": [
+          "Fire",
+          "Lightning"
+        ],
+        "convertedEnergyCost": 2,
+        "damage": "20×",
+        "text": "Does 20 damage for each basic Energy card attached to Rayquaza ex."
+      }
+    ],
+    "weaknesses": [
+      {
+        "type": "Colorless",
+        "value": "×2"
+      }
+    ],
+    "resistances": [
+      {
+        "type": "Water",
+        "value": "-30"
+      },
+      {
+        "type": "Fighting",
+        "value": "-30"
+      }
+    ],
+    "retreat_cost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "converted_retreat_cost": 2,
+    "rules": [
+      "When Pokémon-ex has been Knocked Out, your opponent takes 2 Prize cards."
+    ],
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "regulation_mark": null,
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "Shin-ichi Yoshikawa",
+    "reference_image_file": "image/ex8_102_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/ex8/102_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/ex8/102.png",
+    "pixel_dimensions": {
+      "width": 600,
+      "height": 825
+    },
+    "file_format": "PNG",
+    "sha256": "48032c2722a8ef231e2cae714542fccf062f3ea3230ea40ac35f3d9387ee24b9",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "ex8",
+    "name": "Deoxys",
+    "display_name": "EX Deoxys",
+    "series": "EX",
+    "printedTotal": 107,
+    "total": 108,
+    "ptcgoCode": "DX",
+    "releaseDate": "2005/02/01",
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/ex8/symbol.png",
+    "logo": "https://images.pokemontcg.io/ex8/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2005 POKEMON EX DEOXYS RAYQUAZA EX #102",
+    "inspection_priorities": [
+      "Holo scratches",
+      "Foil silvering",
+      "Edge whitening",
+      "Small surface indentations",
+      "Print lines",
+      "Authenticity of font, texture, and card stock"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "The Rayquaza ex from EX Deoxys, the same set that contains the iconic Rayquaza Gold Star.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.pricecharting.com/game/pokemon-deoxys/rayquaza-ex-102"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/ex8.json",
+      "record_id": "ex8-102"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "ex8"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/ex8/102_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.pricecharting.com/game/pokemon-deoxys/rayquaza-ex-102"
+    }
+  ]
+}

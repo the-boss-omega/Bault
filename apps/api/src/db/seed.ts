@@ -1,9 +1,17 @@
 import * as argon2 from 'argon2';
+import { eq } from 'drizzle-orm';
 import { createDb } from './client';
 import { userAccount } from '../modules/acc/acc.schema';
 import { item, bin, itemImage, custodyEvent, itemChangeHistory, binTransfer, batch } from '../modules/cst/cst.schema';
 import { listing, transaction, offer, swapProposal } from '../modules/mkt/mkt.schema';
-import { ledgerRecord, externalPayment, charge, withdrawal } from '../modules/pay/pay.schema';
+import {
+  ledgerRecord,
+  externalPayment,
+  charge,
+  withdrawal,
+  walletRequest,
+  walletRequestEvent,
+} from '../modules/pay/pay.schema';
 import { pricingRule } from '../modules/prc/prc.schema';
 import { serviceRequest } from '../modules/dis/dis.schema';
 import { shipment } from '../modules/shp/shp.schema';
@@ -12,6 +20,8 @@ import { auditRecord } from '../modules/sec/audit.schema';
 import { outboxMessage } from '../modules/not/outbox/outbox.schema';
 import { notification, notificationPreference } from '../modules/not/notification.schema';
 import { shippingAddress } from '../modules/acc/address.schema';
+import { facility } from '../modules/inv/facility.schema';
+import { consignmentEvent } from '../modules/dis/consignment-event.schema';
 import { ID_PREFIX, prefixedId } from '../shared/ids';
 
 /**
@@ -59,10 +69,15 @@ async function main(): Promise<void> {
     item, bin, item_image, custody_event, item_change_history, bin_transfer, batch,
     listing, "transaction", offer, swap_proposal,
     ledger_record, external_payment, charge, withdrawal,
+    wallet_request, wallet_request_event,
     pricing_rule, service_request, shipment,
     outbox_message, audit_record, idempotency_key, confirmation_token,
     notification, notification_preference, dispute,
-    storage_fee_run, shipping_address
+    storage_fee_run, shipping_address,
+    facility, parcel, parcel_event, arrival_disposal,
+    support_ticket, support_message,
+    consignment_event, grading_submission, shipment_group,
+    escrow_deal, escrow_event
     RESTART IDENTITY`);
 
   // -------------------------------------------------------------------------
@@ -71,11 +86,23 @@ async function main(): Promise<void> {
   //    collectors Red & Golden (user), plus the platform custodian (system).
   //    `username` is set HERE and never again — it is immutable (Requirement 4.1).
   // -------------------------------------------------------------------------
+  /**
+   * `username` is the customer-facing identifier and is set HERE and never again
+   * — the DB trigger from 0004 rejects any later UPDATE of the column.
+   *
+   * No `intakeId` is minted. The OW- code is retired: new accounts do not get
+   * one, and nothing in the product asks for one. Exactly one seeded account
+   * (`legacy`, below) carries an intake ID, so the pre-printed-label fallback in
+   * `IntakeService.resolveOwner` has something real to exercise.
+   */
   const mkUser = async (
     email: string,
     username: string,
     role: 'user' | 'warehouse_operator' | 'admin',
-    displayName: string,
+    firstName: string,
+    /** Null only for a flagged legacy row whose boundary was never resolved. */
+    lastName: string | null,
+    legacy?: { intakeId?: string; nameReviewRequired?: boolean; legacyDisplayName?: string },
   ) =>
     one(
       await db
@@ -85,26 +112,47 @@ async function main(): Promise<void> {
           username,
           passwordHash: pw,
           status: 'active',
-          // Owner ID for the intake context: OW- + random (Requirement 9.1).
-          intakeId: prefixedId(ID_PREFIX.owner, 6),
           role,
-          displayName,
+          // Two explicit name parts — there is no display-name column to seed.
+          firstName,
+          lastName,
+          intakeId: legacy?.intakeId ?? null,
+          nameReviewRequired: legacy?.nameReviewRequired ?? false,
+          legacyDisplayName: legacy?.legacyDisplayName ?? null,
         })
-        .returning({ id: userAccount.id, intakeId: userAccount.intakeId }),
+        .returning({ id: userAccount.id, username: userAccount.username }),
     );
 
-  const eldarAcc = await mkUser('eldar@bault.dev', 'eldar', 'admin', 'Eldar');
-  const hermonAcc = await mkUser('hermon@bault.dev', 'hermon', 'warehouse_operator', 'Hermon');
-  const redAcc = await mkUser('red@bault.dev', 'red', 'user', 'Red');
-  const goldenAcc = await mkUser('golden@bault.dev', 'golden', 'user', 'Golden');
-  // Custodian that owns donated/consigned items (keeps single-owner-never-deleted true).
-  const platformAcc = await mkUser('platform@bault.dev', 'platform', 'admin', 'Platform Custodian');
+  const eldarAcc = await mkUser('eldar@bault.dev', 'eldar', 'admin', 'Eldar', 'Cohen');
+  const hermonAcc = await mkUser('hermon@bault.dev', 'hermon', 'warehouse_operator', 'Hermon', 'Levi');
+  const redAcc = await mkUser('red@bault.dev', 'red', 'user', 'Red', 'Ashwood');
+  const goldenAcc = await mkUser('golden@bault.dev', 'golden', 'user', 'Golden', 'Marsh');
+  // A pre-identity-pass account, reproduced exactly as migration 0004 would leave
+  // one whose single display name could not be split without guessing: the whole
+  // string became the first name, the original is kept read-only, the row is
+  // flagged for review, and the OW- code it was routed by still works.
+  const veteranAcc = await mkUser(
+    'veteran@bault.dev',
+    'veteran',
+    'user',
+    'Ana Maria van der Berg',
+    null,
+    {
+      intakeId: prefixedId(ID_PREFIX.owner, 6),
+      nameReviewRequired: true,
+      legacyDisplayName: 'Ana Maria van der Berg',
+    },
+  );
+  // Custodian that receives donated/consigned items (keeps single-owner-never-deleted
+  // true once a donation is accepted). It owns nothing in this dataset — the seeded
+  // donation request is still open — but the account must exist for that flow to run.
+  await mkUser('platform@bault.dev', 'platform', 'admin', 'Platform', 'Custodian');
 
   const eldar = eldarAcc.id;
   const hermon = hermonAcc.id;
   const red = redAcc.id;
   const golden = goldenAcc.id;
-  const platform = platformAcc.id;
+  const veteran = veteranAcc.id;
 
   // -------------------------------------------------------------------------
   // 3. PRICING RULES. Each rule states WHAT it is (description), HOW MUCH
@@ -120,11 +168,32 @@ async function main(): Promise<void> {
       billingTrigger: 'per_event' as const,
     },
     {
+      /**
+       * Storage is an INCLUDED period folded into the intake fee, then periods
+       * priced as a proportion of that same intake fee. `value` is only the
+       * fallback base for an item that has no intake charge to take a percentage
+       * of; the real terms are in `parameters`, which the worker's sweep reads.
+       */
       actionType: 'storage',
       model: 'fixed' as const,
-      value: 100, // $1.00
-      description: 'Daily storage fee per item held in the vault',
+      value: 100, // $1.00 — fallback base only
+      description: '180 days included, then 10% of the item intake fee every 90 days',
       billingTrigger: 'daily' as const,
+      parameters: { freeDays: 180, periodDays: 90, percentOfIntakeBps: 1_000 },
+    },
+    {
+      /**
+       * Oversized items get a much shorter included window and pay the whole
+       * intake fee again each period. Deliberately punitive: shelf space is the
+       * scarce resource, and this exists to make "leave it there forever" a
+       * decision rather than a default.
+       */
+      actionType: 'storage_oversized',
+      model: 'fixed' as const,
+      value: 500, // $5.00 — fallback base only
+      description: '90 days included, then the full intake fee again every 90 days',
+      billingTrigger: 'daily' as const,
+      parameters: { freeDays: 90, periodDays: 90, percentOfIntakeBps: 10_000 },
     },
     {
       actionType: 'service',
@@ -147,10 +216,270 @@ async function main(): Promise<void> {
       description: 'Marketplace commission charged to the seller on every sale',
       billingTrigger: 'per_event' as const,
     },
+    {
+      /**
+       * Bault's own cut per consignment channel. The partner's commission is
+       * deducted by the partner before they remit and never touches this ledger,
+       * so these are only ever Bault's share.
+       */
+      actionType: 'consignment_fee:card_show',
+      model: 'percentage' as const,
+      value: 1000, // 10.00% — Bault sells it at the table itself
+      description: 'Bault commission on a card-show consignment sale',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'consignment_fee:auction_house',
+      model: 'percentage' as const,
+      value: 100, // 1.00% on top of the auction house's own rate
+      description: 'Bault commission on an auction-house consignment sale',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'consignment_fee:ebay_partner',
+      model: 'percentage' as const,
+      value: 100, // 1.00% on top of the partner seller's own rate
+      description: 'Bault commission on an eBay partner consignment sale',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * Grading is priced per TIER, not per card, because a grader is not
+       * selling a grade — it is selling a turnaround and a declared-value band.
+       * A five-day return on a $5,000 card and a six-week return on a common are
+       * different work and cannot share one fee.
+       *
+       * These sit alongside the flat `service` rule rather than replacing it:
+       * `feeActionType` is TRIED, so a tier added to the catalogue without a
+       * price here falls back to $20 (expensive-by-default) instead of being
+       * silently free.
+       */
+      actionType: 'grading_fee:psa_value',
+      model: 'fixed' as const,
+      value: 2500, // $25.00
+      description: 'PSA Value — up to $499, 45–65 days',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'grading_fee:psa_regular',
+      model: 'fixed' as const,
+      value: 7500, // $75.00
+      description: 'PSA Regular — up to $1,499, 20–30 days',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'grading_fee:psa_express',
+      model: 'fixed' as const,
+      value: 15000, // $150.00
+      description: 'PSA Express — up to $4,999, 10–15 days',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'grading_fee:psa_walkthrough',
+      model: 'fixed' as const,
+      value: 30000, // $300.00
+      description: 'PSA Walkthrough — no ceiling, 5–10 days, needs approval',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'grading_fee:bgs_standard',
+      model: 'fixed' as const,
+      value: 6500, // $65.00
+      description: 'BGS Standard — up to $1,499, 25–40 days',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /** Turning the card under a light on camera — the only way to show gloss. */
+      actionType: 'service_fee:video_review',
+      model: 'fixed' as const,
+      value: 1000, // $10.00
+      description: 'A short video of the card turned under a light',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /** A person looking at named areas and writing down what they see. */
+      actionType: 'service_fee:condition_inspection',
+      model: 'fixed' as const,
+      value: 1500, // $15.00
+      description: 'Per-area condition report against a fixed severity scale',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * Cheaper than the flat service fee on purpose: cracking a slab is thirty
+       * seconds of work, and pricing it like a photo shoot would only push people
+       * to do it themselves badly after the card was shipped home.
+       */
+      actionType: 'service_fee:deslab',
+      model: 'fixed' as const,
+      value: 500, // $5.00
+      description: 'Cracking a graded card out of its holder. Irreversible.',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * Rush is BAULT moving the parcel to the front of the packing queue. It
+       * used to be handed to the carrier, which doubled the carrier rate and
+       * shortened the carrier estimate — attributing Bault's own speed to FedEx.
+       */
+      actionType: 'shipping_rush',
+      model: 'fixed' as const,
+      value: 1000, // $10.00
+      description: 'Same-day picking and packing, ahead of the standard queue',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * A tracker in the outgoing parcel. Priced as a rule rather than only in
+       * the add-on catalogue so it can be changed without a deploy (Principle
+       * VI); the catalogue figure is the fallback if the rule is ever removed.
+       */
+      actionType: 'shipping_addon:gps_tracker',
+      model: 'fixed' as const,
+      value: 3000, // $30.00
+      description: 'GPS tracker placed in the parcel; handed over after delivery',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * Cashing out. Two bands with a kink at $100: below it a percentage with
+       * a floor, because the provider's own minimum dominates a small payout;
+       * above it a fixed component plus a much smaller percentage, because the
+       * work does not scale with the amount.
+       *
+       * The rule records the LARGE band's percentage; the full schedule lives
+       * in `money-terms.ts`, which is what both the quote and the charge use.
+       */
+      actionType: 'cash_out_fee',
+      model: 'percentage' as const,
+      value: 100, // 1.00% over $100, plus $5.00 fixed
+      description: 'Cash-out fee: 6% (min $0.99) under $100, otherwise $5.00 + 1%',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * What the provider charges Bault to handle a disputed card payment,
+       * regardless of who wins it. Charged to the account that received the
+       * money, because that is the only account it could be.
+       */
+      actionType: 'chargeback_fee',
+      model: 'fixed' as const,
+      value: 2500, // $25.00
+      description: 'Handling fee when a card payment into your wallet is reversed',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * Escrow. A percentage, because the work scales with what is at stake:
+       * inspecting a $500 card and a $50,000 one are not the same look.
+       */
+      actionType: 'escrow_fee',
+      model: 'percentage' as const,
+      value: 100, // 1.00%
+      description: 'Middleman fee on a private deal, 1% of the agreed value',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * White glove. This is the BASE — travel is quoted on top, per journey,
+       * because the cost of getting a person from New Jersey to a hotel in
+       * Boston on a Tuesday is not something a rate table knows.
+       */
+      actionType: 'white_glove:domestic',
+      model: 'fixed' as const,
+      value: 100000, // $1,000.00
+      description: 'Hand delivery within the United States, before travel',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'white_glove:international',
+      model: 'fixed' as const,
+      value: 150000, // $1,500.00
+      description: 'Hand delivery outside the United States, before travel',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      /**
+       * Collecting at a show costs a fraction of postage for one reason: the van
+       * was going anyway. A show may override this with its own figure.
+       */
+      actionType: 'show_pickup',
+      model: 'fixed' as const,
+      value: 1500, // $15.00
+      description: 'Collect your cards in person at a show Bault is attending',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'parcel_processing',
+      model: 'fixed' as const,
+      value: 200, // $2.00
+      description: 'Per-package fee for receiving, opening and cataloguing a parcel',
+      billingTrigger: 'per_event' as const,
+    },
+    {
+      actionType: 'parcel_forwarding',
+      model: 'fixed' as const,
+      value: 400, // $4.00
+      description: 'Second leg, charged only to parcels sent to a forwarding address',
+      billingTrigger: 'per_event' as const,
+    },
   ];
   for (const r of rules) {
     await db.insert(pricingRule).values({ ...r, currency: CUR, updatedBy: eldar });
   }
+
+  // -------------------------------------------------------------------------
+  // 3b. FACILITIES — the addresses collectors ship their purchases to.
+  //
+  //     ⚠ THE STREET ADDRESSES BELOW ARE PLACEHOLDERS. ⚠
+  //     They are what a customer will write on a parcel, so inventing something
+  //     that reads as real would be worse than leaving them obviously unset.
+  //     Replace both with the actual facility addresses before anybody is
+  //     invited to ship anything.
+  //
+  //     New Jersey is the PRIMARY site: goods are stored there. Delaware is a
+  //     FORWARDING site that holds nothing — it exists because Delaware levies
+  //     no sales tax, so a purchase delivered there is not taxed by the
+  //     destination state, at the cost of a second leg to New Jersey.
+  //
+  //     `salesTaxBps` is the DESTINATION state's rate, recorded for guidance
+  //     only. Bault is not the seller and neither collects nor remits anybody's
+  //     sales tax; the figure exists so the app can show a collector what a
+  //     purchase would cost at each address instead of making them work it out.
+  //     NJ is 6.625% (6625 bps) at the time of writing; DE is 0.
+  // -------------------------------------------------------------------------
+  const njFacility = one(
+    await db
+      .insert(facility)
+      .values({
+        code: 'NJ',
+        name: 'Bault New Jersey',
+        role: 'primary',
+        line1: 'SET REAL ADDRESS — placeholder',
+        city: 'Newark',
+        region: 'NJ',
+        postalCode: '00000',
+        country: 'US',
+        salesTaxBps: 6625,
+        active: true,
+      })
+      .returning({ id: facility.id }),
+  ).id;
+
+  await db.insert(facility).values({
+    code: 'DE',
+    name: 'Bault Delaware',
+    role: 'forwarding',
+    line1: 'SET REAL ADDRESS — placeholder',
+    city: 'Wilmington',
+    region: 'DE',
+    postalCode: '00000',
+    country: 'US',
+    salesTaxBps: 0,
+    forwardsToFacilityId: njFacility,
+    forwardingDays: 4,
+    active: true,
+  });
 
   // -------------------------------------------------------------------------
   // 4. BINS (shelves) — BIN- prefixed barcodes (Requirement 9.3).
@@ -168,8 +497,10 @@ async function main(): Promise<void> {
   const INTAKE = 500; // $5.00
   const SERVICE = 2000; // $20.00
   const SHIP = 3500; // $35.00
-  const LEBRON = 150_000; // $1,500.00 sale price
-  const FEE = 7_500; // 5% of LEBRON
+  const MEGA_SALE = 26_000; // $260.00 — M Rayquaza-EX sale price
+  const FEE = 1_300; // 5% of MEGA_SALE
+  const GOLD_STAR_ASK = 320_000; // $3,200.00 — Gold Star asking price
+  const GOLD_STAR_OFFER = 275_000; // $2,750.00 — Golden's standing offer
   const TOPUP = 500_000; // $5,000.00
   const WITHDRAW = 100_000; // $1,000.00
 
@@ -251,201 +582,213 @@ async function main(): Promise<void> {
   // 6. ITEMS + full history for each.
   // -------------------------------------------------------------------------
 
-  // (a) Charizard — Red, stored, professionally photographed (2 image versions).
-  const charizard = await mkItem({
-    ownerId: red, serialNumber: 'SN-CHAR-0001', barcode: 'BC-CHAR-0001',
-    typeClass: 'Pokémon Card', description: '1999 Pokémon Base Set Charizard-Holo 1st Edition #4/102 · PSA cert 78359325',
-    conditionGrade: 'PSA 9', lifecycleState: 'stored', binId: binA1,
+  // The vault holds eight of the ten catalogued Rayquaza cards, four owned by Red
+  // and four by Golden. Each `serialNumber` is also the filename of that card's
+  // catalogue photograph under assets/images (SN-DR97-0001.png), so the serial is
+  // the single key joining the database row to the picture on screen.
+  //
+  // GRADES: the research dossiers state their PSA 10 is a *target profile*, not a
+  // certified slab, and carry no certificate number. Inventing one for a real card
+  // would be fabricating an authentication record, so every seeded card is entered
+  // exactly as it is documented — raw and ungraded. The grading workflow is instead
+  // demonstrated by a submission that is still out at PSA (item d).
+
+  // (a) EX Dragon Rayquaza ex — Red, stored, professionally photographed.
+  const rayDragon = await mkItem({
+    ownerId: red, serialNumber: 'SN-DR97-0001', barcode: 'BC-DR97-0001',
+    typeClass: 'trading_card',
+    description: '2003 Pokémon EX Dragon — Rayquaza ex #97/97 · Rare Holo EX · art by Hikaru Koike · ex3-97',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binA1,
   });
-  await custody({ itemId: charizard, eventType: 'intake', newOwnerId: red, newBinId: binA1, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(charizard, null, binA1, hermon, 'intake');
-  await img(charizard, 'intake', 1, 'images/charizard-intake.jpg');
-  await bill(red, 'intake', INTAKE, charizard);
-  await img(charizard, 'professional', 2, 'images/charizard-pro.jpg');
+  await custody({ itemId: rayDragon, eventType: 'intake', newOwnerId: red, newBinId: binA1, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayDragon, null, binA1, hermon, 'intake');
+  await img(rayDragon, 'intake', 1, 'images/sn-dr97-0001-intake.jpg');
+  await bill(red, 'intake', INTAKE, rayDragon);
+  await img(rayDragon, 'professional', 2, 'images/sn-dr97-0001-pro.jpg');
   await db.insert(serviceRequest).values({
     code: prefixedId(ID_PREFIX.serviceRequest),
-    type: 'professional_photography', requesterId: red, itemId: charizard, status: 'completed',
-    typeFields: { objectKey: 'images/charizard-pro.jpg', version: 2 },
-    fulfillment: { objectKey: 'images/charizard-pro.jpg', shotCount: 6, lighting: 'diffused softbox', itemVerified: true, notes: 'Front and back, slab shot at 45°.' },
+    type: 'professional_photography', requesterId: red, itemId: rayDragon, status: 'completed',
+    typeFields: { objectKey: 'images/sn-dr97-0001-pro.jpg', version: 2 },
+    fulfillment: { objectKey: 'images/sn-dr97-0001-pro.jpg', shotCount: 6, lighting: 'diffused softbox', itemVerified: true, notes: 'Front and back, holofoil raked at 45° to show the print lines.' },
     fulfilledBy: hermon,
     fulfilledAt: new Date(),
   });
-  await bill(red, 'service', SERVICE, charizard);
+  await bill(red, 'service', SERVICE, rayDragon);
 
-  // (b) Pikachu — Red, stored, with a corrected grade in change history.
-  const pikachu = await mkItem({
-    ownerId: red, serialNumber: 'SN-PIKA-0002', barcode: 'BC-PIKA-0002',
-    typeClass: 'Pokémon Card', description: '1998 Pokémon Japanese Promo Pikachu Illustrator-Holo · PSA cert 83509149',
-    conditionGrade: 'PSA 8', lifecycleState: 'stored', binId: binA1,
-  });
-  await custody({ itemId: pikachu, eventType: 'intake', newOwnerId: red, newBinId: binA1, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(pikachu, null, binA1, hermon, 'intake');
-  await img(pikachu, 'intake', 1, 'images/pikachu-intake.jpg');
-  await bill(red, 'intake', INTAKE, pikachu);
-  await db.insert(itemChangeHistory).values({ itemId: pikachu, actorId: hermon, field: 'conditionGrade', oldValue: 'PSA 7', newValue: 'PSA 8' });
+  // (b) + (g) EX Deoxys ex and Roaring Skies EX arrived together as a BATCH for
+  //     Golden and were split onto separate shelves by Hermon.
+  const goldenBatch = one(await db.insert(batch).values({ ownerId: golden, status: 'split' }).returning({ id: batch.id })).id;
 
-  // (c) Blue-Eyes White Dragon — Red, LISTED for sale + a pending offer from Golden.
-  //     Relocated once, so the transfer ledger shows a real source → destination move.
-  const blueEyes = await mkItem({
-    ownerId: red, serialNumber: 'SN-BEWD-0003', barcode: 'BC-BEWD-0003',
-    typeClass: 'Yu-Gi-Oh! Card', description: '2002 Yu-Gi-Oh! Legend of Blue Eyes White Dragon 1st Edition Blue-Eyes White Dragon LOB-001 · PSA cert 64400602',
-    conditionGrade: 'PSA 10', lifecycleState: 'listed', binId: binB1,
+  const rayDeoxys = await mkItem({
+    ownerId: golden, serialNumber: 'SN-DX102-0002', barcode: 'BC-DX102-0002',
+    typeClass: 'trading_card',
+    description: '2005 Pokémon EX Deoxys — Rayquaza ex #102/107 · Rare Holo EX · art by Shin-ichi Yoshikawa · ex8-102',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binA2, sourceBatchId: goldenBatch,
   });
-  await custody({ itemId: blueEyes, eventType: 'intake', newOwnerId: red, newBinId: binA2, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(blueEyes, null, binA2, hermon, 'intake');
-  await custody({ itemId: blueEyes, eventType: 'relocate', prevBinId: binA2, newBinId: binB1, actorId: hermon, reason: 'scan relocate' });
-  await transfer(blueEyes, binA2, binB1, hermon, 'scan relocate');
-  await img(blueEyes, 'intake', 1, 'images/blueeyes-intake.jpg');
-  await bill(red, 'intake', INTAKE, blueEyes);
-  await custody({ itemId: blueEyes, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: red, reason: 'listed for sale' });
-  const blueEyesListing = one(
-    await db.insert(listing).values({ itemId: blueEyes, sellerId: red, askingPrice: 800_000, currency: CUR, status: 'active' }).returning({ id: listing.id }),
+  await custody({ itemId: rayDeoxys, eventType: 'batch_split', newOwnerId: golden, newBinId: binA2, newState: 'stored', actorId: hermon, reason: 'batch_split' });
+  await transfer(rayDeoxys, null, binA2, hermon, 'batch_split');
+  await img(rayDeoxys, 'intake', 1, 'images/sn-dx102-0002-intake.jpg');
+  await bill(golden, 'intake', INTAKE, rayDeoxys);
+
+  // (c) Gold Star — the collection's centrepiece. Red has it LISTED, with a
+  //     standing offer from Golden. Relocated once, so the transfer ledger shows
+  //     a real source → destination move.
+  const rayGoldStar = await mkItem({
+    ownerId: red, serialNumber: 'SN-DX107-0003', barcode: 'BC-DX107-0003',
+    typeClass: 'trading_card',
+    description: '2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star) #107/107 · Rare Holo Star · art by Masakazu Fukuda · ex8-107',
+    conditionGrade: 'Raw', lifecycleState: 'listed', binId: binB1,
+  });
+  await custody({ itemId: rayGoldStar, eventType: 'intake', newOwnerId: red, newBinId: binA2, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayGoldStar, null, binA2, hermon, 'intake');
+  await custody({ itemId: rayGoldStar, eventType: 'relocate', prevBinId: binA2, newBinId: binB1, actorId: hermon, reason: 'scan relocate' });
+  await transfer(rayGoldStar, binA2, binB1, hermon, 'scan relocate');
+  await img(rayGoldStar, 'intake', 1, 'images/sn-dx107-0003-intake.jpg');
+  await bill(red, 'intake', INTAKE, rayGoldStar);
+  await custody({ itemId: rayGoldStar, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: red, reason: 'listed for sale' });
+  const goldStarListing = one(
+    await db.insert(listing).values({ itemId: rayGoldStar, sellerId: red, askingPrice: GOLD_STAR_ASK, currency: CUR, status: 'active' }).returning({ id: listing.id }),
   ).id;
-  await db.insert(offer).values({ listingId: blueEyesListing, buyerId: golden, amount: 700_000, currency: CUR, status: 'pending' });
+  await db.insert(offer).values({ listingId: goldStarListing, buyerId: golden, amount: GOLD_STAR_OFFER, currency: CUR, status: 'pending' });
 
-  // (d) LeBron rookie — intaken by Golden, LISTED, then SOLD to Red (full sale record).
-  const lebron = await mkItem({
-    ownerId: red, serialNumber: 'SN-LBJ-0004', barcode: 'BC-LBJ-0004',
-    typeClass: 'Basketball Card', description: '2003 Topps Chrome LeBron James Rookie Draft Pick #1 #111 · PSA cert 63359664',
-    conditionGrade: 'PSA 9', lifecycleState: 'stored', binId: binB2,
+  // (d) Dragon Frontiers δ — Golden's, currently OUT at PSA. The request is open,
+  //     so it sits in the operator's service queue waiting to be closed with a
+  //     real returned grade; nothing about a grade is asserted here.
+  const rayDelta = await mkItem({
+    ownerId: golden, serialNumber: 'SN-DF97-0004', barcode: 'BC-DF97-0004',
+    typeClass: 'trading_card',
+    description: '2006 Pokémon EX Dragon Frontiers — Rayquaza ex δ (Delta Species) #97/101 · Rare Holo EX · art by Ryo Ueda · ex15-97',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB1,
   });
-  await custody({ itemId: lebron, eventType: 'intake', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(lebron, null, binB2, hermon, 'intake');
-  await img(lebron, 'intake', 1, 'images/lebron-intake.jpg');
-  await bill(golden, 'intake', INTAKE, lebron);
-  await custody({ itemId: lebron, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: golden, reason: 'listed for sale' });
-  const lebronListing = one(
-    await db.insert(listing).values({ itemId: lebron, sellerId: golden, askingPrice: LEBRON, currency: CUR, status: 'sold' }).returning({ id: listing.id }),
+  await custody({ itemId: rayDelta, eventType: 'intake', newOwnerId: golden, newBinId: binB1, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayDelta, null, binB1, hermon, 'intake');
+  await img(rayDelta, 'intake', 1, 'images/sn-df97-0004-intake.jpg');
+  await bill(golden, 'intake', INTAKE, rayDelta);
+  await db.insert(serviceRequest).values({
+    code: prefixedId(ID_PREFIX.serviceRequest),
+    type: 'third_party_grading', requesterId: golden, itemId: rayDelta, status: 'in_progress',
+    // Target grade only — the certificate number is filled in when the slab returns.
+    typeFields: { gradingBody: 'PSA', targetGrade: 'PSA 10', submittedAt: new Date().toISOString() },
+  });
+  await bill(golden, 'service', SERVICE, rayDelta);
+
+  // (e) Call of Legends Rayquaza — Red, stored, unremarkable on purpose: a plain
+  //     shelved item with nothing pending against it.
+  const rayLegends = await mkItem({
+    ownerId: red, serialNumber: 'SN-CL10-0005', barcode: 'BC-CL10-0005',
+    typeClass: 'trading_card',
+    description: '2011 Pokémon Call of Legends — Rayquaza #SL10/95 · Rare Holo (Shiny Legendary subset) · art by Noriko Hotta · col1-SL10',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binA1,
+  });
+  await custody({ itemId: rayLegends, eventType: 'intake', newOwnerId: red, newBinId: binA1, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayLegends, null, binA1, hermon, 'intake');
+  await img(rayLegends, 'intake', 1, 'images/sn-cl10-0005-intake.jpg');
+  await bill(red, 'intake', INTAKE, rayLegends);
+
+  // (f) Supreme Victors C LV.X — Golden shipped it home (rush). Ownership stays
+  //     with Golden; only custody of the physical card leaves the vault.
+  const rayLevelX = await mkItem({
+    ownerId: golden, serialNumber: 'SN-SV146-0006', barcode: 'BC-SV146-0006',
+    typeClass: 'trading_card',
+    description: '2009 Pokémon Supreme Victors — Rayquaza C LV.X #146/147 · Rare Holo LV.X (Pokémon SP) · art by Shizurow · pl3-146',
+    conditionGrade: 'Raw', lifecycleState: 'shipped', binId: null,
+  });
+  await custody({ itemId: rayLevelX, eventType: 'intake', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayLevelX, null, binB2, hermon, 'intake');
+  await img(rayLevelX, 'intake', 1, 'images/sn-sv146-0006-intake.jpg');
+  await bill(golden, 'intake', INTAKE, rayLevelX);
+  await custody({ itemId: rayLevelX, eventType: 'state_change', prevState: 'stored', newState: 'shipped', actorId: hermon, reason: 'dispatched via DHL' });
+  await db.insert(shipment).values({
+    code: prefixedId(ID_PREFIX.shipment),
+    userId: golden, itemIds: [rayLevelX], destinationAddress: 'Golden Marsh, 55 Wall St, New York 10005, US',
+    recipientName: 'Golden Marsh',
+    carrier: 'DHL', serviceLevel: 'Express',
+    rushFlag: true, cost: SHIP, currency: CUR, status: 'shipped', trackingNumber: 'SBX-SEED-0001', labelObjectKey: 'labels/sn-sv146-0006.pdf',
+    // The carrier's Express quote at dispatch time; the tracking list shows it.
+    estimatedDeliveryAt: new Date(Date.now() + 86_400_000),
+    packageWeightGrams: 120,
+    fulfillmentNotes: 'Single card, top-loader in a team bag, rigid mailer.',
+    fulfillment: { carrier: 'DHL', packageWeightGrams: 120, verifiedItemIds: [rayLevelX], notes: 'Single card, top-loader in a team bag, rigid mailer.' },
+    fulfilledBy: hermon,
+    fulfilledAt: new Date(),
+  });
+  await bill(golden, 'shipping', SHIP, rayLevelX);
+
+  // (g) Roaring Skies Rayquaza-EX — Golden's, second half of the batch above, with
+  //     an OPEN donation request so the DIS donation path has a live example.
+  const rayFullArt = await mkItem({
+    ownerId: golden, serialNumber: 'SN-ROS104-0007', barcode: 'BC-ROS104-0007',
+    typeClass: 'trading_card',
+    description: '2015 Pokémon XY Roaring Skies — Rayquaza-EX (Full Art) #104/108 · Rare Ultra · art by Ryo Ueda · xy6-104',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB2, sourceBatchId: goldenBatch,
+  });
+  await custody({ itemId: rayFullArt, eventType: 'batch_split', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'batch_split' });
+  await transfer(rayFullArt, null, binB2, hermon, 'batch_split');
+  await img(rayFullArt, 'intake', 1, 'images/sn-ros104-0007-intake.jpg');
+  await bill(golden, 'intake', INTAKE, rayFullArt);
+  await db.insert(serviceRequest).values({
+    code: prefixedId(ID_PREFIX.serviceRequest),
+    type: 'donation', requesterId: golden, itemId: rayFullArt, status: 'requested',
+    typeFields: { note: 'Donate to the youth league raffle if the platform accepts it.' },
+  });
+
+  // (h) M Rayquaza-EX — intaken by Golden, LISTED, then SOLD to Red. This is the
+  //     one full sale record: custody transfer, both ledger legs, fee, and a TXN.
+  const rayMega = await mkItem({
+    ownerId: red, serialNumber: 'SN-ROS105-0008', barcode: 'BC-ROS105-0008',
+    typeClass: 'trading_card',
+    description: '2015 Pokémon XY Roaring Skies — M Rayquaza-EX (Full Art, Δ Evolution) #105/108 · Rare Ultra · art by 5ban Graphics · xy6-105',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB2,
+  });
+  await custody({ itemId: rayMega, eventType: 'intake', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayMega, null, binB2, hermon, 'intake');
+  await img(rayMega, 'intake', 1, 'images/sn-ros105-0008-intake.jpg');
+  await bill(golden, 'intake', INTAKE, rayMega);
+  await custody({ itemId: rayMega, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: golden, reason: 'listed for sale' });
+  const megaListing = one(
+    await db.insert(listing).values({ itemId: rayMega, sellerId: golden, askingPrice: MEGA_SALE, currency: CUR, status: 'sold' }).returning({ id: listing.id }),
   ).id;
-  await custody({ itemId: lebron, eventType: 'ownership_transfer', prevOwnerId: golden, newOwnerId: red, actorId: red, reason: `sale of listing ${lebronListing}` });
-  await custody({ itemId: lebron, eventType: 'state_change', prevState: 'listed', newState: 'stored', actorId: red, reason: 'sold' });
-  await ledger(red, 'purchase', LEBRON, 'debit', 'listing', lebronListing);
-  await ledger(golden, 'sale_credit', LEBRON, 'credit', 'listing', lebronListing);
-  await ledger(golden, 'fee', FEE, 'debit', 'listing', lebronListing);
+  await custody({ itemId: rayMega, eventType: 'ownership_transfer', prevOwnerId: golden, newOwnerId: red, actorId: red, reason: `sale of listing ${megaListing}` });
+  await custody({ itemId: rayMega, eventType: 'state_change', prevState: 'listed', newState: 'stored', actorId: red, reason: 'sold' });
+  await ledger(red, 'purchase', MEGA_SALE, 'debit', 'listing', megaListing);
+  await ledger(golden, 'sale_credit', MEGA_SALE, 'credit', 'listing', megaListing);
+  await ledger(golden, 'fee', FEE, 'debit', 'listing', megaListing);
   const saleTxn = one(
     await db
       .insert(transaction)
       .values({
         code: prefixedId(ID_PREFIX.transaction),
-        type: 'sale', itemIds: [lebron], buyerId: red, sellerId: golden, price: LEBRON, fee: FEE,
+        type: 'sale', itemIds: [rayMega], buyerId: red, sellerId: golden, price: MEGA_SALE, fee: FEE,
         frozenPricing: { model: 'percentage', value: 500, currency: CUR }, currency: CUR,
       })
       .returning({ id: transaction.id }),
   ).id;
+  // The condition was corrected on arrival, giving the item a real change history.
+  await db.insert(itemChangeHistory).values({ itemId: rayMega, actorId: hermon, field: 'conditionGrade', oldValue: 'Near Mint', newValue: 'Raw' });
 
-  // (e) Luka Prizm — Red, shipped home (rush), leaves the vault. The shipment
-  //     carries its SHP- Shipment ID and the operator's fulfillment record.
-  const luka = await mkItem({
-    ownerId: red, serialNumber: 'SN-LUKA-0005', barcode: 'BC-LUKA-0005',
-    typeClass: 'Basketball Card', description: '2018 Panini Prizm Luka Dončić Rookie #280 (Dallas Mavericks) · PSA cert 42670603',
-    conditionGrade: 'PSA 10', lifecycleState: 'shipped', binId: null,
-  });
-  await custody({ itemId: luka, eventType: 'intake', newOwnerId: red, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(luka, null, binB2, hermon, 'intake');
-  await img(luka, 'intake', 1, 'images/luka-intake.jpg');
-  await bill(red, 'intake', INTAKE, luka);
-  await custody({ itemId: luka, eventType: 'state_change', prevState: 'stored', newState: 'shipped', actorId: hermon, reason: 'dispatched via DHL' });
-  await db.insert(shipment).values({
-    code: prefixedId(ID_PREFIX.shipment),
-    userId: red, itemIds: [luka], destinationAddress: 'Red, 1200 Market St, San Francisco 94102, US',
-    carrier: 'DHL', serviceLevel: 'Express',
-    rushFlag: true, cost: SHIP, currency: CUR, status: 'shipped', trackingNumber: 'SBX-SEED-0001', labelObjectKey: 'labels/luka.pdf',
-    packageWeightGrams: 500,
-    fulfillmentNotes: 'Single slab, bubble-wrapped, rigid mailer.',
-    fulfillment: { carrier: 'DHL', packageWeightGrams: 500, verifiedItemIds: [luka], notes: 'Single slab, bubble-wrapped, rigid mailer.' },
-    fulfilledBy: hermon,
-    fulfilledAt: new Date(),
-  });
-  await bill(red, 'shipping', SHIP, luka);
-
-  // (f) Black Lotus + (g) Mickey Mantle — arrived as a BATCH for Golden, split by Hermon.
-  const goldenBatch = one(await db.insert(batch).values({ ownerId: golden, status: 'split' }).returning({ id: batch.id })).id;
-
-  const lotus = await mkItem({
-    ownerId: golden, serialNumber: 'SN-LOTUS-0006', barcode: 'BC-LOTUS-0006',
-    typeClass: 'Magic: The Gathering', description: '1993 Magic: The Gathering Alpha Black Lotus (Mono Artifact, rare) · BGS cert 0016647403, subgrades 9/9/9/9',
-    conditionGrade: 'BGS 9', lifecycleState: 'stored', binId: binA2, sourceBatchId: goldenBatch,
-  });
-  await custody({ itemId: lotus, eventType: 'batch_split', newOwnerId: golden, newBinId: binA2, newState: 'stored', actorId: hermon, reason: 'batch_split' });
-  await transfer(lotus, null, binA2, hermon, 'batch_split');
-  await img(lotus, 'intake', 1, 'images/lotus-intake.jpg');
-  await bill(golden, 'intake', INTAKE, lotus);
-
-  const mantle = await mkItem({
-    ownerId: golden, serialNumber: 'SN-MANTLE-0007', barcode: 'BC-MANTLE-0007',
-    typeClass: 'Baseball Card', description: '1952 Topps Mickey Mantle #311 (New York Yankees) · PSA cert 04005319',
-    conditionGrade: 'PSA 7', lifecycleState: 'stored', binId: binB1, sourceBatchId: goldenBatch,
-  });
-  await custody({ itemId: mantle, eventType: 'batch_split', newOwnerId: golden, newBinId: binB1, newState: 'stored', actorId: hermon, reason: 'batch_split' });
-  await transfer(mantle, null, binB1, hermon, 'batch_split');
-  await img(mantle, 'intake', 1, 'images/mantle-intake.jpg');
-  await bill(golden, 'intake', INTAKE, mantle);
-  // Graded (completed) — grade recorded onto the item + change history, closed with
-  // the operator's structured fulfillment form (Requirement 5.4).
-  await db.insert(itemChangeHistory).values({ itemId: mantle, actorId: hermon, field: 'conditionGrade', oldValue: null, newValue: 'PSA 7' });
-  await db.insert(serviceRequest).values({
-    code: prefixedId(ID_PREFIX.serviceRequest),
-    type: 'third_party_grading', requesterId: golden, itemId: mantle, status: 'completed',
-    typeFields: { gradingBody: 'PSA', receivedGrade: 'PSA 7', certificateNumber: '04005319' },
-    fulfillment: { grade: 'PSA 7', gradingBody: 'PSA', certificateNumber: '04005319', itemVerified: true, notes: 'Returned from PSA, slab intact.' },
-    fulfilledBy: hermon,
-    fulfilledAt: new Date(),
-  });
-  await bill(golden, 'service', SERVICE, mantle);
-
-  // (h) Bulbasaur — Golden DONATED it → platform custodian, terminal 'donated'.
-  //     The donation is recorded as a transaction like any other (Requirement 13.1).
-  const bulbasaur = await mkItem({
-    ownerId: platform, serialNumber: 'SN-BULBA-0008', barcode: 'BC-BULBA-0008',
-    typeClass: 'Pokémon Card', description: '1999 Pokémon Base Set Shadowless Bulbasaur #44/102 · PSA cert 53135338',
-    conditionGrade: 'PSA 6', lifecycleState: 'donated', binId: binA2,
-  });
-  await custody({ itemId: bulbasaur, eventType: 'intake', newOwnerId: golden, newBinId: binA2, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(bulbasaur, null, binA2, hermon, 'intake');
-  await img(bulbasaur, 'intake', 1, 'images/bulbasaur-intake.jpg');
-  await bill(golden, 'intake', INTAKE, bulbasaur);
-  await custody({ itemId: bulbasaur, eventType: 'ownership_transfer', prevOwnerId: golden, newOwnerId: platform, actorId: golden, reason: 'donation' });
-  await custody({ itemId: bulbasaur, eventType: 'state_change', prevState: 'stored', newState: 'donated', actorId: golden, reason: 'donated' });
-  const donationTxn = one(
-    await db
-      .insert(transaction)
-      .values({
-        code: prefixedId(ID_PREFIX.transaction),
-        type: 'transfer', itemIds: [bulbasaur], buyerId: platform, sellerId: golden,
-        price: null, fee: 0, frozenPricing: { reason: 'donation' }, currency: CUR,
-      })
-      .returning({ id: transaction.id }),
-  ).id;
-  await db.insert(serviceRequest).values({
-    code: prefixedId(ID_PREFIX.serviceRequest),
-    type: 'donation', requesterId: golden, itemId: bulbasaur, status: 'completed',
-    typeFields: { transactionId: donationTxn },
-  });
-  await bill(golden, 'service', SERVICE, bulbasaur);
-
-  // (i) A LOT — Golden's sealed box, stored and treated as ONE item until an
-  //     operator runs "Break Lot" (Requirement 10.5). Note the LOT- serial.
-  const boosterLot = await mkItem({
-    ownerId: golden, serialNumber: 'LOT-EVO-0009', barcode: 'LOT-EVO-0009',
-    typeClass: 'Pokémon Card', description: '2016 Pokémon XY Evolutions sealed booster box — 36 packs × 10 cards, factory-sealed',
-    conditionGrade: 'Sealed', lifecycleState: 'stored', binId: binB2,
-    isLot: true, lotSize: 36,
-  });
-  await custody({ itemId: boosterLot, eventType: 'intake', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
-  await transfer(boosterLot, null, binB2, hermon, 'intake');
-  await img(boosterLot, 'intake', 1, 'images/booster-lot-intake.jpg');
-  await bill(golden, 'intake', INTAKE, boosterLot);
+  // NOT SEEDED, ON PURPOSE — the remaining two cards of the ten are left out of the
+  // database so the warehouse intake flow can be exercised end to end against real
+  // items. Their photographs are already on disk, so booking one in with the serial
+  // below immediately shows the correct picture in the vault:
+  //
+  //   SN-EVS194-0009  2021 Pokémon SWSH Evolving Skies — Rayquaza V (Alternate Full Art)
+  //                   #194/203 · Rare Ultra · art by Ryuta Fuse · swsh7-194
+  //   SN-EVS218-0010  2021 Pokémon SWSH Evolving Skies — Rayquaza VMAX (Alternate Art
+  //                   secret) #218/203 · Rare Rainbow · art by Anesaki Dynamic · swsh7-218
 
   // -------------------------------------------------------------------------
-  // 7. A pending SWAP PROPOSAL: Red offers Pikachu for Golden's Black Lotus.
+  // 7. A pending SWAP PROPOSAL: Red offers the Call of Legends Rayquaza for
+  //    Golden's EX Deoxys Rayquaza ex.
   // -------------------------------------------------------------------------
   await db.insert(swapProposal).values({
-    proposerId: red, responderId: golden, offeredItemIds: [pikachu], requestedItemIds: [lotus],
+    proposerId: red, responderId: golden, offeredItemIds: [rayLegends], requestedItemIds: [rayDeoxys],
     proposerApproved: true, responderApproved: false, status: 'pending',
   });
 
   // -------------------------------------------------------------------------
-  // 8. A completed WITHDRAWAL by Golden (money out).
+  // 8. A completed WITHDRAWAL by Golden (money out), from before cash-out became
+  //    a reviewed request. Kept so the historical `withdrawal` reference type in
+  //    the ledger has a real row behind it.
   // -------------------------------------------------------------------------
   const w = one(
     await db.insert(withdrawal).values({ userId: golden, destinationAccount: '••••1234', amount: WITHDRAW, currency: CUR, status: 'paid', confirmedAt: new Date() }).returning({ id: withdrawal.id }),
@@ -453,7 +796,148 @@ async function main(): Promise<void> {
   await ledger(golden, 'withdrawal', WITHDRAW, 'debit', 'withdrawal', w);
 
   // -------------------------------------------------------------------------
-  // 9. A DISPUTE against the real LeBron sale (Requirement 13.3 — disputes always
+  // 8b. WALLET REQUESTS — one at each interesting point of the lifecycle, so the
+  //     Requests view and the review queue both have real work in them.
+  //
+  //     The COMPLETED one is the only one with a ledger row, and that row is what
+  //     changed the balance — exactly the invariant the workflow exists to hold.
+  //     The open ones have moved no money at all.
+  // -------------------------------------------------------------------------
+  const walletEvent = async (
+    requestId: string,
+    toStatus: string,
+    fromStatus: string | null,
+    actorId: string | null,
+    actorRole: string | null,
+    reason?: string,
+  ) => {
+    await db.insert(walletRequestEvent).values({
+      requestId,
+      actorId,
+      actorRole,
+      fromStatus,
+      toStatus,
+      reason: reason ?? null,
+      metadata: {},
+    });
+  };
+
+  // (a) Red's cash-in, waiting to be picked up by a reviewer.
+  const cashInSubmitted = one(
+    await db
+      .insert(walletRequest)
+      .values({
+        code: prefixedId('WR'),
+        userId: red,
+        type: 'cash_in',
+        status: 'submitted',
+        amount: 25_000, // $250.00
+        currency: CUR,
+        fundingSource: 'bank_transfer',
+        reference: 'Wire ref 8842-A',
+        notes: 'Funding the M Rayquaza-EX purchase.',
+      })
+      .returning({ id: walletRequest.id }),
+  ).id;
+  await walletEvent(cashInSubmitted, 'submitted', null, red, 'user');
+
+  // (b) Golden's cash-out, approved by the manager and now being paid out.
+  const cashOutProcessing = one(
+    await db
+      .insert(walletRequest)
+      .values({
+        code: prefixedId('WR'),
+        userId: golden,
+        type: 'cash_out',
+        status: 'processing',
+        amount: 12_500, // $125.00
+        currency: CUR,
+        destinationAccount: 'IL62 0108 0000 0009 9999 999',
+        beneficiaryName: 'Golden Marsh',
+        reviewedBy: eldar,
+        reviewedAt: new Date(),
+      })
+      .returning({ id: walletRequest.id }),
+  ).id;
+  await walletEvent(cashOutProcessing, 'submitted', null, golden, 'user');
+  await walletEvent(cashOutProcessing, 'pending_review', 'submitted', eldar, 'admin');
+  await walletEvent(cashOutProcessing, 'approved', 'pending_review', eldar, 'admin', 'Beneficiary matches the account holder.');
+  await walletEvent(cashOutProcessing, 'processing', 'approved', eldar, 'admin', 'Bank transfer initiated.');
+
+  // (c) A rejected cash-out — the reason is mandatory and is recorded on both the
+  //     request and its event trail.
+  const cashOutRejected = one(
+    await db
+      .insert(walletRequest)
+      .values({
+        code: prefixedId('WR'),
+        userId: red,
+        type: 'cash_out',
+        status: 'rejected',
+        amount: 300_000, // $3,000.00 — more than Red's wallet held
+        currency: CUR,
+        destinationAccount: 'IL62 0108 0000 0001 1111 111',
+        beneficiaryName: 'R. Ashwood',
+        reviewedBy: eldar,
+        reviewedAt: new Date(),
+        rejectionReason: 'Requested amount exceeded the available balance at review time.',
+      })
+      .returning({ id: walletRequest.id }),
+  ).id;
+  await walletEvent(cashOutRejected, 'submitted', null, red, 'user');
+  await walletEvent(
+    cashOutRejected,
+    'rejected',
+    'submitted',
+    eldar,
+    'admin',
+    'Requested amount exceeded the available balance at review time.',
+  );
+
+  // (d) A COMPLETED cash-in — and the one ledger row it produced. This pair is
+  //     the whole rule in miniature: the credit exists because, and only because,
+  //     the request reached `completed`.
+  const cashInCompleted = one(
+    await db
+      .insert(walletRequest)
+      .values({
+        code: prefixedId('WR'),
+        userId: red,
+        type: 'cash_in',
+        status: 'completed',
+        amount: TOPUP,
+        currency: CUR,
+        fundingSource: 'card',
+        reviewedBy: eldar,
+        reviewedAt: new Date(),
+        completedAt: new Date(),
+      })
+      .returning({ id: walletRequest.id }),
+  ).id;
+  const cashInLedgerId = one(
+    await db
+      .insert(ledgerRecord)
+      .values({
+        userId: red,
+        type: 'credit_topup',
+        amount: TOPUP,
+        direction: 'credit',
+        currency: CUR,
+        referenceType: 'wallet_request',
+        referenceId: cashInCompleted,
+      })
+      .returning({ id: ledgerRecord.id }),
+  ).id;
+  await db
+    .update(walletRequest)
+    .set({ settledLedgerId: cashInLedgerId })
+    .where(eq(walletRequest.id, cashInCompleted));
+  await walletEvent(cashInCompleted, 'submitted', null, red, 'user');
+  await walletEvent(cashInCompleted, 'approved', 'submitted', eldar, 'admin');
+  await walletEvent(cashInCompleted, 'completed', 'approved', eldar, 'admin', 'Funds cleared.');
+
+  // -------------------------------------------------------------------------
+  // 9. A DISPUTE against the real M Rayquaza-EX sale (Requirement 13.3 — disputes always
   //    reference an actual recorded transaction, never placeholder data).
   // -------------------------------------------------------------------------
   await db.insert(dispute).values({
@@ -462,24 +946,25 @@ async function main(): Promise<void> {
     openedBy: eldar,
     assignedAdminId: eldar,
     status: 'investigating',
-    note: 'Buyer reports the slab arrived with a scuffed case.',
+    note: 'Buyer reports the card arrived with a nicked corner not shown in the listing photo.',
   });
 
   // -------------------------------------------------------------------------
   // 10. A few AUDIT records + OUTBOX messages (normally interceptor/worker-driven).
   // -------------------------------------------------------------------------
+  const goldStarName = '2005 Pokémon EX Deoxys Rayquaza ★ (Gold Star) #107/107';
   await db.insert(auditRecord).values([
-    { actorId: hermon, action: 'POST /api/v1/intake/items', targetEntity: 'item', targetId: charizard },
-    { actorId: red, action: 'POST /api/v1/marketplace/listings', targetEntity: 'listing', targetId: blueEyesListing },
+    { actorId: hermon, action: 'POST /api/v1/intake/items', targetEntity: 'item', targetId: rayDragon },
+    { actorId: red, action: 'POST /api/v1/marketplace/listings', targetEntity: 'listing', targetId: goldStarListing },
     { actorId: red, action: 'POST /api/v1/marketplace/listings/:id/purchase', targetEntity: 'transaction', targetId: saleTxn },
   ]);
   await db.insert(outboxMessage).values([
-    { aggregateType: 'item', aggregateId: charizard, eventType: 'item_received', payload: { itemId: charizard, ownerId: red, barcode: 'BC-CHAR-0001' } },
+    { aggregateType: 'item', aggregateId: rayDragon, eventType: 'item_received', payload: { itemId: rayDragon, ownerId: red, barcode: 'BC-DR97-0001' } },
     {
       aggregateType: 'listing',
-      aggregateId: blueEyesListing,
+      aggregateId: goldStarListing,
       eventType: 'offer_received',
-      payload: { listingId: blueEyesListing, sellerId: red, amount: 700_000, itemId: blueEyes, barcode: 'BC-BEWD-0003', itemDescription: '2002 Yu-Gi-Oh! LOB Blue-Eyes White Dragon 1st Edition LOB-001' },
+      payload: { listingId: goldStarListing, sellerId: red, amount: GOLD_STAR_OFFER, itemId: rayGoldStar, barcode: 'BC-DX107-0003', itemDescription: goldStarName },
     },
   ]);
 
@@ -492,29 +977,28 @@ async function main(): Promise<void> {
       userId: red,
       eventType: 'item_received',
       content: {
-        itemId: charizard,
-        barcode: 'BC-CHAR-0001',
-        message: 'Item BC-CHAR-0001 was received into your vault and shelved.',
+        itemId: rayDragon,
+        barcode: 'BC-DR97-0001',
+        message: 'Item BC-DR97-0001 was received into your vault and shelved.',
       },
     },
     {
       userId: red,
       eventType: 'offer_received',
       content: {
-        listingId: blueEyesListing,
-        amount: 700_000,
-        itemDescription: '2002 Yu-Gi-Oh! LOB Blue-Eyes White Dragon 1st Edition LOB-001',
-        message:
-          'You received an offer of $7,000.00 on your listing for 2002 Yu-Gi-Oh! LOB Blue-Eyes White Dragon 1st Edition LOB-001.',
+        listingId: goldStarListing,
+        amount: GOLD_STAR_OFFER,
+        itemDescription: goldStarName,
+        message: `You received an offer of $2,750.00 on your listing for ${goldStarName}.`,
       },
     },
     {
       userId: golden,
       eventType: 'item_received',
       content: {
-        itemId: lotus,
-        barcode: 'BC-LOTUS-0006',
-        message: 'Item BC-LOTUS-0006 was received into your vault and shelved.',
+        itemId: rayDeoxys,
+        barcode: 'BC-DX102-0002',
+        message: 'Item BC-DX102-0002 was received into your vault and shelved.',
       },
     },
   ]);
@@ -522,18 +1006,69 @@ async function main(): Promise<void> {
   await db.insert(notificationPreference).values({ userId: golden, eventType: 'hold_placed', enabled: false });
 
   await db.insert(shippingAddress).values([
-    { userId: red, label: 'Home', recipient: 'Red', line1: '1200 Market St', city: 'San Francisco', country: 'US', postalCode: '94102', isDefault: true },
-    { userId: golden, label: 'Home', recipient: 'Golden', line1: '55 Wall St', city: 'New York', country: 'US', postalCode: '10005', isDefault: true },
+    { userId: red, label: 'Home', recipient: 'Red Ashwood', line1: '1200 Market St', city: 'San Francisco', country: 'US', postalCode: '94102', isDefault: true },
+    { userId: golden, label: 'Home', recipient: 'Golden Marsh', line1: '55 Wall St', city: 'New York', country: 'US', postalCode: '10005', isDefault: true },
+    { userId: veteran, label: 'Home', recipient: 'Ana Maria van der Berg', line1: 'Keizersgracht 12', city: 'Amsterdam', country: 'NL', postalCode: '1015 CS', isDefault: true },
+  ]);
+
+  /**
+   * Two shows Bault is taking a table at.
+   *
+   * Real rows rather than decoration: the consignment channel refuses a show
+   * whose deadline has passed or whose capacity is full, the published calendar
+   * reads from here, and show PICKUP is gated on the same deadline because it is
+   * the same van. Dates are relative to the seed run so they never go stale.
+   */
+  const days = (n: number) => new Date(Date.now() + n * 86_400_000);
+  await db.insert(consignmentEvent).values([
+    {
+      name: 'Philly Non-Sports Card Show',
+      venue: 'Greater Philadelphia Expo Center',
+      city: 'Oaks, PA',
+      startsAt: days(28),
+      endsAt: days(30),
+      requestDeadline: days(21),
+      capacity: 40,
+      // Bault hands cards back at this one as well as selling at it.
+      pickupEnabled: true,
+      pickupCapacity: 12,
+      pickupFeeMinor: 1500,
+      notes: 'Three-day show. Collections from the Bault table, ask for Hermon.',
+    },
+    {
+      name: 'East Coast Winter Card Expo',
+      venue: 'Meadowlands Exposition Center',
+      city: 'Secaucus, NJ',
+      startsAt: days(63),
+      endsAt: days(64),
+      requestDeadline: days(56),
+      capacity: 25,
+      // Selling only — no room behind the table to hand boxes back.
+      pickupEnabled: false,
+      notes: 'Consignment only at this one.',
+    },
   ]);
 
   await pool.end();
   // eslint-disable-next-line no-console
   console.log(
-    '✔ seed complete: 5 users, 4 bins, 9 items (1 lot), 1 batch, 2 listings, 1 offer, 1 swap, ' +
-      '2 transactions, 1 dispute, 4 service requests, 1 shipment, 1 withdrawal, 3 notifications, 2 addresses.',
+    '✔ seed complete: 6 users, 4 bins, 8 items (4 Red / 4 Golden), 1 batch, 2 listings, 1 offer, ' +
+      '1 swap, 1 transaction, 1 dispute, 3 service requests, 1 shipment, 1 withdrawal, ' +
+      '4 wallet requests, 3 notifications, 2 addresses, 2 shows.',
   );
   // eslint-disable-next-line no-console
-  console.log(`  owner IDs — Red ${redAcc.intakeId} · Golden ${goldenAcc.intakeId} · Hermon ${hermonAcc.intakeId}`);
+  console.log(
+    `  usernames — ${redAcc.username} · ${goldenAcc.username} · ${hermonAcc.username} · ${eldarAcc.username} · ${veteranAcc.username}`,
+  );
+  // eslint-disable-next-line no-console
+  console.log(
+    '  intake IDs are retired: only "veteran" carries one, so the pre-printed-label fallback stays exercised.',
+  );
+  console.log(
+    '  NOT seeded (intake test material, photos already on disk):\n' +
+      '    SN-EVS194-0009  2021 Evolving Skies Rayquaza V (Alt Full Art) #194/203\n' +
+      '    SN-EVS218-0010  2021 Evolving Skies Rayquaza VMAX (Alt Art secret) #218/203',
+  );
 }
 
 main().catch((err) => {

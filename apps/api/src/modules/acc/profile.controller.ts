@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/commo
 import { ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
+import { AllowSuspended } from './allow-suspended.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './acc.dto';
@@ -33,6 +34,15 @@ class UpdateAddressDto {
 export class ProfileController {
   constructor(private readonly profiles: ProfileService) {}
 
+  /**
+   * Readable by a SUSPENDED account, unlike everything else on this controller.
+   *
+   * The SPA's boot probe is this request: without it the shell cannot tell a
+   * suspended user apart from a signed-out one, and would show them a sign-in
+   * form for an account they have just signed into. It carries the status the
+   * restricted shell keys off, and nothing a suspended holder should not see.
+   */
+  @AllowSuspended()
   @Get('profile')
   get(@CurrentUser() user: AuthUser) {
     return this.profiles.get(user.id);
@@ -40,7 +50,7 @@ export class ProfileController {
 
   @Patch('profile')
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
-    return this.profiles.update(user.id, { displayName: dto.displayName });
+    return this.profiles.update(user.id, { firstName: dto.firstName, lastName: dto.lastName });
   }
 
   @Get('addresses')

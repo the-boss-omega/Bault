@@ -7,6 +7,19 @@ import { pkId, createdAt } from '../../db/schema/_helpers';
  * The item/lifecycle/money tables reference `userAccount.id` as the single owner
  * (Principle I). PII columns (email, profile) are exposed to admins only at the
  * serialization boundary (Principle IX) — the DB stores them normally.
+ *
+ * Identity, after the identity pass:
+ *  - `id` is the immutable internal primary key. It is what every other table
+ *    references and what audit records name; it is never a customer-facing id.
+ *  - `username` is the permanent, unique, CUSTOMER-FACING identifier. It has a
+ *    unique index, a lower-case CHECK constraint, and a DB trigger that rejects
+ *    any UPDATE of the column — so it cannot be reassigned even by a bug.
+ *  - `firstName` / `lastName` replaced the old free-text `displayName`. The
+ *    former column survives as `legacyDisplayName` for historical reference and
+ *    is never written again.
+ *  - `intakeId` is retired from every user-facing workflow. It stays, nullable,
+ *    because existing rows, audit trails and printed package labels still carry
+ *    it; new accounts simply do not get one.
  */
 
 export const accountStatus = pgEnum('account_status', [
@@ -24,14 +37,33 @@ export const userAccount = pgTable(
     id: pkId(),
     email: text('email').notNull(),
     // IMMUTABLE (Requirement 4.1): chosen once at registration, never editable.
-    // No service or endpoint writes this column after the INSERT in AuthService.
+    // No service or endpoint writes this column after the INSERT in AuthService,
+    // and `user_account_username_immutable` rejects it at the database if one ever does.
     username: text('username').notNull(),
     passwordHash: text('password_hash').notNull(), // argon2 hash (never plaintext)
     status: accountStatus('status').notNull().default('pending'),
-    // Unique routing code assigned at registration; inbound packages are addressed by it.
-    intakeId: text('intake_id').notNull(),
+    // RETIRED from user-facing workflows; nullable so new accounts never get one.
+    // Kept for historical rows, audit trails and pre-existing package labels.
+    intakeId: text('intake_id'),
     role: userRole('role').notNull().default('user'),
-    displayName: text('display_name'),
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+    // Set by migration 0004 when the legacy display name could not be split into
+    // first + last without guessing. Surfaced to admins; never blocks sign-in.
+    nameReviewRequired: boolean('name_review_required').notNull().default(false),
+    // The retired free-text display name. Read-only history: nothing writes it.
+    legacyDisplayName: text('legacy_display_name'),
+    /**
+     * Set when the WALLET DEBT SWEEP suspended this account, and cleared when the
+     * same sweep lifts that suspension after the debt clears.
+     *
+     * It exists to keep the two kinds of suspension apart. An administrator's
+     * suspension is a human judgement and must survive the balance recovering;
+     * a debt suspension is a consequence of a number and must not. Only the
+     * sweep writes this column, and it only ever reinstates accounts it can see
+     * it suspended itself.
+     */
+    autoSuspendedAt: timestamp('auto_suspended_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => ({

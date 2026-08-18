@@ -9,7 +9,7 @@ import { SEED, intakeFor, signIn } from './helpers/http';
 describe('DIS value-added services', () => {
   async function freshItem() {
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Card' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
     return { operator, item };
   }
 
@@ -20,6 +20,18 @@ describe('DIS value-added services', () => {
     itemVerified: true,
     notes: 'Front and back captured.',
   };
+
+  /**
+   * A grading request now names a TIER and a declared value, because a grader
+   * prices on exactly those two things. `psa_regular` is used here rather than
+   * the top tier deliberately: the walkthrough tier requires an admin to sign
+   * off before the card may join a submission, which is its own test.
+   */
+  const GRADING_REQUEST = (itemId: string) => ({
+    itemId,
+    tier: 'psa_regular',
+    declaredMinor: 50_000, // $500 — inside psa_regular's $1,499 ceiling
+  });
 
   const GRADING_FORM = {
     grade: 'PSA 10',
@@ -66,7 +78,7 @@ describe('DIS value-added services', () => {
   it('records a returned grade after accept → complete', async () => {
     const { operator, item } = await freshItem();
     const collector = await signIn(SEED.collector);
-    const req = (await collector.post('/services/grading', { itemId: item.id })).body;
+    const req = (await collector.post('/services/grading', GRADING_REQUEST(item.id))).body;
 
     await operator.post(`/services/requests/${req.id}/accept`);
     const done = await operator.post(`/services/grading/${req.id}/complete`, GRADING_FORM);
@@ -79,7 +91,7 @@ describe('DIS value-added services', () => {
   it('operator can deny a pending request', async () => {
     const { operator, item } = await freshItem();
     const collector = await signIn(SEED.collector);
-    const req = (await collector.post('/services/grading', { itemId: item.id })).body;
+    const req = (await collector.post('/services/grading', GRADING_REQUEST(item.id))).body;
     const denied = await operator.post(`/services/requests/${req.id}/deny`);
     expect(denied.status).toBe(201);
     expect(denied.body.status).toBe('cancelled');
@@ -88,7 +100,7 @@ describe('DIS value-added services', () => {
   it('gives every service request a recognizable SR- id (Requirement 9.4)', async () => {
     const { item } = await freshItem();
     const collector = await signIn(SEED.collector);
-    const req = (await collector.post('/services/grading', { itemId: item.id })).body;
+    const req = (await collector.post('/services/grading', GRADING_REQUEST(item.id))).body;
     expect(req.code).toMatch(/^SR-/);
   });
 

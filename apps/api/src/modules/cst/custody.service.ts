@@ -53,6 +53,12 @@ export class CustodyService {
       conditionGrade?: string;
       binId?: string;
       sourceBatchId?: string;
+      /** The inbound parcel this item was unpacked from, when there was one. */
+      sourceParcelId?: string;
+      /** Fixes the storage terms at receipt — see `item.oversized`. */
+      oversized?: boolean;
+      /** What it weighed on the bench, if anybody put it on one. */
+      weightGrams?: number;
       isLot?: boolean;
       lotSize?: number;
       actorId: string;
@@ -71,6 +77,11 @@ export class CustodyService {
         conditionGrade: input.conditionGrade,
         binId: input.binId,
         sourceBatchId: input.sourceBatchId,
+        sourceParcelId: input.sourceParcelId,
+        oversized: input.oversized ?? false,
+        // Null rather than a guess: this column means "somebody measured it",
+        // and the class's typical weight stands in everywhere it is absent.
+        weightGrams: input.weightGrams && input.weightGrams > 0 ? input.weightGrams : null,
         isLot: input.isLot ?? false,
         lotSize: input.lotSize ?? 1,
         lifecycleState: 'stored', // received → stored on documentation

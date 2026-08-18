@@ -6,16 +6,38 @@ import { AppError } from '../../shared/errors/app-error';
 import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
 import { CustodyService } from '../cst/custody.service';
 import { bin, item } from '../cst/cst.schema';
+import { parcel } from './parcel.schema';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { userAccount } from '../acc/acc.schema';
+import { normalizeUsername } from '../../shared/names';
 import { makeItemBarcode, makeItemSerial, makeLotSerial } from './labels';
+import { isKnownItemClass, itemClass, qualifiesAsLot } from './item-classes';
 
 export interface IntakeItemInput {
-  ownerIntakeId: string;
+  /**
+   * The owner's PERMANENT USERNAME — the customer-facing identifier a package,
+   * a label and an operator all name an account by.
+   */
+  ownerUsername?: string;
+  /**
+   * LEGACY. Packages and labels printed before the identity pass carry an OW-
+   * intake ID instead. Still accepted so those arrivals can be received, never
+   * offered as a choice in any UI. See `resolveOwner`.
+   */
+  ownerIntakeId?: string;
   typeClass: string;
   description?: string;
   conditionGrade?: string;
   binId: string; // mandatory — every item must have a bin (Requirement 10.3)
+  /**
+   * What it weighs, in grams, if the operator put it on the scale.
+   *
+   * Optional and left null when it is absent. It is what makes a shipping quote
+   * depend on the parcel rather than on a hard-coded 500 g per item, and a
+   * guessed figure here would be worse than none — the class's typical weight is
+   * at least honestly labelled as an estimate.
+   */
+  weightGrams?: number;
   serialNumber?: string;
   barcode?: string;
   /** Bulk intake: create N identical item records in one action (Requirement 10.1). */
@@ -23,12 +45,20 @@ export interface IntakeItemInput {
   /** Lot support (Requirement 10.5): store the whole lot as a single item. */
   isLot?: boolean;
   lotSize?: number;
+  /**
+   * The inbound parcel this came out of, when it came out of one.
+   *
+   * Optional: an operator can still receive something by hand with no parcel
+   * behind it, and every item booked in before parcels existed has none. Where
+   * it is set, it is what links a collector's purchase to the cards it produced.
+   */
+  parcelId?: string;
 }
 
 /**
  * Intake service (T045, Principles I/III/VI).
  *
- * Receives a package routed by the owner's intake ID and, in ONE transaction per
+ * Receives a package routed by the owner's USERNAME and, in ONE transaction per
  * item: creates the item (assigned to the single owner + a MANDATORY bin) with its
  * first custody event + transfer-ledger row, auto-creates the intake Charge, and
  * emits an `item_received` outbox event. Bulk intake performs all N in one action.
@@ -42,19 +72,70 @@ export class IntakeService {
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
   ) {}
 
-  private async resolveOwner(intakeId: string): Promise<string> {
-    const [owner] = await this.db
-      .select({ id: userAccount.id })
-      .from(userAccount)
-      .where(eq(userAccount.intakeId, intakeId))
-      .limit(1);
-    if (!owner) throw AppError.notFound(`No account for intake ID ${intakeId}`);
-    return owner.id;
+  /**
+   * Resolve the owner an arrival belongs to.
+   *
+   * The username is the identifier the workflow uses: it is permanent, unique,
+   * normalized, and the only one a customer is ever asked to quote. It is
+   * normalized before lookup so an operator typing "Red" finds `red`.
+   *
+   * The OW- intake ID remains accepted as a FALLBACK because packages and shelf
+   * labels printed before the identity pass still carry one and those parcels
+   * must still be receivable. It is never presented as an option, never
+   * allocated to a new account, and is tried only when no username was given.
+   */
+  private async resolveOwner(input: Pick<IntakeItemInput, 'ownerUsername' | 'ownerIntakeId'>): Promise<string> {
+    const username = normalizeUsername(input.ownerUsername ?? '');
+    if (username) {
+      const [owner] = await this.db
+        .select({ id: userAccount.id })
+        .from(userAccount)
+        .where(eq(userAccount.username, username))
+        .limit(1);
+      if (!owner) throw AppError.notFound(`No account with username ${username}`);
+      return owner.id;
+    }
+
+    const legacyIntakeId = input.ownerIntakeId?.trim();
+    if (legacyIntakeId) {
+      const [owner] = await this.db
+        .select({ id: userAccount.id })
+        .from(userAccount)
+        .where(eq(userAccount.intakeId, legacyIntakeId))
+        .limit(1);
+      if (!owner) throw AppError.notFound(`No account for legacy intake ID ${legacyIntakeId}`);
+      return owner.id;
+    }
+
+    throw AppError.validation('An owner username is required to receive an item.');
   }
 
   private async assertBinExists(binId: string): Promise<void> {
     const [row] = await this.db.select({ id: bin.id }).from(bin).where(eq(bin.id, binId)).limit(1);
     if (!row) throw AppError.validation(`Bin ${binId} does not exist`);
+  }
+
+  /**
+   * A parcel may only receive items into the account it belongs to, and only
+   * while it is open.
+   *
+   * `processed` is refused as firmly as the others: that status means the fee has
+   * been charged and the parcel closed out, so adding to it afterwards would
+   * quietly extend a finished record.
+   */
+  private async assertParcelOpenFor(parcelId: string, ownerId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ id: parcel.id, ownerId: parcel.ownerId, status: parcel.status })
+      .from(parcel)
+      .where(eq(parcel.id, parcelId))
+      .limit(1);
+    if (!row) throw AppError.validation(`Parcel ${parcelId} does not exist`);
+    if (row.ownerId !== ownerId) {
+      throw AppError.validation('That parcel belongs to a different account');
+    }
+    if (row.status !== 'opened') {
+      throw AppError.validation(`Parcel must be open to book items out of it (it is ${row.status})`);
+    }
   }
 
   /**
@@ -64,18 +145,67 @@ export class IntakeService {
   async intakeItem(actorId: string, input: IntakeItemInput) {
     if (!input.binId) throw AppError.validation('A bin is required for every item');
     await this.assertBinExists(input.binId);
-    const ownerId = await this.resolveOwner(input.ownerIntakeId);
 
-    const quantity = Math.max(1, Math.min(100, Math.trunc(input.quantity ?? 1)));
+    // The class is vocabulary now, not free text: per-class pricing, the lot rule
+    // and the oversized flag all key off it, and none of them can act on a value
+    // nobody defined.
+    if (!isKnownItemClass(input.typeClass)) {
+      throw AppError.validation(`Unknown item class "${input.typeClass}"`);
+    }
+    const cls = itemClass(input.typeClass)!;
+
+    const ownerId = await this.resolveOwner(input);
+
+    // A parcel, when given, has to be this owner's and has to be open. Booking
+    // items out of somebody else's box, or out of one nobody has opened yet,
+    // would make the parcel's contents record a fiction.
+    if (input.parcelId) await this.assertParcelOpenFor(input.parcelId, ownerId);
+
+    let quantity = Math.max(1, Math.min(100, Math.trunc(input.quantity ?? 1)));
+    let lot = input.isLot === true;
+    const lotSize = Math.max(1, Math.trunc(input.lotSize ?? 1));
+
+    if (lot) {
+      if (!cls.lotEligible) {
+        throw AppError.validation(`${cls.label} cannot be received as a lot`);
+      }
+      /**
+       * The five-or-fewer rule, which applies only to classes that carry a
+       * threshold — cards. A "lot" below it is not refused and the operator is
+       * not sent back to change a checkbox; it is simply received as what it
+       * actually is: that many individual items, each with its own serial,
+       * barcode and intake charge.
+       *
+       * Converting rather than rejecting is the honest reading of the policy.
+       * "Five or fewer are ALWAYS processed as individuals" is a statement about
+       * what happens, not an option the operator gets to weigh, and the
+       * collector is the one who benefits: they cannot sell, grade or ship a
+       * single card out of a lot that was never broken.
+       */
+      if (!qualifiesAsLot(cls, lotSize)) {
+        lot = false;
+        quantity = lotSize;
+      }
+    }
+
+    const effective: IntakeItemInput = {
+      ...input,
+      isLot: lot,
+      lotSize: lot ? lotSize : undefined,
+      // A converted lot mints one serial per piece, so an explicitly-supplied
+      // serial cannot apply to all of them.
+      quantity: quantity === 1 ? input.quantity : quantity,
+    };
+
     const created = [];
     for (let i = 0; i < quantity; i += 1) {
-      created.push(await this.createOne(actorId, ownerId, input));
+      created.push(await this.createOne(actorId, ownerId, effective, cls.oversized));
     }
     // A bulk submit returns the whole batch; a single intake returns the one item.
     return quantity === 1 ? created[0] : created;
   }
 
-  private createOne(actorId: string, ownerId: string, input: IntakeItemInput) {
+  private createOne(actorId: string, ownerId: string, input: IntakeItemInput, oversized = false) {
     // Serial/barcode are always freshly generated per copy so each of N items is
     // individually tracked and uniquely scannable. A lot gets the LOT- prefix.
     const mint = input.isLot ? makeLotSerial : makeItemSerial;
@@ -95,12 +225,25 @@ export class IntakeService {
         description: input.description,
         conditionGrade: input.conditionGrade,
         binId: input.binId,
+        sourceParcelId: input.parcelId,
+        // The storage terms are settled here, at receipt, from the class the
+        // operator booked it under — never re-derived afterwards.
+        oversized,
+        weightGrams: input.weightGrams,
         isLot: input.isLot,
         lotSize: input.isLot ? Math.max(1, Math.trunc(input.lotSize ?? 1)) : 1,
         actorId,
       });
 
-      await this.billing.charge(tx, { userId: ownerId, actionType: 'intake', itemId: createdItem.id });
+      // The class travels with the charge so a class-specific intake rule can
+      // resolve. Without it every intake billed at the catch-all rate no matter
+      // what arrived, which made per-class pricing unreachable in practice.
+      await this.billing.charge(tx, {
+        userId: ownerId,
+        actionType: 'intake',
+        itemId: createdItem.id,
+        itemClass: input.typeClass,
+      });
       await this.outbox.emit(tx, {
         aggregateType: 'item',
         aggregateId: createdItem.id,
@@ -158,11 +301,20 @@ export class IntakeService {
             description: lot.description,
             conditionGrade: lot.conditionGrade ?? undefined,
             binId: lotBinId,
+            sourceParcelId: lot.sourceParcelId ?? undefined,
+            // Children inherit the lot's storage terms: they are the same
+            // physical goods, on the same shelf, received on the same day.
+            oversized: lot.oversized,
             isLot: false,
             lotSize: 1,
             actorId,
           });
-          await this.billing.charge(tx, { userId: lot.ownerId, actionType: 'intake', itemId: child.id });
+          await this.billing.charge(tx, {
+            userId: lot.ownerId,
+            actionType: 'intake',
+            itemId: child.id,
+            itemClass: lot.typeClass,
+          });
           return child;
         }),
       );

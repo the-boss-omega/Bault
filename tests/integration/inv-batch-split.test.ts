@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, binIds, intakeIdOf, signIn } from './helpers/http';
+import { SEED, binIds, signIn, usernameOf } from './helpers/http';
 
 /**
  * US2 — batch split produces one tracked item + custody event per item (T038).
@@ -7,18 +7,18 @@ import { SEED, binIds, intakeIdOf, signIn } from './helpers/http';
 describe('INV batch split', () => {
   it('opens a batch and splits it into individually tracked items', async () => {
     const operator = await signIn(SEED.operator);
-    const ownerIntakeId = await intakeIdOf(SEED.collector2);
+    const ownerUsername = await usernameOf(SEED.collector2);
     const bins = await binIds(operator);
 
-    const batch = await operator.post('/intake/batches', { ownerIntakeId });
+    const batch = await operator.post('/intake/batches', { ownerUsername });
     expect(batch.status).toBe(201);
     const batchId = batch.body.id as string;
 
     const split = await operator.post(`/intake/batches/${batchId}/split`, {
       items: [
-        { typeClass: 'Card', description: 'Card A', binId: bins[0] },
-        { typeClass: 'Card', description: 'Card B', binId: bins[0] },
-        { typeClass: 'Card', description: 'Card C', binId: bins[1] },
+        { typeClass: 'trading_card', description: 'Card A', binId: bins[0] },
+        { typeClass: 'trading_card', description: 'Card B', binId: bins[0] },
+        { typeClass: 'trading_card', description: 'Card C', binId: bins[1] },
       ],
     });
     expect(split.status).toBe(201);
@@ -35,15 +35,15 @@ describe('INV batch split', () => {
 
   it('rejects splitting the same batch twice', async () => {
     const operator = await signIn(SEED.operator);
-    const ownerIntakeId = await intakeIdOf(SEED.collector2);
+    const ownerUsername = await usernameOf(SEED.collector2);
     const bins = await binIds(operator);
-    const batch = await operator.post('/intake/batches', { ownerIntakeId });
+    const batch = await operator.post('/intake/batches', { ownerUsername });
     const batchId = batch.body.id as string;
     await operator.post(`/intake/batches/${batchId}/split`, {
-      items: [{ typeClass: 'X', binId: bins[0] }],
+      items: [{ typeClass: 'other', binId: bins[0] }],
     });
     const second = await operator.post(`/intake/batches/${batchId}/split`, {
-      items: [{ typeClass: 'Y', binId: bins[0] }],
+      items: [{ typeClass: 'comic_raw', binId: bins[0] }],
     });
     expect(second.status).toBe(400);
   });

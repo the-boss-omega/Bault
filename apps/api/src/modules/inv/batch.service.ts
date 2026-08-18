@@ -7,6 +7,7 @@ import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.por
 import { CustodyService } from '../cst/custody.service';
 import { batch } from '../cst/cst.schema';
 import { userAccount } from '../acc/acc.schema';
+import { normalizeUsername } from '../../shared/names';
 import { makeItemBarcode, makeItemSerial } from './labels';
 
 export interface SplitItemInput {
@@ -31,14 +32,35 @@ export class BatchService {
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
   ) {}
 
-  async open(ownerIntakeId: string) {
-    const [owner] = await this.db
+  /**
+   * Open a batch for an owner named by their permanent USERNAME.
+   *
+   * A legacy OW- intake ID is still accepted as a fallback for pre-printed
+   * arrivals, exactly as in `IntakeService.resolveOwner` — same rule, so the two
+   * intake paths never disagree about who an arrival belongs to.
+   */
+  async open(owner: { ownerUsername?: string; ownerIntakeId?: string }) {
+    const username = normalizeUsername(owner.ownerUsername ?? '');
+    if (username) {
+      const [found] = await this.db
+        .select({ id: userAccount.id })
+        .from(userAccount)
+        .where(eq(userAccount.username, username))
+        .limit(1);
+      if (!found) throw AppError.notFound(`No account with username ${username}`);
+      const [created] = await this.db.insert(batch).values({ ownerId: found.id }).returning();
+      return created;
+    }
+
+    const legacyIntakeId = owner.ownerIntakeId?.trim();
+    if (!legacyIntakeId) throw AppError.validation('An owner username is required to open a batch.');
+    const [found] = await this.db
       .select({ id: userAccount.id })
       .from(userAccount)
-      .where(eq(userAccount.intakeId, ownerIntakeId))
+      .where(eq(userAccount.intakeId, legacyIntakeId))
       .limit(1);
-    if (!owner) throw AppError.notFound(`No account for intake ID ${ownerIntakeId}`);
-    const [created] = await this.db.insert(batch).values({ ownerId: owner.id }).returning();
+    if (!found) throw AppError.notFound(`No account for legacy intake ID ${legacyIntakeId}`);
+    const [created] = await this.db.insert(batch).values({ ownerId: found.id }).returning();
     return created;
   }
 

@@ -31,11 +31,37 @@ export class Client {
   del = (p: string) => this.request('DELETE', p);
 }
 
+/**
+ * Where accounts created BY TESTS live.
+ *
+ * These suites register real accounts against a real database. Minting them at
+ * `bault.dev` — the seeded personas' domain — left them sitting in the
+ * product-facing Management > Users table, indistinguishable from customers.
+ * `.test` is reserved by RFC 2606, so this domain can never be a real address,
+ * and `AdmService.listUsers` filters it out by exact domain match.
+ *
+ * Mirrors `FIXTURE_EMAIL_DOMAIN` in `apps/api/src/shared/fixtures.ts`; matched
+ * by value so the test tree and the API stay independent.
+ */
+export const FIXTURE_EMAIL_DOMAIN = 'fixture.bault.test';
+
+/** A unique fixture address. `label` only aids debugging a failed run. */
+export function fixtureEmail(label: string): string {
+  return `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@${FIXTURE_EMAIL_DOMAIN}`;
+}
+
 /** The accounts created by `pnpm --filter @bault/api db:seed`. */
 export const SEED_PASSWORD = '11111111';
 export const SEED = {
   collector: 'red@bault.dev',
   collector2: 'golden@bault.dev',
+  /**
+   * A third collector, seeded as a PRE-IDENTITY-PASS account: it carries a legacy
+   * OW- intake ID, its migrated name is flagged for review, and its original
+   * single display name is kept read-only. Tests use it both as an ordinary
+   * third party and to prove the migrated-account paths still work.
+   */
+  collector3: 'veteran@bault.dev',
   operator: 'hermon@bault.dev',
   admin: 'eldar@bault.dev',
 } as const;
@@ -44,6 +70,7 @@ export const SEED = {
 export const SEED_USERNAME = {
   collector: 'red',
   collector2: 'golden',
+  collector3: 'veteran',
   operator: 'hermon',
   admin: 'eldar',
 } as const;
@@ -61,14 +88,63 @@ export async function signIn(identifier: string, password = SEED_PASSWORD): Prom
 }
 
 /**
- * The account's OW- routing code. The seed mints these randomly (Requirement
- * 9.1), so tests must look one up rather than hard-code it.
+ * The account's permanent USERNAME — the customer-facing identifier every
+ * workflow names an account by.
+ *
+ * This replaced `intakeIdOf`. The OW- intake code is retired from user-facing
+ * APIs and `/me/profile` no longer returns one, so a test that needs to name an
+ * owner asks for the username exactly as an operator would.
  */
-export async function intakeIdOf(email: string): Promise<string> {
+export async function usernameOf(email: string): Promise<string> {
   const c = await signIn(email);
   const me = await c.get('/me/profile');
   if (me.status !== 200) throw new Error(`profile lookup failed for ${email}`);
-  return me.body.intakeId as string;
+  return me.body.username as string;
+}
+
+/**
+ * Put money in a wallet the only way the platform allows: raise a cash-in
+ * REQUEST as the customer, then have an administrator approve and complete it.
+ *
+ * Tests used to call `POST /finance/wallet/topups` and have the balance move on
+ * the spot. That capability no longer exists for anyone — submitting a request
+ * changes nothing, and only a completed request writes a ledger row — so a test
+ * that needs a funded wallet has to walk the real approval path. That the helper
+ * is this long is the point: there is no shortcut, including for tests.
+ *
+ * `customerEmail` must not be the admin's own account: separation of duties bars
+ * an administrator from deciding a request they raised themselves.
+ */
+export async function fundWallet(customerEmail: string, amountMinor: number): Promise<void> {
+  if (customerEmail === SEED.admin) {
+    throw new Error(
+      'fundWallet cannot fund the admin account: an admin may not approve their own wallet request.',
+    );
+  }
+  const customer = await signIn(customerEmail);
+  const created = await customer.post('/finance/wallet-requests', {
+    type: 'cash_in',
+    amountMinor,
+    currency: 'USD',
+    fundingSource: 'bank_transfer',
+    // Unique per call, so two fundings of the same amount are not refused as
+    // duplicates of one another.
+    reference: `test-funding-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+  });
+  if (created.status !== 201) {
+    throw new Error(`cash-in request failed: ${JSON.stringify(created.body)}`);
+  }
+  const requestId = created.body.id as string;
+
+  const admin = await signIn(SEED.admin);
+  const approved = await admin.post(`/admin/wallet-requests/${requestId}/approve`, {});
+  if (approved.status !== 201) {
+    throw new Error(`approve failed: ${JSON.stringify(approved.body)}`);
+  }
+  const completed = await admin.post(`/admin/wallet-requests/${requestId}/complete`, {});
+  if (completed.status !== 201) {
+    throw new Error(`complete failed: ${JSON.stringify(completed.body)}`);
+  }
 }
 
 /** Ids of the seeded bins. Intake requires a bin — it is mandatory (Req 10.3). */
@@ -88,10 +164,11 @@ export async function intakeFor(
   ownerEmail: string,
   overrides: Record<string, unknown> = {},
 ) {
-  const [ownerIntakeId, bins] = await Promise.all([intakeIdOf(ownerEmail), binIds(operator)]);
+  // Routed by USERNAME, exactly as the warehouse intake form does it now.
+  const [ownerUsername, bins] = await Promise.all([usernameOf(ownerEmail), binIds(operator)]);
   const res = await operator.post('/intake/items', {
-    ownerIntakeId,
-    typeClass: 'Trading Card',
+    ownerUsername,
+    typeClass: 'trading_card',
     binId: bins[0],
     ...overrides,
   });

@@ -4,6 +4,7 @@ import { BrowseService } from './browse.service';
 import { PurchaseService } from './purchase.service';
 import { OfferService } from './offer.service';
 import { TradeService } from './trade.service';
+import { MarketReadService } from './market-read.service';
 import { MktController } from './mkt.controller';
 import { OfferController } from './offer.controller';
 import { TradeController } from './trade.controller';
@@ -16,6 +17,13 @@ import { TradeController } from './trade.controller';
  */
 @Module({
   controllers: [MktController, OfferController, TradeController],
-  providers: [ListingService, BrowseService, PurchaseService, OfferService, TradeService],
+  providers: [
+    ListingService,
+    BrowseService,
+    PurchaseService,
+    OfferService,
+    TradeService,
+    MarketReadService,
+  ],
 })
 export class MktModule {}

@@ -1,69 +1,56 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
-import { useT } from '../../../shared/i18n';
-import type { MessageKey } from '../../../shared/i18n';
+import { useI18n, type MessageKey } from '../../../shared/i18n';
+import { formatDateTime } from '../../../shared/money';
+import { useNavigation, useRoute } from '../../../shared/routing';
+import { EVENT_TYPES, channelLabel, eventLabel, renderContent } from '../../../shared/notifications';
+import type { AppNotification, useNotificationFeed } from '../../../shared/hooks';
+import {
+  Button,
+  ContextTabs,
+  EmptyState,
+  ErrorState,
+  Panel,
+  SkeletonTable,
+  StatusBadge,
+  TabPanel,
+} from '../../../shared/ui/primitives';
+import { IconBell } from '../../../shared/ui/icons';
 
-/** Message key per known notification event type. */
-const EVENT_LABEL_KEY: Record<string, MessageKey> = {
-  item_received: 'notifications.event.item_received',
-  item_sold: 'notifications.event.item_sold',
-  offer_received: 'notifications.event.offer_received',
-  shipment_out: 'notifications.event.shipment_out',
-  hold_placed: 'notifications.event.hold_placed',
-};
-const EVENT_TYPES = Object.keys(EVENT_LABEL_KEY);
-
-interface AppNotification {
-  id: string;
-  eventType: string;
-  content: unknown; // jsonb — may be an object; render defensively (never as a raw React child)
+/** One switch: an event type on a channel. */
+interface ChannelPreference {
   channel: string;
-  status: string;
-  createdAt: string;
-}
-
-/**
- * Render a notification as a proper sentence (Requirement 6.1).
- *
- * The dispatcher writes a rendered `message` into every notification's content, so
- * that is what is displayed. Older rows (or an unexpected shape) fall back to a
- * readable "Key: value" summary of the payload — never a raw JSON dump, and never
- * the tuple-of-strings this used to render as.
- */
-function renderContent(content: unknown, eventLabel: string): string {
-  if (content == null) return eventLabel;
-  if (typeof content === 'string') return content;
-  if (typeof content !== 'object') return String(content);
-
-  const record = content as Record<string, unknown>;
-  if (typeof record.message === 'string' && record.message.trim() !== '') return record.message;
-
-  // Fallback: a readable field list, skipping opaque ids and internal plumbing.
-  const skip = new Set(['recipientIds', 'ownerId', 'userId', 'sellerId', 'buyerId', 'donorId', 'responderId']);
-  const parts = Object.entries(record)
-    .filter(([key, value]) => !skip.has(key) && value != null && typeof value !== 'object')
-    .map(([key, value]) => {
-      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-      return `${label}: ${String(value)}`;
-    });
-  return parts.length > 0 ? `${eventLabel} — ${parts.join(', ')}` : eventLabel;
-}
-
-interface Preference {
-  eventType: string;
   enabled: boolean;
+  /** True when this is the default rather than something the user chose. */
+  isDefault: boolean;
+  /** Bad news cannot be switched off in the app. */
+  mandatory: boolean;
+}
+
+interface PreferenceRow {
+  eventType: string;
+  category: string;
+  /** The server's own English label, used when this build has no translation. */
+  label: string;
+  channels: ChannelPreference[];
+}
+
+interface PreferenceMatrix {
+  categories: string[];
+  channels: string[];
+  events: PreferenceRow[];
 }
 
 /**
- * The api client only exposes get/post/patch/del; preferences use PUT, so this
- * one call follows the same fetch conventions (cookie session, uniform errors).
+ * The api client only exposes get/post/patch/del; preferences use PUT, so these
+ * calls follow the same fetch conventions (cookie session, uniform errors).
  */
-async function putPreference(eventType: string, enabled: boolean): Promise<void> {
-  const res = await fetch('/api/v1/notifications/preferences', {
+async function putJson(path: string, body: unknown): Promise<void> {
+  const res = await fetch(`/api/v1/notifications/${path}`, {
     method: 'PUT',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ eventType, enabled }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -71,48 +58,59 @@ async function putPreference(eventType: string, enabled: boolean): Promise<void>
   }
 }
 
+const TABS = ['feed', 'preferences'] as const;
+type NotificationsTab = (typeof TABS)[number];
+
 /**
- * Customer notification feed (NOT). Shows the user's notifications newest-first
- * plus per-event-type opt-in/out toggles. Every event type defaults to enabled
- * unless the server returned an explicit `enabled: false` preference.
+ * Customer notification feed (NOT). Newest-first list plus per-event-type
+ * opt-in/out toggles. Every event type defaults to enabled unless the server
+ * returned an explicit `enabled: false` preference.
+ *
+ * The feed itself is owned by the shell (so the header bell and this page never
+ * disagree); opening the page marks everything as seen.
  */
-export function NotificationsPage() {
-  const t = useT();
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [prefs, setPrefs] = useState<Preference[]>([]);
+export function NotificationsPage({
+  feed,
+  onSeen,
+}: {
+  feed: ReturnType<typeof useNotificationFeed>;
+  onSeen: () => void;
+}) {
+  const { t, locale } = useI18n();
+  const route = useRoute();
+  const { goTab } = useNavigation(route);
+  const [prefs, setPrefs] = useState<PreferenceMatrix | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const tab: NotificationsTab = (TABS as readonly string[]).includes(route.tab ?? '')
+    ? (route.tab as NotificationsTab)
+    : 'feed';
+
+  const loadPrefs = useCallback(async () => {
     try {
-      const [list, preferences] = await Promise.all([
-        api.get<AppNotification[]>('/notifications'),
-        api.get<Preference[]>('/notifications/preferences'),
-      ]);
-      list.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-      setNotifications(list);
-      setPrefs(preferences);
+      setPrefs(await api.get<PreferenceMatrix>('/notifications/preferences'));
       setError(null);
     } catch (e) {
       setError((e as Error).message);
+      setPrefs(null);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadPrefs();
+  }, [loadPrefs]);
 
-  function isEnabled(eventType: string): boolean {
-    const pref = prefs.find((p) => p.eventType === eventType);
-    return pref ? pref.enabled : true;
-  }
+  // Landing on the page means the user has looked at the feed.
+  useEffect(() => {
+    onSeen();
+  }, [onSeen]);
 
-  async function toggle(eventType: string, enabled: boolean) {
+  async function toggle(eventType: string, channel: string, enabled: boolean) {
     setSaving(true);
     try {
-      await putPreference(eventType, enabled);
-      setPrefs(await api.get<Preference[]>('/notifications/preferences'));
-      setError(null);
+      await putJson('preferences', { eventType, channel, enabled });
+      await loadPrefs();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -120,61 +118,143 @@ export function NotificationsPage() {
     }
   }
 
-  function eventLabel(eventType: string): string {
-    const key = EVENT_LABEL_KEY[eventType];
-    return key ? t(key) : eventType;
+  /** "Stop emailing me", in one action rather than twenty-eight. */
+  async function toggleChannel(channel: string, enabled: boolean) {
+    setSaving(true);
+    try {
+      await putJson('preferences/channel', { channel, enabled });
+      await loadPrefs();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   }
 
+  const tabs = TABS.map((key) => ({ key, label: t(`notifications.tab.${key}` as MessageKey) }));
+
   return (
-    <section>
-      <h2>{t('notifications.title')}</h2>
-      {error && <p role="alert">{error}</p>}
+    <>
+      <ContextTabs label={t('notifications.title')} tabs={tabs} active={tab} onSelect={goTab} />
 
-      <div className="card">
-        <h4>{t('notifications.preferences.title')}</h4>
-        <p className="hint">{t('notifications.preferences.hint')}</p>
-        <div className="field-row">
-          {EVENT_TYPES.map((et) => (
-            <label key={et}>
-              <input
-                type="checkbox"
-                checked={isEnabled(et)}
-                disabled={saving}
-                onChange={(e) => toggle(et, e.target.checked)}
-              />
-              {eventLabel(et)}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <h3>{t('notifications.mine', { n: notifications.length })}</h3>
-      {notifications.length === 0 ? (
-        <p className="hint">{t('notifications.empty')}</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{t('notifications.col.event')}</th>
-                <th>{t('notifications.col.content')}</th>
-                <th>{t('notifications.col.date')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {notifications.map((n) => (
-                <tr key={n.id}>
-                  <td>
-                    <span className="badge badge--info">{eventLabel(n.eventType)}</span>
-                  </td>
-                  <td>{renderContent(n.content, eventLabel(n.eventType))}</td>
-                  <td dir="ltr">{n.createdAt?.slice(0, 10)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {(error || feed.error) && (
+        <ErrorState message={error ?? feed.error ?? ''} onRetry={() => void feed.reload()} retryLabel={t('ui.retry')} />
       )}
-    </section>
+
+      {tab === 'feed' && (
+        <TabPanel tab="feed">
+          <Panel title={t('notifications.mine', { n: feed.items.length })} flush>
+            {feed.loading ? (
+              <SkeletonTable rows={5} columns={3} />
+            ) : feed.items.length === 0 ? (
+              <EmptyState title={t('notifications.empty')} text={t('notifications.emptyText')} icon={<IconBell />} />
+            ) : (
+              <div className="dt-wrap dt-wrap--stack">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('notifications.col.event')}</th>
+                      <th scope="col">{t('notifications.col.content')}</th>
+                      <th scope="col">{t('notifications.col.date')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feed.items.map((n: AppNotification) => (
+                      <tr key={n.id}>
+                        <td data-label={t('notifications.col.event')}>
+                          <StatusBadge tone="info">{eventLabel(t, n.eventType)}</StatusBadge>
+                        </td>
+                        <td data-label={t('notifications.col.content')}>
+                          {renderContent(n.content, eventLabel(t, n.eventType))}
+                        </td>
+                        <td data-label={t('notifications.col.date')}>
+                          <span dir="ltr">{formatDateTime(n.createdAt, locale)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </TabPanel>
+      )}
+
+      {tab === 'preferences' && (
+        <TabPanel tab="preferences">
+          <Panel title={t('notifications.preferences.title')} subtitle={t('notifications.preferences.hint')}>
+            {prefs === null ? (
+              <SkeletonTable rows={6} columns={3} />
+            ) : (
+              <>
+                {/* The one thing somebody arriving here in irritation actually
+                    wants to say. Making them tick twenty-eight boxes to say it
+                    would be a dark pattern. */}
+                <div className="row" style={{ gap: 'var(--sp-2)', marginBlockEnd: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                  {prefs.channels.map((channel) => (
+                    <span key={channel} className="row" style={{ gap: 'var(--sp-2)' }}>
+                      <Button size="sm" variant="ghost" disabled={saving} onClick={() => void toggleChannel(channel, true)}>
+                        {t('notifications.allOn', { channel: channelLabel(t, channel) })}
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={saving} onClick={() => void toggleChannel(channel, false)}>
+                        {t('notifications.allOff', { channel: channelLabel(t, channel) })}
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+
+                {prefs.categories.map((category) => {
+                  const rows = prefs.events.filter((e) => e.category === category);
+                  if (rows.length === 0) return null;
+                  return (
+                    <div key={category} style={{ marginBlockEnd: 'var(--sp-5)' }}>
+                      <h3 className="drawer-heading">{t(`notifications.cat.${category}` as MessageKey)}</h3>
+                      <div className="dt-wrap">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">{t('notifications.col.event')}</th>
+                              {prefs.channels.map((channel) => (
+                                <th key={channel} scope="col">
+                                  {channelLabel(t, channel)}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row) => (
+                              <tr key={row.eventType}>
+                                <td className="dt-primary">
+                                  {EVENT_TYPES.includes(row.eventType) ? eventLabel(t, row.eventType) : row.label}
+                                </td>
+                                {row.channels.map((c) => (
+                                  <td key={c.channel} data-label={channelLabel(t, c.channel)}>
+                                    <label className="check">
+                                      <input
+                                        type="checkbox"
+                                        checked={c.enabled}
+                                        disabled={saving || c.mandatory}
+                                        onChange={(e) => void toggle(row.eventType, c.channel, e.target.checked)}
+                                      />
+                                      {c.mandatory && <span className="hint">{t('notifications.always')}</span>}
+                                    </label>
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <p className="field-hint">{t('notifications.emailHint')}</p>
+              </>
+            )}
+          </Panel>
+        </TabPanel>
+      )}
+    </>
   );
 }

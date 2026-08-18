@@ -1,0 +1,204 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "ex8-107",
+    "name": "Rayquaza ★",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "107",
+    "printed_number_format": "107/107",
+    "set_id": "ex8",
+    "set_name": "EX Deoxys",
+    "dataset_set_name": "Deoxys",
+    "series": "EX",
+    "release_date": "2005/02/01",
+    "release_year": 2005,
+    "ptcgo_set_code": "DX",
+    "printed_set_size": 107,
+    "database_set_total_including_secrets_or_subsets": 108
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "Basic",
+      "Star"
+    ],
+    "level": null,
+    "rarity_as_listed_by_dataset": "Rare Holo Star",
+    "collector_variant": "Gold Star secret rare",
+    "finish_description": "Gold Star holofoil",
+    "era": "EX era"
+  },
+  "gameplay": {
+    "hp": "90",
+    "types": [
+      "Colorless"
+    ],
+    "evolves_from": null,
+    "evolves_to": [],
+    "abilities": [],
+    "ancient_trait": null,
+    "attacks": [
+      {
+        "name": "Spiral Rush",
+        "cost": [
+          "Fire",
+          "Lightning"
+        ],
+        "convertedEnergyCost": 2,
+        "damage": "30×",
+        "text": "Flip a coin until you get tails. This attack does 30 damage times the number of heads."
+      },
+      {
+        "name": "Holy Star",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Lightning",
+          "Lightning"
+        ],
+        "convertedEnergyCost": 4,
+        "damage": "",
+        "text": "Discard all Energy cards attached to Rayquaza Star. This attack does 100 damage to each of your opponent's Pokémon-ex. (Don't apply Weakness and Resistance for Benched Pokémon.)"
+      }
+    ],
+    "weaknesses": [
+      {
+        "type": "Colorless",
+        "value": "×2"
+      }
+    ],
+    "resistances": [
+      {
+        "type": "Water",
+        "value": "-30"
+      },
+      {
+        "type": "Fighting",
+        "value": "-30"
+      }
+    ],
+    "retreat_cost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "converted_retreat_cost": 2,
+    "rules": [
+      "You can't have more than 1 Pokémon Star in your deck."
+    ],
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "regulation_mark": null,
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "Masakazu Fukuda",
+    "reference_image_file": "image/ex8_107_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/ex8/107_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/ex8/107.png",
+    "pixel_dimensions": {
+      "width": 600,
+      "height": 825
+    },
+    "file_format": "PNG",
+    "sha256": "82645cb181adfb9aeca6adbe99961f42a1f3aa8648c2762e3cd7915f27664753",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "ex8",
+    "name": "Deoxys",
+    "display_name": "EX Deoxys",
+    "series": "EX",
+    "printedTotal": 107,
+    "total": 108,
+    "ptcgoCode": "DX",
+    "releaseDate": "2005/02/01",
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/ex8/symbol.png",
+    "logo": "https://images.pokemontcg.io/ex8/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2005 POKEMON EX DEOXYS RAYQUAZA-HOLO GOLD STAR #107",
+    "inspection_priorities": [
+      "Counterfeit card or counterfeit slab",
+      "Rebacking, trimming, recoloring, or restoration",
+      "Holo scratching and print lines",
+      "Edge and corner whitening",
+      "Surface dents or binder impressions",
+      "Exact slab certification lookup before payment"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "The flagship Rayquaza grail: a Gold Star card with exceptionally strong collector demand and severe condition sensitivity.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.psacard.com/cardfacts/non-sports-cards/2005-nintendo-pokemon-ex-deoxys/rayquaza-holo-gold-star-107/753114",
+      "https://www.cardmarket.com/en/Pokemon/Products/Singles/EX-Deoxys/Rayquaza-Gold-Star-DX107"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/ex8.json",
+      "record_id": "ex8-107"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "ex8"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/ex8/107_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.psacard.com/cardfacts/non-sports-cards/2005-nintendo-pokemon-ex-deoxys/rayquaza-holo-gold-star-107/753114"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.cardmarket.com/en/Pokemon/Products/Singles/EX-Deoxys/Rayquaza-Gold-Star-DX107"
+    }
+  ]
+}

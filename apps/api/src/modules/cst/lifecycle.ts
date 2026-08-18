@@ -16,17 +16,26 @@ export type LifecycleState =
   | 'sold'
   | 'shipped'
   | 'donated'
-  | 'consigned';
+  | 'consigned'
+  | 'at_grader'
+  | 'discarded';
 
 const TRANSITIONS: Record<LifecycleState, LifecycleState[]> = {
   received: ['stored'],
-  stored: ['listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned'],
+  stored: ['listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned', 'at_grader', 'discarded'],
   listed: ['stored', 'sold', 'on-hold'], // unlist / sale / hold
   'on-hold': ['stored'], // hold released
   sold: ['stored', 'shipped'], // ownership moved; item stays shelved unless shipped
   shipped: [],
   donated: [],
   consigned: [],
+  /**
+   * Away at a grader. It comes back to the shelf, or — rarely — the grader
+   * reports it lost or destroyed, which is recorded as a discard rather than
+   * pretending it returned.
+   */
+  at_grader: ['stored', 'discarded'],
+  discarded: [],
 };
 
 export function assertTransition(from: LifecycleState, to: LifecycleState): void {

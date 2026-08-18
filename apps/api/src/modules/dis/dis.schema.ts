@@ -16,6 +16,16 @@ export const serviceRequestType = pgEnum('service_request_type', [
   'donation',
   'consignment',
   'warehouse_transfer',
+  /** Bault buying the item outright — a quote, then an accept or a decline. */
+  'buyout',
+  /** Turning the card under a light on camera — the only way to show gloss. */
+  'video_review',
+  /** A person looking at named areas and writing down what they see. */
+  'condition_inspection',
+  /** Cracking a graded card out of its holder. Irreversible. */
+  'deslab',
+  /** The bulk cull of cards worth less than the storage they will accrue. */
+  'remove_commons',
 ]);
 
 export const serviceRequestStatus = pgEnum('service_request_status', [

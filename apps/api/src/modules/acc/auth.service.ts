@@ -5,7 +5,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { userAccount } from './acc.schema';
-import { generateIntakeId } from './intake-id';
+import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../shared/names';
 import { VerificationService } from './verification.service';
 import { SessionService } from './session.service';
 import type { AuthUser } from '../sec/auth-context';
@@ -14,9 +14,13 @@ import type { AuthUser } from '../sec/auth-context';
  * Registration + login (T029, Principle IX/X).
  *
  * Registration: hash the password with argon2, record the caller's chosen
- * USERNAME (immutable from this point on — Requirement 4.1), assign a UNIQUE
- * intake ID, create the account in `pending` status, and email a verification link.
- * Login: verify credentials, block non-active accounts, mint a session.
+ * USERNAME (immutable from this point on — Requirement 4.1) plus their first and
+ * last name, create the account in `pending` status, and email a verification
+ * link. Login: verify credentials, block non-active accounts, mint a session.
+ *
+ * No intake ID is allocated any more. The username IS the customer-facing
+ * identifier now, so a second routing code would be a second thing to keep
+ * unique, print, and explain. Existing accounts keep the one they were given.
  */
 @Injectable()
 export class AuthService {
@@ -30,9 +34,20 @@ export class AuthService {
     email: string,
     username: string,
     password: string,
-  ): Promise<{ userId: string; intakeId: string; username: string }> {
+    firstName: string,
+    lastName: string,
+  ): Promise<{ userId: string; username: string; firstName: string; lastName: string }> {
     const normalizedEmail = email.trim().toLowerCase();
-    const normalizedUsername = username.trim().toLowerCase();
+    // Normalized ONCE, here, so the unique index below is an index over exactly
+    // the values a person can type: "Red", " red " and "RED" are one account.
+    const normalizedUsername = normalizeUsername(username);
+    if (!isValidUsername(normalizedUsername)) {
+      throw AppError.validation('Username must be 3-32 characters of letters, digits, dot, dash or underscore');
+    }
+
+    const first = normalizeNamePart(firstName);
+    const last = normalizeNamePart(lastName);
+    if (!first || !last) throw AppError.validation('First name and last name are both required');
 
     const [existing] = await this.db
       .select({ id: userAccount.id })
@@ -49,24 +64,32 @@ export class AuthService {
     if (usernameTaken) throw AppError.validation('Username is already taken');
 
     const passwordHash = await argon2.hash(password);
-    const intakeId = await this.allocateIntakeId();
 
     // This is the ONLY write of `username` anywhere in the platform (Req 4.1).
-    const [created] = await this.db
-      .insert(userAccount)
-      .values({
-        email: normalizedEmail,
-        username: normalizedUsername,
-        passwordHash,
-        intakeId,
-        status: 'pending',
-        role: 'user',
-      })
-      .returning({ id: userAccount.id });
+    // The pre-check above is a friendly error; the unique index is the guarantee,
+    // so a concurrent duplicate still fails rather than slipping through.
+    let created: { id: string } | undefined;
+    try {
+      [created] = await this.db
+        .insert(userAccount)
+        .values({
+          email: normalizedEmail,
+          username: normalizedUsername,
+          passwordHash,
+          firstName: first,
+          lastName: last,
+          status: 'pending',
+          role: 'user',
+        })
+        .returning({ id: userAccount.id });
+    } catch (e) {
+      if (isUniqueViolation(e)) throw AppError.validation('Email or username is already taken');
+      throw e;
+    }
     if (!created) throw AppError.validation('Failed to create account');
 
     await this.verification.issueEmailVerification(created.id, normalizedEmail);
-    return { userId: created.id, intakeId, username: normalizedUsername };
+    return { userId: created.id, username: normalizedUsername, firstName: first, lastName: last };
   }
 
   /**
@@ -78,7 +101,10 @@ export class AuthService {
     identifier: string,
     password: string,
   ): Promise<{ user: AuthUser; rawToken: string; expiresAt: Date }> {
-    const normalized = identifier.trim().toLowerCase();
+    // Same normalization as registration, so a username typed in any casing
+    // resolves to the row that was stored (Requirement: usernames normalized
+    // consistently).
+    const normalized = normalizeUsername(identifier);
     const [u] = await this.db
       .select()
       .from(userAccount)
@@ -90,23 +116,34 @@ export class AuthService {
       throw AppError.unauthenticated('Invalid credentials');
     }
     if (u.status === 'pending') throw AppError.forbidden('Verify your email before signing in');
-    if (u.status !== 'active') throw AppError.accountSuspended();
+    /**
+     * A SUSPENDED account may still authenticate. That is a change, and a
+     * deliberate one.
+     *
+     * Suspension used to refuse sign-in outright, which was coherent while it
+     * was only ever an administrator's decision. It stopped being coherent when
+     * the debt sweep began imposing it automatically: a holder suspended for
+     * owing $20 cannot sign in, therefore cannot cash in, therefore cannot clear
+     * the debt that suspended them. The lock had no key on the inside.
+     *
+     * Authentication now succeeds and AUTHORIZATION does the work instead:
+     * `SessionAuthGuard` refuses every route except those marked
+     * `@AllowSuspended()`, which is the helpdesk and the profile probe the shell
+     * needs to render at all. The account is still entirely unusable — it can
+     * only explain itself and read the answer.
+     *
+     * `closed` remains a hard refusal: that state is terminal.
+     */
+    if (u.status === 'closed') throw AppError.accountSuspended();
+    if (u.status !== 'active' && u.status !== 'suspended') throw AppError.accountSuspended();
 
     const { rawToken, expiresAt } = await this.sessions.create(u.id);
     return { user: { id: u.id, role: u.role, status: u.status }, rawToken, expiresAt };
   }
 
-  /** Generate a free intake ID (retry on the rare collision before insert). */
-  private async allocateIntakeId(): Promise<string> {
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const candidate = generateIntakeId();
-      const [taken] = await this.db
-        .select({ id: userAccount.id })
-        .from(userAccount)
-        .where(eq(userAccount.intakeId, candidate))
-        .limit(1);
-      if (!taken) return candidate;
-    }
-    throw AppError.validation('Could not allocate a unique intake ID; retry');
-  }
+}
+
+/** Postgres reports a violated UNIQUE index as SQLSTATE 23505. */
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
 }

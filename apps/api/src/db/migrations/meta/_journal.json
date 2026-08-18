@@ -29,6 +29,104 @@
       "when": 1785071932273,
       "tag": "0003_drop_dashboard_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785072000000,
+      "tag": "0004_identity_and_wallet_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785072100000,
+      "tag": "0005_shipment_recipient",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785072200000,
+      "tag": "0006_wallet_debt_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785072300000,
+      "tag": "0007_arrival_disposals",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785072400000,
+      "tag": "0008_item_class_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785072500000,
+      "tag": "0009_facilities_and_parcels",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785072600000,
+      "tag": "0010_storage_periods",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785072700000,
+      "tag": "0011_support_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785072800000,
+      "tag": "0012_consignment_channels_and_buyout",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785072900000,
+      "tag": "0013_services_on_a_stored_item",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785073000000,
+      "tag": "0014_outbound_shipping_that_ships",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785073100000,
+      "tag": "0015_notifications_leave_the_app",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785073200000,
+      "tag": "0016_a_person_in_the_middle",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785073300000,
+      "tag": "0017_money_in_money_out",
+      "breakpoints": true
     }
   ]
 }

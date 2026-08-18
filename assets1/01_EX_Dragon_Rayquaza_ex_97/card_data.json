@@ -1,0 +1,196 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "ex3-97",
+    "name": "Rayquaza ex",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "97",
+    "printed_number_format": "97/97",
+    "set_id": "ex3",
+    "set_name": "EX Dragon",
+    "dataset_set_name": "Dragon",
+    "series": "EX",
+    "release_date": "2003/11/24",
+    "release_year": 2003,
+    "ptcgo_set_code": "DR",
+    "printed_set_size": 97,
+    "database_set_total_including_secrets_or_subsets": 100
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "Basic",
+      "ex"
+    ],
+    "level": null,
+    "rarity_as_listed_by_dataset": "Rare Holo EX",
+    "collector_variant": "Early English Pokémon-ex ultra rare",
+    "finish_description": "Holofoil Pokémon-ex",
+    "era": "EX era"
+  },
+  "gameplay": {
+    "hp": "100",
+    "types": [
+      "Colorless"
+    ],
+    "evolves_from": null,
+    "evolves_to": [],
+    "abilities": [],
+    "ancient_trait": null,
+    "attacks": [
+      {
+        "name": "Spiral Growth",
+        "cost": [
+          "Colorless"
+        ],
+        "convertedEnergyCost": 1,
+        "damage": "",
+        "text": "Flip a coin until you get tails. For each heads, search your discard pile for a basic Energy card and attach it to Rayquaza ex."
+      },
+      {
+        "name": "Dragon Burst",
+        "cost": [
+          "Fire",
+          "Lightning"
+        ],
+        "convertedEnergyCost": 2,
+        "damage": "40×",
+        "text": "Discard either all Fire Energy or all Lightning Energy attached to Rayquaza ex. This attack does 40 damage times the amount of Fire or Lightning Energy discarded."
+      }
+    ],
+    "weaknesses": [
+      {
+        "type": "Colorless",
+        "value": "×2"
+      }
+    ],
+    "resistances": [
+      {
+        "type": "Fighting",
+        "value": "-30"
+      },
+      {
+        "type": "Water",
+        "value": "-30"
+      }
+    ],
+    "retreat_cost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "converted_retreat_cost": 2,
+    "rules": [
+      "When Pokémon-ex has been Knocked Out, your opponent takes 2 Prize cards."
+    ],
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "regulation_mark": null,
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "Hikaru Koike",
+    "reference_image_file": "image/ex3_97_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/ex3/97_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/ex3/97.png",
+    "pixel_dimensions": {
+      "width": 734,
+      "height": 1024
+    },
+    "file_format": "PNG",
+    "sha256": "a275783ef1e6483c0c1aeba78d6dddc4819b59828929847285aaf8fd2e06b415",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "ex3",
+    "name": "Dragon",
+    "display_name": "EX Dragon",
+    "series": "EX",
+    "printedTotal": 97,
+    "total": 100,
+    "ptcgoCode": "DR",
+    "releaseDate": "2003/11/24",
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/ex3/symbol.png",
+    "logo": "https://images.pokemontcg.io/ex3/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2003 POKEMON EX DRAGON RAYQUAZA EX #97",
+    "inspection_priorities": [
+      "Holofoil scratching and clouding",
+      "Silver-edge chipping",
+      "Back-edge whitening",
+      "Corner compression",
+      "Print lines and surface dents",
+      "Centering and possible trimming"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "An early English Rayquaza Pokémon-ex from the EX era and a strong vintage Rayquaza centerpiece.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.pricecharting.com/game/pokemon-dragon/rayquaza-ex-97"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/ex3.json",
+      "record_id": "ex3-97"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "ex3"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/ex3/97_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.pricecharting.com/game/pokemon-dragon/rayquaza-ex-97"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "id": "swsh7-194",
+  "name": "Rayquaza V",
+  "supertype": "Pokémon",
+  "subtypes": [
+    "Basic",
+    "V",
+    "Rapid Strike"
+  ],
+  "hp": "210",
+  "types": [
+    "Dragon"
+  ],
+  "rules": [
+    "When your Pokémon V is Knocked Out, your opponent takes 2 Prize cards."
+  ],
+  "attacks": [
+    {
+      "name": "Dragon Pulse",
+      "cost": [
+        "Lightning"
+      ],
+      "convertedEnergyCost": 1,
+      "damage": "40",
+      "text": "Discard the top 2 cards of your deck."
+    },
+    {
+      "name": "Spiral Burst",
+      "cost": [
+        "Fire",
+        "Lightning"
+      ],
+      "convertedEnergyCost": 2,
+      "damage": "20+",
+      "text": "You may discard up to 2 basic Fire Energy or up to 2 basic Lightning Energy from this Pokémon. This attack does 80 more damage for each card you discarded in this way."
+    }
+  ],
+  "retreatCost": [
+    "Colorless",
+    "Colorless"
+  ],
+  "convertedRetreatCost": 2,
+  "number": "194",
+  "artist": "Ryuta Fuse",
+  "rarity": "Rare Ultra",
+  "nationalPokedexNumbers": [
+    384
+  ],
+  "legalities": {
+    "unlimited": "Legal",
+    "expanded": "Legal"
+  },
+  "regulationMark": "E",
+  "images": {
+    "small": "https://images.pokemontcg.io/swsh7/194.png",
+    "large": "https://images.pokemontcg.io/swsh7/194_hires.png"
+  }
+}

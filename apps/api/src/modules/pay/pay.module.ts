@@ -5,7 +5,11 @@ import { WalletService } from './wallet.service';
 import { BillingService } from './billing.service';
 import { TopupService } from './topup.service';
 import { WithdrawalService } from './withdrawal.service';
+import { WalletRequestService } from './wallet-request.service';
+import { CheckoutService } from './checkout.service';
+import { ChargebackService } from './chargeback.service';
 import { PayController } from './pay.controller';
+import { WalletRequestController } from './wallet-request.controller';
 
 /**
  * PAY module (finance). Global because the ledger/wallet/billing primitives are
@@ -14,15 +18,18 @@ import { PayController } from './pay.controller';
  */
 @Global()
 @Module({
-  controllers: [PayController],
+  controllers: [PayController, WalletRequestController],
   providers: [
+    CheckoutService,
+    ChargebackService,
     LedgerService,
     WalletService,
     BillingService,
     TopupService,
     WithdrawalService,
+    WalletRequestService,
     { provide: BILLING_PORT, useExisting: BillingService },
   ],
-  exports: [LedgerService, WalletService, BILLING_PORT],
+  exports: [LedgerService, WalletService, WalletRequestService, BILLING_PORT],
 })
 export class PayModule {}

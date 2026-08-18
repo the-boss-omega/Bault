@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
+import { loadEnv } from '@bault/config';
 import { EMAIL_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { EmailAdapter } from '@bault/adapters';
 import { DRIZZLE } from '../../db/db.module';
@@ -10,6 +11,24 @@ import { userAccount, verificationToken } from './acc.schema';
 
 const EMAIL_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const RESET_TTL_MS = 60 * 60 * 1000; // 1h
+
+/**
+ * Build the absolute link that goes in an email.
+ *
+ * Two things make this more than string concatenation. The link must be
+ * ABSOLUTE — a mail client has no origin to resolve `/verify-email` against, so
+ * the relative path these emails used to carry was unclickable. And the SPA is
+ * a HASH router, so the route lives after `#`; a path-style link would load the
+ * app at its default section and drop the token on the floor.
+ *
+ * The token is percent-encoded even though `generateToken` emits URL-safe
+ * characters today, so a future change to the token alphabet cannot silently
+ * produce a malformed link.
+ */
+function emailLink(route: string, token: string): string {
+  const base = loadEnv().APP_BASE_URL.replace(/\/+$/, '');
+  return `${base}/#/${route}?token=${encodeURIComponent(token)}`;
+}
 
 /**
  * Email verification & password-reset TOKEN issuance/consumption (T030).
@@ -35,7 +54,7 @@ export class VerificationService {
       to: email,
       subject: 'Verify your Bault account',
       template: 'email_verification',
-      variables: { link: `/verify-email?token=${raw}` },
+      variables: { link: emailLink('verify-email', raw) },
     });
   }
 
@@ -99,7 +118,7 @@ export class VerificationService {
       to: email,
       subject: 'Reset your Bault password',
       template: 'password_reset',
-      variables: { link: `/reset-password?token=${raw}` },
+      variables: { link: emailLink('reset-password', raw) },
     });
   }
 }

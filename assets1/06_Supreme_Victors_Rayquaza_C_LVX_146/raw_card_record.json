@@ -1,0 +1,70 @@
+{
+  "id": "pl3-146",
+  "name": "Rayquaza C LV.X",
+  "supertype": "Pokémon",
+  "subtypes": [
+    "Level-Up",
+    "SP"
+  ],
+  "level": "X",
+  "hp": "120",
+  "types": [
+    "Colorless"
+  ],
+  "evolvesFrom": "Rayquaza C",
+  "rules": [
+    "Put this card onto your Active Rayquaza C. Rayquaza C LV.X can use any attack, Poké-Power, or Poké-Body from its previous level."
+  ],
+  "abilities": [
+    {
+      "name": "Dragon Spirit",
+      "text": "If Rayquaza C is your Active Pokémon and is damaged but not Knocked Out by an opponent's attack, you may search your discard pile for an Energy card and attach it to Rayquaza C.",
+      "type": "Poké-Body"
+    }
+  ],
+  "attacks": [
+    {
+      "name": "Final Blowup",
+      "cost": [
+        "Water",
+        "Psychic",
+        "Fighting",
+        "Colorless"
+      ],
+      "convertedEnergyCost": 4,
+      "damage": "200",
+      "text": "Discard all Energy attached to Rayquaza C. Ignore this effect if you have no cards in your hand."
+    }
+  ],
+  "weaknesses": [
+    {
+      "type": "Colorless",
+      "value": "×2"
+    }
+  ],
+  "resistances": [
+    {
+      "type": "Fighting",
+      "value": "-20"
+    }
+  ],
+  "retreatCost": [
+    "Colorless",
+    "Colorless",
+    "Colorless"
+  ],
+  "convertedRetreatCost": 3,
+  "number": "146",
+  "artist": "Shizurow",
+  "rarity": "Rare Holo LV.X",
+  "nationalPokedexNumbers": [
+    384
+  ],
+  "legalities": {
+    "unlimited": "Legal"
+  },
+  "images": {
+    "small": "https://images.pokemontcg.io/pl3/146.png",
+    "large": "https://images.pokemontcg.io/pl3/146_hires.png"
+  }
+}

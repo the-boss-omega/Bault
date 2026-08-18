@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ilike, not, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { FIXTURE_EMAIL_DOMAIN } from '../../shared/fixtures';
 import { userAccount } from '../acc/acc.schema';
 import { item, custodyEvent, itemChangeHistory } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
@@ -10,12 +11,15 @@ import { transaction } from '../mkt/mkt.schema';
 import { PricingService } from '../prc/pricing.service';
 import { LedgerService } from '../pay/ledger.service';
 import { prefixedId, ID_PREFIX } from '../../shared/ids';
+import { isValidNamePart, normalizeNamePart } from '../../shared/names';
+import { isKnownItemClass } from '../inv/item-classes';
 import { dispute, storageFeeRun } from './adm.schema';
 
 export interface UserPatch {
   role?: 'user' | 'warehouse_operator' | 'admin';
   status?: 'pending' | 'active' | 'suspended' | 'closed';
-  displayName?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface ItemPatch {
@@ -45,18 +49,38 @@ export class AdmService {
     private readonly ledger: LedgerService,
   ) {}
 
+  /**
+   * The product-facing Users table.
+   *
+   * Integration fixtures are excluded. The e2e suites register real accounts
+   * against a real database, and those rows used to pile up in this table run
+   * after run — three of them were sitting in the development database and were
+   * indistinguishable from customers at a glance.
+   *
+   * The exclusion is deliberately narrow: it matches ONLY the reserved fixture
+   * domain that the test helper mints (`FIXTURE_EMAIL_DOMAIN`), which is a
+   * `.test` TLD reserved by RFC 2606 and can never be a real address. It does
+   * NOT match on the substring "test" anywhere else — a genuine customer at
+   * `test.family@…` or `contest@…` stays visible, as does anything at
+   * `bault.dev`.
+   */
   listUsers() {
     return this.db
       .select({
         id: userAccount.id,
         email: userAccount.email,
         username: userAccount.username, // read-only everywhere (Requirement 4.1)
-        displayName: userAccount.displayName,
+        firstName: userAccount.firstName,
+        lastName: userAccount.lastName,
+        // Set by migration 0004 where a legacy display name could not be split
+        // without guessing; admins are the ones who resolve those.
+        nameReviewRequired: userAccount.nameReviewRequired,
         role: userAccount.role,
         status: userAccount.status,
         intakeId: userAccount.intakeId,
       })
       .from(userAccount)
+      .where(not(ilike(userAccount.email, `%@${FIXTURE_EMAIL_DOMAIN}`)))
       .orderBy(userAccount.email);
   }
 
@@ -64,14 +88,32 @@ export class AdmService {
     const set: Record<string, unknown> = {};
     if (patch.role) set.role = patch.role;
     if (patch.status) set.status = patch.status;
-    if (patch.displayName !== undefined) set.displayName = patch.displayName;
+    // An admin who writes a name part has just reviewed it, so the migration's
+    // review flag is cleared with it — that is the only thing that clears it here.
+    for (const f of ['firstName', 'lastName'] as const) {
+      if (patch[f] === undefined) continue;
+      const value = normalizeNamePart(patch[f]);
+      if (!isValidNamePart(value)) throw AppError.validation(`${f} is not a valid name`);
+      set[f] = value;
+      set.nameReviewRequired = false;
+    }
     if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
 
     // NOTE: `username` is deliberately not patchable here either (Requirement 4.1).
     await this.db.update(userAccount).set(set as never).where(eq(userAccount.id, id));
     const [u] = await this.db.select().from(userAccount).where(eq(userAccount.id, id)).limit(1);
     if (!u) throw AppError.notFound('User not found');
-    return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, role: u.role, status: u.status, intakeId: u.intakeId };
+    return {
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      nameReviewRequired: u.nameReviewRequired,
+      role: u.role,
+      status: u.status,
+      intakeId: u.intakeId,
+    };
   }
 
   listItems() {
@@ -100,6 +142,14 @@ export class AdmService {
       if (!cur) throw AppError.notFound('Item not found');
       const c = cur as Record<string, unknown>;
       const set: Record<string, unknown> = {};
+
+      // The taxonomy is enforced on every write path, this one included. An
+      // admin override exists for lifecycle transitions because a stuck item is
+      // a real operational problem; there is no equivalent argument for putting
+      // an item into a class that does not exist.
+      if (patch.typeClass !== undefined && !isKnownItemClass(patch.typeClass)) {
+        throw AppError.validation(`Unknown item class "${patch.typeClass}"`);
+      }
 
       // Descriptive fields → direct update + a change-history row per change.
       for (const f of ['typeClass', 'description', 'conditionGrade'] as const) {

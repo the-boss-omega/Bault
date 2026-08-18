@@ -3,17 +3,31 @@ import { and, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { fullName, isValidNamePart, normalizeNamePart } from '../../shared/names';
 import { userAccount } from './acc.schema';
 import { shippingAddress } from './address.schema';
 
+/**
+ * What a user sees about themselves.
+ *
+ * `intakeId` is deliberately ABSENT. The OW- code is retired from every
+ * user-facing workflow: nothing asks a customer to quote one, so returning it
+ * here would only invite its reuse. It still exists on the row, and admins can
+ * still read it through `GET /admin/users` for troubleshooting a pre-printed
+ * label — that is the one surface it survives on.
+ */
 export interface ProfileView {
   id: string;
   email: string; // a user always sees their OWN email (PII rule guards OTHER users' data)
   username: string; // immutable, read-only (Requirement 4.1)
-  intakeId: string;
   role: string;
   status: string;
-  displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  /** Derived from the two parts above with `fullName()` — never stored. */
+  fullName: string;
+  /** True while the legacy-name migration's split is still unconfirmed. */
+  nameReviewRequired: boolean;
 }
 
 export interface AddressInput {
@@ -50,19 +64,34 @@ export class ProfileService {
       id: u.id,
       email: u.email,
       username: u.username,
-      intakeId: u.intakeId,
       role: u.role,
       status: u.status,
-      displayName: u.displayName,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: fullName(u.firstName, u.lastName),
+      nameReviewRequired: u.nameReviewRequired,
     };
   }
 
   /**
-   * Only the display name is writable. `username` is never in the SET clause —
-   * there is no code path anywhere that updates it after registration (Req 4.1).
+   * Only the two name parts are writable. `username` is never in the SET clause —
+   * there is no code path anywhere that updates it after registration (Req 4.1) —
+   * and there is no separate display name that could drift out of step with these.
+   *
+   * A name the owner has just confirmed clears `nameReviewRequired`, which is the
+   * only way the flag set by the legacy-name migration (0004) is ever cleared by
+   * the person it describes.
    */
-  async update(userId: string, patch: { displayName?: string }): Promise<ProfileView> {
-    await this.db.update(userAccount).set({ displayName: patch.displayName }).where(eq(userAccount.id, userId));
+  async update(userId: string, patch: { firstName: string; lastName: string }): Promise<ProfileView> {
+    const first = normalizeNamePart(patch.firstName);
+    const last = normalizeNamePart(patch.lastName);
+    if (!isValidNamePart(first) || !isValidNamePart(last)) {
+      throw AppError.validation('First name and last name are both required');
+    }
+    await this.db
+      .update(userAccount)
+      .set({ firstName: first, lastName: last, nameReviewRequired: false })
+      .where(eq(userAccount.id, userId));
     return this.get(userId);
   }
 

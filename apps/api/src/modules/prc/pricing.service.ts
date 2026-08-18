@@ -65,6 +65,27 @@ export class PricingService {
     return row;
   }
 
+  /**
+   * `price`, but answers `null` instead of throwing when no rule is in force.
+   *
+   * For callers that have a legitimate fallback — a consignment channel with no
+   * channel-specific rule falls back to the flat marketplace fee — where a
+   * missing rule is a configuration choice rather than a fault. Everything else
+   * should keep using `price`, so an unpriced action fails loudly instead of
+   * quietly costing nothing.
+   */
+  async tryPrice(
+    actionType: string,
+    opts: { itemClass?: string; base?: Money } = {},
+    tx?: Database,
+  ): Promise<PriceResult | null> {
+    try {
+      return await this.price(actionType, opts, tx);
+    } catch {
+      return null;
+    }
+  }
+
   async price(
     actionType: string,
     opts: { itemClass?: string; base?: Money } = {},

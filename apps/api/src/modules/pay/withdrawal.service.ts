@@ -23,6 +23,13 @@ interface WithdrawalPayload {
  *             record the withdrawal, pay out via the provider, and append a
  *             `withdrawal` ledger DEBIT.
  * Irreversible: reversal would be a new compensating entry, never an edit.
+ *
+ * STATUS after the wallet-request pass: no customer-invokable route reaches
+ * `request`/`confirm` any more — a cash-out is a reviewed request, and the money
+ * moves in `WalletRequestService.complete`. The methods are kept, unrouted,
+ * because they hold the provider payout call and the confirmation-token protocol
+ * that a real (non-sandbox) payout integration will drive from the completion
+ * step. `retiredConfirmEndpoint` is what the retired route answers with.
  */
 @Injectable()
 export class WithdrawalService {
@@ -32,6 +39,17 @@ export class WithdrawalService {
     private readonly confirmation: ConfirmationService,
     private readonly ledger: LedgerService,
   ) {}
+
+  /**
+   * The error the retired `/finance/withdrawals/confirm` route answers with.
+   * A 410 states that the capability is gone and names what replaced it, which
+   * is more useful to an old client than a 404 or a lie.
+   */
+  retiredConfirmEndpoint(): AppError {
+    return AppError.tokenExpired(
+      'Direct withdrawal confirmation has been retired. Cash-out is now a reviewed request: POST /finance/wallet-requests with type "cash_out".',
+    );
+  }
 
   async request(userId: string, amountMinor: number, destinationAccount: string, currency = DEFAULT_CURRENCY) {
     const balance = await this.ledger.balanceOf(userId);

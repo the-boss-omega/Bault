@@ -11,8 +11,35 @@ import type { Database } from '../../db/client';
  */
 export interface BillableAction {
   userId: string;
-  actionType: 'intake' | 'storage' | 'service' | 'shipping' | 'marketplace_fee';
+  actionType:
+    | 'intake'
+    | 'storage'
+    | 'service'
+    | 'shipping'
+    | 'marketplace_fee'
+    /** Per-package fee, charged once when an inbound parcel is closed out. */
+    | 'parcel_processing'
+    /** The second leg, charged only to parcels sent to a forwarding address. */
+    | 'parcel_forwarding';
   itemId?: string;
+  /**
+   * The item's class, when the action is about a specific thing.
+   *
+   * `PricingService.price` has always preferred a class-specific rule over the
+   * catch-all, but nothing passed a class through this port — so a rule naming
+   * one could be created in the admin console and would never resolve. Carrying
+   * it here is what makes per-class pricing reachable.
+   */
+  itemClass?: string;
+  /**
+   * A more specific pricing action to try first, falling back to `actionType`.
+   *
+   * Grading tiers are the reason: `service` is the right CATEGORY of charge for
+   * one, but the wrong price, because a five-day turnaround on a $5,000 card and
+   * a six-week one on a common are not the same work. A caller that knows a
+   * narrower rule names it here.
+   */
+  feeActionType?: string;
   metadata?: Record<string, unknown>;
 }
 

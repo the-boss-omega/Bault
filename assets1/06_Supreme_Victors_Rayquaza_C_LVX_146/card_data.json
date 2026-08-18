@@ -1,0 +1,192 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "pl3-146",
+    "name": "Rayquaza C LV.X",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "146",
+    "printed_number_format": "146/147",
+    "set_id": "pl3",
+    "set_name": "Supreme Victors",
+    "dataset_set_name": "Supreme Victors",
+    "series": "Platinum",
+    "release_date": "2009/08/19",
+    "release_year": 2009,
+    "ptcgo_set_code": "SV",
+    "printed_set_size": 147,
+    "database_set_total_including_secrets_or_subsets": 153
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "Level-Up",
+      "SP"
+    ],
+    "level": "X",
+    "rarity_as_listed_by_dataset": "Rare Holo LV.X",
+    "collector_variant": "Pokémon SP Level-Up card",
+    "finish_description": "Holofoil LV.X",
+    "era": "Platinum era"
+  },
+  "gameplay": {
+    "hp": "120",
+    "types": [
+      "Colorless"
+    ],
+    "evolves_from": "Rayquaza C",
+    "evolves_to": [],
+    "abilities": [
+      {
+        "name": "Dragon Spirit",
+        "text": "If Rayquaza C is your Active Pokémon and is damaged but not Knocked Out by an opponent's attack, you may search your discard pile for an Energy card and attach it to Rayquaza C.",
+        "type": "Poké-Body"
+      }
+    ],
+    "ancient_trait": null,
+    "attacks": [
+      {
+        "name": "Final Blowup",
+        "cost": [
+          "Water",
+          "Psychic",
+          "Fighting",
+          "Colorless"
+        ],
+        "convertedEnergyCost": 4,
+        "damage": "200",
+        "text": "Discard all Energy attached to Rayquaza C. Ignore this effect if you have no cards in your hand."
+      }
+    ],
+    "weaknesses": [
+      {
+        "type": "Colorless",
+        "value": "×2"
+      }
+    ],
+    "resistances": [
+      {
+        "type": "Fighting",
+        "value": "-20"
+      }
+    ],
+    "retreat_cost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "converted_retreat_cost": 3,
+    "rules": [
+      "Put this card onto your Active Rayquaza C. Rayquaza C LV.X can use any attack, Poké-Power, or Poké-Body from its previous level."
+    ],
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "regulation_mark": null,
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "Shizurow",
+    "reference_image_file": "image/pl3_146_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/pl3/146_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/pl3/146.png",
+    "pixel_dimensions": {
+      "width": 600,
+      "height": 825
+    },
+    "file_format": "PNG",
+    "sha256": "57cb563b7b3dd49b9d1c6acdd4c0ef0b1ae7c7546c21d8492a9ef223bb72442b",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "pl3",
+    "name": "Supreme Victors",
+    "display_name": "Supreme Victors",
+    "series": "Platinum",
+    "printedTotal": 147,
+    "total": 153,
+    "ptcgoCode": "SV",
+    "releaseDate": "2009/08/19",
+    "legalities": {
+      "unlimited": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/pl3/symbol.png",
+    "logo": "https://images.pokemontcg.io/pl3/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2009 POKEMON SUPREME VICTORS RAYQUAZA C LV.X #146",
+    "inspection_priorities": [
+      "Holo scratches across the border and artwork",
+      "Edge whitening",
+      "Corner wear",
+      "Surface dents",
+      "Centering",
+      "Correct LV.X and SP layout"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "A Pokémon SP and LV.X-era Rayquaza with a distinctive sideways level-up layout and 200-damage attack.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.pricecharting.com/game/pokemon-supreme-victors/rayquaza-c-lv-x-146"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/pl3.json",
+      "record_id": "pl3-146"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "pl3"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/pl3/146_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.pricecharting.com/game/pokemon-supreme-victors/rayquaza-c-lv-x-146"
+    }
+  ]
+}

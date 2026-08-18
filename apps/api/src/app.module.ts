@@ -20,7 +20,9 @@ import { PayModule } from './modules/pay/pay.module';
 import { MktModule } from './modules/mkt/mkt.module';
 import { DisModule } from './modules/dis/dis.module';
 import { ShpModule } from './modules/shp/shp.module';
+import { EscModule } from './modules/esc/esc.module';
 import { AdmModule } from './modules/adm/adm.module';
+import { SupModule } from './modules/sup/sup.module';
 
 // Global guards + interceptors
 import { SessionAuthGuard } from './modules/acc/session-auth.guard';
@@ -53,7 +55,9 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
     MktModule,
     DisModule,
     ShpModule,
+    EscModule,
     AdmModule,
+    SupModule,
   ],
   controllers: [AppController],
   providers: [

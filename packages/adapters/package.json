@@ -11,6 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "nodemailer": "^9.0.5"
   }
 }

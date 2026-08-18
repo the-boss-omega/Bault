@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { NAME_PART_MAX } from '../../shared/names';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -9,7 +10,10 @@ import { AdmService } from './adm.service';
 class UpdateUserDto {
   @IsOptional() @IsIn(['user', 'warehouse_operator', 'admin']) role?: 'user' | 'warehouse_operator' | 'admin';
   @IsOptional() @IsIn(['pending', 'active', 'suspended', 'closed']) status?: 'pending' | 'active' | 'suspended' | 'closed';
-  @IsOptional() @IsString() displayName?: string;
+  // Two name parts, never a free-text display name (see shared/names).
+  @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) firstName?: string;
+  @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) lastName?: string;
+  // `username` is deliberately absent — immutable once set (Requirement 4.1).
 }
 
 class UpdateItemDto {

@@ -10,7 +10,18 @@ export const DEFAULT_CURRENCY = 'USD';
 
 export interface LedgerEntry {
   userId: string;
-  type: 'purchase' | 'sale_credit' | 'fee' | 'service_charge' | 'credit_topup' | 'withdrawal' | 'interest';
+  type:
+    | 'purchase'
+    | 'sale_credit'
+    | 'fee'
+    | 'service_charge'
+    | 'credit_topup'
+    | 'withdrawal'
+    | 'interest'
+    | 'escrow_hold'
+    | 'escrow_release'
+    | 'escrow_refund'
+    | 'chargeback';
   amount: number; // positive minor units
   direction: 'debit' | 'credit';
   currency?: string;

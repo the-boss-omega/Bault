@@ -1,0 +1,181 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "swsh7-218",
+    "name": "Rayquaza VMAX",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "218",
+    "printed_number_format": "218/203",
+    "set_id": "swsh7",
+    "set_name": "Sword & Shield—Evolving Skies",
+    "dataset_set_name": "Evolving Skies",
+    "series": "Sword & Shield",
+    "release_date": "2021/08/27",
+    "release_year": 2021,
+    "ptcgo_set_code": "EVS",
+    "printed_set_size": 203,
+    "database_set_total_including_secrets_or_subsets": 237
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "VMAX",
+      "Rapid Strike"
+    ],
+    "level": null,
+    "rarity_as_listed_by_dataset": "Rare Rainbow",
+    "collector_variant": "Alternate-art secret rare Rayquaza VMAX",
+    "finish_description": "Textured alternate-art secret holofoil",
+    "era": "Sword & Shield era"
+  },
+  "gameplay": {
+    "hp": "320",
+    "types": [
+      "Dragon"
+    ],
+    "evolves_from": "Rayquaza V",
+    "evolves_to": [],
+    "abilities": [
+      {
+        "name": "Azure Pulse",
+        "text": "Once during your turn, you may discard your hand and draw 3 cards.",
+        "type": "Ability"
+      }
+    ],
+    "ancient_trait": null,
+    "attacks": [
+      {
+        "name": "Max Burst",
+        "cost": [
+          "Fire",
+          "Lightning"
+        ],
+        "convertedEnergyCost": 2,
+        "damage": "20+",
+        "text": "You may discard any amount of basic Fire Energy or any amount of basic Lightning Energy from this Pokémon. This attack does 80 more damage for each card you discarded in this way."
+      }
+    ],
+    "weaknesses": [],
+    "resistances": [],
+    "retreat_cost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "converted_retreat_cost": 2,
+    "rules": [
+      "When your Pokémon VMAX is Knocked Out, your opponent takes 3 Prize cards."
+    ],
+    "legalities": {
+      "unlimited": "Legal",
+      "expanded": "Legal"
+    },
+    "regulation_mark": "E",
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "Anesaki Dynamic",
+    "reference_image_file": "image/swsh7_218_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/swsh7/218_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/swsh7/218.png",
+    "pixel_dimensions": {
+      "width": 734,
+      "height": 1024
+    },
+    "file_format": "PNG",
+    "sha256": "60c8bc01194b020d066e9d969f4871b51561e0e44e90b100ed44f9cc6f13eadd",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "swsh7",
+    "name": "Evolving Skies",
+    "display_name": "Sword & Shield—Evolving Skies",
+    "series": "Sword & Shield",
+    "printedTotal": 203,
+    "total": 237,
+    "ptcgoCode": "EVS",
+    "releaseDate": "2021/08/27",
+    "legalities": {
+      "unlimited": "Legal",
+      "expanded": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/swsh7/symbol.png",
+    "logo": "https://images.pokemontcg.io/swsh7/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2021 POKEMON EVOLVING SKIES RAYQUAZA VMAX ALTERNATE ART #218",
+    "inspection_priorities": [
+      "Severe front/back centering imbalance",
+      "Texture authenticity",
+      "Edge whitening and chipping",
+      "Surface dents or roller damage",
+      "Corner cut consistency",
+      "Correct 218/203 secret numbering and artwork"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "The premier modern Rayquaza chase card from Evolving Skies, with a large full-scene alternate artwork.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.pricecharting.com/game/pokemon-evolving-skies/rayquaza-vmax-218"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/swsh7.json",
+      "record_id": "swsh7-218"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "swsh7"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/swsh7/218_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.pricecharting.com/game/pokemon-evolving-skies/rayquaza-vmax-218"
+    }
+  ]
+}

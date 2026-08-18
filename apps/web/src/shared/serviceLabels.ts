@@ -12,6 +12,11 @@ export const SERVICE_TYPE_KEY: Record<string, MessageKey> = {
   donation: 'service.type.donation',
   batch_split: 'service.type.batch_split',
   warehouse_transfer: 'service.type.warehouse_transfer',
+  buyout: 'service.type.buyout',
+  video_review: 'service.type.video_review',
+  condition_inspection: 'service.type.condition_inspection',
+  deslab: 'service.type.deslab',
+  remove_commons: 'service.type.remove_commons',
 };
 
 export const SERVICE_STATUS_KEY: Record<string, MessageKey> = {

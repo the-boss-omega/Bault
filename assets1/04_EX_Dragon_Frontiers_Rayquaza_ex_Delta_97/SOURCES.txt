@@ -1,0 +1,20 @@
+Research date: 2026-07-31
+
+SOURCES
+=======
+1. Raw card metadata
+   Record ID: ex15-97
+   https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/ex15.json
+2. Set metadata
+   Record ID: ex15
+   https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json
+3. Reference image
+   https://images.pokemontcg.io/ex15/97_hires.png
+4. Market research starting point
+   https://www.pricecharting.com/game/pokemon-dragon-frontiers/rayquaza-ex-97
+
+SOURCE NOTE
+===========
+Card and set metadata are identification references.
+Market links are starting points only; verify recent completed sales.
+The included image is for private identification/research and is not a grading scan.

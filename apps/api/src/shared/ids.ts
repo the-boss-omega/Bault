@@ -8,6 +8,8 @@ import { randomInt } from 'node:crypto';
  *   OW-  owner (intake)      BC-  item/barcode      BIN- storage bin
  *   SHP- shipment            SR-  service request   DSP- dispute
  *   LOT- lot / batch         TXN- marketplace transaction
+ *   DSL- arrival disposal (something that arrived and was not accepted)
+ *   PKG- inbound parcel        TKT- support ticket   GSB- grading submission
  *
  * Ambiguous characters (0/O, 1/I) are excluded for readability. Uniqueness is
  * ultimately enforced by DB unique indexes; callers retry on the rare collision.
@@ -29,6 +31,14 @@ export const ID_PREFIX = {
   dispute: 'DSP',
   lot: 'LOT',
   transaction: 'TXN',
+  disposal: 'DSL',
+  parcel: 'PKG',
+  ticket: 'TKT',
+  gradingSubmission: 'GSB',
+  /** A shared parcel several collectors ship in together. */
+  shipmentGroup: 'GRP',
+  /** A private deal with Bault standing in the middle. */
+  escrow: 'ESC',
 } as const;
 
 export const newShipmentCode = () => prefixedId(ID_PREFIX.shipment);

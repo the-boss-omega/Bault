@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, intakeFor, signIn } from './helpers/http';
+import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
 /**
  * US8 / Scenario H — create a MULTI-ITEM shipment request (Requirement 5.2) →
@@ -8,11 +8,21 @@ import { SEED, intakeFor, signIn } from './helpers/http';
  * number; shipping is billed.
  */
 describe('SHP outbound shipping', () => {
-  /** The destination string the UI builds from a saved Profile address (Req 5.1). */
-  const DESTINATION = 'Red, 1200 Market St, San Francisco 94102, US';
+  /**
+   * The destination the UI builds from a saved Profile address (Req 5.1).
+   *
+   * The country and postal code are their own fields now. A rate depends on
+   * both, and a formatted single line cannot be split back into them without
+   * guessing — which is how a parcel to Japan gets quoted a domestic price.
+   */
+  const DESTINATION = {
+    destinationAddress: 'Red, 1200 Market St, San Francisco 94102, US',
+    destinationCountry: 'US',
+    destinationPostalCode: '94102',
+  };
 
   const FULFILLMENT = {
-    carrier: 'DHL',
+    carrier: 'USPS',
     packageWeightGrams: 500,
     fulfillmentNotes: 'Slabs bubble-wrapped in a rigid mailer.',
   };
@@ -20,18 +30,18 @@ describe('SHP outbound shipping', () => {
   it('ships a multi-item shipment end to end and bills the owner', async () => {
     const operator = await signIn(SEED.operator);
     const [itemA, itemB] = await Promise.all([
-      intakeFor(operator, SEED.collector, { typeClass: 'Card' }),
-      intakeFor(operator, SEED.collector, { typeClass: 'Card' }),
+      intakeFor(operator, SEED.collector, { typeClass: 'trading_card' }),
+      intakeFor(operator, SEED.collector, { typeClass: 'trading_card' }),
     ]);
 
     const collector = await signIn(SEED.collector);
-    await collector.post('/finance/wallet/topups', { amountMinor: 100000 });
+    await fundWallet(SEED.collector, 100000);
 
     // ONE request covering EVERY selected item, with one Shipment ID (Req 5.2).
     const shipment = (
       await collector.post('/shipping/shipments', {
         itemIds: [itemA.id, itemB.id],
-        destinationAddress: DESTINATION,
+        ...DESTINATION,
       })
     ).body;
     expect(shipment.code).toMatch(/^SHP-/); // Requirement 9.4
@@ -63,13 +73,13 @@ describe('SHP outbound shipping', () => {
 
   it('rejects dispatch when the scanned set does not match', async () => {
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Card' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
     const collector = await signIn(SEED.collector);
-    await collector.post('/finance/wallet/topups', { amountMinor: 100000 });
+    await fundWallet(SEED.collector, 100000);
     const shipment = (
       await collector.post('/shipping/shipments', {
         itemIds: [item.id],
-        destinationAddress: DESTINATION,
+        ...DESTINATION,
       })
     ).body;
     const rates = (await collector.get(`/shipping/shipments/${shipment.id}/rates`)).body as {
@@ -90,13 +100,13 @@ describe('SHP outbound shipping', () => {
 
   it('rejects dispatch when the fulfillment form is incomplete (Requirement 5.3)', async () => {
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Card' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
     const collector = await signIn(SEED.collector);
-    await collector.post('/finance/wallet/topups', { amountMinor: 100000 });
+    await fundWallet(SEED.collector, 100000);
     const shipment = (
       await collector.post('/shipping/shipments', {
         itemIds: [item.id],
-        destinationAddress: DESTINATION,
+        ...DESTINATION,
       })
     ).body;
     const rates = (await collector.get(`/shipping/shipments/${shipment.id}/rates`)).body as {

@@ -1,0 +1,57 @@
+{
+  "id": "col1-SL10",
+  "name": "Rayquaza",
+  "supertype": "Pokémon",
+  "subtypes": [
+    "Basic"
+  ],
+  "hp": "100",
+  "types": [
+    "Colorless"
+  ],
+  "attacks": [
+    {
+      "name": "Inferno Spear",
+      "cost": [
+        "Fire",
+        "Fire",
+        "Lightning",
+        "Lightning"
+      ],
+      "convertedEnergyCost": 4,
+      "damage": "100",
+      "text": "Discard a Fire Energy and a Lightning Energy attached to Rayquaza."
+    }
+  ],
+  "weaknesses": [
+    {
+      "type": "Colorless",
+      "value": "×2"
+    }
+  ],
+  "resistances": [
+    {
+      "type": "Fighting",
+      "value": "-20"
+    }
+  ],
+  "retreatCost": [
+    "Colorless",
+    "Colorless"
+  ],
+  "convertedRetreatCost": 2,
+  "number": "SL10",
+  "artist": "Noriko Hotta",
+  "rarity": "Rare Holo",
+  "flavorText": "It flies in the ozone layer, way up high in the sky. Until recently, no one had ever seen it.",
+  "nationalPokedexNumbers": [
+    384
+  ],
+  "legalities": {
+    "unlimited": "Legal"
+  },
+  "images": {
+    "small": "https://images.pokemontcg.io/col1/SL10.png",
+    "large": "https://images.pokemontcg.io/col1/SL10_hires.png"
+  }
+}

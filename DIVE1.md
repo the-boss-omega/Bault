@@ -18,7 +18,7 @@ bug can violate them. Everything below explains how that is achieved.
 
 ## How this document is organized
 
-It is split into ten parts, each covering a coherent slice of the code:
+It is split into twenty-three parts, each covering a coherent slice of the code:
 
 - **Part 1 — Repository, Monorepo & Shared Packages**: the root tooling, `@bault/config`,
   `@bault/adapters`, `@bault/contracts`, and infra.
@@ -39,14 +39,68 @@ It is split into ten parts, each covering a coherent slice of the code:
   identifiers, immutable usernames, lots, structured service fulfillment, automatic storage
   billing, readable notifications, barcode printing, the migrations that fixed a schema drift,
   and the state of the test suite.
-- **Part 10 — The Bilingual, Photo & Split-Auth Pass**: the changelog for the *most recent*
-  revision — the full Hebrew/English message catalogue behind a React context, the split of
-  the single auth card into separate sign-in and sign-up pages, real catalogue photographs
-  served from `assets/`, the dependency-free PDF inventory report, and the seeded dataset's
-  conversion to genuine, cert-matched collectibles.
+- **Part 10 — The Bilingual, Photo & Split-Auth Pass**: the full Hebrew/English message
+  catalogue behind a React context, the split of the single auth card into separate sign-in
+  and sign-up pages, real catalogue photographs served from `assets/`, the dependency-free
+  PDF inventory report, and the seeded dataset's conversion to genuine, cert-matched
+  collectibles.
+- **Part 11 — The Local Development Proxy Fix**: why `/api/v1/me/profile` failed with
+  `AggregateError [ECONNREFUSED]` behind the Vite dev server, the ordered `pnpm dev` that
+  starts the API before the web app, the validated proxy target, public health probes, typed
+  API errors, and the removal of the duplicated boot request.
+- **Part 12 — The Navigation Rail, Vault States, Shipping & Services, and FAQ & Legal Pass**:
+  the persistent left rail as the only primary navigation, the Vault's three card states and
+  its permanent history view, the merge of Services into Shipping, and the FAQ & Legal
+  section with its sourced, availability-marked entries.
+- **Part 13 — Account Recovery, Real Email & the Wallet Debt Policy**: the SMTP email adapter
+  and its templates, absolute hash-routed links, the four screens that finally reach the
+  account-recovery API, and the debt policy that gives a negative balance a grace period,
+  interest and an automatic suspension.
+- **Part 14 — The Item Taxonomy and Arrivals That Were Not Accepted**: `type_class` becoming a
+  closed vocabulary enforced on every write path, the per-class pricing that was unreachable
+  until it existed, the five-or-fewer card rule, and the append-only record of things that
+  arrived for a collector and never entered a vault.
+- **Part 15 — Inbound: Facilities, Parcels, and the Half of the Product That Was Missing**:
+  receiving addresses generated per collector, the New Jersey and Delaware facilities, the
+  parcel lifecycle from expected to processed, the unattributable arrival as a first-class
+  state, and the per-package and forwarding fees.
+- **Part 16 — Storage Becomes an Included Period**: storage moving from a flat daily fee to a
+  period included in the intake fee followed by charges proportional to it, the far steeper
+  oversized terms, and period accounting replacing the once-a-day guard that silently
+  under-billed.
+- **Part 17 — The Helpdesk, and the Lock That Had No Key on the Inside**: support tickets with
+  an append-only thread, a staff queue ordered longest-waiting first, and the change to
+  suspension that lets a locked-out account sign in and reach support, and nothing else.
+- **Part 18 — Selling, Trading and Consignment**: the marketplace read side that made four
+  already-complete engines reachable, offer responses and listing management, trades
+  addressed by username, consignment channels with real economics and card shows, and Bault
+  buying a card outright.
+- **Part 19 — What You Can Ask Us To Do To a Card**: grading as a pipeline with priced tiers,
+  a physical submission batch and a lifecycle state that admits a card is not on the shelf;
+  video review and per-area condition inspection; cracking a slab; splitting a lot at the
+  owner's request; the free bulk cull; and the vault finally showing the photographs it has
+  always stored.
+- **Part 20 — Outbound Shipping Stops Being a Shape**: real item weights and destinations
+  reaching the rate request, a carrier line-up defined by what each service refuses, quoting
+  before committing, insurance and signature and customs paperwork, a request that can be
+  edited, merged, cancelled or left unpaid, and one parcel shared by several collectors.
+- **Part 21 — Notifications Leave the App, and Bault Writes Something Down**: a canonical
+  event catalogue, email as a second delivery channel with a per-channel preference matrix,
+  workflow guides written under the FAQ's own rule that nothing is invented, the card-show
+  calendar as published content, and support details that come from configuration and say so
+  when they are absent.
+- **Part 22 — A Person in the Middle**: escrow on a private deal, with funds genuinely held
+  as a ledger debit, an inspection gate written down before anybody releases, and a
+  counterparty who may have no account at all; plus the two ways out of the vault that are a
+  human being rather than a parcel.
+- **Part 23 — Money In, Money Out, and Knowing What It Costs**: the changelog for the *most
+  recent* revision — a card payment that settles without waiting on a reviewer, a cash-out
+  fee quoted from the same function that charges it, a payout rail that was wired to nothing,
+  a chargeback the ledger can finally record, and a price list a collector can read before
+  being charged.
 
-**Precedence: later parts win.** Where Parts 1–8 disagree with Part 9 or Part 10, the
-changelog part is current; where Part 9 disagrees with Part 10, Part 10 is current. The
+**Precedence: later parts win.** Where Parts 1–8 disagree with a later changelog part, the
+changelog part is current; among Parts 9–23, the highest-numbered one is current. The
 file-by-file sections in Parts 1–8 have been corrected in place wherever the code they
 quoted no longer exists, so they should be accurate on their own terms too.
 
@@ -12510,3 +12564,5496 @@ lightbox's keyboard and scroll behaviour, whether a generated PDF opens in a rea
 reader, and the integration suite — which still needs a live API against a migrated,
 seeded Postgres, as Part 9 § "Tests" describes. None of that could be exercised in the
 environment where this pass was written.
+
+---
+
+# Part 11 — The Local Development Proxy Fix
+
+This part is a changelog. It documents one defect end to end: a fresh clone that ran
+`pnpm dev:web` reached the login screen, but every API call died in the Vite proxy.
+
+## The failure as reported
+
+```
+@bault/web@0.1.0 dev D:\Proj\Bault\apps\web
+vite
+
+[vite] http proxy error: /api/v1/me/profile
+AggregateError [ECONNREFUSED]                          (x2)
+```
+
+The frontend served fine on `http://localhost:5173/`. Only the proxied calls failed.
+
+## Root cause
+
+**Nothing was starting the backend.** The repository had `dev:api`, `dev:worker` and
+`dev:web` scripts but no command that ran them together, and no readiness gate between
+them. `pnpm dev:web` therefore booted a web app whose very first paint issues
+`GET /api/v1/me/profile` — against a port with no listener. The proxy did exactly what
+it was told; the target simply was not up.
+
+Two secondary factors made a plain "backend is down" unreadable:
+
+1. **The proxy targeted `http://localhost:3000`.** On Windows `localhost` resolves to
+   *both* `::1` and `127.0.0.1`, so Node's happy-eyeballs connect tries each and reports
+   the pair as `AggregateError [ECONNREFUSED]` — an error naming neither the address nor
+   the port it failed to reach. With the target pinned to `127.0.0.1` the same failure now
+   reads `Error: connect ECONNREFUSED 127.0.0.1:3000`, which states the problem outright.
+2. **The `(x2)`** came from React StrictMode running the boot effect twice in development,
+   which fired the profile request twice. It was a genuine duplicate request, not a
+   duplicated log line.
+
+Everything else was already correct and was left alone: the endpoint exists, the prefix is
+right, no environment variable was missing, and the database services were running.
+
+## The endpoint, and where it lives
+
+| Question | Answer |
+|---|---|
+| Which service owns `/api/v1/me/profile`? | `@bault/api` — the NestJS modular monolith in `apps/api` |
+| Which controller? | `ProfileController` (`apps/api/src/modules/acc/profile.controller.ts`), `@Controller('me')` + `@Get('profile')` |
+| Where does the `/api/v1` prefix come from? | `app.setGlobalPrefix('api/v1')` in `apps/api/src/main.ts` — the route is **not** under a different prefix |
+| Which port locally? | `API_PORT` from the repo-root `.env` (`3000`); `@bault/config` defaults to `3000` when unset |
+| Which host does it bind? | `app.listen(env.API_PORT)` binds the dual-stack wildcard `::`, so **both** `127.0.0.1:3000` and `[::1]:3000` reach it — pinning IPv4 in the proxy is safe |
+| Was it running? | No. Ports `5432`/`6432`/`9000` (Postgres, PgBouncer, MinIO) were listening; `3000` was not |
+| Does it start on a different port? | No — it logs `bault-api listening on http://localhost:3000/api/v1` |
+| Unauthenticated response? | `401` with the uniform envelope `{"error":{"code":"unauthenticated",…}}`, thrown by the global `SessionAuthGuard` — intentional, not an accident |
+
+CORS needed no change and none was added: the dev proxy makes every call same-origin from
+the browser's point of view, exactly as the production reverse proxy does.
+
+## `apps/web/vite.config.ts`
+
+- Replaced the hard-coded `target: 'http://localhost:3000'` with a resolved, validated
+  target from the new `apps/web/proxy-target.ts`.
+- Added `VITE_API_PROXY_TARGET` support, read from the repo-root `.env` and from
+  `apps/web/.env` via Vite's `loadEnv` (process environment wins over both). Nothing read
+  here is injected into the client bundle — it only selects the dev target.
+- Defaults to `http://127.0.0.1:<API_PORT>` so the single source of truth for the port
+  stays the root `.env`, and falls back to `http://127.0.0.1:3000`.
+- Prints the resolved target once at startup: `[vite] /api → http://127.0.0.1:3000 (from API_PORT)`.
+- `changeOrigin: true` kept. **`secure` is not blanket-`false`**: it is
+  `!(protocol === 'https:' && loopback host)`, so TLS verification is relaxed only for a
+  local self-signed certificate and stays on for any real https target.
+- No `cookieDomainRewrite` / `cookiePathRewrite` / `ws` / `rewrite`, deliberately. The API
+  sets its session cookie with `Path=/` and **no** `Domain` attribute, so the browser scopes
+  it to `localhost:5173` on its own; rewriting either field would break it. The API speaks
+  no WebSocket, and the paths already match one-to-one.
+- Added a `configure` hook that turns an unreachable backend into a typed
+  `503 {"error":{"code":"api_unreachable",…}}` instead of the opaque HTML `500` the proxy
+  returns by default, and logs an actionable line naming the target and the command to run.
+  The original Vite error is still printed — the failure is surfaced, not hidden.
+
+## `apps/web/proxy-target.ts` (new)
+
+The resolution rules on their own, so they can be unit-tested. Precedence
+`VITE_API_PROXY_TARGET` → `API_PORT` → built-in default; any path or query on the override
+is stripped (the proxy appends the request path itself). A malformed URL, a non-http(s)
+scheme, or an impossible port **throws at dev-server startup** with a message naming the
+variable to set — it never silently proxies somewhere wrong.
+
+## `apps/api/src/shared/observability/health.controller.ts`
+
+`/api/v1/healthz` and `/api/v1/readyz` were behind the global `SessionAuthGuard` and
+answered `401` to everyone, which made them useless as probes — including for the load
+balancer they were written for. Both are now `@Public()`. Neither exposes anything beyond
+"the process is up" and "the database answers `select 1`". This is the only backend change
+in this pass, and the readiness gate below depends on it. `/me/profile` is deliberately
+**not** used as a health check: it requires a session and would answer `401` forever on a
+perfectly healthy server.
+
+## `scripts/dev.mjs` (new) and the root `package.json`
+
+`pnpm dev` now starts the whole stack in order:
+
+1. spawn `pnpm --filter @bault/api dev`, its output prefixed `[api]`;
+2. poll `http://127.0.0.1:<port>/api/v1/healthz` every 500 ms until it answers;
+3. only then spawn `pnpm --filter @bault/web dev`, passing the same resolved
+   `VITE_API_PROXY_TARGET` so both processes cannot disagree;
+4. if the API never becomes ready within `DEV_API_READY_TIMEOUT_MS` (default 120 s), print
+   what to check (Docker services, root `.env`) and **refuse to start the web app** — it
+   would only proxy to a dead port;
+5. if the API exits later, stop the web app too rather than leave it talking to nothing.
+
+It is plain Node, on purpose: **no new dependency** — no `concurrently`, `wait-on` or
+`cross-env`. It works identically on Windows, macOS and Linux. Windows specifics are
+handled explicitly: `shell: true` resolves `pnpm.cmd`, the command is passed as one string
+(an argv array with `shell: true` is deprecated in Node 22), and shutdown uses
+`taskkill /pid <pid> /T /F` so the `pnpm → node → nest` tree cannot be orphaned. No
+`export VAR=`, no `source`, no `kill -9`.
+
+`pnpm dev:api`, `pnpm dev:web` and `pnpm dev:worker` are unchanged and still work
+standalone. `test:web` was added for the new suite.
+
+## `apps/web/src/shared/api.ts`
+
+Every failure is now an `ApiError` carrying a `kind`, so the UI can tell the cases apart
+instead of collapsing them into one string:
+
+| Condition | `kind` | Meaning |
+|---|---|---|
+| `fetch` rejects (refused, offline, DNS) | `unreachable` | no backend answered |
+| `503` with `error.code === 'api_unreachable'` | `unreachable` | the dev proxy could not reach the API |
+| `401` | `unauthenticated` | not signed in |
+| `403` | `forbidden` | signed in, not allowed |
+| `404` | `not_found` | route or profile missing |
+| `5xx` | `server` | backend error |
+| other `4xx` | `client` | validation/conflict — the API's own message is kept |
+
+`apiErrorKey()` maps a kind to an i18n key; ordinary `4xx` returns `null` so specific
+validation messages are not flattened into a generic one. There is **no automatic retry**
+anywhere: a refused connection retried in a loop hammers a dead port and hides the problem.
+Recovery is an explicit retry button.
+
+## `apps/web/src/shared/session.ts` (new) — the `(x2)`
+
+`loadProfile()` holds the in-flight request and hands the same promise to concurrent
+callers, so StrictMode's double effect makes exactly **one** network call. The slot clears
+once the request settles, so a later retry or a post-sign-in reload really does hit the
+network. StrictMode was **not** removed — the duplicate was fixed at its source.
+
+Audit of the other callers: `App.tsx` (boot) and `ProfilePage` (when the profile section is
+open) are the only two, they never mount simultaneously, and `ProfilePage`'s load is a
+deliberate fetch of fresh data alongside `/me/addresses`. There are no route loaders, no
+duplicated providers, and no polling on this endpoint.
+
+## `apps/web/src/App.tsx` — backend-unavailable is now its own state
+
+The boot probe used to be `catch { setUser(null) }`, which rendered the sign-in page for
+*any* failure. A dead backend therefore looked like a sign-out and invited the user to
+re-enter a password that could not be checked. Boot is now a four-state machine:
+
+- `loading` — the existing splash;
+- `anonymous` — **only** on `401` → `AuthPage`;
+- `ready` → the workspace;
+- `blocked` — unreachable / `5xx` / `403` / `404` → a real error screen with the message
+  *"The Bault API is unavailable. Start the local backend (pnpm dev) and try again."*, the
+  underlying detail, and a **retry** button that re-runs the probe.
+
+No blank page, no infinite spinner, no automatic sign-out, no synthetic profile. **No mock
+mode was added** — the real API is the only development path.
+
+`ProfilePage` uses the same mapping, so an expired session, a permission failure and a dead
+backend read differently there too.
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `apps/web/vite.config.ts` | validated `VITE_API_PROXY_TARGET`, IPv4 default, scoped `secure`, typed 503 on proxy error, startup banner |
+| `apps/web/proxy-target.ts` | **new** — target resolution + validation |
+| `apps/web/.env.example` | **new** — documents `VITE_API_PROXY_TARGET`; explicitly no secrets |
+| `.env.example` | documents `VITE_API_PROXY_TARGET` next to `API_PORT` |
+| `apps/web/src/shared/api.ts` | `ApiError` with `kind`, `apiErrorKey()`, `isUnreachable()`, no auto-retry |
+| `apps/web/src/shared/session.ts` | **new** — de-duplicated `loadProfile()` |
+| `apps/web/src/App.tsx` | four-state boot, backend-unavailable screen with retry |
+| `apps/web/src/areas/customer/profile/ProfilePage.tsx` | failure-kind-aware error messages |
+| `apps/web/src/shared/i18n.tsx` | seven `error.*` keys, Hebrew + English |
+| `apps/web/src/index.css` | `.boot-error` layout |
+| `apps/api/src/shared/observability/health.controller.ts` | `@Public()` on `/healthz` and `/readyz` |
+| `scripts/dev.mjs` | **new** — ordered, cross-platform dev orchestration |
+| `package.json` | added `dev` and `test:web` |
+| `vitest.workspace.ts` | added the `web` project |
+| `eslint.config.mjs` | Node globals for `scripts/**/*.mjs` |
+| `tests/web/*.test.ts` | **new** — 28 unit tests |
+| `tests/integration/dev-proxy.test.ts` | **new** — 8 live-server tests |
+
+## Tests
+
+`tests/web/` (no database, no server — `pnpm test:web`):
+
+- `proxy-target.test.ts` — default target, `API_PORT`, override precedence, path stripping,
+  and that a malformed URL / bad scheme / impossible port throws with the variable named;
+  asserts the default never resolves to `localhost`.
+- `api-client.test.ts` — the versioned prefix and `credentials: 'include'`, `204` handling,
+  and the full status→kind table including the proxy's `api_unreachable` envelope; asserts
+  a refused connection produces exactly **one** attempt.
+- `session.test.ts` — two concurrent callers issue one request and share the result (and
+  share the failure); a later call is not served from a stale cache; a retry after a failure
+  really re-requests; `401` surfaces as `unauthenticated`.
+
+`tests/integration/dev-proxy.test.ts` (against a live API, like every other integration
+suite): health and readiness answer without a cookie, `127.0.0.1` is a valid target,
+`/me/profile` is `401` unauthenticated and `200` with a session — and, **only when a Vite
+dev server is also up**, the same calls through `http://localhost:5173` including
+`Set-Cookie` pass-through with no `Domain` rewrite. The proxied block is skipped, not
+failed, when the web server is not running, and nothing anywhere sleeps for a fixed delay.
+
+## Verification performed
+
+```bash
+docker compose -f infra/docker-compose.yml up -d     # Postgres/PgBouncer/MinIO already up
+pnpm dev                                             # ordered API -> healthz gate -> Vite
+
+curl http://127.0.0.1:3000/api/v1/healthz            # {"status":"ok"}                       200
+curl http://127.0.0.1:3000/api/v1/readyz             # {"status":"ok","db":true}             200
+curl http://127.0.0.1:3000/api/v1/me/profile         # {"error":{"code":"unauthenticated"}}  401
+
+curl http://localhost:5173/api/v1/healthz            # {"status":"ok"}                       200
+curl http://localhost:5173/api/v1/me/profile         # {"error":{"code":"unauthenticated"}}  401
+curl -X POST http://localhost:5173/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"eldar@bault.dev","password":"11111111"}' -c cookies.txt
+# set-cookie: session=...; Path=/; HttpOnly; SameSite=Lax  (no Domain — host-only, as required)
+curl -b cookies.txt http://localhost:5173/api/v1/me/profile
+# {"id":"...","email":"eldar@bault.dev","role":"admin",...}                                  200
+
+pnpm test:web                                        # 28 passed
+pnpm vitest run --project integration tests/integration/dev-proxy.test.ts   # 8 passed
+pnpm --filter @bault/web typecheck                   # clean
+pnpm --filter @bault/api typecheck                   # clean
+pnpm exec eslint <changed files>                     # clean
+```
+
+Zero `ECONNREFUSED` in the dev log across two full restarts of both processes.
+
+The unavailable path was verified deliberately, by stopping the API and leaving the web app
+running:
+
+```
+$ curl http://localhost:5173/api/v1/me/profile
+{"error":{"code":"api_unreachable","message":"The Bault API is unavailable at http://127.0.0.1:3000.",
+ "details":{"target":"http://127.0.0.1:3000","codes":["ECONNREFUSED"]}}}          503
+
+# terminal:
+[vite] API unreachable at http://127.0.0.1:3000 — is it running? Try `pnpm dev:api`
+       (or `pnpm dev` for both). Request: /api/v1/me/profile
+[vite] http proxy error: /api/v1/me/profile
+Error: connect ECONNREFUSED 127.0.0.1:3000
+```
+
+Note the last line: the `AggregateError` is gone, replaced by a single named address —
+direct confirmation that the dual-stack resolution of `localhost` was what obscured the
+original error.
+
+## Production routing is unaffected
+
+The proxy is `server.proxy`, which exists only in the Vite **dev server**. `vite build`
+output is unchanged: the SPA calls `/api/v1/...` on its own origin and the reverse proxy in
+front of it routes those to the API, exactly as before. No `VITE_` value used here reaches
+the bundle, and no production URL is hard-coded anywhere.
+
+## Remaining limitations
+
+- The rendered backend-unavailable screen was **not** confirmed in a real browser — no
+  browser automation was available in this environment. Its logic is covered by unit tests
+  and the underlying `503` was verified with `curl`, but the visual state is unverified.
+- Two pre-existing test problems are unrelated to this pass and were left alone, having been
+  confirmed to fail identically without these changes: `tests/contract/*` cannot resolve
+  `@bault/adapters` because the workspace package is not linked into the **root**
+  `node_modules`; and running the whole `integration` project at once lets files interfere
+  through the shared database (`mkt-purchase` and `wallet-ledger` pass in isolation, fail in
+  a parallel full run). Both are test-harness issues, not product defects.
+- `pnpm dev` starts the API and the web app. The background worker still needs
+  `pnpm dev:worker` in its own terminal; nothing in the SPA's boot path depends on it.
+
+
+---
+
+# Part 12 — The Navigation Rail, Vault States, Shipping & Services, and FAQ & Legal Pass
+
+**Completed: 4 August 2026.**
+
+This part documents one pass with a single organising idea: **the application shell
+stops moving.** A persistent left rail becomes the only primary navigation, the
+sections behind it are reorganised so that each one owns a coherent job, and the
+Vault becomes a real command centre for cards rather than a grid with a search box.
+
+Everything below is the state of the code after the pass, with the reasoning behind
+each decision and an honest account of what is **not** finished. Where a
+requirement could not be met without inventing something — a policy, a legal
+document, a workflow the backend does not have — it was not met, and it is recorded
+as such rather than papered over.
+
+---
+
+## 1. Executive summary
+
+### What changed
+
+1. **Navigation.** Every previously specified circular / radial / wheel / GTA-style
+   navigation concept was removed from the requirements and none exists in the
+   code. The single primary navigation is a fixed, collapsible left rail. (The rail
+   already existed in the working tree from the previous pass; this pass changed
+   its *destinations*, its motion timings, its selector treatment and its expanded
+   shadow, and verified the rest against the specification.)
+2. **Information architecture.** Eight primary destinations, in a fixed order, with
+   a divider before the last three. The standalone **Services** section was
+   removed: card-level services moved *into the Vault card drawer*, and the
+   operational remainder merged with Shipping into **Shipping & Services**. A new
+   **FAQ & Legal** destination was added.
+3. **Vault.** A prominent centred search, three large state controls (Active /
+   On-hold / Card history) with live count badges, whole-card click targets, a card
+   action drawer whose actions are all backed by real endpoints, and — new to the
+   platform — a genuine, permanent **card history** built on the append-only
+   custody log.
+4. **FAQ & Legal.** An Ask tab whose every query returns exactly `#1DDD` with no
+   network request, an FAQ tab carrying all 31 entries copied verbatim from the
+   official Ship My Cards FAQ (each explicitly marked as applying to Bault or not),
+   and a Legal Terms viewer that shows only text that genuinely governs Bault.
+5. **Design system.** The six-colour Bault palette applied as specified, and
+   Libertinus Math adopted as the primary typeface — self-hosted, not merely
+   declared.
+6. **Two security fixes** found while implementing the above (see §11).
+
+### Why
+
+The previous shell had two coordinate systems for "where am I": a tab strip and a
+section list that partly duplicated it, with Services and Shipping splitting one
+user intent across two destinations. Ordering a service meant leaving the card you
+were looking at, finding it again in a dropdown on another page, and losing the
+context that made you want the service. Meanwhile the Vault's own list quietly
+excluded anything that had left storage, so a collector could not see what they
+used to own at all.
+
+### The resulting information architecture
+
+```
+Bault (logo)
+├── Vault                 ← cards: active / on-hold / history, and every card action
+├── Wallet
+├── Marketplace
+├── Shipping & Services   ← overview / shipping / tracking / requests / history
+├── Warehouse             (staff only)
+├───────────────────────  divider
+├── Notifications
+├── FAQ & Legal           ← ask / faq / legal
+└── Management            (admin only)
+
+Header (upper right): role pill · notification bell · account menu
+                      (profile, settings, language, sign out)
+```
+
+Profile, language, account settings, current role and sign-out are **not** rail
+destinations; they live in the upper-right account menu, as required.
+
+---
+
+## 2. Navigation
+
+### 2.1 Removal of the previous navigation implementation
+
+No circular, radial, wheel, dial, segment-based, hold-and-release,
+number-key-selected or overlay-triggered navigation exists anywhere in the
+codebase. A search for `radial`, `wheel`, `dial` and `GTA` across `apps/` and
+`packages/` returns only unrelated matches (`pgTable`). Nothing had to be deleted
+because no such implementation was ever built; the requirement is satisfied by
+construction and was verified rather than assumed.
+
+The navigation that *was* removed is the standalone **Services** rail destination
+and its page (§5).
+
+### 2.2 The collapsible left rail
+
+`apps/web/src/shared/ui/NavigationRail.tsx` renders a fixed `<nav class="rail">`.
+
+**Geometry** (measured live in Chromium, not asserted from the stylesheet):
+
+| Property | Required | Actual |
+| --- | --- | --- |
+| Collapsed width | 72–80px | **76px** |
+| Expanded width | 220–240px | **232px** |
+| Default desktop state | collapsed | collapsed |
+
+The collapsed width is reserved permanently by `.workspace { margin-inline-start:
+var(--rail-w) }`, and the rail itself is `position: fixed`. Expanding therefore
+*overlays* the workspace instead of pushing it. Verified by measuring the content
+container's bounding box before and after expansion: `x 76→76, width 1364→1364` —
+the page does not move by a single pixel, so tables are not resized, scroll
+position is not reset, drawers are not closed and no data is refetched.
+
+**Motion.** Expansion and collapse are deliberately asymmetric — opening is a
+considered reveal, closing should get out of the way:
+
+```css
+--dur-rail-open:  200ms;   /* requirement: 180–220ms */
+--dur-rail-close: 165ms;   /* requirement: 150–180ms */
+--dur-selector:   190ms;   /* requirement: 160–220ms */
+```
+
+The base `.rail` rule carries the *close* duration and `.rail.is-open` carries the
+*open* duration, which works because the `.is-open` rule is present during
+expansion and absent during collapse.
+
+**Triggers.** Hover, keyboard focus anywhere inside the rail, or the pin toggle.
+A 220ms close delay (`onLeave` in `NavigationRail.tsx`) stops the rail flickering
+when the pointer briefly clips its edge. The pinned state persists in
+`localStorage` under `bault.railPinned`.
+
+**Expanded shadow.** `--shadow-rail-open: 12px 0 36px rgba(11,31,51,0.26)` — cast
+along the trailing edge only, because the expanded rail floats over content and
+needs to separate itself from what it covers. Verified live:
+`rgba(11, 31, 51, 0.26) 12px 0px 36px 0px`.
+
+### 2.3 The gold vault selector
+
+A single positioned element per rail group, measured onto the active row with
+`useLayoutEffect` + `ResizeObserver`, so it *slides* between destinations rather
+than popping. Verified: selecting Vault then Wallet moved it `top 80 → 128`.
+
+- **Collapsed:** a dark Graphite plate (`#26323D → #2c3a46 → --bronze`) behind the
+  active icon, with a machined gold notch (`::after`, a 4px bar in
+  `--gold-bright → --gold → --gold-deep`) riding the rail's trailing edge and a
+  turned gold rivet (`::before`) at its centre.
+- **Expanded:** the plate extends behind icon *and* label, and the inner field
+  shifts to a muted bronze tint (`--gold-surface`, `rgba(224,180,76,0.18)`) so the
+  white label stays readable while the brighter gold stays concentrated on the
+  mechanical edge.
+
+Only the selector animates. The rail, the header and the viewport do not.
+`@media (prefers-reduced-motion: reduce)` sets `.rail-selector { transition: none }`,
+so the selector *jumps* to the new position instead of sliding.
+
+### 2.4 Keyboard and accessibility
+
+- A skip link is the first focusable element in the shell. **Verified:** the first
+  `Tab` from a freshly loaded document lands on `.skip-link`.
+- **Focus alone expands the rail** — no pointer required. Verified: tabbing to a
+  rail item measured the rail at **232px**.
+- The active destination carries `aria-current="page"`. Verified: exactly one
+  element has it at any time.
+- Every rail item is a real `<button>` inside a list; icon-only controls in the
+  collapsed state keep their text label in the accessible name.
+- Contextual tab strips implement the WAI-ARIA tabs pattern with roving
+  `tabindex`; Arrow keys move between tabs (mirrored in RTL), Home/End jump to the
+  ends. Verified: `ArrowRight` on the Shipping & Services strip navigated
+  `overview → shipping`.
+- The current location is signalled four ways, never by colour alone: selector
+  position, `aria-current`, the page title, and the breadcrumb.
+
+### 2.5 Icons
+
+One outline system, `apps/web/src/shared/ui/icons.tsx`: 24-box, 1.6 stroke,
+rounded caps and joins, rendered at 21px in the rail (requirement: 20–22px).
+Nothing filled, no emoji, no photographic or illustrated glyphs. Six icons were
+added this pass — `IconShippingServices` (truck + wrench), `IconLegal` (document +
+balance beam), `IconArchive`, `IconAsk`, `IconPrint` — each drawn to the same
+grid and stroke weight as the existing set.
+
+One exception is recorded honestly in §13.
+
+### 2.6 Breadcrumb
+
+`App.tsx` composes `Home › <Section> › <Active tab>`, e.g. **Home › Vault › Card
+history**. The trailing crumb is resolved through `TAB_PREFIX` (a map from section
+key to message-key prefix) and rendered only when the key actually exists in the
+catalogue — `hasMessage()` was added to `i18n.tsx` for exactly this, so a missing
+translation omits the crumb rather than printing a raw key like `ss.tab.overview`
+at the user.
+
+---
+
+## 3. Vault
+
+### 3.1 The command bar
+
+`.vault-command` centres a large search field with the three state controls beside
+it, per the requirement that search be prominent and near the centre of the content
+header.
+
+| Property | Required | Actual |
+| --- | --- | --- |
+| Search width | 520–720px | **720px** |
+| Search height | 54–62px | **58px** (54px on mobile) |
+
+Search is incremental (250ms debounce, no Enter, no button) and runs server-side
+across the fields a collector actually types: description/card name, type class,
+serial number, slab barcode, condition grade, and lifecycle state — so typing
+`shipped` narrows the history list without a separate filter control
+(`VaultService.searchClause`).
+
+> **Adaptation note.** The requirement lists the searchable fields in payment-card
+> vocabulary — "cardholder", "last four digits", "expiration date". Bault's cards
+> are *collectible* cards, not payment instruments; there is no cardholder, no PAN
+> and no expiry. The analogous identifying fields listed above are searched
+> instead. No field was invented to satisfy the wording.
+
+### 3.2 The three states
+
+Three large icon-led controls, each with a visible label, a `title` tooltip, a
+count badge, `aria-pressed`, and an `aria-label` that includes the count. The
+selected control is filled Graphite with a gold badge — never colour alone.
+
+| Control | Scope | Definition |
+| --- | --- | --- |
+| Active cards | `active` | `received` / `stored` / `listed`, not on hold |
+| On-hold cards | `hold` | `holdFlag` set **or** state `on-hold` (set independently) |
+| Card history | `history` | see §3.3 |
+
+The state lives in the route (`#/vault/history`), so it is linkable and survives a
+refresh. Switching state refetches that scope only — **verified that the document
+does not reload** (a sentinel set on `window` survives the switch).
+
+Counts come from `GET /vault/counts`, computed server-side under the same search
+query as the list, so a badge never claims cards the current search has filtered
+away.
+
+### 3.3 Card history — the substantive change
+
+Before this pass the Vault could not show history at all: `listOwned` filtered with
+`notInArray(lifecycleState, ['shipped','donated','consigned'])`, so anything that
+left storage vanished from the owner's view.
+
+History is now assembled from two disjoint populations:
+
+1. **Still owned, no longer in storage** — `shipped` / `donated` / `consigned` /
+   `sold`.
+2. **Previously owned.** Bault is single-owner: a sale or swap *moves* `owner_id`,
+   so those rows stop matching an owner-scoped query entirely. What survives is the
+   **append-only custody log**, so previous ownership is recovered from
+   `custody_event.prev_owner_id` — a card is "previously held" when the customer
+   appears as the previous owner of a transfer and is not the current owner.
+
+This is real data, not a placeholder. Verified live: after Red's seeded listing
+sold, that card appears in Red's history with
+`departureReason: "sale of listing 43143590-…"` taken from the custody event, and
+after donating `SN-DR97-0001` it appears as `Historical — Donated`, reason
+`donation`, dated from the log.
+
+**The history projection is deliberately narrower than the live one.** It carries
+the card's own identity and the lifecycle facts of its departure but **never the
+current owner and never the bin it now sits in** — that belongs to whoever holds it
+now. `binId`, `binBarcode` and `binZone` are forced to `null`.
+
+**Nothing deletes, hides or rewrites history.** There is no clear/hide/remove/delete
+control anywhere in the Vault, and the service has no code path that removes a
+history row — the underlying custody log is append-only and enforced by database
+triggers. The UI states this explicitly: *"History records are kept permanently and
+cannot be deleted."* Verified by scanning the rendered page for any
+clear/delete/hide/remove-history affordance: none.
+
+### 3.4 Historical card treatment
+
+Historical cards are visibly different, in five independent ways so the distinction
+never rests on colour alone:
+
+- Graphite-dominant container (`.card--historical`, background `#26323D`)
+- Desaturated artwork — verified computed style:
+  `grayscale(0.85) contrast(0.9) brightness(0.92)`
+- Lower contrast on secondary text (`opacity: 0.78`)
+- An archive icon badge on the artwork
+- An explicit status badge: **"Historical — Donated"**, plus the lifecycle date
+  ("Left on Aug 4, 2026") and the closure reason where the log has one
+
+**The artwork pipeline is untouched.** Historical tiles render the *same*
+`CardPhotoThumb` component with the *same* serial-number mapping; only the
+container's CSS filter differs. Verified after the pass that all 8 seeded `SN-*`
+cards still resolve to their files on disk and that `/images/SN-DR97-0001.png`
+serves 200 (1.4 MB) through the dev server and ships in `dist/`.
+
+### 3.5 Clicking a card, and the action drawer
+
+The **whole tile** is the control: `.card-hit` is a transparent `<button>`
+stretched over the tile, so click and keyboard focus land on one element while the
+tile keeps its normal layout. Verified: clicking anywhere on a tile opens the
+drawer.
+
+The drawer carries the card record, its barcode label, its full lifecycle timeline,
+and its actions. Every action maps 1:1 onto an endpoint the API actually exposes:
+
+| Action | Endpoint | Offered when |
+| --- | --- | --- |
+| Professional photography | `POST /services/photography` | state `stored` |
+| Third-party grading | `POST /services/grading` | state `stored` |
+| Consignment | `POST /services/consignment` | state `stored` |
+| Donate | `POST /services/donation` → `/donation/confirm` | state `stored`, behind a confirmation modal |
+
+Each is reachable in **two interactions** from the grid: click card → click action
+(donation adds a deliberate third, the irreversibility confirmation).
+
+**Nothing unsupported or fake is displayed.** There is no "sell now", no "insure",
+no "request appraisal". Actions that exist in the API but are **role-gated to
+staff** — place hold, release hold, relocate — are *not* offered to collectors,
+because calling them would 403; a held card instead shows an explanatory note that
+releasing a hold is a warehouse operation.
+
+**Historical cards get no actions at all.** `actions` resolves to `[]` when
+`historical` is set. Verified live: the historical drawer renders zero
+`.drawer-actions`, while a `stored` card's drawer renders the action list.
+
+---
+
+## 4. Wallet
+
+**Unchanged by this pass.** The Wallet's balance interface, its four contextual
+tabs (Overview / Transactions / Top up / Withdrawals), its transaction table,
+transaction drawer and top-up behaviour are as documented in Parts 8–9 and were not
+modified here beyond inheriting the new palette and typeface.
+
+**Cents versus display currency** is likewise unchanged and worth restating because
+it is load-bearing: money is stored and transported as **integer minor units**
+(cents) end to end — `amountMinor` columns, `costMinor` in rates, `amount` in ledger
+rows — and is converted to a display string only at the edge, by `formatUsd()` in
+`apps/web/src/shared/money.ts`. No float arithmetic touches money at any layer. The
+one change money-adjacent in this pass is presentational: `font-variant-numeric:
+tabular-nums` now applies to every numeric surface (§8).
+
+---
+
+## 5. Shipping & Services
+
+### 5.1 What moved where
+
+The standalone Services section is **gone** — `ServicesPage.tsx` and the
+`services/` directory are deleted, and there is no `Services` rail destination
+(verified against the live rail label list).
+
+Its two jobs were separated rather than merged wholesale:
+
+- **Ordering a service is something you do to a card**, so photography, grading,
+  consignment and donation moved into the Vault card drawer (§3.5).
+- **Tracking the resulting requests** is operational, so it merged with Shipping.
+
+`ShipmentPage.tsx` was also deleted; its flow now lives as the Shipping tab inside
+the merged page. No page or workflow is duplicated.
+
+### 5.2 The merged section
+
+`apps/web/src/areas/customer/shipping/ShippingServicesPage.tsx`, five tabs, all
+backed by real endpoints:
+
+| Tab | Backing | Notes |
+| --- | --- | --- |
+| Overview | `/services/mine`, `/vault/items` | Counts + routes into the other tabs; states plainly that services are ordered from a card in the Vault |
+| Shipping | `POST /shipping/shipments`, `GET …/rates`, `POST …/select-rate` | The former ShipmentPage flow, unchanged |
+| Tracking | `GET /shipping/shipments/:id` | A **lookup**, not a table — see below |
+| Service requests | `/services/mine`, filtered to `requested` + `in_progress` | |
+| History | `/services/mine`, filtered to terminal statuses | |
+
+**Tracking is a lookup by id, not a list, because the API has no per-customer
+shipment list endpoint.** Rather than invent one or fake a table, the tab does what
+the backend supports: it looks a shipment up by id, pre-filling the id of a
+shipment created in the same session. Nothing fabricates carrier scan events.
+
+### 5.3 Redirects
+
+`legacyRedirect()` in `apps/web/src/shared/routing.ts`, applied in `App.tsx` with
+`replace: true` so Back never returns to the dead route. Also covers a persisted
+`bault.tab` left over from before the merge.
+
+| Old route | New route | Verified |
+| --- | --- | --- |
+| `#/services` | `#/shipping-services/requests` | ✅ live |
+| `#/shipping` | `#/shipping-services/shipping` | ✅ live |
+
+Covered by unit tests including the negative cases (`services-archive` and
+`shipping-services` must **not** redirect).
+
+---
+
+## 6. FAQ & Legal
+
+### 6.1 Ask
+
+`answerQuestion()` in `FaqLegalPage.tsx` is the single integration seam:
+
+```ts
+export async function answerQuestion(_query: string): Promise<string> {
+  return '#1DDD';
+}
+```
+
+Every query returns **exactly** `#1DDD` — no answer text, no heuristics, no lookup
+against the FAQ, and **no network request of any kind**. It is `async` and ignores
+its argument on purpose, so swapping the body for a real call is the only change
+required; every caller already awaits it and already renders a pending state.
+
+Verified two ways: 12 unit tests covering empty input, whitespace, Hebrew, CJK, a
+5,000-character string, an injection-shaped string and a prompt-injection attempt —
+all `toBe('#1DDD')`, plus a determinism check over 25 calls; and live in the
+browser, where three distinct questions each returned exactly `#1DDD`.
+
+A separate, unobtrusive but always-visible notice states that the automated legal
+assistant is not currently connected — placed *before* the transcript, so nobody
+reads a placeholder as an answer.
+
+### 6.2 FAQ content — source, retrieval and verification
+
+- **Source URL:** <https://www.shipmycards.com/faq/>
+- **Retrieved:** 2026-08-03
+- **Re-verified against the live site immediately before completion:** 2026-08-04 —
+  all 31 questions identical, all answer text identical. (The only diff was
+  WordPress/Elementor session nonces in inline scripts, which are not content.)
+- **Entries copied:** 31 of 31 — the complete accordion, in source order.
+
+The requirement named `shipmycard.com`; the actual live site is
+**`shipmycards.com`** (plural), which is what was used. The FAQ is a single flat
+Elementor accordion: it has **no categories** and **no stable anchors** (its element
+ids are generated by the page builder, e.g. `elementor-tab-content-17910`).
+
+Content was extracted from the page's own markup — not from a rendered summary —
+so wording, figures, conditions, exceptions and typography (em dashes, curly
+quotes) survive intact. It lives in
+`apps/web/src/areas/customer/help/faqContent.ts` as structured data, not hard-coded
+in components.
+
+**Two extraction defects were found and fixed during verification, and are recorded
+because both produced output that looked correct:**
+
+1. **Every bullet list was silently dropped** — 48 lists and 174 items, including
+   the entire Arizona and Oregon fee tables. The answers still read plausibly,
+   which is exactly what made it dangerous.
+2. **The final entry absorbed the site footer** (navigation menu, mailing
+   addresses, copyright line) because the region bound ran past the last accordion
+   item, and emphasis tags carrying attributes (`<strong class="…">`) lost their
+   opening marker, leaving orphaned `**` mid-sentence.
+
+Both are now covered by regression tests that pin the exact list and item counts,
+so a future extractor change cannot pass as "content copied".
+
+### 6.3 Bault-specific adaptation
+
+Three fields per entry are Bault's, not the source's, and are the **only**
+editorial additions:
+
+- `category` — a navigation aid, since the source has none.
+- `id` — a stable slug for deep links, since the source has no stable anchors.
+- `availability` + `baultNote` — whether Bault actually implements the workflow the
+  answer describes, and what differs.
+
+`availability` has two values:
+
+- **`adapted`** (10 entries) — Bault does this, with differences, which the note
+  states.
+- **`unavailable`** (21 entries) — Bault has no such capability.
+
+**No entry is presented as Bault policy, and no Ship My Cards figure is imported as
+a Bault price.** The FAQ defaults to showing only the 10 applicable entries, with a
+checkbox to reveal the full copied set; every entry's Bault note renders *above*
+the copied answer, and the copied answer is rendered in English with `lang="en"`
+and `dir="ltr"` regardless of app locale, visually set apart as quoted third-party
+material. Translating published policy text would change what it says.
+
+> **Why so many entries are marked unavailable.** Ship My Cards is a US
+> package-forwarding and storage business; Bault is a vaulting and marketplace
+> platform. They share the concept but almost no operational specifics — Bault has
+> no Arizona/Oregon forwarding addresses, no PayPal/Wise funding rails, no
+> insurance, no customs declarations, no AirTag service and no PSA integration.
+> Importing those answers unmarked would have made Bault appear to offer services
+> it does not.
+
+### 6.4 Source mapping
+
+Every Bault FAQ entry, its source position, and its adaptation:
+
+| # | Ship My Cards question (source order) | Bault entry id | Category | Status | Bault adaptation / reason |
+| --- | --- | --- | --- | --- | --- |
+| 0 | How does ShipMyCards work? | `how-does-shipmycards-work` | getting-started | unavailable | Bault has no U.S. package-forwarding address. Cards enter a Bault vault through warehouse intake, not by being mailed to a forwarding address. |
+| 1 | How is ShipMyCards different than other shipping Services? | `how-is-shipmycards-different-than-other-shipping-services` | getting-started | unavailable | Describes ShipMyCards' address options, White Glove and Middleman services. Bault offers none of these. |
+| 2 | Why ShipMyCards is great for U.S.-based collectors? | `why-shipmycards-is-great-for-u-s-based-collectors` | getting-started | unavailable | Built entirely on the Oregon sales-tax address. Bault has no forwarding addresses and no tax-avoidance routing. |
+| 3 | Why ShipMyCards is great for international collectors? | `why-shipmycards-is-great-for-international-collectors` | getting-started | unavailable | Built on providing a U.S. shipping address to overseas buyers. Bault does not provide one. |
+| 4 | Shipping to Australia: Customs Clearance Guide | `shipping-to-australia-customs-clearance-guide` | shipping | unavailable | FedEx assembly-order customs guidance specific to ShipMyCards' Arizona facility. Bault's shipping adapter exposes carrier rates only and files no customs paperwork. |
+| 5 | What are the fees for using ShipMyCards? | `what-are-the-fees-for-using-shipmycards` | fees | adapted | Bault charges per-action fees and automatic storage fees, but the amounts come from Bault's own pricing-rule table (Management > Pricing), not from these Arizona/Oregon price lists. Treat every figure here as ShipMyCards', not Bault's. |
+| 6 | Do you accept any non-Card items? | `do-you-accept-any-non-card-items` | intake | unavailable | An accepted/restricted item policy specific to ShipMyCards' facility. Bault publishes no equivalent policy. |
+| 7 | Do we allow GPS Trackers for incoming shipments? | `do-we-allow-gps-trackers-for-incoming-shipments` | intake | unavailable | Facility security policy for inbound packages at ShipMyCards. Bault has no inbound-package policy. |
+| 8 | What address should I use for my account? | `what-address-should-i-use-for-my-account` | addresses | unavailable | ShipMyCards' physical mailing addresses. Bault has no forwarding addresses. |
+| 9 | What is the benefit of mailing to Oregon? | `what-is-the-benefit-of-mailing-to-oregon` | addresses | unavailable | Depends on the Oregon forwarding address, which Bault does not operate. |
+| 10 | How do I purchase Store Credit? | `how-do-i-purchase-store-credit` | fees | unavailable | Bault funds a wallet through its payment adapter. PayPal Friends & Family and Wise transfers are not Bault payment rails. |
+| 11 | What shipping options do you offer? | `what-shipping-options-do-you-offer` | shipping | adapted | Bault does return carrier and service-level options for a shipment, but they come from Bault's shipping adapter. The USPS/FedEx/ePost/ePacket line-up and its restrictions are ShipMyCards'. |
+| 12 | What’s the difference between Simple Shipping and Personalized Shipping? | `what-s-the-difference-between-simple-shipping-and-personalized-shippin` | shipping | unavailable | Bault has a single shipment flow — pick items, pick a saved address, optionally mark it rush, then choose a rate. There is no Simple/Personalized split. |
+| 13 | How do I make a shipment request? | `how-do-i-make-a-shipment-request` | shipping | unavailable | Points at ShipMyCards' YouTube tutorials for their own interface. |
+| 14 | Can I add/remove Items to a Pending shipment request? | `can-i-add-remove-items-to-a-pending-shipment-request` | shipping | unavailable | Bault exposes no endpoint for editing a shipment after it is requested. |
+| 15 | Is there a way to get a postage quote prior to Requesting my Shipment? | `is-there-a-way-to-get-a-postage-quote-prior-to-requesting-my-shipment` | shipping | adapted | Bault does show carrier rates before you commit to one, but only after the shipment request is created, and the quoted dollar ranges here are ShipMyCards'. |
+| 16 | Can I combine shipment requests from one that I made at an earlier date? | `can-i-combine-shipment-requests-from-one-that-i-made-at-an-earlier-dat` | shipping | unavailable | Bault cannot merge two shipment requests, and charges no restocking fee. |
+| 17 | What customs value is declared on outgoing packages? | `what-customs-value-is-declared-on-outgoing-packages` | shipping | unavailable | Bault's shipment request carries no customs-value field and files no customs declaration. |
+| 18 | Can Multiple collectors combine shipments to save on postage? | `can-multiple-collectors-combine-shipments-to-save-on-postage` | shipping | unavailable | Bault has no group-shipment option. |
+| 19 | What does the optional insurance cover? | `what-does-the-optional-insurance-cover` | shipping | unavailable | Bault offers no shipment insurance. |
+| 20 | What is the GPS tracking option in the Shipment request? | `what-is-the-gps-tracking-option-in-the-shipment-request` | shipping | unavailable | Bault offers no GPS tracking add-on. |
+| 21 | What all is included within normal Processing? | `what-all-is-included-within-normal-processing` | intake | adapted | Bault's intake does photograph items, shelve them in a numbered bin and publish them to the owner's vault, and storage fees are charged automatically. The 180-day/90-day terms and fee percentages here are ShipMyCards' own. |
+| 22 | How long after delivery do items get uploaded to the Website? | `how-long-after-delivery-do-items-get-uploaded-to-the-website` | intake | unavailable | An operational turnaround commitment tied to ShipMyCards' Arizona facility. |
+| 23 | Can we submit a card for grading through PSA? | `can-we-submit-a-card-for-grading-through-psa` | services | adapted | Bault supports third-party grading as a service request raised against a card in your vault; a warehouse operator then accepts and completes it. Bault is not PSA-integrated and has no PSA pricing tiers, walkthrough service or marketing-consent term. |
+| 24 | What Consignment Options do you offer? | `what-consignment-options-do-you-offer` | services | adapted | Bault supports consignment as a service request against a card. The consignment partners, fee splits and payout timings listed here are ShipMyCards' commercial arrangements, not Bault's. |
+| 25 | How do I request a higher quality Scan or Video review? | `how-do-i-request-a-higher-quality-scan-or-video-review` | services | adapted | Bault supports professional photography as a service request. Video review and OneDrive delivery are not Bault capabilities. |
+| 26 | What if I want to Sell or Grade 1 card that is part of a lot? | `what-if-i-want-to-sell-or-grade-1-card-that-is-part-of-a-lot` | services | adapted | Bault can break a lot into individually tracked items, and splitting re-prices the resulting items. The Disposition menu described here is ShipMyCards' interface. |
+| 27 | What if I need help with looking for damage on a card? | `what-if-i-need-help-with-looking-for-damage-on-a-card` | intake | unavailable | Bault records a condition grade at intake but offers no damage-inspection or video-review request. |
+| 28 | Are collectors required to have store credit to use the service? | `are-collectors-required-to-have-store-credit-to-use-the-service` | fees | adapted | Bault does require a funded wallet: a negative balance blocks new shipments and service requests. The 14-day grace period, 1% weekly overdraft fee and -$20 lockout threshold are ShipMyCards' terms. |
+| 29 | Can I cash out my Store Credit? | `can-i-cash-out-my-store-credit` | fees | adapted | Bault supports withdrawing wallet funds, with a confirmation step. The cash-out fee schedule and PayPal Friends & Family payout here are ShipMyCards'. |
+| 30 | Can I send an International Shipment to my ShipMyCards address? | `can-i-send-an-international-shipment-to-my-shipmycards-address` | shipping | unavailable | Concerns importing into ShipMyCards' U.S. address. Bault operates no inbound international address. |
+
+### 6.5 Omitted or inaccessible content
+
+**None.** The complete source FAQ was reachable, copied and verified. No entry was
+omitted; the 21 non-applicable entries are present and explicitly marked rather
+than dropped, so the mapping to the source stays complete.
+
+### 6.6 FAQ interface
+
+Search (indexes question text, answer text and category name), category chips,
+expandable answers, deep links, keyboard operation. Each question is a real
+`<button>` inside an `<h3>` with `aria-expanded` / `aria-controls`; the answer is a
+`role="region"` labelled by its trigger. Deep links use `#/faq/faq?q=<id>` and
+reveal an entry the current filters would otherwise hide. Verified live: Enter
+expands, expansion writes the deep link, and loading
+`#/faq/faq?q=can-i-cash-out-my-store-credit` opens exactly that entry.
+
+The renderer parses two inline markers (`**bold**`, `[[label|url]]`) into React
+nodes — deliberately **not** `dangerouslySetInnerHTML`, because the content is
+third-party text and must never be able to inject markup. A test asserts no raw
+HTML survives into the data module.
+
+### 6.7 Legal Terms
+
+The viewer has everything required: document search, a table of contents with
+section links, a last-updated date, print support (`window.print()` plus print
+stylesheet rules that drop the app chrome and un-stick the contents column), and
+download where a file exists.
+
+**What it does not have is invented legal text.** Bault has not authored a Terms of
+Service, Privacy Policy or Cookie Policy — none exists anywhere in the repository.
+Writing plausible-sounding ones would have produced documents that read as binding
+while having been drafted by nobody. So those three are listed by name, each marked
+**"Not published"**, carrying no body text.
+
+The one authoritative legal document Bault genuinely ships is the **SIL Open Font
+License 1.1**, which governs the bundled Libertinus Math font and whose reproduction
+is a condition of using it. It is reproduced verbatim, sectioned, and downloadable
+at `/fonts/OFL.txt`.
+
+This is an honest partial: see the checklist in §15.
+
+### 6.8 Future integration point
+
+`answerQuestion()` is the only thing to replace. It is exported from
+`FaqLegalPage.tsx`, covered by tests that assert the current contract, and called
+from exactly one place.
+
+---
+
+## 7. Management
+
+### 7.1 What was actually found
+
+The requirement asks for three known test-email records to be removed from the
+Management Users interface, and — correctly — insists on identifying them exactly
+rather than deleting anything matching "test".
+
+**Inspected the live development database directly before changing anything.** The
+`user_account` table contains **five rows, all legitimate seeded personas**:
+
+```
+eldar@bault.dev     admin               active
+hermon@bault.dev    warehouse_operator  active
+red@bault.dev       user                active
+golden@bault.dev    user                active
+platform@bault.dev  admin               active
+```
+
+**There were no test-email records to remove.** A re-seed had already cleared them
+(the seed `TRUNCATE`s `user_account`), so the three rows described in the
+requirement were not present at the time of this pass.
+
+### 7.2 The mechanism that produced them, and the fix
+
+The cause was found and fixed, which matters more than deleting three rows:
+`tests/integration/acc-lifecycle.test.ts` registered accounts as
+**`t<epoch-ms>@bault.dev`** — the same domain as the seeded personas — one
+surviving row per run (the other two registrations in that file are *rejected* by
+design, so they never persist). Three runs since the last seed leaves exactly three
+customer-shaped rows in Management > Users.
+
+Three changes, so it cannot recur:
+
+1. **`apps/api/src/shared/fixtures.ts`** (new) — defines
+   `FIXTURE_EMAIL_DOMAIN = 'fixture.bault.test'`. `.test` is reserved by RFC 2606
+   and can never be a real address.
+2. **`tests/integration/helpers/http.ts`** — added `fixtureEmail(label)`, and
+   `acc-lifecycle.test.ts` now uses it for all three registrations.
+3. **`apps/api/src/modules/adm/adm.service.ts`** — `listUsers()` excludes that
+   domain by **exact domain match**, not a substring search. A genuine customer at
+   `test.family@…` or `contest@…` stays visible; so does anything at `bault.dev`.
+
+This is precisely the "isolated test fixtures that do not appear in the
+product-facing Users table" the requirement asks for. **Verified end to end:** ran
+the integration suite, confirmed
+`lifecycle-1785775676539-402841@fixture.bault.test` exists in the database, and
+confirmed `GET /admin/users` returns **5 rows** with no fixture address — and that
+the Management UI shows 5 rows.
+
+### 7.3 Cleanup for environments that still have the rows
+
+`scripts/remove-test-users.mjs` (new, `pnpm users:remove-test`) clears legacy
+residue from any environment that still has it. It is built to refuse anything it
+is not certain about:
+
+- **Dry run by default**; deleting requires `--apply`.
+- Matches **one anchored pattern**: `^t\d{10,19}@bault\.dev$`. It does not match on
+  the substring "test".
+- The five seeded personas are in an explicit keep-list and can never be selected.
+- An account is **skipped** if it owns items or has ledger records, charges,
+  shipments, service requests or addresses — a bare test registration owns nothing,
+  and anything that does is not one, whatever its address looks like. A table it
+  cannot check is treated as a reason to skip, not as evidence of safety.
+
+**Not executed with `--apply` in this environment, because there was nothing to
+remove.** Its query paths and column names were checked against the schema
+(`service_request.requester_id`, UUID primary keys), but the delete branch is
+unexercised — recorded in §13.
+
+### 7.4 Seed, fixture and mock data
+
+`apps/api/src/db/seed.ts` needed **no change**: it creates only the five purposeful
+personas and `TRUNCATE`s the table first, so it never reintroduces test rows. No
+other fixture, mock or migration creates user accounts.
+
+---
+
+## 8. Design system
+
+### 8.1 Colour
+
+The six required colours are the palette's spine, used deliberately unequally.
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `--navy` / `--navy-800` | `#0B1F33` | Deep Ink Navy — rail, hero surfaces |
+| `--teal` | `#00B8A9` | Electric Teal — focus rings, active interaction, `--info` |
+| `--gold` | `#E0B44C` | Achievement Gold — the rail selector, premium emphasis |
+| `--bg` | `#F3F7F8` | Soft Ice — the dominant workspace background |
+| `--graphite` / `--text` | `#26323D` | Graphite — body text, neutral dark surfaces, historical cards |
+| `--mint` | `#80E1D1` | Signal Mint — positive status |
+
+Each has a derived ramp in the same family (`--navy-900…--navy-500`,
+`--gold-bright/--gold-deep/--bronze`, `--surface-2/3`) so tints never drift out of
+the palette. Every pre-existing off-palette literal was swept out of the
+stylesheet: `rgba(217,167,46,…) → rgba(224,180,76,…)` and both old navy shadow
+values → `rgba(11,31,51,…)`; a grep for the previous hexes now returns zero.
+
+Warning and error stay deliberately **outside** the six — a failure must never be
+mistakable for premium gold. Success reads as Signal Mint and info borrows Electric
+Teal, so "active/interactive" is one colour across the app.
+
+### 8.2 Typography
+
+**Libertinus Math is self-hosted, not merely declared.** A declared-but-absent font
+silently falls back, and the font is installed on neither this machine nor most
+others; so the real face ships with the app:
+
+- `assets/fonts/LibertinusMath-Regular.woff2` (396 KB), served at `/fonts/…` from
+  Vite's `publicDir`. Verified live: `200 font/woff2 396244B`, and
+  `document.fonts.check('16px "Libertinus Math"')` returns **true**.
+- Licensed under the SIL OFL 1.1; the licence ships beside it at `/fonts/OFL.txt`
+  and is reproduced in the Legal Terms viewer.
+- Self-hosted rather than CDN-linked so the app makes **no third-party request** to
+  render its own text.
+
+```css
+--font-body: 'Libertinus Math', 'STIX Two Math', 'Rubik', 'Assistant', serif;
+```
+
+Verified computed: `"Libertinus Math", "STIX Two Math", Rubik, Assistant, serif`.
+The face covers full ASCII, all 27 Hebrew letters, curly quotes and dashes (checked
+with fontTools against the OTF), so the bilingual UI renders in one typeface; the
+Hebrew faces remain at the end of the stack as a safety net.
+
+**Controls were re-measured for the new proportions rather than shrunk to fit.**
+Libertinus has a smaller x-height and narrower counters than the sans it replaced,
+so the base size went **up** (15px → 16px), line-height opened to 1.55, rail items
+went 14px → 15px, and headings dropped the −0.01em tracking that suited Inter and
+crowds a serif. Nothing was reduced to compensate. The family ships a single 400
+weight, so headings use synthesised bold at 700 and hierarchy leans on size, colour
+and spacing as well as weight.
+
+`font-variant-numeric: tabular-nums` now covers every numeric surface the
+requirement names — balances, card/serial numbers, dates, quantities, transaction
+values, admin metrics — via `.num, .amt, .hero-value, .metric-value, .price, .code,
+code, time, .state-count, .rail-count, [dir=ltr]` cells.
+
+### 8.3 Spacing, radii, shadows, motion
+
+Unchanged 8px spacing scale (`--sp-1…--sp-12`) and radius scale (`--r-xs…--r-pill`).
+Shadows were re-tinted to the navy (`rgba(11,31,51,…)`) and gained
+`--shadow-rail-open`. Motion tokens gained `--dur-rail-open`, `--dur-rail-close`
+and `--dur-selector` (§2.2). Section transitions remain a 120–180ms opacity fade
+with ≤10px translation; the viewport, header and rail never animate.
+
+### 8.4 Responsive
+
+Verified at **390×844**: **zero horizontal overflow**, and the search field stays
+usable at 358×54. Below 767px the state controls drop their text labels (tooltip
+and `aria-label` still name them) and scroll horizontally within their own
+container; the legal two-column layout collapses below 900px; the rail becomes a
+scrim-backed drawer.
+
+---
+
+## 9. Code changes
+
+### New files
+
+| File | Responsibility |
+| --- | --- |
+| `apps/web/src/areas/customer/help/FaqLegalPage.tsx` | FAQ & Legal section: Ask (with `answerQuestion`, the future integration seam), FAQ list with search/categories/deep links, Legal viewer with TOC/search/print/download. Inline marker renderer that emits React nodes, never HTML. |
+| `apps/web/src/areas/customer/help/faqContent.ts` | The 31 copied Ship My Cards entries as structured data, with source URL, retrieval date, per-entry category, deep-link slug, `availability` and Bault note. Generated, not hand-edited. |
+| `apps/web/src/areas/customer/help/legalContent.ts` | Legal documents that genuinely govern Bault (OFL 1.1, sectioned, verbatim) plus `PENDING_DOCUMENTS` naming the unwritten ones with no body text. |
+| `apps/web/src/areas/customer/shipping/ShippingServicesPage.tsx` | The merged section: overview, shipment creation + rate selection, shipment lookup, and the open/closed service-request ledgers. |
+| `apps/api/src/shared/fixtures.ts` | `FIXTURE_EMAIL_DOMAIN` + `isFixtureEmail` — the reserved identity space for automated-test accounts. |
+| `scripts/remove-test-users.mjs` | Dry-run-by-default cleanup for legacy `t<epoch>@bault.dev` residue, with keep-list and activity checks. |
+| `assets/fonts/LibertinusMath-Regular.woff2`, `assets/fonts/OFL.txt` | The self-hosted primary typeface and its licence. |
+| `tests/web/faq-legal.test.ts` | 26 tests: the `#1DDD` contract, FAQ completeness/ordering/uniqueness/verbatim-ness/list integrity, legal document integrity. |
+| `tests/web/routing.test.ts` | 5 tests for the legacy redirects, including negative cases. |
+
+### Materially modified files
+
+| File | Change |
+| --- | --- |
+| `apps/web/src/App.tsx` | Replaced the `services` + `shipping` destinations with `shipping-services`; added the `faq` destination; wired `ShippingServicesPage` and `FaqLegalPage`; added `TAB_PREFIX` and the active-tab breadcrumb via `hasMessage`; applied `legacyRedirect` with `replace` (guard placed after all hooks so hook order stays stable). |
+| `apps/web/src/areas/customer/vault/VaultPage.tsx` | Rewritten: command bar with centred search + three state controls with counts; scope in the route; whole-tile click target; historical treatment; action drawer carrying the four card services with a confirmation step for donation; actions withheld for historical and held cards. |
+| `apps/web/src/shared/routing.ts` | Added `LEGACY_ROUTES` and `legacyRedirect()`. |
+| `apps/web/src/shared/i18n.tsx` | Added `hasMessage()`; removed `tab.services`/`tab.shipping`; added ~150 keys across both catalogues for Shipping & Services, FAQ & Legal and the Vault states. |
+| `apps/web/src/shared/ui/icons.tsx` | Added `IconShippingServices`, `IconLegal`, `IconArchive`, `IconAsk`, `IconPrint`. |
+| `apps/web/src/index.css` | Palette rewritten to the six required colours + derived ramps; `@font-face` for Libertinus Math; asymmetric rail durations; expanded-rail shadow; graphite/gold selector; tabular-nums coverage; new styles for the vault command bar, historical cards, drawer additions, Ask, FAQ and Legal; print rules; responsive rules. |
+| `apps/api/src/modules/vlt/vault.service.ts` | `VaultScope`; scope-aware `listOwned`; `searchClause` across six fields; `listHistory` built on the custody log; `departureReason`; `counts`; `hasHeld` so historical timelines stay open; `toIso` timestamp normalisation. |
+| `apps/api/src/modules/vlt/vlt.controller.ts` | `scope` query param with safe fallback; new `GET /vault/counts`. |
+| `apps/api/src/modules/shp/shipment.service.ts` | `ShipmentActor`; `loadFor` owner-or-staff guard; `rates`/`selectRate`/`track` now take an actor; richer tracking projection. |
+| `apps/api/src/modules/shp/shp.controller.ts` | Passes `@CurrentUser()` into the three newly-scoped endpoints. |
+| `apps/api/src/modules/adm/adm.service.ts` | `listUsers()` excludes the fixture domain by exact match. |
+| `tests/integration/helpers/http.ts`, `tests/integration/acc-lifecycle.test.ts` | Fixture accounts registered in the reserved domain. |
+| `package.json` | Added `users:remove-test`. |
+
+### Removed files
+
+| File | Reason |
+| --- | --- |
+| `apps/web/src/areas/customer/services/ServicesPage.tsx` | Services is no longer a section; ordering moved into the Vault card drawer, tracking into Shipping & Services. |
+| `apps/web/src/areas/customer/shipping/ShipmentPage.tsx` | Absorbed as the Shipping tab of the merged page. |
+
+### Routes
+
+| Route | Meaning |
+| --- | --- |
+| `#/vault/{active\|hold\|history}` | Vault state (default `active`) |
+| `#/vault/…?item=<id>` | Card drawer open |
+| `#/shipping-services/{overview\|shipping\|tracking\|requests\|history}` | Merged section |
+| `#/faq/{ask\|faq\|legal}` | FAQ & Legal |
+| `#/faq/faq?q=<slug>` | Deep-linked FAQ answer |
+| `#/services`, `#/shipping` | Redirected (§5.3) |
+
+### API contract changes
+
+- `GET /vault/items` gains `?scope=active|hold|history`. **Behaviour change:**
+  the default `active` scope now excludes held cards and everything that has left
+  storage, where it previously returned everything except three terminal states.
+- `GET /vault/counts` — new.
+- `GET /vault/items/:id/timeline` now also serves cards the caller *used to* own.
+- `GET /shipping/shipments/:id`, `GET …/rates`, `POST …/select-rate` are now
+  **owner-or-staff scoped** and return richer tracking fields.
+
+---
+
+## 10. Database and migrations
+
+**No schema modifications, no migrations, no backfills.**
+
+This is worth stating plainly because card history *sounds* like it needs storage.
+It does not: the platform already writes an append-only `custody_event` row for
+every ownership, location and state change, in the same transaction as the change
+itself. History was always in the database — it simply had no query and no screen.
+`listHistory` is a read over existing columns (`prev_owner_id`, `new_owner_id`,
+`new_state`, `reason`, `occurred_at`).
+
+The append-only guarantee is enforced by database triggers, which is also what
+makes "history cannot be deleted" a structural property rather than a UI promise.
+
+---
+
+## 11. Security and permissions
+
+### 11.1 Two vulnerabilities found and fixed
+
+Both were pre-existing and were found while building the Tracking tab on top of the
+shipment endpoints.
+
+**Shipment IDOR — `GET /shipping/shipments/:id`.** Loaded a shipment by id with no
+ownership check, returning the **destination address** and item ids to any
+authenticated user who could guess or obtain an id. Surfacing the endpoint in the
+customer UI would have widened the exposure.
+
+**Forced charge — `POST /shipping/shipments/:id/select-rate`.** Also unscoped, and
+it creates a settled `charge` and a ledger **debit against the shipment owner's
+wallet**. Any authenticated user could have moved money out of another collector's
+wallet by selecting a rate on their shipment.
+
+Fixed with `loadFor(shipmentId, actor)`: the caller must own the shipment or be
+staff. It returns **`notFound`, not `forbidden`** — telling a stranger that another
+collector's shipment id exists is itself a leak.
+
+**Verified live** with three accounts:
+
+| Caller | `GET :id` | `GET :id/rates` | `POST :id/select-rate` |
+| --- | --- | --- | --- |
+| Owner (golden) | 200 | 200 | — |
+| Other collector (red) | **404** | **404** | **404** |
+| Staff (hermon) | 200 | — | — |
+
+### 11.2 Vault authorisation and data minimisation
+
+- `listOwned` / `listHistory` / `counts` are owner-scoped in SQL; there is no
+  parameter that widens them.
+- Historical cards expose the card's identity and departure facts but **never the
+  current owner or current bin** — those are nulled in the projection.
+- `timeline` uses `hasHeld`, which allows current *or* past ownership and denies
+  anyone who never held the card.
+- `itemCard` remains strictly current-owner scoped (it returns the full row,
+  including `ownerId` and `binId`) and was deliberately **not** relaxed for
+  history.
+- Staff-only custody actions (hold, release, relocate) are not rendered for
+  collectors, so the UI never invites a call that would 403.
+- Donation keeps its two-step confirmation-token challenge; the drawer adds a
+  modal in front of it, so the irreversible action needs a deliberate second act.
+
+### 11.3 Masking and audit
+
+Unchanged from previous parts: PII exposure to admins goes through the SEC module,
+and every state-changing action writes an immutable audit record. Nothing in this
+pass added a new PII surface — the FAQ and Legal pages are static content, and Ask
+sends nothing anywhere.
+
+---
+
+## 12. Testing
+
+### Added
+
+- `tests/web/faq-legal.test.ts` — **26 tests.** The `#1DDD` contract (10 adversarial
+  inputs including empty, whitespace, Hebrew, CJK, a 5,000-char string, a
+  script-shaped string and a prompt-injection attempt; plus determinism over 25
+  calls). FAQ completeness (31 entries), source-order preservation, slug
+  uniqueness, per-entry availability + note, verbatim spot-checks including em
+  dash and curly apostrophe, **bullet-list integrity (48 lists / 174 items / 12
+  nested)**, and a no-raw-HTML assertion. Legal document integrity and the
+  "pending documents carry no body text" rule.
+- `tests/web/routing.test.ts` — **5 tests** for the legacy redirects, including
+  that `services-archive` and `shipping-services` must not redirect.
+
+### Changed
+
+- `tests/integration/acc-lifecycle.test.ts` + `helpers/http.ts` — registrations
+  moved to the reserved fixture domain.
+
+### Removed
+
+None.
+
+### Commands executed and results
+
+| Command | Result |
+| --- | --- |
+| `pnpm -r typecheck` | **PASS** — all 6 packages |
+| `pnpm -r build` | **PASS** — all 6 packages |
+| `eslint .` | **0 errors**, 31 warnings — all pre-existing (unused `eslint-disable` directives, `any` in older integration tests); none in files touched by this pass |
+| `vitest run --project web` | **59/59 pass** |
+| `vitest run --project integration` | **57/57 pass** (14 files) |
+| `vitest run --project concurrency` | **1/1 pass** |
+| `vitest run --project property` | **1/1 pass** |
+| `vitest run --project contract` | **FAIL — pre-existing**, see below |
+
+The `contract` project fails to load `@bault/adapters` (`Failed to load url
+@bault/adapters`) because the workspace package is not linked into the **root**
+`node_modules`. This is the same harness defect recorded in Part 11; neither
+`tests/contract/*` nor `packages/adapters/*` was modified by this pass.
+
+Also as recorded in Part 11: running the whole `integration` project without a
+fresh seed lets files interfere through the shared database — `mkt-purchase` failed
+once on a re-run and passed in isolation immediately afterwards. Seeding before each
+project run gives 57/57 reliably.
+
+### Live browser verification
+
+A Playwright walkthrough (Chromium, 1440×900 and 390×844) against the running dev
+stack — Postgres + PgBouncer + MinIO in Docker, the NestJS API, and the Vite dev
+server — signed in as the seeded admin and as a collector and checked **52
+acceptance criteria: 52/52 pass.** It measures live geometry and computed styles
+rather than reading the stylesheet.
+
+It covers: rail collapsed/expanded widths, the no-page-shift guarantee, the
+expanded shadow, collapse-on-leave, the eight destinations in order, absence of a
+Services destination, selector travel and treatment, `aria-current`, both legacy
+redirects, the Users table contents, vault search dimensions, the three state
+controls with tooltips and badges, no-reload state switching, historical treatment
+(graphite / desaturation / archive mark / explicit status), historical drawer with
+no actions, absence of any delete-history affordance, an active card's action
+drawer and timeline, the Ask notice, `#1DDD` for three live queries, FAQ default and
+full listings, keyboard expansion, deep linking both directions, the Legal viewer's
+TOC / date / print / download, the five Shipping & Services tabs, the breadcrumb,
+skip-link focus order, focus-driven rail expansion, arrow-key tab navigation, mobile
+overflow, and that Libertinus Math is actually loaded.
+
+**Three genuine defects were found by this walkthrough and fixed**, each of which
+had passed a code reading:
+
+1. Every FAQ bullet list was missing (§6.2).
+2. The last FAQ entry carried the site footer, and attributed `<strong>` tags left
+   orphaned `**` markers (§6.2).
+3. `departedAt` reached the client as a raw Postgres timestamp
+   (`2026-08-03 16:18:49.573228+00`) whose `+00` offset V8 rejects — historical
+   dates came back `null`. Fixed by normalising to ISO-8601 in `toIso`.
+
+### Accessibility checks
+
+Performed as part of the walkthrough: skip link first in tab order; rail expands on
+focus alone; exactly one `aria-current="page"`; icon-only controls carry tooltip +
+accessible name; FAQ disclosures use `aria-expanded`/`aria-controls` with a labelled
+region and operate from the keyboard; contextual tabs follow the ARIA tabs pattern
+with arrow-key navigation; state controls use `aria-pressed` with the count in the
+accessible name; reduced-motion disables selector travel. **Not** performed: a
+full automated audit (axe/Lighthouse) or a screen-reader pass — see §13.
+
+---
+
+## 13. Known limitations
+
+1. **Bault has no Terms of Service, Privacy Policy or Cookie Policy.** The Legal
+   viewer is complete, but three of the documents it would show do not exist and
+   were deliberately not written. They are listed as "Not published" with no body
+   text. This is the main reason the FAQ & Legal criterion is marked partial.
+2. **21 of 31 FAQ entries do not apply to Bault** and are marked as such. This is
+   faithful to the source and to Bault, but it means the FAQ answers fewer real
+   Bault questions than a purpose-written one would. Bault-specific FAQ content
+   was not invented.
+3. **`scripts/remove-test-users.mjs` has never run with `--apply`**, because this
+   environment had no matching rows. The dry-run path, the pattern, the keep-list
+   and the schema column names were checked; the delete branch is unexercised.
+4. **The three test users described in the requirement were not present**, so
+   nothing was deleted. The mechanism that creates them is fixed and verified;
+   the cleanup script exists for environments that still carry the residue.
+5. **Shipment history is a lookup, not a list.** The API exposes no per-customer
+   shipment index, so Tracking takes an id. A `GET /shipping/shipments` scoped to
+   the caller would let this become a proper table.
+6. **The card-photo placeholder is a 📷 emoji**, which conflicts with the
+   "no emoji in the icon system" rule. It sits inside `CardPhoto.tsx`, which the
+   requirements protect from modification; changing it is not required to prevent a
+   regression, so it was left alone and is flagged here instead. An `IconArchive`-
+   style outline glyph would resolve it in a one-line change if the protection is
+   lifted.
+7. **`vault.item.bin` / lot metadata for historical cards is intentionally absent**
+   (data minimisation, §11.2), so a historical drawer shows fewer fields than a
+   live one. Past transactions and statements are surfaced through the lifecycle
+   timeline rather than as separate sections.
+8. **No automated accessibility audit or screen-reader pass** was run; checks were
+   behavioural and manual-equivalent.
+9. **The JS bundle is 865 KB** (206 KB gzipped) and the build warns about it. The
+   FAQ content module contributes ~54 KB. Code-splitting was out of scope.
+10. **The Ask assistant is a placeholder by requirement** and answers nothing.
+11. **`prefers-reduced-motion` was not verified in a live browser run** — the rule
+    is present and correct in the stylesheet, but the walkthrough ran with default
+    motion settings.
+
+---
+
+## 14. Verification instructions
+
+### Running it
+
+```bash
+docker compose -f infra/docker-compose.yml up -d      # postgres, pgbouncer, minio
+pnpm --filter @bault/api db:migrate
+pnpm --filter @bault/api db:seed
+pnpm dev                                              # API :3000 + web :5173
+```
+
+Open <http://localhost:5173>. Seeded accounts, password `11111111` (development
+fixtures only, not secrets):
+
+| Account | Role |
+| --- | --- |
+| `red@bault.dev` | collector — has live cards **and** card history |
+| `golden@bault.dev` | collector |
+| `hermon@bault.dev` | warehouse operator |
+| `eldar@bault.dev` | admin — sees Management |
+
+The UI defaults to **Hebrew**; switch to English from the account menu.
+
+### Checking each change
+
+- **Rail** — hover it: 76px → 232px, page content must not move. Tab into it from
+  the top of the page: it expands on focus alone. Watch the gold selector slide
+  between destinations. Try the pin at the bottom.
+- **Navigation** — the rail must show exactly Vault, Wallet, Marketplace,
+  Shipping & Services, Warehouse, then a divider, then Notifications, FAQ & Legal,
+  Management. No Services entry.
+- **Redirects** — visit `#/services` and `#/shipping`; they must land on
+  `#/shipping-services/requests` and `#/shipping-services/shipping`, and Back must
+  not return to them.
+- **Vault** — as `red@bault.dev`. Search is ~720×58 and filters as you type. Switch
+  between Active / On-hold / Card history; the URL changes, the page does not
+  reload. Card history shows graphite, desaturated cards with an archive badge and
+  a "Historical — …" status. Click any card anywhere on the tile. A `Stored` card's
+  drawer offers photography / grading / consignment / donate; a historical card's
+  drawer offers **no** actions. Confirm no control anywhere clears history.
+- **Card artwork** — the 8 seeded `SN-*` cards must show their photographs; the
+  mapping is unchanged.
+- **FAQ & Legal** — Ask: type anything, the reply is exactly `#1DDD` and the
+  not-connected notice is visible. FAQ: 10 entries by default, 31 with the
+  checkbox; search, categories, Enter to expand, and
+  `#/faq/faq?q=can-i-cash-out-my-store-credit` opens that entry directly. Legal:
+  TOC, search, last-updated, Print, Download.
+- **Management** — as `eldar@bault.dev`, Users lists exactly the 5 real accounts.
+  Run `pnpm test:integration` and confirm it still lists 5 while
+  `select email from user_account` shows a `@fixture.bault.test` row.
+- **Security** — sign in as `red`, take a shipment id belonging to `golden`
+  (`select id from shipment`), and request
+  `/api/v1/shipping/shipments/<id>` — it must return 404.
+
+### Re-running the checks
+
+```bash
+pnpm -r typecheck && pnpm -r build && pnpm lint
+pnpm --filter @bault/api db:seed && pnpm test:web
+pnpm --filter @bault/api db:seed && pnpm test:integration
+```
+
+---
+
+## 15. Acceptance checklist
+
+**Navigation**
+
+- [x] All circular / radial / wheel / GTA / overlay / segment / hold-and-release navigation removed and absent
+- [x] Persistent left rail is the sole primary navigation
+- [x] Collapsed 72–80px (76px), expanded 220–240px (232px), collapsed by default
+- [x] Collapsed width permanently reserved; expansion overlays and does not move content
+- [x] Expansion 180–220ms (200ms); collapse 150–180ms (165ms); close delay present
+- [x] Subtle shadow when expanded
+- [x] Pinning supported and persisted
+- [x] Gold vault selector: graphite plate, gold notch, rivet; slides 160–220ms (190ms)
+- [x] `prefers-reduced-motion` disables selector travel *(stylesheet verified; not exercised in a live run)*
+- [x] Keyboard usable; focus expands the rail; skip link first
+- [x] Notification count badges
+- [x] Labels via expansion and tooltips; every icon-only control has an accessible name
+- [x] Eight primary destinations in the required order with divider
+- [x] Profile / language / settings / role / sign-out in the upper-right menu, not the rail
+- [x] One consistent outline icon set at 20–22px — *see §13.6 for the one emoji exception inside protected code*
+- [x] Current location shown by selector + title + breadcrumb + active tab + `aria-current`
+- [x] Shell stays mounted across section changes; no data refetched on navigation
+
+**Vault**
+
+- [x] Centred search, 520–720px × 54–62px (720×58)
+- [x] Searches name, type, serial, barcode, condition and status
+- [x] Active / On-hold / Card history controls with icons, labels, tooltips, counts, selected state
+- [x] Switching state does not reload the page
+- [x] Every card clickable; opens a detail + action drawer, not a separate page
+- [x] Actions reachable in 1–2 interactions and all backed by real endpoints
+- [x] No unsupported or fake actions shown
+- [x] Card history maintained and visible; historical cards clickable
+- [x] Historical treatment: graphite, desaturated art, lower contrast, archive icon, explicit status, lifecycle date, reason
+- [x] No active-card actions on historical cards
+- [x] No clear / hide / remove / delete-history action introduced
+- [x] Existing card artwork and serial-number mapping unmodified and working
+
+**Shipping & Services**
+
+- [x] Standalone Services section removed
+- [x] Card services moved into the Vault
+- [x] Remaining service functionality merged into Shipping & Services
+- [x] Contextual tabs limited to what the backend supports
+- [x] `/services` and `/shipping` redirect
+- [x] No duplicated pages or workflows
+
+**FAQ & Legal**
+
+- [x] FAQ & Legal is a primary destination with Ask / FAQ / Legal Terms tabs
+- [x] Ask returns exactly `#1DDD`, with no network request and no extra answer text
+- [x] Replaceable `answerQuestion` interface
+- [x] Visible notice that the assistant is not connected
+- [x] FAQ copied from the official Ship My Cards site; source URL and retrieval date recorded
+- [x] All 31 source entries copied, in source order, verbatim
+- [x] Source re-verified immediately before completion (2026-08-04)
+- [x] Complete source mapping, with every adaptation documented (§6.4)
+- [x] No entry silently imported for a capability Bault lacks — all 31 explicitly marked
+- [x] Structured, maintainable content format; search indexes question, answer and category
+- [x] Deep links open the correct entry; keyboard-operable expand/collapse
+- [x] No placeholder or invented FAQ entries
+- [~] **Legal Terms tab** — viewer complete (search, TOC, section links, last-updated, print, download) and the one authoritative document Bault ships is reproduced verbatim, **but Bault's own Terms of Service, Privacy Policy and Cookie Policy do not exist and were deliberately not written.** They are shown as "Not published". See §6.7 and §13.1.
+
+**Management**
+
+- [~] **Three test-email records removed** — the mechanism that created them is fixed and verified, and a safe cleanup script is provided, **but the three rows were not present in this environment** (a prior re-seed had already cleared them), so nothing was deleted. See §7.1 and §13.3–13.4.
+- [x] Real users not removed; no broad "contains test" matching
+- [x] Test fixtures isolated in a reserved domain and excluded from the Users table
+- [x] Automated testing still works
+- [x] Seed / fixture / mock data verified not to reintroduce them
+
+**Design system**
+
+- [x] Six-colour palette applied with the required hierarchy; off-palette literals swept out
+- [x] Libertinus Math as the primary font — self-hosted and verified loaded, not just declared
+- [x] `tabular-nums` on balances, card numbers, dates, quantities, transaction values and admin metrics
+- [x] Controls re-measured for the font's proportions; sizes raised, not reduced
+- [x] Spacing, radii, shadows, motion tokens documented
+- [x] Responsive verified at 390px with zero horizontal overflow
+
+**Process**
+
+- [x] Build run and passing
+- [x] Typecheck run and passing
+- [x] Lint run — 0 errors
+- [x] Automated tests run — web / integration / concurrency / property pass
+- [~] **`contract` project fails** — pre-existing `@bault/adapters` resolution defect, unrelated to this pass (§12)
+- [x] Main routes verified live in a browser (52/52 checks)
+- [x] Rail verified in both states
+- [x] Vault card states verified
+- [x] Card artwork verified unmodified
+- [x] No history-destroying action introduced
+- [x] Card details and actions verified
+- [x] Shipping & Services verified
+- [x] FAQ & Legal verified
+- [x] Every Ask query verified to return `#1DDD`
+- [x] Responsive behaviour verified
+- [x] Keyboard operation verified
+- [x] DIVE1.md updated with the verified implementation record
+- [ ] **Automated accessibility audit (axe/Lighthouse) and screen-reader pass** — not performed (§13.8)
+
+---
+
+# Part 13 — Account Recovery, Real Email & the Wallet Debt Policy
+
+**Completed: 16 August 2026.**
+
+This part documents one pass with a narrow, deliberately-bounded scope: close every
+**Missing** and **Partially covered** item in section 1 (Account & identity) of the
+ShipMyCards parity audit, except the helpdesk, which is a module in its own right
+and was held back on purpose.
+
+The organising observation behind the pass is that the platform had a complete
+account-recovery API and no way for a person to reach any of it. `/auth/verify-email`,
+`/auth/password/reset-request`, `/auth/password/reset` and `/auth/password/change`
+were all implemented, guarded, single-use and time-limited — and the SPA called
+exactly two auth routes, `login` and `logout`. A user who forgot their password was
+locked out permanently; a user who registered could not activate their account
+without somebody reading the server's stdout. Both were hard stops sitting behind
+working code.
+
+The second half of the pass gives the wallet's debt handling somewhere to go. A
+negative balance blocked spending immediately and then never escalated, so an
+account two cents down and an account two thousand dollars down were treated
+identically, forever.
+
+---
+
+## 1. Executive summary
+
+### What changed
+
+1. **Email became real.** `ConsoleEmailAdapter` is no longer the only implementation.
+   `SmtpEmailAdapter` delivers over SMTP through nodemailer, with both a plain-text
+   and an HTML part rendered from a named template. The choice is made from
+   `EMAIL_PROVIDER`, and the console sink stays the default so a fresh checkout
+   still boots with no mail configuration at all.
+
+2. **Emailed links became clickable.** They used to be relative paths
+   (`/verify-email?token=…`), which a mail client has no origin to resolve, and
+   which pointed at a path the SPA's hash router does not serve. They are now
+   absolute and hash-routed, built from `APP_BASE_URL`.
+
+3. **Four screens were added** so the recovery API is reachable: email
+   confirmation, forgot-password, choose-a-new-password, and a password panel on
+   the profile page.
+
+4. **Two routes are answered before the session probe.** `#/verify-email` and
+   `#/reset-password` are opened from a link in an email by someone who by
+   definition has no session — and, in the reset case, may be unable to obtain one.
+   They render ahead of every boot state.
+
+5. **The wallet debt policy escalates.** A debt is free for a grace period, then
+   accrues daily interest, and past a configured threshold the account is
+   suspended outright until the debt clears — after which the same sweep lifts the
+   suspension again.
+
+6. **Bault published its first authored legal document.** An Account Use & Balance
+   Policy, stating the account-sharing rule, username immutability, the account
+   statuses, the fee model and the debt thresholds.
+
+### Why
+
+The audit's section 1 scored 5 covered, 4 partially covered and 2 missing. Of the
+four partials, three were the same defect wearing three hats — an endpoint with no
+caller — and the fourth was a policy with no escalation. Fixing the first three is
+almost entirely UI work over code that was already written, reviewed and guarded;
+fixing the fourth needed one column and one job. That ratio of user outcome to
+build cost is why this section was taken first.
+
+### What was deliberately NOT done
+
+**SMC-11, the helpdesk, is not implemented.** It is a new module — schema,
+endpoints, a customer thread, a staff queue — larger than the other five items
+combined, and folding it into this pass would have produced a diff nobody could
+review as one thing. It remains **Missing**, and the audit's section 1 now stands
+at **10 covered, 0 partial, 1 missing**.
+
+---
+
+## 2. Email
+
+### 2.1 The adapter, and why the interface did not change
+
+`EmailAdapter` is unchanged:
+
+```ts
+export interface EmailAdapter {
+  send(message: EmailMessage): Promise<{ providerRef: string }>;
+}
+```
+
+That mattered. `VerificationService` is the only caller, and it composes a message
+from a `to`, a `subject`, a `template` name and a bag of `variables`. Nothing about
+that shape is console-specific, so real delivery is a second implementation rather
+than a change rippling through the caller.
+
+`SmtpEmailAdapter` takes its credentials through its constructor rather than
+reading `process.env` itself. `packages/adapters` therefore carries no dependency
+on `@bault/config`, and the adapter is directly constructible in a test with a fake
+transport.
+
+`verify()` is deliberately not called at construction. The API must boot whether or
+not the mail server is reachable; a failure surfaces on the first send, carrying the
+provider's own error, rather than as a process that refuses to start.
+
+### 2.2 Templates
+
+`renderEmail(template, variables)` returns **both** parts of a message:
+
+```ts
+export interface RenderedEmail {
+  text: string;
+  html: string;
+}
+```
+
+Both are always produced. A text-only client — and every spam filter — reads
+`text`, and a URL that exists only inside an anchor tag is invisible to both, so the
+link is written out in full in the plain part as well.
+
+Every transactional message Bault sends has the same shape: a sentence of context,
+one link, and a line saying what happens if it is ignored. That shape is one
+function, `actionEmail`, so a new template cannot arrive without a plain-text part
+or with an unescaped URL.
+
+An **unknown template does not throw**. A mail that fails to render would abort the
+registration or the reset that triggered it, which is a far worse outcome than a
+plainly-formatted message; it degrades to the variables it was given.
+
+### 2.3 The link
+
+```ts
+function emailLink(route: string, token: string): string {
+  const base = loadEnv().APP_BASE_URL.replace(/\/+$/, '');
+  return `${base}/#/${route}?token=${encodeURIComponent(token)}`;
+}
+```
+
+Two defects are fixed here. The link is **absolute**, because a mail client has no
+origin against which to resolve `/verify-email`. And it targets the **hash route**,
+because the SPA is a hash router — a path-style link would load the application at
+its default section and discard the token silently.
+
+The token is percent-encoded although `generateToken` emits URL-safe characters
+today, so a later change to the token alphabet cannot quietly produce a malformed
+link.
+
+Verified live, with the console sink:
+
+```
+[email] to=red@bault.dev template=password_reset {
+  link: 'http://localhost:5173/#/reset-password?token=03e2db96…'
+}
+```
+
+### 2.4 Configuration
+
+`EMAIL_PROVIDER` is now an enum (`console` | `smtp`) rather than a free string, and
+the SMTP credentials are **conditionally required**: the env schema's `superRefine`
+demands `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` and `SMTP_FROM` only when the
+provider is `smtp`. Demanding them unconditionally would stop a fresh checkout
+booting; defaulting them would hand the operator a mail path that silently fails.
+
+Two small correctness details in the schema:
+
+- `SMTP_SECURE` is read through a `booleanFromEnv` helper, not `z.coerce.boolean()`.
+  Coercion applies JavaScript truthiness, so the literal string "false" — the
+  exact value an operator writes to turn something off — coerces to `true`. Only
+  `true` / `1` / `yes` / `on` count.
+
+- `SMTP_PASSWORD` has whitespace stripped. Google displays an app password as four
+  space-separated groups (`abcd efgh ijkl mnop`) and Gmail's SMTP server rejects it
+  in that form, so pasting exactly what the screen shows produces an authentication
+  failure with no hint as to the cause. Stripping makes the displayed value and the
+  working value the same thing.
+
+`.env.example` documents the Gmail app-password setup end to end: enabling 2-Step
+Verification, generating the credential, which value goes in which variable, and the
+fact that the credential belongs in `.env` and never in the template or in code.
+
+---
+
+## 3. Account recovery
+
+### 3.1 Routing: two routes answered before the session probe
+
+```ts
+const TOKEN_ROUTES = ['verify-email', 'reset-password'] as const;
+```
+
+`App()` answers these ahead of every boot state. Handling them inside the
+signed-out `AuthPage` would have been the smaller change and the wrong one: a
+reader who already has a session — a shared machine, a second account — would hit
+the signed-in shell, which treats an unknown section as a mistake and redirects to
+the role's landing page, discarding the token on the way.
+
+Answering them before the probe also removes a spinner from in front of an answer
+the app already has: neither page needs to know who is signed in.
+
+The signed-out chrome was extracted from `AuthPage` into an exported `AuthShell`,
+so both token pages get the same frame — including the language control, which is
+the one language switch in the product that is not the application shell's, and
+which a reader who cannot read the page needs first.
+
+### 3.2 Email confirmation (`VerifyEmailPage`)
+
+Verification runs **on mount**, not behind a button: the reader already expressed
+intent by clicking the link, and a second confirmation step carries no information.
+
+Three states, each stated plainly. On failure the token is spent, expired or wrong;
+an expired link is the common case and the only one with a way forward, so the
+failure state offers a resend form rather than a dead end.
+
+A **missing** token is its own state rather than a form that cannot succeed — the
+usual cause is a mail client that truncated the link, and saying so is more useful
+than letting somebody type into a dead form.
+
+### 3.3 Forgot password (`ForgotPasswordPage`)
+
+The API answers identically whether or not the address belongs to an account —
+`VerificationService.issuePasswordReset` returns silently for an unknown email — and
+this page does the same. It shows one confirmation for every submission and never
+says "no such account", because a form that distinguishes the two is an
+account-enumeration oracle: anybody could test an address list against it.
+
+That is also why the confirmation is worded as what **will** happen if the address
+is registered, rather than asserting that a mail was sent:
+
+> If {email} is registered, a reset link is on its way to it.
+
+The same reasoning governs the resend confirmation on both the sign-up panel and the
+verification page.
+
+### 3.4 Choose a new password (`ResetPasswordPage`)
+
+The token arrives in the hash route and is never shown, never editable and never
+stored — it goes straight from the URL into the one request that consumes it.
+
+Client-side the page requires eight characters and a matching confirmation; the
+server independently enforces the length through `ResetPasswordDto`.
+
+### 3.5 Change password (`ProfilePage` → Security)
+
+A third tab on the profile page. The current password is required — by the API, and
+asked for here for the reason it exists: an unattended signed-in browser should not
+be enough to lock the real owner out of their own account.
+
+The panel refuses a **no-op change** (new password identical to current) rather than
+letting the server accept it and report success while nothing happened.
+
+Sessions are deliberately **not** revoked on success. `SessionService.resolve`
+validates a session against its own row, not against the password hash, so existing
+sessions survive — including the one being used, which is why the page stays usable
+afterwards instead of bouncing the user to sign-in. This was verified rather than
+assumed (§7.3).
+
+---
+
+## 4. The wallet debt policy
+
+### 4.1 What existed, and what was missing
+
+`WalletService.assertNotBlocked` refuses new shipments and new service requests
+while the balance is negative, and `accrueInterest` charged interest daily. Between
+them there was no grace and no escalation: interest started the instant a balance
+went negative — charging a customer for the hours between a fee posting and their
+noticing it — and nothing ever became more serious.
+
+### 4.2 The three parameters
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `WALLET_DEBT_GRACE_DAYS` | `14` | Days a debt may sit before interest begins |
+| `WALLET_DEBT_INTEREST_BPS` | `5` | Daily interest on a debt past the grace period (0.05%); `0` disables accrual |
+| `WALLET_SUSPEND_BELOW_MINOR` | `-2000` | Balance below which the sweep suspends the account (−$20.00) |
+
+They are configuration and not constants because they are a commercial policy, not
+an implementation detail. The defaults mirror the reference service.
+
+### 4.3 Deriving how long a debt has existed
+
+A balance is never stored (Principle IV), so "when did this go negative" is not a
+column and cannot be one. `negativeAccounts` in `apps/worker/src/jobs/debt.ts`
+replays each account's ledger in order with a window function and takes the **last**
+row where the running total crossed from ≥ 0 into < 0.
+
+Taking the *first* such crossing would be wrong for an account that has been
+negative, recovered, and gone negative again: it would date the debt from a balance
+the customer already cleared, and charge interest on it.
+
+Accounts that are currently solvent are filtered out before the crossing is joined,
+so a long ledger history costs nothing for the accounts that are fine.
+
+The query lives in one module because both jobs need exactly the same two facts —
+how much is owed, and for how long — and writing it twice would let the two drift.
+
+### 4.4 Suspension, and the marker that makes it safe
+
+The sweep suspends an account whose balance is below the threshold, and lifts that
+suspension once the balance recovers. The second half is what needs care: naively
+reinstating *every* suspended account whose balance recovered would also reinstate
+an account an administrator suspended for fraud, which happens to be solvent.
+
+`user_account.auto_suspended_at` is the discriminator. It is written only by the
+sweep and cleared only by the sweep, so:
+
+- an administrator's suspension has no marker and survives the balance recovering,
+  because it was a judgement about a person and not about a number;
+- a debt suspension is never mistaken for a human decision.
+
+Both halves of that property were verified against the running system (§7.4).
+
+The `status = 'active'` predicate in the suspend statement is what makes the job
+idempotent and keeps it off accounts that are pending, closed, or already suspended
+by a person.
+
+### 4.5 The consequence nobody should discover by accident
+
+A suspended holder cannot sign in — `SessionAuthGuard` rejects every request and
+`AuthService.login` refuses at the door — and therefore **cannot raise the cash-in
+request that would clear their own debt**. This matches the reference service, which
+locks accounts below −$20 and expects the holder to contact support.
+
+It is made survivable by the automatic reinstatement: money can still arrive at a
+locked account (an administrator completing a cash-in on their behalf, or one of
+their listings selling credits the ledger), and the next sweep sees the balance and
+lifts the suspension without anyone having to remember to. The behaviour is stated
+in `.env.example`, in the job's own header, and in §5 of the published policy.
+
+### 4.6 Scheduling
+
+`wallet.suspension-sweep` runs at 03:15, fifteen minutes after `interest.accrual` at
+03:00, so a debt that crosses the suspension threshold *because of* today's interest
+is acted on today rather than sitting a further twenty-four hours.
+
+---
+
+## 5. The Account Use & Balance Policy
+
+`legalContent.ts` opens by stating that it carries only text that genuinely governs
+Bault, and that writing a plausible-sounding Terms of Service would create a
+document that reads as binding while having been authored by nobody. Publishing an
+account policy had to satisfy that standard rather than sidestep it.
+
+The rule adopted, and now written into the module header: **a clause may only appear
+once the behaviour it describes exists**, and the enforcement point is named in the
+text so a reader can check the claim. Accordingly:
+
+| Section | Claim | Enforced by |
+| --- | --- | --- |
+| 1 | One account, one person | Stated obligation; no automated detection (§8) |
+| 2 | The username is permanent | `user_account_username_immutable` DB trigger |
+| 3 | The four account statuses | `SessionAuthGuard`, `AuthService.login` |
+| 4 | A funded balance is required | `WalletService.assertNotBlocked`, pricing-rule snapshots |
+| 5 | Grace, interest, suspension at −$20 | `accrueInterest`, `sweepWalletSuspensions` |
+| 6 | Append-only custody, ledger and wallet-request trails | `0001_append_only.sql` triggers |
+
+Terms of Service, Privacy Policy and Cookie Policy remain in `PENDING_DOCUMENTS`,
+named and explicitly unpublished.
+
+Body text is English and is not translated, as with the bundled OFL. Rendering a
+legal text in a language its author did not write it in creates a second version
+that can disagree with the first; the page chrome is localised, the governing words
+are not.
+
+---
+
+## 6. Code changes
+
+### New files
+
+| File | Purpose |
+| --- | --- |
+| `apps/api/src/db/migrations/0006_wallet_debt_policy.sql` | `auto_suspended_at` + two indexes |
+| `apps/worker/src/jobs/debt.ts` | Shared derivation of debt size and debt age |
+| `apps/worker/src/jobs/wallet-suspension.ts` | Suspend below threshold; reinstate on recovery |
+| `apps/web/src/areas/customer/auth/VerifyEmailPage.tsx` | Confirms an emailed token; offers resend on failure |
+| `apps/web/src/areas/customer/auth/ForgotPasswordPage.tsx` | Requests a reset link, without leaking existence |
+| `apps/web/src/areas/customer/auth/ResetPasswordPage.tsx` | Consumes a reset token, sets a new password |
+
+### Materially modified files
+
+| File | Change |
+| --- | --- |
+| `packages/config/src/env.ts` | SMTP block, `APP_BASE_URL`, three debt parameters, `booleanFromEnv`, conditional-requirement refinement |
+| `packages/adapters/src/email.ts` | `renderEmail`, `actionEmail`, `escapeHtml`, `SmtpEmailAdapter`, `SmtpConfig` |
+| `packages/adapters/package.json` | `nodemailer` dependency, `@types/nodemailer` dev dependency |
+| `apps/api/src/shared/adapters/adapters.module.ts` | `createEmailAdapter` factory chosen by `EMAIL_PROVIDER` |
+| `apps/api/src/modules/acc/verification.service.ts` | `emailLink` — absolute, hash-routed, encoded |
+| `apps/api/src/modules/acc/acc.schema.ts` | `autoSuspendedAt` column |
+| `apps/worker/src/jobs/interest-accrual.ts` | Grace period; rate and grace from config; shared debt query |
+| `apps/worker/src/jobs/registry.ts`, `apps/worker/src/index.ts` | New queue registered at `15 3 * * *` |
+| `apps/web/src/App.tsx` | `TOKEN_ROUTES`, answered before the boot states |
+| `apps/web/src/areas/customer/auth/AuthPage.tsx` | `AuthShell` extracted; third mode for forgot-password |
+| `apps/web/src/areas/customer/auth/SignInPage.tsx` | "Forgot your password?" beneath the submit button |
+| `apps/web/src/areas/customer/auth/SignUpPage.tsx` | Resend control on the confirmation panel |
+| `apps/web/src/areas/customer/profile/ProfilePage.tsx` | `security` tab and `PasswordPanel` |
+| `apps/web/src/shared/i18n.tsx` | 32 new keys, Hebrew and English |
+| `apps/web/src/areas/customer/help/legalContent.ts` | Account Use & Balance Policy; revised module header |
+| `.env.example` | Email, `APP_BASE_URL` and debt-policy blocks |
+
+### Routes
+
+No API routes were added, removed or changed. Every endpoint the new screens call
+already existed. Two SPA hash routes are new: `#/verify-email` and
+`#/reset-password`, plus a `security` tab under `#/profile`.
+
+---
+
+## 7. Verification performed
+
+### 7.1 Static
+
+```
+pnpm -r typecheck   → 6/6 projects pass
+pnpm -r build       → 6/6 projects build
+pnpm lint           → 0 errors, 33 warnings (all pre-existing in kind)
+```
+
+### 7.2 Automated tests
+
+```
+vitest --project web         → 139 passed (10 files)
+vitest --project contract    →   6 passed (2 files)
+vitest --project integration → 103 passed, 3 skipped, 1 failed
+```
+
+The one failure is `shp-tracking-list.test.ts > preserves a shipment in the list
+after it has been dispatched`, asserting that the signed-in owner has a shipment in
+status `shipped`. The database's shipment table holds one `shipped` and one
+`in_transit` row; the seeded shipment has been advanced to `in_transit` by a
+previous `tracking-refresh` run. It is environment drift in a long-lived
+development database, not a regression — this pass touches no SHP, MKT or CST code
+path, and does not modify the seed. It is cleared by re-seeding.
+
+### 7.3 Account recovery, end to end against the running API
+
+Registration → confirmation → sign-in, on a reserved `@fixture.bault.test` address:
+
+```
+register                        201
+login while pending             403  "Verify your email before signing in"
+verify-email  (emailed token)   200
+verify-email  (same token)      410  "expired or already used"
+login                           200
+```
+
+Password change:
+
+```
+change with wrong current       400  "Current password is incorrect"
+change with correct current     200
+login with old password         401
+login with new password         200
+GET /me/profile on same session 200   ← session survives, as documented
+```
+
+Password reset:
+
+```
+reset-request (known address)   202
+reset-request (unknown address) 202   ← indistinguishable, as required
+reset  (emailed token)          200
+reset  (same token)             410  "expired or already used"
+login with new password         200
+login with previous password    401
+```
+
+The emailed link was read from the console sink and confirmed absolute and
+hash-routed (§2.3).
+
+### 7.4 Debt policy, end to end against the running jobs
+
+All balances were listed first to confirm no seeded persona was near the threshold;
+the exercise ran on the fixture account.
+
+```
+1  baseline                              balance non-negative,  status active
+2  post a $25.00 debit dated 20 days ago balance -2500, negativeDays 20
+3  accrueInterest + sweepWalletSuspensions
+     [job:interest] 1 negative account(s), 1 past the 14-day grace period and charged
+     [job:wallet-suspension] threshold -2000 — suspended 1, reinstated 0
+                                         balance -2501, status suspended, marker set
+4  login                                 403  account_suspended
+5  post a $26.00 credit                  balance non-negative, status suspended
+6  sweep again
+     [job:wallet-suspension] suspended 0, reinstated 1
+                                         status active, marker cleared
+7  login                                 200
+8  post a $5.00 debit dated today
+     [job:interest] 1 negative account(s), 0 past the 14-day grace period and charged
+                                         ← grace period respected
+9  admin-suspend (marker deliberately NULL), run sweep
+                                         status suspended, not reinstated
+10 credit to a positive balance, run sweep
+     [job:wallet-suspension] suspended 0, reinstated 0
+                                         status STILL suspended
+                                         ← an administrator's suspension is never auto-lifted
+```
+
+Step 10 is the property the `auto_suspended_at` column exists for, and it holds.
+
+### 7.5 Migration
+
+Applied against the development database and introspected:
+
+```
+pnpm --filter @bault/api db:migrate → ✔ migrations applied and append-only guards installed
+auto_suspended_at present: true
+indexes: ledger_record_user_occurred_idx, user_account_status_idx
+```
+
+### 7.6 Not verified
+
+- **No browser pass.** The four new screens were not opened in a browser; they are
+  verified only through their endpoints, the type checker and the build. The i18n
+  catalogue test does confirm every new key exists in both languages.
+- **SMTP delivery was not exercised against a live server.** `EMAIL_PROVIDER=smtp`
+  needs a real credential, which is not present in this checkout. The console path,
+  the template renderer and the link builder were all exercised; what remains
+  unverified is nodemailer's conversation with a real mail server.
+- **No automated accessibility audit** of the new screens.
+
+---
+
+## 8. Honest limitations
+
+1. **The account-sharing rule is stated, not enforced.** Nothing detects concurrent
+   sessions from different devices or locations, and nothing acts on it. The policy
+   text is an obligation on the account holder and is written as one.
+
+2. **Verification and reset are only as good as the mail configuration.** With the
+   default `EMAIL_PROVIDER=console` the links go to the server's stdout, which means
+   the two hard stops this pass set out to remove still exist in any deployment that
+   never sets `EMAIL_PROVIDER=smtp`. The capability is present; delivery is a
+   deployment decision, and the template says so.
+
+3. **Suspension is coarse.** A suspended holder loses read access to their own vault
+   along with everything else, because `SessionAuthGuard` blocks the whole surface
+   for any non-active status. A narrower "restricted" state that keeps the vault
+   readable and cash-in available would be kinder and would remove the dependence on
+   an administrator; it would also be a new account status with its own transitions,
+   which is more than this pass was scoped for.
+
+4. **Interest compounds silently.** It appears as ordinary ledger rows the customer
+   can see, and the policy document states the rate — but nothing notifies a
+   customer that accrual has begun, or warns them as they approach the suspension
+   threshold. Both are notification events that do not exist yet.
+
+5. **SMC-11, the helpdesk, is not implemented** (§1). It is the last remaining gap
+   in section 1 of the audit, and it is the natural channel for the "contact
+   support" instruction that §4.5 and the policy document both depend on.
+
+---
+
+# Part 14 — The Item Taxonomy and Arrivals That Were Not Accepted
+
+**Completed: 17 August 2026.**
+
+This part documents section 3 of the ShipMyCards parity audit — item handling
+rules and policies. Five of its seven outstanding items were built; two were
+deferred, with the reason recorded rather than worked around.
+
+The pass began with an observation from the reader rather than from the code:
+several of these "features" are things a person does at a bench, not things
+software performs. Nobody writes a GPS-tracker detector. What the software owes
+is the other three quarters of the job — **publish** the rule in advance,
+**record** which of the permitted decisions was actually taken, and **tell** the
+collector, who is otherwise left waiting for something that is never going to
+arrive. Once that split is drawn, three separate audit rows collapse into one
+mechanism.
+
+---
+
+## 1. Executive summary
+
+### What changed
+
+1. **`type_class` became a vocabulary.** It was an unconstrained text box
+   pre-filled with "Trading Card", and it had filled up the way an unconstrained
+   text box always does: `Card`, `Trading Card`, `Pokémon Card` and `Bulk Card`
+   all meaning the same thing, plus single letters left behind by tests.
+
+2. **Per-class pricing became reachable.** `PricingService.price` had always
+   preferred a class-specific rule over the catch-all, but nothing ever passed a
+   class through the billing port — so a rule naming one could be created in the
+   admin console and would silently never resolve. A latent defect, fixed here
+   because the taxonomy is what made it visible.
+
+3. **The five-or-fewer rule.** A "lot" of five or fewer CARDS is received as
+   that many individual items instead, each with its own serial, barcode and
+   intake charge.
+
+4. **Arrivals that were not accepted are now a record.** One mechanism covers
+   prohibited items, GPS trackers found in parcels, and things worth less than
+   the cost of processing them. The collector is notified and keeps a permanent,
+   append-only account of what arrived, why it was refused, and what happened
+   to it.
+
+5. **The policy is published.** A seventh section of the Account Use & Balance
+   Policy lists what cannot be accepted and says plainly what becomes of it.
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-23 | Item-type taxonomy driving handling and price | Partial | **Covered** |
+| SMC-24 | Lots stored and priced as one unit | Covered | Covered |
+| SMC-25 | "Five or fewer are always processed individually" | Missing | **Covered** |
+| SMC-26 | Prohibited-items list, discard without return | Missing | **Covered** |
+| SMC-27 | GPS-tracker detection and removal | Missing | **Covered** |
+| SMC-28 | Zero-value items given away rather than processed | Missing | **Covered** |
+| SMC-29 | Unclaimed goods held 12 months, then disposed | Missing | Missing (deferred, §6) |
+| SMC-30 | Per-package processing fee | Partial | Partial (deferred, §6) |
+
+Section 3 now stands at **6 covered, 1 partial, 1 missing**.
+
+---
+
+## 2. The taxonomy
+
+### 2.1 What it is
+
+`apps/api/src/modules/inv/item-classes.ts` defines twelve classes, each carrying
+the handling metadata that something downstream actually consults:
+
+| Field | Consulted by |
+| --- | --- |
+| `key` | `item.type_class`; named by pricing rules |
+| `label` | The API's own English name for the class |
+| `oversized` | The intake form, which warns before booking one |
+| `lotEligible` | Intake, which refuses a lot of a class that cannot be one |
+| `lotMinSize` | The five-or-fewer rule (§3) |
+
+The list is deliberately coarse. Every entry has to earn its place by changing
+how the item is handled, stored or priced — a taxonomy that separates things
+Bault treats identically is a longer dropdown with no consequence, and every
+extra option is another chance for two operators to file the same object
+differently.
+
+The module talks to nothing, so all of it is directly testable.
+`apps/web/src/shared/itemClasses.ts` mirrors it by value, the same arrangement
+`wallet-request.rules.ts` already has with the SPA. Labels live on the SPA side
+as message keys rather than being taken from the API's English `label`: the
+intake console runs in Hebrew by default, and a dropdown of English strings
+inside a Hebrew form is exactly the half-localised surface the bilingual pass set
+out to remove.
+
+### 2.2 Every write path enforces it
+
+Three paths can set an item's class, and all three now validate:
+
+- `IntakeService.intakeItem` — an unknown class is a 400 at the door;
+- `CorrectionService.correct` — otherwise an item received under a known class
+  could be edited back into free text, and this is also the path by which a
+  pre-taxonomy item acquires a real class;
+- `AdmService.updateItem` — an admin override exists for *lifecycle* transitions
+  because a stuck item is a real operational problem; there is no equivalent
+  argument for putting an item into a class that does not exist.
+
+### 2.3 The billing defect this exposed
+
+`BillingService.charge` called:
+
+```ts
+this.pricing.price(action.actionType, {}, tx)
+```
+
+The second argument is where `itemClass` goes. It was always `{}`. `BillableAction`
+had no field to carry a class, so every intake resolved the catch-all rule no
+matter what arrived, and the class-specific branch in `PricingService` — which
+had been written, and reads correctly — could not be reached from anywhere in
+the product.
+
+`BillableAction.itemClass` now exists and `IntakeService` populates it on both
+the normal path and the break-lot path. Verified by creating a `sealed_case`
+intake rule and watching the two classes bill differently (§7.4).
+
+### 2.4 Existing data
+
+Migration `0008_item_class_backfill.sql` moves what is already stored onto the
+vocabulary, mapping ONLY unambiguous values (`Card` / `Trading Card` /
+`Pokémon Card` / `Bulk Card` → `trading_card`, and so on).
+
+Anything that does not clearly denote exactly one class is **left alone** — the
+rule migration 0004 set when it could not split a legacy display name without
+guessing. An unmapped value still displays, because `itemClassLabel` falls back
+to the raw string; it simply keeps showing what somebody actually typed until an
+operator corrects it, which is more honest than filing it under a class nobody
+chose. On the development database that left four rows (`A`, `B`, `X`, `Gift`)
+untouched, which is the correct outcome — they are test residue and mean nothing.
+
+The seed was moved onto the keys in the same pass, so a fresh `db:seed` no longer
+recreates free text.
+
+---
+
+## 3. The five-or-fewer rule, and the mistake it caught
+
+ShipMyCards' price list reads: *"Individual cards: $1 each (5 or fewer always
+processed as individuals)."*
+
+Intake CONVERTS rather than rejects. "Five or fewer are ALWAYS processed as
+individuals" is a statement about what happens, not an option the operator gets
+to weigh — and the collector is the one who benefits, because they cannot sell,
+grade or ship a single card out of a lot that was never broken.
+
+**The first implementation was wrong, and the test suite said so.** The threshold
+was applied to every class, and `inv-intake.test.ts` — "stores a lot as ONE item
+and breaks it into standalone items (Req 10.5)" — books a lot of **four sealed
+boxes**. That test began failing.
+
+It was not a stale fixture. Re-reading the source: the rule is a *card* rule.
+Four sealed boxes on a pallet are four boxes, and splitting them into four
+separate intakes because a card rule said so would quadruple the fee for no
+benefit to anybody. The threshold now lives on the class (`lotMinSize`), is set
+only on `trading_card` and `graded_slab`, and a class without one has no
+threshold at all.
+
+The failing test was encoding real intent, and the fix was to the code.
+
+---
+
+## 4. Arrivals that were not accepted
+
+### 4.1 Three audit rows, one mechanism
+
+SMC-26 (prohibited items), SMC-27 (GPS trackers) and SMC-28 (no processing
+value) are the same shape once the physical act is set aside: a person made a
+judgement, and the software must record which of the permitted outcomes occurred,
+in whose name, and why. They are one table, one endpoint and one screen.
+
+### 4.2 Why it is not an item
+
+Everything Bault takes into custody becomes an `item`, and a database trigger
+makes items undeletable. Recording a refusal as an item would mean booking a
+thing into a vault it was never in and then inventing a lifecycle state to take
+it back out again.
+
+A refusal is not a custody event — it is the *absence* of one. `arrival_disposal`
+is its own table, and nothing about it touches the item lifecycle.
+
+### 4.3 The record
+
+| Column | Note |
+| --- | --- |
+| `code` | `DSL-XXXXXXXX`, unique — what a person quotes when they ask |
+| `owner_id` | Who it was addressed to |
+| `category` | A closed list: seven prohibited categories, plus `no_value` |
+| `outcome` | `destroyed` / `given_away` / `recycled` / `returned` |
+| `description` | What the thing was, in the operator's words |
+| `notes` | **Required, non-blank** |
+| `actor_id` | The operator who made the call |
+
+`notes` is mandatory for the same reason the warehouse fulfillment forms are
+(Requirement 5.4): this row is the only account that will ever exist of why
+somebody's property was destroyed, and a record reading "prohibited item,
+destroyed" is not an account of anything.
+
+The table is registered with the append-only guards in `0001_append_only.sql`.
+The statement "we destroyed something addressed to you" is evidence, and evidence
+that can be edited afterwards is not evidence. A mistake is corrected by writing
+a second row.
+
+**Nothing here is billable.** Nothing entered storage, so there is nothing to
+charge for storing it, and an intake fee for an item destroyed on arrival would
+be indefensible.
+
+### 4.4 The collector's side
+
+An `arrival_not_accepted` outbox event is emitted in the same transaction that
+writes the row, so a disposal cannot exist silently. The rendered notification
+names the thing and its fate plainly:
+
+> Glass display case, cracked in transit arrived for you but could not be
+> accepted into your vault — it was disposed of and cannot be returned. See
+> DSL-XLGC2T2T for the details.
+
+A euphemism here would leave somebody waiting for a parcel that no longer exists.
+
+The durable list is a new **Not accepted** tab under Shipping & Services. It is
+not in the Vault, deliberately: these are precisely the things that are *not* in
+the vault, and rendering them in a grid of card photographs beside items the
+collector owns would suggest they are holdings. The operator's notes are shown in
+the row rather than hidden behind a drawer — they are the whole reason the record
+exists. There is no action to offer; the decision was made at a bench and cannot
+be undone from a screen.
+
+### 4.5 Roles
+
+`DisposalController` sets roles per method rather than on the class, unlike
+`InvController`. Writing and the warehouse-wide list are staff work, but a
+collector must be able to read their own disposals — that is the entire point of
+recording them. A class-level `@Roles('warehouse_operator', 'admin')` would have
+locked the owner out of the record of their own property.
+
+---
+
+## 5. The published policy
+
+A seventh section, *Items we cannot accept*, was added to the Account Use &
+Balance Policy. It lists the prohibited categories, singles out GPS trackers with
+the reason (the location of a facility holding other people's property is not
+published, and a live tracker inside it defeats that for everyone stored there),
+states that such items are disposed of and cannot be returned, states that no
+intake or storage fee is charged for them, and points the reader at Shipping &
+Services → Not accepted for their own records.
+
+It satisfies the standard that section set in Part 13 §5: **a clause may only
+appear once the behaviour it describes exists.** Every sentence in it corresponds
+to something the code does — the closed category list, the outcomes, the absence
+of a charge, the append-only record.
+
+---
+
+## 6. What was deferred, and why
+
+Both remaining items are section-2 features (inbound parcels) wearing section-3
+labels. Building lookalikes now would have produced features with the right names
+and the wrong behaviour.
+
+**SMC-29 — unclaimed goods held 12 months.** ShipMyCards' premise is *"a package
+arrives with no valid username."* That cannot happen in Bault:
+`IntakeService.resolveOwner` throws if the username does not resolve, so an item
+cannot exist without an owner and there is nothing to hold unclaimed. Real parity
+needs an unattributable parcel to be able to exist, which is the inbound work.
+
+**SMC-30 — per-package processing fee.** Bault bills per item because there is no
+package to bill. The nearest approximation — charging per intake *session* —
+would put a fee on "when staff clicked submit", so two parcels booked together
+would be billed as one and one parcel booked in two sittings as two. A package
+fee without a package is a fee on an arbitrary boundary.
+
+---
+
+## 7. Verification performed
+
+### 7.1 Static
+
+```
+pnpm -r typecheck → 6/6 projects pass
+pnpm -r build     → 6/6 projects build
+pnpm lint         → 0 errors, 33 warnings (all pre-existing in kind)
+```
+
+### 7.2 Automated tests
+
+```
+vitest --project web         → 139 passed (10 files)
+vitest --project concurrency →   1 passed
+vitest --project property    →   2 passed
+vitest --project integration → 101 passed, 3 skipped, 3 failed
+```
+
+The taxonomy initially broke **32** integration tests, because the fixtures
+booked items as `Card`, `Trading Card`, `X` and so on. Those were moved onto the
+vocabulary — with one exception that was a genuine code defect and is described
+in §3.
+
+Of the three remaining failures, none is caused by this pass:
+
+- **two in `acc-identity.test.ts`** ("keeps a flagged legacy account signed in
+  and usable", "clears the review flag when the owner confirms a real split").
+  Both assert on the seeded `veteran` account, and the second one PATCHes it into
+  the state that makes the first impossible. The development database was already
+  holding that mutated row from an earlier run. Restoring the row to its seeded
+  state and re-running gave **23/23 passed**, which is the proof; nothing in this
+  pass touches names or the review flag.
+- **one in `shp-tracking-list.test.ts`**, the same environment drift recorded in
+  Part 13 §7.2.
+
+Both are order-dependence on shared seed data and are cleared by re-seeding.
+
+### 7.3 Taxonomy, live against the API
+
+```
+intake typeClass "Trading Card"   400  Unknown item class "Trading Card"
+intake typeClass "trading_card"   201
+sealed_case as a lot              400  Sealed case cannot be received as a lot
+```
+
+### 7.4 Per-class pricing, live
+
+A `sealed_case` intake rule at 2000 was created through the admin endpoint, then
+one item of each class was booked in:
+
+```
+trading_card   charged   500 | rule itemClass: (catch-all)
+sealed_case    charged  2000 | rule itemClass: sealed_case
+```
+
+Before this pass both would have charged 500 and the class-specific rule would
+have been unreachable.
+
+### 7.5 The five-or-fewer rule, live
+
+```
+lot of 3 trading_card → returned 3 items; isLot false,false,false; serials BC-…
+lot of 8 trading_card → returned 1 item;  isLot true; lotSize 8; serial LOT-…
+```
+
+### 7.6 Disposals, live
+
+```
+record a GPS tracker            201  DSL-2VJS4NRP | gps_tracker | destroyed
+record a no-value giveaway      201
+blank notes                     400  "Notes are required — record why this decision was taken"
+unknown category                400  Unknown disposal category "because_i_said_so"
+owner reads /me/disposals       2 rows, both theirs
+collector POSTs a disposal      403
+collector GETs the staff list   403
+a different account's own list  0 rows
+UPDATE arrival_disposal         rejected: append_only_violation
+DELETE arrival_disposal         rejected: append_only_violation
+```
+
+The notification was produced by running the real outbox dispatch job and reading
+the row back (§4.4). One detail worth recording: the first attempt rendered the
+fallback text, because `apps/worker/dist` was stale — the worker had not been
+rebuilt after the message was added. Rebuilding produced the intended sentence.
+
+### 7.7 Migration
+
+```
+pnpm --filter @bault/api db:migrate → ✔ migrations applied and append-only guards installed
+
+arrival_disposal table:   present
+append-only trigger:      trg_append_only_arrival_disposal
+type_class after backfill: 38 trading_card, 5 sealed_box, 1 small_collectible,
+                           and X / A / Gift / B left untouched by design
+```
+
+### 7.8 Not verified
+
+- **No browser pass.** The new intake dropdown, the disposal form and the
+  Not accepted tab were exercised through their endpoints, the type checker and
+  the build, but not opened in a browser. The i18n catalogue test confirms every
+  new key exists in both languages.
+- **No accessibility audit** of the new form or table.
+
+---
+
+## 8. Honest limitations
+
+1. **Nothing detects anything.** No tracker is found by software, no prohibited
+   item is recognised, no valuation decides that a box of commons is not worth
+   shelving. Every one of those judgements is a person's, and the system records
+   the outcome on trust. That is the correct division of labour, but it means the
+   record is exactly as accurate as the operator filling it in.
+
+2. **A disposal cannot be corrected, only supplemented.** The table is
+   append-only and there is no "amend" endpoint, so an operator who files the
+   wrong category has no path to fix it beyond filing a second row — and nothing
+   in the UI links the two. A superseding reference would be the honest fix.
+
+3. **Four legacy `type_class` values remain outside the vocabulary** on the
+   development database, by design (§2.4). They display as typed. There is no
+   report telling an operator which items still need reclassifying.
+
+4. **`oversized` is metadata that nothing yet enforces.** The intake form warns,
+   and that is all. ShipMyCards requires prior approval for oversized items at
+   one facility and imposes a 90-day shipping limit on them; neither exists here,
+   and the 90-day limit is SMC-38, still open in section 4.
+
+5. **The `no_value` outcome has no time bound.** ShipMyCards accepts a
+   remove-commons request only within 30 days of arrival. Bault's equivalent is
+   an operator judgement with no window, because without an inbound parcel there
+   is no arrival date to measure 30 days from.
+
+---
+
+# Part 15 — Inbound: Facilities, Parcels, and the Half of the Product That Was Missing
+
+**Completed: 17 August 2026.**
+
+This part documents section 2 of the ShipMyCards parity audit — the inbound
+address and package-receiving gap. It is the largest single pass in the document
+and the one the audit named as the reason a collector could not substitute Bault
+for the reference service:
+
+> Bault has no inbound side at all — no per-user receiving address, no parcel
+> entity, no arrival tracking, no consolidation of purchases. Items only exist in
+> Bault once a warehouse operator books them in by hand.
+
+That is no longer true. A collector is now given real receiving addresses, ships
+purchases to them, watches parcels arrive, and sees the contents appear in their
+vault with the parcel they came from attached.
+
+Two facility locations were specified for this build: **New Jersey** as the
+primary site where goods are stored, and **Delaware** as the sales-tax-free
+receiving address that forwards everything on.
+
+---
+
+## 1. Executive summary
+
+### What changed
+
+1. **Facilities exist.** A `facility` is a place that receives mail on a
+   collector's behalf. Two roles: `primary` stores goods, `forwarding` stores
+   nothing and passes everything to the primary site. The distinction is the
+   entire point of having more than one address.
+
+2. **Every collector has addresses.** `GET /me/inbound-addresses` returns each
+   facility with a `Bault C/O <username>` line generated from the account. The
+   `C/O` line is the mechanism by which a parcel finds an account.
+
+3. **Parcels exist.** A `parcel` runs from before it arrives until after it is
+   emptied: `expected → received → opened → processed`, with `unclaimed` and
+   `disposed` as side exits and forwarding as a detour.
+
+4. **An arrival with no resolvable owner is a first-class state.** Not an error.
+
+5. **Items link to the parcel they came out of.** `item.source_parcel_id`, set at
+   intake, nullable forever.
+
+6. **The per-package and forwarding fees exist**, closing SMC-30 — deferred from
+   Part 14 explicitly to this pass.
+
+7. **The processing backlog is visible to collectors**, derived from the actual
+   queue rather than from a published promise.
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-12 | Personal U.S. receiving address (`C/O username`) | Missing | **Covered** |
+| SMC-13 | Second, tax-advantaged address | Missing | **Covered** |
+| SMC-14 | Inter-facility forwarding | Missing | **Covered** |
+| SMC-15 | Which-address-to-use guidance | Missing | **Covered** |
+| SMC-16 | Receive parcels from any third-party seller | Missing | **Covered** |
+| SMC-17 | Receive inbound international parcels | Missing | **Partial** (§7) |
+| SMC-18 | Inbound tracking | Missing | **Covered** |
+| SMC-19 | Package opened and contents verified | Partial | **Covered** |
+| SMC-20 | Every item photographed within 1 business day | Partial | **Partial** (§7) |
+| SMC-21 | Quick damage check on arrival | Partial | **Covered** |
+| SMC-22 | Live intake-backlog status | Missing | **Covered** |
+| SMC-29 | Unclaimed goods held, then disposed | Missing | **Covered** |
+| SMC-30 | Per-package processing fee | Partial | **Covered** |
+
+Section 2 moves from **0 covered / 3 partial / 8 missing** to **9 covered /
+2 partial / 0 missing**. Section 3's two deferred items are both closed.
+
+---
+
+## 2. Facilities
+
+### 2.1 The model
+
+| Field | Why it exists |
+| --- | --- |
+| `code` | Short stable handle (`NJ`, `DE`) used in labels and requests |
+| `role` | `primary` stores; `forwarding` holds nothing and passes on |
+| `sales_tax_bps` | The destination state's rate, for GUIDANCE only |
+| `forwards_to_facility_id` | Where a forwarding site sends what it receives |
+| `forwarding_days` | Typical onward transit, shown to the collector |
+| `active` | A facility is never deleted — parcels reference it forever |
+
+Seeded: **New Jersey**, primary, 6.625% (6625 bps). **Delaware**, forwarding,
+0%, forwards to New Jersey, about 4 days.
+
+### 2.2 Sales tax is recorded, never charged
+
+`sales_tax_bps` is the *destination state's* rate and exists so the app can tell
+a collector what a purchase would cost at each address instead of leaving them to
+work it out. Bault is not the seller of anything bought elsewhere and neither
+collects nor remits anybody's sales tax. The Inbound page says so in the guidance
+panel, and §6 of the published policy says so again.
+
+The guidance is expressed as a **worked example rather than a percentage** —
+"on a $500 purchase the difference is roughly $33.13" — because a rate is
+arithmetic homework and a number is the decision being made.
+
+### 2.3 ⚠ The seeded street addresses are placeholders
+
+Both facility rows carry `line1: 'SET REAL ADDRESS — placeholder'` and postal
+code `00000`.
+
+This is deliberate and is flagged in three places (the seed, migration 0009, and
+here). These strings are what a customer will write on a parcel containing
+property they are trusting to a vault. Inventing something that reads as a real
+address would be worse than leaving it obviously unset, because a plausible fake
+would be pasted into a checkout and the parcel would go to a stranger.
+
+**Set both real addresses before anybody is invited to ship anything.**
+
+---
+
+## 3. Parcels
+
+### 3.1 Why a parcel is not an item
+
+Everything Bault takes into custody becomes an `item`, and a database trigger
+makes items undeletable. A parcel cannot be one: it exists before anybody knows
+what is inside, it may produce many items, none, or a problem, and it has a
+condition of its own that is independent of anything it contains.
+
+### 3.2 The lifecycle
+
+```
+expected ──▶ received ──▶ opened ──▶ processed
+                 │
+                 ├──▶ unclaimed ──▶ disposed
+                 └──▶ disposed          ▲
+                                        │
+                          (refused outright)
+
+unclaimed ──▶ received   (an owner is worked out — the claim path)
+```
+
+Written as an explicit adjacency list in `ParcelService`, for the same reason
+`wallet-request.rules.ts` does it: the set of legal moves is a product decision
+and belongs somewhere a person can read in one go. It is also what makes
+double-charging structurally impossible — `processed` has no outgoing edges, so
+the second call cannot reach the billing code. Verified (§8.4).
+
+### 3.3 An unattributable arrival is a state, not an error
+
+`parcel.owner_id` is nullable, and that is the single most considered decision in
+this pass. A parcel can arrive addressed to a username that does not exist.
+Refusing to record it would mean the platform's answer to *"somebody's property
+is on our shelf and we do not know whose"* is to have no record of it at all.
+
+So: the parcel is recorded as `unclaimed`, `addressed_to` keeps whatever was
+written on the label **verbatim and uncorrected** — it is the only clue to whose
+property this is — and the parcel cannot be opened until somebody attributes it.
+That last rule is enforced by the transition table and by an explicit check, and
+it matters: it is somebody's property, and nobody has the right to open it on a
+guess.
+
+The receive form's hint says so to the operator: *"Exactly as written. Do not
+correct it — what was written is the only clue."*
+
+### 3.4 Registration is optional
+
+A collector may register a parcel before it arrives. It changes nothing about how
+the parcel is handled. What it buys is that the collector can watch it, and that
+the operator receiving it has a tracking number to match against — which is what
+turns an anonymous box into somebody's property *before* anyone opens it.
+
+When a tracking number matches an open registration, the arrival **adopts** that
+row rather than creating a second one. A duplicate registration of the same
+tracking number while the first is still open is refused, because that is a
+person clicking twice rather than two parcels.
+
+This is slightly **ahead** of the reference service, which has no inbound
+tracking at all and tells collectors they are responsible for chasing the seller.
+
+### 3.5 The arrival check
+
+Opening a parcel requires a condition (`sound` / `packaging_damaged` /
+`contents_damaged`) and non-blank notes. `sound` is a positive statement that
+somebody looked, not a default meaning nobody did.
+
+The finding is written **before any item exists**, which is the point: it is the
+timestamped evidence a damage dispute rests on, and it predates the item records
+it might be used to argue about.
+
+A damaged arrival notifies the owner immediately rather than waiting for the
+contents to be catalogued — a claim against the seller or the carrier has a
+deadline, and a collector cannot start one they were never told about.
+
+### 3.6 The append-only trail
+
+`parcel_event` records every transition: who, when, from which status to which,
+at which facility, with notes. Registered with the guards in
+`0001_append_only.sql`.
+
+It covers the one window in which somebody else's unopened property sits in
+Bault's custody before any item record exists, which makes it the least editable
+thing in the system rather than the most.
+
+---
+
+## 4. Money
+
+Two new billable actions:
+
+| Action | Amount | Charged when |
+| --- | --- | --- |
+| `parcel_processing` | $2.00 | The parcel is closed out |
+| `parcel_forwarding` | $4.00 | A forwarding facility passes it on |
+
+Both are pricing rules, not constants, so they are admin-editable and snapshot
+onto the charge like every other price (Principle VI).
+
+Charging at `process` rather than at `receive` is deliberate: the fee is for the
+work of unpacking and cataloguing, so a parcel that arrives and is never opened
+costs nothing.
+
+An **unclaimed parcel is forwarded without being billed**. Leaving it at a site
+that stores nothing helps nobody, and the cost is written off rather than charged
+to a stranger who may have nothing to do with it.
+
+---
+
+## 5. What a collector sees
+
+A new rail destination, **Inbound**, placed directly after the Vault because it
+is where the Vault's contents come from. Three tabs:
+
+**My addresses** — each facility as a copyable block, `C/O` line first, with the
+destination tax rate, the forwarding transit time where it applies, and the
+guidance panel. The address block is `dir="ltr"` unconditionally: a US postal
+address is left-to-right even on a Hebrew page, and a mirrored one is not
+deliverable.
+
+**Parcels** — the registration form and the parcel list, with a drawer showing
+the full timeline. Cancelling is offered only while `expected`; once something
+physical is on a shelf, no customer action can make the record of it go away.
+
+**Processing** — the backlog. Two counts and the age of the oldest unprocessed
+arrival, all derived from live queries. There is deliberately **no published
+turnaround target**: the reference service promises "within 1 business day", and
+a number typed into a page is a promise nobody measured. Showing the real queue
+is the honest version of the same information, and the panel says so.
+
+---
+
+## 6. What the warehouse sees
+
+A new **Parcels** tab in the warehouse console: a receive form and a queue where
+each row offers only the moves legal for its status — the API enforces the same
+transition table, so a button that would 409 is never drawn.
+
+The **Intake** tab gained a "From parcel" selector listing open parcels. Choosing
+one links the items and fills in the owner, then locks the owner field: the API
+refuses items booked into a parcel belonging to somebody else, and making that
+impossible to express is better than explaining it in an error.
+
+---
+
+## 7. What is still partial, and why
+
+**SMC-17 — international inbound.** The parcel carries an `international_origin`
+flag, the obligation is stated on the parcel and in §7 of the published policy,
+and the registration form warns when the box is ticked. What does **not** exist
+is any customs paperwork, HS codes, brokerage handling or duty accounting. The
+recipient-clears-customs position is recorded, not administered.
+
+**SMC-20 — photographed within 1 business day.** Two of the three halves landed:
+the arrival check is recorded per parcel, and the processing backlog gives an
+honest turnaround figure. What has not moved is the photography itself.
+`SandboxStorageAdapter` is a stub — `putObject` returns the key and stores
+nothing — so there is no file upload from an operator's browser, and the vault
+still renders the static catalogue photo keyed on serial number rather than a
+photograph of the collector's actual card. That remains the gap the audit named,
+and closing it needs a real object-storage integration plus a multipart upload
+path, which is its own pass.
+
+---
+
+## 8. Verification performed
+
+### 8.1 Static
+
+```
+pnpm -r typecheck → 6/6 pass
+pnpm -r build     → 6/6 build
+pnpm lint         → 0 errors, 33 warnings (all pre-existing in kind)
+```
+
+### 8.2 Automated tests
+
+```
+vitest --project web         → 139 passed (10 files)
+vitest --project contract    →   6 passed
+vitest --project concurrency →   1 passed
+vitest --project property    →   2 passed
+vitest --project integration → 101 passed, 3 skipped, 3 failed
+```
+
+The three integration failures are the same pre-existing ones recorded in Part 13
+§7.2 and Part 14 §7.2 — two in `acc-identity` from order-dependence on the shared
+seeded `veteran` row, one `shp-tracking-list` drift. **No new failures**; the
+count is unchanged by this pass.
+
+The i18n catalogue test passes, so all 96 new keys exist in both languages.
+
+### 8.3 Addresses, live
+
+```
+primary     NJ | Bault C/O red | Newark, NJ     | tax bps 6625 | fwd days -
+forwarding  DE | Bault C/O red | Wilmington, DE | tax bps    0 | fwd days 4
+```
+
+### 8.4 The full lifecycle, live
+
+```
+register to DE                         PKG-8Y7QBL4E  expected
+duplicate tracking number              409  already registered as PKG-8Y7QBL4E
+receive at DE (tracking matched)       received — adopted the registration, no second row
+forward DE → NJ                        forwardedAt set
+forward again                          409  already been forwarded
+open with condition + notes            201  opened / packaging_damaged
+open with blank notes                  400  "Record what the arrival check found"
+intake x2 against the parcel           201
+intake against it as another owner     400  "That parcel belongs to a different account"
+process                                201  {status: processed, itemCount: 2}
+process again                          409  Illegal parcel transition processed → processed
+intake into a closed parcel            400  "Parcel must be open … (it is processed)"
+```
+
+Charges raised against that parcel: `parcel_forwarding 400`, `parcel_processing
+200` — one each, exactly once.
+
+Items linked: 2. Trail:
+
+```
+registered   -        → expected
+received     expected → received   | Matched a registration by tracking number
+forwarded    received → received   | Bault Delaware → Bault New Jersey
+opened       received → opened     | Outer mailer split along one seam…
+processed    opened   → processed
+UPDATE parcel_event → rejected: append_only_violation
+```
+
+### 8.5 The unattributable path
+
+```
+receive addressedTo "nosuchperson"  → status unclaimed, label kept, owner null
+open it                             → 409  Illegal transition unclaimed → opened
+claim for "golden"                  → 201  status received
+open it                             → 201
+```
+
+### 8.6 Access scoping
+
+```
+collector GET  /parcels          403   (staff queue)
+collector POST /parcels/receive  403
+red GET another collector's parcel  404  (notFound, not forbidden — an id is not confirmed)
+```
+
+### 8.7 Notifications
+
+Produced by running the real outbox dispatch job:
+
+```
+Parcel PKG-8Y7QBL4E has arrived at Bault Delaware and is waiting to be opened.
+Parcel PKG-8Y7QBL4E is on its way from Bault Delaware to Bault New Jersey — usually about 4 days.
+Parcel PKG-8Y7QBL4E was opened and the packaging arrived damaged. Outer mailer split along one seam…
+Parcel PKG-8Y7QBL4E has been unpacked — 2 items are now in your vault.
+```
+
+### 8.8 Not verified
+
+- **No browser pass.** The Inbound section and the warehouse Parcels tab were
+  exercised through their endpoints, the type checker and the build, but not
+  opened in a browser.
+- **The seed was not run.** Facilities and the two pricing rules were inserted
+  directly so the development database's existing data survived; `db:seed`
+  creates the same rows and typechecks, but the full reset path was not executed.
+- **No accessibility audit** of the new screens.
+
+---
+
+## 9. Honest limitations
+
+1. **Pricing is not per facility.** ShipMyCards charges a different package fee
+   at each address ($2 in Arizona, $5 in Oregon). Bault has one
+   `parcel_processing` rule plus a separate forwarding fee, which captures the
+   economics — the tax-free address costs more because it forwards — but not the
+   shape. `pricing_rule` scopes by `item_class` only; a facility scope would need
+   a new column and a resolver change.
+
+2. **Nothing polls the carrier for an inbound parcel.** A registered parcel sits
+   at `expected` until a human receives it. The outbound side has a
+   tracking-refresh job; the inbound side has no equivalent, so the collector's
+   "on its way" status is only as fresh as the seller's own tracking page.
+
+3. **The retention sweep is a query, not a job.** `listRetentionDue` exists and
+   the 12-month holding period is published, but nothing runs on a schedule to
+   surface or act on parcels past it — an operator has to go looking. Disposal
+   itself is deliberately manual, but the reminder should not be.
+
+4. **A forwarding facility is not enforced as storing nothing.** Nothing stops an
+   operator opening a parcel that is still sitting at Delaware — the UI steers
+   them to forward first, and the queue flags it, but the API permits it. Whether
+   that is a bug or useful latitude depends on how the sites actually operate.
+
+5. **No consolidation across parcels.** Each parcel is processed on its own.
+   Combining several arrivals into one outbound shipment already works (a
+   shipment takes any set of stored items), but there is no notion of "hold these
+   three parcels and open them together".
+
+6. **The facility addresses are placeholders** (§2.3). This is the one item on
+   this list that blocks real use.
+
+---
+
+# Part 16 — Storage Becomes an Included Period
+
+**Completed: 17 August 2026.**
+
+This part closes section 4 of the ShipMyCards parity audit — vault and storage —
+with one exception held back by request: **SMC-35, the premium "Vault Safe"
+tier, was deliberately not built.**
+
+The remaining three items turned out to be one mechanism with two parameter sets,
+which is why they were done together rather than separately.
+
+---
+
+## 1. Executive summary
+
+### Why all three, when only one was "Missing"
+
+The audit scored SMC-38 as **Missing** and SMC-36 / SMC-37 as **Different by
+design**. On paper only SMC-38 was outstanding. In practice they are inseparable:
+
+> SMC-38 — *"Large items must ship within 90 days. Items remaining past 90 days
+> are re-charged the original incoming processing fee, every additional 90 days."*
+
+Building that requires a size classification, a 90-day period concept, and the
+ability to charge relative to an item's own intake fee. Those are precisely the
+three things SMC-36 and SMC-37 need. Implementing SMC-38 alone would have built
+most of the other two and then left them unused.
+
+So storage was rebuilt once, with two parameter sets:
+
+| | Included | Then | Of what |
+| --- | --- | --- | --- |
+| **Standard** | 180 days | every 90 days | 10% of the item's own intake fee |
+| **Oversized** | 90 days | every 90 days | 100% of the intake fee |
+
+### What this replaced, and why it was wrong
+
+The old sweep charged a **flat per-item fee every day** for anything stored more
+than one day. It was simple, and it was wrong in one specific way: it charged
+rent on a $1 common from the moment it landed. A collector who left a bulk lot
+alone for six months paid many times what the lot was worth, and the platform had
+no answer to "why does storing a common cost the same as storing a sealed case".
+
+Tying the periodic charge to the item's own intake fee fixes that, because the
+intake fee already encodes how much handling the thing needed.
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-31 | Online inventory of everything held | Covered | Covered |
+| SMC-32 | Item detail record | Covered | Covered |
+| SMC-33 | Search the inventory | Covered | Covered |
+| SMC-34 | Standard vault storage | Covered | Covered |
+| SMC-35 | "Vault Safe" premium tier | Missing | **Missing — excluded by request** |
+| SMC-36 | Free storage window included in intake | Different | **Covered** |
+| SMC-37 | Periodic fee as a proportion of the intake fee | Different | **Covered** |
+| SMC-38 | Oversized 90-day limit, re-charging the intake fee | Missing | **Covered** |
+
+Section 4 stands at **7 covered, 1 missing (by choice)**.
+
+### ⚠ This changes what customers are billed
+
+This is not an additive feature. Every stored item's storage cost changed, in
+both directions: nothing is billed at all for the first 180 days (previously
+billed from day two), and after that the charge is proportional rather than flat.
+On the development database the immediate effect was that **the sweep billed
+nothing at all**, because no item is 180 days old yet.
+
+All three figures are pricing-rule parameters, not constants, so the old
+behaviour is reachable by configuration (`freeDays: 1`, `periodDays: 1`, and a
+percentage that yields the flat amount) — but the shipped defaults are the parity
+values.
+
+---
+
+## 2. Where the policy lives
+
+`freeDays`, `periodDays` and `percentOfIntakeBps` are stored in the `parameters`
+column of the relevant pricing rule — a column that existed on `pricing_rule`
+from the start and had never been used by anything.
+
+Two rules, not one class-scoped rule: `storage` and `storage_oversized`. Scoping
+by `item_class` was the obvious alternative and was rejected — "oversized" spans
+several classes (`oversized_card`, `sealed_case`, `memorabilia`), so a class
+scope would have meant maintaining the same parameters in three places and
+silently missing the fourth class somebody adds later.
+
+`value` survives on both rules as a **fallback base only**: an item with no
+intake charge (seeded, or created before billing existed) has nothing to take a
+percentage of, and falls back to the rule's flat value rather than being stored
+free forever by accident.
+
+---
+
+## 3. `item.oversized`, and why it is denormalised
+
+The oversized flag is copied from the item's CLASS at intake and stored on the
+item, rather than being looked up from the taxonomy when the sweep runs.
+
+That is deliberate, and it is the same argument as the pricing snapshot on a
+charge: **the storage terms an item is held under were agreed when it was
+received.** If `sealed_case` were reclassified next year, re-deriving the flag
+would retroactively move a box that has been sitting on the same shelf the whole
+time onto different — and much more expensive — terms.
+
+It has a second, more practical benefit: the worker's sweep runs raw SQL and
+cannot import the taxonomy from the API tree, so a stored flag is the only way it
+can decide the terms without a join to something it cannot see.
+
+Migration 0010 backfills it from the classes that were oversized when the
+migration was written. Anything whose class is unrecognised — the pre-taxonomy
+free text that 0008 deliberately left alone — stays `false`, which is the safe
+direction: it applies the gentler terms rather than silently moving an old item
+onto punitive ones.
+
+---
+
+## 4. Idempotence, done properly
+
+The old sweep guarded itself with *"at most one run per calendar day"*. That
+protected against a double run and silently **under-billed** whenever a day was
+missed — the skipped day's fee was never charged and nothing noticed.
+
+The guard is now **period accounting**. For each item the sweep computes how many
+periods have elapsed:
+
+```
+periods_elapsed = floor( (now − (received_at + freeDays)) / periodDays ) + 1
+```
+
+and subtracts how many storage charges already exist against that item. It bills
+the difference.
+
+Running twice in one day bills nothing the second time, because the count already
+matches. Missing a week bills the catch-up when it next runs. **The ledger, not
+the clock, is the record of what has been charged** — which is the same principle
+the wallet balance already follows.
+
+One charge row is written per period rather than one lump for a catch-up, so a
+collector reading their ledger sees three periods as three lines they can count,
+each carrying the snapshot of the rule it was billed under.
+
+---
+
+## 5. One rule, two expressions — stated honestly
+
+Billing is performed in SQL, inside the worker, because it is a set operation
+over every stored item and because the correctness of the guard depends on
+counting existing charges and inserting in the same statement.
+
+The API needs to *display* the same policy, and cannot import from the worker.
+Rather than duplicating the calculation, `apps/api/src/modules/vlt/storage-policy.ts`
+computes only what display needs — when the included period ends, when the next
+charge falls, what one period costs. **Everything about the past is read from the
+charges the sweep wrote, never recomputed.** If a sweep were missed, the customer
+sees what has genuinely been billed and the next date computed from there, rather
+than an assertion about a charge nobody raised.
+
+The overlap between the two expressions is one line (`received_at + freeDays`).
+The sweep is the authority, and the module says so at the top.
+
+---
+
+## 6. What a collector sees
+
+`GET /vault/items/:id/storage` returns the item's terms, what storage has cost so
+far, and when the next charge falls. It is a separate endpoint from the item
+record because it is derived from charge history rather than stored on the item,
+and because the vault grid does not need it — only the drawer, when somebody asks.
+
+The card drawer gained a **Storage cost** panel that distinguishes the two states
+in plain language: while the included period runs it says so and names the date it
+ends; once it has, it names what has already been charged and when the next period
+falls. Oversized items also carry a warning that names the shorter window and
+suggests shipping or selling before it closes — the charge exists to make "leave
+it there forever" a decision, and a decision needs to be visible in advance.
+
+Oversized items are badged on the card tile itself, so a collector can see which
+of their holdings are on the steep terms without opening anything.
+
+Section 5 of the published Account Use & Balance Policy was rewritten to describe
+the real model. The previous wording — "daily storage while it is held" — became
+false the moment this shipped, and a policy document that is false is worse than
+one that is missing.
+
+---
+
+## 7. Verification performed
+
+### 7.1 Static
+
+```
+pnpm -r typecheck → 6/6 pass
+pnpm -r build     → 6/6 build
+pnpm lint         → 0 errors
+```
+
+### 7.2 Automated tests
+
+```
+vitest --project web         → 139 passed (10 files)
+vitest --project contract    →   6 passed
+vitest --project concurrency →   1 passed
+vitest --project property    →   2 passed
+vitest --project integration → 101 passed, 3 skipped, 3 failed
+```
+
+The three integration failures are the same pre-existing ones recorded in Parts
+13–15 — two `acc-identity` order-dependence failures on the shared seeded
+`veteran` row, one `shp-tracking-list` drift. **No new failures.**
+
+### 7.3 The period arithmetic, against the real job
+
+Four items were created on the reserved fixture account with backdated
+`received_at`, each landing on a different branch, and the **actual sweep** was
+run against them — not a re-implementation:
+
+```
+PASS  std-inside-window   100 days, standard   expected 0 periods        got 0
+PASS  std-one-period      181 days, standard   expected 1 x 50c          got 1 x 50
+PASS  std-three-periods    400 days, standard   expected 3 x 50c          got 3 x 50
+PASS  ovr-one-period      100 days, oversized  expected 1 x 2000c        got 1 x 2000
+PASS  idempotent          second run added nothing: 5 → 5 charges
+```
+
+`std-three-periods` is the catch-up case the old daily guard got wrong: 400 days
+is 220 past the included window, which is three started periods, and all three
+were billed in one run.
+
+`ovr-one-period` is SMC-38 exactly: an oversized item 100 days old, past its
+90-day window, charged the **full** 2000c intake fee again.
+
+`std-inside-window` is SMC-36: 100 days old and charged nothing.
+
+### 7.4 The collector's view, live
+
+```
+ovr-one-period      free 90  | period 90 | 10000bps | intake 2000 | billed 1 | total 2000 | next 2026-11-05
+std-three-periods   free 180 | period 90 |  1000bps | intake  500 | billed 3 | total  150 | next 2026-10-06
+std-one-period      free 180 | period 90 |  1000bps | intake  500 | billed 1 | total   50 | next 2026-11-14
+std-inside-window   billed 0 | total 0 | freeUntil 2026-11-05 — still inside the included period
+```
+
+Ownership scoping: another collector reading the same item's storage → **404**.
+
+### 7.5 Migration
+
+```
+pnpm --filter @bault/api db:migrate → ✔ migrations applied and append-only guards installed
+149 items, 1 backfilled as oversized
+```
+
+### 7.6 Not verified
+
+- **No browser pass.** The storage panel and the oversized badge were exercised
+  through their endpoint, the type checker and the build, but not opened in a
+  browser.
+- **The seed was not run.** The two parameterised storage rules were inserted
+  directly so the development database's existing data survived.
+- **No long-horizon test.** Behaviour across many periods was verified by
+  backdating, not by letting real time pass.
+
+---
+
+## 8. Honest limitations
+
+1. **SMC-35 is not built, by request.** There is still exactly one storage tier.
+   A collector cannot pay more to have a grail held more securely, and bins carry
+   a zone but no protection class.
+
+2. **Nothing warns a collector before a charge lands.** The drawer shows the next
+   charge date if somebody opens the card, but there is no notification as an
+   included period nears its end — which matters most for oversized items, where
+   the charge is the entire intake fee again. The notification machinery exists;
+   nothing emits into it on a schedule.
+
+3. **The catch-up is silent.** If the worker is down for a month, the next run
+   bills every missed period at once, correctly, and the collector sees several
+   charges appear on the same day with no explanation of why. A note on the
+   charge, or a single grouped notification, would be kinder.
+
+4. **`freeUntil` is measured from `received_at`, not from when billing began.**
+   For items that predate this pass, the included window is measured from their
+   original receipt — so an item received 200 days ago is immediately outside its
+   window and will be billed on the next sweep. On the development database
+   nothing is that old, but a production cutover would want a grace date rather
+   than retroactive periods.
+
+5. **An item that leaves storage mid-period is not pro-rated.** Shipping
+   something on day 91 of a 90-day period costs the same as shipping it on day
+   180. The reference service works the same way, so this is parity rather than a
+   defect — but it is a real edge a collector could reasonably query.
+
+6. **The oversized flag cannot be corrected.** It is fixed at intake and no
+   endpoint changes it. If an operator books a sealed case as a trading card, the
+   item is on the wrong storage terms permanently — `CorrectionService` can
+   change `typeClass` but does not touch `oversized`, deliberately, because
+   re-deriving it is exactly what §3 argues against. A supervised override is the
+   missing piece.
+
+---
+
+# Part 17 — The Helpdesk, and the Lock That Had No Key on the Inside
+
+**Completed: 17 August 2026.**
+
+This part implements SMC-11 — the helpdesk — the last outstanding item in
+section 1 of the ShipMyCards parity audit, and the one deliberately held back
+from Part 13 because it is a module rather than a screen.
+
+It closes two honest limitations recorded in earlier parts, and it turned out to
+require a change to how suspension works.
+
+---
+
+## 1. Executive summary
+
+### Why a contact form is load-bearing here
+
+Bault had no way for a person to ask a question: no contact form, no address
+published anywhere in the app, no inbox. That was survivable while everything
+the platform did was self-service. It stopped being survivable once two
+workflows began to *depend* on a human conversation:
+
+- **cash-in and cash-out are reviewed by a person** (Part 13), so a request
+  sitting in `pending_review` for two days had no channel to ask about;
+- **an account suspended for debt cannot sign in** (Part 13 §4.5), therefore
+  cannot cash in, therefore cannot clear the debt that suspended it.
+
+Both were written down as limitations at the time. The second is the more
+serious: it was a lock with no key on the inside, and the helpdesk is the key.
+
+### What was built
+
+1. **Tickets and threads.** `support_ticket` plus an append-only
+   `support_message`, with a status that answers one question — whose turn is it.
+2. **A customer section** in the rail: open a ticket, read the thread, reply.
+3. **A staff queue** in the warehouse console, ordered longest-waiting first.
+4. **Suspension changed** so a suspended account can sign in and reach the
+   helpdesk, and nothing else.
+5. **Notifications** when staff reply or resolve.
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-11 | In-app helpdesk / support tickets | Missing | **Covered** |
+
+Section 1 is now **11 covered, 0 partial, 0 missing** — complete.
+
+---
+
+## 2. The change to suspension
+
+This is the part worth reading carefully, because it loosened a security
+control on purpose.
+
+### 2.1 What it used to do
+
+`AuthService.login` refused any non-active account outright, and
+`SessionAuthGuard` refused every request from one. Suspension was total.
+
+That was coherent while suspension was only ever an administrator's decision. It
+stopped being coherent in Part 13, when the debt sweep began imposing it
+**automatically** at −$20: the holder cannot sign in, so cannot cash in, so
+cannot clear the debt, so cannot be reinstated except by somebody else noticing.
+
+### 2.2 What it does now
+
+Authentication succeeds for a `suspended` account. **Authorization** does the
+work instead:
+
+- `AuthService.login` refuses `pending` (unverified) and `closed` (terminal),
+  and allows `suspended` through;
+- `SessionAuthGuard` refuses every route for a suspended account **except** those
+  marked with the new `@AllowSuspended()` decorator;
+- that decorator is applied to the six helpdesk routes and to `GET /me/profile`,
+  and nowhere else.
+
+`GET /me/profile` needs it because the SPA's boot probe is that request: without
+it the shell cannot tell a suspended user from a signed-out one, and would show a
+sign-in form to somebody who has just signed in.
+
+### 2.3 Why this is not a weakening
+
+The account remains entirely unusable. It cannot read its vault, see its wallet,
+browse the marketplace, register a parcel, or request a shipment — every one of
+those was verified as a 403 (§6.4). What it gains is the ability to say "I am
+locked out, please help", which was previously impossible to express.
+
+`closed` is deliberately excluded. Suspension is a state an account is expected
+to come back from; closure is terminal, and a terminated relationship does not
+need a message box.
+
+The shell narrows the navigation rail to match rather than showing destinations
+that would each answer 403 — a disabled vault shown to somebody who cannot open
+it is a worse explanation than not showing it at all. The Support page carries a
+banner saying plainly why they are there.
+
+---
+
+## 3. Status answers one question
+
+```
+open               waiting on staff
+awaiting_customer  staff have replied; waiting on the customer
+resolved           done — a customer reply reopens it
+```
+
+There is deliberately **no "in progress"**. A ticket somebody is thinking about
+is still one the customer is waiting on, and a status that says otherwise lets
+work sit somewhere that looks handled.
+
+The flip is **automatic and follows from who spoke**: a customer reply puts the
+ball back with staff, a staff reply puts it back with the customer. Nobody has to
+remember to set it, which is the only way a status like this stays true. A staff
+reply also claims the ticket if nobody had.
+
+A reply to a `resolved` ticket **reopens** it and clears the resolution, because
+a person who answers a closed ticket is telling you it was not actually resolved.
+
+The queue is ordered by `last_message_at` **ascending** — longest-waiting first.
+A support queue sorted newest-first is one in which whoever has been ignored
+longest keeps being ignored, and the index added by migration 0011 supports that
+order rather than the more obvious descending one.
+
+---
+
+## 4. Two deliberate omissions
+
+**No internal staff-only notes.** A real helpdesk wants them. They were left out
+of this first version because every message being visible to both sides means
+there is no filter to get wrong — no `where internal = false` that a future
+endpoint forgets, and no way for a private note about a customer to reach that
+customer through a missed clause. Adding them later is a schema change plus a
+carefully-reviewed read path; shipping them now would be a leak waiting for a
+refactor.
+
+**No email.** Tickets and replies are in-app only. The notification carries the
+reply to the bell and the feed, but somebody who is not looking at Bault will not
+learn that support answered. The `channel` column on `notification` exists and is
+always `in_app`; wiring the SMTP adapter (Part 13) into it is the natural next
+step and was not done here.
+
+---
+
+## 5. Two labels for one status
+
+`ticketStatusLabel(t, status, staff)` renders the same status differently
+depending on who is reading:
+
+| Status | Customer sees | Staff see |
+| --- | --- | --- |
+| `open` | Waiting for us | Waiting for staff |
+| `awaiting_customer` | Waiting for you | Waiting for customer |
+
+"Whose turn is it" reverses with the reader, and one shared string would be wrong
+for one of them. The thread component itself is shared between the customer page
+and the staff queue — two renderings of one conversation is how a support tool
+ends up showing the two sides different things.
+
+---
+
+## 6. Verification performed
+
+### 6.1 Static
+
+```
+pnpm -r typecheck → 6/6 pass
+pnpm -r build     → 6/6 build
+pnpm lint         → 0 errors
+```
+
+### 6.2 Automated tests
+
+```
+vitest --project web         → 139 passed (10 files)
+vitest --project contract    →   6 passed
+vitest --project concurrency →   1 passed
+vitest --project property    →   2 passed
+vitest --project integration → 101 passed, 3 skipped, 3 failed
+```
+
+The three integration failures are the same pre-existing ones recorded in Parts
+13–16. **No new failures** — notably, the change to `AuthService.login` did not
+break the existing identity suite, which asserts on pending and active accounts.
+
+### 6.3 The conversation, live
+
+```
+customer opens a ticket           TKT-L8QRTPGD  status open
+staff queue                       1 ticket, red, longest-waiting first
+customer reads the staff queue    403
+staff reply                       → awaiting_customer  (and claims the ticket)
+customer reply                    → open
+empty reply                       400  "A reply cannot be empty"
+customer tries to resolve         403  requires warehouse_operator | admin
+staff resolve                     → resolved
+staff resolve again               409  "Ticket is already resolved"
+customer replies to a resolved    → open   (reopened)
+another collector reads it        404      (notFound, not forbidden)
+staff read it                     200
+```
+
+### 6.4 The suspended-account path — the reason this exists
+
+The fixture account was suspended, then:
+
+```
+sign in while suspended        200   ← the change in §2
+GET /me/profile                200
+GET /support/tickets           200
+POST /support/tickets          201   "My account is locked…"
+
+everything else, still closed:
+GET /vault/items               403
+GET /finance/wallet            403
+GET /marketplace/listings      403
+GET /me/parcels                403
+GET /shipping/shipments        403
+```
+
+And with the account set to `closed`:
+
+```
+sign in                        403   "This account is suspended or closed."
+```
+
+### 6.5 Append-only and notifications
+
+```
+UPDATE support_message  → rejected: append_only_violation
+DELETE support_message  → rejected: append_only_violation
+
+Support replied to TKT-L8QRTPGD — Storage charge I do not recognise.
+Ticket TKT-L8QRTPGD was marked resolved. Reply to it if the question is still open.
+```
+
+### 6.6 Not verified
+
+- **No browser pass.** The Support section, the staff queue and the restricted
+  suspended shell were exercised through their endpoints, the type checker and
+  the build, but not opened in a browser. The restricted rail in particular is
+  the piece most worth looking at, since it is the only place the shell renders
+  a materially different navigation.
+- **The seed was not run**; no sample tickets are seeded.
+- **No accessibility audit.**
+
+---
+
+## 7. Honest limitations
+
+1. **In-app only** (§4). Somebody not looking at Bault will not know support
+   replied. Email is the obvious next step and the adapter for it already exists.
+
+2. **No internal notes** (§4). Staff cannot record anything about a ticket that
+   the customer will not read.
+
+3. **No SLA, no ageing signal.** The queue is ordered by wait time, and that is
+   the entire prioritisation. There is no escalation, no "this has been open five
+   days" flag, and no count of how long the oldest ticket has waited — the
+   inbound section has exactly that for parcels (Part 15 §5), and support should
+   have it too.
+
+4. **`relatedType` / `relatedId` are captured and never used.** The schema and
+   the API accept a link to a parcel, shipment, item or wallet request, and no UI
+   sets one, so no ticket arrives with the context it was designed to carry. The
+   natural fix is a "Get help with this" control on those records.
+
+5. **A suspended account can open unlimited tickets.** There is no rate limit
+   anywhere on ticket creation, for suspended or active accounts. That is the
+   same exposure every other write endpoint has today, but the helpdesk is the
+   one route reachable by an account that has been locked for cause, which makes
+   it the most attractive one to abuse.
+
+6. **Nothing links a ticket to the suspension it is about.** A holder locked out
+   for debt writes a free-text ticket; staff read the badge on the queue row and
+   work it out. A ticket that carried the debt figure and a one-click "credit and
+   reinstate" would close the loop this part opened.
+
+---
+
+# Part 18 — Selling, Trading and Consignment: Reaching the Engine That Was Already There
+
+**Completed: 17 August 2026.**
+
+This part closes section 6 of the ShipMyCards parity audit — selling, trading and
+consignment — the largest remaining section, with six partials and five missing
+items.
+
+Most of the work was not building an engine. It was building a way in. The audit
+put it bluntly about offers:
+
+> `POST /marketplace/offers/:id/respond` is fully implemented — and no screen
+> calls it. The seller is told an offer arrived and cannot act on it.
+
+The same was true of listing management, of swaps, and of gift transfers. Four
+complete, transaction-safe, dual-approval workflows existed and were reachable
+from nowhere.
+
+---
+
+## 1. Executive summary
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-53 | List a stored item | Covered | Covered |
+| SMC-54 | Browse and search listings | Covered | Covered |
+| SMC-55 | Buy now | Covered | Covered |
+| SMC-56 | Make an offer | Covered | Covered |
+| SMC-57 | Seller accepts / rejects / counters | Partial | **Covered** |
+| SMC-58 | Manage own listings — reprice, delist | Partial | **Covered** |
+| SMC-59 | A "my listings" view | Missing | **Covered** |
+| SMC-60 | Card-show consignment | Missing | **Covered** |
+| SMC-61 | Auction-house consignment | Partial | **Covered** |
+| SMC-62 | eBay consignment via a partner | Partial | **Covered** |
+| SMC-63 | Outright purchase programme | Missing | **Covered** |
+| SMC-64 | Private sale of a large collection | Missing | **Different by design** (§6) |
+| SMC-65 | Personal storefront | Missing | **Covered** |
+| SMC-66 | Trade / swap with another collector | Partial | **Covered** |
+| SMC-67 | Gift transfer | Partial | **Covered** |
+
+Section 6: **14 covered, 1 different by design, 0 partial, 0 missing.**
+
+### What was actually built
+
+1. **A read side for the marketplace.** Five queries that answer the questions a
+   seller has and nothing could answer before.
+2. **Seller UI** — my listings, offers on both sides, swaps, a trade proposer, a
+   storefront.
+3. **Consignment channels** with real economics, eligibility and card shows.
+4. **A buyout programme** — Bault buying a card outright.
+5. **Two corrections to the API's shape**, both breaking, both deliberate (§4).
+
+---
+
+## 2. The read side
+
+`MarketReadService` is new and is most of the answer to section 6. Every WRITE it
+serves already existed:
+
+| Query | Answers |
+| --- | --- |
+| `myListings` | Which listings are mine, and how many offers await me |
+| `myOffers` | Everything I am party to, with `direction` computed server-side |
+| `mySwaps` | Proposals either way, with items resolved and `awaitingMe` set |
+| `counterparty` | Who is this username — id and name, nothing more |
+| `tradableItem` | One of *their* items, by serial (§4.2) |
+| `storefront` | One collector's active listings, public |
+
+`direction` and `awaitingMe` are computed in the service rather than inferred in
+the UI by comparing ids. The available actions depend entirely on which side you
+are on, and a screen that works that out for itself is a screen that can get it
+wrong in one place and not another.
+
+---
+
+## 3. Offers, listings, swaps — the UI that was missing
+
+**Offers.** A seller can accept, reject or counter; a buyer sees their own offer
+and, when a counter comes back, can accept that. Only a `pending` offer on an
+`active` listing draws controls, because those are the only ones the API will act
+on — a button that reliably 409s is worse than no button.
+
+**Listings.** Reprice inline; delist behind a confirmation. Delisting is
+two-step-confirmed by the API (`requestRemove` issues a challenge,
+`confirmRemove` consumes it) and the panel runs both halves behind one dialog, so
+the token is never something the user handles.
+
+**Swaps and gifts.** A list with approve/reject, and a proposer. "They get" and
+"you get" are written from the reader's side, so the two columns swap depending
+on who proposed — the same fact read from opposite ends of the table.
+
+---
+
+## 4. Two breaking API changes, both deliberate
+
+### 4.1 Trades are addressed by username
+
+`POST /marketplace/swaps` took `responderId`; `/transfers` took `toUserId`. Both
+are internal UUIDs. A collector cannot obtain one, would not recognise one, and
+Bault deliberately exposes usernames as the only customer-facing identifier —
+so the endpoints were, in practice, uncallable by the product.
+
+They now take `responderUsername` and `toUsername` and resolve them.
+`tests/integration/mkt-swap-transfer.test.ts` was updated to match; it is the
+contract, and the change to it is part of the change.
+
+### 4.2 A swap must name what comes back — and this caught a real bug
+
+The first version of the trade panel proposed swaps with an **empty**
+`requestedItemIds`, on the reasoning that the two collectors would settle the
+return leg between themselves.
+
+That would have given cards away. `TradeService` reads an empty requested set as
+`isTransfer` — a GIFT — and on approval transfers the offered items with nothing
+coming back. A proposer who thought they were opening a negotiation would have
+handed over a card.
+
+The DTO's `@ArrayNotEmpty()` caught it at the first live test. The fix is that a
+swap must name at least one item on the other side, which raised the question of
+how, since a collector cannot browse somebody else's vault.
+
+**By serial number.** `GET /marketplace/collectors/:username/items/:serial`
+resolves one item if it belongs to that collector and is genuinely swappable.
+Requiring the serial IS the privacy control: you must already know which card you
+want, which is how collectors agree a trade anyway. The response carries identity
+and nothing about value or history, and a serial that does not resolve gives the
+same answer whether it does not exist or belongs to somebody else — a lookup that
+distinguished those would confirm holdings one guess at a time.
+
+---
+
+## 5. Consignment gets channels
+
+Consignment was one request with the channel hard-coded to `'eBay'` in the vault
+drawer. The accounting was exact; the product was empty.
+
+Three channels, differing in the three things a seller decides on:
+
+| Channel | Accepts | Minimum | Payout | Bault's cut |
+| --- | --- | --- | --- | --- |
+| Card show | anything | — | 3–10 days | 10% |
+| Auction house | graded only | $50 | 42–70 days | 1% |
+| eBay partner | anything | — | 14–35 days | 1% |
+
+A channel differing in none of those would be a label, not a channel.
+
+**The fee is a pricing rule**, not a constant: the action type is
+`consignment_fee:<channel>`, so each channel's cut lives in the pricing table
+with every other price and stays admin-editable (Principle VI). A channel with no
+rule configured falls back to the flat marketplace fee via a new
+`PricingService.tryPrice`, so a new channel is never silently free. A partner's
+own commission is deducted before they remit and never touches Bault's ledger, so
+it is quoted as guidance only.
+
+**Card shows are a table** (`consignment_event`) because they are the only channel
+with a date: cards must be pulled, packed and driven somewhere by a particular
+morning, so the request has a deadline and the van has a capacity. Both are
+checked at submission — a consignment aimed at a full show, or one past its
+deadline, is refused before the billable request exists rather than discovered by
+an operator on the Friday.
+
+**Eligibility is enforced before billing.** A seller who is going to be told
+"graded cards only" should hear it before they are charged a service fee.
+
+---
+
+## 6. Buyout, and why private sale is a ticket
+
+**SMC-63, the buyout programme**, is a negotiation with exactly one round, which
+is what makes it unlike every other service request:
+
+```
+collector asks  →  operator accepts  →  operator QUOTES  →  collector accepts / declines
+```
+
+Only the last step moves anything. Until the collector says yes, the card is
+theirs and the quote is a number on a screen — which is why acceptance, not
+quoting, transfers ownership and credits the wallet. The quote is re-read inside
+the transaction rather than trusted from the caller, so the amount that moves is
+the amount that was quoted.
+
+The rationale field is required, because a collector weighing a figure below
+market is entitled to know how it was reached.
+
+**SMC-64, private sale**, is scored **Different by design**. ShipMyCards frames it
+as contacting a named specialist about a collection over $10,000 — a
+conversation, not a workflow. Part 17 built exactly that, so it is a helpdesk
+category (`private_sale`) rather than a fourth half-built request type with a
+status enum nobody would drive. Building a bespoke entity would have produced
+more machinery and less product.
+
+---
+
+## 7. Verification performed
+
+### 7.1 Static
+
+```
+pnpm -r typecheck → 6/6 pass
+pnpm -r build     → 6/6 build
+pnpm lint         → 0 errors
+```
+
+### 7.2 Automated tests
+
+```
+web         → 139 passed
+contract    →   6 passed
+concurrency →   1 passed
+property    →   2 passed
+integration → 101 passed, 3 skipped, 3 failed
+```
+
+The three failures are the same pre-existing ones recorded in Parts 13–17. Two
+NEW failures appeared mid-pass, both in `mkt-swap-transfer.test.ts`, both caused
+by the username rename in §4.1; the test was updated and both pass.
+
+### 7.3 Offers, live
+
+```
+golden lists a card at $300; red offers $220
+seller counters at $260                    → countered
+a genuine third party responds             → 403
+the buyer accepts the counter              → accepted, price $260, fee $13 (5%)
+seller rejects a different offer           → 201
+responding to an already-rejected offer    → 409
+```
+
+### 7.4 Listings, live
+
+```
+reprice                                    → 200
+delist (challenge then confirm)            → 201
+my listings, with pending offer counts     → 30 listings, counts present
+```
+
+### 7.5 Consignment, live
+
+```
+channels + open shows                      → 3 channels, 2 shows
+auction_house on an ungraded card          → "accepts graded items only"
+card_show with no show chosen              → "needs a specific show to be chosen"
+unknown channel "ebay"                     → "Unknown consignment channel"
+card_show WITH a show, $250                → 201
+```
+
+### 7.6 Buyout, live
+
+```
+accept before any quote exists             → "There is no quote to accept yet"
+quote before the operator accepts          → "Request must be accepted by an operator first"
+operator quotes $400                       → 201
+a different collector accepts              → 404
+owner accepts                              → accepted, credited $400, TXN-CG7PGZ8E
+wallet                                     → 5,433,764 → 5,473,764  (+40,000c, exact)
+accept twice                               → 409
+```
+
+### 7.7 Trades and storefront, live
+
+```
+serial lookup of another collector's item  → resolved; fields are id, serial,
+                                              class, description, grade, owner
+                                              — no value, cost or history
+a serial they do not own                   → "golden has no item with serial …"
+propose swap by username                   → pending, proposerApproved true
+propose with an EMPTY requested list       → 400  (would have been a gift, §4.2)
+a non-party approves                       → 403
+responder approves                         → executed
+gift transfer by username                  → awaiting_recipient_approval
+counterparty lookup leaks email            → false
+looking up your own account                → 400
+public storefront with no cookie           → 16 active listings
+private sale ticket                        → TKT-2M2RJ5ZS | private_sale | open
+```
+
+### 7.8 Not verified
+
+- **No browser pass.** Five new panels and a rewritten consignment flow were
+  exercised through their endpoints, the type checker and the build, but not
+  opened in a browser. This is the largest UI addition in the document and the
+  one most worth looking at.
+- **The seed was not run.** Channel fee rules and two card shows were inserted
+  directly so the development database's data survived.
+- **No accessibility audit.**
+
+---
+
+## 8. Honest limitations
+
+1. **Swap discovery does not exist.** You can trade with somebody whose username
+   AND whose card's serial you already know. There is no browse, no want-list, no
+   "who has this card" — the trade platform ShipMyCards markets is a place people
+   find each other, and this is a place people who have already found each other
+   can transact safely.
+
+2. **A counter-offer has no expiry.** Offers and counters sit `pending`
+   indefinitely, holding nothing and blocking nothing, but a seller looking at a
+   three-month-old offer has no signal that it is stale.
+
+3. **Consignment has no in-flight status.** Once an operator accepts, the card is
+   at a partner or in a van and the request says `in_progress` until it sells.
+   The payout window is snapshotted onto the request, so the seller knows what to
+   expect, but nothing tells them "it is listed" or "it did not sell at the show".
+
+4. **Card-show capacity counts requests, not items.** A lot consigned to a show
+   occupies one slot regardless of how many cards it contains.
+
+5. **Buyout quotes never expire.** ShipMyCards' programme is priced off a
+   conservative auction value that moves; a quote from six weeks ago is accepted
+   here at its original figure. `expiresAt` is the obvious missing field.
+
+6. **The storefront has no route of its own.** It is a tab inside the
+   marketplace, so the "link to share" is a hash route into the app rather than a
+   clean public URL, and it is only reachable by someone who already has Bault
+   open. The endpoint behind it is genuinely public; the page is not yet.
+
+7. **Nothing surfaces a pending offer outside the marketplace.** The notification
+   fires, and the Offers tab shows it, but the navigation rail carries no badge —
+   unlike Notifications, which does. A seller who does not open the marketplace
+   will not know somebody is waiting on them.
+
+---
+
+# Part 19 — What You Can Ask Us To Do To a Card
+
+**Completed: 18 August 2026.**
+
+This part closes section 5 of the ShipMyCards parity audit — the services a
+collector requests against something already sitting on the shelf. ShipMyCards
+calls it the *Disposition menu*. It had fourteen entries; Bault covered four.
+
+The section is worth reading for one finding in particular, which the audit did
+not make and which turned up while building the fix.
+
+> A grading request was accepted, and then at some later point completed with a
+> grade. In between, the card was not modelled as being **anywhere**. It stayed
+> `stored` — so it could be listed on the marketplace, sold, swapped, or shipped
+> to a buyer while it was physically sitting in a grader's building on the other
+> side of the country.
+
+That is not a missing feature. That is a custody system that could tell you, with
+total confidence and full audit trail, the location of a card that was not there.
+
+---
+
+## 1. Executive summary
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-39 | Order a service from the item itself | Covered | Covered |
+| SMC-40 | Submit a card to PSA, batched weekly | Partial | **Covered** (§7.1) |
+| SMC-41 | Live tiers and prices inside the request form | Missing | **Covered** |
+| SMC-42 | High-value grading needs Walkthrough and prior approval | Missing | **Covered** |
+| SMC-43 | Flat grading handling fee, postage and insurance absorbed | Partial | **Covered** |
+| SMC-44 | Returned grade and certificate recorded on the item | Covered | Covered |
+| SMC-45 | Better photos / high-quality scan on request | Partial | **Covered** |
+| SMC-46 | Video review, delivered as a file | Missing | **Covered** |
+| SMC-47 | Targeted damage inspection (corners, edges, surface, creases) | Missing | **Covered** |
+| SMC-48 | Separate a lot into individual items, on request | Partial | **Covered** |
+| SMC-49 | Crack a slab | Missing | **Covered** |
+| SMC-50 | Donate cards | Covered | Covered |
+| SMC-51 | Remove commons — discard or donate low-value cards | Missing | **Covered** |
+| SMC-52 | Track the status of your service requests | Covered | Covered |
+
+Section 5: **14 covered, 0 partial, 0 missing.**
+
+### What was actually built
+
+1. **Grading became a pipeline** — tiers, an approval gate, a physical submission
+   batch, and the `at_grader` lifecycle state that stops a card being sold while
+   it is away.
+2. **Two services that answer "what does it actually look like"** — video review
+   and a per-area condition inspection with a closed vocabulary.
+3. **Two services that destroy something on purpose** — cracking a slab, and the
+   bulk cull. Both two-step confirmed; the cull is free.
+4. **A door onto machinery that already existed** — `breakLot` was correct and
+   reachable only by staff. SMC-48 adds no mechanism at all (§5).
+5. **The vault renders its own photographs**, which it never has (§6).
+
+---
+
+## 2. Grading, which was the whole section
+
+### 2.1 A tier is two numbers
+
+`apps/api/src/modules/dis/grading-tiers.ts` is new and is most of the answer.
+
+A grader does not price per card. It prices on the **declared value** it will
+insure up to, and on **how long it takes**. Everything else follows from those
+two, including the fee. So that is what a tier is here:
+
+| Tier | Ceiling | Turnaround | Approval | Fee |
+| --- | --- | --- | --- | --- |
+| PSA Value | $499 | 45–65 days | — | $25 |
+| PSA Regular | $1,499 | 20–30 days | — | $75 |
+| PSA Express | $4,999 | 10–15 days | — | $150 |
+| PSA Walkthrough | uncapped | 5–10 days | **required** | $300 |
+| BGS Standard | $1,499 | 25–40 days | — | $65 |
+
+Tiers live in **code**, not in a table, for the same reason consignment channels
+do (Part 18 §3): they differ in *rules* — a ceiling, a turnaround, whether a
+person has to agree — and a rule belongs where it can be read and tested. The
+**fee** is the exception and lives in the pricing rules, because Principle VI
+makes them the single source of truth for what anything costs. `GET
+/services/grading/tiers` resolves each tier's fee at request time and serves it
+with the catalogue, so the number in the form is the number that will be charged.
+
+A tier whose pricing rule does not exist reports `feeMinor: null` and the form
+says *"Price not set yet"*. It does **not** quote the flat $20 service fee that
+the charge would fall back to — a form that lies about a price is worse than a
+form that admits it does not know one.
+
+### 2.2 Both directions of wrong are refused
+
+`checkTier` runs **before** the billable request exists:
+
+```ts
+if (declaredMinor > tier.maxDeclaredMinor)  // "choose a higher tier"
+if (tier.requiresApproval && declaredMinor < WALKTHROUGH_THRESHOLD_MINOR)
+```
+
+The second guard is the interesting one. Nothing forces it — a $50 common on the
+$300 walkthrough tier is a perfectly valid, perfectly profitable transaction. It
+is refused because it is somebody paying six times what they need to for a
+service they cannot use, and taking that money is not a business model, it is a
+trick.
+
+### 2.3 The approval gate
+
+A card declared above $4,999 is worth more than most of the shelf it sits on.
+Sending one away is not a decision a form should be able to take on its own.
+
+The request is still **created** — refusing to record it would lose the owner's
+intent — but it carries `approvalState: 'pending'` and is filtered out of
+`readyFor()`, so it cannot join a batch. `POST /services/grading/:id/approval`
+is `@Roles('admin')` and demands a written reason either way.
+
+### 2.4 The submission, and the state that admits a card is gone
+
+`grading_submission` is a new table: a code (`GSB-`), one grading body, a status,
+a tracking number, and dates. Requests join it by `type_fields ->> 'submissionId'`.
+
+`shipSubmission` is the whole point of the table:
+
+```ts
+for (const req of members) {
+  await this.custody.changeState(tx, req.itemId, 'at_grader', operatorId, `sent to ${sub.gradingBody}`);
+  await this.outbox.emit(tx, { eventType: 'grading_shipped', ... });
+}
+```
+
+One transaction, one custody event per card, one notification per owner. The
+`at_grader` state is reachable only from `stored` and leads only back to `stored`
+or to `discarded` — so a card at a grader cannot be listed, sold, swapped or
+shipped, which is exactly what could happen before.
+
+`closeSubmission` refuses while any card in it still has no grade recorded. The
+integration test asserts the 409.
+
+The notification says the consequence, not just the fact:
+
+> Your card on SR-… is on its way to PSA. **While it is away it cannot be sold,
+> swapped or shipped.** Tracking number …
+
+### 2.5 What "postage and insurance absorbed" means here (SMC-43)
+
+There is exactly one charge: the tier fee. No separate postage line, no separate
+insurance line. That is not a simplification — it is the reference behaviour, and
+it is why the tier fee scales with declared value in the first place. The tier
+price *is* the insurance premium with handling on top.
+
+---
+
+## 3. A billing seam that was one field short
+
+`BillableAction` gained `feeActionType`:
+
+```ts
+const { amount, snapshot } =
+  (action.feeActionType ? await this.pricing.tryPrice(action.feeActionType, opts, tx) : null) ??
+  (await this.pricing.price(action.actionType, opts, tx));
+```
+
+It is **tried**, not required. A grading tier added to the catalogue without a
+pricing rule falls back to the flat service fee — expensive-by-default rather
+than free-by-default. Getting that fallback backwards would have meant a new tier
+silently costing nothing, which is the kind of bug that is only discovered by
+accounting.
+
+Verified live: `service $150.00 <- grading_fee:psa_express`,
+`service $10.00 <- service_fee:video_review`. The charge's *category* is still
+`service`; only its price is tier-specific.
+
+---
+
+## 4. The two services that answer "what does it look like"
+
+Professional photography already existed and went partway. It does not go far
+enough, for two specific reasons:
+
+- **A still photograph cannot show gloss.** `video_review` turns the card under
+  a light on camera. It is stored as another version on `item_image` with
+  `type: 'video'` — same table, same versioning — rather than in a parallel
+  structure, because it *is* another view of the same card.
+- **A photograph of the front says nothing about a soft corner.**
+  `condition_inspection` is a person looking at named areas and writing down what
+  they see.
+
+The inspection's areas (`corners, edges, surface, centering, creases`) and
+severities (`clean, minor, notable`) are **closed lists**. The value of a report
+is that two reports of the same card are comparable; free text produces findings
+nobody can line up against each other.
+
+The requester chooses which areas they care about, and the operator must answer
+**every** one:
+
+```ts
+const missing = asked.filter((a) => !answered.has(a));
+if (missing.length > 0) throw AppError.validation(`No finding recorded for: ${missing.join(', ')}`);
+```
+
+A report that silently omits the corners reads as *"nothing wrong"* when it means
+*"nobody looked"*. That distinction is the entire product, so the API enforces it
+and an integration test asserts the 400.
+
+---
+
+## 5. Lot split adds no mechanism
+
+`IntakeService.breakLot` has been correct since intake was built. It creates one
+item per contained card, each with its own serial, barcode, bin and intake
+charge, and marks the parent broken so nothing is double-counted.
+
+It lived in the warehouse console and was reachable only by staff. A collector
+who wanted to sell one card out of a lot of forty saw *"Lot of 40"* in the drawer
+and was offered nothing.
+
+`LotSplitService` is the door, and it deliberately goes through the
+service-request framework rather than exposing break-lot directly: splitting a
+lot **costs money** — each child is a fresh intake — and takes physical work, so
+it belongs in the operator queue alongside every other request rather than firing
+on a click. The request states `willCreate` up front, because that is the part
+that surprises people.
+
+---
+
+## 6. The vault finally shows its own photographs
+
+`GET /vault/items/:id` has returned signed URLs for every stored image since
+intake was built. The drawer rendered `CardPhotoThumb` — deterministic generated
+artwork keyed on the serial number — and never touched them.
+
+So a collector who **paid for a photo shoot** got back the same generated tile
+they had before. That is SMC-45, and it was scored Partial for exactly this
+reason:
+
+> Professional photography is a real request with a structured fulfilment form
+> and versioned images — but the customer's vault UI never displays the result.
+
+`ItemMediaGallery` renders them newest-version-first, video as `<video controls>`
+rather than a link, with `object-fit: contain` — a slab photographed off-centre
+is still the evidence somebody paid for, and cropping it would hide the corner
+they were trying to see.
+
+---
+
+## 7. Destroying things on purpose
+
+### 7.1 Crack a slab
+
+Irreversible: the holder is snapped, and the grade and certificate stop
+describing anything. Two-step confirmed, like a donation.
+
+The part that matters is what happens at completion. The operator records
+`conditionAfter`, and it **replaces** the grade:
+
+```ts
+await tx.update(item).set({ conditionGrade: form.conditionAfter, ... });
+await tx.insert(itemChangeHistory).values({ field: 'conditionGrade', oldValue: it.conditionGrade, ... });
+```
+
+Leaving *"PSA 10"* on a card now loose in a sleeve would let it be listed,
+insured or consigned as a graded card it is no longer. The request is refused
+outright on a card that carries no grade — cracking a raw card is a no-op with a
+fee attached.
+
+### 7.2 Remove commons
+
+The bulk cull: cards worth less than the storage they are about to accrue,
+discarded or given away in one action.
+
+Two decisions in it are deliberate.
+
+**It is free.** `free: true` on the request, no pricing rule, no charge. Charging
+somebody to stop charging them is indefensible.
+
+**It is time-limited** to 30 days after arrival. After that the cards have been
+stored, storage was billed, and *"these were never worth keeping"* has stopped
+being true of the arrangement.
+
+The whole set is validated — ownership, state, hold flag, window — **before** the
+confirmation challenge is issued, so somebody who confirms is confirming
+something that will actually happen, rather than typing a confirmation and then
+being told one of the forty cards was on hold. The integration test asserts that
+a set containing one card belonging to somebody else leaves the *other* card
+untouched.
+
+`discarded` is a new terminal lifecycle state. An item is never deleted
+(Principle I), so a card thrown away has to have a state that says it was.
+
+---
+
+## 8. Migration 0013
+
+`0013_services_on_a_stored_item.sql`:
+
+- `item_lifecycle` += `at_grader`, `discarded`
+- `item_image_type` += `video`
+- `service_request_type` += `video_review`, `condition_inspection`, `deslab`, `remove_commons`
+- `CREATE TABLE grading_submission` + unique code index + `(grading_body, status)` index
+- an expression index on `service_request ((type_fields ->> 'submissionId'))`, because
+  shipping or closing a batch scans for its members over the whole table
+
+New enum values must be committed before any statement *uses* one, so nothing in
+the migration inserts a row carrying one.
+
+The seed's `TRUNCATE` list gained `grading_submission` and `consignment_event` —
+the first has a foreign key to `user_account`, which made the reset fail outright
+until it was listed; the second was simply missed in Part 18 and would have
+survived a reset that claims to wipe everything.
+
+---
+
+## 9. What was verified
+
+- `pnpm -r typecheck`, `pnpm -r build`, `pnpm lint` — clean (33 pre-existing warnings, 0 errors).
+- `pnpm test` — **265 passing** across all five projects (web 139, contract 6,
+  integration 117 with 3 skipped, concurrency 1, property 2).
+- `tests/integration/dis-item-services.test.ts` is new: 13 tests covering the tier
+  catalogue, both ceiling refusals, the approval gate holding a card out of a
+  batch, the full ship → `at_grader` → listing-refused → grade → `stored` →
+  close cycle, video attachment, the unanswered-area refusal, de-slab clearing
+  the grade, the owner-requested lot split, and both cull paths.
+- Live: tier prices served from the pricing rules and charged as served.
+
+Two pre-existing tests were updated, not the code they tested: `dis-services.test.ts`
+posted `{ itemId }` to a grading endpoint that now requires a tier and a declared
+value. That contract change is the feature.
+
+---
+
+## 10. Honest limitations
+
+1. **There is no PSA API.** The submission batch is real — codes, tracking,
+   states, notifications — but a human types the grader's reference in and a
+   human types the grade back out. ShipMyCards works the same way; a live
+   integration is a different project.
+
+2. **Video and inspection results are recorded, not surfaced side by side.** The
+   video appears in the media gallery and the inspection findings live in the
+   request's fulfillment record, reachable from the service history. There is no
+   single "condition report" page that puts the video, the findings and the
+   photographs together, which is what somebody deciding whether to buy actually
+   wants.
+
+3. **`at_grader` has no expected-return date.** The tier's turnaround is
+   snapshotted onto the request, so the number the owner was quoted survives, but
+   nothing computes a due date from the ship date or flags a batch that is
+   overdue.
+
+4. **A shipped submission cannot be partially received.** Cards come back by
+   completing their individual requests, which works, but there is no "this batch
+   arrived, here are the three that came back damaged" step.
+
+5. **The cull window is measured from arrival, not from the end of the included
+   storage period.** Thirty days is comfortably inside the 180-day included
+   window (Part 16), so the rule is more conservative than it needs to be — a
+   card at day 120 is still costing nothing and still cannot be culled for free.
+
+6. **De-slab does not reprice the item.** A card that was worth $2,000 in a PSA
+   10 holder is worth considerably less raw, and the storage fee is a proportion
+   of the *intake* fee, which does not move. Nothing here is wrong; it is simply
+   not modelled.
+
+7. **The bulk cull is a mode inside the vault, not a screen.** It is a toggle
+   above the grid on the active scope. For forty cards that is fine. For four
+   hundred it is a scrolling checkbox list with no filter of its own.
+
+---
+
+# Part 20 — Outbound Shipping Stops Being a Shape
+
+**Completed: 18 August 2026.**
+
+This part closes section 8 of the ShipMyCards parity audit — outbound shipping.
+Twenty-three capabilities, of which six were covered, four partial and thirteen
+missing.
+
+The section is unusual because almost nothing in it was *broken*. The flow
+existed and its outline was correct: pick items, pick an address, get rates,
+choose one, get charged, get a tracking number. What the audit found underneath
+was that the outline was the entire product.
+
+> The rate request hard-codes the destination as country `IL`, postal code
+> `00000`, and assumes 500 g per item regardless of what the items are. [...]
+> Rates do not depend on the destination, the weight, or the contents.
+
+Two prices came back — DHL and USPS — and they were the same two prices for
+every parcel Bault had ever quoted. One card or a sealed case. New Jersey or
+Japan. 500 g is roughly a hundred times what a sleeved card weighs and about a
+fortieth of a sealed case, so the number was not merely approximate; it was
+unrelated to the thing being shipped.
+
+---
+
+## 1. Executive summary
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-71 | Create a shipment request from selected inventory | Covered | Covered |
+| SMC-72 | Consolidate many purchases into one parcel | Covered | Covered |
+| SMC-73 | Simple Shipping — the platform chooses for you | Missing | **Covered** |
+| SMC-74 | Personalised Shipping — you choose carrier and service | Partial | **Covered** (§9.1) |
+| SMC-75 | Standard vs Rush processing | Covered | Covered — and corrected (§4) |
+| SMC-76 | Real carrier line-up with weight, size, value and country limits | Partial | **Covered** (§9.1) |
+| SMC-77 | Postage quote before committing | Partial | **Covered** |
+| SMC-78 | Signature required on delivery | Missing | **Covered** |
+| SMC-79 | Optional insurance up to $5,000 | Missing | **Covered** |
+| SMC-80 | Insurance above $500 forces a signature | Missing | **Covered** |
+| SMC-81 | Customs value, per shipment or per item | Missing | **Covered** |
+| SMC-82 | Customs documentation, HS codes, broker guidance | Missing | **Covered** (§9.4) |
+| SMC-83 | Special-handling notes on a shipment | Missing | **Covered** |
+| SMC-84 | Add or remove items while still "Requested" | Missing | **Covered** |
+| SMC-85 | Combine two shipment requests | Missing | **Covered** |
+| SMC-86 | Cancel a request, with a restocking fee | Missing | **Covered** |
+| SMC-87 | Unpaid shipment held a week, then returned to inventory | Missing | **Covered** |
+| SMC-88 | Group shipment shared by several collectors | Missing | **Covered** |
+| SMC-89 | Direct-from-Delaware overnight | Missing | **Covered** |
+| SMC-90 | GPS-tracker add-on in the outgoing parcel | Missing | **Covered** |
+| SMC-91 | Tracking number and live status | Covered | Covered |
+| SMC-92 | Delivery and exception status updates | Covered | Covered |
+| SMC-93 | Estimated delivery date | Covered | Covered |
+
+Section 8: **23 covered, 0 partial, 0 missing.**
+
+**One caveat stated up front, because it is the most important sentence here:
+the rate SOURCE is still a sandbox.** Bault has no carrier account, so no price
+in this system is a real carrier price. What became real is everything around
+the price — see §9.1, which is unusually long on purpose.
+
+### What was actually built
+
+1. **Weight and destination**, which is what makes any of the rest mean
+   anything (§2).
+2. **A carrier line-up defined by what each service refuses** (§3).
+3. **Quote before you commit**, and "choose for me" (§4).
+4. **Insurance, signature and customs** — the three that constrain each other
+   (§5).
+5. **A request that can be changed, merged, cancelled or left unpaid** (§6).
+6. **One parcel, several collectors**, without breaking single ownership (§7).
+7. **Direct out of the tax-free site**, bypassing the vault entirely (§8).
+
+---
+
+## 2. Weight and destination
+
+### 2.1 Why `item` gained a column
+
+A carrier prices on weight. Bault had none. The fix is not "add a weight field
+and require it" — there are tens of thousands of items nobody weighed, and a
+mandatory column would have to be filled with an invented number, which is worse
+than no column at all.
+
+So `item.weight_grams` is **nullable and means "somebody put this on a scale"**.
+Intake accepts it optionally. Where it is absent, the item's CLASS supplies a
+typical weight — the taxonomy already existed for exactly this kind of question
+(Part 14) and gained a `typicalWeightGrams` field:
+
+| Class | Typical | Class | Typical |
+| --- | --- | --- | --- |
+| trading_card | 5 g | comic_raw | 90 g |
+| graded_slab | 60 g | comic_graded | 350 g |
+| sealed_pack | 30 g | memorabilia | 2 kg |
+| sealed_box | 500 g | sealed_case | 6 kg |
+
+`itemWeightGrams` prefers the measured figure, falls back to the class, and
+multiplies by the lot size — an unbroken lot of forty cards is forty cards in one
+parcel, and weighing it as one card would under-declare the parcel by a factor of
+forty.
+
+The quote says which it used. `weightEstimated: true` renders as *"Some weights
+are estimated from the item class — nobody put these on a scale."* Being honest
+about the provenance of a number costs one boolean.
+
+### 2.2 Why `shipment` gained two columns
+
+`destination_address` is a formatted single line for humans. It cannot be split
+back into a country without guessing, and guessing is how a parcel to Japan gets
+quoted a domestic price. `destination_country` and `destination_postal_code` are
+what a carrier actually needs.
+
+The SPA always sends an `addressId` and the two fields are derived from the saved
+address, which carries them already. Free text is still accepted — and now has to
+carry both explicitly. That is a **breaking API change**, and two existing test
+fixtures were updated rather than the rule being softened, because the softer
+version is the bug.
+
+---
+
+## 3. A line-up is defined by what it refuses
+
+`shp/carriers.ts` is new. Seven services, each with the limits that decide
+whether it can carry a given parcel:
+
+| Service | Scope | Max weight | Max customs | Max insured | Signature |
+| --- | --- | --- | --- | --- | --- |
+| USPS Ground Advantage | domestic | 70 lb | — | $5,000 | yes |
+| USPS Priority Mail | domestic | 70 lb | — | $5,000 | yes |
+| FedEx 2Day | domestic | 150 lb | — | $5,000 | yes |
+| ePacket International | 32 countries | 4 lb | $400 | $500 | **no** |
+| ePost International | international | 20 lb | — | $2,000 | yes |
+| FedEx International Priority | international | 150 lb | — | $5,000 | yes |
+| Direct Overnight | domestic, from DE | 500 g | — | $5,000 | yes |
+
+Those limits *are* the product. A collector choosing "the cheap one" for a
+$3,000 slab going to Germany needs to be told, before they pay, that the cheap
+one will not insure it — not after a claim is refused.
+
+Three deliberate decisions in how they are surfaced:
+
+**All the reasons, not the first.** `checkService` returns every failed rule.
+Somebody whose parcel is both too heavy and too valuable for ePacket learns both
+at once instead of fixing one and being refused again.
+
+**Refused services stay on screen.** They are returned with `eligible: false` and
+their problems, and the UI lists them under *"Not available for this parcel"*. An
+option that silently vanished leaves somebody hunting for the cheap one they saw
+a moment ago.
+
+**The rule travels separately from the sentence.** Each problem carries a
+machine-readable `rule` and a formatted `limit` alongside the English message, so
+the SPA can render *"מבטח עד $500.00"* — translated phrasing, real figure. A
+Hebrew reader handed an English sentence loses the phrasing; handed a translated
+sentence with the number stripped out, they lose the only actionable part.
+
+Dimensional weight is modelled (`billableWeightGrams`, divisor published) because
+it is the reason a light parcel in a big box is priced like a heavy one. Without
+recorded box dimensions it is currently a no-op — honest, and it becomes
+meaningful the moment an operator records a box size.
+
+---
+
+## 4. Quoting, choosing, and what rush actually is
+
+### 4.1 `POST /shipping/quote`
+
+Creates nothing, charges nothing, and re-runs automatically as the form changes.
+Previously rates appeared only after a shipment record existed, so *"what would
+it cost to send these three?"* could only be answered by committing to sending
+them.
+
+### 4.2 "Choose for me"
+
+Neither cheapest nor fastest, because both are wrong on their own. Cheapest sends
+a $3,000 card by the slowest boat to save $2. Fastest charged $525 for a parcel
+that would have arrived comfortably for $310 — which is exactly what the first
+implementation of this did, and why it was rewritten before it shipped.
+
+A day of waiting is given an explicit price:
+
+```ts
+const DAY_OF_WAITING_MINOR = 250;             // $2.50
+const score = (r) => r.totalMinor + r.transitDaysMax * DAY_OF_WAITING_MINOR;
+```
+
+At $2.50 a day, saving $30 is worth about twelve days and saving $2 is worth less
+than one. The point is not that the number is right — it is that the number is
+*stateable*, and therefore arguable in public, which "we picked the cheap one" is
+not. Who chose is recorded on the shipment (`service_mode`), because a late
+parcel has to be answerable for.
+
+### 4.3 Rush was lying, quietly
+
+The old adapter took the `rush` flag, **doubled its own base rate and shortened
+its own estimate**. That told the collector that FedEx would arrive sooner
+because Bault packed faster.
+
+Rush is Bault moving a parcel to the front of the packing queue. It is now a
+handling charge (`shipping_rush`, $10) and the carrier's promise is left alone.
+SMC-75 was already scored Covered; this keeps it covered and stops it
+misattributing Bault's own speed to a third party. The integration test asserts
+both halves: the total goes up, `handlingMinor` goes up, and `estimatedDays` does
+not move.
+
+---
+
+## 5. Insurance, signature, customs
+
+`shp/shipping-options.ts` holds the rules, and the interesting thing about them
+is that they constrain each other.
+
+- **Insurance** caps at $5,000 per parcel, priced at 1.5% with a $2 minimum.
+- **Above $500 a signature is forced** — not validated, *forced*. It is the
+  condition on which the cover is written; a parcel worth more than that left on
+  a doorstep is not insured, so offering the combination would be selling
+  somebody a policy that would not pay. The UI shows the box ticked and disabled
+  with the reason under it.
+- **A tracker is only sold alongside $500 of insurance**, because it exists to
+  help recover a parcel somebody is going to claim on.
+
+**Customs** is a policy question wearing a formatting question's clothes. Two
+decisions:
+
+The declared value is **the collector's** and is never adjusted. Under-declaring
+to reduce somebody's duty is customs fraud committed in their name, and a
+platform that quietly rounds a $3,000 slab down to $50 has made its customer the
+one who signed for it. The invoice prints the sentence:
+
+> The values stated are those declared by the owner of the goods. Bault does not
+> adjust, reduce or omit a declared value for any reason.
+
+An international shipment with no declared value is **refused at creation**, not
+defaulted to zero.
+
+Per-item lines are apportioned by weight when the collector gives one lump sum,
+with the last line absorbing the rounding so the invoice total is exactly the
+figure declared. A broker cannot use a single number on a five-item parcel, and
+inventing per-item values from nothing would be worse.
+
+The invoice is **generated, not stored** — a view over the shipment's frozen
+customs lines. A rendered document on disk is a second version of the truth that
+can drift from the shipment it describes.
+
+---
+
+## 6. A request that can be changed
+
+The audit's complaint was blunt:
+
+> A mistake is permanent. If a collector selects the wrong card, or changes their
+> mind before anything has been picked, there is no recovery path in the product.
+
+Three operations, all gated on the same rule: the window is open exactly while
+the request reads `requested`. That is not arbitrary — it is the point before
+which nobody has walked to a shelf.
+
+- **`PATCH /shipping/shipments/:id`** — items, insurance, customs value,
+  signature, add-ons, notes. Every field optional; only what is sent moves, so
+  adding one card cannot clear the insurance figure. Customs lines are *rebuilt*
+  rather than patched, because the apportionment depends on the whole set.
+- **`POST .../merge`** — same owner, same address, both still `requested`. The
+  absorbed request is **not deleted**: it keeps its code and points at its new
+  home, because somebody wrote SHP-1234 down and is entitled to find out what
+  became of it rather than meeting a 404. The combined parcel takes the SUM of
+  the declared values and the STRONGER of the two protections; taking the
+  target's figures alone would quietly downgrade the cover on the cards that came
+  from the source.
+- **`POST .../cancel`** — a $25 restocking fee, charged **only** when a rate was
+  selected and paid for. A request nobody has touched costs nothing to abandon,
+  and charging $25 for changing your mind thirty seconds after clicking would be
+  indefensible. The UI says which case applies *before* the button, not in a
+  receipt afterwards.
+
+### 6.1 A hole found while building this
+
+Nothing stopped the same item being on two open shipments. `create` checked only
+that an item was `stored`, and an item in an open shipment stays `stored` until
+it is physically dispatched — so one card could sit in three open requests, two
+of which would fail at the packing bench with an operator holding one card and
+two lists.
+
+`assertItemsFree` closes it. It also makes cancelling *mean* something: being in
+a shipment now costs an item the ability to go on another one, and cancelling is
+what hands that back.
+
+### 6.2 `awaiting_payment`
+
+Selecting a rate used to charge unconditionally, which drove the wallet negative
+— and a negative balance blocks every other service the collector has. They took
+one deliberate action and lost the rest of the platform.
+
+Now, if the wallet cannot cover the total, the shipment is **held** for seven
+days at the frozen price. `POST .../pay` settles it once the wallet is funded;
+the price is *not* re-quoted, because somebody who funds their wallet on Friday
+should pay the figure they agreed to on Monday (Principle V). An hourly worker
+job (`shipment.expiry-sweep`) cancels what was never paid and tells the owner.
+
+---
+
+## 7. One parcel, several collectors
+
+The tempting implementation is to let one shipment carry everybody's items. It
+breaks Principle I outright: an item has exactly one owner, and a shipment moving
+somebody else's card is a custody event that person never authorised.
+
+So `shipment_group` carries **no items at all**. Each collector keeps their own
+shipment, with their own items, their own custody events and their own history.
+The group carries the two facts that actually needed modelling — that they travel
+together, and who pays the carrier.
+
+- Joining is always the member's own act, with a request of their own. A group
+  you can be added to without agreeing is a group that can send your property to
+  an address you never saw.
+- The destination is held **on the group** and must match exactly. "Everybody
+  typed the same thing" is not the same claim as "there is one destination", and
+  only the second gets a parcel to the right door.
+- Only the payer can lock or cancel it. A member locking it would be committing
+  somebody else's wallet.
+- Each member still pays for their own service. Merging money across accounts is
+  precisely the thing a custody platform must never do quietly.
+
+---
+
+## 8. Direct from the tax-free site
+
+ShipMyCards markets this as Direct-from-Oregon; Bault's tax-free forwarding
+facility is in Delaware, so it is Direct-from-Delaware here.
+
+The insight is that the normal path is slow for a reason that has nothing to do
+with the collector. A parcel landing at the forwarding site is trucked to the
+vault — days of transit and a forwarding fee — booked in as items, and only then
+shipped out. Somebody who bought a card to have it in their hand on Saturday is
+paying for a round trip they did not want.
+
+So this bypasses the vault entirely, and that is why it lives on the **parcel**
+rather than on a shipment of stored items: the goods never become items, never
+get a serial, never accrue storage. Every constraint on it is a real one — it
+leaves from Delaware so the parcel must still be there; it is an envelope so five
+cards and no more; it is domestic; and it is $100 flat.
+
+The card count is *stated* rather than counted, because nobody has opened the
+parcel — which is the entire point. An operator who opens it at the bench and
+finds nine cards has a request that says five and a discrepancy worth recording.
+
+---
+
+## 9. Honest limitations
+
+### 9.1 The prices are not real
+
+This is the big one and it deserves more than a bullet.
+
+The audit's parity requirement for SMC-74/76 opens with *"a real carrier
+integration behind the existing ShippingAdapter port"*. That has **not** been
+done, and cannot be from here: it needs a ShipStation or Easyship account,
+credentials, and a contract. Every figure this system quotes comes from
+`SandboxShippingAdapter`.
+
+What changed is what the sandbox *is*. It was two hard-coded numbers. It is now a
+base plus a per-kilogram component, multiplied by a distance band, with a
+signature surcharge, packaging weight added, dimensional weight applied where a
+service publishes a divisor, and services filtered to the side of the border they
+serve. A quote moves when the parcel gets heavier and moves again when the
+destination gets further — which the contract suite now asserts directly.
+
+So: the **behaviour** the audit describes is real — constraints enforced before
+purchase, quote-before-commit, recommendation, destination- and weight-driven
+pricing. The **numbers** are invented, and swapping in a real adapter is a
+one-file change behind an unchanged port. Anyone reading a price in this system
+should treat it as a shape, not a quote.
+
+The distance band is by country, not by zone. A real carrier prices on zone, and
+deriving a zone from a postcode needs the carrier's own tables.
+
+### 9.2 No box dimensions
+
+Dimensional weight is implemented and currently inert, because nothing records
+the size of the box. The dispatch form captures a package weight; it does not
+capture length, width and height. Until it does, a shoebox of sleeved commons is
+priced on mass alone and is under-quoted.
+
+### 9.3 A group parcel is not packed as one in the system
+
+The group tells the warehouse that N shipments travel together, and each member
+pays their own postage. What it does not do is produce **one** carrier label for
+the combined parcel — each member's shipment is dispatched separately by the
+existing flow. The saving is in Bault's handling, not yet in the postage, which
+is the opposite way round from the reference service.
+
+### 9.4 Customs guidance is a default, not advice
+
+The HS code (`4911.99`, printed matter — other) and country of origin (`US`) are
+defaults applied to every line. They are right for trading cards from a U.S.
+warehouse and wrong for a Japanese-origin sealed box, and nothing lets a
+collector override either per item. "Broker guidance" in the audit's sense — the
+prose explaining duty thresholds by country — does not exist; there is a single
+sentence saying duty is the recipient's.
+
+### 9.5 Cancelling does not refund the postage
+
+The restocking fee is charged and the carrier cost is left alone. Postage that
+has been bought has been bought; what is refundable is the part Bault has not
+spent, and deciding that is a support conversation rather than a rule this can
+compute. A collector who cancels after paying is currently out the full carrier
+cost with no automatic path to getting any of it back.
+
+### 9.6 The expiry sweep releases, it does not warn
+
+An unpaid shipment is cancelled at the end of the window and the owner is told
+*then*. Nothing warns them on day five that it is about to happen, which is the
+one notification that would actually save the parcel.
+
+---
+
+## 10. What was verified
+
+- `pnpm -r typecheck`, `pnpm -r build`, `pnpm lint` — clean (33 pre-existing
+  warnings, 0 errors).
+- `pnpm test` — **292 passing** across all five projects (web 139, contract 10,
+  integration 140 with 3 skipped, concurrency 1, property 2).
+- `tests/integration/shp-outbound.test.ts` is new: 23 tests covering quoting
+  without creating, prices that move with weight and distance, ePacket refusing a
+  $3,000 parcel with both failed rules named, the forced signature, the insurance
+  ceiling, the tracker's insurance prerequisite, editing, the two-shipments-one-
+  item conflict, merge and its address guard, both cancel paths, "choose for me",
+  the held-and-then-paid cycle, the commercial invoice adding up to the cent, two
+  collectors sharing a parcel with ownership intact, and the full direct-ship
+  flow from registering a Delaware parcel to a shipment carrying zero items.
+- The contract suite was rewritten around what the adapter now owes (§4.3), and
+  gained assertions for weight, distance, signature and service filtering.
+- Live: the service catalogue, and quotes for a card and a sealed case to both
+  New Jersey and Tokyo, with every constraint firing as described in §3.
+
+Three pre-existing tests were updated rather than the code they tested. Two
+fixtures posted a formatted destination with no country or postal code, which is
+now refused; one contract test asserted that the *adapter* prices rush, which it
+deliberately no longer does (§4.3). Both changes are the feature.
+
+---
+
+# Part 21 — Notifications Leave the App, and Bault Writes Something Down
+
+**Completed: 18 August 2026.**
+
+This part closes section 10 of the ShipMyCards parity audit — notifications,
+content and support. Eight capabilities: five covered, one partial, three
+missing.
+
+The audit's summary of the partial is worth quoting because it is a compliment
+and a complaint in one sentence:
+
+> In-app notifications only, driven by a transactional outbox with ten event
+> types, human-readable sentences composed at dispatch, a header bell with an
+> unseen count, a full feed page, and per-event-type opt-outs — **a well-built
+> system that reaches exactly one channel.**
+
+Nothing about it was wrong. It simply could not reach anybody who was not
+already looking at the app, which matters here more than it would elsewhere:
+several of Bault's workflows explicitly wait on a human. A wallet request needs
+a reviewer. A parcel arrives damaged. A shipment held for payment releases its
+items after seven days whether or not anybody was watching.
+
+---
+
+## 1. Executive summary
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-109 | Told when goods arrive and are catalogued | Covered | Covered |
+| SMC-110 | Told about offers, sales, dispatches, holds, donations, swaps | Covered | Covered |
+| SMC-111 | Email notifications | Partial | **Covered** |
+| SMC-112 | In-app FAQ | Covered | Covered |
+| SMC-113 | Terms & policy documents | Covered | Covered |
+| SMC-114 | Blog, show schedule, buying guides | Missing | **Covered** (§6.1) |
+| SMC-115 | Video tutorials for each workflow | Missing | **Different by design** (§6.2) |
+| SMC-116 | Direct human support — phone, email, named owners | Missing | **Covered** (§6.3) |
+
+Section 10: **7 covered, 1 different by design, 0 partial, 0 missing.**
+
+SMC-115 is scored honestly rather than generously, and §6.2 explains why at
+length. There are no videos. There will not be videos produced by writing
+TypeScript. What exists instead is the written walkthrough a video would be a
+recording of, and calling that "covered" would be the kind of claim this
+changelog exists to avoid.
+
+### What was actually built
+
+1. **A canonical event catalogue** — the list that did not exist and that
+   everything else needed (§2).
+2. **Email as a second delivery channel**, with the preference matrix that makes
+   it survivable (§3, §4).
+3. **Workflow guides**, written under the FAQ module's own rule (§6.2).
+4. **The show calendar**, from rows that already existed (§6.1).
+5. **Support details from configuration**, honest about their own absence (§6.3).
+
+---
+
+## 2. The list that did not exist
+
+Events were emitted by name from twenty different services, rendered by a
+`switch` in the worker, and filtered by preference rows keyed on a free-text
+`event_type`. Nothing anywhere held the list.
+
+The consequence was quiet and quite bad: `GET /notifications/preferences`
+returned only the rows a user had **already changed**, so the settings screen
+could show you what you had turned off and had no way to show you what you could
+turn off. The SPA papered over it with a hard-coded list of fourteen event types
+— against twenty-seven the system actually emits.
+
+`apps/api/src/modules/not/event-types.ts` is the catalogue. Each entry carries a
+category, a label, whether email is on by default, and whether it can be
+switched off at all.
+
+Two entries cannot:
+
+```ts
+{ key: 'parcel_damaged',        mandatoryInApp: true }
+{ key: 'arrival_not_accepted',  mandatoryInApp: true }
+```
+
+Both are statements that somebody's property did not survive contact with the
+warehouse. A preference toggle that suppresses those is a preference toggle that
+hides bad news, so in-app they are permanent — and the email side is still a
+choice, because somebody who wants no mail should get no mail.
+
+An event **not** in the catalogue defaults to in-app on and email off. A new
+emitter somebody forgot to register still reaches the collector, and cannot
+start sending mail without a deliberate entry.
+
+---
+
+## 3. Email
+
+### 3.1 What goes out, and what does not
+
+Turning every notification into an email would be indefensible — a collector
+with forty cards would get mail every time a parcel moved a shelf. The default
+is money, custody of somebody's property changing hands, and anything with a
+deadline attached. Twenty-one of the twenty-seven are on; the six that are off
+are the chatty ones (`parcel_forwarded`, `commons_removed`, `item_donated`,
+`group_shipment_locked`, `wallet_request_submitted`,
+`support_ticket_resolved`).
+
+That judgement lives in a file that can be read and argued with, which is the
+point. It was previously nowhere, because there was nothing to argue about.
+
+### 3.2 How it is delivered
+
+`dispatchOutbox` gained the second channel, built so nothing about it can break
+what it accompanies:
+
+- **In-app is written first, and independently.** A dead mail server cannot cost
+  somebody the notification it was meant to accompany.
+- **A failure is recorded, not swallowed.** `notification.channel` and `.status`
+  existed from the start and each only ever held one value, because in-app
+  delivery cannot fail — writing the row *is* the delivery. Email can, so a
+  bounce lands as a `failed` row with `failure_reason`. A mail that bounced has
+  to be visible as a mail that bounced rather than as silence.
+- **Only an `active` account is mailed.** A `pending` account has never
+  confirmed its address; mailing it would send somebody's vault activity to an
+  address nobody has proved they own. A `closed` one has asked to be left alone.
+- **Both channels send the same sentence.** The `notification_event` template
+  takes the message the worker already composed. Two channels telling somebody
+  two differently-worded versions of one event is how a support conversation
+  starts with "which one is right?".
+
+Verified live against the console adapter: `dispatched 4 message(s), delivered 4
+in-app, 4 email, 0 failed`, and the rows carry `channel='email'` with a
+`provider_ref` on every one.
+
+---
+
+## 4. The preference matrix
+
+The stored preference was one boolean per event type. That is fine with one
+channel and cannot express the single most common thing anybody wants to say
+about notifications:
+
+> Tell me when something sells, but not by email.
+
+So the unique key gained the channel, and `GET /notifications/preferences` now
+returns the whole matrix with defaults filled in — every event type, both
+channels, plus `isDefault` so a screen can tell "they chose this" from "nobody
+has touched it", and the raw rows alongside as the evidence of what was actually
+decided.
+
+`PUT /notifications/preferences/channel` turns a whole channel off in one
+action. Somebody arriving at this screen in irritation wants to say "stop
+emailing me", and making them tick twenty-eight boxes to say it is a dark
+pattern. Mandatory in-app events are skipped, so the master switch cannot be
+used to route around them.
+
+The **backfill is deliberately conservative**. Every existing preference row was
+written about the in-app channel, so all of them are stamped `in_app` — and
+nothing is inserted for email. Somebody who opted out of an event type in the
+old world has not thereby opted *into* an email about it.
+
+### 4.1 The duplication, and the test that makes it safe
+
+The worker cannot import the API's catalogue: it is deliberately independent of
+the Nest container and runs raw SQL, the same arrangement the item taxonomy has
+with the SPA. So `apps/worker/src/jobs/notification-events.ts` mirrors the email
+defaults by value.
+
+That independence is worth having and has exactly one failure mode — the two
+drift, and an event quietly starts or stops sending mail because somebody edited
+one file. `tests/web/notification-catalogue.test.ts` compares them, checks every
+catalogue entry has a subject line rather than falling through to the generic
+one, and asserts that the SPA carries no label key for an event the server no
+longer emits.
+
+---
+
+## 5. A response shape changed
+
+`GET /notifications/preferences` used to return an array and now returns an
+object. That is breaking, and it is the point of the pass: the array could not
+render a settings screen, because it did not contain the settings.
+
+One pre-existing test asserted `Array.isArray(before)`. Its actual claim — a
+default is on, an explicit opt-out is honoured — is unchanged and now asserted
+against the matrix, with the raw `rows` checked too. The `PUT` DTO defaults
+`channel` to `in_app` rather than requiring it, so a client written against the
+one-boolean shape still targets the channel it meant instead of failing
+validation on a field it has never heard of.
+
+---
+
+## 6. Content
+
+### 6.1 The show calendar (SMC-114)
+
+This turned out to be data Bault already had. `consignment_event` has existed
+since Part 18 — Bault takes a table at particular shows on particular dates, and
+a consignment aimed at one has a deadline and a capacity. What was missing was
+anywhere to *read* it that was not the consignment form.
+
+`GET /content/shows` publishes it, past shows included: a calendar that silently
+drops yesterday cannot be used to check what you missed. `open` says whether
+submissions are still being taken, which is the only thing a reader decides
+from.
+
+The blog and the buying guides in the audit's phrasing became §6.2. Bault is not
+going to publish market commentary, and inventing some would be inventing claims
+about what cards are worth — which is exactly the kind of thing the FAQ module
+already refuses to do.
+
+### 6.2 Guides, and the videos that do not exist (SMC-115)
+
+`guideContent.ts` holds twelve workflow guides: first week, sending a parcel,
+what storage costs, culling commons, grading, selling, swapping, shipping home,
+insurance and customs, shared parcels, the wallet, and getting a person to look
+at it. Each is ordered steps, each step naming the screen it happens on with a
+real hash route.
+
+It is held to the FAQ module's rule, and for the same reason that module states
+it:
+
+> Every sentence is a factual statement about what Bault does. Nothing is market
+> advice, nothing is a claim about what cards are worth, and nothing describes a
+> capability that does not exist.
+
+Where a workflow has a constraint that surprises people, the guide leads with the
+constraint. The lot-split guide says the fee multiplies. The cull guide says the
+window closes at thirty days. The customs guide says Bault will not restate a
+declared value, and why that is the collector's problem if it were otherwise.
+
+**And every guide carries `video: null`, which the page renders.** Not by
+omitting the section — by saying it:
+
+> There is no recording of this one. None was made, and we will not link to a
+> video that does not exist — the steps below are what such a video would show.
+
+A fabricated YouTube URL that 404s would be worse than an empty state. This is
+why SMC-115 is scored **Different by design** rather than Covered: the written
+walkthrough is a real answer to the underlying need, and it is not a video.
+
+### 6.3 Support details (SMC-116)
+
+Four optional environment variables — `SUPPORT_EMAIL`, `SUPPORT_PHONE`,
+`SUPPORT_HOURS`, `SUPPORT_TEAM` — surfaced by `GET /content/contact`.
+
+Configuration rather than source, because a phone number written into a source
+file is a phone number that is wrong in every deployment but one. An
+unconfigured channel returns `null` and the page prints *"Not published"* — never
+a plausible-looking placeholder somebody might actually dial.
+
+The helpdesk (Part 17) is listed first and unconditionally, because it is the
+route that works regardless of whether anybody has filled a variable in, and it
+is the one that arrives with the account, the items and the codes attached.
+
+`GET /content/locations` publishes the facility cities. It deliberately omits
+`line1` and `postalCode`: the per-collector `C/O username` line is
+`GET /me/inbound-addresses` and is nobody else's business. A test asserts the
+omission.
+
+All three endpoints are `@Public()`. Somebody deciding whether to use Bault at
+all has to be able to read them before they have an account, and putting the
+support page behind a session makes it unreachable to exactly the person most
+likely to need it.
+
+---
+
+## 7. What was verified
+
+- `pnpm -r typecheck`, `pnpm -r build`, `pnpm lint` — clean (32 pre-existing
+  warnings, 0 errors).
+- `pnpm test` — **309 passing** across all five projects (web 146, contract 10,
+  integration 150 with 3 skipped, concurrency 1, property 2).
+- `tests/web/notification-catalogue.test.ts` is new: 7 tests holding the API
+  catalogue and the worker mirror to each other.
+- `tests/integration/not-channels-and-content.test.ts` is new: 10 tests covering
+  the full matrix, the per-category defaults, a per-channel choice leaving the
+  other channel alone, the master switch leaving the in-app column byte-identical,
+  the two events that refuse to be switched off, unknown channels and event types
+  being refused rather than stored, and all three public content endpoints
+  including the address fields that must not appear.
+- Live: `dispatchOutbox` run directly against the seeded database, delivering
+  4 in-app and 4 email with matching sentences, and the rows verified in
+  Postgres to carry the channel and the provider reference.
+
+One pre-existing test was updated rather than the code it tested (§5).
+
+---
+
+## 8. Honest limitations
+
+1. **Email is immediate, not digested.** Twenty-one event types are on by
+   default and each one is its own message. A collector who ships thirty cards
+   gets thirty emails. A daily digest is the obvious missing option and the
+   preference model has room for it — `channel` would take a third value — but
+   it is not built.
+
+2. **There is no unsubscribe link in the mail.** The footer names the
+   preferences screen; it does not carry a one-click token that switches the
+   channel off without signing in. For transactional mail that is defensible;
+   for twenty-one event types it is thin, and it is the first thing to add.
+
+3. **A failed email is recorded and never retried.** The row says `failed` with
+   a reason, and nothing sweeps them. A mail server down for an hour loses that
+   hour's mail permanently, and the only trace is a row nobody looks at.
+
+4. **The guides are English only.** The surrounding chrome is localised; the
+   guide text is not. This matches the legal module's reasoning — a second
+   translated version can disagree with the first — but a guide is not a legal
+   document, and the argument is weaker here than it is there.
+
+5. **Nothing checks that a guide's routes still exist.** The step routes are
+   plain strings. A section renamed in the router leaves twelve guides pointing
+   at a page that no longer resolves, and no test would catch it. A cheap fix
+   exists (assert every route against the section/tab tables) and is not written.
+
+6. **The show calendar has no admin surface.** Shows are inserted directly, as
+   they were in Part 18. There is still no screen for booking a table, which
+   means the published calendar is only as current as somebody's SQL.
+
+7. **`SUPPORT_TEAM` is parsed from a delimited string.** `Name|Role;Name|Role`
+   is doing the work of a small table because a small table for three names
+   would be worse. It is lenient — a malformed entry is dropped rather than
+   breaking the page — which also means a typo silently loses a person.
+
+---
+
+# Part 22 — A Person in the Middle
+
+**Completed: 18 August 2026.**
+
+This part closes section 7 of the ShipMyCards parity audit — escrow and premium
+handling. Three capabilities, all scored Missing, and all three are the same
+theme: the places where the reference service puts a **human being** between two
+parties, and Bault could only offer a machine.
+
+The audit's sentence about escrow shaped most of the work:
+
+> Escrow's whole point is a held state with an inspection gate and an external
+> counterparty. Bault has no funds-held concept — money moves the instant a
+> purchase executes — and no way to involve someone without an account.
+
+Its sentence about the other two is shorter and just as exact:
+
+> Every route out of a Bault vault is a parcel. Two of ShipMyCards' outbound
+> routes are a human being.
+
+---
+
+## 1. Executive summary
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-68 | Middleman & escrow on a private deal (1% of value) | Missing | **Covered** |
+| SMC-69 | White-glove hand delivery by a person | Missing | **Covered** |
+| SMC-70 | Collect your cards in person at a card show | Missing | **Covered** |
+
+Section 7: **3 covered, 0 partial, 0 missing.**
+
+### What was actually built
+
+1. **Held funds that are actually held** — a ledger debit, not a flag (§2).
+2. **An inspection gate**, written down before anybody is asked to release (§3).
+3. **A counterparty who may have no account**, without inventing one (§4).
+4. **A fulfilment dimension on the shipment**, so a route out can be a person (§5).
+5. **White glove as a quote**, because the round trip is the product (§5.1).
+6. **Show pickup**, gated on the van that was going anyway (§5.2).
+
+---
+
+## 2. Held funds are a debit, not a flag
+
+This is the design decision the rest of escrow hangs off.
+
+Bault derives every balance from its ledger rows (Principle IV). There is no
+stored balance anywhere, which is what makes the property test
+`balance == sum(ledger)` meaningful. So a `held: true` column on a deal would be
+a claim the wallet would immediately contradict: the money would still be
+spendable, the seller's protection would be fictional, and the first collector to
+escrow $4,000 and then buy something with it would find out.
+
+A hold is therefore a real ledger **debit**:
+
+```ts
+{ type: 'escrow_hold', direction: 'debit', referenceType: 'escrow_deal' }
+```
+
+The money genuinely leaves the buyer's spendable balance the moment it is held.
+Settlement credits the seller (`escrow_release`); a return credits the buyer back
+(`escrow_refund`). Three types rather than one, because they answer three
+different questions on a statement: *why did my balance drop*, *where did that
+credit come from*, *was I actually refunded*.
+
+`GET /escrow/held` exists for the one thing a smaller balance cannot tell you —
+where it went. It is derived from open deals, never stored.
+
+The integration tests assert the balance at every step, including that the
+buyer's balance does **not** move a second time at settlement, because it moved
+when it was held.
+
+---
+
+## 3. The inspection gate
+
+The escrow state machine is two gates and some bookkeeping:
+
+```
+proposed → agreed → funded → inspecting → awaiting_release → settled
+                                                           ↘ returned
+```
+
+**Funding** is what makes it safe for a seller to put a card in a box for a
+stranger. **Inspection** is what makes it safe for a buyer to pay one.
+
+The finding is recorded *before* either party is asked to release, and
+`inspection_matches` is the question both of them are actually paying to have
+answered. A `false` there does not itself return the deal — it means the buyer
+now has a reason to refuse and can take it. That distinction matters: Bault
+reports, the parties decide.
+
+The UI renders the finding above the release controls, and renders it loudly when
+it is negative, because a buyer clicking *I am satisfied* without having read
+"this is a PSA 8, not a PSA 10" is the single failure this feature exists to
+prevent.
+
+Settlement is one transaction. A settlement that credited the seller and then
+failed to move the card would leave one stranger paid and the other holding
+nothing — precisely the outcome escrow exists to prevent.
+
+**No fee is charged on a return.** Bault did the work, but charging a buyer for
+the privilege of finding out they were being misled is not a service.
+
+---
+
+## 4. A counterparty with no account
+
+The person who *raises* a deal is always a Bault account — somebody has to be
+answerable for it, and they are also the side the fee falls on, because they
+chose the service. The other side may be a name and an email and nothing else.
+
+No shadow account is created. `counterparty_name` and `counterparty_email` are
+contact detail on a deal, and they die with the deal.
+
+Two consequences, both handled as attestation rather than fiction:
+
+**An external party cannot click anything.** Their agreement and their release
+are recorded by an operator who spoke to them — and stored in *different columns*
+(`buyer_release_attested_by` alongside `buyer_released_at`), so a reader can
+always tell a first-hand confirmation from a second-hand one. A collector
+attempting to agree on their counterparty's behalf gets a 403.
+
+**An external buyer's money never touches a Bault account.** It arrives by bank
+transfer between two strangers. No ledger row is written for it: an operator
+records receipt with a reference, `funding_source` reads `external`, and the
+attestation is stored as an attestation. Writing a ledger row for a movement that
+did not happen here would be recording something that did not happen.
+
+One rule is refused at submission rather than discovered at settlement: a deal
+cannot settle into the vault of a buyer who has no vault. The error says so and
+names the alternative.
+
+`escrow_event` is append-only and registered with the guards in `0001`, because
+escrow is the one place where Bault holds one stranger's money and another
+stranger's property at the same time. "Who said what, when" cannot be a mutable
+field.
+
+---
+
+## 5. Two routes out that are a person
+
+`shipment.fulfilment_method` — `carrier`, `hand_delivery`, `show_pickup`. The
+methods differ in what they **skip**, and each skip is the reason the method
+exists.
+
+Neither of the new two has a tracking number, so neither can be closed by a
+carrier scan. Both are closed by `handOver`: somebody putting a name to having
+taken the cards, with the same scan-verification a dispatch uses — an operator
+handing a box across a table at a show still has to confirm that what is in the
+box is what the request says. A test asserts a mismatched scan is refused, and
+another asserts a carrier shipment cannot be closed this way.
+
+### 5.1 White glove is a quote
+
+There is no rate card for putting a person on the road. The cost of getting
+somebody from New Jersey to a hotel in Boston on a Tuesday is not something a
+lookup knows.
+
+So the request is a **question**: the collector states pickup address and window,
+delivery address and window; `quote_minor` stays null, which is a real state
+rather than a missing value; an operator works out the journey and comes back
+with a figure; the collector accepts or does not. The round trip is the feature.
+
+The screen makes that obvious — the button says *Ask for a quote*, not *Book*,
+with "Nothing is charged now" beside it. A collector who expected to be charged
+on submit and was not would think it had failed.
+
+The base figures mirror the reference service ($1,000 domestic, $1,500
+international) and travel is quoted on top. A 48-hour lead time is enforced at
+submission, because somebody has to plan a journey and be told the price first —
+as are the obvious window errors (delivering before collecting, a window that is
+not a window).
+
+Accepting charges the **quoted** figure and nothing else. A quote that moved
+between being given and being accepted would not be a quote.
+
+### 5.2 Show pickup reuses the van
+
+`consignment_event` already existed — Bault takes a table at particular shows on
+particular dates, with a deadline because the van is packed before the doors
+open. Pickup reuses it rather than adding a second table, because it is the same
+van going to the same show, and it is gated on the same deadline.
+
+What it adds is `pickup_enabled`, `pickup_capacity` and `pickup_fee_minor`.
+Capacity is separate from the consignment capacity on purpose: a table with room
+for forty cards to sell is not a table with room for forty boxes to hand back.
+Remaining capacity is **computed** from the pickups actually booked, so it cannot
+drift.
+
+It is charged on the spot, because there is nothing to quote and nothing to
+select — the fee is the show's, the van is going, and the only question was
+whether there was room. The screen says why it is cheap: not a discount, the
+absence of a journey.
+
+The seed now carries two real shows, one with pickup enabled and one without, so
+the difference is visible rather than theoretical.
+
+---
+
+## 6. What was verified
+
+- `pnpm -r typecheck`, `pnpm -r build`, `pnpm lint` — clean (32 pre-existing
+  warnings, 0 errors).
+- `pnpm test` — **323 passing** across all five projects (web 146, contract 10,
+  integration 164 with 3 skipped, concurrency 1, property 2).
+- `tests/integration/esc-and-human-fulfilment.test.ts` is new: **14 tests**, all
+  passing on the first run. They cover the floor under a deal, both counterparty
+  errors, the both-sides-of-one-deal refusal, the buyer-with-no-vault refusal,
+  the full happy path with the balance asserted before/during/after and the
+  append-only trail checked step by step, the mismatch path with a full refund
+  and the card never changing hands, insufficient funds, the external-party
+  attestation flow including the 403 a collector gets for agreeing on somebody
+  else's behalf, the 404 a stranger gets on a deal they are not party to, the
+  white-glove lead-time refusal and the full quote → accept → hand-over cycle,
+  the pickup show listing and booking with computed capacity, a mismatched
+  hand-over scan, and a carrier shipment refusing to be hand-overed.
+- The notification catalogue cross-check still passes with the ten new event
+  types registered in both the API catalogue and the worker mirror.
+
+### A note on how the suite is run
+
+A full run of this pass initially reported three failures — two in
+`acc-identity` and one in the escrow settlement — which turned out to be **two
+`pnpm test` invocations overlapping on the same database**, exactly the
+interference `vitest.workspace.ts` warns about in its header:
+
+> Three of them (integration, concurrency, property) drive the same live API and
+> the same database; started together they produce connection resets and
+> cross-suite interference that look like product bugs and are not.
+
+Re-run alone against a fresh seed, all five projects pass. The lesson is the
+config's own: seed, then run once.
+
+---
+
+## 7. Honest limitations
+
+1. **`ship_to_buyer` settlement does not create the shipment.** The deal settles,
+   ownership moves where the buyer has an account, and somebody then has to raise
+   an ordinary shipment. For an external buyer the card stays in the vault under
+   the seller's ownership with a settled deal beside it — which is wrong enough
+   to be worth naming. The clean fix is a platform-custodian hand-off, and it is
+   not built.
+
+2. **There is no dispute path inside escrow.** If the buyer refuses to release on
+   a card that inspected clean, the deal sits in `awaiting_release` indefinitely.
+   Either party can return it, which favours the buyer; nothing arbitrates, and
+   nothing times out.
+
+3. **The fee always falls on the raiser.** It is simple, stated up front and
+   always lands on an account that exists — but "whoever asked first pays" is not
+   obviously fair, and a real service would let the parties agree a split.
+
+4. **External payouts are not modelled at all.** Where the *seller* is external,
+   settlement writes no credit and no record of the payout: the money is Bault's
+   to send and nothing tracks that it was. This is the mirror of the funding
+   attestation and deserves the same treatment.
+
+5. **White glove has no scheduling.** The quote is a number and a note. Nothing
+   assigns a courier, nothing blocks a date, and two collectors can be quoted for
+   the same window on the same afternoon.
+
+6. **Pickup capacity counts requests, not cards.** One request with forty cards
+   occupies the same slot as one with one — the same simplification the card-show
+   consignment capacity carries, and wrong in the same way.
+
+7. **A pickup nobody collects has no path.** The shipment sits in
+   `rates_selected` forever if the collector does not turn up at the show. There
+   is no no-show sweep returning the cards to the shelf, which is exactly the
+   thing Part 20 built for unpaid shipments and did not generalise.
+
+---
+
+# Part 23 — Money In, Money Out, and Knowing What It Costs
+
+**Completed: 18 August 2026.**
+
+This part closes section 9 of the ShipMyCards parity audit — money and store
+credit — and with it the last open section of the audit.
+
+Section 9 is unusual because almost nothing in it was broken. The ledger was
+right: append-only, no stored balance, every movement derived. The request
+workflow was right. The transaction history was right. What the audit found was
+a set of **omissions**, and they cluster around one thing:
+
+> A collector cannot see what anything costs until it is charged.
+
+That sentence is about `GET /pricing/rules` being admin-only, but it describes
+the whole section. Cashing out quoted no fee. A bank transfer named no account
+to pay into. A card top-up had no payment page at all. And in the other
+direction, the platform could not record a payment that had been taken back.
+
+---
+
+## 1. Executive summary
+
+### Audit movement
+
+| ID | Capability | Before | After |
+| --- | --- | --- | --- |
+| SMC-94 | A store-credit balance | Covered | Covered |
+| SMC-95 | Funded balance required before acting | Covered | Covered |
+| SMC-96 | Self-service top-up at checkout | Missing | **Covered** |
+| SMC-97 | Top-up by manual transfer, reconciled by staff | Covered | Covered |
+| SMC-98 | Bank transfer as a funding route | Partial | **Covered** |
+| SMC-99 | Balance may go negative | Covered | Covered |
+| SMC-100 | Charge on a negative balance | Different | **Different by design** (§8.1) |
+| SMC-101 | Grace period before the overdraft charge | Missing | **Covered in Part 13** |
+| SMC-102 | Hard account lock below a debt threshold | Missing | **Covered in Part 13** |
+| SMC-103 | Cash out the balance | Covered | Covered |
+| SMC-104 | Published cash-out fee schedule | Missing | **Covered** |
+| SMC-105 | An actual payout rail to the collector | Partial | **Covered** (§4) |
+| SMC-106 | Full fee and transaction history | Covered | Covered |
+| SMC-107 | A price list the customer can read | Missing | **Covered** |
+| SMC-108 | All-sales-final and chargeback terms | Missing | **Covered** |
+
+Section 9: **14 covered, 1 different by design, 0 partial, 0 missing.**
+
+Two rows were already closed and are marked so rather than re-claimed: SMC-101
+and SMC-102 were built in **Part 13**, when the debt policy gained a 14-day
+grace period and a −$20 suspension threshold. The audit predates that pass.
+
+### What was actually built
+
+1. **A payment page** — and, more importantly, the distinction that makes one
+   defensible (§2).
+2. **Published account details** for the routes nothing confirms (§2.2).
+3. **A cash-out fee**, quoted from the same function that charges it (§3).
+4. **A payout rail** that was wired to nothing (§4).
+5. **Chargebacks**, which the ledger could not previously express (§5).
+6. **A price list**, grouped for a person rather than for a database (§6).
+
+---
+
+## 2. Instant is a property of the ROUTE
+
+`POST /finance/wallet/topups` had been reduced to a shim that raises a cash-in
+request for a human to approve. That is exactly right for a bank transfer —
+nothing confirms it, so somebody has to read a statement — and exactly wrong for
+a card, which the provider has already guaranteed.
+
+Making a guaranteed payment wait on a reviewer adds a delay that protects
+nobody. So `money-terms.ts` draws the line explicitly:
+
+| Route | Settles | Why |
+| --- | --- | --- |
+| Card | instantly | The provider confirms it |
+| PayPal Goods & Services | instantly | The provider confirms it, with buyer protection |
+| PayPal Friends & Family | needs review | Nothing confirms it |
+| Bank transfer | needs review | Nothing confirms it |
+
+`POST /finance/checkout` takes the first two. The other two are **refused there
+with the reason and the alternative** — not with a bare validation error:
+
+> PayPal (Friends & Family) is not settled by a provider, so it cannot be taken
+> here. Raise a cash-in request instead and we will reconcile it against the
+> statement.
+
+### 2.1 Credited once, whatever happens
+
+The unique index on `external_payment.provider_ref` is what makes the fast path
+safe. The caller's idempotency key becomes the provider reference, so a retried
+request, a duplicated webhook and a double-clicked button all converge on one
+ledger row — and a replay returns the original with `replayed: true` rather than
+charging again. A test asserts the balance moves once across two identical
+POSTs.
+
+A `pending` payment credits nothing. `succeeded` is the only status that moves a
+balance; anything else is recorded and left for the webhook.
+
+### 2.2 Where to actually send it
+
+`bank_transfer` was one of five strings on a form and no particulars were
+published anywhere, so choosing it told Bault how the money would arrive and told
+the customer nothing about how to send it.
+
+Seven optional environment variables now carry the bank details and the PayPal
+F&F handle, and `GET /finance/funding-routes` serves them per route. The pattern
+is Part 21's: configuration rather than source, because bank particulars written
+into a repository are the wrong bank in every deployment but one — and an unset
+route reports `available: false` with no particulars, never a placeholder
+somebody might wire money to.
+
+The screen says the one thing that matters most, once:
+
+> Put your username in the payment reference. It is the only thing that ties an
+> arriving payment to your account.
+
+---
+
+## 3. The cash-out fee
+
+Cashing out was free and no figure was quoted anywhere. That reads as generous
+and is really an omission: the provider's payout fee was being absorbed
+silently, and a collector planning a $40 withdrawal could not find out what would
+actually land until after they had asked for it.
+
+The schedule mirrors the reference service, with a deliberate kink at $100:
+
+| Amount | Fee |
+| --- | --- |
+| Up to $100 | 6%, minimum $0.99 |
+| Above $100 | $5.00 + 1% |
+
+Below the band a percentage with a floor, because the provider's own minimum
+dominates a small payout; above it a fixed component plus a much smaller
+percentage, because the work does not scale with the amount and a flat 6% on
+$5,000 would be indefensible.
+
+Three details are the substance:
+
+**The quote and the charge are the same function.** `GET
+/finance/cash-out-quote` and the completion path both call `cashOutFeeMinor`, so
+they cannot disagree unless somebody deliberately moves the schedule.
+
+**Rounding goes up.** A cent in the platform's favour on a boundary is
+defensible; a cent the other way means the quote was wrong.
+
+**The fee is its own ledger row, not netted off.** A collector asking for $200
+and receiving $193 should see both numbers. A single $200 debit next to a $193
+arrival is the shape of a question to support.
+
+The balance re-check at completion now covers the fee too. Completing a cash-out
+that clears the balance and *then* charging a fee against it would overdraw an
+account by an amount the collector was told about and never agreed to fund.
+
+---
+
+## 4. The payout rail that went nowhere
+
+The audit's phrasing was precise:
+
+> the provider payout call exists in `WithdrawalService` but is no longer wired
+> to any route.
+
+So a completed cash-out wrote a ledger debit and moved no actual money. The
+request said settled; the collector's bank account never heard about it.
+
+`WalletRequestService.complete` now calls `createPayout` for a cash-out, records
+the result as an `external_payment` row, and **aborts the transaction on
+failure**. The ordering matters: the provider is called before the ledger row is
+written, because the alternative — debit first, pay out after — loses the
+collector's money every time the provider is down.
+
+---
+
+## 5. A payment that was taken back
+
+A card top-up can be reversed by the cardholder weeks after the goods have
+shipped. Bault had nowhere to put that fact: the ledger would go on insisting the
+money had arrived, because as far as it knew it had.
+
+`chargeback` is its own ledger type rather than a negative `credit_topup`,
+because the two are different facts — one is money arriving, the other is money
+being recalled later by somebody who is not Bault — and a statement that cannot
+tell them apart is a statement nobody can reconcile.
+
+Recording one writes two rows against the account that received the money: the
+reversal itself, and the provider's dispute fee. The fee is **optional**, because
+a dispute Bault wins sometimes carries none, and charging one anyway would be
+inventing a cost that was not incurred.
+
+It is deliberately operator-only and deliberately manual. A chargeback is
+something a provider tells Bault about out of band; inventing an automatic path
+for a message Bault does not receive would be inventing the message.
+
+The notification says it plainly, because the first a collector usually hears of
+a reversal is a balance that went negative:
+
+> A card payment of $300.00 into your wallet was reversed by the cardholder's
+> bank, so it has been taken back off your balance. A $25.00 handling fee was
+> also charged. If you think this is wrong, open a support ticket.
+
+Sections 11 and 12 of the Account Use & Balance Policy now state the
+all-sales-final position and the chargeback terms — including the part worth
+saying out loud, that raising a chargeback is slower and more expensive for the
+collector than opening a ticket, and that items in the vault are never seized.
+
+---
+
+## 6. A price list for a person
+
+`GET /pricing/rules` existed, returned every rule ever created in the shape the
+admin console edits, and nothing customer-facing called it.
+
+`GET /pricing/list` is `@Public()` — somebody deciding whether to use Bault has
+to be able to read the prices before they have an account — and differs from the
+admin list in three ways, each of which is why it could not simply be exposed as
+it stood:
+
+- **Only what is in force**, by the same test the billing engine applies when it
+  charges somebody. A superseded rule beside its replacement turns a price list
+  into a puzzle.
+- **Grouped by what a person is doing.** Somebody wants to know what it costs to
+  send a card home, and `shipping`, `shipping_rush` and
+  `shipping_addon:gps_tracker` are three answers to that one question.
+- **Prefixed families collapsed.** Grouping is prefix-first, so adding
+  `grading_fee:bgs_black_label` files itself with no change here.
+
+The page states a percentage rule as a percentage. 500 basis points is 5%, not
+$5.00, and rendering both through `formatUsd` is exactly the error a price list
+exists to prevent — so a test asserts it.
+
+And the page carries the promise that makes reading it worthwhile:
+
+> The rule in force at the moment of a charge is recorded with that charge, so a
+> later price change never alters what you were already billed.
+
+---
+
+## 7. What was verified
+
+- `pnpm -r typecheck`, `pnpm -r build`, `pnpm lint` — clean (34 pre-existing
+  warnings, 0 errors; none in the new files).
+- `tests/integration/pay-money-in-out.test.ts` is new: **13 tests**, all passing
+  on the first run. They cover the route catalogue and which routes settle
+  instantly, a card payment moving the balance on the spot, one credit across
+  two identical idempotency keys, the refusal of a manual route with the reason
+  and the alternative named, both top-up limits, the fee quoted on both sides of
+  the $100 band including the $0.99 floor, the fee charged at completion as its
+  own ledger row matching the quote, a cash-out refused because the fee has
+  nowhere to come from, a chargeback that reverses the balance and charges the
+  handling fee, a waived fee where Bault won the dispute, a collector refused
+  permission to reverse their own payment, and the public price list — its
+  grouping, its one-entry-per-action rule, and a percentage rule stated as a
+  percentage rather than as dollars.
+
+- `pnpm test` — **336 passing** across all five projects (web 146, contract 10,
+  integration 177 with 3 skipped, concurrency 1, property 2).
+
+### Two pre-existing tests were updated, and one of them is worth dwelling on
+
+`pay-flow.test.ts` asserted that a completed $50 cash-out moved the balance by
+exactly $50. Its actual claim is about WHEN the debit lands — "only once an
+approved cash-out is completed" — and that is unchanged. It now asserts against
+the quote endpoint rather than a literal, so what it defends is stronger than
+before: the collector is charged exactly what they were quoted, and the fee
+appears as its own row.
+
+The property suite is the interesting one. `wallet-ledger.test.ts` makes two
+assertions in sequence:
+
+```ts
+expect(balance.amount).toBe(summed);    // the balance IS Σ ledger, always
+expect(balance.amount).toBe(expected);  // and only completed requests moved it
+```
+
+The **first passed and the second failed**, which is exactly the right shape of
+failure. Principle IV held: the balance still equalled the sum of the ledger, to
+the cent, with the fee rows in it. What broke was the test's own MODEL of what
+the balance ought to be — it predicted the total from completed requests alone,
+and a cash-out now also charges a fee. The gap was 208 minor units: the fee.
+
+The model was corrected to take the fee from the quote endpoint rather than
+recomputing it, for the same reason the server shares one function between the
+quote and the charge — a second copy of a schedule is a second thing that can
+drift.
+
+---
+
+## 8. Honest limitations
+
+### 8.1 The interest policy stays Bault's
+
+SMC-100 remains **Different by design** and that is a decision, not an oversight.
+ShipMyCards charges 1% weekly after 14 days; Bault accrues 0.05% daily after the
+same 14-day grace period — roughly 0.35% a week, compounding. The grace period
+and the −$20 suspension threshold were deliberately matched to the reference in
+Part 13; the rate was not, and nothing in this pass revisits it.
+
+### 8.2 The payment provider is still a sandbox
+
+Every figure moves through `SandboxPaymentAdapter`, which succeeds
+unconditionally. There is no Stripe account, no PayPal account, no real card
+form — `paymentMethodToken` is accepted and passed through to a provider that
+ignores it. The **flow** is real (idempotency, statuses, the webhook seam, the
+payout-before-debit ordering); the settlement is not. Swapping in a real adapter
+is a one-file change behind an unchanged port, exactly as it is for shipping.
+
+### 8.3 The webhook still does nothing
+
+`TopupService.handleWebhook` verifies the signature, dedupes on the event id, and
+then falls through a comment saying where the credit would go. With a
+synchronous sandbox nothing needs it; with a real provider it is the path that
+matters most, because it is the one that runs when the browser has already
+closed.
+
+### 8.4 A failed payout leaves the request approved
+
+Aborting the transaction is the right call, but it leaves the request sitting in
+`approved` with no record that a payout was attempted and refused. A reviewer
+pressing Complete again gets the same failure and the same silence. What is
+missing is a `payout_failed` state and the provider's reason on the request.
+
+### 8.5 The chargeback fee is not configurable per case
+
+$25 or nothing. Providers charge different amounts for different card networks
+and different dispute stages, and an operator who knows the real figure cannot
+enter it.
+
+### 8.6 The price list cannot show what a specific item costs
+
+It shows the rules. It cannot answer "what will storage cost *this* sealed case
+after the included period", which is the question a collector actually has —
+that number exists on the item's own storage panel, and the two are not linked.
+
+### 8.7 Nothing reconciles a manual transfer automatically
+
+The bank details are published and the reference note is prominent, but matching
+an arriving payment to a cash-in request is still a person reading a statement
+and pressing Complete. That is honest — it is what the reference service does
+too — but the reference is what makes it possible, and nothing validates that a
+collector actually put theirs in.

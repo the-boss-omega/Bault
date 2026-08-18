@@ -9,6 +9,8 @@ import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { pricingRule } from './prc.schema';
 import { PricingService } from './pricing.service';
+import { PriceListService } from './price-list.service';
+import { Public } from '../acc/public.decorator';
 
 class CreateRuleDto {
   @IsString() actionType!: string;
@@ -28,7 +30,21 @@ export class PrcController {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly pricing: PricingService,
+    private readonly priceList: PriceListService,
   ) {}
+
+  /**
+   * The price list, for a collector.
+   *
+   * Public: somebody deciding whether to use Bault has to be able to read what
+   * it costs before they have an account, and putting the prices behind a
+   * session makes them unreadable to exactly the person deciding.
+   */
+  @Public()
+  @Get('list')
+  publicList() {
+    return this.priceList.publicList();
+  }
 
   @Get('rules')
   list() {

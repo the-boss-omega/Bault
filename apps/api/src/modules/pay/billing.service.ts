@@ -26,7 +26,16 @@ export class BillingService implements BillingPort {
   ) {}
 
   async charge(tx: Database, action: BillableAction): Promise<void> {
-    const { amount, snapshot } = await this.pricing.price(action.actionType, {}, tx);
+    /**
+     * A caller may name a narrower rule than its action type. It is TRIED, not
+     * required: an unconfigured variant falls back to the action's own rule
+     * rather than costing nothing, so adding a grading tier without adding its
+     * price makes it expensive-by-default instead of free-by-default.
+     */
+    const opts = { itemClass: action.itemClass };
+    const { amount, snapshot } =
+      (action.feeActionType ? await this.pricing.tryPrice(action.feeActionType, opts, tx) : null) ??
+      (await this.pricing.price(action.actionType, opts, tx));
     if (amount.amount === 0) return; // free action; nothing to record
 
     const [row] = await tx

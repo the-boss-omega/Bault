@@ -13,7 +13,25 @@ export default tseslint.config(
   // 3. TypeScript recommended rules (type-aware where a tsconfig is found).
   ...tseslint.configs.recommended,
 
-  // 4. Project-wide overrides.
+  // 4. Node-run tooling scripts (pnpm dev orchestration). Declared explicitly
+  //    instead of pulling in the `globals` package for a single directory.
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        AbortSignal: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
+
+  // 5. Project-wide overrides.
   {
     rules: {
       // Encourage explicit intent; warn (not error) so it never blocks a commit.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, intakeFor, signIn, Client } from '../integration/helpers/http';
+import { SEED, fundWallet, intakeFor, signIn } from '../integration/helpers/http';
 
 /**
  * US3 concurrency (T073, Principles V & VIII): two buyers purchase the SAME listing
@@ -8,24 +8,23 @@ import { SEED, intakeFor, signIn, Client } from '../integration/helpers/http';
  * impossible. Requires a running API + seeded DB.
  */
 describe('concurrency: no double-sale', () => {
-  async function fund(client: Client, amount: number) {
-    await client.post('/finance/wallet/topups', { amountMinor: amount });
-  }
-
   it('exactly one of two concurrent purchases succeeds', async () => {
     // Seller = the first collector; the operator intakes an item for them.
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Card' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
 
     const seller = await signIn(SEED.collector);
     const listing = await seller.post('/marketplace/listings', { itemId: item.id, askingPrice: 10000 });
     const listingId = listing.body.id as string;
 
-    // Two distinct funded buyers, both != seller.
+    // Two distinct funded buyers, both != seller. Funding now walks the real
+    // cash-in approval path — there is no direct top-up left to shortcut it,
+    // for tests or for anyone. Neither buyer is the admin, because an admin may
+    // not approve their own wallet request.
+    await fundWallet(SEED.collector2, 100000);
+    await fundWallet(SEED.collector3, 100000);
     const buyerA = await signIn(SEED.collector2);
-    const buyerB = await signIn(SEED.admin);
-    await fund(buyerA, 100000);
-    await fund(buyerB, 100000);
+    const buyerB = await signIn(SEED.collector3);
 
     const [r1, r2] = await Promise.all([
       buyerA.post(`/marketplace/listings/${listingId}/purchase`),

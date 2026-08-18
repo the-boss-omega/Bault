@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { OutboxService } from './outbox/outbox.service';
 import { NotificationService } from './notification.service';
 import { NotificationController } from './notification.controller';
+import { ContentService } from './content.service';
+import { ContentController } from './content.controller';
 
 /**
  * NOT module. Provides the OutboxService globally so any state change across
@@ -11,8 +13,8 @@ import { NotificationController } from './notification.controller';
  */
 @Global()
 @Module({
-  controllers: [NotificationController],
-  providers: [OutboxService, NotificationService],
-  exports: [OutboxService, NotificationService],
+  controllers: [NotificationController, ContentController],
+  providers: [OutboxService, NotificationService, ContentService],
+  exports: [OutboxService, NotificationService, ContentService],
 })
 export class NotModule {}

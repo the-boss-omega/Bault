@@ -41,19 +41,38 @@ describe('NOT notification feed', () => {
     expect(messages.some((m) => m.includes('$'))).toBe(true);
   });
 
-  it('defaults every event type to enabled and honours an explicit opt-out', async () => {
+  it('defaults every event type to enabled in-app and honours an explicit opt-out', async () => {
     const c = await signIn(SEED.collector);
-    const before = (await c.get('/notifications/preferences')).body as { eventType: string }[];
-    expect(Array.isArray(before)).toBe(true);
+
+    /**
+     * The endpoint returns the whole MATRIX now, not the handful of rows the
+     * user had already changed.
+     *
+     * That is a deliberate shape change and it is the point of the pass: the old
+     * array could tell a settings screen what somebody had turned off and had no
+     * way to tell it what could be turned off. The claim under test is unchanged
+     * — a default is on, an explicit opt-out is honoured — and `rows` still
+     * carries the raw evidence of what was actually chosen.
+     */
+    type Matrix = {
+      events: Array<{ eventType: string; channels: Array<{ channel: string; enabled: boolean }> }>;
+      rows: Array<{ eventType: string; channel: string; enabled: boolean }>;
+    };
+    const inApp = (m: Matrix, key: string) =>
+      m.events.find((e) => e.eventType === key)!.channels.find((ch) => ch.channel === 'in_app')!;
+
+    const before = (await c.get('/notifications/preferences')).body as Matrix;
+    expect(before.events.length).toBeGreaterThan(0);
+    expect(inApp(before, 'item_received').enabled).toBe(true);
 
     const res = await fetchPreference(c, 'item_received', false);
     expect(res).toBe(true);
 
-    const after = (await c.get('/notifications/preferences')).body as {
-      eventType: string;
-      enabled: boolean;
-    }[];
-    expect(after.find((p) => p.eventType === 'item_received')?.enabled).toBe(false);
+    const after = (await c.get('/notifications/preferences')).body as Matrix;
+    expect(inApp(after, 'item_received').enabled).toBe(false);
+    expect(
+      after.rows.some((r) => r.eventType === 'item_received' && r.channel === 'in_app' && !r.enabled),
+    ).toBe(true);
 
     // Restore, so re-running the suite against the same DB stays idempotent.
     await fetchPreference(c, 'item_received', true);
@@ -66,6 +85,8 @@ async function fetchPreference(
   eventType: string,
   enabled: boolean,
 ): Promise<boolean> {
+  // No `channel` sent on purpose: the DTO defaults it to `in_app`, so a client
+  // written against the one-boolean shape still targets the channel it meant.
   const res = await c.request('PUT', '/notifications/preferences', { eventType, enabled });
   return res.status === 200 || res.status === 201;
 }

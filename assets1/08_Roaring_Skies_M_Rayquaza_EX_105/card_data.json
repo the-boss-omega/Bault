@@ -1,0 +1,189 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "xy6-105",
+    "name": "M Rayquaza-EX",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "105",
+    "printed_number_format": "105/108",
+    "set_id": "xy6",
+    "set_name": "XY—Roaring Skies",
+    "dataset_set_name": "Roaring Skies",
+    "series": "XY",
+    "release_date": "2015/05/06",
+    "release_year": 2015,
+    "ptcgo_set_code": "ROS",
+    "printed_set_size": 108,
+    "database_set_total_including_secrets_or_subsets": 112
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "MEGA",
+      "EX"
+    ],
+    "level": null,
+    "rarity_as_listed_by_dataset": "Rare Ultra",
+    "collector_variant": "Mega Evolution Full Art with Δ Evolution",
+    "finish_description": "Textured full-art holofoil",
+    "era": "XY era"
+  },
+  "gameplay": {
+    "hp": "220",
+    "types": [
+      "Colorless"
+    ],
+    "evolves_from": "Rayquaza-EX",
+    "evolves_to": [],
+    "abilities": [],
+    "ancient_trait": {
+      "name": "Δ Evolution",
+      "text": "You may play this card from your hand to evolve a Pokémon during your first turn or the turn you play that Pokémon."
+    },
+    "attacks": [
+      {
+        "name": "Emerald Break",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "convertedEnergyCost": 3,
+        "damage": "30×",
+        "text": "This attack does 30 damage times the number of your Benched Pokémon."
+      }
+    ],
+    "weaknesses": [
+      {
+        "type": "Lightning",
+        "value": "×2"
+      }
+    ],
+    "resistances": [
+      {
+        "type": "Fighting",
+        "value": "-20"
+      }
+    ],
+    "retreat_cost": [
+      "Colorless"
+    ],
+    "converted_retreat_cost": 1,
+    "rules": [
+      "When 1 of your Pokémon becomes a Mega Evolution Pokémon, your turn ends.",
+      "When a Pokémon-EX has been Knocked Out, your opponent takes 2 Prize cards."
+    ],
+    "legalities": {
+      "unlimited": "Legal",
+      "expanded": "Legal"
+    },
+    "regulation_mark": null,
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "5ban Graphics",
+    "reference_image_file": "image/xy6_105_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/xy6/105_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/xy6/105.png",
+    "pixel_dimensions": {
+      "width": 734,
+      "height": 1024
+    },
+    "file_format": "PNG",
+    "sha256": "a7947a09b666b92459ec9f2c4fda0db3a23c3c937ffe5eff721c3370097e7b53",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "xy6",
+    "name": "Roaring Skies",
+    "display_name": "XY—Roaring Skies",
+    "series": "XY",
+    "printedTotal": 108,
+    "total": 112,
+    "ptcgoCode": "ROS",
+    "releaseDate": "2015/05/06",
+    "legalities": {
+      "unlimited": "Legal",
+      "expanded": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/xy6/symbol.png",
+    "logo": "https://images.pokemontcg.io/xy6/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2015 POKEMON ROARING SKIES M RAYQUAZA EX FULL ART #105",
+    "inspection_priorities": [
+      "Texture authenticity",
+      "Front and back centering",
+      "Edge chipping",
+      "Corner whitening",
+      "Surface scratching or dents",
+      "Correct Mega Evolution text and Δ Evolution mark"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "A Mega Rayquaza full-art card with the Δ Evolution Ancient Trait and one of the signature competitive attacks of the Roaring Skies era.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.pricecharting.com/game/pokemon-roaring-skies/m-rayquaza-ex-105"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/xy6.json",
+      "record_id": "xy6-105"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "xy6"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/xy6/105_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.pricecharting.com/game/pokemon-roaring-skies/m-rayquaza-ex-105"
+    }
+  ]
+}

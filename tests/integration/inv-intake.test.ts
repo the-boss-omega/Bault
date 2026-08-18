@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, binIds, intakeFor, intakeIdOf, signIn } from './helpers/http';
+import { SEED, binIds, intakeFor, signIn, usernameOf } from './helpers/http';
 
 /**
  * US2 / Scenario B — intake creates item + custody + charge; correction keeps
@@ -36,14 +36,14 @@ describe('INV intake & custody', () => {
 
   it('rejects an intake with no bin — a bin is mandatory (Requirement 10.3)', async () => {
     const operator = await signIn(SEED.operator);
-    const ownerIntakeId = await intakeIdOf(SEED.collector);
-    const res = await operator.post('/intake/items', { ownerIntakeId, typeClass: 'Card' });
+    const ownerUsername = await usernameOf(SEED.collector);
+    const res = await operator.post('/intake/items', { ownerUsername, typeClass: 'trading_card' });
     expect(res.status).toBe(400);
   });
 
   it('performs a bulk intake of N items in one action (Requirement 10.1)', async () => {
     const operator = await signIn(SEED.operator);
-    const created = await intakeFor(operator, SEED.collector, { typeClass: 'Bulk Card', quantity: 3 });
+    const created = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card', quantity: 3 });
     expect(Array.isArray(created)).toBe(true);
     expect(created).toHaveLength(3);
     // Each copy is individually tracked with its own unique label.
@@ -54,7 +54,7 @@ describe('INV intake & custody', () => {
   it('stores a lot as ONE item and breaks it into standalone items (Req 10.5)', async () => {
     const operator = await signIn(SEED.operator);
     const lot = await intakeFor(operator, SEED.collector, {
-      typeClass: 'Sealed Box',
+      typeClass: 'sealed_box',
       isLot: true,
       lotSize: 4,
     });
@@ -74,7 +74,7 @@ describe('INV intake & custody', () => {
 
   it('records a correction in change history and relocates with source + destination', async () => {
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Coin' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'small_collectible' });
     const itemId = item.id as string;
     const bins = await binIds(operator);
     const destination = bins.find((id) => id !== item.binId) ?? bins[1];
@@ -102,8 +102,8 @@ describe('INV intake & custody', () => {
   it('blocks a customer from the operator-only intake endpoint', async () => {
     const collector = await signIn(SEED.collector);
     const res = await collector.post('/intake/items', {
-      ownerIntakeId: await intakeIdOf(SEED.collector),
-      typeClass: 'X',
+      ownerUsername: await usernameOf(SEED.collector),
+      typeClass: 'other',
       binId: 'irrelevant',
     });
     expect(res.status).toBe(403);

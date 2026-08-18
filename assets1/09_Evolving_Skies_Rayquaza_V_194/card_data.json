@@ -1,0 +1,185 @@
+{
+  "research_metadata": {
+    "created_on": "2026-07-31",
+    "scope": "English-language Pokémon Trading Card Game printing",
+    "record_type": "Collector research dossier",
+    "data_repository": "https://github.com/PokemonTCG/pokemon-tcg-data",
+    "data_notes": [
+      "Gameplay fields reproduce the referenced open card-data record.",
+      "Collector terminology is separately labeled and may differ from the dataset rarity name.",
+      "Market values are deliberately not frozen into this file because they change frequently."
+    ]
+  },
+  "identity": {
+    "database_id": "swsh7-194",
+    "name": "Rayquaza V",
+    "pokemon": "Rayquaza",
+    "national_pokedex_number": 384,
+    "language": "English",
+    "collector_number": "194",
+    "printed_number_format": "194/203",
+    "set_id": "swsh7",
+    "set_name": "Sword & Shield—Evolving Skies",
+    "dataset_set_name": "Evolving Skies",
+    "series": "Sword & Shield",
+    "release_date": "2021/08/27",
+    "release_year": 2021,
+    "ptcgo_set_code": "EVS",
+    "printed_set_size": 203,
+    "database_set_total_including_secrets_or_subsets": 237
+  },
+  "classification": {
+    "supertype": "Pokémon",
+    "subtypes": [
+      "Basic",
+      "V",
+      "Rapid Strike"
+    ],
+    "level": null,
+    "rarity_as_listed_by_dataset": "Rare Ultra",
+    "collector_variant": "Alternate Full Art Pokémon V",
+    "finish_description": "Textured alternate-art holofoil",
+    "era": "Sword & Shield era"
+  },
+  "gameplay": {
+    "hp": "210",
+    "types": [
+      "Dragon"
+    ],
+    "evolves_from": null,
+    "evolves_to": [],
+    "abilities": [],
+    "ancient_trait": null,
+    "attacks": [
+      {
+        "name": "Dragon Pulse",
+        "cost": [
+          "Lightning"
+        ],
+        "convertedEnergyCost": 1,
+        "damage": "40",
+        "text": "Discard the top 2 cards of your deck."
+      },
+      {
+        "name": "Spiral Burst",
+        "cost": [
+          "Fire",
+          "Lightning"
+        ],
+        "convertedEnergyCost": 2,
+        "damage": "20+",
+        "text": "You may discard up to 2 basic Fire Energy or up to 2 basic Lightning Energy from this Pokémon. This attack does 80 more damage for each card you discarded in this way."
+      }
+    ],
+    "weaknesses": [],
+    "resistances": [],
+    "retreat_cost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "converted_retreat_cost": 2,
+    "rules": [
+      "When your Pokémon V is Knocked Out, your opponent takes 2 Prize cards."
+    ],
+    "legalities": {
+      "unlimited": "Legal",
+      "expanded": "Legal"
+    },
+    "regulation_mark": "E",
+    "flavor_text": null
+  },
+  "artwork_and_image": {
+    "artist": "Ryuta Fuse",
+    "reference_image_file": "image/swsh7_194_hires.png",
+    "reference_image_source_url": "https://images.pokemontcg.io/swsh7/194_hires.png",
+    "source_small_image_url": "https://images.pokemontcg.io/swsh7/194.png",
+    "pixel_dimensions": {
+      "width": 734,
+      "height": 1024
+    },
+    "file_format": "PNG",
+    "sha256": "9a6ce1119526818317cfe9b87063b503c729d9113cc9b5e1dfba7e3268f4c610",
+    "rights_note": "Reference image included for identification and private research. Pokémon, card design, and artwork remain the property of their respective rights holders."
+  },
+  "set": {
+    "id": "swsh7",
+    "name": "Evolving Skies",
+    "display_name": "Sword & Shield—Evolving Skies",
+    "series": "Sword & Shield",
+    "printedTotal": 203,
+    "total": 237,
+    "ptcgoCode": "EVS",
+    "releaseDate": "2021/08/27",
+    "legalities": {
+      "unlimited": "Legal",
+      "expanded": "Legal"
+    },
+    "symbol": "https://images.pokemontcg.io/swsh7/symbol.png",
+    "logo": "https://images.pokemontcg.io/swsh7/logo.png",
+    "metadata_source": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json"
+  },
+  "grading_target": {
+    "grading_company": "PSA",
+    "numeric_grade": 10,
+    "grade_name": "GEM MINT",
+    "display_grade": "PSA 10 GEM MINT",
+    "certificate_number": null,
+    "certification_status": "Target grade profile only; not a specific certified slab.",
+    "important_disclaimer": "A grade cannot be assigned from this reference image. Verify the exact physical card and its certification record before buying.",
+    "suggested_submission_description_not_official": "2021 POKEMON EVOLVING SKIES RAYQUAZA V ALTERNATE ART #194",
+    "inspection_priorities": [
+      "Front and back centering",
+      "Edge whitening",
+      "Texture authenticity",
+      "Surface dents and factory roller marks",
+      "Corner cutting",
+      "Correct alternate-art image and 194/203 numbering"
+    ]
+  },
+  "collector_assessment": {
+    "why_it_is_collectible": "The alternate-art Rayquaza V featuring a full-scene illustration from Evolving Skies.",
+    "authentication_risks_and_checks": [
+      "Compare the card against a known-authentic example: font, symbols, borders, colors, and card stock.",
+      "Inspect holofoil or texture under moving light; flat, printed-on shine is a major warning sign.",
+      "For a graded card, verify the certification number directly with the grading company and compare the slab image.",
+      "Check for trimming, rebacking, recoloring, pressed dents, filled whitening, or other restoration.",
+      "For high-value purchases, use an established seller, protected payment method, return rights, and third-party authentication."
+    ],
+    "storage_recommendations": [
+      "Do not handle the card surface with bare fingers.",
+      "For raw cards: use a clean inner sleeve, rigid holder, and archival storage box.",
+      "For graded cards: use a slab sleeve and a fitted protective case.",
+      "Store upright in a stable, dry environment away from direct sunlight and rapid temperature changes.",
+      "Do not expose the card to cleaners, adhesive labels, PVC pages, or pressure from overfilled binders."
+    ]
+  },
+  "market_research": {
+    "snapshot_date": "2026-07-31",
+    "currency": "USD",
+    "pricing_status": "No fixed price asserted",
+    "note": "Use recent completed sales for the same language, exact card number, grading company, numeric grade, qualifier, and certification status. Asking prices are not equivalent to realized prices.",
+    "research_links": [
+      "https://www.pricecharting.com/game/pokemon-evolving-skies/rayquaza-v-194"
+    ]
+  },
+  "sources": [
+    {
+      "purpose": "Raw card metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/swsh7.json",
+      "record_id": "swsh7-194"
+    },
+    {
+      "purpose": "Set metadata",
+      "url": "https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json",
+      "record_id": "swsh7"
+    },
+    {
+      "purpose": "Reference image",
+      "url": "https://images.pokemontcg.io/swsh7/194_hires.png"
+    },
+    {
+      "purpose": "Market research starting point",
+      "url": "https://www.pricecharting.com/game/pokemon-evolving-skies/rayquaza-v-194"
+    }
+  ]
+}

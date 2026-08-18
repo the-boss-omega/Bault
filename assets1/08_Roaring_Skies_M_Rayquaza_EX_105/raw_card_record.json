@@ -1,0 +1,65 @@
+{
+  "id": "xy6-105",
+  "name": "M Rayquaza-EX",
+  "supertype": "Pokémon",
+  "subtypes": [
+    "MEGA",
+    "EX"
+  ],
+  "hp": "220",
+  "types": [
+    "Colorless"
+  ],
+  "evolvesFrom": "Rayquaza-EX",
+  "rules": [
+    "When 1 of your Pokémon becomes a Mega Evolution Pokémon, your turn ends.",
+    "When a Pokémon-EX has been Knocked Out, your opponent takes 2 Prize cards."
+  ],
+  "ancientTrait": {
+    "name": "Δ Evolution",
+    "text": "You may play this card from your hand to evolve a Pokémon during your first turn or the turn you play that Pokémon."
+  },
+  "attacks": [
+    {
+      "name": "Emerald Break",
+      "cost": [
+        "Colorless",
+        "Colorless",
+        "Colorless"
+      ],
+      "convertedEnergyCost": 3,
+      "damage": "30×",
+      "text": "This attack does 30 damage times the number of your Benched Pokémon."
+    }
+  ],
+  "weaknesses": [
+    {
+      "type": "Lightning",
+      "value": "×2"
+    }
+  ],
+  "resistances": [
+    {
+      "type": "Fighting",
+      "value": "-20"
+    }
+  ],
+  "retreatCost": [
+    "Colorless"
+  ],
+  "convertedRetreatCost": 1,
+  "number": "105",
+  "artist": "5ban Graphics",
+  "rarity": "Rare Ultra",
+  "nationalPokedexNumbers": [
+    384
+  ],
+  "legalities": {
+    "unlimited": "Legal",
+    "expanded": "Legal"
+  },
+  "images": {
+    "small": "https://images.pokemontcg.io/xy6/105.png",
+    "large": "https://images.pokemontcg.io/xy6/105_hires.png"
+  }
+}

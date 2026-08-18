@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, intakeFor, signIn } from './helpers/http';
+import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
 /**
  * US3 / Scenario C — atomic purchase, price freeze, no self-dealing (T074).
@@ -7,13 +7,13 @@ import { SEED, intakeFor, signIn } from './helpers/http';
 describe('MKT direct purchase', () => {
   it('purchases atomically: buyer debited, seller credited net fee, ownership moved', async () => {
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Card' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
 
     const seller = await signIn(SEED.collector);
     const listing = (await seller.post('/marketplace/listings', { itemId: item.id, askingPrice: 20000 })).body;
 
     const buyer = await signIn(SEED.collector2);
-    await buyer.post('/finance/wallet/topups', { amountMinor: 50000 });
+    await fundWallet(SEED.collector2, 50000);
     const before = (await buyer.get('/finance/wallet')).body.amount as number;
 
     const res = await buyer.post(`/marketplace/listings/${listing.id}/purchase`);
@@ -36,7 +36,7 @@ describe('MKT direct purchase', () => {
 
   it('blocks buying your own listing (self-dealing)', async () => {
     const operator = await signIn(SEED.operator);
-    const item = await intakeFor(operator, SEED.collector, { typeClass: 'Card' });
+    const item = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
     const seller = await signIn(SEED.collector);
     const listing = (await seller.post('/marketplace/listings', { itemId: item.id, askingPrice: 20000 })).body;
 

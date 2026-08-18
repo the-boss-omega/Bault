@@ -3,15 +3,39 @@ import { useT } from './i18n';
 
 /**
  * Professional card photos are stored one-per-item under the repo-root
- * assets/images folder, named by the item's serial number (SN-CHAR-0001.jpg).
- * Vite serves that folder as publicDir, so they resolve at /images/<SERIAL>.jpg.
+ * assets/images folder, named by the item's serial number (SN-DR97-0001.png).
+ * Vite serves that folder as publicDir, so they resolve at /images/<SERIAL>.<ext>.
  *
  * This is deliberately separate from the API's item_image / signed-URL pipeline:
  * those are the per-item intake and photography scans stored in object storage,
  * whereas these are the catalogue photos shipped with the app.
  */
-export function cardPhotoUrl(serialNumber: string): string {
-  return `/images/${encodeURIComponent(serialNumber)}.jpg`;
+
+/**
+ * Extensions tried in order. Reference scans arrive in whatever format the source
+ * supplies — the current catalogue is PNG, earlier photos were JPEG — so the
+ * filename convention fixes the *stem* (the serial number) and lets the extension
+ * vary, rather than forcing a lossy re-encode of every new photo.
+ */
+const PHOTO_EXTENSIONS = ['png', 'jpg'] as const;
+
+export function cardPhotoUrl(serialNumber: string, attempt = 0): string {
+  const ext = PHOTO_EXTENSIONS[Math.min(attempt, PHOTO_EXTENSIONS.length - 1)];
+  return `/images/${encodeURIComponent(serialNumber)}.${ext}`;
+}
+
+/**
+ * Walks the candidate extensions on load failure and reports exhaustion, so a
+ * genuinely missing photo still degrades to the placeholder rather than looping.
+ */
+function useCardPhotoSource(serialNumber: string) {
+  const [attempt, setAttempt] = useState(0);
+  const exhausted = attempt >= PHOTO_EXTENSIONS.length;
+  return {
+    src: cardPhotoUrl(serialNumber, attempt),
+    exhausted,
+    onError: () => setAttempt((a) => a + 1),
+  };
 }
 
 /**
@@ -49,7 +73,7 @@ export function CardPhotoButton({ serialNumber, title }: { serialNumber: string;
 export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; title: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const photo = useCardPhotoSource(serialNumber);
 
   return (
     <>
@@ -60,15 +84,15 @@ export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; 
         aria-label={t('photo.showOf', { title })}
         onClick={() => setOpen(true)}
       >
-        {failed ? (
+        {photo.exhausted ? (
           <span className="photo-thumb-empty" aria-hidden="true">📷</span>
         ) : (
           <img
             className="photo-thumb-img"
-            src={cardPhotoUrl(serialNumber)}
+            src={photo.src}
             alt={title}
             loading="lazy"
-            onError={() => setFailed(true)}
+            onError={photo.onError}
           />
         )}
       </button>
@@ -91,7 +115,7 @@ function CardPhotoModal({
   const t = useT();
   // An item with no file on disk should degrade to a message rather than a broken
   // image icon — not every item in the vault has a catalogue photo.
-  const [failed, setFailed] = useState(false);
+  const photo = useCardPhotoSource(serialNumber);
 
   // Esc closes the lightbox; freeze background scrolling while it is open.
   useEffect(() => {
@@ -122,15 +146,10 @@ function CardPhotoModal({
             ✕
           </button>
         </header>
-        {failed ? (
+        {photo.exhausted ? (
           <p className="hint modal-empty">{t('photo.missing')}</p>
         ) : (
-          <img
-            className="modal-photo"
-            src={cardPhotoUrl(serialNumber)}
-            alt={title}
-            onError={() => setFailed(true)}
-          />
+          <img className="modal-photo" src={photo.src} alt={title} onError={photo.onError} />
         )}
         <code className="modal-serial" dir="ltr">
           {serialNumber}

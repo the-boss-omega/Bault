@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -12,6 +12,9 @@ import { item } from '../cst/cst.schema';
 import { transaction } from '../mkt/mkt.schema';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { ServiceRequestService } from './service.service';
+import { serviceRequest } from './dis.schema';
+import { consignmentEvent } from './consignment-event.schema';
+import { channelFeeAction, checkEligibility, consignmentChannel } from './consignment-channels';
 
 /** Fields the operator MUST fill to close a consignment request (Requirement 5.4). */
 export interface ConsignmentFulfillment {
@@ -65,18 +68,97 @@ export class ConsignmentService {
     private readonly pricing: PricingService,
   ) {}
 
-  async request(ownerId: string, itemId: string, channel: string) {
+  /**
+   * Consign an item down a chosen channel, at a price the owner sets.
+   *
+   * Everything that can be refused is refused HERE, before the billable service
+   * request exists. A seller who is going to be told "graded cards only" or
+   * "that show is full" should hear it before they are charged a service fee,
+   * not after an operator picks the request up two days later.
+   */
+  async request(
+    ownerId: string,
+    itemId: string,
+    channelKey: string,
+    askingMinor: number,
+    eventId?: string,
+  ) {
+    const channel = consignmentChannel(channelKey);
+    if (!channel) throw AppError.validation(`Unknown consignment channel "${channelKey}"`);
+    if (!Number.isInteger(askingMinor) || askingMinor <= 0) {
+      throw AppError.validation('Set the price you want for it');
+    }
+
     return this.custody.run(async (tx) => {
       const [it] = await tx.select().from(item).where(eq(item.id, itemId)).for('update').limit(1);
       if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
       if (it.lifecycleState !== 'stored') throw new AppError(ErrorCode.CONFLICT, 'Item must be stored', 409);
+      if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
+
+      const problems = checkEligibility(channel, {
+        conditionGrade: it.conditionGrade,
+        askingMinor,
+        eventId,
+      });
+      if (problems.length > 0) {
+        throw AppError.validation(problems[0]!.message, { problems });
+      }
+
+      let event: typeof consignmentEvent.$inferSelect | undefined;
+      if (channel.requiresEvent && eventId) {
+        [event] = await tx
+          .select()
+          .from(consignmentEvent)
+          .where(eq(consignmentEvent.id, eventId))
+          .limit(1);
+        if (!event || !event.active) throw AppError.validation('That show is not accepting consignments');
+        if (event.requestDeadline.getTime() < Date.now()) {
+          throw new AppError(ErrorCode.CONFLICT, `The deadline for ${event.name} has passed`, 409);
+        }
+        if (event.capacity > 0) {
+          // Count what is already committed to this show. Cancelled requests do
+          // not occupy a slot; completed ones did travel and still do.
+          const [taken] = await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(serviceRequest)
+            .where(
+              and(
+                eq(serviceRequest.type, 'consignment'),
+                inArray(serviceRequest.status, ['requested', 'in_progress', 'completed']),
+                sql`${serviceRequest.typeFields} ->> 'eventId' = ${eventId}`,
+              ),
+            );
+          if ((taken?.count ?? 0) >= event.capacity) {
+            throw new AppError(ErrorCode.CONFLICT, `${event.name} is full`, 409);
+          }
+        }
+      }
+
       return this.requests.create(tx, {
         type: 'consignment',
         requesterId: ownerId,
         itemId,
-        typeFields: { channel },
+        typeFields: {
+          channel: channel.key,
+          askingMinor,
+          eventId: event?.id ?? null,
+          eventName: event?.name ?? null,
+          // Snapshotted so the expectation the seller was given survives a later
+          // change to the channel catalogue.
+          payoutDaysMin: channel.payoutDaysMin,
+          payoutDaysMax: channel.payoutDaysMax,
+        },
       });
     });
+  }
+
+  /** Shows still open for consignment, soonest deadline first. */
+  listEvents() {
+    return this.db
+      .select()
+      .from(consignmentEvent)
+      .where(and(eq(consignmentEvent.active, true), sql`${consignmentEvent.requestDeadline} > now()`))
+      .orderBy(sql`${consignmentEvent.requestDeadline} asc`);
   }
 
   async complete(operatorId: string, requestId: string, form: ConsignmentFulfillment) {
@@ -89,11 +171,18 @@ export class ConsignmentService {
       const ownerId = req.requesterId;
       const currency = DEFAULT_CURRENCY;
 
-      const { amount: fee, snapshot } = await this.pricing.price(
-        'marketplace_fee',
-        { base: money(saleAmountMinor, currency) },
-        tx,
-      );
+      /**
+       * Bault's cut depends on the channel — that is most of what choosing one
+       * means. The rule is looked up by the channel's own action type and falls
+       * back to the flat marketplace fee when no channel-specific rule has been
+       * configured, so a new channel is never silently free.
+       */
+      const channelKey = String((req.typeFields as Record<string, unknown>)?.channel ?? '');
+      const base = money(saleAmountMinor, currency);
+      const priced =
+        (channelKey ? await this.pricing.tryPrice(channelFeeAction(channelKey), { base }, tx) : null) ??
+        (await this.pricing.price('marketplace_fee', { base }, tx));
+      const { amount: fee, snapshot } = priced;
 
       // Credit owner gross, debit the fee → net proceeds, all on the immutable ledger.
       await this.ledger.record(

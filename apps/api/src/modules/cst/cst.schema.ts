@@ -28,6 +28,24 @@ export const itemLifecycle = pgEnum('item_lifecycle', [
   'shipped', // terminal in-vault
   'donated', // terminal
   'consigned', // terminal
+  /**
+   * Physically away at a third-party grader, and coming back.
+   *
+   * The one non-terminal state that means "not on our shelf". Without it a card
+   * sent for grading stayed `stored`, so it could be listed, sold, swapped or
+   * shipped while it was in somebody else's building — every one of those
+   * guards asks for `stored`, and every one of them was satisfied by a card that
+   * was hundreds of miles away.
+   */
+  'at_grader',
+  /**
+   * Destroyed at the owner's request — the bulk cull of low-value cards.
+   *
+   * Terminal, and distinct from `donated`: a donated card still exists and has a
+   * new owner, whereas this one is gone. Both leave the record standing forever,
+   * because an item row is never deleted.
+   */
+  'discarded',
 ]);
 
 export const bin = pgTable(
@@ -65,7 +83,43 @@ export const item = pgTable(
     lifecycleState: itemLifecycle('lifecycle_state').notNull().default('received'),
     binId: text('bin_id'), // null when not physically shelved (e.g. shipped)
     sourceBatchId: text('source_batch_id'),
+    /**
+     * The inbound parcel this item came out of, when it came out of one.
+     *
+     * Null for every item booked in before parcels existed, and for anything an
+     * operator receives by hand without one — so it is a link, never a
+     * requirement. Where it is set, it is what lets a collector see which of
+     * their purchases produced which cards, and what lets an operator verify a
+     * parcel's contents against what was declared.
+     */
+    sourceParcelId: text('source_parcel_id'),
     holdFlag: boolean('hold_flag').notNull().default(false),
+    /**
+     * Whether this item is bulky enough to fall under the oversized storage
+     * terms (a much shorter included period, and a far steeper per-period fee).
+     *
+     * Copied from the item's CLASS at intake rather than looked up later, and
+     * deliberately so. It is the same reasoning as the pricing snapshot on a
+     * charge: the storage terms an item is held under were agreed when it was
+     * received, and re-deriving them from a taxonomy somebody edits next year
+     * would retroactively change what a collector is paying for a box that has
+     * been sitting on the same shelf the whole time.
+     *
+     * It also lets the worker's storage sweep — which runs raw SQL and cannot
+     * import the taxonomy — decide the terms without a join.
+     */
+    oversized: boolean('oversized').notNull().default(false),
+    /**
+     * What it actually weighs, packed, in grams — if anybody weighed it.
+     *
+     * A carrier prices on weight, and every rate Bault ever quoted assumed 500 g
+     * per item regardless of whether the item was a single card or a sealed
+     * case. Nullable on purpose: this is the figure somebody put on a scale, and
+     * inventing one for the tens of thousands of items nobody weighed would make
+     * the column useless. Where it is null, the class's typical weight stands in
+     * (`itemWeightGrams` in the taxonomy) and the quote says it is an estimate.
+     */
+    weightGrams: integer('weight_grams'),
     // Lot support (Requirement 10.5): a lot is stored & treated as ONE item until
     // "Break Lot" intakes each contained item individually.
     isLot: boolean('is_lot').notNull().default(false),
@@ -81,7 +135,16 @@ export const item = pgTable(
   }),
 );
 
-export const itemImageType = pgEnum('item_image_type', ['intake', 'professional']);
+/**
+ * What a stored media object IS.
+ *
+ * `video` joins the two image kinds because a video review produces exactly the
+ * same thing an extra photo does — an immutable, versioned object attached to
+ * one item — and giving it a second table would have meant two of everything
+ * for a difference of one MIME type. The table keeps its `item_image` name; the
+ * column is what says which kind of media a row holds.
+ */
+export const itemImageType = pgEnum('item_image_type', ['intake', 'professional', 'video']);
 
 export const itemImage = pgTable('item_image', {
   id: pkId(),

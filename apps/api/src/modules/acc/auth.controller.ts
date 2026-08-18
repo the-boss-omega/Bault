@@ -32,11 +32,22 @@ export class AuthController {
     private readonly sessions: SessionService,
   ) {}
 
+  /**
+   * The response names the account by its USERNAME — the permanent, unique,
+   * customer-facing identifier. No intake ID is returned any more (none is
+   * allocated); nothing downstream ever asks a person to quote one.
+   */
   @Public()
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    const { intakeId, username } = await this.auth.register(dto.email, dto.username, dto.password);
-    return { status: 'pending_verification', intakeId, username };
+    const { username, firstName, lastName } = await this.auth.register(
+      dto.email,
+      dto.username,
+      dto.password,
+      dto.firstName,
+      dto.lastName,
+    );
+    return { status: 'pending_verification', username, firstName, lastName };
   }
 
   @Public()

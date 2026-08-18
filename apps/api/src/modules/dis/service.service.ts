@@ -17,7 +17,12 @@ type ServiceType =
   | 'third_party_grading'
   | 'donation'
   | 'consignment'
-  | 'warehouse_transfer';
+  | 'warehouse_transfer'
+  | 'buyout'
+  | 'video_review'
+  | 'condition_inspection'
+  | 'deslab'
+  | 'remove_commons';
 
 /**
  * Service-request framework (Principle VI) + operator approval workflow.
@@ -37,11 +42,35 @@ export class ServiceRequestService {
 
   async create(
     tx: Database,
-    input: { type: ServiceType; requesterId: string; itemId?: string; batchId?: string; typeFields?: Record<string, unknown> },
+    input: {
+      type: ServiceType;
+      requesterId: string;
+      itemId?: string;
+      batchId?: string;
+      typeFields?: Record<string, unknown>;
+      /**
+       * A more specific pricing action than the flat `service` rate.
+       *
+       * Grading tiers price on turnaround and declared value, so "a service
+       * happened" is the wrong unit for them. A caller naming its own action
+       * gets that rule; anything unpriced falls back to `service`, so a new
+       * variant is never accidentally free.
+       */
+      feeActionType?: string;
+      /** Skip billing entirely — for services that are deliberately free. */
+      free?: boolean;
+    },
   ) {
     // PAY-10: a negative balance blocks new service requests.
     await this.wallet.assertNotBlocked(input.requesterId);
-    await this.billing.charge(tx, { userId: input.requesterId, actionType: 'service', itemId: input.itemId });
+    if (!input.free) {
+      await this.billing.charge(tx, {
+        userId: input.requesterId,
+        actionType: 'service',
+        itemId: input.itemId,
+        feeActionType: input.feeActionType,
+      });
+    }
     const [row] = await tx
       .insert(serviceRequest)
       .values({

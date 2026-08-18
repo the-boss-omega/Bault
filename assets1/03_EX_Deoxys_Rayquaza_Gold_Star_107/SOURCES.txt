@@ -1,0 +1,22 @@
+Research date: 2026-07-31
+
+SOURCES
+=======
+1. Raw card metadata
+   Record ID: ex8-107
+   https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/cards/en/ex8.json
+2. Set metadata
+   Record ID: ex8
+   https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/refs/heads/master/sets/en.json
+3. Reference image
+   https://images.pokemontcg.io/ex8/107_hires.png
+4. Market research starting point
+   https://www.psacard.com/cardfacts/non-sports-cards/2005-nintendo-pokemon-ex-deoxys/rayquaza-holo-gold-star-107/753114
+5. Market research starting point
+   https://www.cardmarket.com/en/Pokemon/Products/Singles/EX-Deoxys/Rayquaza-Gold-Star-DX107
+
+SOURCE NOTE
+===========
+Card and set metadata are identification references.
+Market links are starting points only; verify recent completed sales.
+The included image is for private identification/research and is not a grading scan.

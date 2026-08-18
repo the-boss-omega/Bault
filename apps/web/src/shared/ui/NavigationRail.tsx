@@ -1,0 +1,214 @@
+import { useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useT } from '../i18n';
+import {
+  INITIAL_NAV_RAIL_STATE,
+  isExpanded,
+  navRailReducer,
+} from './navRailState';
+
+export interface NavDestination {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  /** Rendered below the divider (notifications, management). */
+  secondary?: boolean;
+  /** Optional count badge (unseen notifications). */
+  count?: number;
+}
+
+/**
+ * The fixed Bault navigation rail.
+ *
+ * TWO STATES ONLY: collapsed at 76px, and temporarily expanded to 232px while
+ * the pointer is over it or keyboard focus is inside it. There is no pin, no
+ * lock, and no persisted "stay open" preference — the rail was pinnable and is
+ * not any more, and nothing was added in its place.
+ *
+ *   - choosing a destination collapses the rail immediately, even though the
+ *     pointer is still over it and focus is still on the item just activated;
+ *   - moving the pointer off the rail collapses it immediately, with no grace
+ *     period — the old 220 ms delay is what left it hanging open;
+ *   - Tab/Shift-Tab into the rail expands it, so a keyboard user reads the same
+ *     labels a pointer user does, and Tabbing on after activating brings them
+ *     back.
+ *
+ * The expanded rail floats OVER the workspace and the shell reserves only the
+ * collapsed width permanently (`.workspace { margin-inline-start: var(--rail-w) }`),
+ * so expanding and collapsing never shifts the page.
+ *
+ * The active destination is marked by the gold vault selector — a translucent
+ * bronze surface with a machined gold notch on the rail's trailing edge, which
+ * slides between rows. It is positioned by measurement and is rendered in BOTH
+ * states, so the collapsed rail still says plainly where you are; `aria-current`
+ * carries the same fact to assistive technology.
+ */
+export function NavigationRail({
+  destinations,
+  active,
+  onNavigate,
+  mobile,
+  open: mobileOpen,
+  onRequestClose,
+}: {
+  destinations: readonly NavDestination[];
+  active: string;
+  onNavigate: (key: string) => void;
+  mobile: boolean;
+  open: boolean;
+  onRequestClose: () => void;
+}) {
+  const t = useT();
+  const [state, dispatch] = useReducer(navRailReducer, INITIAL_NAV_RAIL_STATE);
+
+  // On mobile the rail is a drawer the shell opens and closes, so hover has no
+  // meaning there and the state machine is bypassed entirely.
+  const expanded = mobile ? mobileOpen : isExpanded(state);
+
+  const primary = destinations.filter((d) => !d.secondary);
+  const secondary = destinations.filter((d) => d.secondary);
+
+  /** One navigation: tell the shell, collapse the rail, close the mobile drawer. */
+  function go(key: string) {
+    onNavigate(key);
+    dispatch({ type: 'navigate' });
+    if (mobile) onRequestClose();
+  }
+
+  return (
+    <>
+      {mobile && mobileOpen && <div className="rail-scrim" role="presentation" onClick={onRequestClose} />}
+      <nav
+        className={`rail${expanded ? ' is-open' : ''}`}
+        aria-label={t('nav.primary')}
+        onMouseEnter={mobile ? undefined : () => dispatch({ type: 'pointerEnter' })}
+        onMouseLeave={mobile ? undefined : () => dispatch({ type: 'pointerLeave' })}
+        // Real movement is the only pointer signal that reopens a rail closed by
+        // a selection — see `navRailState`. Dispatched only when it would change
+        // something, so an idle sweep of the pointer costs no re-renders.
+        onMouseMove={
+          mobile || (state.hovering && !state.dismissed)
+            ? undefined
+            : () => dispatch({ type: 'pointerMove' })
+        }
+        onFocus={mobile ? undefined : () => dispatch({ type: 'focusEnter' })}
+        onBlur={
+          mobile
+            ? undefined
+            : (event) => {
+                // React's onBlur bubbles, so it also fires when focus moves
+                // BETWEEN two rail items. Only a move out of the rail entirely
+                // counts as focus leaving.
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                  dispatch({ type: 'focusLeave' });
+                }
+              }
+        }
+      >
+        <a
+          className="rail-brand"
+          href="#/"
+          onClick={(e) => {
+            e.preventDefault();
+            const first = destinations[0];
+            if (first) go(first.key);
+          }}
+        >
+          <span className="rail-mark" aria-hidden="true">
+            B
+          </span>
+          <span className="rail-brand-text">
+            <span className="rail-word">Bault</span>
+            <span className="rail-sub">{t('nav.workspace')}</span>
+          </span>
+          <span className="rail-word-mini" aria-hidden="true">
+            Bault
+          </span>
+        </a>
+
+        <RailGroup destinations={primary} active={active} onNavigate={go} />
+
+        <hr className="rail-divider" />
+
+        <RailGroup destinations={secondary} active={active} foot onNavigate={go} />
+      </nav>
+    </>
+  );
+}
+
+/**
+ * One block of rail items plus the sliding selector that belongs to it. The
+ * selector is a single element positioned by measurement, so it animates between
+ * rows; when the active destination lives in the other block it is hidden.
+ */
+function RailGroup({
+  destinations,
+  active,
+  onNavigate,
+  foot,
+}: {
+  destinations: readonly NavDestination[];
+  active: string;
+  onNavigate: (key: string) => void;
+  foot?: boolean;
+}) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const [selector, setSelector] = useState<{ top: number; height: number } | null>(null);
+  const activeIndex = destinations.findIndex((d) => d.key === active);
+
+  // Measure the active row after layout so the selector lands exactly on it,
+  // and re-measure whenever the rail resizes (expand/collapse, window resize).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    if (activeIndex < 0) {
+      setSelector(null);
+      return;
+    }
+    function measure() {
+      // Query the rows specifically — the selector itself is also a child of
+      // this list, so a positional index would be off by one.
+      const el = list?.querySelectorAll<HTMLElement>(':scope > li')[activeIndex];
+      if (!el) return;
+      setSelector({ top: el.offsetTop, height: el.offsetHeight });
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [activeIndex, destinations.length]);
+
+  return (
+    <ul ref={listRef} className={`rail-nav${foot ? ' rail-nav--foot' : ''}`}>
+      <span
+        className="rail-selector"
+        aria-hidden="true"
+        hidden={!selector}
+        style={selector ? { transform: `translateY(${selector.top}px)`, height: selector.height } : undefined}
+      />
+      {destinations.map((destination) => {
+        const isActive = destination.key === active;
+        return (
+          <li key={destination.key}>
+            <button
+              type="button"
+              className={`rail-item${isActive ? ' is-active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => onNavigate(destination.key)}
+            >
+              <span className="rail-icon">
+                {destination.icon}
+                {destination.count ? <span className="rail-dot" aria-hidden="true" /> : null}
+              </span>
+              <span className="rail-label">{destination.label}</span>
+              {destination.count ? (
+                <span className="rail-count" aria-hidden="true">
+                  {destination.count > 99 ? '99+' : destination.count}
+                </span>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
