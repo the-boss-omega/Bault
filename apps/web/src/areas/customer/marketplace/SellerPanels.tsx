@@ -397,7 +397,7 @@ export function OffersPanel({
                     </StatusBadge>
                   </td>
                   <td data-label={t('support.col.activity')} className="td-tight">
-                    <span className="ltr-run">{formatDate(row.createdAt, locale)}</span>
+                    <span className="date">{formatDate(row.createdAt, locale)}</span>
                   </td>
                   <td className="td-tight">
                     {/* Only a PENDING offer on a still-active listing can be

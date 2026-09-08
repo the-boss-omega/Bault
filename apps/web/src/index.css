@@ -811,8 +811,46 @@ time,
   text-align: start;
 }
 
+/*
+ * Text whose direction is not known in advance.
+ *
+ * `isolate` alone is NOT enough, and this is the trap: it fences the run off
+ * from its surroundings but still resolves that run's direction from the
+ * ELEMENT'S `direction`, which on a Hebrew page is rtl. A catalogue string
+ * beginning "2011 Pokémon Call of Legends…" starts with a digit — a neutral
+ * character, not a strong one — so the whole line was laid out right-to-left and
+ * the leading year migrated to the far end: "Pokémon Call of Legends … 2011".
+ * The audit caught it on the item title and it survived the first fix, because
+ * the first fix was `isolate`.
+ *
+ * `plaintext` is the CSS equivalent of `dir="auto"`: isolate, AND resolve the
+ * direction from the run's own first strong character. "Pokémon" wins, the line
+ * is laid out left-to-right inside a right-to-left page, and the year stays
+ * where it was written.
+ */
 .bidi {
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
+}
+
+/*
+ * A date, and it is NOT a Latin run.
+ *
+ * `Intl.DateTimeFormat('he-IL')` returns "8 בספט׳ 2026" — Hebrew text with
+ * Hebrew's own ordering. Forcing it left-to-right, which is what `.ltr-run`
+ * would do, lays it out backwards; leaving it unisolated in a cell whose
+ * direction disagrees with the locale reorders it the other way. `plaintext`
+ * gets it right in both directions without either mistake, and `nowrap` stops a
+ * narrow column breaking "8 בספט׳" from its year.
+ */
+.date {
+  unicode-bidi: plaintext;
+  white-space: nowrap;
+}
+
+/* Every date cell in a register, whether or not the component remembered. */
+.data-table td.td-date {
+  unicode-bidi: plaintext;
+  white-space: nowrap;
 }
 
 ::selection {
@@ -2481,9 +2519,24 @@ input[type='search'] {
   border-inline-start-color: var(--amber-mark);
 }
 
+/*
+ * A register cell's primary value, and the line under it.
+ *
+ * Both hold text of unknown direction — a pricing rule's description, a
+ * carrier's name, an operator's note — so both resolve their own direction from
+ * their own first strong character. Without it, "180 days included, then 10% of
+ * the item intake fee every 90 days" renders in a Hebrew table as
+ * "days included, then 10% … 90 days 180", which is what the audit found on the
+ * pricing screen and the published price list.
+ */
 .dt-primary {
   font-weight: var(--fw-medium);
   color: var(--ink);
+  unicode-bidi: plaintext;
+}
+
+.dt-sub {
+  unicode-bidi: plaintext;
 }
 
 /* The secondary line under a table cell's primary value — a shipment code under
@@ -2765,6 +2818,17 @@ input[type='search'] {
   line-height: var(--lh-snug);
 }
 
+/* Sized, like every other icon in this system. Unconstrained, the archive glyph
+   rendered at its intrinsic size — a 250px box drawing dominating the sheet of
+   a departed item, which is the one state that must not shout. */
+.departed-note svg,
+.frozen-reason svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-block-start: 2px;
+}
+
 /* ============================================================
    The sheet — a record opened, not a panel slid in
    ============================================================
@@ -2848,14 +2912,14 @@ input[type='search'] {
   font-weight: var(--fw-semibold);
   line-height: var(--lh-snug);
   color: var(--ink);
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
 }
 
 .drawer-subtitle {
   margin-block-start: 3px;
   font-size: var(--fs-sm);
   color: var(--ink-2);
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
 }
 
 .drawer-body {
@@ -2950,7 +3014,7 @@ input[type='search'] {
   font-size: var(--fs-base);
   font-weight: var(--fw-medium);
   color: var(--ink);
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
   overflow-wrap: anywhere;
 }
 
@@ -3396,7 +3460,7 @@ input[type='search'] {
   color: var(--ink);
   /* Catalogue strings are Latin even in Hebrew; isolate them or the bidi
      algorithm moves the leading year to the end of the line. */
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -3407,7 +3471,7 @@ input[type='search'] {
   grid-column: 2;
   font-size: var(--fs-sm);
   color: var(--ink-2);
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -5657,7 +5721,7 @@ textarea[aria-invalid='true'] {
   color: var(--ink-body);
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
-  unicode-bidi: isolate;
+  unicode-bidi: plaintext;
 }
 
 /* ---- Break-Even Watch -------------------------------------------------- */

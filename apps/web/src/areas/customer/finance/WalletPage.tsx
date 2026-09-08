@@ -630,7 +630,7 @@ function TransactionTable({
                 }}
               >
                 <td data-label={t('wallet.col.date')} className="td-tight">
-                  <span className="ltr-run">{formatDate(row.occurredAt, locale)}</span>
+                  <span className="date">{formatDate(row.occurredAt, locale)}</span>
                 </td>
                 <td data-label={t('wallet.col.type')}>
                   <span className="dt-primary">{typeLabel(t, row.type)}</span>

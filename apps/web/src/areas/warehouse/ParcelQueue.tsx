@@ -152,7 +152,7 @@ export function ParcelQueue({
                       )}
                     </td>
                     <td className="td-tight">
-                      <span className="ltr-run">
+                      <span className="date">
                         {row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}
                       </span>
                     </td>

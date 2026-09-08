@@ -743,7 +743,7 @@ function CardTile({
         {historical ? (
           <>
             {item.departedAt && (
-              <span className="ltr-run">
+              <span className="date">
                 {t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}
               </span>
             )}
@@ -1110,7 +1110,13 @@ function ItemDrawer({
    * between a frozen card and a broken one.
    */
   const holdReason = frozen
-    ? ((events ?? []).find((e) => e.kind === 'hold_placed')?.summary ?? null)
+    ? ((events ?? [])
+        .find((e) => e.kind === 'hold_placed')
+        ?.summary // The API prefixes the operator's reason with the event's own
+        // name — "hold placed — Dispute opened on the sale: …". The sentence
+        // above already says the item is frozen, so the prefix is the same fact
+        // twice and the reader has to read past it to reach the reason.
+        .replace(/^\s*hold placed\s*[—–-]\s*/i, '') ?? null)
     : null;
 
   return (
@@ -1372,7 +1378,7 @@ function ItemDrawer({
               <ul className="timeline">
                 {events.map((event, index) => (
                   <li key={`${event.at}-${index}`}>
-                    <span className="hint ltr-run">{formatDate(event.at, locale)}</span>
+                    <span className="hint date">{formatDate(event.at, locale)}</span>
                     <div>
                       {/*
                         The kind was rendered as `event.kind.replace(/_/g, ' ')` —

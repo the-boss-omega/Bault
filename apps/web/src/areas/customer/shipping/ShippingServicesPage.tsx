@@ -969,7 +969,7 @@ function RequestTable({
                     </StatusBadge>
                   </td>
                   <td data-label={t('services.colDate')} className="td-tight">
-                    <span className="ltr-run">{formatDate(request.createdAt, locale)}</span>
+                    <span className="date">{formatDate(request.createdAt, locale)}</span>
                   </td>
                   <td className="td-tight">
                     {/*
