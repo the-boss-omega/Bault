@@ -4,6 +4,7 @@ import { useVaultItems } from '../../../shared/useVaultItems';
 import { ITEM_CLASSES } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { Amount, Serial } from '../../../shared/ui/Serial';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
@@ -49,40 +50,38 @@ type MarketTab = (typeof TABS)[number];
 export function MarketplacePage() {
   const { t } = useI18n();
   const route = useRoute();
-  const { goTab } = useNavigation(route);
+  const { goTab, setParams } = useNavigation(route);
 
   const [listings, setListings] = useState<Listing[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [q, setQ] = useState('');
   /**
-   * Narrowing the shelf, which was not possible at all.
+   * Narrowing the shelf — and the narrowed shelf is a PLACE.
    *
    * Browse offered a free-text box over the description and the type class and
    * nothing else: no way to see only graded slabs, no price range, and one fixed
-   * order (newest first) with no control over it. Somebody looking for a slab
-   * under $200 had to read every listing, and somebody comparing prices had to do
-   * it by eye — the first two things anybody does on a marketplace.
+   * order with no control over it. Those controls were added, and then held in
+   * `useState` — so a collector who found a graded slab under $200 could not
+   * link it, bookmark it, reload it or send it to anybody, and the browser's
+   * Back button walked out of the marketplace rather than out of the filter.
    *
-   * Held in component state rather than the URL: these are a reading position,
-   * not a record, and the route already carries the drawer. The one thing that
-   * IS worth keeping is whether any of them are set, so the panel can offer to
-   * clear them.
+   * They live in the URL now. `setParams` merges and drops empties, so an
+   * unfiltered browse is `#/marketplace/browse` and a filtered one is
+   * `#/marketplace/browse?type=trading_card&max=200`. It replaces rather than
+   * pushes, because one history entry per keystroke is not a history.
    */
-  const [type, setType] = useState('');
-  const [condition, setCondition] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [sort, setSort] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
+  const q = route.params.q ?? '';
+  const type = route.params.type ?? '';
+  const condition = route.params.condition ?? '';
+  const minPrice = route.params.min ?? '';
+  const maxPrice = route.params.max ?? '';
+  const sort = (route.params.sort ?? 'newest') as 'newest' | 'price_asc' | 'price_desc';
   const filtered = Boolean(q || type || condition || minPrice || maxPrice || sort !== 'newest');
 
+  const setQ = useCallback((value: string) => setParams({ q: value }), [setParams]);
+
   function clearFilters() {
-    setQ('');
-    setType('');
-    setCondition('');
-    setMinPrice('');
-    setMaxPrice('');
-    setSort('newest');
+    setParams({ q: null, type: null, condition: null, min: null, max: null, sort: null });
   }
   const [buying, setBuying] = useState<Listing | null>(null);
   const [offering, setOffering] = useState<Listing | null>(null);
@@ -201,7 +200,7 @@ export function MarketplacePage() {
             */}
             <div className="filter-bar" role="group" aria-label={t('market.filters')}>
               <Field label={t('market.filter.type')} className="field--compact">
-                <select value={type} onChange={(e) => setType(e.target.value)}>
+                <select value={type} onChange={(e) => setParams({ type: e.target.value })}>
                   <option value="">{t('market.filter.anyType')}</option>
                   {ITEM_CLASSES.map((c) => (
                     <option key={c.key} value={c.key}>
@@ -214,7 +213,7 @@ export function MarketplacePage() {
               <Field label={t('market.filter.condition')} className="field--compact">
                 <input
                   value={condition}
-                  onChange={(e) => setCondition(e.target.value)}
+                  onChange={(e) => setParams({ condition: e.target.value })}
                   placeholder={t('market.filter.anyCondition')}
                 />
               </Field>
@@ -223,7 +222,7 @@ export function MarketplacePage() {
                 <input
                   inputMode="decimal"
                   value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
+                  onChange={(e) => setParams({ min: e.target.value })}
                   placeholder="0"
                   dir="ltr"
                 />
@@ -233,7 +232,7 @@ export function MarketplacePage() {
                 <input
                   inputMode="decimal"
                   value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
+                  onChange={(e) => setParams({ max: e.target.value })}
                   placeholder="—"
                   dir="ltr"
                 />
@@ -242,7 +241,7 @@ export function MarketplacePage() {
               <Field label={t('market.filter.sort')} className="field--compact">
                 <select
                   value={sort}
-                  onChange={(e) => setSort(e.target.value as typeof sort)}
+                  onChange={(e) => setParams({ sort: e.target.value })}
                 >
                   <option value="newest">{t('market.sort.newest')}</option>
                   <option value="price_asc">{t('market.sort.priceAsc')}</option>
@@ -271,7 +270,6 @@ export function MarketplacePage() {
               <EmptyState
                 title={t('market.empty.title')}
                 text={filtered ? t('market.empty.searchText') : t('market.empty.text')}
-                icon={<IconMarketplace />}
                 /* An empty shelf caused by a filter has a way out; an empty shelf
                    because nothing is for sale does not, and offering one would be
                    a button that changes nothing. */
@@ -286,21 +284,43 @@ export function MarketplacePage() {
             ) : (
               <ul className="card-grid">
                 {listings.map((listing) => (
-                  <li key={listing.id} className="card card--interactive">
-                    <CardPhotoThumb
-                      serialNumber={listing.serialNumber}
-                      title={listing.description || listing.typeClass}
-                    />
-                    <h3 className="card-title">{listing.typeClass}</h3>
-                    <p className="card-desc">{listing.description || '—'}</p>
-                    <p className="price" dir="ltr">
-                      {formatUsd(listing.askingPrice)}
+                  <li key={listing.id} className="card card--interactive card--listing">
+                    {/* The photograph is the pitch: a fixed 4:5 stage, the shape
+                        of a slab, so a shelf of listings is a shelf rather than
+                        a ragged edge. */}
+                    <div className="card-art">
+                      <CardPhotoThumb
+                        serialNumber={listing.serialNumber}
+                        title={listing.description || listing.typeClass}
+                      />
+                    </div>
+
+                    {/* THE PRICE IS THE FIRST TEXT LINE. It used to be the
+                        fourth thing in the tile, under a bold `trading_card` and
+                        two lines of truncated catalogue string. */}
+                    <p className="price">
+                      <Amount>{formatUsd(listing.askingPrice)}</Amount>
                     </p>
+
+                    <h3 className="card-title">
+                      <Serial value={listing.serialNumber} lead />
+                    </h3>
+                    <p className="card-desc" title={listing.description || undefined}>
+                      {listing.description || '—'}
+                    </p>
+                    <div className="card-meta">
+                      <span>{t('vault.condition', { grade: listing.conditionGrade ?? '—' })}</span>
+                      <span className="ltr-run">{listing.typeClass}</span>
+                    </div>
+
                     <div className="actions">
+                      {/* Buying is irreversible and settles from the wallet;
+                          making an offer opens a negotiation. They were the same
+                          size and the same weight. */}
                       <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
                         {t('market.buy')}
                       </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setOffering(listing)}>
+                      <Button variant="ghost" size="sm" onClick={() => setOffering(listing)}>
                         {t('market.makeOffer')}
                       </Button>
                     </div>

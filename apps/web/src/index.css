@@ -5812,3 +5812,92 @@ textarea[aria-invalid='true'] {
   line-height: var(--lh-snug);
   text-align: center;
 }
+
+/* ============================================================
+   The marketplace listing row
+   ============================================================
+   The same register row as the vault, with two differences that follow from the
+   job rather than from taste.
+
+   The photograph is larger, because on a shelf of things for sale the
+   photograph IS the pitch — it is the only thing a buyer can inspect.
+
+   And the PRICE IS THE FIRST TEXT LINE. It used to be the fourth thing in the
+   tile, below a bold `trading_card` and two lines of truncated catalogue string,
+   in the mono face at the same weight as a barcode. Somebody browsing a
+   marketplace is reading prices; everything else on the row is qualifying one.
+   ============================================================ */
+
+.card--listing {
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+}
+
+.card--listing .card-art {
+  width: 96px;
+}
+
+.card--listing .price {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: start;
+}
+
+.card--listing .card-title {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.card--listing .card-desc {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.card--listing .card-meta {
+  grid-column: 2;
+  grid-row: 4;
+}
+
+.card--listing .actions {
+  grid-column: 3;
+  grid-row: 1 / span 4;
+  align-self: center;
+  margin-block-start: 0;
+  padding-block-start: 0;
+}
+
+@media (max-width: 640px) {
+  .card--listing {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .card--listing .card-art {
+    width: 72px;
+  }
+
+  .card--listing .actions {
+    grid-column: 2;
+    grid-row: 5;
+  }
+}
+
+/* A row of actions, wrapping rather than stacking. Three buttons of three
+   different weights piled vertically in a 90px column is what a table does when
+   nobody decided how wide the action column should be. */
+.actions--row {
+  display: flex;
+  /* `nowrap`, deliberately: this sits in a `td-tight` cell, which is as narrow
+     as its content, so wrapping would put every button on its own line — which
+     is exactly what the offers table was doing. */
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+  margin-block-start: 0;
+  padding-block-start: 0;
+}
+
+/* A register cell holding a figure and its qualifier: the figure aligns on the
+   decimal, the qualifier sits under it at the same edge. */
+.data-table td.num .dt-sub {
+  text-align: end;
+}

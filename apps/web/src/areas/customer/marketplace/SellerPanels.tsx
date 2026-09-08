@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { Amount, Code, Serial } from '../../../shared/ui/Serial';
+import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { useI18n, type TranslateFn } from '../../../shared/i18n';
 import {
   LISTING_TONE,
@@ -327,11 +329,7 @@ export function OffersPanel({
       {rows === null ? (
         <SkeletonTable rows={3} columns={5} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          title={t('market.offers.empty')}
-          text={t('market.offers.emptyText')}
-          icon={<IconMarketplace />}
-        />
+        <EmptyState title={t('market.offers.empty')} text={t('market.offers.emptyText')} />
       ) : (
         <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
@@ -350,9 +348,18 @@ export function OffersPanel({
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td data-label={t('market.mine.col.item')} className="dt-primary">
-                    {row.description || row.typeClass}
-                    <span className="dt-sub" dir="ltr">
-                      {t('market.offers.asking', { amount: formatUsd(row.askingPrice) })}
+                    <span className="dt-cell">
+                      {/* An offer is about an OBJECT, and the row showed none of
+                          it — two lines of catalogue string and no photograph on
+                          the one screen where somebody is deciding what a thing
+                          is worth. */}
+                      <span className="dt-thumb">
+                        <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
+                      </span>
+                      <span>
+                        <Serial value={row.serialNumber} />
+                        <span className="dt-sub ltr-run">{row.description || row.typeClass}</span>
+                      </span>
                     </span>
                   </td>
                   <td data-label={t('market.offers.col.side')}>
@@ -360,8 +367,8 @@ export function OffersPanel({
                       {t(row.direction === 'incoming' ? 'market.offers.incoming' : 'market.offers.outgoing')}
                     </StatusBadge>
                     {row.direction === 'incoming' && row.buyerUsername && (
-                      <span className="dt-sub" dir="ltr">
-                        <code>{row.buyerUsername}</code>
+                      <span className="dt-sub">
+                        <Code value={`@${row.buyerUsername}`} />
                       </span>
                     )}
                     {/* A pending offer is either waiting on you or waiting on
@@ -373,16 +380,24 @@ export function OffersPanel({
                       </span>
                     )}
                   </td>
-                  <td data-label={t('market.offers.col.offer')} dir="ltr">
-                    {formatUsd(row.amount)}
+                  {/*
+                    The two figures a person is comparing, adjacent and aligned:
+                    what was offered, and what is being asked. They used to be
+                    380px apart in different columns, one of them 12px grey.
+                  */}
+                  <td data-label={t('market.offers.col.offer')} className="num">
+                    <Amount size="lead">{formatUsd(row.amount)}</Amount>
+                    <span className="dt-sub">
+                      {t('market.offers.asking', { amount: formatUsd(row.askingPrice) })}
+                    </span>
                   </td>
                   <td data-label={t('support.col.status')}>
                     <StatusBadge tone={OFFER_TONE[row.status] ?? 'neutral'}>
                       {offerStatusLabel(t, row.status)}
                     </StatusBadge>
                   </td>
-                  <td data-label={t('support.col.activity')} dir="ltr">
-                    {formatDate(row.createdAt, locale)}
+                  <td data-label={t('support.col.activity')} className="td-tight">
+                    <span className="ltr-run">{formatDate(row.createdAt, locale)}</span>
                   </td>
                   <td className="td-tight">
                     {/* Only a PENDING offer on a still-active listing can be
@@ -500,8 +515,17 @@ function OfferActions({
     );
   }
 
+  /*
+    It is your turn. Accept, counter, decline — in that order of weight, in a
+    row rather than a vertical stack of three differently-shaped buttons in a
+    90px column.
+
+    When it is NOT your turn the Accept control is not rendered at all (see
+    above): a party may not accept a price they proposed, and the way to say
+    that is for the action not to exist, not for it to be greyed out.
+  */
   return (
-    <div className="actions">
+    <div className="actions actions--row">
       <Button size="sm" variant="gold" disabled={busy} onClick={() => onRespond('accept')}>
         {t('market.offers.accept')}
       </Button>
