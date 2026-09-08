@@ -21,7 +21,33 @@
       the moment those two things do.
     -->
     <meta name="description" content="Bault — collectibles vault and marketplace." />
-    <meta name="theme-color" content="#0b1f33" />
+    <!--
+      Matches the page ground in each theme, so the browser chrome above the
+      page is the same colour as the page rather than a navy band left over
+      from a palette this product no longer uses.
+    -->
+    <meta name="theme-color" content="#f3f4f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)" />
+
+    <!--
+      The two faces the first paint actually needs: the Latin and Hebrew UI text.
+      Everything else (the other weights, the mono, the display face) is fetched
+      on demand by unicode-range, which is the point of subsetting them.
+    -->
+    <link
+      rel="preload"
+      href="/fonts/plex-sans-400-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/plex-sans-hebrew-400-hebrew.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Bault" />
     <meta property="og:title" content="Bault" />
