@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
+import { useMediaQuery } from '../../shared/hooks';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { InboundAddress } from '../../shared/parcels';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
@@ -29,6 +30,8 @@ export function ReceiveParcels({
   onReceived: (fn: () => Promise<unknown>, ok: string) => Promise<void>;
 }) {
   const { t } = useI18n();
+  /** A mouse or a trackpad, rather than a finger — see the autoFocus below. */
+  const precisePointer = useMediaQuery('(pointer: fine)');
   const [facilities, setFacilities] = useState<InboundAddress[]>([]);
   const [facilityCode, setFacilityCode] = useState('');
   const [carrier, setCarrier] = useState('');
@@ -107,10 +110,29 @@ export function ReceiveParcels({
             hint={t('parcelQueue.receive.labelHint')}
             error={labelOk ? undefined : t('warehouse.intake.ownerUsernameInvalid')}
           >
+            {/*
+              The next action, focused.
+
+              A box has landed and the first thing an operator does is read the
+              name off it. On a bench worked standing up with one hand on a
+              scanner, the cursor being already in the right field is the
+              difference between a keyboard flow and a mouse one.
+
+              Gated on a fine pointer: on a touch device `autoFocus` opens the
+              keyboard over the screen before anybody has decided to type, which
+              is the reason the guidelines warn against it.
+
+              `spellCheck` off — this is a username, and a red squiggle under
+              somebody's account name is noise on a field that must be typed
+              EXACTLY as written.
+            */}
             <input
               value={addressedTo}
               onChange={(e) => setAddressedTo(e.target.value)}
               aria-invalid={!labelOk}
+              autoFocus={precisePointer}
+              spellCheck={false}
+              autoComplete="off"
               dir="ltr"
             />
           </Field>

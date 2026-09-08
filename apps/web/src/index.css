@@ -5543,6 +5543,43 @@ textarea[aria-invalid='true'] {
   font-weight: var(--fw-semibold);
 }
 
+/* A refusal is not a fourth step; it is the second one answered "no". */
+.step.is-declined {
+  border-block-start-color: var(--oxblood-mark);
+  color: var(--oxblood);
+}
+
+/* Inside a register cell the steps stack, because a table cell is not the place
+   for a three-column layout. */
+.data-table .steps {
+  border-block-start: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.data-table .step {
+  flex: 1 1 auto;
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
+  padding-inline-start: var(--sp-3);
+  border-block-start: 0;
+  border-inline-start: 2px solid var(--line);
+  margin-block-start: 0;
+}
+
+.data-table .step:first-child {
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--line);
+}
+
+.data-table .step.is-done,
+.data-table .step.is-current {
+  border-inline-start-color: var(--custody-mark);
+}
+
+.data-table .step.is-declined {
+  border-inline-start-color: var(--oxblood-mark);
+}
+
 /* ---- The price, stated before the button ------------------------------
    No service action in this product may render without its price adjacent. The
    figure leads and the action follows it, never the other way round. */
@@ -5900,4 +5937,17 @@ textarea[aria-invalid='true'] {
    decimal, the qualifier sits under it at the same edge. */
 .data-table td.num .dt-sub {
   text-align: end;
+}
+
+/* A label that resolves to no account. Quoted exactly as written — it is the
+   only clue to whose property the box is — and marked as unresolved rather than
+   greyed into looking like an empty cell. */
+.unresolved {
+  display: inline-block;
+  padding-inline-start: var(--sp-2);
+  border-inline-start: 2px solid var(--oxblood-mark);
+}
+
+.unresolved .dt-sub {
+  color: var(--oxblood);
 }

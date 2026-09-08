@@ -945,7 +945,7 @@ function RequestTable({
       {requests === null ? (
         <SkeletonTable rows={4} columns={3} />
       ) : requests.length === 0 ? (
-        <EmptyState title={emptyTitle} text={emptyText} icon={<IconServices />} />
+        <EmptyState title={emptyTitle} text={emptyText} />
       ) : (
         <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
@@ -962,19 +962,14 @@ function RequestTable({
                 <tr key={request.id}>
                   <td data-label={t('services.colService')} className="dt-primary">
                     {serviceTypeLabel(t, request.type)}
-                    {request.type === 'custom' && (
-                      <span className="dt-sub">
-                        {String((request.typeFields as { summary?: string } | null)?.summary ?? '')}
-                      </span>
-                    )}
                   </td>
                   <td data-label={t('services.colStatus')}>
                     <StatusBadge tone={STATUS_TONE[request.status] ?? 'neutral'}>
                       {serviceStatusLabel(t, request.status)}
                     </StatusBadge>
                   </td>
-                  <td data-label={t('services.colDate')} dir="ltr">
-                    {formatDate(request.createdAt, locale)}
+                  <td data-label={t('services.colDate')} className="td-tight">
+                    <span className="ltr-run">{formatDate(request.createdAt, locale)}</span>
                   </td>
                   <td className="td-tight">
                     {/*
@@ -986,21 +981,21 @@ function RequestTable({
 
                     {request.type === 'custom' &&
                       (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
-                        <div className="actions">
-                          <span className="hint">
-                            {t('custom.quotedAt', {
-                              amount: formatUsd(
-                                Number((request.typeFields as { priceMinor?: number })?.priceMinor ?? 0),
-                              ),
-                            })}
-                          </span>
+                        <div className="actions actions--row">
+                          {/* The amount is stated on the step above, beside the
+                              scope it buys. Repeating it next to the button was
+                              the price appearing twice and the scope not at all. */}
                           <Button
                             size="sm"
                             variant="gold"
                             disabled={busy}
                             onClick={() => void answerCustomQuote(request, 'accept')}
                           >
-                            {t('custom.acceptQuote')}
+                            {t('custom.acceptQuoteAmount', {
+                              amount: formatUsd(
+                                Number((request.typeFields as { priceMinor?: number })?.priceMinor ?? 0),
+                              ),
+                            })}
                           </Button>
                           <Button
                             size="sm"
@@ -1053,26 +1048,83 @@ function RequestTable({
 }
 
 /**
- * What a custom request currently says, beyond its status badge.
+ * A custom request, as a three-step register.
  *
- * The three states a collector needs to be able to tell apart are: nobody has
- * looked at it yet, somebody quoted it (and the buttons beside this are live),
- * and somebody said no — with the reason, because a refusal without one leaves
- * them guessing whether to ask differently or stop asking.
+ * ASK (free) → an operator PROPOSES a price and a scope → you ACCEPT. Those are
+ * the three steps of the flow, they are the whole reason the box marked "custom"
+ * is not frightening, and the interface showed none of them: one status word in
+ * a pill, and the price — the thing being agreed to — inside a collapsed row
+ * beside the button that agrees to it.
+ *
+ * Drawn horizontally with the current step marked by the same custody rule that
+ * marks an active tab and an active rail destination. Each step states its own
+ * fact where that fact belongs: the ask carries the summary, the proposal
+ * carries THE AMOUNT AND THE SCOPE — a collector accepting a figure is agreeing
+ * to whatever the operator understood the ask to be, and "$18.00" with nothing
+ * behind it is not something anybody can agree to — and the last step carries
+ * what was actually done.
+ *
+ * A declined request is not a fourth step; it is the second step answered "no",
+ * so it takes the second step's position and states the reason. A refusal
+ * without one leaves the collector guessing whether to ask differently or stop
+ * asking.
  */
 function CustomRequestRow({ request }: { request: MyRequest }) {
   const { t } = useI18n();
   const fields = (request.typeFields as Record<string, unknown> | null) ?? {};
   const stage = String(fields.stage ?? '');
+  const price = Number(fields.priceMinor ?? 0);
+  const scope = String(fields.scope ?? '');
+  const declined = stage === 'declined';
 
-  if (stage === 'awaiting_quote') return <span className="hint">{t('custom.awaitingQuote')}</span>;
-  if (stage === 'declined') {
-    return <span className="hint">{t('custom.declinedBy', { reason: String(fields.declineReason ?? '') })}</span>;
-  }
-  if (stage === 'accepted') return <span className="hint">{t('custom.inProgress')}</span>;
-  if (stage === 'done') return <span className="hint">{String(fields.completionNotes ?? '')}</span>;
-  if (stage === 'quoted') return <span className="hint">{String(fields.scope ?? '')}</span>;
-  return null;
+  /** Where the request has got to, as an index into the three steps. */
+  const at = stage === 'awaiting_quote' ? 0 : stage === 'quoted' || declined ? 1 : 2;
+
+  const steps = [
+    {
+      name: t('custom.step.ask'),
+      detail: String(fields.summary ?? ''),
+    },
+    {
+      name: t('custom.step.propose'),
+      detail: declined
+        ? t('custom.declinedBy', { reason: String(fields.declineReason ?? '') })
+        : price > 0
+          ? `${formatUsd(price)} · ${scope}`
+          : t('custom.awaitingQuote'),
+    },
+    {
+      name: t('custom.step.accept'),
+      detail:
+        stage === 'done'
+          ? String(fields.completionNotes ?? t('custom.stepDone'))
+          : stage === 'accepted'
+            ? t('custom.inProgress')
+            : t('custom.step.acceptWaiting'),
+    },
+  ];
+
+  return (
+    <ol className="steps">
+      {steps.map((step, index) => (
+        <li
+          key={step.name}
+          className={[
+            'step',
+            index < at ? 'is-done' : '',
+            index === at ? 'is-current' : '',
+            index === 1 && declined ? 'is-declined' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-current={index === at ? 'step' : undefined}
+        >
+          <span className="step-name">{step.name}</span>
+          {step.detail && <span className="step-detail ltr-run">{step.detail}</span>}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 /* ============================================================

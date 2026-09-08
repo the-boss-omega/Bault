@@ -229,14 +229,30 @@ export function WarehouseConsole() {
   const tabs = TABS.map((key) => ({ key, label: t(`warehouse.tab.${key}` as MessageKey) }));
 
   return (
-    <>
+    /*
+      The whole console runs at WAREHOUSE density.
+
+      This screen is worked standing up, one hand on a scanner, and it was set at
+      exactly the same rhythm as the wallet: 24px panel padding, 16px field gaps,
+      56px table rows. The receiving bench needed three panels and 1,900px of
+      scroll to do one job.
+
+      `data-density` swaps four variables — panel padding, section gap, group
+      gap, row height — and drops the base size to 13px. Nothing else changes:
+      the same Panel, the same Register, the same Field, measured for the job
+      instead of rewritten for it.
+    */
+    <div data-density="warehouse">
       <ContextTabs
         label={t('warehouse.title')}
         tabs={tabs}
         active={tab}
         onSelect={goTab}
         actions={
-          <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('receiving')}>
+          /* Secondary, not primary. The bench below has the primary action of
+             every screen it appears on, and two gold buttons on one screen is
+             the same as none. */
+          <Button variant="secondary" icon={<IconPlus />} onClick={() => goTab('receiving')}>
             {t('warehouse.addInventory')}
           </Button>
         }
@@ -423,7 +439,7 @@ export function WarehouseConsole() {
           <SupportQueue onChanged={loadSummary} />
         </TabPanel>
       )}
-    </>
+    </div>
   );
 }
 

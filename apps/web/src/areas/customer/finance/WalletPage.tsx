@@ -3,6 +3,7 @@ import { api } from '../../../shared/api';
 import { formatDate, formatDateTime, formatLedgerAmount, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useRoute, useNavigation } from '../../../shared/routing';
+import { Amount, Code } from '../../../shared/ui/Serial';
 import {
   WALLET_REQUEST_TONE,
   canCancel as canCancelRequest,
@@ -567,9 +568,27 @@ function TransactionTable({
   emptyText: string;
   emptyAction?: ReactNode;
 }) {
-  if (loading) return <SkeletonTable rows={5} columns={4} />;
+  /**
+   * The balance after each row, in the order the rows are displayed.
+   *
+   * `rows` is newest-first, so the walk runs backwards from the oldest entry:
+   * every credit adds, every debit subtracts, and the value recorded against a
+   * row is the balance the wallet stood at once that entry had landed.
+   */
+  const balanceAfter = useMemo(() => {
+    const out = new Array<number>(rows.length);
+    let running = 0;
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const row = rows[i]!;
+      running += row.direction === 'credit' ? row.amount : -row.amount;
+      out[i] = running;
+    }
+    return out;
+  }, [rows]);
+
+  if (loading) return <SkeletonTable rows={5} columns={5} />;
   if (rows.length === 0) {
-    return <EmptyState title={emptyTitle} text={emptyText} action={emptyAction} icon={<IconReceipt />} />;
+    return <EmptyState title={emptyTitle} text={emptyText} action={emptyAction} />;
   }
 
   return (
@@ -584,12 +603,14 @@ function TransactionTable({
             <th scope="col" className="td-end">
               {t('wallet.col.amount')}
             </th>
+            <th scope="col" className="td-end">
+              {t('wallet.col.balance')}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const credit = row.direction === 'credit';
-            const meta = TYPE_META[row.type];
             return (
               <tr
                 key={row.id}
@@ -608,24 +629,19 @@ function TransactionTable({
                   }
                 }}
               >
-                <td data-label={t('wallet.col.date')}>
-                  <span dir="ltr">{formatDate(row.occurredAt, locale)}</span>
+                <td data-label={t('wallet.col.date')} className="td-tight">
+                  <span className="ltr-run">{formatDate(row.occurredAt, locale)}</span>
                 </td>
                 <td data-label={t('wallet.col.type')}>
-                  <span className="dt-cell">
-                    <span className={`type-icon type-icon--${credit ? 'credit' : 'debit'}`}>
-                      {meta?.icon ?? <IconReceipt />}
-                    </span>
-                    <span className="dt-primary">{typeLabel(t, row.type)}</span>
-                  </span>
+                  <span className="dt-primary">{typeLabel(t, row.type)}</span>
                 </td>
                 <td data-label={t('wallet.col.description')}>
                   {row.referenceType ? (
                     <>
                       <span>{refLabel(t, row.referenceType)}</span>
                       {row.referenceId && (
-                        <span className="dt-sub" dir="ltr">
-                          {row.referenceId.slice(0, 8)}
+                        <span className="dt-sub">
+                          <Code value={row.referenceId.slice(0, 8)} />
                         </span>
                       )}
                     </>
@@ -634,9 +650,28 @@ function TransactionTable({
                   )}
                 </td>
                 <td data-label={t('wallet.col.amount')} className="td-end num">
-                  <span className={credit ? 'amt-pos' : 'amt-neg'} dir="ltr">
+                  <Amount tone={credit ? 'credit' : 'debit'}>
                     {formatLedgerAmount(row.amount, row.direction)}
-                  </span>
+                  </Amount>
+                </td>
+                {/*
+                  THE RUNNING BALANCE.
+
+                  A ledger without one is a list of movements, and the question
+                  anybody actually brings to it — "what did I have after that?" —
+                  cannot be answered by reading it. It was never here.
+
+                  Computed rather than fetched, and that is safe: `GET
+                  /finance/ledger` returns the WHOLE ledger with no limit and no
+                  pagination (LedgerService.list), so the walk below starts from
+                  zero at the oldest row and the newest row's figure is exactly
+                  the balance the wallet header shows. A running balance computed
+                  over a truncated page would be a wrong number in the one place
+                  a wrong number is unforgivable, so if that endpoint ever grows
+                  a limit, this column has to come from the server.
+                */}
+                <td data-label={t('wallet.col.balance')} className="td-end num">
+                  <Amount>{formatUsd(balanceAfter[index] ?? 0)}</Amount>
                 </td>
               </tr>
             );
