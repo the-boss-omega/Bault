@@ -17,6 +17,7 @@ import {
   type StatusTone,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { Serial } from '../../../shared/ui/Serial';
 import {
   IconAlert,
   IconAsk,
@@ -35,6 +36,28 @@ import { GradingForm } from './GradingForm';
 import { InspectionForm } from './InspectionForm';
 import { CustomRequestForm } from './CustomRequestForm';
 import { RemoveCommonsPanel } from './RemoveCommonsPanel';
+
+/**
+ * One card's position in the Break-Even Watch, as `GET /vault/break-even`
+ * returns it.
+ *
+ * `estimatedValueMinor` is deliberately nullable and `valueBasis` says where the
+ * figure came from, because the service refuses to invent one: it uses the
+ * median of real sales of the same class, or the owner's own asking price, or
+ * nothing. The UI has to carry that honesty through rather than rendering a bar
+ * against a number nobody can source.
+ */
+interface BreakEvenRow {
+  itemId: string;
+  storageSpentMinor: number;
+  totalSpentMinor: number;
+  projectedYearMinor: number;
+  estimatedValueMinor: number | null;
+  valueBasis: 'sold_comparable' | 'own_asking_price' | 'unknown';
+  comparableCount: number;
+  pastBreakEven: boolean;
+  monthsToBreakEven: number | null;
+}
 
 interface VaultItem {
   id: string;
@@ -395,6 +418,14 @@ export function VaultPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [culling, setCulling] = useState(false);
   const [cullWindowDays, setCullWindowDays] = useState<number | null>(null);
+  /**
+   * The Break-Even Watch for the whole vault, in ONE request.
+   *
+   * Not per row: a vault of two hundred cards would otherwise fire two hundred
+   * of these, and the service already computes the comparable medians once for
+   * the whole set. Keyed by item id at render time.
+   */
+  const [watch, setWatch] = useState<Map<string, BreakEvenRow>>(() => new Map());
 
   // Incremental search-as-you-type, scoped to the selected state. Both the list
   // and the badge counts follow the same query, so a badge never claims cards a
@@ -421,6 +452,21 @@ export function VaultPage() {
     return () => clearTimeout(handle);
   }, [load]);
 
+  // The break-even figures move only when money moves, so they are fetched once
+  // per mount rather than with every keystroke of the search box. A failure is
+  // silent: the watch is an addition to the register, and a vault that cannot
+  // price its cards is still a vault.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const summary = await api.get<{ items: BreakEvenRow[] }>('/vault/break-even');
+        setWatch(new Map(summary.items.map((row) => [row.itemId, row])));
+      } catch {
+        /* no watch this time; the register renders without it */
+      }
+    })();
+  }, []);
+
   // The cull window is a server rule, so it is asked for rather than assumed —
   // the panel prints it in its own subtitle and on every blocked card.
   useEffect(() => {
@@ -443,9 +489,11 @@ export function VaultPage() {
 
   return (
     <>
-      {/* The search field is the vault's primary control, so it sits centred in
-          the content header at a size that matches that role, with the state
-          controls immediately beside it. */}
+      {/* A filter row, at the start edge. The search field used to be a 720px
+          centred pill, 58px tall, over a list that fits on one screen — the
+          largest and loudest control in the product, searching four holdings.
+          The scope is in the URL and the segmented control shows which of the
+          three views of one collection you are in. */}
       <div className="vault-command">
         <div className="vault-search">
           <IconSearch />
@@ -494,18 +542,6 @@ export function VaultPage() {
       {status && <SuccessNote>{status}</SuccessNote>}
       {error && <ErrorState message={error} />}
 
-      {/* Culling is bulk, destructive and rare, so it is a mode rather than a
-          control sitting permanently over the collection. It is only offered on
-          the active scope — there is nothing to cull among held or departed
-          cards. */}
-      {scope === 'active' && cullWindowDays !== null && (
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <Button size="sm" variant={culling ? 'secondary' : 'ghost'} onClick={() => setCulling((v) => !v)}>
-            {culling ? t('cull.close') : t('cull.open')}
-          </Button>
-        </div>
-      )}
-
       {culling && cullWindowDays !== null && (
         <RemoveCommonsPanel
           items={items ?? []}
@@ -519,10 +555,26 @@ export function VaultPage() {
         />
       )}
 
+      {/* Culling is bulk, destructive and rare, so it is a mode rather than a
+          control sitting permanently over the collection — and it belongs to the
+          register it acts on rather than floating, right-aligned, above it. Only
+          offered on the active scope: there is nothing to cull among held or
+          departed cards. */}
       <Panel
         title={t(`vault.scope.${scope}` as MessageKey)}
         subtitle={
           items === null ? undefined : t('vault.assetsCount', { count: items.length })
+        }
+        tools={
+          scope === 'active' && cullWindowDays !== null ? (
+            <Button
+              size="sm"
+              variant={culling ? 'secondary' : 'ghost'}
+              onClick={() => setCulling((v) => !v)}
+            >
+              {culling ? t('cull.close') : t('cull.open')}
+            </Button>
+          ) : undefined
         }
         flush
       >
@@ -573,6 +625,7 @@ export function VaultPage() {
               <CardTile
                 key={item.id}
                 item={item}
+                watch={watch.get(item.id)}
                 t={t}
                 locale={locale}
                 onOpen={() => openRecord('item', item.id)}
@@ -599,34 +652,57 @@ export function VaultPage() {
 }
 
 /**
- * One card in the grid. The whole tile is the control — clicking anywhere on it
- * opens the drawer — so it is a real `<button>` and reachable by Tab, rather
- * than a div with a small "view details" affordance in one corner.
+ * One holding, as a register row.
+ *
+ * The order is the direction's first rule: PHOTOGRAPH → SERIAL → STATUS, then
+ * what the card is, then what it is costing. The whole row is the control —
+ * clicking anywhere on it opens the sheet — so it is a real `<button>` stretched
+ * over the row and reachable by Tab, rather than a div with a small "view
+ * details" affordance in one corner.
+ *
+ * The title is the CARD, not its class. It used to be `item.typeClass`, so every
+ * holding in every vault was called `trading_card` in bold at title size while
+ * its actual identity sat underneath in grey, truncated mid-word. The class is a
+ * classification and now reads as one.
  */
 function CardTile({
   item,
+  watch,
   t,
   locale,
   onOpen,
 }: {
   item: VaultItem;
+  /** The card's break-even position, when the watch has one for it. */
+  watch?: BreakEvenRow;
   t: TranslateFn;
   locale: string;
   onOpen: () => void;
 }) {
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
+  const frozen = Boolean(item.holdFlag) && !historical;
+  const name = item.description || item.typeClass;
 
   return (
-    <li className={`card card--interactive${historical ? ' card--historical' : ''}`}>
+    <li
+      className={[
+        'card',
+        'card--interactive',
+        historical ? 'card--historical' : '',
+        frozen ? 'card--frozen' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <button type="button" className="card-hit" onClick={onOpen}>
-        <span className="sr-only">{t('vault.openCard', { name: item.description || item.typeClass })}</span>
+        <span className="sr-only">{t('vault.openCard', { name })}</span>
       </button>
 
-      {/* The artwork pipeline is untouched — historical cards reuse exactly the
+      {/* The artwork pipeline is untouched — a departed card reuses exactly the
           same component and mapping, desaturated by the container's CSS only. */}
       <div className="card-art">
-        <CardPhotoThumb serialNumber={item.serialNumber} title={item.description || item.typeClass} />
+        <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
         {historical && (
           <span className="card-archive-mark" aria-hidden="true">
             <IconArchive />
@@ -634,14 +710,23 @@ function CardTile({
         )}
       </div>
 
-      <h3 className="card-title">{item.typeClass}</h3>
-      <p className="card-desc">{item.description || '—'}</p>
+      {/* The serial IS the identity, so it leads — isolated LTR so a Hebrew row
+          cannot reorder it, and selectable, because somebody is going to paste
+          it into an email. */}
+      <h3 className="card-title">
+        <Serial value={item.serialNumber} lead />
+      </h3>
+      <p className="card-desc" title={name}>
+        {name}
+      </p>
 
       <div className="card-meta">
         {historical ? (
           <StatusBadge tone="neutral">
             {t('vault.historical.status', { state: stateLabel(t, item.lifecycleState) })}
           </StatusBadge>
+        ) : frozen ? (
+          <span className="pill pill--frozen">{t('vault.frozen.label')}</span>
         ) : (
           <StatusBadge tone={meta?.tone ?? 'neutral'}>{stateLabel(t, item.lifecycleState)}</StatusBadge>
         )}
@@ -655,28 +740,90 @@ function CardTile({
         {item.oversized && !historical && (
           <StatusBadge tone="warning">{t('vault.oversized')}</StatusBadge>
         )}
-      </div>
-
-      <div className="card-meta">
         {historical ? (
           <>
             {item.departedAt && (
-              <span dir="ltr">{t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}</span>
+              <span className="ltr-run">
+                {t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}
+              </span>
             )}
             {item.departureReason && (
-              <span className="hint">{t('vault.historical.reason', { reason: item.departureReason })}</span>
+              <span className="hint ltr-run">
+                {t('vault.historical.reason', { reason: item.departureReason })}
+              </span>
             )}
           </>
         ) : (
           /* The bin is mandatory on intake, so it is always shown (Req 10.3). */
-          <span dir="ltr">
-            {t('vault.bin', {
-              bin: item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin'),
-            })}
+          <span className="code-inline">
+            {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
           </span>
         )}
       </div>
+
+      {/*
+        What this card is costing, on the row rather than three clicks away.
+
+        The API has computed this all along and nothing has ever shown it: a
+        `GET /vault/break-even` that counts what has actually been billed against
+        each item and compares it to what cards of the same class have really
+        sold for here. Never a forecast, never an invented valuation — where
+        there is no honest value signal the bar is absent and the figure stands
+        alone, which is a true and useful sentence rather than a gap.
+      */}
+      {watch && !historical && <Watch row={watch} t={t} />}
     </li>
+  );
+}
+
+/**
+ * Break-Even Watch, one row of it.
+ *
+ * A proportion, not a score: how much of what a card is worth has already been
+ * eaten by what it costs to keep. It goes AMBER at two thirds — before it says
+ * anything — because a watch that only warns once the number is bad is a report.
+ */
+function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
+  const value = row.estimatedValueMinor;
+  const known = value !== null && value > 0;
+  const ratio = known ? Math.min(row.totalSpentMinor / value, 1) : 0;
+  const tone = row.pastBreakEven ? 'proportion--over' : ratio >= 0.66 ? 'proportion--watch' : '';
+
+  return (
+    <div className="watch">
+      <div className="watch-line">
+        <span className="watch-amount">{formatUsd(row.totalSpentMinor)}</span>
+        <span>{t('vault.watch.spent')}</span>
+      </div>
+      {known ? (
+        <>
+          <span
+            className={`proportion ${tone}`.trim()}
+            role="img"
+            aria-label={
+              row.pastBreakEven
+                ? t('vault.watch.past')
+                : row.monthsToBreakEven !== null
+                  ? t('vault.watch.months', { count: row.monthsToBreakEven })
+                  : t('vault.watch.spent')
+            }
+          >
+            <span style={{ inlineSize: `${Math.round(ratio * 100)}%` }} />
+          </span>
+          <span className="watch-line">
+            {row.pastBreakEven
+              ? t('vault.watch.past')
+              : row.valueBasis === 'sold_comparable' && row.comparableCount === 1
+                ? t('vault.watch.basis.sold_comparable_one')
+                : t(`vault.watch.basis.${row.valueBasis}` as MessageKey, {
+                    count: row.comparableCount,
+                  })}
+          </span>
+        </>
+      ) : (
+        <span className="watch-line">{t('vault.watch.basis.unknown')}</span>
+      )}
+    </div>
   );
 }
 
@@ -698,6 +845,17 @@ function ItemMediaGallery({
   t: TranslateFn;
 }) {
   const ordered = [...media].sort((a, b) => b.version - a.version);
+  /**
+   * Which of these the browser could not fetch.
+   *
+   * Item media are presigned object-storage URLs, and in this environment they
+   * answer 403 — the signature parameters are absent from the URL (reported in
+   * docs/design/01-audit.md; the fix is in the storage adapter, not here). An
+   * <img> that fails renders its alt text sprawled across a grey box, which for
+   * a catalogue description is six lines of it. A photograph that did not load
+   * should say that it did not load.
+   */
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
 
   return (
     <>
@@ -705,10 +863,25 @@ function ItemMediaGallery({
       <ul className="media-strip">
         {ordered.map((m) => (
           <li key={m.id} className="media-item">
-            {m.type === 'video' ? (
-              <video src={m.url} controls preload="metadata" playsInline />
+            {failed.has(m.id) ? (
+              <span className="media-missing">{t('vault.media.unavailable')}</span>
+            ) : m.type === 'video' ? (
+              <video
+                src={m.url}
+                controls
+                preload="metadata"
+                playsInline
+                onError={() => setFailed((prev) => new Set(prev).add(m.id))}
+              />
             ) : (
-              <img src={m.url} alt={t('vault.media.alt', { title, version: m.version })} loading="lazy" />
+              <img
+                src={m.url}
+                alt={t('vault.media.alt', { title, version: m.version })}
+                loading="lazy"
+                width={152}
+                height={200}
+                onError={() => setFailed((prev) => new Set(prev).add(m.id))}
+              />
             )}
             <span className="hint">
               {t(`vault.media.type.${m.type}` as MessageKey)} · {t('vault.media.version', { version: m.version })}
@@ -929,11 +1102,44 @@ function ItemDrawer({
     }
   }
 
+  const name = item.description || item.typeClass;
+  const frozen = Boolean(item.holdFlag) && !historical;
+  /**
+   * The reason the card is frozen, taken from the custody log rather than
+   * invented here. `hold_placed` carries it, and it is the whole difference
+   * between a frozen card and a broken one.
+   */
+  const holdReason = frozen
+    ? ((events ?? []).find((e) => e.kind === 'hold_placed')?.summary ?? null)
+    : null;
+
   return (
     <>
       <DetailDrawer
-        title={item.description || item.typeClass}
-        subtitle={item.typeClass}
+        title={name}
+        /* The identity, in the direction's order: SERIAL, then status. The
+           title used to be the whole four-line catalogue string with
+           `trading_card` under it, which is a description reading as a name. */
+        lead={
+          <span className="identity">
+            <Serial value={item.serialNumber} lead className="identity-serial" />
+            {historical ? (
+              <StatusBadge tone="neutral">
+                {t('vault.historical.status', { state: stateLabel(t, item.lifecycleState) })}
+              </StatusBadge>
+            ) : frozen ? (
+              <span className="pill pill--frozen">{t('vault.frozen.label')}</span>
+            ) : (
+              <StatusBadge tone={meta?.tone ?? 'neutral'}>
+                {stateLabel(t, item.lifecycleState)}
+              </StatusBadge>
+            )}
+            <span className="identity-name">{name}</span>
+          </span>
+        }
+        subtitle={undefined}
+        wide
+        flush
         onClose={onClose}
         footer={
           <Button variant="ghost" onClick={onClose}>
@@ -941,37 +1147,45 @@ function ItemDrawer({
           </Button>
         }
       >
-        <div className={historical ? 'card-art card-art--historical' : 'card-art'}>
-          <CardPhotoThumb serialNumber={item.serialNumber} title={item.description || item.typeClass} />
+        {/*
+          The photography stage. The one local dark moment in a light product,
+          and the first thing in the sheet: a collector cannot hold this object,
+          so the least the screen can do is light it like one.
+        */}
+        <div className={historical ? 'stage stage--departed' : 'stage'}>
+          <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
         </div>
 
-        {media !== null && media.length > 0 && (
-          <ItemMediaGallery media={media} title={item.description || item.typeClass} t={t} />
-        )}
+        <div className="sheet-cols">
+          <div className="sheet-col">
+            {frozen && (
+              <p className="frozen-reason">
+                <IconClock />
+                <span>
+                  {holdReason ? (
+                    <>
+                      {t('vault.frozen.reason', { reason: '' })}{' '}
+                      <span className="ltr-run">{holdReason}</span>{' '}
+                    </>
+                  ) : (
+                    <>{t('vault.frozen.reason', { reason: '' })} </>
+                  )}
+                  {t('vault.frozen.actionsNote')}
+                </span>
+              </p>
+            )}
 
-        {historical && (
-          <p className="drawer-note drawer-note--archive">
-            <IconArchive />
-            <span>{t('vault.historical.drawerNote')}</span>
-          </p>
-        )}
+            {historical && (
+              <p className="departed-note">
+                <IconArchive />
+                <span>{t('vault.historical.drawerNote')}</span>
+              </p>
+            )}
 
-        <dl className="detail-list stack-top">
+        <dl className="detail-list">
           <div className="detail-row">
-            <dt className="detail-label">{t('vault.item.state')}</dt>
-            <dd className="detail-value">
-              <StatusBadge tone={historical ? 'neutral' : meta?.tone ?? 'neutral'}>
-                {historical
-                  ? t('vault.historical.status', { state: stateLabel(t, item.lifecycleState) })
-                  : stateLabel(t, item.lifecycleState)}
-              </StatusBadge>
-            </dd>
-          </div>
-          <div className="detail-row">
-            <dt className="detail-label">{t('vault.item.serial')}</dt>
-            <dd className="detail-value">
-              <code dir="ltr">{item.serialNumber}</code>
-            </dd>
+            <dt className="detail-label">{t('vault.class')}</dt>
+            <dd className="detail-value">{item.typeClass}</dd>
           </div>
           <div className="detail-row">
             <dt className="detail-label">{t('vault.item.condition')}</dt>
@@ -1015,6 +1229,8 @@ function ItemDrawer({
         {error && <ErrorState message={error} />}
 
         {storage && <StoragePanel storage={storage} locale={locale} t={t} />}
+
+        {media !== null && media.length > 0 && <ItemMediaGallery media={media} title={name} t={t} />}
 
         {actions.length > 0 && (
           <>
@@ -1128,47 +1344,58 @@ function ItemDrawer({
           />
         )}
 
-        {!historical && item.holdFlag && (
-          <p className="drawer-note drawer-note--hold">
-            <IconClock />
-            <span>{t('vault.actions.heldNote')}</span>
-          </p>
-        )}
+            {/* The barcode is an operational control on a collector's screen, so
+                it goes last in its column rather than sitting mid-sheet above
+                the record. */}
+            <div className="stack-top-lg">
+              <BarcodeLabel value={item.barcode} caption={name} />
+            </div>
+          </div>
 
-        <div style={{ marginBlockStart: 'var(--sp-5)' }}>
-          <BarcodeLabel value={item.barcode} caption={item.description || item.typeClass} />
+          {/*
+            The custody register, on the end side.
+
+            It is append-only and it looks it: a continuous rule, a date column,
+            an entry beside it, and nothing that suggests any of it can be
+            changed. This is the most trust-critical thing Bault renders — it is
+            the answer to "prove you have had this the whole time" — so it sits
+            beside the card's details rather than three screens below them.
+          */}
+          <div className="sheet-col sheet-col--register">
+            <h3 className="drawer-heading">{t('vault.historyTitle')}</h3>
+
+            {events === null ? (
+              <p className="hint">{t('vault.historyLoading')}</p>
+            ) : events.length === 0 ? (
+              <EmptyState title={t('vault.historyEmpty')} />
+            ) : (
+              <ul className="timeline">
+                {events.map((event, index) => (
+                  <li key={`${event.at}-${index}`}>
+                    <span className="hint ltr-run">{formatDate(event.at, locale)}</span>
+                    <div>
+                      {/*
+                        The kind was rendered as `event.kind.replace(/_/g, ' ')` —
+                        the database enum with its underscores taken out. A vault's
+                        chain of custody is the most trust-critical thing it shows,
+                        and it read "ownership transfer" / "state change" in English
+                        to a Hebrew reader, in the machine's vocabulary to everyone.
+                      */}
+                      <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
+                      {/*
+                        The summary comes back from the API in English whatever
+                        the reader's locale — an operator's own words on a custody
+                        event. Isolated, so a Hebrew page lays it out as the Latin
+                        run it is instead of reordering it.
+                      */}
+                      <p className="register-entry ltr-run">{event.summary}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-
-        <h3 className="drawer-heading">{t('vault.historyTitle')}</h3>
-
-        {events === null ? (
-          <p className="hint">{t('vault.historyLoading')}</p>
-        ) : events.length === 0 ? (
-          <EmptyState title={t('vault.historyEmpty')} icon={<IconClock />} />
-        ) : (
-          <ul className="timeline">
-            {events.map((event, index) => (
-              <li key={`${event.at}-${index}`} className="detail-row" style={{ display: 'block' }}>
-                <div className="row" style={{ gap: 'var(--sp-2)' }}>
-                  {/*
-                    The kind was rendered as `event.kind.replace(/_/g, ' ')` —
-                    the database enum with its underscores taken out. A vault's
-                    chain of custody is the most trust-critical thing it shows,
-                    and it read "ownership transfer" / "state change" in English
-                    to a Hebrew reader, in the machine's vocabulary to everyone.
-                  */}
-                  <StatusBadge tone="info" plain>
-                    {timelineKindLabel(t, event.kind)}
-                  </StatusBadge>
-                  <span className="hint" dir="ltr">
-                    {formatDate(event.at, locale)}
-                  </span>
-                </div>
-                <p style={{ marginBlockStart: 4, fontSize: 13.5 }}>{event.summary}</p>
-              </li>
-            ))}
-          </ul>
-        )}
       </DetailDrawer>
 
       {confirming && (

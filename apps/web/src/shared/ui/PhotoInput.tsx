@@ -116,7 +116,7 @@ export function PhotoInput({
 
       <ul className="photo-strip" aria-labelledby={`${id}-label`}>
         {value.map((photo) => (
-          <li key={photo.objectKey} className="photo-thumb">
+          <li key={photo.objectKey} className="upload-thumb">
             <img src={photo.previewUrl} alt={photo.name} />
             <IconButton
               label={t('photos.remove', { name: photo.name })}
@@ -130,7 +130,7 @@ export function PhotoInput({
 
         {busy > 0 &&
           Array.from({ length: busy }, (_, i) => (
-            <li key={`pending-${i}`} className="photo-thumb photo-thumb--pending" aria-hidden="true">
+            <li key={`pending-${i}`} className="upload-thumb upload-thumb--pending" aria-hidden="true">
               <span className="skel" />
             </li>
           ))}

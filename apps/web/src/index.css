@@ -744,6 +744,14 @@ time,
   font-size: var(--fs-sm);
 }
 
+/* The figure and its caption travel together and wrap together. */
+.amount-with {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
 /* ============================================================
    BIDI ISOLATION
    ============================================================
@@ -1080,18 +1088,14 @@ time,
 }
 
 /*
- * The gold selector plate is gone.
+ * The gold selector plate is gone, element and all.
  *
- * It was an absolutely-positioned element animated between rows behind the
- * active item, carrying a gradient, an inset ring, a machined notch and a
- * rivet — five decorative decisions to say "you are here", which the border on
- * `.rail-item.is-active` now says with one. The element is still rendered by
- * `NavigationRail`, measured and positioned; it is simply not painted, so the
- * measurement code stays honest and nothing jumps if it is ever brought back.
+ * It was an absolutely-positioned span animated between rows behind the active
+ * item, carrying a gradient, an inset ring, a machined notch and a turned rivet
+ * — five decorative decisions, plus a `ResizeObserver` and an `offsetTop` read
+ * per layout, to say "you are here". `.rail-item.is-active` says it with a
+ * border. `NavigationRail` no longer renders the element.
  */
-.rail-selector {
-  display: none;
-}
 
 /* ============================================================
    Page header
@@ -3434,13 +3438,19 @@ input[type='search'] {
   transform: none;
 }
 
+/* A card with no photograph on disk. It says so, in words, on the stage — a
+   1.6rem emoji at 40% opacity was a shrug where an answer belongs. */
 .photo-thumb-empty {
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
-  font-size: 1.6rem;
-  opacity: 0.4;
+  padding: var(--sp-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  text-align: center;
+  color: var(--ink-2);
+  opacity: 1;
 }
 
 .photo-btn {
@@ -4319,24 +4329,34 @@ input[type='search'] {
   list-style: none;
 }
 
-.photo-thumb {
+/*
+ * The bench's upload thumbnail — a photograph an operator has just taken, not a
+ * catalogue photograph of a card.
+ *
+ * It was ALSO called `.photo-thumb`, and its fixed 72x72 block-size silently won
+ * the cascade over the catalogue thumbnail's 4:5 aspect ratio, which is why the
+ * item sheet's photography stage rendered a 260x72 letterbox with a 55px card
+ * floating in it. One class, two components, and the later one wins: renamed
+ * rather than fought with specificity.
+ */
+.upload-thumb {
   position: relative;
   inline-size: 72px;
   block-size: 72px;
-  border-radius: var(--r-sm);
+  border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: var(--border-w) solid var(--line);
   background: var(--surface-sunken);
 }
 
-.photo-thumb img {
+.upload-thumb img {
   inline-size: 100%;
   block-size: 100%;
   object-fit: cover;
   display: block;
 }
 
-.photo-thumb--pending .skel {
+.upload-thumb--pending .skel {
   display: block;
   inline-size: 100%;
   block-size: 100%;
@@ -5435,10 +5455,13 @@ textarea[aria-invalid='true'] {
 /* ---- Break-Even Watch -------------------------------------------------- */
 
 .watch {
+  grid-column: 3;
+  grid-row: 2 / span 2;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 120px;
+  align-self: end;
 }
 
 .watch-line {
@@ -5668,4 +5691,124 @@ textarea[aria-invalid='true'] {
   .ctx-actions {
     display: none !important;
   }
+}
+
+/* ============================================================
+   THE ITEM SHEET — two kinds of reading, side by side
+   ============================================================
+   The start side is the card: what it is, what it costs to keep, what can be
+   done to it and for how much. The end side is the record: every custody event
+   in order, which is the answer to "prove you have had this the whole time".
+
+   They are different kinds of reading and they belong abreast, not stacked —
+   which is why the sheet is 960px rather than the 420px column the item used to
+   share with wallet requests and shipments. Below 900px they stack, register
+   last, because on a phone the card comes first.
+   ============================================================ */
+
+.sheet-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-section);
+  padding: var(--pad-panel);
+}
+
+@media (min-width: 900px) {
+  .sheet-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    gap: var(--sp-8);
+  }
+}
+
+.sheet-col {
+  min-width: 0;
+}
+
+.sheet-col--register {
+  padding-inline-start: 0;
+}
+
+@media (min-width: 900px) {
+  .sheet-col--register {
+    padding-inline-start: var(--sp-8);
+    border-inline-start: var(--border-w) solid var(--line);
+  }
+}
+
+/* The item sheet's head carries the identity line, so it wraps rather than
+   truncating: a serial is never abbreviated. */
+.drawer-head-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.drawer-head .identity {
+  padding-block: 0;
+  border-block-end: 0;
+}
+
+/*
+ * The photography stage, at the very top of the sheet and full-bleed inside it.
+ *
+ * The card is given a real size — 260px wide, 4:5, centred on the sweep — rather
+ * than the 72px thumbnail it had in the old drawer. This is the whole argument
+ * of the direction in one element: a collector cannot hold the object, so the
+ * screen lights it like one.
+ */
+.drawer .stage {
+  padding: var(--sp-8) var(--sp-6);
+}
+
+.drawer .stage .photo-thumb,
+.drawer .stage .photo-thumb-empty {
+  inline-size: 260px;
+  max-inline-size: 60vw;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.drawer .stage .photo-thumb-img {
+  object-fit: contain;
+}
+
+/* On the dark stage the same placeholder needs light ink. */
+.drawer .stage .photo-thumb-empty {
+  color: var(--ink-on-dark);
+  font-size: var(--fs-sm);
+}
+
+.stage--departed .photo-thumb-img {
+  filter: grayscale(0.9);
+}
+
+/* ---- One register entry ---- */
+
+.register-kind {
+  display: inline-block;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.register-entry {
+  margin-block-start: 2px;
+  color: var(--ink-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+/* A photograph that did not load says so, in the space it would have filled. */
+.media-missing {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 12.5rem;
+  padding: var(--sp-3);
+  border: var(--border-w) dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  text-align: center;
 }
