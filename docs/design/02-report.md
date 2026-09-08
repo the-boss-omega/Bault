@@ -264,12 +264,30 @@ Under `prefers-reduced-motion: reduce`, all **34** measured `animation-duration`
 | Custody register is append-only | ✅ 2 entries, **0** interactive elements inside it |
 
 ### Tests and lint
-| | |
+
+Every suite, each run from a freshly seeded database:
+
+| Project | Result |
 | --- | --- |
-| `pnpm test:ux` | **98 passed** (83 existing + 15 new) |
-| `pnpm test:web` | **155 passed** |
+| `web` | **155 passed** |
+| `ux` | **98 passed** (83 existing + 15 new) |
+| `contract` | **11 passed** |
+| `core-contract` | **19 passed** |
+| `integration` | **180 passed** |
+| `core` | **195 passed** |
+| `concurrency` | **1 passed** |
+| `property` | **2 passed** |
+| | **661 passed, 0 failed** |
 | `pnpm typecheck` | clean across all six workspace projects |
 | `node scripts/design-lint.mjs` | **clean** (from 47 findings) |
+
+> **Run them with `pnpm test:seeded`, not `pnpm test`.** `scripts/test.mjs` reseeds at the END of a
+> run and not at the start, so `pnpm test` executes against whatever state the database is in. Run
+> straight after a long browser session it reported one failure —
+> `shp-tracking-list.test.ts` expecting Golden's seeded shipment, which an earlier project in the
+> same run had consumed. From a clean seed the same file passes, its project passes 180/180, and so
+> does everything else. This is a pre-existing property of the runner against a shared database, not
+> a regression, and `pnpm test:seeded` exists for exactly it.
 
 `tests/ux/custody-grade.test.tsx` adds 15 cases over Serial, Amount, Code, LtrRun, Seal, the status
 mark and the three item states — each run twice, once per direction. They pin behaviour rather than
