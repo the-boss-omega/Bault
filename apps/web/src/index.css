@@ -5951,3 +5951,138 @@ textarea[aria-invalid='true'] {
 .unresolved .dt-sub {
   color: var(--oxblood);
 }
+
+/* ============================================================
+   THE CHART — one style, and these are its rules
+   ============================================================
+   Graphite bars. ONE accent, and it marks the thing to act on rather than
+   distinguishing a series. Tabular axis labels. A stated maximum, because a bar
+   chart whose scale is not stated is a decoration. No gradients, no rounded
+   caps, no shadows, no animation on load.
+
+   Every bar carries its own figure beside it: the bar is for comparing down a
+   column, the number is for knowing, and neither replaces the other.
+   ============================================================ */
+
+.chart {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding-block: var(--sp-2) var(--sp-4);
+}
+
+.chart-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chart-title {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.chart-sub {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: var(--measure);
+}
+
+/*
+ * The bars and their labels are two layers of one grid cell: the SVG stretches
+ * to the container while the text stays at the page's own size, which is the
+ * only way to have a chart that scales and labels that do not.
+ */
+.chart-svg,
+.chart-rows {
+  grid-column: 1;
+  grid-row: 2;
+  inline-size: 100%;
+}
+
+.chart-svg {
+  display: block;
+  /* The bars start after the label column and stop before the figures. */
+  padding-inline-start: calc(var(--chart-label, 132px) + var(--sp-2));
+  padding-inline-end: var(--chart-value, 96px);
+  box-sizing: border-box;
+}
+
+.chart-bar {
+  fill: var(--ink-2);
+}
+
+/** The one accent: the row somebody is meant to do something about. */
+.chart-bar--mark {
+  fill: var(--amber-mark);
+}
+
+.chart-rows {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: var(--chart-label, 132px) minmax(0, 1fr) var(--chart-value, 96px);
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-caption);
+}
+
+/*
+ * All three cells are placed EXPLICITLY, column and row.
+ *
+ * With only the value and the note placed, grid auto-placement put the label in
+ * (1,1), the value in (1,3) — and then, finding its cursor already past column
+ * 2, dropped the note into (2,2). Every occupancy count rendered one row below
+ * the zone it belonged to, which on a chart about which zone to act on is the
+ * one mistake that cannot be tolerated.
+ */
+.chart-label {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.chart-value {
+  grid-column: 3;
+  grid-row: 1;
+  text-align: end;
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.chart-note {
+  min-width: 0;
+  color: var(--ink-2);
+  font-weight: var(--fw-regular);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-axis {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block-start: var(--sp-2);
+  border-block-start: var(--border-w) solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.chart-axis-label {
+  flex: 1 1 auto;
+  text-align: center;
+}
