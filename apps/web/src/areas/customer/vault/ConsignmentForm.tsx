@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { channelLabel, type ConsignmentChannel, type ConsignmentEvent } from '../../../shared/market';
-import { Button, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, Field, StatusBadge } from '../../../shared/ui/primitives';
 
 /**
  * Choose where a card is sold, and for how much.
@@ -92,7 +92,7 @@ export function ConsignmentForm({
   }
 
   return (
-    <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-4)' }}>
+    <div className="stack stack--tight stack-top">
       <h3 className="drawer-heading">{t('consign.title')}</h3>
 
       <label className="field">
@@ -116,8 +116,10 @@ export function ConsignmentForm({
       )}
 
       {channel?.requiresEvent && (
-        <label className="field">
-          <span className="field-label">{t('consign.show')}</span>
+        <Field
+          label={t('consign.show')}
+          hint={events.length === 0 ? t('consign.noShows') : undefined}
+        >
           <select value={eventId} onChange={(e) => setEventId(e.target.value)}>
             <option value="">{t('consign.pickShow')}</option>
             {events.map((ev) => (
@@ -126,8 +128,7 @@ export function ConsignmentForm({
               </option>
             ))}
           </select>
-          {events.length === 0 && <span className="field-hint">{t('consign.noShows')}</span>}
-        </label>
+        </Field>
       )}
 
       <div className="field">
@@ -140,7 +141,7 @@ export function ConsignmentForm({
       </div>
 
       {problems.length > 0 && (
-        <ul className="check-list" style={{ maxHeight: 'none' }}>
+        <ul className="check-list list-unbounded">
           {problems.map((p) => (
             <li key={p}>
               <StatusBadge tone="error" plain>

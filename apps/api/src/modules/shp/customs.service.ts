@@ -9,6 +9,7 @@ import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
 import { ShipmentService, type ShipmentActor } from './shipment.service';
 import { DEFAULT_HS_CODE, needsCustoms } from './shipping-options';
+import { destinationGuidance } from './destinations';
 import type { CustomsLine } from './parcel-profile.service';
 
 /**
@@ -138,4 +139,77 @@ export class CustomsService {
       .filter((s) => ((s.customsLines as CustomsLine[]) ?? []).length === 0)
       .map((s) => ({ id: s.id, code: s.code, country: s.destinationCountry }));
   }
+
+  /**
+   * Everything a collector needs to know BEFORE the parcel leaves, in one call.
+   *
+   * The invoice above answers "what did you declare". This answers the question
+   * that comes first and had nowhere to be asked: "am I about to send this
+   * somewhere it will get stuck, and what will it cost the person receiving it".
+   *
+   * Three things it deliberately does and does not do.
+   *
+   * It REPORTS rather than blocks. A missing declared value or an estimated
+   * weight is surfaced as a warning the collector can act on, not an error that
+   * refuses the shipment — Bault is not in a position to know that an estimate
+   * is wrong, only that it is an estimate, and refusing on that basis would
+   * ground parcels nobody had a problem with.
+   *
+   * It never states a duty figure. Thresholds and rates are set by the
+   * destination and change; the guidance carries the authority's own link so the
+   * collector reads the current number from the body that sets it. See
+   * `destinations.ts`.
+   *
+   * It names what Bault does NOT do at the destination. A collector planning
+   * around a clearance step Bault does not perform is exactly who this exists
+   * for, and telling them afterwards is telling them too late.
+   */
+  async readiness(shipmentId: string, actor: ShipmentActor) {
+    const s = await this.shipments.loadFor(shipmentId, actor);
+    const international = needsCustoms(s.destinationCountry);
+    const lines = ((s.customsLines as CustomsLine[]) ?? []).slice();
+
+    const warnings: { code: string; message: string }[] = [];
+
+    if (international && lines.length === 0) {
+      warnings.push({
+        code: 'no_customs_lines',
+        message:
+          'This parcel is crossing a border and has no declared values on it. Re-enter the shipment’s declared value before it is dispatched.',
+      });
+    }
+
+    const unvalued = lines.filter((l) => !(l.valueMinor > 0));
+    if (unvalued.length > 0) {
+      warnings.push({
+        code: 'unvalued_items',
+        message: `${unvalued.length} item(s) carry no declared value. Customs treats a zero-value line as an unanswered question, which is what holds a parcel.`,
+      });
+    }
+
+    const estimated = lines.filter((l) => l.weightEstimated);
+    if (estimated.length > 0) {
+      warnings.push({
+        code: 'estimated_weight',
+        message: `${estimated.length} item(s) were never weighed, so the invoice uses the class’s typical weight. It is marked as an estimate rather than presented as measured.`,
+      });
+    }
+
+    return {
+      shipmentCode: s.code,
+      destinationCountry: s.destinationCountry,
+      international,
+      /** Nothing here refuses the shipment; every entry is actionable advice. */
+      ready: warnings.length === 0,
+      warnings,
+      declaredTotalMinor: lines.reduce((sum, l) => sum + l.valueMinor, 0),
+      currency: s.currency,
+      lineCount: lines.length,
+      /** Universal notes always; the destination's own only where one is written. */
+      guidance: international
+        ? destinationGuidance(s.destinationCountry)
+        : { universal: [], specific: null },
+    };
+  }
+
 }

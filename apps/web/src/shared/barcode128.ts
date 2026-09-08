@@ -2,7 +2,7 @@
  * Dependency-free Code 128 barcode renderer.
  *
  * The API already MINTS barcode payloads — `makeItemSerial()` produces a random
- * `BC-<base36 time>-<4 digits>` item label, `makeShelfBarcode()` produces `BIN-…`,
+ * `BC-<base36 time>-<4 digits>` item label, `makeBinSerial()` produces `BIN-…`,
  * and lots get `LOT-…` (see apps/api/src/modules/inv/labels.ts). Those are just
  * STRINGS, though: nothing in the platform ever drew the scannable bars. This
  * module closes that gap by encoding a payload into real Code 128 and emitting an

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -22,7 +22,30 @@ type ServiceType =
   | 'video_review'
   | 'condition_inspection'
   | 'deslab'
-  | 'remove_commons';
+  | 'remove_commons'
+  | 'custom';
+
+/**
+ * What each service is called in a sentence.
+ *
+ * The enum values are machine words: telling somebody "professional_photography
+ * has already been requested" reads as a leaked column value. Kept beside the
+ * type so a new service cannot be added without naming it.
+ */
+const SERVICE_LABEL: Record<ServiceType, string> = {
+  batch_split: 'A lot split',
+  professional_photography: 'A photo shoot',
+  third_party_grading: 'Grading',
+  donation: 'A donation',
+  consignment: 'Consignment',
+  warehouse_transfer: 'A warehouse transfer',
+  buyout: 'A buyout quote',
+  video_review: 'A video',
+  condition_inspection: 'A condition inspection',
+  deslab: 'Cracking the slab',
+  remove_commons: 'Removing commons',
+  custom: 'A custom request',
+};
 
 /**
  * Service-request framework (Principle VI) + operator approval workflow.
@@ -59,10 +82,22 @@ export class ServiceRequestService {
       feeActionType?: string;
       /** Skip billing entirely — for services that are deliberately free. */
       free?: boolean;
+      /**
+       * Allow a second open request of this type on the same item.
+       *
+       * Only a custom request sets it. Two photo shoots on one card is a
+       * double-charge for one job; two custom asks about one collectible
+       * ("sleeve this" and "weigh this") are two different pieces of work that
+       * happen to share a type, because the type means "not on the list".
+       */
+      allowDuplicate?: boolean;
     },
   ) {
     // PAY-10: a negative balance blocks new service requests.
     await this.wallet.assertNotBlocked(input.requesterId);
+    if (!input.allowDuplicate) {
+      await this.assertNotAlreadyOpen(tx, input.type, input.requesterId, input.itemId);
+    }
     if (!input.free) {
       await this.billing.charge(tx, {
         userId: input.requesterId,
@@ -84,6 +119,53 @@ export class ServiceRequestService {
       })
       .returning();
     return row;
+  }
+
+  /**
+   * One open request of a given kind per card.
+   *
+   * Every service is billed the moment it is created, and nothing stopped the
+   * same one being created twice: a double-clicked "Professional photography"
+   * produced SR-TLJ3EFY5 *and* SR-UVXY72FU, two charges, and two identical jobs
+   * in the operator queue for one card. Nothing in the product said the first
+   * request existed, either — the drawer offered the button again as though
+   * nothing had been asked for.
+   *
+   * The window is deliberately "still open", not "ever": a re-shoot after the
+   * first shoot is finished is a real thing to want. Only a request that has not
+   * been resolved blocks another of its kind, and the refusal names the code of
+   * the one that is already in flight, so the reader can find it.
+   *
+   * Batch-scoped requests (`itemId` absent) are not covered: those are keyed on
+   * a parcel, and a parcel legitimately carries several.
+   */
+  private async assertNotAlreadyOpen(
+    tx: Database,
+    type: ServiceType,
+    requesterId: string,
+    itemId: string | undefined,
+  ): Promise<void> {
+    if (!itemId) return;
+    const [open] = await tx
+      .select({ code: serviceRequest.code, status: serviceRequest.status })
+      .from(serviceRequest)
+      .where(
+        and(
+          eq(serviceRequest.itemId, itemId),
+          eq(serviceRequest.requesterId, requesterId),
+          eq(serviceRequest.type, type),
+          inArray(serviceRequest.status, ['requested', 'in_progress']),
+        ),
+      )
+      .limit(1);
+    if (!open) return;
+    throw new AppError(
+      ErrorCode.CONFLICT,
+      open.status === 'in_progress'
+        ? `${SERVICE_LABEL[type]} is already under way on this card (${open.code}).`
+        : `${SERVICE_LABEL[type]} has already been requested for this card (${open.code}) and is waiting on the warehouse.`,
+      409,
+    );
   }
 
   async get(requestId: string) {

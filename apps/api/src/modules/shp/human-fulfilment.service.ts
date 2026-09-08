@@ -23,6 +23,7 @@ import {
   checkHandDelivery,
   whiteGloveFeeAction,
 } from './fulfilment';
+import { formatMinor } from '../../shared/money';
 
 /**
  * The two ways out of the vault that are a person rather than a parcel.
@@ -210,7 +211,7 @@ export class HumanFulfilmentService {
     if (balance.amount < s.quoteMinor) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        `Short by ${((s.quoteMinor - balance.amount) / 100).toFixed(2)}. Top up the wallet and accept again.`,
+        `Short by ${formatMinor(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
         409,
       );
     }
@@ -337,7 +338,7 @@ export class HumanFulfilmentService {
     if (balance.amount < show.feeMinor) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        `Short by ${((show.feeMinor - balance.amount) / 100).toFixed(2)}.`,
+        `Short by ${formatMinor(show.feeMinor - balance.amount)}.`,
         409,
       );
     }

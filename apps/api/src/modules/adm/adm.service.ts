@@ -84,7 +84,37 @@ export class AdmService {
       .orderBy(userAccount.email);
   }
 
-  async updateUser(id: string, patch: UserPatch) {
+  /**
+   * Edit a user. `actorId` is the administrator doing it, and it matters.
+   *
+   * SUSPENDING YOURSELF WORKED, AND IT WAS FATAL. `PATCH /admin/users/:id` with
+   * your own id and `status: 'suspended'` returned 200, and the very next admin
+   * request answered `account_suspended`. Every route on the console is behind
+   * the admin role and the suspension guard, so the one person who could lift
+   * the suspension was the person who could no longer make a request. Nothing in
+   * the product could undo it — it needed a hand on the database. Demoting
+   * yourself to `user` had exactly the same effect by a different door.
+   *
+   * The guard is narrow on purpose: an administrator may still edit their own
+   * NAME, which is an ordinary thing to want and cannot lock anybody out. Only
+   * the two fields that revoke your own access are refused, and the refusal says
+   * what to do instead — another administrator can make the change, which is
+   * also the only way it gets reviewed by somebody.
+   */
+  async updateUser(actorId: string, id: string, patch: UserPatch) {
+    if (actorId === id) {
+      if (patch.status && patch.status !== 'active') {
+        throw AppError.validation(
+          'You cannot suspend or close your own account here — you would lock yourself out of this console and no route in the product could let you back in. Ask another administrator to do it.',
+        );
+      }
+      if (patch.role && patch.role !== 'admin') {
+        throw AppError.validation(
+          'You cannot remove your own administrator role — this console would refuse you on the next request. Ask another administrator to do it.',
+        );
+      }
+    }
+
     const set: Record<string, unknown> = {};
     if (patch.role) set.role = patch.role;
     if (patch.status) set.status = patch.status;

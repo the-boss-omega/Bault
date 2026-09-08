@@ -12,6 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Public } from '../acc/public.decorator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -19,9 +20,11 @@ import { ShipmentService } from './shipment.service';
 import { ShipmentEditService } from './shipment-edit.service';
 import { GroupShipmentService } from './group-shipment.service';
 import { CustomsService } from './customs.service';
+import { destinationGuidance } from './destinations';
 import { DirectShipService } from './direct-ship.service';
 import { DispatchService } from './dispatch.service';
 import { HumanFulfilmentService } from './human-fulfilment.service';
+import { shippingCountries } from './countries';
 
 /** The options every shipment path accepts, so the shapes cannot drift apart. */
 class ShipmentOptionsDto {
@@ -160,6 +163,19 @@ export class ShpController {
    * collector needs to know ePacket will not insure past $500 while they can
    * still pick something else.
    */
+  /**
+   * The destinations an address may name.
+   *
+   * Served so the address form can be a select rather than a text box. It used
+   * to be free text with "Israel" as its pre-filled value, which every carrier
+   * rule read as an unrecognised country — see `shp/countries.ts`. Public to any
+   * signed-in caller because it is a shipping capability, not anybody's data.
+   */
+  @Get('countries')
+  countries() {
+    return shippingCountries();
+  }
+
   @Get('services')
   services() {
     return this.shipments.services();
@@ -338,6 +354,33 @@ export class ShpController {
   @Get('shipments/:id/customs')
   customsInvoice(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.customs.invoice(id, user);
+  }
+
+  /**
+   * What will happen to this parcel at the border, before it leaves.
+   *
+   * Separate from the invoice because it answers a different question at a
+   * different moment: the invoice is what travels WITH the parcel, this is what
+   * the collector reads while deciding whether to send it.
+   */
+  @Get('shipments/:id/customs/readiness')
+  customsReadiness(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.customs.readiness(id, user);
+  }
+
+  /**
+   * Guidance for a destination, with no shipment involved.
+   *
+   * PUBLIC, and reachable before anything is created — "can Bault even ship to
+   * Australia, and what will it cost me at the far end" is a question people ask
+   * before they have a parcel, and often before they have an account. It carries
+   * no shipment, no account and no rate: only what Bault does at a border and
+   * who to read the real rules from.
+   */
+  @Public()
+  @Get('destinations/:country')
+  destination(@Param('country') country: string) {
+    return destinationGuidance(country);
   }
 
   /** Closes a shipment that has no tracking number, because a person took it. */

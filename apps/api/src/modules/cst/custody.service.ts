@@ -165,9 +165,20 @@ export class CustodyService {
     });
   }
 
-  async setHold(tx: Tx, itemId: string, hold: boolean, actorId: string) {
+  /**
+   * Returns whether anything actually changed.
+   *
+   * It used to return nothing, and the controller answered `hold_placed` either
+   * way — so an operator who scanned a card that was already frozen was told the
+   * hold had just been placed, and one who released a card that was never on
+   * hold was told a hold had been lifted. The DATA was always right (the early
+   * return means no second custody event is written), but the bench was told a
+   * story about work it had not done, on the one screen whose whole job is
+   * saying what happened to a card.
+   */
+  async setHold(tx: Tx, itemId: string, hold: boolean, actorId: string): Promise<boolean> {
     const current = await this.lockItem(tx, itemId);
-    if (current.holdFlag === hold) return;
+    if (current.holdFlag === hold) return false;
     await tx.update(item).set({ holdFlag: hold, updatedAt: new Date() }).where(eq(item.id, itemId));
     await tx.insert(custodyEvent).values({
       itemId,
@@ -185,6 +196,7 @@ export class CustodyService {
         payload: { itemId, barcode: current.barcode, ownerId: current.ownerId },
       });
     }
+    return true;
   }
 
   /** Convenience wrapper: run a unit of work in a transaction. */

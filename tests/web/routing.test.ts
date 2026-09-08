@@ -19,6 +19,31 @@ describe('legacy route redirects', () => {
     });
   });
 
+  it('sends both halves of the old inbound workflow to the receiving bench', () => {
+    /**
+     * `parcels` and `intake` were two tabs describing one piece of work: a box is
+     * received, opened, and its contents are booked in. "Book contents" on the
+     * parcel bench SWITCHED TABS to a form on another screen, and the box was
+     * closed out over there — so an operator crossed a tab boundary twice to work
+     * through one box. They are one `receiving` tab now, and an operator's
+     * bookmark for either half should reach the bench rather than falling back to
+     * the section's landing tab.
+     */
+    expect(legacyRedirect(route('warehouse', 'parcels'))).toEqual({
+      section: 'warehouse',
+      tab: 'receiving',
+    });
+    expect(legacyRedirect(route('warehouse', 'intake'))).toEqual({
+      section: 'warehouse',
+      tab: 'receiving',
+    });
+  });
+
+  it('leaves the warehouse tabs that still exist alone', () => {
+    expect(legacyRedirect(route('warehouse', 'receiving'))).toBeNull();
+    expect(legacyRedirect(route('warehouse', 'inventory'))).toBeNull();
+  });
+
   it('sends /shipping to the merged shipping tab', () => {
     expect(legacyRedirect(route('shipping'))).toEqual({
       section: 'shipping-services',

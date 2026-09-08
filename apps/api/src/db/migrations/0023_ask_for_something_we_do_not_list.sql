@@ -1,0 +1,27 @@
+-- 0023 — Asking for something the service list does not offer.
+--
+-- The vault offers nine services and every one of them is a fixed thing Bault
+-- decided to sell: a photo shoot, a video, an inspection, grading, consignment,
+-- a buyout, a lot split, deslabbing, a donation. A collector who wants anything
+-- else — "sleeve these four before you ship them", "weigh this box and tell me",
+-- "check the seal is intact", "put the two Gold Stars in one parcel" — had one
+-- route: a support ticket, which is a CONVERSATION. It has no price, no operator
+-- queue, no completion, and no link to the collectible it is about. So the work
+-- got agreed in a thread and then had to be re-entered by hand as something
+-- else, or it did not happen.
+--
+-- A custom request is a service request like any other. It sits in the same
+-- queue, it is completed by the same fulfilment form, and it appears in the
+-- collectible's own timeline. What makes it different is that nobody knows what
+-- it costs until somebody reads it — so it is the one service that is QUOTED
+-- before it is billed, which is the shape `buyout` already has:
+--
+--   1. the collector describes what they want (free, and billed nothing);
+--   2. an operator accepts it and quotes a price, or declines it with a reason;
+--   3. the collector accepts the quote — and only THAT bills the wallet;
+--   4. the operator does the work and completes the request.
+--
+-- Nothing is charged for asking, deliberately. A price on the question would
+-- stop people asking, and the questions are how Bault finds out which services
+-- it should be selling as standard.
+ALTER TYPE "service_request_type" ADD VALUE IF NOT EXISTS 'custom';

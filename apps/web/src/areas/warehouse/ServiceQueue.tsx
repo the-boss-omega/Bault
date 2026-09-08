@@ -15,7 +15,7 @@ import {
   SuccessNote,
   type StatusTone,
 } from '../../shared/ui/primitives';
-import { IconCheck, IconClose, IconServices } from '../../shared/ui/icons';
+import { IconAsk, IconCheck, IconClose, IconServices } from '../../shared/ui/icons';
 
 /** Service status → badge tone. Colour never carries the meaning alone. */
 const STATUS_TONE: Record<string, StatusTone> = {
@@ -345,6 +345,23 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
       { name: 'itemVerified', label: 'queue.fulfill.itemVerified', kind: 'checkbox', initial: false },
     ],
   },
+  /**
+   * A custom request is QUOTED, like a buyout, and for the same reason: nobody
+   * knows what it costs until an operator reads what was asked for.
+   *
+   * `scope` is required and is not a note. The collector is about to agree to a
+   * figure, and what they are agreeing to is this sentence — "we will do it for
+   * $30" with nothing behind it is not something anybody can accept. The ask
+   * itself is shown above the form so it can be read without leaving the row.
+   */
+  custom: {
+    endpoint: (id) => `/services/custom/${id}/quote`,
+    ok: 'queue.msg.customQuoted',
+    fields: [
+      { name: 'priceMinor', label: 'queue.fulfill.customPrice', kind: 'money', initial: '25.00', width: '8rem' },
+      { name: 'scope', label: 'queue.fulfill.customScope', kind: 'text', initial: '', width: '20rem' },
+    ],
+  },
   video_review: {
     endpoint: (id) => `/services/video/${id}/complete`,
     ok: 'queue.msg.videoDone',
@@ -451,6 +468,22 @@ function FulfillmentForm({
 
   return (
     <div className="fulfill-form">
+      {/*
+        What the collector actually asked for.
+        A custom row otherwise reads "A custom request" — the type, not the
+        thing — and the operator is being asked to price something they cannot
+        see without opening another screen.
+      */}
+      {q.type === 'custom' && (
+        <div className="ask-notice">
+          <IconAsk />
+          <span>
+            <strong>{String((q.typeFields as { summary?: string } | null)?.summary ?? '')}</strong>
+            <br />
+            {String((q.typeFields as { detail?: string } | null)?.detail ?? '')}
+          </span>
+        </div>
+      )}
       <span className="hint">{t('queue.fulfill.legend')}</span>
       <div className="field-row">
         {spec.fields.map((f) =>

@@ -221,7 +221,7 @@ export class GradingService {
         throw AppError.validation(`That request is for ${String(fields.gradingBody)}, not ${sub.gradingBody}`);
       }
       if (fields.approvalRequired === true && fields.approvalState !== 'approved') {
-        throw new AppError(ErrorCode.CONFLICT, 'This card is still awaiting approval', 409);
+        throw new AppError(ErrorCode.CONFLICT, 'This item is still awaiting approval', 409);
       }
       if (fields.submissionId) {
         throw new AppError(ErrorCode.CONFLICT, 'Already in a submission', 409);
@@ -372,7 +372,7 @@ export class GradingService {
       if (outstanding.length > 0) {
         throw new AppError(
           ErrorCode.CONFLICT,
-          `${outstanding.length} card(s) in this submission have no grade recorded yet`,
+          `${outstanding.length} item(s) in this submission have no grade recorded yet`,
           409,
         );
       }

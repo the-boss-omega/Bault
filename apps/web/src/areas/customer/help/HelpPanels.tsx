@@ -123,7 +123,7 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
         </p>
       )}
 
-      <ol className="timeline" style={{ marginBlockStart: 'var(--sp-4)' }}>
+      <ol className="timeline stack-top">
         {g.steps.map((step, index) => (
           <li key={index} className="detail-row" style={{ display: 'block' }}>
             <div className="row" style={{ gap: 'var(--sp-2)' }}>
@@ -145,7 +145,7 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
       {related.length > 0 && (
         <>
           <h3 className="drawer-heading">{t('guide.related')}</h3>
-          <ul className="check-list" style={{ maxHeight: 'none' }}>
+          <ul className="check-list list-unbounded">
             {related.map((r) => (
               <li key={r.id}>
                 <span>{r.title}</span>
@@ -215,7 +215,7 @@ export function ShowsPanel() {
         ) : upcoming.length === 0 ? (
           <EmptyState title={t('shows.noneTitle')} text={t('shows.noneText')} icon={<IconCalendar />} />
         ) : (
-          <ul className="check-list" style={{ maxHeight: 'none' }}>
+          <ul className="check-list list-unbounded">
             {upcoming.map((s) => (
               <li key={s.id}>
                 <span>
@@ -247,7 +247,7 @@ export function ShowsPanel() {
 
       {past.length > 0 && (
         <Panel title={t('shows.pastTitle')} subtitle={t('shows.pastSubtitle')}>
-          <ul className="check-list" style={{ maxHeight: 'none' }}>
+          <ul className="check-list list-unbounded">
             {past.map((s) => (
               <li key={s.id}>
                 <span>
@@ -333,7 +333,7 @@ export function ContactPanel() {
             </Button>
           </div>
 
-          <dl className="detail-list" style={{ marginBlockStart: 'var(--sp-4)' }}>
+          <dl className="detail-list stack-top">
             <div className="detail-row">
               <dt className="detail-label">{t('contact.email')}</dt>
               <dd className="detail-value">
@@ -369,7 +369,7 @@ export function ContactPanel() {
           {(contact?.team.length ?? 0) > 0 && (
             <>
               <h3 className="drawer-heading">{t('contact.whoAnswers')}</h3>
-              <ul className="check-list" style={{ maxHeight: 'none' }}>
+              <ul className="check-list list-unbounded">
                 {contact!.team.map((person) => (
                   <li key={person.name}>
                     <span>
@@ -388,7 +388,7 @@ export function ContactPanel() {
         {locations.length === 0 ? (
           <EmptyState title={t('contact.noLocations')} text={t('contact.noLocationsText')} icon={<IconLocation />} />
         ) : (
-          <ul className="check-list" style={{ maxHeight: 'none' }}>
+          <ul className="check-list list-unbounded">
             {locations.map((l) => (
               <li key={l.code}>
                 <span>

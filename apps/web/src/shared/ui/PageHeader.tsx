@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n, useT, type Locale } from '../i18n';
+import { useTheme } from '../theme';
 import type { AppNotification } from '../hooks';
 import { IconButton } from './primitives';
 import {
@@ -7,6 +8,9 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconGlobe,
+  IconMonitor,
+  IconMoon,
+  IconSun,
   IconSettings,
   IconShield,
   IconSignOut,
@@ -66,11 +70,71 @@ export function PageHeader({
 }
 
 /** "Signed in as Manager" — quiet, informational, never a button. */
-export function StatusPill({ label }: { label: string }) {
+/**
+ * Who you are signed in as, and whether the account is in good standing.
+ *
+ * This replaced a pill that read "Signed in as Collector" beside a green dot,
+ * and each of those three things was wrong in its own way.
+ *
+ * THE DOT WAS DECORATION. It was hard-coded to the success colour and never
+ * changed, on any account, in any state — so it looked like a status indicator
+ * while indicating nothing. The platform has a real status to show there: an
+ * account can be `suspended`, which Part 13's debt policy applies automatically
+ * once a negative balance passes its threshold, and which locks the app down to
+ * the helpdesk. That is precisely the fact a person needs on screen at all
+ * times, and it was the one thing the pill did not say.
+ *
+ * THE ROLE WAS ALREADY THERE. The account menu two controls to the right shows
+ * the name and the role together. Spending the header's most prominent
+ * horizontal space restating the role in a sentence is chrome, not information.
+ *
+ * THE IDENTIFIER WAS MISSING. `@username` is the operational identity in this
+ * product — it is the `C/O` line a seller must write on a parcel, the string an
+ * operator types to route an arrival, and the one identifier a collector is ever
+ * asked to quote. It is permanent and unique (Requirement 4.1). Having it
+ * permanently on screen is worth more than a sentence about a role.
+ */
+export function AccountPill({
+  username,
+  roleLabel,
+  suspended,
+}: {
+  /**
+   * Absent only in the moment between a successful sign-in and the profile
+   * request that fills the session in — the login response does not carry it.
+   * The pill falls back to the role for that frame rather than rendering a bare
+   * `@`, which would flash a broken identifier on every sign-in.
+   */
+  username?: string;
+  roleLabel: string;
+  suspended: boolean;
+}) {
+  const t = useT();
+
+  if (suspended) {
+    return (
+      <span className="status-pill status-pill--warning" title={t('app.account.suspendedHint')}>
+        <span className="status-dot status-dot--warning" aria-hidden="true" />
+        <span className="status-pill-main">{t('app.account.suspended')}</span>
+      </span>
+    );
+  }
+
   return (
-    <span className="status-pill">
+    <span className="status-pill" title={t('app.account.activeHint', { role: roleLabel })}>
       <span className="status-dot" aria-hidden="true" />
-      {label}
+      {username ? (
+        <>
+          {/* The username is the identifier; the role is context for it, so it
+              is set quieter rather than given equal weight. */}
+          <span className="status-pill-main" dir="ltr">
+            @{username}
+          </span>
+          <span className="status-pill-sub">{roleLabel}</span>
+        </>
+      ) : (
+        <span className="status-pill-main">{roleLabel}</span>
+      )}
     </span>
   );
 }
@@ -225,6 +289,42 @@ export function NotificationBell({
  * reloads, nothing remounts, and the route is untouched — so the section, tab
  * and any open drawer survive the change.
  */
+/**
+ * Light / dark / system, in one control.
+ *
+ * A single button that cycles rather than a three-way menu: the whole state
+ * space is three, the current one is visible in the icon, and a menu for three
+ * options is a menu for the sake of having one. The title says which state is
+ * next so the cycle is discoverable rather than guessed at.
+ */
+export function ThemeToggle() {
+  const t = useT();
+  const { choice, resolved, cycle } = useTheme();
+
+  const label =
+    choice === 'system'
+      ? t('app.theme.system')
+      : choice === 'dark'
+        ? t('app.theme.dark')
+        : t('app.theme.light');
+
+  return (
+    <IconButton
+      label={t('app.theme.label', { current: label })}
+      className="theme-toggle"
+      onClick={cycle}
+    >
+      {choice === 'system' ? (
+        <IconMonitor />
+      ) : resolved === 'dark' ? (
+        <IconMoon />
+      ) : (
+        <IconSun />
+      )}
+    </IconButton>
+  );
+}
+
 export function LanguageSwitcher() {
   const t = useT();
   const { locale, setLocale } = useI18n();

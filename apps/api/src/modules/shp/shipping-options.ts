@@ -12,6 +12,7 @@
  * parcel left on a doorstep), and a tracker add-on is only sold alongside
  * insurance (it exists to help recover a parcel somebody is going to claim on).
  */
+import { formatMinor } from '../../shared/money';
 
 /* ============================================================
    Insurance
@@ -157,13 +158,13 @@ export function checkOptions(opts: {
   if (opts.insuredValueMinor > MAX_INSURED_VALUE_MINOR) {
     problems.push({
       field: 'insuredValueMinor',
-      message: `Cover stops at $${(MAX_INSURED_VALUE_MINOR / 100).toFixed(2)} on one parcel. Split it across two.`,
+      message: `Cover stops at ${formatMinor(MAX_INSURED_VALUE_MINOR)} on one parcel. Split it across two.`,
     });
   }
   if (signatureForced(opts.insuredValueMinor) && !opts.signatureRequired) {
     problems.push({
       field: 'signatureRequired',
-      message: `Anything insured above $${(SIGNATURE_REQUIRED_ABOVE_MINOR / 100).toFixed(2)} has to be signed for.`,
+      message: `Anything insured above ${formatMinor(SIGNATURE_REQUIRED_ABOVE_MINOR)} has to be signed for.`,
     });
   }
   if (needsCustoms(opts.destinationCountry) && opts.customsValueMinor <= 0) {
@@ -181,7 +182,7 @@ export function checkOptions(opts: {
     if (opts.insuredValueMinor < addOn.requiresInsuranceMinor) {
       problems.push({
         field: 'addOns',
-        message: `${addOn.label} needs at least $${(addOn.requiresInsuranceMinor / 100).toFixed(2)} of insurance.`,
+        message: `${addOn.label} needs at least ${formatMinor(addOn.requiresInsuranceMinor)} of insurance.`,
       });
     }
   }

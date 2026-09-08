@@ -21,6 +21,7 @@ import {
   checkDeal,
   escrowFeeMinor,
 } from './escrow-terms';
+import { formatMinor } from '../../shared/money';
 
 type Deal = typeof escrowDeal.$inferSelect;
 
@@ -333,7 +334,7 @@ export class EscrowService {
     if (balance.amount < total) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        `Short by ${((total - balance.amount) / 100).toFixed(2)}. The full amount has to be held before the card is sent.`,
+        `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
         409,
       );
     }

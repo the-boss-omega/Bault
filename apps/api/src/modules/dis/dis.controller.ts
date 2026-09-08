@@ -11,6 +11,8 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -23,6 +25,7 @@ import { GradingService } from './grading.service';
 import { DonationService } from './donation.service';
 import { ConsignmentService } from './consignment.service';
 import { BuyoutService } from './buyout.service';
+import { CustomRequestService } from './custom-request.service';
 import { CONSIGNMENT_CHANNELS } from './consignment-channels';
 import { MediaService } from './media.service';
 import { DisposalServicesService, CULL_WINDOW_DAYS } from './disposal-services.service';
@@ -156,6 +159,33 @@ class WarehouseTransferDto {
 }
 
 /** DIS endpoints (`/services/*`). */
+
+/**
+ * Asking for something the service list does not offer.
+ *
+ * `detail` has a real minimum because somebody has to PRICE this by reading it.
+ * "please help" is not a thing anybody can quote.
+ */
+class CustomRequestDto {
+  @IsOptional() @IsString() itemId?: string;
+  @IsString() @MinLength(3) @MaxLength(120) summary!: string;
+  @IsString() @MinLength(10) @MaxLength(2000) detail!: string;
+}
+
+class CustomQuoteDto {
+  @IsInt() @IsPositive() priceMinor!: number;
+  /** What will actually be done — the thing the collector is agreeing to. */
+  @IsString() @MinLength(10) @MaxLength(1000) scope!: string;
+}
+
+class ReasonDto {
+  @IsString() @MinLength(5) @MaxLength(1000) reason!: string;
+}
+
+class CompletionNotesDto {
+  @IsString() @MinLength(5) @MaxLength(1000) notes!: string;
+}
+
 @ApiTags('DIS')
 @Controller('services')
 export class DisController {
@@ -166,6 +196,7 @@ export class DisController {
     private readonly donation: DonationService,
     private readonly consignment: ConsignmentService,
     private readonly buyouts: BuyoutService,
+    private readonly custom: CustomRequestService,
     private readonly media: MediaService,
     private readonly disposals: DisposalServicesService,
     private readonly lotSplits: LotSplitService,
@@ -418,6 +449,67 @@ export class DisController {
   @Post('buyout')
   requestBuyout(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
     return this.buyouts.request(user.id, dto.itemId);
+  }
+
+  /* ----------------------------------------------------------------
+     Custom requests — asking for something the service list lacks
+     ---------------------------------------------------------------- */
+
+  /**
+   * A collector describes what they want. Costs nothing.
+   *
+   * Deliberately free: a charge on the QUESTION would stop people asking, and
+   * the questions are how Bault finds out which services it should be selling
+   * as standard. The money moves only when a quote is accepted.
+   */
+  @Post('custom')
+  askForSomething(@CurrentUser() user: AuthUser, @Body() dto: CustomRequestDto) {
+    return this.custom.ask(user.id, dto);
+  }
+
+  /** An operator prices it, and states what they will actually do. */
+  @Roles('warehouse_operator', 'admin')
+  @Post('custom/:requestId/quote')
+  quoteCustom(
+    @CurrentUser() user: AuthUser,
+    @Param('requestId') requestId: string,
+    @Body() dto: CustomQuoteDto,
+  ) {
+    return this.custom.quote(user.id, requestId, dto);
+  }
+
+  /** Or says it cannot be done, and why — a refusal with no reason is a dead end. */
+  @Roles('warehouse_operator', 'admin')
+  @Post('custom/:requestId/decline')
+  declineCustom(
+    @CurrentUser() user: AuthUser,
+    @Param('requestId') requestId: string,
+    @Body() dto: ReasonDto,
+  ) {
+    return this.custom.declineToQuote(user.id, requestId, dto.reason);
+  }
+
+  /** The collector agrees to the quote. THIS is what charges the wallet. */
+  @Post('custom/:requestId/accept-quote')
+  acceptCustomQuote(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
+    return this.custom.acceptQuote(user.id, requestId);
+  }
+
+  /** Or turns it down. Nothing was charged, so nothing unwinds. */
+  @Post('custom/:requestId/decline-quote')
+  declineCustomQuote(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
+    return this.custom.declineQuote(user.id, requestId);
+  }
+
+  /** The work is done. Refused unless the collector accepted the quote first. */
+  @Roles('warehouse_operator', 'admin')
+  @Post('custom/:requestId/complete')
+  completeCustom(
+    @CurrentUser() user: AuthUser,
+    @Param('requestId') requestId: string,
+    @Body() dto: CompletionNotesDto,
+  ) {
+    return this.custom.complete(user.id, requestId, dto.notes);
   }
 
   /** An operator puts a figure on an accepted buyout request. */

@@ -6,6 +6,7 @@ import { AppError } from '../../shared/errors/app-error';
 import { fullName, isValidNamePart, normalizeNamePart } from '../../shared/names';
 import { userAccount } from './acc.schema';
 import { shippingAddress } from './address.schema';
+import { toCountryCode } from '../shp/countries';
 
 /**
  * What a user sees about themselves.
@@ -121,7 +122,9 @@ export class ProfileService {
           recipient: dto.recipient,
           line1: dto.line1,
           city: dto.city,
-          country: dto.country,
+          // Stored as the code the carrier rules read, whatever shape it arrived
+          // in — the validator has already established it resolves to one.
+          country: toCountryCode(dto.country) ?? dto.country,
           postalCode: dto.postalCode,
           isDefault: dto.isDefault ?? false,
         })
@@ -146,7 +149,8 @@ export class ProfileService {
 
       const set: Record<string, unknown> = {};
       for (const f of ['label', 'recipient', 'line1', 'city', 'country', 'postalCode'] as const) {
-        if (patch[f] !== undefined) set[f] = patch[f];
+        if (patch[f] === undefined) continue;
+        set[f] = f === 'country' ? (toCountryCode(patch[f]!) ?? patch[f]) : patch[f];
       }
       if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
       if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');

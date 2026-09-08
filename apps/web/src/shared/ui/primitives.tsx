@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { cloneElement, isValidElement, useId } from 'react';
+import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
 /* ============================================================
@@ -11,6 +12,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: 'md' | 'sm';
   block?: boolean;
+  /** Shows a spinner, disables the control and announces `aria-busy`. */
+  loading?: boolean;
   icon?: ReactNode;
 }
 
@@ -24,9 +27,11 @@ export function Button({
   size = 'md',
   block,
   icon,
+  loading,
   children,
   className = '',
   type = 'button',
+  disabled,
   ...rest
 }: ButtonProps) {
   const classes = [
@@ -34,15 +39,120 @@ export function Button({
     `btn--${variant}`,
     size === 'sm' ? 'btn--sm' : '',
     block ? 'btn--block' : '',
+    loading ? 'btn--loading' : '',
     className,
   ]
     .filter(Boolean)
     .join(' ');
   return (
-    <button type={type} className={classes} {...rest}>
-      {icon}
+    /**
+     * A busy button is disabled AND says so.
+     *
+     * Every submit in this app was a plain button whose only feedback was that
+     * nothing happened for a moment — so people press twice, and on a
+     * money-moving form that is a real problem rather than an aesthetic one.
+     * `aria-busy` announces it, `disabled` prevents the second press, and the
+     * spinner replaces the icon rather than sitting next to it so the control
+     * does not change width mid-action.
+     */
+    <button
+      type={type}
+      className={classes}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...rest}
+    >
+      {loading ? <span className="btn-spinner" aria-hidden="true" /> : icon}
       {children}
     </button>
+  );
+}
+
+/**
+ * A labelled form control.
+ *
+ * Replaces the pattern this app repeated everywhere:
+ *
+ *   <label class="field"><span class="field-label">Caption</span>
+ *     <input/><span class="field-hint">Help</span></label>
+ *
+ * which associates the control with its label only by NESTING. The consequence
+ * is that the label's accessible name is the caption and the hint run together,
+ * so a screen reader announces "Owner usernameThe customer's permanent
+ * identifier as shown on the parcel" as the name of the field. It also made the
+ * hint unclickable-but-focus-stealing and defeated `getByLabelText` in tests,
+ * which is how it was found.
+ *
+ * Here the label points at the control by id, the hint is attached with
+ * `aria-describedby` where it belongs, and an error message replaces the hint
+ * and sets `aria-invalid` so the failure is announced rather than only coloured.
+ */
+export function Field({
+  label,
+  hint,
+  error,
+  htmlFor,
+  children,
+  className = '',
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+  /**
+   * The id of the control this labels.
+   *
+   * OPTIONAL, and omitting it is the better call in most places. It was
+   * required, which meant every conversion away from the wrapping-label pattern
+   * had to invent an id — and an id written as a literal is wrong the moment the
+   * field renders inside a list, because then there are several of it. Left out,
+   * the field mints one with `useId` and attaches it to its child, which is
+   * unique per instance by construction.
+   *
+   * Pass it explicitly only when something outside needs to point at the control
+   * (a `ref`, a test, an `aria-controls` elsewhere on the page).
+   */
+  htmlFor?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const generated = useId();
+  const id = htmlFor ?? generated;
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+
+  /**
+   * When the id is ours, put it on the control — otherwise the label points at
+   * nothing and the whole exercise is decoration. `describedBy` goes on with it,
+   * so the hint is announced as a DESCRIPTION rather than becoming part of the
+   * field's name, which is the bug this component exists to fix.
+   *
+   * Only a single element child can be given an id; anything else (a fragment, a
+   * group of radios) is left alone and should pass `htmlFor` itself.
+   */
+  const control =
+    htmlFor === undefined && isValidElement(children)
+      ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+          id: (children.props as { id?: string }).id ?? id,
+          'aria-describedby':
+            (children.props as { 'aria-describedby'?: string })['aria-describedby'] ?? describedBy,
+        })
+      : children;
+
+  return (
+    <div className={`field ${className}`.trim()} data-describes={describedBy}>
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
+      {control}
+      {error ? (
+        <span className="field-error" id={`${id}-error`} role="alert">
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="field-hint" id={`${id}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
   );
 }
 

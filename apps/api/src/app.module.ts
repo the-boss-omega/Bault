@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { loadEnv } from '@bault/config';
 import { AppController } from './app.controller';
 
 // Infrastructure (global)
@@ -15,6 +17,7 @@ import { AccModule } from './modules/acc/acc.module';
 import { CstModule } from './modules/cst/cst.module';
 import { InvModule } from './modules/inv/inv.module';
 import { VltModule } from './modules/vlt/vlt.module';
+import { MedModule } from './modules/med/med.module';
 import { PrcModule } from './modules/prc/prc.module';
 import { PayModule } from './modules/pay/pay.module';
 import { MktModule } from './modules/mkt/mkt.module';
@@ -38,6 +41,31 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
  */
 @Module({
   imports: [
+    /**
+     * Rate limiting, which did not exist at all.
+     *
+     * `POST /auth/login` was unmetered, so a password could be attacked as fast
+     * as the network allowed, and registration and password-reset were unmetered
+     * mail cannons pointed at whatever address the caller named.
+     *
+     * Two budgets rather than one. The generous `default` keeps an operator
+     * working a bench from being throttled while scanning items in; the `auth`
+     * bucket is deliberately small because every route in it either checks a
+     * credential or sends mail to a stranger. Both come from config, because the
+     * right number depends on the deployment rather than on anything knowable
+     * here.
+     */
+    ThrottlerModule.forRootAsync({
+      useFactory: () => {
+        const env = loadEnv();
+        return {
+          throttlers: [
+            { name: 'default', ttl: 60_000, limit: env.RATE_LIMIT_PER_MINUTE },
+            { name: 'auth', ttl: 60_000, limit: env.AUTH_RATE_LIMIT_PER_MINUTE },
+          ],
+        };
+      },
+    }),
     DbModule,
     SecModule,
     SharedModule,
@@ -52,6 +80,7 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
     CstModule,
     InvModule,
     VltModule,
+    MedModule,
     MktModule,
     DisModule,
     ShpModule,
@@ -61,6 +90,10 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
   ],
   controllers: [AppController],
   providers: [
+    // Throttling runs BEFORE authentication: an unauthenticated flood must be
+    // cheap to refuse, and a guard that first hits the session table to decide
+    // whether to rate-limit has already done the expensive part.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

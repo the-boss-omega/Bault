@@ -71,7 +71,7 @@ export class ChargebackService {
         .limit(1);
       if (!payment) throw AppError.notFound('Payment not found');
       if (payment.purpose !== 'topup') {
-        throw AppError.validation('Only a top-up can be charged back');
+        throw AppError.validation('Only a cash-in can be charged back');
       }
       if (payment.status === 'reversed') {
         throw new AppError(ErrorCode.CONFLICT, 'That payment has already been reversed', 409);

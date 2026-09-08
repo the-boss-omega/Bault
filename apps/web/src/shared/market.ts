@@ -93,8 +93,22 @@ export interface MyOffer {
   typeClass: string;
   description: string;
   buyerUsername: string | null;
-  /** Which side of the table the caller is on — the API computes it. */
+  /** Which side of the LISTING the caller is on — the API computes it. */
   direction: 'incoming' | 'outgoing';
+  /** The caller's own side, named rather than inferred from `direction`. */
+  side: 'buyer' | 'seller';
+  /** Which side named the price currently on the table. */
+  proposedBy: 'buyer' | 'seller';
+  /**
+   * Whether the ball is in the caller's court.
+   *
+   * This panel used to key its controls off `direction`, which is a different
+   * question: it showed a buyer "awaiting seller" and no controls at all, so a
+   * buyer who had been sent a counter-offer could not accept it, counter it, or
+   * withdraw. Whose move it is depends on who proposed the price, not on who is
+   * selling.
+   */
+  yourTurn: boolean;
 }
 
 export interface SwapItemRef {

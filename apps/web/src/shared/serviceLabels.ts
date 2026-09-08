@@ -17,6 +17,7 @@ export const SERVICE_TYPE_KEY: Record<string, MessageKey> = {
   condition_inspection: 'service.type.condition_inspection',
   deslab: 'service.type.deslab',
   remove_commons: 'service.type.remove_commons',
+  custom: 'service.type.custom',
 };
 
 export const SERVICE_STATUS_KEY: Record<string, MessageKey> = {

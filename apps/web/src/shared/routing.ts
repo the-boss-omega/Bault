@@ -54,6 +54,17 @@ const LEGACY_TABS: Record<string, Record<string, string>> = {
     topup: 'cash-in',
     withdrawals: 'cash-out',
   },
+  /**
+   * `parcels` and `intake` were two tabs describing one piece of work, and the
+   * split cut it in half: "Book contents" on the parcel bench SWITCHED TABS to
+   * the intake form, and the box was closed out over there. They are one
+   * `receiving` tab now, so both old names land on it — an operator's bookmark
+   * should reach the bench, not a section fallback.
+   */
+  warehouse: {
+    parcels: 'receiving',
+    intake: 'receiving',
+  },
 };
 
 /**

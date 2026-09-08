@@ -9,6 +9,7 @@ import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
 import { bin, custodyEvent, item, itemImage } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
+import { serviceRequest } from '../dis/dis.schema';
 import {
   OVERSIZED_STORAGE,
   STANDARD_STORAGE,
@@ -438,6 +439,35 @@ export class VaultService {
       .where(eq(custodyEvent.itemId, itemId))
       .orderBy(sql`${custodyEvent.occurredAt} desc`);
 
-    return { item: it, images: signedImages, history };
+    /**
+     * What has already been asked for on this card, and is not finished.
+     *
+     * The drawer offered every service as though nothing had ever been requested
+     * — so a collector who ordered a photo shoot yesterday opened the card today
+     * and saw the same button, with no sign the first request existed. Pressing
+     * it produced a second charge and a second identical job in the queue.
+     *
+     * Sent with the card rather than fetched separately because it changes what
+     * the ACTIONS say, and an action list that renders before it knows this is an
+     * action list that lies for a moment.
+     */
+    const openRequests = await this.db
+      .select({
+        code: serviceRequest.code,
+        type: serviceRequest.type,
+        status: serviceRequest.status,
+        createdAt: serviceRequest.createdAt,
+      })
+      .from(serviceRequest)
+      .where(
+        and(
+          eq(serviceRequest.itemId, itemId),
+          eq(serviceRequest.requesterId, userId),
+          inArray(serviceRequest.status, ['requested', 'in_progress']),
+        ),
+      )
+      .orderBy(sql`${serviceRequest.createdAt} desc`);
+
+    return { item: it, images: signedImages, history, openRequests };
   }
 }

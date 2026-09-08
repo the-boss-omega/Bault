@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { useVaultItems } from '../../../shared/useVaultItems';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
-import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox, IconSearch } from '../../../shared/ui/icons';
 
 interface Collector {
@@ -139,16 +139,18 @@ export function ProposeTradePanel({
     <Panel title={t('market.propose.title')} subtitle={t('market.propose.subtitle')}>
       <div className="stack stack--tight" style={{ maxWidth: 620 }}>
         <div className="row" style={{ alignItems: 'end' }}>
-          <label className="field" style={{ flex: '1 1 220px' }}>
-            <span className="field-label">{t('market.propose.username')}</span>
+          <Field
+            label={t('market.propose.username')}
+            hint={t('market.propose.usernameHint')}
+            className="field--grow"
+          >
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               aria-invalid={username.length > 0 && !usernameOk}
               dir="ltr"
             />
-            <span className="field-hint">{t('market.propose.usernameHint')}</span>
-          </label>
+          </Field>
           <Button
             variant="secondary"
             icon={<IconSearch />}
@@ -202,17 +204,19 @@ export function ProposeTradePanel({
         {!gift && counterparty && (
           <>
             <div className="row" style={{ alignItems: 'end' }}>
-              <label className="field" style={{ flex: '1 1 200px' }}>
-                <span className="field-label">{t('market.propose.wantSerial')}</span>
+              <Field
+                label={t('market.propose.wantSerial')}
+                hint={t('market.propose.wantHint')}
+                className="field--grow"
+              >
                 <input value={serial} onChange={(e) => setSerial(e.target.value)} dir="ltr" />
-                <span className="field-hint">{t('market.propose.wantHint')}</span>
-              </label>
+              </Field>
               <Button variant="secondary" disabled={!serial.trim()} onClick={() => void addWanted()}>
                 {t('market.propose.addWanted')}
               </Button>
             </div>
             {wanted.length > 0 && (
-              <ul className="check-list" style={{ maxHeight: 'none' }}>
+              <ul className="check-list list-unbounded">
                 {wanted.map((w) => (
                   <li key={w.id}>
                     <span>

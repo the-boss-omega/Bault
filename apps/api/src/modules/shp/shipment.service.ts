@@ -29,6 +29,7 @@ import {
 import {
   MAX_INSURED_VALUE_MINOR,
   PAYMENT_WINDOW_DAYS,
+  RESTOCKING_FEE_MINOR,
   SHIPMENT_ADD_ONS,
   SIGNATURE_REQUIRED_ABOVE_MINOR,
   addOnFeeAction,
@@ -38,6 +39,7 @@ import {
   shipmentAddOn,
   signatureForced,
 } from './shipping-options';
+import { formatMinor } from '../../shared/money';
 
 /** Who is asking. Staff may act on any shipment; a collector only on their own. */
 export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
@@ -197,6 +199,15 @@ export class ShipmentService {
       maxInsuredValueMinor: MAX_INSURED_VALUE_MINOR,
       signatureRequiredAboveMinor: SIGNATURE_REQUIRED_ABOVE_MINOR,
       paymentWindowDays: PAYMENT_WINDOW_DAYS,
+      /**
+       * What cancelling costs once a rate has been selected.
+       *
+       * Published so the warning shown BEFORE the cancel button can name the
+       * figure. It said "charges a restocking fee" while the number was a
+       * constant sitting in the server — asking somebody to accept a cost
+       * nobody was willing to state.
+       */
+      restockingFeeMinor: RESTOCKING_FEE_MINOR,
     };
   }
 
@@ -741,7 +752,7 @@ export class ShipmentService {
     if (balance.amount < s.cost) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        `Short by ${((s.cost - balance.amount) / 100).toFixed(2)}. Top up the wallet and try again.`,
+        `Short by ${formatMinor(s.cost - balance.amount)}. Top up the wallet and try again.`,
         409,
       );
     }

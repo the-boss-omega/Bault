@@ -6,13 +6,24 @@ import { AllowSuspended } from './allow-suspended.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './acc.dto';
+import { IsShippableCountry } from '../shp/country.validator';
 
+/**
+ * `country` is an ISO 3166-1 alpha-2 code that a carrier rule can read, not
+ * free text.
+ *
+ * It was `@IsString()`, and the address form pre-filled it with the word
+ * "Israel". Every rule in `carriers.ts` compares this field against a code, so
+ * the default value made each new address international-and-uncontracted: the
+ * collector lost the cheapest service they qualified for and was told the
+ * carrier does not go there. See `shp/countries.ts`.
+ */
 class CreateAddressDto {
   @IsString() label!: string;
   @IsString() recipient!: string;
   @IsString() line1!: string;
   @IsString() city!: string;
-  @IsString() country!: string;
+  @IsShippableCountry() country!: string;
   @IsString() postalCode!: string;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
@@ -23,7 +34,7 @@ class UpdateAddressDto {
   @IsOptional() @IsString() recipient?: string;
   @IsOptional() @IsString() line1?: string;
   @IsOptional() @IsString() city?: string;
-  @IsOptional() @IsString() country?: string;
+  @IsOptional() @IsShippableCountry() country?: string;
   @IsOptional() @IsString() postalCode?: string;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }

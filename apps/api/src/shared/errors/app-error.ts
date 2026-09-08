@@ -25,6 +25,15 @@ export class AppError extends HttpException {
   static forbidden(message = 'Not permitted'): AppError {
     return new AppError(ErrorCode.FORBIDDEN, message, HttpStatus.FORBIDDEN);
   }
+  /**
+   * Right password, unconfirmed address.
+   *
+   * Its own code because it is the only sign-in failure the person can fix from
+   * the sign-in page, and the page can only offer that if it can recognise it.
+   */
+  static emailUnverified(message: string): AppError {
+    return new AppError(ErrorCode.EMAIL_UNVERIFIED, message, HttpStatus.FORBIDDEN);
+  }
   static accountSuspended(): AppError {
     return new AppError(
       ErrorCode.ACCOUNT_SUSPENDED,

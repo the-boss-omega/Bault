@@ -5,6 +5,7 @@
  * to nothing, so all of it is directly testable, and the SPA mirrors the shape
  * while fetching the actual figures from `GET /escrow/terms`.
  */
+import { formatMinor } from '../../shared/money';
 
 /** Bault's cut, in basis points of the agreed value. */
 export const ESCROW_FEE_BPS = 100; // 1.00%
@@ -58,7 +59,7 @@ export function checkDeal(input: {
   } else if (input.valueMinor < ESCROW_MINIMUM_VALUE_MINOR) {
     problems.push({
       field: 'valueMinor',
-      message: `Escrow starts at $${(ESCROW_MINIMUM_VALUE_MINOR / 100).toFixed(2)}. Below that the fee costs more than the protection is worth to you.`,
+      message: `Escrow starts at ${formatMinor(ESCROW_MINIMUM_VALUE_MINOR)}. Below that the fee costs more than the protection is worth to you.`,
     });
   }
 

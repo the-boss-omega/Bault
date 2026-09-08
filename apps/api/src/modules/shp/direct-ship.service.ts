@@ -15,6 +15,7 @@ import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { carrierService, DIRECT_OVERNIGHT_FACILITY, DIRECT_OVERNIGHT_KEY, DOMESTIC_COUNTRY } from './carriers';
 import { insurancePremiumMinor, signatureForced, MAX_INSURED_VALUE_MINOR } from './shipping-options';
+import { formatMinor } from '../../shared/money';
 
 /**
  * Ship it straight out of the tax-free site, overnight, instead of vaulting it.
@@ -128,7 +129,7 @@ export class DirectShipService {
     if (!eligible) throw new AppError(ErrorCode.CONFLICT, reasons[0]!, 409);
 
     if (!Number.isInteger(input.cardCount) || input.cardCount < 1) {
-      throw AppError.validation('Say how many cards are in it');
+      throw AppError.validation('Say how many items are in it');
     }
     if (service.maxItems !== undefined && input.cardCount > service.maxItems) {
       throw AppError.validation(
@@ -154,7 +155,7 @@ export class DirectShipService {
     if (balance.amount < total) {
       throw new AppError(
         ErrorCode.CONFLICT,
-        `Direct overnight is ${(total / 100).toFixed(2)} and your balance is ${(balance.amount / 100).toFixed(2)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
+        `Direct overnight is ${formatMinor(total)} and your balance is ${formatMinor(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
         409,
       );
     }

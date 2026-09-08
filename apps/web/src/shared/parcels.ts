@@ -87,6 +87,14 @@ export interface ParcelQueueRow extends Omit<ParcelSummary, 'declaredContents'> 
   ownerUsername: string | null;
   declaredContents: string | null;
   facilityRole: string | null;
+  /**
+   * How many vault items have been booked out of this parcel so far.
+   *
+   * The bench's reconciliation figure: an opened box showing zero has had
+   * nothing taken out of it yet, and closing it in that state is what the API
+   * now refuses without a stated reason.
+   */
+  itemCount: number;
 }
 
 /** `GET /me/inbound-addresses`. */

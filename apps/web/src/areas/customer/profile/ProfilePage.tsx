@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { api, apiErrorKey } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
-import { NAME_PART_MAX, fullName, isValidNamePart, normalizeNamePart } from '../../../shared/names';
+import {
+  NAME_PART_MAX,
+  PASSWORD_MIN,
+  fullName,
+  isValidNamePart,
+  normalizeNamePart,
+} from '../../../shared/names';
 import { useNavigation, useRoute } from '../../../shared/routing';
+import { countryName, useShippingCountries } from '../../../shared/countries';
 import {
   Button,
   ContextTabs,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   StatusBadge,
   SuccessNote,
@@ -215,8 +223,10 @@ export function ProfilePage() {
               )}
 
               <div className="form-grid">
-                <label className="field">
-                  <span className="field-label">{t('auth.firstName')}</span>
+                <Field
+                  label={t('auth.firstName')}
+                  error={firstName.length > 0 && !firstOk ? t('auth.nameInvalid') : undefined}
+                >
                   <input
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
@@ -224,13 +234,12 @@ export function ProfilePage() {
                     maxLength={NAME_PART_MAX}
                     aria-invalid={firstName.length > 0 && !firstOk}
                   />
-                  {firstName.length > 0 && !firstOk && (
-                    <span className="field-error">{t('auth.nameInvalid')}</span>
-                  )}
-                </label>
+                </Field>
 
-                <label className="field">
-                  <span className="field-label">{t('auth.lastName')}</span>
+                <Field
+                  label={t('auth.lastName')}
+                  error={lastName.length > 0 && !lastOk ? t('auth.nameInvalid') : undefined}
+                >
                   <input
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
@@ -238,10 +247,7 @@ export function ProfilePage() {
                     maxLength={NAME_PART_MAX}
                     aria-invalid={lastName.length > 0 && !lastOk}
                   />
-                  {lastName.length > 0 && !lastOk && (
-                    <span className="field-error">{t('auth.nameInvalid')}</span>
-                  )}
-                </label>
+                </Field>
               </div>
 
               <p className="field-hint">
@@ -357,12 +363,12 @@ function PasswordPanel({
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const tooShort = next.length > 0 && next.length < 8;
+  const tooShort = next.length > 0 && next.length < PASSWORD_MIN;
   const mismatch = confirm.length > 0 && confirm !== next;
   // Refusing a no-op change here rather than letting the server accept it: it
   // reports success while nothing happened, which reads as a bug.
   const unchanged = next.length > 0 && next === current;
-  const ready = current.length > 0 && next.length >= 8 && confirm === next && !unchanged;
+  const ready = current.length > 0 && next.length >= PASSWORD_MIN && confirm === next && !unchanged;
 
   async function save() {
     setBusy(true);
@@ -382,8 +388,7 @@ function PasswordPanel({
   return (
     <Panel title={t('profile.password.heading')} subtitle={t('profile.password.subtitle')}>
       <div className="stack stack--tight" style={{ maxWidth: 460 }}>
-        <label className="field">
-          <span className="field-label">{t('profile.password.current')}</span>
+        <Field label={t('profile.password.current')}>
           <input
             type="password"
             value={current}
@@ -391,10 +396,23 @@ function PasswordPanel({
             autoComplete="current-password"
             dir="ltr"
           />
-        </label>
+        </Field>
 
-        <label className="field">
-          <span className="field-label">{t('auth.newPassword')}</span>
+        {/* Two different problems, told apart. The field previously rendered the
+            length HINT in error colour when the password was too short and the
+            "same as your current one" text when it was unchanged — so the two
+            failures shared one line and only one of them ever named itself. */}
+        <Field
+          label={t('auth.newPassword')}
+          hint={t('auth.passwordHint')}
+          error={
+            unchanged
+              ? t('profile.password.sameAsCurrent')
+              : tooShort
+                ? t('auth.passwordTooShort', { min: PASSWORD_MIN })
+                : undefined
+          }
+        >
           <input
             type="password"
             value={next}
@@ -403,13 +421,12 @@ function PasswordPanel({
             aria-invalid={tooShort || unchanged}
             dir="ltr"
           />
-          <span className={tooShort || unchanged ? 'field-error' : 'field-hint'}>
-            {unchanged ? t('profile.password.sameAsCurrent') : t('auth.passwordHint')}
-          </span>
-        </label>
+        </Field>
 
-        <label className="field">
-          <span className="field-label">{t('auth.confirmPassword')}</span>
+        <Field
+          label={t('auth.confirmPassword')}
+          error={mismatch ? t('auth.passwordMismatch') : undefined}
+        >
           <input
             type="password"
             value={confirm}
@@ -418,8 +435,7 @@ function PasswordPanel({
             aria-invalid={mismatch}
             dir="ltr"
           />
-          {mismatch && <span className="field-error">{t('auth.passwordMismatch')}</span>}
-        </label>
+        </Field>
 
         <div className="row">
           <Button variant="gold" disabled={busy || !ready} onClick={() => void save()}>
@@ -447,6 +463,7 @@ function AddressCard({
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
+  const countries = useShippingCountries();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(address);
 
@@ -481,8 +498,11 @@ function AddressCard({
           {address.isDefault && <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>}
         </div>
         <p className="card-desc">{address.recipient}</p>
+        {/* The country is stored as a code; a card reading "San Francisco, US"
+            has swapped one unreadable value for another. */}
         <p className="card-desc">
-          {address.line1}, {address.city}, {address.country} {address.postalCode}
+          {address.line1}, {address.city}, {countryName(address.country, countries)}{' '}
+          {address.postalCode}
         </p>
         <div className="actions">
           <Button
@@ -529,34 +549,81 @@ function AddressFields({
   onChange: (next: AddressDraft) => void;
 }) {
   const { t } = useI18n();
+  const countries = useShippingCountries();
   const set = (patch: Partial<AddressDraft>) => onChange({ ...draft, ...patch });
+  const id = useId();
 
   return (
     <div className="form-grid">
-      <label className="field">
-        <span className="field-label">{t('profile.addressForm.label')}</span>
-        <input value={draft.label} onChange={(e) => set({ label: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="field-label">{t('profile.addressForm.recipient')}</span>
-        <input value={draft.recipient} onChange={(e) => set({ recipient: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="field-label">{t('profile.addressForm.line1')}</span>
-        <input value={draft.line1} onChange={(e) => set({ line1: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="field-label">{t('profile.addressForm.city')}</span>
-        <input value={draft.city} onChange={(e) => set({ city: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="field-label">{t('profile.addressForm.country')}</span>
-        <input value={draft.country} onChange={(e) => set({ country: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="field-label">{t('profile.addressForm.postalCode')}</span>
-        <input value={draft.postalCode} onChange={(e) => set({ postalCode: e.target.value })} dir="ltr" />
-      </label>
+      {/*
+        `Field` throughout. These were wrapping <label>s, which is the pattern
+        that makes a hint part of the control's accessible name — and the country
+        field below now has a hint worth reading.
+      */}
+      <Field label={t('profile.addressForm.label')} htmlFor={`${id}-label`}>
+        <input id={`${id}-label`} value={draft.label} onChange={(e) => set({ label: e.target.value })} />
+      </Field>
+      <Field label={t('profile.addressForm.recipient')} htmlFor={`${id}-recipient`}>
+        <input
+          id={`${id}-recipient`}
+          value={draft.recipient}
+          onChange={(e) => set({ recipient: e.target.value })}
+          autoComplete="name"
+        />
+      </Field>
+      <Field label={t('profile.addressForm.line1')} htmlFor={`${id}-line1`}>
+        <input
+          id={`${id}-line1`}
+          value={draft.line1}
+          onChange={(e) => set({ line1: e.target.value })}
+          autoComplete="address-line1"
+        />
+      </Field>
+      <Field label={t('profile.addressForm.city')} htmlFor={`${id}-city`}>
+        <input
+          id={`${id}-city`}
+          value={draft.city}
+          onChange={(e) => set({ city: e.target.value })}
+          autoComplete="address-level2"
+        />
+      </Field>
+      {/*
+        A SELECT, not a text box.
+        This was free text pre-filled with the word "Israel", and every carrier
+        rule reads this field as an ISO code — so the default value made each new
+        address international-and-uncontracted, and the collector was told
+        "ePacket International is not contracted to ISRAEL" for an address that
+        should have qualified. The list comes from the carrier table itself, so
+        nothing here can offer a destination that cannot be reached.
+      */}
+      <Field
+        label={t('profile.addressForm.country')}
+        htmlFor={`${id}-country`}
+        hint={t('profile.addressForm.countryHint')}
+      >
+        <select
+          id={`${id}-country`}
+          value={draft.country}
+          onChange={(e) => set({ country: e.target.value })}
+          autoComplete="country"
+        >
+          <option value="">{t('profile.addressForm.countryPlaceholder')}</option>
+          {countries.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label={t('profile.addressForm.postalCode')} htmlFor={`${id}-postal`}>
+        <input
+          id={`${id}-postal`}
+          value={draft.postalCode}
+          onChange={(e) => set({ postalCode: e.target.value })}
+          autoComplete="postal-code"
+          dir="ltr"
+        />
+      </Field>
       <label className="check">
         <input
           type="checkbox"
@@ -582,7 +649,9 @@ function AddressForm({
     recipient: '',
     line1: '',
     city: '',
-    country: t('profile.addressForm.countryDefault'),
+    // No default. A pre-filled country is a country nobody checked, and the one
+    // that used to be here was a display name that no carrier rule recognised.
+    country: '',
     postalCode: '',
     isDefault: false,
   };

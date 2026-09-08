@@ -40,6 +40,12 @@ export function Barcode({ value, options }: { value: string; options?: BarcodeOp
   );
 }
 
+/** One label to print: the payload that scans, and the line a human reads. */
+export interface PrintableLabel {
+  value: string;
+  caption?: string;
+}
+
 /**
  * Open the print dialog with a one-label document.
  *
@@ -48,14 +54,45 @@ export function Barcode({ value, options }: { value: string; options?: BarcodeOp
  * not (older Safari), so repeated printing never leaks iframes into the DOM.
  */
 export function printBarcode(value: string, caption?: string): void {
-  let svg: string;
-  try {
-    // Print at a larger module width than the screen: 3 modules keeps the
-    // narrowest bar above the ~0.25mm most laser scanners need at 300dpi.
-    svg = barcodeSvg(value, { moduleWidth: 3, height: 90, showText: true });
-  } catch {
-    return; // unencodable payload — nothing sensible to print
-  }
+  printBarcodes([{ value, caption }]);
+}
+
+/**
+ * Print a whole run in ONE dialog, one label per page.
+ *
+ * `printBarcode` handled a single label, which was right when the bench booked in
+ * one unit at a time. It books in a box now, and twelve units meant twelve trips
+ * to the print dialog — twelve confirmations, and no way for an operator who
+ * missed one to tell which.
+ *
+ * `page-break-after` on every label but the last is what makes a run of twelve
+ * come out as twelve label-stock pages rather than twelve barcodes crammed onto
+ * one sheet. The last one is exempt so a single-label print does not eject a
+ * blank page after it.
+ */
+export function printBarcodes(labels: readonly PrintableLabel[]): void {
+  // Print at a larger module width than the screen: 3 modules keeps the
+  // narrowest bar above the ~0.25mm most laser scanners need at 300dpi.
+  const printable = labels
+    .map((label) => {
+      try {
+        return { ...label, svg: barcodeSvg(label.value, { moduleWidth: 3, height: 90, showText: true }) };
+      } catch {
+        return null; // an unencodable payload is skipped, never printed blank
+      }
+    })
+    .filter((l): l is PrintableLabel & { svg: string } => l !== null);
+
+  if (printable.length === 0) return;
+
+  const body = printable
+    .map(
+      (label, index) =>
+        `<div class="label${index === printable.length - 1 ? ' last' : ''}">${label.svg}` +
+        (label.caption ? `<div class="caption">${escapeHtml(label.caption)}</div>` : '') +
+        `</div>`,
+    )
+    .join('');
 
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
@@ -74,18 +111,24 @@ export function printBarcode(value: string, caption?: string): void {
     return;
   }
 
+  const title =
+    printable.length === 1 ? escapeHtml(printable[0]!.value) : `${printable.length} labels`;
+
   doc.open();
   doc.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(value)}</title>` +
+    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
       `<style>` +
       `@page { margin: 8mm; }` +
-      `body { margin: 0; display: flex; align-items: center; justify-content: center; }` +
-      `.label { font-family: ui-monospace, Consolas, monospace; text-align: center; }` +
+      `body { margin: 0; font-family: ui-monospace, Consolas, monospace; }` +
+      `.label { text-align: center; page-break-after: always; break-after: page;` +
+      ` display: flex; flex-direction: column; align-items: center;` +
+      ` justify-content: center; min-height: 100vh; }` +
+      // The last label does not eject a page after it, so printing one label
+      // does not push a blank sheet out behind it.
+      `.label.last { page-break-after: auto; break-after: auto; }` +
       `.label svg { display: block; margin: 0 auto; }` +
       `.label .caption { margin-top: 6px; font-size: 12px; }` +
-      `</style></head><body><div class="label">${svg}` +
-      (caption ? `<div class="caption">${escapeHtml(caption)}</div>` : '') +
-      `</div></body></html>`,
+      `</style></head><body>${body}</body></html>`,
   );
   doc.close();
 
@@ -102,6 +145,33 @@ export function printBarcode(value: string, caption?: string): void {
   win.focus();
   win.print();
   window.setTimeout(cleanup, 60_000);
+}
+
+/**
+ * Print every label in a run, in one dialog.
+ *
+ * Offered beside the labels an intake just produced. Disabled-by-absence rather
+ * than disabled-and-grey: with nothing to print there is nothing to render.
+ */
+export function BarcodePrintAllButton({
+  labels,
+  className = 'btn btn--gold',
+}: {
+  labels: readonly PrintableLabel[];
+  className?: string;
+}) {
+  const t = useT();
+  if (labels.length === 0) return null;
+  return (
+    <button
+      type="button"
+      className={className}
+      title={t('barcode.printAll', { count: labels.length })}
+      onClick={() => printBarcodes(labels)}
+    >
+      🖨 {t('barcode.printAll', { count: labels.length })}
+    </button>
+  );
 }
 
 /** Print button, rendered next to a barcode wherever one is displayed. */

@@ -16,6 +16,7 @@ import {
   ContextTabs,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   SkeletonTable,
   StatusBadge,
@@ -257,16 +258,14 @@ function NewTicketForm({
           <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />
         </label>
 
-        <label className="field">
-          <span className="field-label">{t('support.message')}</span>
+        <Field label={t('support.message')} hint={t('support.messageHint')}>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={7}
             maxLength={5000}
           />
-          <span className="field-hint">{t('support.messageHint')}</span>
-        </label>
+        </Field>
 
         <div className="row">
           <Button variant="gold" disabled={busy || !ready} onClick={() => void submit()}>

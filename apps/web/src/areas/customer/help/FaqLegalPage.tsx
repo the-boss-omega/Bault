@@ -11,12 +11,44 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
-import { FAQ, type FaqBlock, type FaqEntry } from './faqContent';
+import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
+import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS, PENDING_DOCUMENTS } from './legalContent';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
 
-const TABS = ['ask', 'guides', 'faq', 'prices', 'shows', 'contact', 'legal'] as const;
+/**
+ * How each availability value is presented.
+ *
+ * Three values rather than the original two, because "Bault has no such
+ * capability" and "Bault does most of this but not the part about lodging a
+ * broker instruction" are different answers, and collapsing them into one
+ * badge made the second look like the first. `partial` is warned rather than
+ * greyed out: it is a thing Bault does, with a stated limit, so hiding it
+ * behind the "not relevant" filter would bury a capability people have.
+ */
+/** Whether any catalogued entry is outright unavailable — see the filter. */
+const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
+
+const AVAILABILITY_TONE: Record<FaqAvailability, 'info' | 'warning' | 'neutral'> = {
+  adapted: 'info',
+  partial: 'warning',
+  unavailable: 'neutral',
+};
+
+const AVAILABILITY_BADGE: Record<FaqAvailability, MessageKey> = {
+  adapted: 'faq.badge.adapted',
+  partial: 'faq.badge.partial',
+  unavailable: 'faq.badge.unavailable',
+};
+
+const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
+  adapted: 'faq.note.adaptedTitle',
+  partial: 'faq.note.partialTitle',
+  unavailable: 'faq.note.unavailableTitle',
+};
+
+const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
 type HelpTab = (typeof TABS)[number];
 
 /**
@@ -61,6 +93,11 @@ export function FaqLegalPage() {
           <FaqPanel />
         </TabPanel>
       )}
+      {/* Sits after the FAQ because it is the answer the FAQ keeps pointing at:
+          what may be sent at all. Before the prices, because whether Bault will
+          take the thing comes before what keeping it costs. */}
+      {tab === 'policy' && <IntakePolicyPanel />}
+
       {tab === 'prices' && (
         <TabPanel tab="prices">
           <PriceListPanel />
@@ -238,7 +275,7 @@ function FaqPanel() {
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return FAQ.entries.filter((entry) => {
-      if (!showAll && entry.availability !== 'adapted') return false;
+      if (!showAll && entry.availability === 'unavailable') return false;
       if (category !== 'all' && entry.category !== category) return false;
       if (!needle) return true;
       return (SEARCH_INDEX.get(entry.id) ?? '').includes(needle);
@@ -251,7 +288,7 @@ function FaqPanel() {
     if (!openId) return;
     const entry = FAQ.entries.find((e) => e.id === openId);
     if (!entry) return;
-    if (entry.availability !== 'adapted') setShowAll(true);
+    if (entry.availability === 'unavailable') setShowAll(true);
     setCategory((current) => (current === 'all' || current === entry.category ? current : 'all'));
   }, [openId]);
 
@@ -286,10 +323,17 @@ function FaqPanel() {
             ))}
           </div>
 
-          <label className="check">
-            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-            {t('faq.showAll')}
-          </label>
+          {/* Offered only when there is something to reveal. Every entry in the
+              catalogue currently describes something Bault does, in whole or in
+              part, so a permanent "also show what does not apply" control would
+              be a toggle that changes nothing — and would imply a set of
+              excluded answers that does not exist. */}
+          {HAS_UNAVAILABLE && (
+            <label className="check">
+              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+              {t('faq.showAll')}
+            </label>
+          )}
         </div>
 
         {/*
@@ -383,8 +427,8 @@ function FaqItem({
           <span className="faq-q-text" lang="en" dir="ltr">
             {entry.question}
           </span>
-          <StatusBadge tone={entry.availability === 'adapted' ? 'info' : 'neutral'} plain>
-            {t(entry.availability === 'adapted' ? 'faq.badge.adapted' : 'faq.badge.unavailable')}
+          <StatusBadge tone={AVAILABILITY_TONE[entry.availability]} plain>
+            {t(AVAILABILITY_BADGE[entry.availability])}
           </StatusBadge>
         </button>
       </h3>
@@ -401,7 +445,7 @@ function FaqItem({
             they read it as Bault policy. */}
         <p className={`faq-note faq-note--${entry.availability}`}>
           <strong>
-            {t(entry.availability === 'adapted' ? 'faq.note.adaptedTitle' : 'faq.note.unavailableTitle')}
+            {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
@@ -558,7 +602,7 @@ function LegalPanel() {
           </div>
         )}
 
-        <div className="search search--wide" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <div className="search search--wide stack-top">
           <IconSearch />
           <input
             type="search"

@@ -208,9 +208,26 @@ export class PayController {
   }
 
   @Public()
+  /**
+   * A provider telling us something happened.
+   *
+   * Public, because a provider has no session — which is exactly why the
+   * verification behind it is the only thing standing between this route and
+   * anyone on the internet. The WHOLE delivery is handed to the adapter: real
+   * verification needs the headers, not one signature string, and PayPal's is a
+   * call rather than a compare.
+   *
+   * An unverifiable delivery throws, which the global filter renders as a 4xx.
+   * That is deliberate — a provider that gets a 4xx retries and eventually
+   * alerts a human, whereas a 200 for a body we could not authenticate is a
+   * silent acceptance of whatever it said.
+   */
   @Post('webhooks/payment')
-  async webhook(@Req() req: Request, @Headers('x-signature') signature: string) {
-    await this.topups.handleWebhook(JSON.stringify(req.body ?? {}), signature ?? '');
+  async webhook(@Req() req: Request) {
+    await this.topups.handleWebhook({
+      rawBody: JSON.stringify(req.body ?? {}),
+      headers: req.headers as Record<string, string | undefined>,
+    });
     return { received: true };
   }
 }

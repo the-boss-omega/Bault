@@ -23,15 +23,25 @@ import { shippingAddress } from '../modules/acc/address.schema';
 import { facility } from '../modules/inv/facility.schema';
 import { consignmentEvent } from '../modules/dis/consignment-event.schema';
 import { ID_PREFIX, prefixedId } from '../shared/ids';
+import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
 
 /**
  * Seed script — realistic, internally-consistent sample data (dev only).
  *
- * RESET: TRUNCATE clears every table, INCLUDING the append-only history tables.
- * The append-only guards (0001_append_only.sql) block UPDATE/DELETE via per-ROW
- * triggers, which do NOT fire on TRUNCATE — so a full reset is possible here but
- * remains impossible through the running application. This is a deliberate,
- * dev-only escape hatch; never TRUNCATE in production.
+ * RESET: TRUNCATE clears every table, INCLUDING the append-only history tables,
+ * and the background job queue with them. The append-only guards
+ * (0001_append_only.sql) block UPDATE/DELETE via per-ROW triggers, which do NOT
+ * fire on TRUNCATE — so a full reset is possible here but remains impossible
+ * through the running application. This is a deliberate, dev-only escape hatch;
+ * never TRUNCATE in production.
+ *
+ * The reset is what makes this script the answer to a database full of test
+ * residue. The e2e suites drive the real HTTP stack against a real database, so
+ * every intake they perform creates a real item, with a real custody trail, in a
+ * real collector's vault — 112 of them after one full run — and none of it can
+ * be deleted afterwards through any supported path, because an item is never
+ * deleted (Principle I) and its trail is append-only. Re-seeding is the only
+ * way back to the catalogue, which is why `pnpm test` now ends by running it.
  *
  * The dataset below is consistent by construction: every item has an intake
  * custody event + transfer-ledger row + image + intake charge; ownership changes
@@ -79,6 +89,31 @@ async function main(): Promise<void> {
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event
     RESTART IDENTITY`);
+
+  /**
+   * The background job queue is app data too, and the reset was leaving it
+   * behind.
+   *
+   * pg-boss keeps its own schema, so nothing above touches it, and after a test
+   * run it held a hundred and fifty rows of history for work done on rows that
+   * no longer exist. Worse than untidy: the outbox dispatcher's queued jobs
+   * would wake up against a table that had just been truncated underneath them.
+   *
+   * Only the two HISTORY tables are cleared. `queue`, `schedule`, `subscription`
+   * and `version` are pg-boss's own configuration and its schema version —
+   * emptying those would leave the worker unable to start. `job` is partitioned
+   * one table per queue, and TRUNCATE on the parent empties every partition
+   * while keeping the partitions themselves.
+   *
+   * Guarded on the schema existing at all, because a checkout that has never run
+   * the worker has no pgboss schema and a seed must not fail on that.
+   */
+  await pool.query(`DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'pgboss') THEN
+        TRUNCATE TABLE pgboss.job, pgboss.archive;
+      END IF;
+    END $$;`);
 
   // -------------------------------------------------------------------------
   // 2. USERS — delete-all is handled by the TRUNCATE above. Password: 11111111.
@@ -482,14 +517,40 @@ async function main(): Promise<void> {
   });
 
   // -------------------------------------------------------------------------
-  // 4. BINS (shelves) — BIN- prefixed barcodes (Requirement 9.3).
+  // 4. BINS (shelves) — BIN- prefixed SERIALS, minted, never named
+  //    (Requirement 9.3, and 0019_bins_get_a_serial).
   // -------------------------------------------------------------------------
-  const mkBin = async (barcode: string, zone: string, capacity: number) =>
-    one(await db.insert(bin).values({ barcode, zone, capacity }).returning({ id: bin.id })).id;
-  const binA1 = await mkBin('BIN-A-001', 'A', 50);
-  const binA2 = await mkBin('BIN-A-002', 'A', 50);
-  const binB1 = await mkBin('BIN-B-001', 'B', 100);
-  const binB2 = await mkBin('BIN-B-002', 'B', 100);
+  // No capacity: a bin holds what physically goes into it, and the person who
+  // knows whether there is room is the one standing in front of it. Every shelf
+  // names the building it is in, because "stow it wherever there is room" has to
+  // mean "wherever in THIS building" — see 0018_stow_wherever_it_fits.
+  //
+  // Zone O is oversized shelving. Without at least one such bin, the directed
+  // stow has nowhere to send a sealed case or a piece of memorabilia and says so
+  // rather than putting it on a card shelf.
+  // The serial is minted, exactly as the console mints one — the seed does not
+  // get to hand-write `BIN-A-001`, because nothing else can either.
+  const mkBin = async (zone: string, oversized = false) => {
+    const serialNumber = makeBinSerial();
+    return one(
+      await db
+        .insert(bin)
+        .values({
+          serialNumber,
+          barcode: makeBinBarcode(serialNumber),
+          zone,
+          oversized,
+          facilityId: njFacility,
+        })
+        .returning({ id: bin.id }),
+    ).id;
+  };
+  const binA1 = await mkBin('A');
+  const binA2 = await mkBin('A');
+  const binB1 = await mkBin('B');
+  const binB2 = await mkBin('B');
+  await mkBin('O', true);
+  await mkBin('O', true);
 
   // -------------------------------------------------------------------------
   // Money constants (USD cents) and small helpers.
@@ -1052,7 +1113,7 @@ async function main(): Promise<void> {
   await pool.end();
   // eslint-disable-next-line no-console
   console.log(
-    '✔ seed complete: 6 users, 4 bins, 8 items (4 Red / 4 Golden), 1 batch, 2 listings, 1 offer, ' +
+    '✔ seed complete: 6 users, 6 bins (4 standard, 2 oversized), 8 items (4 Red / 4 Golden), 1 batch, 2 listings, 1 offer, ' +
       '1 swap, 1 transaction, 1 dispute, 3 service requests, 1 shipment, 1 withdrawal, ' +
       '4 wallet requests, 3 notifications, 2 addresses, 2 shows.',
   );

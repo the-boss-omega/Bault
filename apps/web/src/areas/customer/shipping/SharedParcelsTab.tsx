@@ -4,7 +4,7 @@ import { useI18n } from '../../../shared/i18n';
 import { formatUsd } from '../../../shared/money';
 import { formatWeight } from '../../../shared/carriers';
 import { shipmentStatusLabel, type ShipmentSummary } from '../../../shared/shipments';
-import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconUsers } from '../../../shared/ui/icons';
 
 interface GroupMember {
@@ -119,11 +119,9 @@ export function SharedParcelsTab({
                 ))}
               </select>
             </label>
-            <label className="field">
-              <span className="field-label">{t('grp.notes')}</span>
+            <Field label={t('grp.notes')} hint={t('grp.notesHint')}>
               <input value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
-              <span className="field-hint">{t('grp.notesHint')}</span>
-            </label>
+            </Field>
             <div className="row">
               <Button
                 variant="gold"
@@ -159,8 +157,7 @@ export function SharedParcelsTab({
               onChange={(e) => setJoinCode(e.target.value)}
             />
           </label>
-          <label className="field">
-            <span className="field-label">{t('grp.whichRequest')}</span>
+          <Field label={t('grp.whichRequest')} hint={t('grp.sameAddressHint')}>
             <select value={joinShipmentId} onChange={(e) => setJoinShipmentId(e.target.value)}>
               <option value="">{t('grp.pickRequest')}</option>
               {shipments.map((s) => (
@@ -169,8 +166,7 @@ export function SharedParcelsTab({
                 </option>
               ))}
             </select>
-            <span className="field-hint">{t('grp.sameAddressHint')}</span>
-          </label>
+          </Field>
           <div className="row">
             <Button
               disabled={busy || !joinCode.trim() || !joinShipmentId}
@@ -217,7 +213,7 @@ export function SharedParcelsTab({
                 <p className="hint">{g.destinationAddress}</p>
                 {g.notes && <p className="hint">{g.notes}</p>}
 
-                <ul className="check-list" style={{ maxHeight: 'none' }}>
+                <ul className="check-list list-unbounded">
                   {g.members.map((m) => (
                     <li key={m.shipmentId}>
                       <span>

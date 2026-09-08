@@ -123,5 +123,17 @@ export const api = {
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
+  /**
+   * Added because it was missing, and its absence had consequences.
+   *
+   * Two routes take PUT (`/notifications/preferences` and `.../channel`), so the
+   * notifications page hand-rolled its own `fetch` — which threw a plain `Error`
+   * rather than an `ApiError`. Every caller that branches on `kind` or `code`
+   * (offline vs signed-out vs refused) was therefore blind on exactly those two
+   * calls, and a preference toggle made while the API was down reported the
+   * browser's network message instead of "Bault is not reachable".
+   */
+  put: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
   del: <T = unknown>(path: string) => request<T>(path, { method: 'DELETE' }),
 };

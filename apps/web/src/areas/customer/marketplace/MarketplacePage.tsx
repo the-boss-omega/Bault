@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
+import { ITEM_CLASSES } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
@@ -11,6 +12,7 @@ import {
   ContextTabs,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   SkeletonBlock,
   SuccessNote,
@@ -53,6 +55,35 @@ export function MarketplacePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  /**
+   * Narrowing the shelf, which was not possible at all.
+   *
+   * Browse offered a free-text box over the description and the type class and
+   * nothing else: no way to see only graded slabs, no price range, and one fixed
+   * order (newest first) with no control over it. Somebody looking for a slab
+   * under $200 had to read every listing, and somebody comparing prices had to do
+   * it by eye — the first two things anybody does on a marketplace.
+   *
+   * Held in component state rather than the URL: these are a reading position,
+   * not a record, and the route already carries the drawer. The one thing that
+   * IS worth keeping is whether any of them are set, so the panel can offer to
+   * clear them.
+   */
+  const [type, setType] = useState('');
+  const [condition, setCondition] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sort, setSort] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
+  const filtered = Boolean(q || type || condition || minPrice || maxPrice || sort !== 'newest');
+
+  function clearFilters() {
+    setQ('');
+    setType('');
+    setCondition('');
+    setMinPrice('');
+    setMaxPrice('');
+    setSort('newest');
+  }
   const [buying, setBuying] = useState<Listing | null>(null);
   const [offering, setOffering] = useState<Listing | null>(null);
   const { items, reload: reloadItems } = useVaultItems(true);
@@ -80,9 +111,30 @@ export function MarketplacePage() {
     ? (route.tab as MarketTab)
     : 'browse';
 
-  const loadListings = useCallback(async (query: string) => {
+  /**
+   * Filtering happens on the SERVER, not over the rows already fetched.
+   *
+   * The query is capped at 200 listings, so narrowing a page in the client would
+   * silently hide matches that fell off the end of an unfiltered page — a filter
+   * that quietly lies is worse than no filter.
+   */
+  const query = useMemo(() => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set('q', q.trim());
+    if (type) params.set('type', type);
+    if (condition.trim()) params.set('condition', condition.trim());
+    const cents = (value: string) => dollarsToCents(value);
+    const min = cents(minPrice);
+    const max = cents(maxPrice);
+    if (min !== null) params.set('minPrice', String(min));
+    if (max !== null) params.set('maxPrice', String(max));
+    if (sort !== 'newest') params.set('sort', sort);
+    return params.toString();
+  }, [q, type, condition, minPrice, maxPrice, sort]);
+
+  const loadListings = useCallback(async (search: string) => {
     try {
-      setListings(await api.get<Listing[]>(`/marketplace/listings?q=${encodeURIComponent(query)}`));
+      setListings(await api.get<Listing[]>(`/marketplace/listings?${search}`));
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -90,19 +142,23 @@ export function MarketplacePage() {
     }
   }, []);
 
-  // Incremental search-as-you-type: debounce a refetch on every query change so
-  // results update live from the partial query — no Enter/button required.
+  // Incremental search-as-you-type: debounce a refetch on every change so results
+  // update live from a partial query — no Enter/button required.
   useEffect(() => {
-    const handle = setTimeout(() => void loadListings(q), 250);
+    const handle = setTimeout(() => void loadListings(query), 250);
     return () => clearTimeout(handle);
-  }, [q, loadListings]);
+  }, [query, loadListings]);
 
   async function buy(listing: Listing) {
     try {
-      await api.post(`/marketplace/listings/${listing.id}/purchase`);
-      setStatus(t('market.status.purchased'));
+      // A replay is not a second purchase, and must not be reported as one — a
+      // double-clicked button otherwise says "Purchased" twice.
+      const result = await api.post<{ replayed?: boolean }>(
+        `/marketplace/listings/${listing.id}/purchase`,
+      );
+      setStatus(result?.replayed ? t('market.alreadyBought') : t('market.status.purchased'));
       setError(null);
-      await loadListings(q);
+      await loadListings(query);
       await reloadItems();
     } catch (e) {
       setError((e as Error).message);
@@ -138,6 +194,71 @@ export function MarketplacePage() {
               </div>
             }
           >
+            {/*
+              The filter bar. Ordered the way somebody narrows a shelf: what kind
+              of thing, what condition it is in, what they are willing to pay, and
+              only then how to order what is left.
+            */}
+            <div className="filter-bar" role="group" aria-label={t('market.filters')}>
+              <Field label={t('market.filter.type')} className="field--compact">
+                <select value={type} onChange={(e) => setType(e.target.value)}>
+                  <option value="">{t('market.filter.anyType')}</option>
+                  {ITEM_CLASSES.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {t(c.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label={t('market.filter.condition')} className="field--compact">
+                <input
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                  placeholder={t('market.filter.anyCondition')}
+                />
+              </Field>
+
+              <Field label={t('market.filter.minPrice')} className="field--compact">
+                <input
+                  inputMode="decimal"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder="0"
+                  dir="ltr"
+                />
+              </Field>
+
+              <Field label={t('market.filter.maxPrice')} className="field--compact">
+                <input
+                  inputMode="decimal"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder="—"
+                  dir="ltr"
+                />
+              </Field>
+
+              <Field label={t('market.filter.sort')} className="field--compact">
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as typeof sort)}
+                >
+                  <option value="newest">{t('market.sort.newest')}</option>
+                  <option value="price_asc">{t('market.sort.priceAsc')}</option>
+                  <option value="price_desc">{t('market.sort.priceDesc')}</option>
+                </select>
+              </Field>
+
+              {/* Offered only when there is something to clear, so the bar does
+                  not carry a permanently dead control. */}
+              {filtered && (
+                <Button size="sm" variant="ghost" onClick={clearFilters}>
+                  {t('market.filter.clear')}
+                </Button>
+              )}
+            </div>
+
             {listings === null ? (
               <ul className="card-grid">
                 {Array.from({ length: 6 }, (_, i) => (
@@ -149,9 +270,18 @@ export function MarketplacePage() {
             ) : listings.length === 0 ? (
               <EmptyState
                 title={t('market.empty.title')}
-                text={q ? t('market.empty.searchText') : t('market.empty.text')}
+                text={filtered ? t('market.empty.searchText') : t('market.empty.text')}
                 icon={<IconMarketplace />}
-                action={q ? <Button size="sm" onClick={() => setQ('')}>{t('vault.clearSearch')}</Button> : undefined}
+                /* An empty shelf caused by a filter has a way out; an empty shelf
+                   because nothing is for sale does not, and offering one would be
+                   a button that changes nothing. */
+                action={
+                  filtered ? (
+                    <Button size="sm" onClick={clearFilters}>
+                      {t('market.filter.clear')}
+                    </Button>
+                  ) : undefined
+                }
               />
             ) : (
               <ul className="card-grid">
@@ -438,7 +568,7 @@ function OfferDrawer({
         <p className="field-hint">{t('market.offer.hint')}</p>
       </div>
 
-      {error && <div style={{ marginBlockStart: 'var(--sp-4)' }}><ErrorState message={error} /></div>}
+      {error && <div className="stack-top" ><ErrorState message={error} /></div>}
     </DetailDrawer>
   );
 }

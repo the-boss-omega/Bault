@@ -52,3 +52,25 @@ export const isNegative = (m: Money): boolean => m.amount < 0;
 export function sum(items: Money[], currency: string): Money {
   return items.reduce((acc, m) => add(acc, m), zero(currency));
 }
+
+/**
+ * A minor-unit amount as a person reads it: `4137` → `$41.37`.
+ *
+ * Every message in this product that quoted an amount built the string at the
+ * call site, and twelve of the sixteen sites dropped the currency symbol — so a
+ * shipment refusal said "Short by 45.00", a top-up limit said "The smallest
+ * top-up is 10.00", and the four that did print a `$` made the other twelve look
+ * like a different product. The figure is the actionable part of those
+ * sentences; it should not be the part that is formatted by accident.
+ *
+ * Deliberately not `Intl.NumberFormat`: these strings are assembled on the
+ * server, which has no reader locale, and the SPA translates the SENTENCE while
+ * keeping the number (see `carriers.ts`). USD is the only currency the platform
+ * settles in; anything else prints its code so a mistake is visible rather than
+ * silently wrong.
+ */
+export function formatMinor(minor: number, currencyCode = 'USD'): string {
+  const value = (Math.abs(minor) / 100).toFixed(2);
+  const sign = minor < 0 ? '-' : '';
+  return currencyCode.toUpperCase() === 'USD' ? `${sign}$${value}` : `${sign}${value} ${currencyCode.toUpperCase()}`;
+}

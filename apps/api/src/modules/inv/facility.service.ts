@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { loadEnv } from '@bault/config';
 import { asc, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -68,6 +69,23 @@ export class FacilityService {
    * pastes into a checkout, and getting it wrong sends their property to a
    * stranger's shelf.
    */
+  /**
+   * Guard against handing a collector an address that does not exist.
+   *
+   * The seed ships two facilities whose `line1` is literally
+   * `SET REAL ADDRESS — placeholder`, which is correct for a dataset nobody has
+   * configured and catastrophic the moment a real person reads it and posts a
+   * card there. This is the last point before that string reaches a customer, so
+   * it is where the check belongs: in production a placeholder address is
+   * withheld rather than shown.
+   *
+   * It filters rather than throwing. One configured facility and one forgotten
+   * one should still let collectors ship to the configured one.
+   */
+  private static isPlaceholder(line1: string): boolean {
+    return /placeholder|SET REAL ADDRESS/i.test(line1);
+  }
+
   async inboundAddressesFor(userId: string): Promise<InboundAddress[]> {
     const [account] = await this.db
       .select({ username: userAccount.username })
@@ -76,7 +94,10 @@ export class FacilityService {
       .limit(1);
     if (!account) throw AppError.notFound('Account not found');
 
-    const facilities = await this.listActive();
+    const inProduction = loadEnv().NODE_ENV === 'production';
+    const facilities = (await this.listActive()).filter(
+      (f) => !inProduction || !FacilityService.isPlaceholder(f.line1),
+    );
     return facilities.map((f) => ({
       facilityId: f.id,
       code: f.code,

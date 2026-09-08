@@ -19,8 +19,20 @@
  *                  its page builder). Categories and the `id` slugs here exist
  *                  so Bault can offer filtering and stable deep links.
  *   `availability` Whether Bault actually implements the workflow the answer
- *                  describes: `adapted` (Bault does this, with differences) or
- *                  `unavailable` (Bault has no such capability).
+ *                  describes: `adapted` (Bault does this, with differences),
+ *                  `partial` (the mechanism exists but part of what this entry
+ *                  describes does not), or `unavailable` (no such capability).
+ *
+ *                  THIS FIELD ROTS IF IT IS NOT RE-CHECKED. It was first
+ *                  captured on 2026-08-03 and left alone while the facilities,
+ *                  inbound parcels, customs paperwork, group shipments,
+ *                  shipment editing, insurance, tracker add-on, video review,
+ *                  condition inspection and self-service top-up were all built.
+ *                  By 2026-08-31 seventeen entries marked `unavailable`
+ *                  described things Bault had been doing for weeks — the page
+ *                  was telling paying customers that Bault could not do things
+ *                  it does. Re-audit these two fields against the API whenever a
+ *                  capability ships; the quoted text above them never changes.
  *   `baultNote`    What differs, or why the entry does not apply. Factual
  *                  statements about Bault's implementation — never a rewrite of
  *                  the source's policy language.
@@ -35,7 +47,7 @@
  * faithful to the source.
  */
 
-export type FaqAvailability = 'adapted' | 'unavailable';
+export type FaqAvailability = 'adapted' | 'partial' | 'unavailable';
 
 export interface FaqInlineListItem {
   text: string;
@@ -85,8 +97,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 0,
       "question": "How does ShipMyCards work?",
       "category": "getting-started",
-      "availability": "unavailable",
-      "baultNote": "Bault has no U.S. package-forwarding address. Cards enter a Bault vault through warehouse intake, not by being mailed to a forwarding address.",
+      "availability": "adapted",
+      "baultNote": "Bault works the same way: you are issued a receiving address, you tell Bault a parcel is coming, and it moves expected → received → opened → contents booked into your vault → processed. The addresses are Bault's own facilities, not ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -161,8 +173,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 1,
       "question": "How is ShipMyCards different than other shipping Services?",
       "category": "getting-started",
-      "availability": "unavailable",
-      "baultNote": "Describes ShipMyCards' address options, White Glove and Middleman services. Bault offers none of these.",
+      "availability": "adapted",
+      "baultNote": "All three differentiators exist here. Two receiving addresses, one of them in a state that levies no sales tax; White Glove hand delivery, quoted per journey; and a middleman for private deals — Bault's escrow, where the money is genuinely held as a ledger entry and released against an inspection window agreed before either side commits.",
       "blocks": [
         {
           "kind": "p",
@@ -219,8 +231,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 2,
       "question": "Why ShipMyCards is great for U.S.-based collectors?",
       "category": "getting-started",
-      "availability": "unavailable",
-      "baultNote": "Built entirely on the Oregon sales-tax address. Bault has no forwarding addresses and no tax-avoidance routing.",
+      "availability": "adapted",
+      "baultNote": "Same idea, different state: Bault's tax-free forwarding facility is in Delaware rather than Oregon. Bault records each facility's destination sales-tax rate and shows what a purchase would cost at each address — as guidance only. Bault is not the seller and neither collects nor remits anybody's sales tax.",
       "blocks": [
         {
           "kind": "p",
@@ -261,8 +273,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 3,
       "question": "Why ShipMyCards is great for international collectors?",
       "category": "getting-started",
-      "availability": "unavailable",
-      "baultNote": "Built on providing a U.S. shipping address to overseas buyers. Bault does not provide one.",
+      "availability": "adapted",
+      "baultNote": "Bault issues each account a U.S. address in the form 'Bault C/O <username>', which is what an overseas buyer gives a U.S. seller. An arrival shipped from outside the country is flagged, and the duty obligation is recorded on the parcel rather than left in a policy document.",
       "blocks": [
         {
           "kind": "p",
@@ -303,8 +315,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 4,
       "question": "Shipping to Australia: Customs Clearance Guide",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "FedEx assembly-order customs guidance specific to ShipMyCards' Arizona facility. Bault's shipping adapter exposes carrier rates only and files no customs paperwork.",
+      "availability": "partial",
+      "baultNote": "Bault generates a full commercial invoice for every international parcel — one line per item with description, declared value, HS code, country of origin and weight — and publishes destination guidance with a link to the destination's own customs authority. It does NOT lodge a FedEx assembly order or any other broker-side clearance instruction, which is what this entry is largely about.",
       "blocks": [
         {
           "kind": "h",
@@ -517,7 +529,7 @@ export const FAQ: FaqDocument = {
       "question": "What are the fees for using ShipMyCards?",
       "category": "fees",
       "availability": "adapted",
-      "baultNote": "Bault charges per-action fees and automatic storage fees, but the amounts come from Bault's own pricing-rule table (Management > Pricing), not from these Arizona/Oregon price lists. Treat every figure here as ShipMyCards', not Bault's.",
+      "baultNote": "Bault charges per-action fees and automatic storage fees, and publishes a price list you can read before being charged. Every amount comes from Bault's own effective-dated pricing rules, not from the figures quoted here, and each charge stores a snapshot of the rule that produced it.",
       "blocks": [
         {
           "kind": "p",
@@ -704,8 +716,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 6,
       "question": "Do you accept any non-Card items?",
       "category": "intake",
-      "availability": "unavailable",
-      "baultNote": "An accepted/restricted item policy specific to ShipMyCards' facility. Bault publishes no equivalent policy.",
+      "availability": "adapted",
+      "baultNote": "Bault publishes its own accepted-and-refused list under FAQ & Legal > What we accept: twelve accepted item classes with their storage terms and lot rules, and the categories refused outright with the reason for each. That page is generated from the same modules intake validates against, so it cannot drift from what is actually enforced. The specific policy quoted here is ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -826,8 +838,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 7,
       "question": "Do we allow GPS Trackers for incoming shipments?",
       "category": "intake",
-      "availability": "unavailable",
-      "baultNote": "Facility security policy for inbound packages at ShipMyCards. Bault has no inbound-package policy.",
+      "availability": "adapted",
+      "baultNote": "Same rule, and Bault now states it in advance on its own intake policy page: do not put a tracker in a parcel you send. One found in an arriving parcel is removed, destroyed, recorded as an arrival disposal and notified to you. Bault does sell a tracker as an outbound add-on, which is not a contradiction: that one travels in a parcel Bault packed, declared and insured, and is handed to you on delivery.",
       "blocks": [
         {
           "kind": "p",
@@ -840,8 +852,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 8,
       "question": "What address should I use for my account?",
       "category": "addresses",
-      "availability": "unavailable",
-      "baultNote": "ShipMyCards' physical mailing addresses. Bault has no forwarding addresses.",
+      "availability": "adapted",
+      "baultNote": "Bault gives each account its receiving addresses under Inbound, addressed as 'Bault C/O <username>'. The C/O line is generated from your own account, so it cannot name somebody else. The addresses listed in this answer are ShipMyCards'.",
       "blocks": [
         {
           "kind": "h",
@@ -884,8 +896,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 9,
       "question": "What is the benefit of mailing to Oregon?",
       "category": "addresses",
-      "availability": "unavailable",
-      "baultNote": "Depends on the Oregon forwarding address, which Bault does not operate.",
+      "availability": "adapted",
+      "baultNote": "The same benefit, from Delaware rather than Oregon: it levies no sales tax, so a purchase shipped there is not charged any. Bault shows the estimated destination tax at each of its addresses before you buy. Guidance only — Bault is not the seller.",
       "blocks": [
         {
           "kind": "p",
@@ -981,8 +993,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 10,
       "question": "How do I purchase Store Credit?",
       "category": "fees",
-      "availability": "unavailable",
-      "baultNote": "Bault funds a wallet through its payment adapter. PayPal Friends & Family and Wise transfers are not Bault payment rails.",
+      "availability": "adapted",
+      "baultNote": "Bault funds a wallet two ways: a card payment, which settles immediately, or a bank transfer, which raises a cash-in request that staff reconcile against the arriving payment. PayPal Friends & Family and Wise are ShipMyCards' rails, not Bault's.",
       "blocks": [
         {
           "kind": "p",
@@ -1056,7 +1068,7 @@ export const FAQ: FaqDocument = {
       "question": "What shipping options do you offer?",
       "category": "shipping",
       "availability": "adapted",
-      "baultNote": "Bault does return carrier and service-level options for a shipment, but they come from Bault's shipping adapter. The USPS/FedEx/ePost/ePacket line-up and its restrictions are ShipMyCards'.",
+      "baultNote": "Bault does return carrier and service-level options for a shipment, each with its own insurance ceiling and whether a signature can be demanded. They come from Bault's own carrier catalogue; the USPS/FedEx/ePost/ePacket line-up and the prices quoted here are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -1192,8 +1204,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 12,
       "question": "What’s the difference between Simple Shipping and Personalized Shipping?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault has a single shipment flow — pick items, pick a saved address, optionally mark it rush, then choose a rate. There is no Simple/Personalized split.",
+      "availability": "adapted",
+      "baultNote": "Bault has both modes. A shipment request carries a service mode of 'simple' or 'personalised', and the difference is the same one described here: how much say you have over carrier and packing versus letting Bault choose the cheapest sensible option.",
       "blocks": [
         {
           "kind": "h",
@@ -1274,8 +1286,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 13,
       "question": "How do I make a shipment request?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Points at ShipMyCards' YouTube tutorials for their own interface.",
+      "availability": "partial",
+      "baultNote": "Bault's own written walkthroughs are under FAQ & Legal > Guides, with the steps and the screen each one happens on. Bault has no video tutorials, and this entry's answer is a set of links to ShipMyCards' own.",
       "blocks": [
         {
           "kind": "p",
@@ -1296,8 +1308,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 14,
       "question": "Can I add/remove Items to a Pending shipment request?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault exposes no endpoint for editing a shipment after it is requested.",
+      "availability": "adapted",
+      "baultNote": "Bault lets you add items to, remove items from, or cancel a shipment while it still reads 'requested'. Once a rate is selected the parcel has been paid for and an operator may already be holding it, so the window closes there — which is the same cutoff described here.",
       "blocks": [
         {
           "kind": "p",
@@ -1324,7 +1336,7 @@ export const FAQ: FaqDocument = {
       "question": "Is there a way to get a postage quote prior to Requesting my Shipment?",
       "category": "shipping",
       "availability": "adapted",
-      "baultNote": "Bault does show carrier rates before you commit to one, but only after the shipment request is created, and the quoted dollar ranges here are ShipMyCards'.",
+      "baultNote": "Bault quotes postage before anything is created: a quote request prices a hypothetical parcel for the items and address you name, with no shipment raised. The dollar ranges quoted in this answer are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -1401,8 +1413,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 16,
       "question": "Can I combine shipment requests from one that I made at an earlier date?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault cannot merge two shipment requests, and charges no restocking fee.",
+      "availability": "adapted",
+      "baultNote": "Bault can merge an earlier shipment request into a later one while both still read 'requested'. Cancelling after a rate has been selected does carry a restocking fee, because by then the double-verification and packing have already been done.",
       "blocks": [
         {
           "kind": "p",
@@ -1423,8 +1435,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 17,
       "question": "What customs value is declared on outgoing packages?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault's shipment request carries no customs-value field and files no customs declaration.",
+      "availability": "adapted",
+      "baultNote": "Bault declares the value YOU entered, per item, on a commercial invoice — and never adjusts, reduces or omits it. Under-declaring to lower somebody's duty is customs fraud committed in their name. Import duty, VAT and brokerage are payable by the recipient.",
       "blocks": [
         {
           "kind": "p",
@@ -1445,8 +1457,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 18,
       "question": "Can Multiple collectors combine shipments to save on postage?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault has no group-shipment option.",
+      "availability": "adapted",
+      "baultNote": "Bault supports this, modelled rather differently. Each collector keeps their own shipment with their own items and their own custody trail; a shipment GROUP records that they travel together and who pays the carrier. Joining is always the member's own act — nobody can be added to a group that would send their property to an address they never saw.",
       "blocks": [
         {
           "kind": "p",
@@ -1484,8 +1496,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 19,
       "question": "What does the optional insurance cover?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault offers no shipment insurance.",
+      "availability": "adapted",
+      "baultNote": "Bault insures a parcel at 1.5% of the value you declare, with a $2 minimum and a $5,000 ceiling. Insuring above $500 forces a signature on delivery, because that is the condition the cover is written on. The specific terms quoted here are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -1526,8 +1538,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 20,
       "question": "What is the GPS tracking option in the Shipment request?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Bault offers no GPS tracking add-on.",
+      "availability": "adapted",
+      "baultNote": "Bault offers a tracker in the parcel as a paid add-on, sold only alongside at least $500 of insurance — it exists to help recover a parcel somebody is going to claim on. The price and handover described here are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -1590,7 +1602,7 @@ export const FAQ: FaqDocument = {
       "question": "What all is included within normal Processing?",
       "category": "intake",
       "availability": "adapted",
-      "baultNote": "Bault's intake does photograph items, shelve them in a numbered bin and publish them to the owner's vault, and storage fees are charged automatically. The 180-day/90-day terms and fee percentages here are ShipMyCards' own.",
+      "baultNote": "Bault's intake photographs each item, gives it a serial and a printed barcode, shelves it in a numbered location and publishes it to your vault, and storage is billed automatically after an included period. The included period and the fee are Bault's own, and they differ for oversized items.",
       "blocks": [
         {
           "kind": "p",
@@ -1673,8 +1685,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 22,
       "question": "How long after delivery do items get uploaded to the Website?",
       "category": "intake",
-      "availability": "unavailable",
-      "baultNote": "An operational turnaround commitment tied to ShipMyCards' Arizona facility.",
+      "availability": "adapted",
+      "baultNote": "Bault publishes a live figure rather than a target: your Inbound page shows how many parcels are waiting and how long the oldest unprocessed arrival has been waiting, taken from the actual queue. The turnaround stated here is ShipMyCards' commitment at their own facility.",
       "blocks": [
         {
           "kind": "p",
@@ -1716,7 +1728,7 @@ export const FAQ: FaqDocument = {
       "question": "Can we submit a card for grading through PSA?",
       "category": "services",
       "availability": "adapted",
-      "baultNote": "Bault supports third-party grading as a service request raised against a card in your vault; a warehouse operator then accepts and completes it. Bault is not PSA-integrated and has no PSA pricing tiers, walkthrough service or marketing-consent term.",
+      "baultNote": "Bault supports third-party grading as a service request raised against a card in your vault, across five tiers, with a submission batch and a lifecycle state that stops a card being listed, sold or shipped while it is away at the grader. The tier prices and turnarounds quoted here are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -1791,7 +1803,7 @@ export const FAQ: FaqDocument = {
       "question": "What Consignment Options do you offer?",
       "category": "services",
       "availability": "adapted",
-      "baultNote": "Bault supports consignment as a service request against a card. The consignment partners, fee splits and payout timings listed here are ShipMyCards' commercial arrangements, not Bault's.",
+      "baultNote": "Bault supports consignment as a service request against a card, through three channel types — a card show, an auction house, or eBay through a partner seller — each with its own fee and deadline, plus an outright buyout option. The partners, splits and payout timings listed here are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -1865,7 +1877,7 @@ export const FAQ: FaqDocument = {
       "question": "How do I request a higher quality Scan or Video review?",
       "category": "services",
       "availability": "adapted",
-      "baultNote": "Bault supports professional photography as a service request. Video review and OneDrive delivery are not Bault capabilities.",
+      "baultNote": "Bault supports both as service requests against a card in your vault: professional photography, and a video review where an operator turns the card under a light and records what they find. Delivery is in the app, attached to the item, rather than through OneDrive.",
       "blocks": [
         {
           "kind": "p",
@@ -1879,7 +1891,7 @@ export const FAQ: FaqDocument = {
       "question": "What if I want to Sell or Grade 1 card that is part of a lot?",
       "category": "services",
       "availability": "adapted",
-      "baultNote": "Bault can break a lot into individually tracked items, and splitting re-prices the resulting items. The Disposition menu described here is ShipMyCards' interface.",
+      "baultNote": "Bault can break a lot into individually tracked items, each with its own serial, label, shelf and charge — and a lot of five or fewer cards is never created as a lot in the first place. The Disposition menu described here is ShipMyCards' interface.",
       "blocks": [
         {
           "kind": "p",
@@ -1915,8 +1927,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 27,
       "question": "What if I need help with looking for damage on a card?",
       "category": "intake",
-      "availability": "unavailable",
-      "baultNote": "Bault records a condition grade at intake but offers no damage-inspection or video-review request.",
+      "availability": "adapted",
+      "baultNote": "Bault supports this as a condition inspection: a service request against a card in your vault where a person looks at the named areas and writes down what they find. Bault also records a condition grade at intake, and the arrival check on the parcel itself is recorded before any item exists.",
       "blocks": [
         {
           "kind": "p",
@@ -1969,7 +1981,7 @@ export const FAQ: FaqDocument = {
       "question": "Are collectors required to have store credit to use the service?",
       "category": "fees",
       "availability": "adapted",
-      "baultNote": "Bault does require a funded wallet: a negative balance blocks new shipments and service requests. The 14-day grace period, 1% weekly overdraft fee and -$20 lockout threshold are ShipMyCards' terms.",
+      "baultNote": "Bault does require a funded wallet: a negative balance blocks new shipments and service requests. Bault's own terms differ — a 14-day grace period, then interest at 0.05% per day, then an automatic suspension that still leaves the helpdesk open so you can settle. The 1% weekly figure here is ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -2010,7 +2022,7 @@ export const FAQ: FaqDocument = {
       "question": "Can I cash out my Store Credit?",
       "category": "fees",
       "availability": "adapted",
-      "baultNote": "Bault supports withdrawing wallet funds, with a confirmation step. The cash-out fee schedule and PayPal Friends & Family payout here are ShipMyCards'.",
+      "baultNote": "Bault supports cashing out, with a published fee schedule quoted from the same figures that are charged, and a confirmation step. The fee schedule and the PayPal Friends & Family payout described here are ShipMyCards'.",
       "blocks": [
         {
           "kind": "p",
@@ -2039,8 +2051,8 @@ export const FAQ: FaqDocument = {
       "sourceIndex": 30,
       "question": "Can I send an International Shipment to my ShipMyCards address?",
       "category": "shipping",
-      "availability": "unavailable",
-      "baultNote": "Concerns importing into ShipMyCards' U.S. address. Bault operates no inbound international address.",
+      "availability": "adapted",
+      "baultNote": "Bault accepts international arrivals at its U.S. addresses and flags them as such. The recipient of record clears customs and pays any duty, which is recorded on the parcel rather than left in a policy document.",
       "blocks": [
         {
           "kind": "p",

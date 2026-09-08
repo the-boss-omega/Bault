@@ -13,6 +13,7 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   StatusBadge,
   SuccessNote,
@@ -170,11 +171,9 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                 <span className="field-label">{t('esc.theirName')}</span>
                 <input value={outsideName} onChange={(e) => setOutsideName(e.target.value)} />
               </label>
-              <label className="field">
-                <span className="field-label">{t('esc.theirEmail')}</span>
+              <Field label={t('esc.theirEmail')} hint={t('esc.externalHint')}>
                 <input value={outsideEmail} dir="ltr" onChange={(e) => setOutsideEmail(e.target.value)} />
-                <span className="field-hint">{t('esc.externalHint')}</span>
-              </label>
+              </Field>
             </>
           ) : (
             <label className="field">
@@ -183,11 +182,9 @@ export function EscrowTab({ meId }: { meId: string | null }) {
             </label>
           )}
 
-          <label className="field">
-            <span className="field-label">{t('esc.what')}</span>
+          <Field label={t('esc.what')} hint={t('esc.whatHint')}>
             <input value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
-            <span className="field-hint">{t('esc.whatHint')}</span>
-          </label>
+          </Field>
 
           <div className="field">
             <span className="field-label">{t('esc.value')}</span>
@@ -205,8 +202,7 @@ export function EscrowTab({ meId }: { meId: string | null }) {
             )}
           </div>
 
-          <label className="field">
-            <span className="field-label">{t('esc.settlement')}</span>
+          <Field label={t('esc.settlement')} hint={t('esc.settlementHint')}>
             <select
               value={settlement}
               onChange={(e) => setSettlement(e.target.value as 'buyer_vault' | 'ship_to_buyer')}
@@ -214,8 +210,7 @@ export function EscrowTab({ meId }: { meId: string | null }) {
               <option value="buyer_vault">{t('esc.settlement.vault')}</option>
               <option value="ship_to_buyer">{t('esc.settlement.ship')}</option>
             </select>
-            <span className="field-hint">{t('esc.settlementHint')}</span>
-          </label>
+          </Field>
 
           <div className="row">
             <Button variant="gold" icon={<IconUsers />} disabled={busy || !ready} onClick={() => void raise()}>
@@ -404,7 +399,7 @@ function DealDrawer({
       )}
 
       {deal.status === 'proposed' && deal.counterpartyUserId === meId && (
-        <div className="row" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <div className="row stack-top">
           <Button
             variant="gold"
             size="sm"
@@ -417,7 +412,7 @@ function DealDrawer({
       )}
 
       {deal.status === 'agreed' && iAmBuyer && (
-        <div className="row" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <div className="row stack-top">
           <Button
             variant="gold"
             size="sm"
@@ -431,7 +426,7 @@ function DealDrawer({
       )}
 
       {deal.status === 'awaiting_release' && (iAmBuyer || iAmSeller) && (
-        <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <div className="stack stack--tight stack-top">
           {myRelease ? (
             <p className="field-hint">{t('esc.youConfirmed')}</p>
           ) : (
@@ -451,7 +446,7 @@ function DealDrawer({
       )}
 
       {['funded', 'inspecting', 'awaiting_release'].includes(deal.status) && (iAmBuyer || iAmSeller) && (
-        <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <div className="stack stack--tight stack-top">
           <label className="field">
             <span className="field-label">{t('esc.returnReason')}</span>
             <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />

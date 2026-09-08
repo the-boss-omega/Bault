@@ -83,7 +83,7 @@ export function GradingForm({
   }
 
   return (
-    <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-4)' }}>
+    <div className="stack stack--tight stack-top">
       <h3 className="drawer-heading">{t('grade.title')}</h3>
 
       <label className="field">
@@ -118,7 +118,7 @@ export function GradingForm({
       </div>
 
       {problems.length > 0 && (
-        <ul className="check-list" style={{ maxHeight: 'none' }}>
+        <ul className="check-list list-unbounded">
           {problems.map((p) => (
             <li key={p}>
               <StatusBadge tone="error" plain>

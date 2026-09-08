@@ -13,10 +13,11 @@ import { useMediaQuery, useNotificationFeed } from './shared/hooks';
 import { eventLabel, renderContent } from './shared/notifications';
 import { NavigationRail, type NavDestination } from './shared/ui/NavigationRail';
 import {
+  AccountPill,
   LanguageSwitcher,
   NotificationBell,
   PageHeader,
-  StatusPill,
+  ThemeToggle,
   UserMenu,
   type Crumb,
 } from './shared/ui/PageHeader';
@@ -437,9 +438,16 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             crumbs={crumbs}
             actions={
               <>
-                <StatusPill label={t('app.signedInAs', { role: roleLabel })} />
-                {/* The one language control, in the shell — so it is present on
-                    every section, drawer, dialog, error and empty state below. */}
+                <AccountPill
+                  username={user.username}
+                  roleLabel={roleLabel}
+                  suspended={suspended}
+                />
+                {/* Shell settings, together: language and theme are the same
+                    kind of choice — they change the frame, not the content —
+                    so they sit side by side rather than one in the header and
+                    one buried in a menu. */}
+                <ThemeToggle />
                 <LanguageSwitcher />
                 <NotificationBell
                   items={notifications.items}

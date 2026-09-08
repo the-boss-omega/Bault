@@ -55,7 +55,7 @@ describe('ESC escrow and human fulfilment', () => {
       raiserRole: 'seller',
       counterpartyName: 'A Stranger',
       counterpartyEmail: 'stranger@example.test',
-      description: '1999 Base Set Charizard, PSA 9',
+      description: '2003 EX Dragon Rayquaza ex #97/97, PSA 9',
       valueMinor: 900_000,
       // The buyer is external — there is nowhere to put it.
       settlement: 'buyer_vault',
@@ -237,7 +237,7 @@ describe('ESC escrow and human fulfilment', () => {
         raiserRole: 'seller',
         counterpartyName: 'Marcus Webb',
         counterpartyEmail: 'marcus@example.test',
-        description: '1986 Fleer Jordan, BGS 8.5',
+        description: '2015 XY Roaring Skies M Rayquaza-EX #105/108, BGS 8.5',
         valueMinor: 800_000,
         settlement: 'ship_to_buyer',
       })

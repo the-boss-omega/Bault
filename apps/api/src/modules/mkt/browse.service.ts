@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -8,11 +8,34 @@ import type { StorageAdapter } from '@bault/adapters';
 import { listing } from './mkt.schema';
 import { item, itemImage } from '../cst/cst.schema';
 
+/** How a browse result is ordered. `newest` is what the shelf shows by default. */
+export type BrowseSort = 'newest' | 'price_asc' | 'price_desc';
+
+export interface BrowseFilters {
+  q?: string;
+  /** An item class key — `trading_card`, `graded_slab`, … */
+  type?: string;
+  /** A condition grade as recorded on the item, matched case-insensitively. */
+  condition?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: BrowseSort;
+}
+
 /**
  * Browse/search active listings (T078, MKT-03/MKT-04). Public — anyone can
  * browse. Joins the item so cards show type/condition/description alongside the
- * price, supports free-text search (ILIKE over description/type class), and
- * attaches a signed URL for each item's newest image.
+ * price, and attaches a signed URL for each item's newest image.
+ *
+ * FILTERS AND SORT, which were absent. The only way to narrow this list was a
+ * free-text `q` over the description and the type class, and the only order was
+ * newest-first with no way to change it — so somebody looking for a graded slab
+ * under $200 had to read the whole shelf, and somebody comparing prices had to
+ * do it by eye. Both are the first two things anybody does on a marketplace.
+ *
+ * Applied in SQL rather than in the client, because the query is capped at 200
+ * rows: filtering after the cap would silently hide matches that fell off the
+ * end of an unfiltered page, which is worse than no filter at all.
  */
 @Injectable()
 export class BrowseService {
@@ -21,7 +44,8 @@ export class BrowseService {
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
   ) {}
 
-  async list(limit = 50, q?: string) {
+  async list(limit = 50, filters: BrowseFilters = {}) {
+    const { q, type, condition, minPrice, maxPrice, sort = 'newest' } = filters;
     const conditions = [eq(listing.status, 'active')];
     if (q && q.trim() !== '') {
       const pattern = `%${q.trim()}%`;
@@ -29,6 +53,19 @@ export class BrowseService {
         or(ilike(item.description, pattern), ilike(item.typeClass, pattern)) ?? sql`true`,
       );
     }
+    if (type && type.trim() !== '') conditions.push(eq(item.typeClass, type.trim()));
+    // Grades are free text on the item (`Raw`, `PSA 10`, …), so this matches the
+    // way somebody would type it rather than demanding the exact casing.
+    if (condition && condition.trim() !== '') conditions.push(ilike(item.conditionGrade, condition.trim()));
+    if (Number.isFinite(minPrice)) conditions.push(gte(listing.askingPrice, minPrice as number));
+    if (Number.isFinite(maxPrice)) conditions.push(lte(listing.askingPrice, maxPrice as number));
+
+    const order =
+      sort === 'price_asc'
+        ? sql`${listing.askingPrice} asc`
+        : sort === 'price_desc'
+          ? sql`${listing.askingPrice} desc`
+          : sql`${listing.publishedAt} desc`;
 
     const rows = await this.db
       .select({
@@ -44,7 +81,7 @@ export class BrowseService {
       .from(listing)
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
       .where(and(...conditions))
-      .orderBy(sql`${listing.publishedAt} desc`)
+      .orderBy(order)
       .limit(Math.min(limit, 200));
 
     return Promise.all(

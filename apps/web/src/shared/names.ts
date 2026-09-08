@@ -17,6 +17,15 @@ export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 32;
 export const USERNAME_PATTERN = /^[a-z0-9_.-]+$/;
 export const NAME_PART_MAX = 80;
+/**
+ * Shortest password the API will accept (`@MinLength(8)` on every password DTO).
+ *
+ * Named here because three separate forms — sign-up, reset, change — each hard
+ * coded the literal 8 next to a hint that spelled the number out in prose, so
+ * the rule and the sentence describing it could drift apart without anything
+ * noticing.
+ */
+export const PASSWORD_MIN = 8;
 
 export function normalizeUsername(raw: string): string {
   return raw.trim().toLowerCase();

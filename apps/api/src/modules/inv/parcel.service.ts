@@ -8,10 +8,11 @@ import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { normalizeUsername } from '../../shared/names';
 import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
 import { OutboxService } from '../not/outbox/outbox.service';
+import { MediaService } from '../med/media.service';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
 import { facility } from './facility.schema';
-import { parcel, parcelEvent } from './parcel.schema';
+import { parcel, parcelEvent, parcelPhoto } from './parcel.schema';
 
 export type ParcelStatus =
   | 'expected'
@@ -73,11 +74,19 @@ export interface ReceiveParcelInput {
   trackingNumber?: string;
   internationalOrigin?: boolean;
   notes?: string;
+  /**
+   * Object keys of photographs of the box as it turned up, already uploaded via
+   * `POST /media/uploads`. Keys, never bytes — the same convention the wallet
+   * request uses for its supporting document.
+   */
+  photoKeys?: string[];
 }
 
 export interface OpenParcelInput {
   condition: 'sound' | 'packaging_damaged' | 'contents_damaged';
   conditionNotes: string;
+  /** Photographs of what the arrival check found. */
+  photoKeys?: string[];
 }
 
 /**
@@ -105,6 +114,7 @@ export class ParcelService {
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
     private readonly outbox: OutboxService,
+    private readonly media: MediaService,
   ) {}
 
   /* ------------------------------------------------------------------
@@ -322,13 +332,26 @@ export class ParcelService {
    * leave them watching a parcel that will never move.
    */
   async receive(operatorId: string, input: ReceiveParcelInput) {
+    return this.db.transaction((tx) => this.receiveIn(tx, operatorId, input));
+  }
+
+  /**
+   * One arrival, inside a transaction the CALLER owns.
+   *
+   * Split out so a batch can put the whole stack in one transaction. `receive`
+   * opened its own, so `receiveMany` — which was a loop over it — committed each
+   * box as it went: the refusal on row two left row one on the system, and an
+   * operator fixing the bad row and pressing the button again received the first
+   * box twice.
+   */
+  private async receiveIn(tx: Database, operatorId: string, input: ReceiveParcelInput) {
     const fac = await this.facilityByCode(input.facilityCode);
     const label = normalizeUsername(input.addressedTo ?? '');
     const tracking = input.trackingNumber?.trim() || null;
 
     let ownerId: string | null = null;
     if (label) {
-      const [owner] = await this.db
+      const [owner] = await tx
         .select({ id: userAccount.id })
         .from(userAccount)
         .where(eq(userAccount.username, label))
@@ -339,7 +362,7 @@ export class ParcelService {
     // Adopt a pre-registration when the tracking number matches one.
     let existing: typeof parcel.$inferSelect | undefined;
     if (tracking) {
-      [existing] = await this.db
+      [existing] = await tx
         .select()
         .from(parcel)
         .where(and(eq(parcel.trackingNumber, tracking), eq(parcel.status, 'expected')))
@@ -349,7 +372,7 @@ export class ParcelService {
     const now = new Date();
     const nextStatus: ParcelStatus = ownerId || existing?.ownerId ? 'received' : 'unclaimed';
 
-    return this.db.transaction(async (tx) => {
+    {
       if (existing) {
         assertTransition('expected', nextStatus);
         await tx
@@ -377,6 +400,7 @@ export class ParcelService {
           facilityId: fac.id,
           notes: 'Matched a registration by tracking number',
         });
+        await this.attachPhotos(tx, existing.id, 'arrival', input.photoKeys, operatorId);
         await this.notifyOwner(tx, existing.id, ownerId ?? existing.ownerId, 'parcel_received', {
           parcelCode: existing.code,
           facility: fac.name,
@@ -411,12 +435,75 @@ export class ParcelService {
         facilityId: fac.id,
         notes: nextStatus === 'unclaimed' ? `Label "${input.addressedTo ?? ''}" did not resolve` : null,
       });
+      await this.attachPhotos(tx, row.id, 'arrival', input.photoKeys, operatorId);
       await this.notifyOwner(tx, row.id, ownerId, 'parcel_received', {
         parcelCode: row.code,
         facility: fac.name,
       });
       return row;
+    }
+  }
+
+  /**
+   * Book several arrivals in one gesture.
+   *
+   * A receiving bench does not process one box at a time — a courier drops a
+   * dozen, and the operator works down the stack. Receiving them one at a time
+   * through a form that clears itself between each meant re-choosing the
+   * facility, re-typing the carrier, and no way to see the run as a whole.
+   *
+   * ALL OR NOTHING, on purpose. A partial success would leave the operator
+   * reading a list of results to work out which four of seven boxes are now on
+   * the system, which is worse than fixing one row and pressing the button
+   * again. The refusal names the row by its position on screen.
+   */
+  async receiveMany(operatorId: string, inputs: readonly ReceiveParcelInput[]) {
+    return this.db.transaction(async (tx) => {
+      const created = [];
+      for (const [index, input] of inputs.entries()) {
+        try {
+          created.push(await this.receiveIn(tx, operatorId, input));
+        } catch (e) {
+          // Rethrowing inside the transaction is what rolls the earlier rows
+          // back; the position is added so the operator can find the row on
+          // screen, since the rest of the message is about one box.
+          const reason = e instanceof Error ? e.message : 'could not be recorded';
+          throw AppError.validation(`Parcel ${index + 1} of ${inputs.length}: ${reason}`);
+        }
+      }
+      return created;
     });
+  }
+
+  /**
+   * Record photographs against a parcel.
+   *
+   * Silently ignores an empty list so every caller can pass the field through
+   * without checking it. The keys have already been through `MediaService`,
+   * which is what decides whether a thing is an image at all.
+   */
+  private async attachPhotos(
+    tx: Database,
+    parcelId: string,
+    kind: 'arrival' | 'condition',
+    keys: readonly string[] | undefined,
+    uploadedBy: string,
+  ): Promise<void> {
+    const clean = (keys ?? []).map((k) => k.trim()).filter(Boolean);
+    if (clean.length === 0) return;
+    await tx.insert(parcelPhoto).values(
+      clean.map((objectKey) => ({ parcelId, kind, objectKey, uploadedBy })),
+    );
+  }
+
+  /** Every photograph on a parcel, newest first, with a readable URL. */
+  async photos(parcelId: string) {
+    const rows = await this.db
+      .select()
+      .from(parcelPhoto)
+      .where(eq(parcelPhoto.parcelId, parcelId))
+      .orderBy(sql`${parcelPhoto.createdAt} desc`);
+    return this.media.signAll(rows);
   }
 
   /**
@@ -524,6 +611,7 @@ export class ParcelService {
         })
         .where(eq(parcel.id, parcelId));
 
+      await this.attachPhotos(tx, parcelId, 'condition', input.photoKeys, operatorId);
       await this.writeEvent(tx, {
         parcelId,
         eventType: 'opened',
@@ -556,8 +644,20 @@ export class ParcelService {
    * This is the ONLY point at which the per-package fee is charged, and the
    * transition guard is what stops it being charged twice: `processed` has no
    * outgoing edges, so a second call cannot reach this code.
+   *
+   * The empty-parcel guard is the reconciliation step this workflow was missing.
+   * Closing an opened parcel that produced no items was a single click, and it
+   * charged the collector a processing fee for unpacking nothing while leaving a
+   * record that says the box was dealt with. There are only two ways a box can
+   * be empty at this point — it really arrived empty, or somebody pressed the
+   * button before booking the contents in — and the second is by far the more
+   * likely, so the default answer is to refuse. `emptyReason` is the operator
+   * asserting the first, in words, onto the append-only trail, which is what
+   * makes it a finding rather than a slip.
    */
-  async process(operatorId: string, parcelId: string) {
+  async process(operatorId: string, parcelId: string, emptyReason?: string) {
+    const statedEmptyReason = emptyReason?.trim() ?? '';
+
     return this.db.transaction(async (tx) => {
       const [row] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
       if (!row) throw AppError.notFound('Parcel not found');
@@ -568,6 +668,14 @@ export class ParcelService {
         .select({ id: item.id })
         .from(item)
         .where(eq(item.sourceParcelId, parcelId));
+
+      if (contents.length === 0 && !statedEmptyReason) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          'Nothing has been booked in from this parcel — receive its contents first, or record why it is empty',
+          409,
+        );
+      }
 
       const now = new Date();
       await this.billing.charge(tx, {
@@ -593,7 +701,10 @@ export class ParcelService {
         toStatus: 'processed',
         actorId: operatorId,
         facilityId: row.facilityId,
-        metadata: { itemCount: contents.length },
+        // The reason a box was closed empty belongs on the trail beside the
+        // charge it justified, not only in whatever the operator remembers.
+        notes: contents.length === 0 ? statedEmptyReason : null,
+        metadata: { itemCount: contents.length, closedEmpty: contents.length === 0 },
       });
       await this.notifyOwner(tx, parcelId, row.ownerId, 'parcel_processed', {
         parcelCode: row.code,
@@ -690,8 +801,22 @@ export class ParcelService {
      Queues and counts
      ------------------------------------------------------------------ */
 
-  /** Everything a warehouse still has to act on, oldest first. */
+  /**
+   * Everything a warehouse still has to act on, oldest first.
+   *
+   * `itemCount` is the running number of units already booked out of the box.
+   * It is the one number a receive bench needs and did not have: an operator
+   * looking at an opened parcel could not tell, without leaving the page,
+   * whether they had booked in three of its cards or none of them.
+   */
   listQueue() {
+    const contents = this.db
+      .select({ parcelId: item.sourceParcelId, n: sql<number>`count(*)::int`.as('n') })
+      .from(item)
+      .where(sql`${item.sourceParcelId} is not null`)
+      .groupBy(item.sourceParcelId)
+      .as('contents');
+
     return this.db
       .select({
         id: parcel.id,
@@ -709,10 +834,12 @@ export class ParcelService {
         facilityCode: facility.code,
         facilityRole: facility.role,
         facilityName: facility.name,
+        itemCount: sql<number>`coalesce(${contents.n}, 0)::int`,
       })
       .from(parcel)
       .leftJoin(userAccount, eq(userAccount.id, parcel.ownerId))
       .leftJoin(facility, eq(facility.id, parcel.facilityId))
+      .leftJoin(contents, eq(contents.parcelId, parcel.id))
       .where(inArray(parcel.status, ['expected', 'received', 'opened', 'unclaimed']))
       .orderBy(sql`${parcel.receivedAt} asc nulls last`, desc(parcel.createdAt));
   }

@@ -259,7 +259,7 @@ function OpenSubmission({
   }
 
   return (
-    <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-4)' }}>
+    <div className="stack stack--tight stack-top">
       <h3 className="drawer-heading">{t('grade.subs.waiting', { body: submission.gradingBody })}</h3>
 
       {ready === null ? (
@@ -267,7 +267,7 @@ function OpenSubmission({
       ) : ready.length === 0 ? (
         <p className="hint">{t('grade.subs.noneWaiting')}</p>
       ) : (
-        <ul className="check-list" style={{ maxHeight: 'none' }}>
+        <ul className="check-list list-unbounded">
           {ready.map((r) => {
             const declared = Number(r.typeFields?.declaredMinor ?? 0);
             return (

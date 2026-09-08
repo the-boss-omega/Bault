@@ -10,7 +10,7 @@ describe('INV intake & custody', () => {
   it('intakes an item for the routed owner, then the owner sees it in their vault', async () => {
     const operator = await signIn(SEED.operator);
     const item = await intakeFor(operator, SEED.collector, {
-      description: 'Charizard 1st edition',
+      description: '2003 EX Dragon Rayquaza ex #97/97',
       conditionGrade: 'PSA 9',
     });
     expect(item.ownerId).toBeTruthy();
@@ -34,7 +34,13 @@ describe('INV intake & custody', () => {
     expect(mine.binBarcode).toBeTruthy();
   });
 
-  it('rejects an intake with no bin — a bin is mandatory (Requirement 10.3)', async () => {
+  /**
+   * Every item still ends up on a shelf (Requirement 10.3). What changed is who
+   * chooses it: an intake may name a bin, or ask for one with `autoStow`, but
+   * one that does neither has nowhere to put the goods and is refused. The
+   * directed-stow half of that is covered in `inv-stow.test.ts`.
+   */
+  it('rejects an intake that neither names a bin nor asks for one', async () => {
     const operator = await signIn(SEED.operator);
     const ownerUsername = await usernameOf(SEED.collector);
     const res = await operator.post('/intake/items', { ownerUsername, typeClass: 'trading_card' });

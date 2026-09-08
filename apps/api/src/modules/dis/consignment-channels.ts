@@ -17,6 +17,7 @@
  * they remit, so it never passes through Bault's ledger and is quoted here as
  * guidance only.
  */
+import { formatMinor } from '../../shared/money';
 
 export interface ConsignmentChannel {
   key: string;
@@ -116,7 +117,7 @@ export function checkEligibility(
   if (channel.minAskingMinor > 0 && input.askingMinor < channel.minAskingMinor) {
     problems.push({
       field: 'askingPrice',
-      message: `${channel.label} has a minimum of ${(channel.minAskingMinor / 100).toFixed(2)}.`,
+      message: `${channel.label} has a minimum of ${formatMinor(channel.minAskingMinor)}.`,
     });
   }
 

@@ -5,6 +5,7 @@ import { NAME_PART_MAX } from '../../shared/names';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { ShelfYieldService } from './shelf-yield.service';
 import { AdmService } from './adm.service';
 
 class UpdateUserDto {
@@ -43,16 +44,50 @@ class UpdateDisputeDto {
 @Roles('admin')
 @Controller('admin')
 export class AdmController {
-  constructor(private readonly adm: AdmService) {}
+  constructor(
+    private readonly adm: AdmService,
+    private readonly yield_: ShelfYieldService,
+  ) {}
+
+  /**
+   * Shelf Yield — what each shelf earns against the occupancy it consumes.
+   *
+   * Admin-only, and pointed at the operator rather than the collector: the same
+   * charges and the same custody trail that produce Break-Even Watch, rolled up
+   * by shelf instead of by card. REVENUE per shelf-month, never margin — Bault's
+   * rent, labour and insurance are not in this database, and a profit figure
+   * computed without them would be a confident number about something nobody
+   * measured.
+   */
+  @Get('shelf-yield')
+  shelfYield() {
+    return this.yield_.byShelf();
+  }
+
+  /** The same, per zone — which part of the building earns, and where to build. */
+  @Get('shelf-yield/zones')
+  shelfYieldByZone() {
+    return this.yield_.byZone();
+  }
+
+  /** Which accounts pay for the shelving they occupy, and which are carried. */
+  @Get('shelf-yield/customers')
+  shelfYieldByCustomer() {
+    return this.yield_.byCustomer();
+  }
 
   @Get('users')
   users() {
     return this.adm.listUsers();
   }
 
+  /**
+   * The caller's own id travels with the patch, because one of the edits an
+   * administrator can make is to the administrator making it.
+   */
   @Patch('users/:id')
-  updateUser(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.adm.updateUser(id, dto);
+  updateUser(@CurrentUser() actor: AuthUser, @Param('id') id: string, @Body() dto: UpdateUserDto) {
+    return this.adm.updateUser(actor.id, id, dto);
   }
 
   @Get('items')

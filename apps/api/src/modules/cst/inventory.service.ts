@@ -3,13 +3,15 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
-import { makeShelfBarcode } from '../inv/labels';
+import { makeBinBarcode, makeBinSerial } from '../inv/labels';
 import { userAccount } from '../acc/acc.schema';
 import { listing, offer, transaction } from '../mkt/mkt.schema';
 import { shipment } from '../shp/shp.schema';
 import { dispute } from '../adm/adm.schema';
+import { facility } from '../inv/facility.schema';
 import { bin, binTransfer, custodyEvent, item, itemChangeHistory } from './cst.schema';
 import { renderReportPdf } from './report-pdf';
+import { StowService } from './stow.service';
 
 export type Cut = 'shelf' | 'owner' | 'condition' | 'item_class';
 
@@ -36,7 +38,10 @@ export interface TimelineEvent {
  */
 @Injectable()
 export class InventoryService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly stow: StowService,
+  ) {}
 
   async history(itemId: string) {
     return this.db
@@ -67,8 +72,12 @@ export class InventoryService {
 
   private async labelRows(cut: Cut, grouped: { key: string | null; count: number }[]) {
     if (cut === 'shelf') {
-      const bins = await this.db.select({ id: bin.id, barcode: bin.barcode, zone: bin.zone }).from(bin);
-      const byId = new Map(bins.map((b) => [b.id, `${b.barcode} (${b.zone})`]));
+      // Named by SERIAL, which is what is on the shelf label and therefore what
+      // somebody holding this report walks to the shelf and compares against.
+      const bins = await this.db
+        .select({ id: bin.id, serialNumber: bin.serialNumber, zone: bin.zone })
+        .from(bin);
+      const byId = new Map(bins.map((b) => [b.id, `${b.serialNumber} (${b.zone})`]));
       return grouped.map((g) => ({
         key: g.key,
         label: g.key ? byId.get(g.key) ?? g.key : 'Unshelved',
@@ -186,26 +195,105 @@ export class InventoryService {
     return events.sort((a, b) => (a.at < b.at ? 1 : -1));
   }
 
-  /** INV-01: operator creates a bin; barcode auto-generated per zone when omitted. */
-  async createBin(input: { zone: string; capacity: number; barcode?: string }) {
-    let barcode = input.barcode;
-    if (!barcode) {
-      const [c] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(bin)
-        .where(eq(bin.zone, input.zone));
-      barcode = makeShelfBarcode(input.zone, (c?.count ?? 0) + 1);
-    }
+  /**
+   * INV-01: operator creates a shelf. Its serial is minted here and is not
+   * negotiable.
+   *
+   * There is no barcode input any more. There used to be, and leaving it would
+   * have defeated the point of `0019_bins_get_a_serial`: an operator who can
+   * type an identifier will type `BIN-A-001`, and the shelf is back to having a
+   * name — with the sequence, the zone baked into the identity, and the
+   * collision on the next one, all restored by hand.
+   *
+   * No capacity is asked for either, because there is no longer such a thing —
+   * see `0018_stow_wherever_it_fits`. What IS asked for is the two things the
+   * stow assignment needs to know: which building the shelf is in, and whether
+   * it is oversized storage. The facility defaults to the primary site, which is
+   * the only one that stores anything.
+   */
+  async createBin(input: {
+    zone: string;
+    facilityId?: string;
+    facilityCode?: string;
+    oversized?: boolean;
+  }) {
+    const zone = input.zone?.trim();
+    if (!zone) throw AppError.validation('A zone is required');
+
+    const facilityId = await this.resolveFacilityForBin(input);
+    const serialNumber = makeBinSerial();
+
     const [row] = await this.db
       .insert(bin)
-      .values({ zone: input.zone, capacity: input.capacity, barcode })
+      .values({
+        zone,
+        serialNumber,
+        barcode: makeBinBarcode(serialNumber),
+        facilityId,
+        oversized: input.oversized ?? false,
+      })
       .returning();
     if (!row) throw AppError.validation('Failed to create bin');
     return row;
   }
 
+  /**
+   * Which building a new shelf belongs to.
+   *
+   * An explicit id or code wins. With neither, it is the primary facility: a
+   * forwarding site stores nothing, so a bin there would be a shelf in a
+   * building that by definition has no shelves.
+   */
+  private async resolveFacilityForBin(input: { facilityId?: string; facilityCode?: string }) {
+    if (input.facilityId) {
+      const [row] = await this.db
+        .select({ id: facility.id })
+        .from(facility)
+        .where(eq(facility.id, input.facilityId))
+        .limit(1);
+      if (!row) throw AppError.validation('That facility does not exist');
+      return row.id;
+    }
+    if (input.facilityCode) {
+      const [row] = await this.db
+        .select({ id: facility.id })
+        .from(facility)
+        .where(sql`upper(${facility.code}) = upper(${input.facilityCode})`)
+        .limit(1);
+      if (!row) throw AppError.validation(`No facility with code "${input.facilityCode}"`);
+      return row.id;
+    }
+    const [primary] = await this.db
+      .select({ id: facility.id })
+      .from(facility)
+      .where(eq(facility.role, 'primary'))
+      .orderBy(sql`${facility.code} asc`)
+      .limit(1);
+    if (!primary) throw AppError.validation('No storage facility exists to put this bin in');
+    return primary.id;
+  }
+
+  /**
+   * Take a bin out of service, or put it back.
+   *
+   * Never a delete: items reference their bin forever, and the transfer ledger
+   * references bins that items left years ago. An inactive bin keeps everything
+   * it holds and everything it ever held; it is simply never handed out by the
+   * stow assignment again, so it empties as its contents are picked.
+   */
+  async setBinActive(binId: string, active: boolean) {
+    const [row] = await this.db
+      .update(bin)
+      .set({ active, updatedAt: new Date() })
+      .where(eq(bin.id, binId))
+      .returning();
+    if (!row) throw AppError.notFound('Bin not found');
+    return row;
+  }
+
+  /** Every bin with what is on it — the console's locations list. */
   listBins() {
-    return this.db.select().from(bin).orderBy(sql`${bin.zone} asc, ${bin.barcode} asc`);
+    return this.stow.listWithCounts();
   }
 
   async reconcile() {

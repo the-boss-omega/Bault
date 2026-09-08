@@ -1,10 +1,64 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
-import { IconButton } from './primitives';
+import { Button, IconButton } from './primitives';
 import { IconClose } from './icons';
 import { useT } from '../i18n';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Which overlay Escape belongs to.
+ *
+ * Both overlays listened on `document` in the capture phase, and capture
+ * handlers fire in registration order — so the DRAWER, which mounts first, saw
+ * Escape first and called `stopPropagation()`. Pressing Escape on the "donate
+ * this card, this cannot be undone" confirmation therefore closed the entire
+ * drawer and took the confirmation with it, losing the reader's place on a card
+ * they were part-way through deciding about.
+ *
+ * The topmost overlay is the one a person means, so the stack decides and the
+ * others stand down. Module-level because it describes the page rather than any
+ * component, and there is exactly one page.
+ */
+const overlays: symbol[] = [];
+
+function pushOverlay(token: symbol): () => void {
+  overlays.push(token);
+  return () => {
+    const at = overlays.indexOf(token);
+    if (at >= 0) overlays.splice(at, 1);
+  };
+}
+
+const isTopOverlay = (token: symbol) => overlays[overlays.length - 1] === token;
+
+/**
+ * Keep Tab inside `container`.
+ *
+ * Shared by both overlays, because a modal guarding an irreversible action needs
+ * it at least as much as a drawer does and only the drawer had it: Tab from the
+ * confirmation's last button moved focus into the page behind, where Enter would
+ * act on whatever it happened to land on.
+ */
+function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
+  if (event.key !== 'Tab' || !container) return;
+  const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => el.offsetParent !== null || el === document.activeElement,
+  );
+  if (nodes.length === 0) {
+    event.preventDefault();
+    return;
+  }
+  const first = nodes[0]!;
+  const last = nodes[nodes.length - 1]!;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 /**
  * Right-side detail drawer (leading→trailing edge, so it mirrors in RTL).
@@ -42,33 +96,22 @@ export function DetailDrawer({
   useEffect(() => {
     openerRef.current = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
+    const token = Symbol('drawer');
+    const popOverlay = pushOverlay(token);
     // Focus the panel itself, so a screen reader announces the drawer title
     // before the user tabs into its controls.
     panel?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
+      // A confirmation opened ON TOP of this drawer owns Escape; closing the
+      // drawer out from under it would take the confirmation with it.
+      if (!isTopOverlay(token)) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onClose();
         return;
       }
-      if (event.key !== 'Tab' || !panel) return;
-      const nodes = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.offsetParent !== null || el === document.activeElement,
-      );
-      if (nodes.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = nodes[0]!;
-      const last = nodes[nodes.length - 1]!;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      trapTab(event, panel);
     }
 
     document.addEventListener('keydown', onKeyDown, true);
@@ -78,6 +121,7 @@ export function DetailDrawer({
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
       document.body.style.overflow = previousOverflow;
+      popOverlay();
       // Return focus to the row/button that opened the drawer.
       openerRef.current?.focus?.();
     };
@@ -146,19 +190,33 @@ export function ConfirmationModal({
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
+    const dialog = dialogRef.current;
+    const token = Symbol('confirm');
+    const popOverlay = pushOverlay(token);
+    dialog?.focus();
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onCancel();
+      if (!isTopOverlay(token)) return;
+      if (event.key === 'Escape') {
+        // Stopped here so a drawer underneath does not ALSO close.
+        event.stopPropagation();
+        onCancel();
+        return;
+      }
+      trapTab(event, dialog);
     }
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
+      popOverlay();
       opener?.focus?.();
     };
   }, [onCancel]);
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onCancel}>
+    // A click outside is ignored while the action is running: it cannot cancel
+    // what is already in flight, and dismissing the dialog would leave the reader
+    // with no idea whether the irreversible thing happened.
+    <div className="modal-backdrop" role="presentation" onClick={() => !busy && onCancel()}>
       <div
         ref={dialogRef}
         className="modal"
@@ -172,18 +230,20 @@ export function ConfirmationModal({
           <h4 id={titleId}>{title}</h4>
         </div>
         <div>{body}</div>
+        {/*
+          The `Button` primitive, not hand-rolled `<button className="btn">`.
+          These two were the only buttons in the product that opted out of it,
+          and they were the ones guarding the irreversible actions — so the
+          control that most needed a spinner and `aria-busy` had neither, and its
+          Cancel stayed live while the confirmed action was already running.
+        */}
         <div className="modal-actions">
-          <button type="button" className="btn btn--secondary" onClick={onCancel}>
+          <Button variant="secondary" disabled={busy} onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className={`btn btn--${tone === 'danger' ? 'danger' : 'gold'}`}
-            disabled={busy}
-            onClick={onConfirm}
-          >
+          </Button>
+          <Button variant={tone === 'danger' ? 'danger' : 'gold'} loading={busy} onClick={onConfirm}>
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

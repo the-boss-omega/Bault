@@ -13,7 +13,7 @@ import {
   type WalletRequest,
   type WalletRequestType,
 } from '../../../shared/walletRequests';
-import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
+import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import { IconArrowDown, IconUpload } from '../../../shared/ui/icons';
 
 /**
@@ -162,8 +162,10 @@ export function WalletRequestForm({
       {type === 'cash_out' && <CashOutQuotePanel amount={amount} />}
 
       {type === 'cash_in' ? (
-        <label className="field">
-          <span className="field-label">{t('wallet.request.fundingSource')}</span>
+        <Field
+          label={t('wallet.request.fundingSource')}
+          error={showProblem('fundingSource') ? t('wallet.request.error.fundingRequired') : undefined}
+        >
           <select value={fundingSource} onChange={(e) => setFundingSource(e.target.value)}>
             {FUNDING_SOURCES.map((source) => (
               <option key={source} value={source}>
@@ -171,14 +173,14 @@ export function WalletRequestForm({
               </option>
             ))}
           </select>
-          {showProblem('fundingSource') && (
-            <span className="field-error">{t('wallet.request.error.fundingRequired')}</span>
-          )}
-        </label>
+        </Field>
       ) : (
         <>
-          <label className="field">
-            <span className="field-label">{t('wallet.request.destination')}</span>
+          <Field
+            label={t('wallet.request.destination')}
+            hint={t('wallet.request.destinationHint')}
+            error={showProblem('destinationAccount') ? t('wallet.request.error.destinationRequired') : undefined}
+          >
             <input
               dir="ltr"
               placeholder="IL00 0000 0000 0000"
@@ -186,53 +188,46 @@ export function WalletRequestForm({
               aria-invalid={Boolean(showProblem('destinationAccount'))}
               onChange={(e) => setDestinationAccount(e.target.value)}
             />
-            <span className={showProblem('destinationAccount') ? 'field-error' : 'field-hint'}>
-              {showProblem('destinationAccount')
-                ? t('wallet.request.error.destinationRequired')
-                : t('wallet.request.destinationHint')}
-            </span>
-          </label>
+          </Field>
 
-          <label className="field">
-            <span className="field-label">{t('wallet.request.beneficiary')}</span>
+          <Field
+            label={t('wallet.request.beneficiary')}
+            error={
+              showProblem('beneficiaryName') ? t('wallet.request.error.beneficiaryRequired') : undefined
+            }
+          >
             <input
               value={beneficiaryName}
               aria-invalid={Boolean(showProblem('beneficiaryName'))}
               onChange={(e) => setBeneficiaryName(e.target.value)}
             />
-            {showProblem('beneficiaryName') && (
-              <span className="field-error">{t('wallet.request.error.beneficiaryRequired')}</span>
-            )}
-          </label>
+          </Field>
         </>
       )}
 
-      <label className="field">
-        <span className="field-label">{t('wallet.request.reference')}</span>
+      <Field label={t('wallet.request.reference')} hint={t('wallet.request.referenceHint')}>
         <input
           value={reference}
           maxLength={MAX_REFERENCE_LENGTH}
           onChange={(e) => setReference(e.target.value)}
         />
-        <span className="field-hint">{t('wallet.request.referenceHint')}</span>
-      </label>
+      </Field>
 
-      <label className="field">
-        <span className="field-label">{t('wallet.request.document')}</span>
+      <Field label={t('wallet.request.document')} hint={t('wallet.request.documentHint')}>
         <input dir="ltr" value={documentKey} onChange={(e) => setDocumentKey(e.target.value)} />
-        <span className="field-hint">{t('wallet.request.documentHint')}</span>
-      </label>
+      </Field>
 
-      <label className="field">
-        <span className="field-label">{t('wallet.request.notes')}</span>
+      <Field
+        label={t('wallet.request.notes')}
+        error={showProblem('notes') ? t('wallet.request.error.notesTooLong') : undefined}
+      >
         <textarea
           rows={3}
           value={notes}
           maxLength={MAX_NOTE_LENGTH}
           onChange={(e) => setNotes(e.target.value)}
         />
-        {showProblem('notes') && <span className="field-error">{t('wallet.request.error.notesTooLong')}</span>}
-      </label>
+      </Field>
 
       {/* Caught here so a double-click reads as an explanation rather than as a
           server error, and so the user can find the request already in flight. */}

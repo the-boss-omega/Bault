@@ -42,21 +42,13 @@ interface PreferenceMatrix {
 }
 
 /**
- * The api client only exposes get/post/patch/del; preferences use PUT, so these
- * calls follow the same fetch conventions (cookie session, uniform errors).
+ * Preferences are written with PUT, which the shared client now supports.
+ *
+ * This was a hand-rolled `fetch` because `api` had no `put`, and the copy threw
+ * a plain `Error` — so these two calls, alone in the app, could not be told
+ * apart from a network failure by anything that branches on `ApiError.kind`.
  */
-async function putJson(path: string, body: unknown): Promise<void> {
-  const res = await fetch(`/api/v1/notifications/${path}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new Error(body?.error?.message ?? res.statusText);
-  }
-}
+const putJson = (path: string, body: unknown) => api.put(`/notifications/${path}`, body);
 
 const TABS = ['feed', 'preferences'] as const;
 type NotificationsTab = (typeof TABS)[number];

@@ -5,6 +5,7 @@ import { GradingService } from './grading.service';
 import { DonationService } from './donation.service';
 import { ConsignmentService } from './consignment.service';
 import { BuyoutService } from './buyout.service';
+import { CustomRequestService } from './custom-request.service';
 import { MediaService } from './media.service';
 import { DisposalServicesService } from './disposal-services.service';
 import { LotSplitService } from './lot-split.service';
@@ -24,6 +25,7 @@ import { DisController } from './dis.controller';
     DonationService,
     ConsignmentService,
     BuyoutService,
+    CustomRequestService,
     MediaService,
     DisposalServicesService,
     LotSplitService,

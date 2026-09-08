@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
-import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
+import { PASSWORD_MIN } from '../../../shared/names';
+import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 
 /**
  * Step two of password recovery: the page the emailed link opens.
@@ -25,7 +26,7 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const tooShort = password.length > 0 && password.length < 8;
+  const tooShort = password.length > 0 && password.length < PASSWORD_MIN;
   const mismatch = confirm.length > 0 && confirm !== password;
   const ready = password.length >= 8 && confirm === password;
 
@@ -77,8 +78,11 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       <h2>{t('auth.resetTitle')}</h2>
       <p className="field-hint">{t('auth.resetIntro')}</p>
 
-      <label className="field">
-        <span className="field-label">{t('auth.newPassword')}</span>
+      <Field
+        label={t('auth.newPassword')}
+        hint={t('auth.passwordHint')}
+        error={tooShort ? t('auth.passwordTooShort', { min: PASSWORD_MIN }) : undefined}
+      >
         <input
           type="password"
           value={password}
@@ -88,11 +92,12 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
           aria-invalid={tooShort}
           dir="ltr"
         />
-        <span className={tooShort ? 'field-error' : 'field-hint'}>{t('auth.passwordHint')}</span>
-      </label>
+      </Field>
 
-      <label className="field">
-        <span className="field-label">{t('auth.confirmPassword')}</span>
+      <Field
+        label={t('auth.confirmPassword')}
+        error={mismatch ? t('auth.passwordMismatch') : undefined}
+      >
         <input
           type="password"
           value={confirm}
@@ -101,8 +106,7 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
           aria-invalid={mismatch}
           dir="ltr"
         />
-        {mismatch && <span className="field-error">{t('auth.passwordMismatch')}</span>}
-      </label>
+      </Field>
 
       {error && <ErrorState message={error} />}
 

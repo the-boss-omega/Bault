@@ -23,6 +23,7 @@ import {
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconMarketplace, IconTag } from '../../../shared/ui/icons';
+import { navigate } from '../../../shared/routing';
 
 /* ============================================================
    My listings — reprice and delist
@@ -108,7 +109,21 @@ export function MyListingsPanel({
         {rows === null ? (
           <SkeletonTable rows={3} columns={5} />
         ) : rows.length === 0 ? (
-          <EmptyState title={t('market.mine.empty')} text={t('market.mine.emptyText')} icon={<IconTag />} />
+          /* Listing a card is done from the Sell tab, which this did not say. */
+          <EmptyState
+            title={t('market.mine.empty')}
+            text={t('market.mine.emptyText')}
+            icon={<IconTag />}
+            action={
+              <Button
+                size="sm"
+                variant="gold"
+                onClick={() => navigate({ section: 'marketplace', tab: 'sell' })}
+              >
+                {t('market.mine.listOne')}
+              </Button>
+            }
+          />
         ) : (
           <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
@@ -235,9 +250,16 @@ export function MyListingsPanel({
 /**
  * Every offer the collector is party to, on both sides.
  *
- * `direction` comes from the API rather than being inferred by comparing ids,
- * and it decides everything: a seller may accept, reject or counter; a buyer can
- * only watch their own offer, or counter a counter that came back to them.
+ * WHOSE TURN IT IS decides what is offered, and that is not the same as which
+ * side of the listing you are on. This panel used to branch on `direction`: a
+ * buyer saw "awaiting seller" and no controls whatsoever, so a buyer who had
+ * been sent a counter-offer had no way to accept it, counter it, or even take
+ * their own offer off the table — a negotiation could be started but never
+ * finished by the person being negotiated with.
+ *
+ * `yourTurn` comes from the API, which knows which side proposed the price
+ * currently on the table. When it is your turn: accept, counter or decline.
+ * When it is not: withdraw, which is a real action and was missing entirely.
  */
 export function OffersPanel({
   onChanged,
@@ -277,13 +299,20 @@ export function OffersPanel({
       await api.post(`/marketplace/offers/${offer.id}/respond`, body);
       setCountering(null);
       await load();
+      // "Rejected" is the seller declining. When it is your OWN price you are
+      // taking off the table, the same call is a withdrawal, and telling
+      // somebody they rejected their own offer is a small nonsense.
       await onChanged(
         t(
           action === 'accept'
             ? 'market.offers.accepted'
             : action === 'reject'
-              ? 'market.offers.rejected'
-              : 'market.offers.countered',
+              ? offer.yourTurn
+                ? 'market.offers.rejected'
+                : 'market.offers.withdrawn'
+              : offer.yourTurn
+                ? 'market.offers.countered'
+                : 'market.offers.changed',
         ),
       );
     } catch (e) {
@@ -333,6 +362,14 @@ export function OffersPanel({
                     {row.direction === 'incoming' && row.buyerUsername && (
                       <span className="dt-sub" dir="ltr">
                         <code>{row.buyerUsername}</code>
+                      </span>
+                    )}
+                    {/* A pending offer is either waiting on you or waiting on
+                        them, and which one it is decides whether you need to do
+                        anything today. The table said neither. */}
+                    {row.status === 'pending' && row.listingStatus === 'active' && (
+                      <span className="dt-sub">
+                        {t(row.yourTurn ? 'market.offers.turnYours' : 'market.offers.turnTheirs')}
                       </span>
                     )}
                   </td>
@@ -423,7 +460,7 @@ function OfferActions({
             disabled={busy || dollarsToCents(amount) === null}
             onClick={() => onRespond('counter')}
           >
-            {t('market.offers.counter')}
+            {t(offer.yourTurn ? 'market.offers.counter' : 'market.offers.change')}
           </Button>
           <Button size="sm" variant="ghost" onClick={onCounterCancel}>
             {t('ui.cancel')}
@@ -433,9 +470,34 @@ function OfferActions({
     );
   }
 
-  // A buyer waiting on their own offer has nothing to do but wait.
-  if (offer.direction === 'outgoing') {
-    return <span className="hint">{t('market.offers.awaitingSeller')}</span>;
+  /**
+   * Waiting on the other side. The one thing you can still do is take the price
+   * back off the table — for a buyer that is withdrawing an offer, for a seller
+   * withdrawing a counter. Both are the same call; only the wording differs,
+   * because "reject my own offer" is not a sentence anybody would write.
+   */
+  if (!offer.yourTurn) {
+    return (
+      <div className="actions">
+        <span className="hint">
+          {t(offer.side === 'buyer' ? 'market.offers.awaitingSeller' : 'market.offers.awaitingBuyer')}
+        </span>
+        {/*
+          Changing your mind about your own price is one action, not three.
+          Only one open offer per buyer per listing is allowed, so raising a bid
+          used to mean withdrawing, going back to Browse, finding the listing
+          again and offering afresh. A counter on your own offer replaces it in
+          place, which is the same call the other side makes and needs no new
+          endpoint.
+        */}
+        <Button size="sm" variant="secondary" disabled={busy} onClick={onCounterStart}>
+          {t('market.offers.change')}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => onRespond('reject')}>
+          {t('market.offers.withdraw')}
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -447,7 +509,7 @@ function OfferActions({
         {t('market.offers.counter')}
       </Button>
       <Button size="sm" variant="danger" disabled={busy} onClick={() => onRespond('reject')}>
-        {t('market.offers.reject')}
+        {t(offer.side === 'seller' ? 'market.offers.reject' : 'market.offers.decline')}
       </Button>
     </div>
   );

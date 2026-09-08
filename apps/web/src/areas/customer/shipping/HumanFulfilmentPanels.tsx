@@ -3,8 +3,9 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { formatDate, formatUsd } from '../../../shared/money';
 import type { PickupShow, WhiteGloveTerms } from '../../../shared/escrow';
-import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox, IconCalendar, IconShield } from '../../../shared/ui/icons';
+import { useShippingCountries } from '../../../shared/countries';
 
 interface VaultItem {
   id: string;
@@ -176,6 +177,7 @@ export function WhiteGlovePanel({
   const [deliverFrom, setDeliverFrom] = useState('');
   const [deliverTo, setDeliverTo] = useState('');
   const [country, setCountry] = useState('US');
+  const countries = useShippingCountries();
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -263,11 +265,9 @@ export function WhiteGlovePanel({
           </ul>
         )}
 
-        <label className="field">
-          <span className="field-label">{t('ff.wg.pickupAddress')}</span>
+        <Field label={t('ff.wg.pickupAddress')} hint={t('ff.wg.pickupHint')}>
           <input value={pickupAddress} maxLength={400} onChange={(e) => setPickupAddress(e.target.value)} />
-          <span className="field-hint">{t('ff.wg.pickupHint')}</span>
-        </label>
+        </Field>
         <div className="field-row">
           <label className="field">
             <span className="field-label">{t('ff.wg.pickupFrom')}</span>
@@ -292,10 +292,17 @@ export function WhiteGlovePanel({
             <span className="field-label">{t('ff.wg.deliverTo')}</span>
             <input type="datetime-local" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} />
           </label>
-          <label className="field">
-            <span className="field-label">{t('ff.wg.country')}</span>
-            <input value={country} dir="ltr" maxLength={2} style={{ width: '4rem' }} onChange={(e) => setCountry(e.target.value)} />
-          </label>
+          {/* Was a 4rem text box asking a collector to type a two-letter
+              country code from memory. The same select the address form uses. */}
+          <Field label={t('ff.wg.country')} htmlFor="wg-country">
+            <select id="wg-country" value={country} onChange={(e) => setCountry(e.target.value)}>
+              {countries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
 
         <label className="field">
@@ -355,7 +362,7 @@ export function WhiteGloveQuotes({
 
   return (
     <Panel title={t('ff.wg.quotesTitle')} subtitle={t('ff.wg.quotesSubtitle')}>
-      <ul className="check-list" style={{ maxHeight: 'none' }}>
+      <ul className="check-list list-unbounded">
         {rows.map((r) => (
           <li key={r.id}>
             <span>

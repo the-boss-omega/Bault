@@ -5,7 +5,10 @@ import { Public } from '../acc/public.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ListingService } from './listing.service';
-import { BrowseService } from './browse.service';
+import { BrowseService, type BrowseSort } from './browse.service';
+
+/** The orders the shelf can be shown in. Anything else falls back to the first. */
+const BROWSE_SORTS: readonly string[] = ['newest', 'price_asc', 'price_desc'];
 import { PurchaseService } from './purchase.service';
 import { MarketReadService } from './market-read.service';
 
@@ -31,10 +34,34 @@ export class MktController {
     private readonly read: MarketReadService,
   ) {}
 
+  /**
+   * An unrecognised `sort` falls back to `newest` rather than erroring: a stale
+   * bookmark should still show the shelf, which is the same rule the vault's
+   * `scope` follows.
+   */
   @Public()
   @Get('listings')
-  list(@Query('limit') limit?: string, @Query('q') q?: string) {
-    return this.browse.list(limit ? Number(limit) : undefined, q);
+  list(
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
+    @Query('type') type?: string,
+    @Query('condition') condition?: string,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('sort') sort?: string,
+  ) {
+    const price = (raw: string | undefined) => {
+      const n = Number(raw);
+      return raw !== undefined && raw !== '' && Number.isFinite(n) && n >= 0 ? n : undefined;
+    };
+    return this.browse.list(limit ? Number(limit) : undefined, {
+      q,
+      type,
+      condition,
+      minPrice: price(minPrice),
+      maxPrice: price(maxPrice),
+      sort: BROWSE_SORTS.includes(sort as BrowseSort) ? (sort as BrowseSort) : 'newest',
+    });
   }
 
   /**

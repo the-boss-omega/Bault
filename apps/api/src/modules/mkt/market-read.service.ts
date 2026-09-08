@@ -160,10 +160,16 @@ export class MarketReadService {
   /**
    * Every offer that concerns the caller, on both sides of the table.
    *
-   * `direction` says which side they are on, because the available actions
-   * differ completely: a seller may accept, reject or counter; a buyer may only
-   * watch, or counter a counter. Computing it here means the UI never has to
-   * infer it by comparing ids.
+   * `direction` says which side of the LISTING they are on. `yourTurn` says
+   * whether the ball is in their court, and those are not the same question —
+   * which is the mistake the offers panel made.
+   *
+   * The panel keyed its actions off `direction` alone: a buyer was always shown
+   * "awaiting seller" and given no controls, so a buyer who had been sent a
+   * counter-offer could not accept it, counter it, or even withdraw. A
+   * negotiation could be started but never finished from the side that was being
+   * negotiated with. Whose move it is depends on who proposed the price on the
+   * table, so that is what is computed and sent.
    */
   async myOffers(userId: string) {
     const rows = await this.db
@@ -174,6 +180,7 @@ export class MarketReadService {
         currency: offer.currency,
         status: offer.status,
         parentOfferId: offer.parentOfferId,
+        proposedBy: offer.proposedBy,
         createdAt: offer.createdAt,
         buyerId: offer.buyerId,
         sellerId: listing.sellerId,
@@ -192,10 +199,21 @@ export class MarketReadService {
       .where(or(eq(offer.buyerId, userId), eq(listing.sellerId, userId)))
       .orderBy(desc(offer.createdAt));
 
-    return rows.map((r) => ({
-      ...r,
-      direction: r.sellerId === userId ? ('incoming' as const) : ('outgoing' as const),
-    }));
+    return rows.map((r) => {
+      const side = r.sellerId === userId ? ('seller' as const) : ('buyer' as const);
+      return {
+        ...r,
+        direction: side === 'seller' ? ('incoming' as const) : ('outgoing' as const),
+        /** The caller's own side, so the UI never re-derives it from ids. */
+        side,
+        /**
+         * True when the price on the table was named by the OTHER party, which
+         * is exactly when accept / counter / reject are available. False means
+         * the caller is waiting — and their one action is to withdraw.
+         */
+        yourTurn: r.proposedBy !== side,
+      };
+    });
   }
 
   /**

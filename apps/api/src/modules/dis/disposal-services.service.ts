@@ -64,7 +64,7 @@ export class DisposalServicesService {
     if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
     // Cracking something that was never graded is a no-op with a fee attached.
     if (!it.conditionGrade || /^raw$/i.test(it.conditionGrade)) {
-      throw AppError.validation('This card has no grade recorded — there is nothing to crack it out of.');
+      throw AppError.validation('This item has no grade recorded — there is nothing to crack it out of.');
     }
     return this.confirmation.issue(ownerId, 'deslab', { itemId });
   }
@@ -134,7 +134,7 @@ export class DisposalServicesService {
    */
   async requestCull(ownerId: string, itemIds: string[], outcome: 'discard' | 'donate') {
     const ids = [...new Set((itemIds ?? []).filter(Boolean))];
-    if (ids.length === 0) throw AppError.validation('Choose at least one card');
+    if (ids.length === 0) throw AppError.validation('Choose at least one item');
     if (outcome !== 'discard' && outcome !== 'donate') {
       throw AppError.validation('Outcome must be discard or donate');
     }

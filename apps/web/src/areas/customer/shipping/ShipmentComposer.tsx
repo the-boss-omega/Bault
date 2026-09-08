@@ -10,8 +10,10 @@ import {
   type QuotedRate,
   type ServiceCatalogue,
 } from '../../../shared/carriers';
-import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation, IconShipping } from '../../../shared/ui/icons';
+import { navigate } from '../../../shared/routing';
+import { countryName, useShippingCountries } from '../../../shared/countries';
 
 interface Address {
   id: string;
@@ -58,6 +60,7 @@ export function ShipmentComposer({
   onCreated: () => void;
 }) {
   const { t } = useI18n();
+  const countries = useShippingCountries();
 
   const [catalogue, setCatalogue] = useState<ServiceCatalogue | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -227,25 +230,42 @@ export function ShipmentComposer({
 
       <Panel title={t('shipping.destination')} subtitle={t('shipping.destinationSubtitle')}>
         {addresses.length === 0 ? (
+          /*
+            This told somebody to go and manage their addresses and gave them no
+            way to do it — the form lives on another section entirely, and
+            nothing on screen said which. A shipment cannot be composed at all
+            from here without one, so this is the only thing to do next.
+          */
           <EmptyState
             title={t('shipping.noAddresses')}
             text={t('shipping.manageAddressesHint')}
             icon={<IconLocation />}
+            action={
+              <Button
+                size="sm"
+                variant="gold"
+                onClick={() => navigate({ section: 'profile', tab: 'addresses' })}
+              >
+                {t('shipping.addAnAddress')}
+              </Button>
+            }
           />
         ) : (
           <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-            <label className="field">
-              <span className="field-label">{t('shipping.addressPlaceholder')}</span>
+            <Field
+              label={t('shipping.addressPlaceholder')}
+              hint={t('shipping.manageAddressesHint')}
+            >
               <select value={addressId} onChange={(e) => setAddressId(e.target.value)}>
                 <option value="">{t('shipping.addressPlaceholder')}</option>
                 {addresses.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.label}: {a.recipient}, {a.line1}, {a.city} {a.postalCode}, {a.country}
+                    {a.label}: {a.recipient}, {a.line1}, {a.city} {a.postalCode},{' '}
+                    {countryName(a.country, countries)}
                   </option>
                 ))}
               </select>
-              <span className="field-hint">{t('shipping.manageAddressesHint')}</span>
-            </label>
+            </Field>
 
             <label className="check">
               <input type="checkbox" checked={rush} onChange={(e) => setRush(e.target.checked)} />
@@ -308,11 +328,9 @@ export function ShipmentComposer({
             </div>
           ))}
 
-          <label className="field">
-            <span className="field-label">{t('ship.notes')}</span>
+          <Field label={t('ship.notes')} hint={t('ship.notesHint')}>
             <input value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
-            <span className="field-hint">{t('ship.notesHint')}</span>
-          </label>
+          </Field>
         </div>
       </Panel>
 
@@ -380,7 +398,7 @@ export function ShipmentComposer({
             )}
 
             {eligible.length > 0 && (
-              <div className="row" style={{ marginBlockStart: 'var(--sp-4)' }}>
+              <div className="row stack-top">
                 <Button
                   variant="gold"
                   icon={<IconShipping />}
@@ -398,7 +416,7 @@ export function ShipmentComposer({
             {refused.length > 0 && (
               <>
                 <h3 className="drawer-heading">{t('ship.unavailable')}</h3>
-                <ul className="check-list" style={{ maxHeight: 'none' }}>
+                <ul className="check-list list-unbounded">
                   {refused.map((r) => (
                     <li key={r.serviceKey}>
                       <span>

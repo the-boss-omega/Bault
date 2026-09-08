@@ -132,3 +132,26 @@ export const parcelEvent = pgTable('parcel_event', {
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: createdAt(),
 });
+
+/**
+ * A photograph of a PARCEL — the container, not its contents.
+ *
+ * Deliberately its own table rather than a row in `item_image`. A parcel
+ * photograph is evidence about a box: it is taken before anybody knows what is
+ * inside, it belongs to no item, and it has to outlive the box being emptied. An
+ * arrival shot and a condition shot answer different questions — "this is how it
+ * turned up" and "this is what the check found" — so the kind is recorded rather
+ * than inferred from when it was taken.
+ *
+ * Not append-only guarded: unlike `parcel_event`, a photograph attached to the
+ * wrong box is a mistake worth being able to remove.
+ */
+export const parcelPhoto = pgTable('parcel_photo', {
+  id: pkId(),
+  parcelId: text('parcel_id').notNull(),
+  kind: text('kind').$type<'arrival' | 'condition'>().notNull(),
+  objectKey: text('object_key').notNull(),
+  caption: text('caption'),
+  uploadedBy: text('uploaded_by').notNull(),
+  createdAt: createdAt(),
+});

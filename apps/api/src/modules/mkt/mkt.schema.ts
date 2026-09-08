@@ -46,6 +46,15 @@ export const offer = pgTable('offer', {
   currency: currency().notNull(),
   status: offerStatus('status').notNull().default('pending'),
   parentOfferId: text('parent_offer_id'), // chains counter-offers
+  /**
+   * Which side put THIS price on the table.
+   *
+   * Not derivable from `buyerId`, which names the same person on every offer in
+   * a chain, nor reliably from `parentOfferId` once both sides may counter. It
+   * is the whole basis of the accept rule — the party who proposed a price may
+   * not also accept it — so it is stored rather than inferred.
+   */
+  proposedBy: text('proposed_by').$type<'buyer' | 'seller'>().notNull().default('buyer'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

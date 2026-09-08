@@ -17,6 +17,7 @@
  * to add, and it behaves identically on Windows, macOS and Linux.
  */
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +56,8 @@ const apiTarget = (env.VITE_API_PROXY_TARGET || `http://127.0.0.1:${env.API_PORT
   '',
 );
 const healthUrl = `${apiTarget}/api/v1/healthz`;
+/** The port the API will try to bind, for the in-use check below. */
+const apiPort = Number(new URL(apiTarget).port || 3000);
 
 const children = [];
 let shuttingDown = false;
@@ -143,6 +146,62 @@ async function waitForApi() {
       '[dev] check: does the root .env exist with DATABASE_URL and API_PORT?',
   );
   return false;
+}
+
+/**
+ * Is something already sitting on the API's port?
+ *
+ * Without this the failure is a raw Node stack trace — `EADDRINUSE` followed by
+ * twelve frames of Nest internals — which says what happened but nothing about
+ * what to do, and buries the one useful word under a wall of paths. The usual
+ * cause is the most boring one: an earlier `pnpm dev` that was closed by
+ * shutting a terminal rather than with Ctrl-C, so its child API is still
+ * running and still holding the port.
+ *
+ * Checked BEFORE spawning anything, so the script fails in a sentence instead
+ * of starting the API, watching it die, and then reporting that the API died.
+ */
+async function portIsBusy() {
+  try {
+    // A liveness probe is the cheapest possible check, and it distinguishes the
+    // two cases that matter: a stale Bault API (answers /healthz) from some
+    // unrelated process that merely holds the port (does not).
+    const res = await fetch(healthUrl, { signal: AbortSignal.timeout(1_500) });
+    return res.ok ? 'bault' : 'other';
+  } catch {
+    // Either nothing is listening, or something is listening and is not us.
+    // Distinguished by attempting a bare connection.
+    return await new Promise((resolve) => {
+      const socket = net.connect({ port: apiPort, host: '127.0.0.1' });
+      socket.setTimeout(1_000);
+      socket.on('connect', () => {
+        socket.destroy();
+        resolve('other');
+      });
+      socket.on('error', () => resolve(false));
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+  }
+}
+
+const busy = await portIsBusy();
+if (busy) {
+  const who =
+    busy === 'bault'
+      ? 'Another Bault API is already running there — probably a `pnpm dev` whose terminal was closed instead of stopped with Ctrl-C.'
+      : 'Something else is listening on that port.';
+  console.error(
+    `[dev] port ${apiPort} is already in use. ${who}\n` +
+      '[dev] free it, then run `pnpm dev` again:\n' +
+      (process.platform === 'win32'
+        ? `[dev]   powershell -Command "Get-NetTCPConnection -LocalPort ${apiPort} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"\n`
+        : `[dev]   lsof -ti :${apiPort} | xargs kill\n`) +
+      `[dev] or run on a different port with API_PORT=<port> in the root .env.`,
+  );
+  process.exit(1);
 }
 
 console.log(`[dev] API target: ${apiTarget}  (health: ${healthUrl})`);

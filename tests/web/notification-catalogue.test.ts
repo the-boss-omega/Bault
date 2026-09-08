@@ -74,12 +74,30 @@ describe('notification catalogue', () => {
   });
 
   it('does not label an event the SPA has never heard of as one it has', () => {
-    // The SPA translates the event types it knows and falls back to the server's
-    // own English label for the rest. That fallback is fine; what is NOT fine is
-    // the SPA carrying a label key for an event the server no longer emits,
-    // because that is a dead translation nobody will ever see fail.
+    // A label key for an event the server no longer emits is a dead translation
+    // nobody will ever see fail.
     const known = new Set(NOTIFICATION_EVENT_TYPES.map((e) => e.key));
     const orphans = Object.keys(EVENT_LABEL_KEY).filter((key) => !known.has(key));
     expect(orphans).toEqual([]);
+  });
+
+  it('translates every event the server can emit', () => {
+    /**
+     * The other direction, which was never checked and was badly broken:
+     * TWENTY-FOUR of the thirty-six event types had no client label at all.
+     *
+     * `eventLabel` falls back to the raw event type, so the notification feed
+     * badged them `wallet_request_completed`, `escrow_funded`,
+     * `payment_reversed` — the database enum, in both languages — and the
+     * preferences matrix fell through to the server's English `label`, leaving a
+     * Hebrew reader with two-thirds of their notification settings in English.
+     *
+     * The fallbacks are still there and still correct as a safety net. What is
+     * not acceptable is shipping with the safety net load-bearing.
+     */
+    const unlabelled = NOTIFICATION_EVENT_TYPES.filter((e) => !EVENT_LABEL_KEY[e.key]).map(
+      (e) => e.key,
+    );
+    expect(unlabelled).toEqual([]);
   });
 });

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
+import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { BarcodeLabel } from '../../../shared/Barcode';
-import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { formatDate, formatUsd } from '../../../shared/money';
-import { useNavigation, useRoute } from '../../../shared/routing';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
   EmptyState,
@@ -18,6 +19,7 @@ import {
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import {
   IconAlert,
+  IconAsk,
   IconArchive,
   IconBox,
   IconChart,
@@ -31,6 +33,7 @@ import {
 import { ConsignmentForm } from './ConsignmentForm';
 import { GradingForm } from './GradingForm';
 import { InspectionForm } from './InspectionForm';
+import { CustomRequestForm } from './CustomRequestForm';
 import { RemoveCommonsPanel } from './RemoveCommonsPanel';
 
 interface VaultItem {
@@ -148,6 +151,14 @@ const SCOPE_ICON: Record<Scope, ReactNode> = {
    Card actions — every one backed by a real endpoint
    ============================================================ */
 
+/** A service already asked for on this card and not yet finished. */
+interface OpenServiceRequest {
+  code: string;
+  type: string;
+  status: 'requested' | 'in_progress';
+  createdAt: string;
+}
+
 interface CardAction {
   key: string;
   label: MessageKey;
@@ -167,10 +178,28 @@ interface CardAction {
   gradedOnly?: boolean;
   /** Opens a form in the drawer rather than firing the request immediately. */
   form?: FormKind;
+  /**
+   * The `service_request.type` this action creates, so an already-open request
+   * of the same kind can be recognised and the action shown as done rather than
+   * offered a second time.
+   */
+  serviceType?: string;
   run: (item: VaultItem) => Promise<unknown>;
 }
 
-type FormKind = 'consignment' | 'grading' | 'inspection';
+type FormKind = 'consignment' | 'grading' | 'inspection' | 'custom';
+
+/**
+ * A timeline entry's kind, in words.
+ *
+ * Falls back to the raw value with its underscores removed, so an event type
+ * added on the server before a translation exists still renders as something
+ * rather than as a blank badge — the same rule the notification catalogue uses.
+ */
+function timelineKindLabel(t: TranslateFn, kind: string): string {
+  const key = `timeline.${kind}` as MessageKey;
+  return hasMessage(key) ? t(key) : kind.replace(/_/g, ' ');
+}
 
 /**
  * Card services moved here from the retired Services section: ordering a service
@@ -184,6 +213,7 @@ type FormKind = 'consignment' | 'grading' | 'inspection';
 const CARD_ACTIONS: readonly CardAction[] = [
   {
     key: 'photography',
+    serviceType: 'professional_photography',
     label: 'services.photography',
     description: 'services.photography.desc',
     icon: <IconServices />,
@@ -198,6 +228,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
      * could express neither.
      */
     key: 'grading',
+    serviceType: 'third_party_grading',
     label: 'services.grading',
     description: 'services.grading.desc',
     icon: <IconChart />,
@@ -208,6 +239,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     key: 'video',
+    serviceType: 'video_review',
     label: 'services.video',
     description: 'services.video.desc',
     icon: <IconServices />,
@@ -219,6 +251,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     key: 'inspection',
+    serviceType: 'condition_inspection',
     label: 'services.inspection',
     description: 'services.inspection.desc',
     icon: <IconSearch />,
@@ -234,6 +267,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
      * in the operator queue rather than a button that fires.
      */
     key: 'lot-split',
+    serviceType: 'batch_split',
     label: 'services.lotSplit',
     description: 'services.lotSplit.desc',
     icon: <IconBox />,
@@ -249,6 +283,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
      * picks the show. The drawer opens a form instead of firing a request.
      */
     key: 'consignment',
+    serviceType: 'consignment',
     label: 'services.consignment',
     description: 'services.consignment.desc',
     icon: <IconTag />,
@@ -259,6 +294,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     key: 'buyout',
+    serviceType: 'buyout',
     label: 'services.buyout',
     description: 'services.buyout.desc',
     icon: <IconReceipt />,
@@ -268,12 +304,32 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     /**
+     * The one action that is not a thing Bault sells.
+     *
+     * Nine fixed services and no way to ask for anything else: a collector who
+     * wanted these sleeved before shipping, or the box weighed, had only a
+     * support ticket — a conversation with no price, no operator queue, no
+     * completion and no link to the collectible it is about. Priced by a person
+     * after they read it, which is why it carries no figure here.
+     */
+    key: 'custom',
+    label: 'custom.action',
+    description: 'custom.action.desc',
+    icon: <IconAsk />,
+    ok: 'custom.requested',
+    states: ['stored', 'listed'],
+    form: 'custom',
+    run: async () => undefined,
+  },
+  {
+    /**
      * Cracking a slab is the one service that destroys the thing it is performed
      * on: the holder is snapped, and the grade and certificate stop describing
      * anything. Two-step confirmed, and the grade is cleared afterwards so the
      * card cannot be listed or insured as graded when it no longer is.
      */
     key: 'deslab',
+    serviceType: 'deslab',
     label: 'services.deslab',
     description: 'services.deslab.desc',
     icon: <IconAlert />,
@@ -294,6 +350,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     key: 'donation',
+    serviceType: 'donation',
     label: 'services.donation',
     description: 'services.donation.desc',
     icon: <IconAlert />,
@@ -486,10 +543,26 @@ export function VaultPage() {
             title={t(`vault.empty.${scope}` as MessageKey)}
             text={q ? t('vault.empty.searchText') : t(`vault.empty.${scope}Text` as MessageKey)}
             icon={scope === 'history' ? <IconArchive /> : <IconBox />}
+            /*
+              The vault is where a new account lands, and an empty one used to
+              say only "Cards appear here once the warehouse books them in." —
+              a description of something that will never happen unless the
+              reader does something first, with no hint as to what. The whole
+              product begins with sending cards in, and the address to send them
+              to is one section away, so the empty state says so and goes there.
+            */
             action={
               q ? (
                 <Button size="sm" onClick={() => setQ('')}>
                   {t('vault.clearSearch')}
+                </Button>
+              ) : scope === 'active' ? (
+                <Button
+                  size="sm"
+                  variant="gold"
+                  onClick={() => navigate({ section: 'inbound', tab: 'addresses' })}
+                >
+                  {t('vault.empty.getStarted')}
                 </Button>
               ) : undefined
             }
@@ -766,6 +839,8 @@ function ItemDrawer({
   const [storage, setStorage] = useState<StorageStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<ItemMedia[] | null>(null);
+  const [openRequests, setOpenRequests] = useState<OpenServiceRequest[]>([]);
+  const prices = useServicePrices();
   const [confirming, setConfirming] = useState<CardAction | null>(null);
   const [formOpen, setFormOpen] = useState<FormKind | null>(null);
   const [busy, setBusy] = useState(false);
@@ -798,10 +873,14 @@ function ItemDrawer({
     setMedia(null);
     void (async () => {
       try {
-        const card = await api.get<{ images: ItemMedia[] }>(`/vault/items/${item.id}`);
+        const card = await api.get<{ images: ItemMedia[]; openRequests?: OpenServiceRequest[] }>(
+          `/vault/items/${item.id}`,
+        );
         setMedia(card.images ?? []);
+        setOpenRequests(card.openRequests ?? []);
       } catch {
         setMedia([]);
+        setOpenRequests([]);
       }
     })();
   }, [item.id]);
@@ -877,7 +956,7 @@ function ItemDrawer({
           </p>
         )}
 
-        <dl className="detail-list" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <dl className="detail-list stack-top">
           <div className="detail-row">
             <dt className="detail-label">{t('vault.item.state')}</dt>
             <dd className="detail-value">
@@ -941,27 +1020,58 @@ function ItemDrawer({
           <>
             <h3 className="drawer-heading">{t('vault.actions.title')}</h3>
             <ul className="drawer-actions">
-              {actions.map((action) => (
-                <li key={action.key}>
-                  <Button
-                    size="sm"
-                    variant={action.confirm ? 'secondary' : 'gold'}
-                    icon={action.icon}
-                    disabled={busy}
-                    block
-                    onClick={() =>
-                      action.form
-                        ? setFormOpen(action.form)
-                        : action.confirm
-                          ? setConfirming(action)
-                          : void run(action)
-                    }
-                  >
-                    {t(action.label)}
-                  </Button>
-                  <p className="hint">{t(action.description)}</p>
-                </li>
-              ))}
+              {actions.map((action) => {
+                const price = priceLabel(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
+                const pending = action.serviceType
+                  ? openRequests.find((r) => r.type === action.serviceType)
+                  : undefined;
+                return (
+                  <li key={action.key}>
+                    {/*
+                      Every one of these buttons used to be `gold`. Nine primary
+                      actions in one list is the same as none: the eye has
+                      nothing to land on, and "donate this card forever" carried
+                      the identical weight as "take a photo of it".
+                    */}
+                    <Button
+                      size="sm"
+                      variant={action.confirm ? 'danger' : 'secondary'}
+                      icon={action.icon}
+                      disabled={busy || Boolean(pending)}
+                      block
+                      onClick={() =>
+                        action.form
+                          ? setFormOpen(action.form)
+                          : action.confirm
+                            ? setConfirming(action)
+                            : void run(action)
+                      }
+                    >
+                      <span className="action-line">
+                        <span>{t(action.label)}</span>
+                        {/* The charge lands the moment this is pressed, so it is
+                            stated on the control rather than in a price list in
+                            another section of the app. */}
+                        {price && !pending && (
+                          <span className="action-price" dir="ltr">
+                            {price}
+                          </span>
+                        )}
+                      </span>
+                    </Button>
+                    <p className="hint">
+                      {pending
+                        ? t(
+                            pending.status === 'in_progress'
+                              ? 'services.pending.underway'
+                              : 'services.pending.queued',
+                            { code: pending.code },
+                          )
+                        : t(action.description)}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}
@@ -982,6 +1092,19 @@ function ItemDrawer({
         {formOpen === 'grading' && (
           <GradingForm
             item={item}
+            onCancel={() => setFormOpen(null)}
+            onDone={(message) => {
+              setFormOpen(null);
+              onActed(message);
+              onClose();
+            }}
+            onError={setError}
+          />
+        )}
+
+        {formOpen === 'custom' && (
+          <CustomRequestForm
+            itemId={item.id}
             onCancel={() => setFormOpen(null)}
             onDone={(message) => {
               setFormOpen(null);
@@ -1027,8 +1150,15 @@ function ItemDrawer({
             {events.map((event, index) => (
               <li key={`${event.at}-${index}`} className="detail-row" style={{ display: 'block' }}>
                 <div className="row" style={{ gap: 'var(--sp-2)' }}>
+                  {/*
+                    The kind was rendered as `event.kind.replace(/_/g, ' ')` —
+                    the database enum with its underscores taken out. A vault's
+                    chain of custody is the most trust-critical thing it shows,
+                    and it read "ownership transfer" / "state change" in English
+                    to a Hebrew reader, in the machine's vocabulary to everyone.
+                  */}
                   <StatusBadge tone="info" plain>
-                    {event.kind.replace(/_/g, ' ')}
+                    {timelineKindLabel(t, event.kind)}
                   </StatusBadge>
                   <span className="hint" dir="ltr">
                     {formatDate(event.at, locale)}
@@ -1045,11 +1175,19 @@ function ItemDrawer({
         <ConfirmationModal
           title={t(confirming.confirmTitle ?? 'services.donation.confirmTitle')}
           body={
-            <p>
-              {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                item: `${item.typeClass} — ${item.description}`,
-              })}
-            </p>
+            <>
+              <p>
+                {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
+                  item: `${item.typeClass} — ${item.description}`,
+                })}
+              </p>
+              {/* Donating a card charges $20, and the dialog asking somebody to
+                  do something irreversible said nothing about money at all. */}
+              {(() => {
+                const fee = priceLabel(prices.get(SERVICE_FEE_ACTION[confirming.key] ?? ''));
+                return fee ? <p className="hint">{t('services.confirmFee', { amount: fee })}</p> : null;
+              })()}
+            </>
           }
           confirmLabel={t(confirming.label)}
           cancelLabel={t('ui.cancel')}

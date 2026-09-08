@@ -48,17 +48,66 @@ export const itemLifecycle = pgEnum('item_lifecycle', [
   'discarded',
 ]);
 
+/**
+ * A shelf location. A bin holds whatever physically goes into it.
+ *
+ * There is deliberately no capacity here. A bin used to declare how many items
+ * it held, nothing enforced it, and the number was wrong the moment two
+ * different kinds of thing were stowed in the same shelf — four sealed cases
+ * fill a bin that four hundred sleeved cards would not. The person who knows
+ * whether a bin has room is the person standing in front of it; the system's
+ * job is to record where the item actually went. See `0018_stow_wherever_it_fits`.
+ */
 export const bin = pgTable(
   'bin',
   {
     id: pkId(),
-    barcode: text('barcode').notNull(), // Code 128
+    /**
+     * The shelf's identity: `BIN-` plus eight characters from the unambiguous
+     * alphabet, minted at random. Never a sequence, never derived from the zone
+     * — see `0019_bins_get_a_serial` for why the old `BIN-A-001` was a name
+     * rather than an identifier.
+     */
+    serialNumber: text('serial_number').notNull(),
+    /** Code 128. The serial itself, as it is for an item. */
+    barcode: text('barcode').notNull(),
+    /**
+     * A human-readable label for a part of the building. Deliberately NOT part
+     * of the identity: a shelf can be moved to another zone without its label,
+     * its scans or its history meaning anything different.
+     */
     zone: text('zone').notNull(),
-    capacity: integer('capacity').notNull().default(0),
+    /**
+     * The building this shelf is in.
+     *
+     * Nullable only because it was added to a table that already had rows; every
+     * bin created since names one, and the stow assignment will not hand out a
+     * bin that does not. Without it "put it wherever there is room" could route
+     * a parcel sitting in Delaware onto a New Jersey shelf.
+     */
+    facilityId: text('facility_id'),
+    /**
+     * Whether this is oversized storage — the shelving that takes a sealed case
+     * or a piece of memorabilia rather than a card.
+     *
+     * Matched against the item CLASS's own `oversized` flag when a bin is
+     * assigned, so the two kinds of goods do not get directed at each other's
+     * shelves. Coarse on purpose: two kinds of storage is what the building has.
+     */
+    oversized: boolean('oversized').notNull().default(false),
+    /**
+     * Whether the bin may still be stowed into. A bin is never deleted — items
+     * and the transfer ledger reference it forever — so taking one out of
+     * service is a flag, exactly as it is for a facility.
+     */
+    active: boolean('active').notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => ({ binBarcodeUnique: uniqueIndex('bin_barcode_unique').on(t.barcode) }),
+  (t) => ({
+    binBarcodeUnique: uniqueIndex('bin_barcode_unique').on(t.barcode),
+    binSerialUnique: uniqueIndex('bin_serial_unique').on(t.serialNumber),
+  }),
 );
 
 /** A batch groups items that arrived together before they are split into tracked items. */

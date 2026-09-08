@@ -15,6 +15,7 @@ import {
   Button,
   DetailRow,
   EmptyState,
+  Field,
   Panel,
   SkeletonTable,
   StatusBadge,
@@ -265,18 +266,17 @@ export function WalletRequestsSection({
         <ConfirmationModal
           title={t('admin.requests.rejectTitle')}
           body={
-            <label className="field">
-              <span className="field-label">{t('admin.requests.rejectReasonLabel')}</span>
+            <Field
+              label={t('admin.requests.rejectReasonLabel')}
+              hint={t('admin.requests.rejectReasonHint')}
+            >
               <textarea
                 rows={3}
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 aria-describedby="reject-reason-hint"
               />
-              <span className="field-hint" id="reject-reason-hint">
-                {t('admin.requests.rejectReasonHint')}
-              </span>
-            </label>
+            </Field>
           }
           confirmLabel={t('admin.requests.reject')}
           cancelLabel={t('ui.cancel')}

@@ -5,15 +5,18 @@ import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
 import { CustodyService } from '../cst/custody.service';
+import { StowService } from '../cst/stow.service';
 import { batch } from '../cst/cst.schema';
 import { userAccount } from '../acc/acc.schema';
 import { normalizeUsername } from '../../shared/names';
 import { makeItemBarcode, makeItemSerial } from './labels';
+import { isKnownItemClass, itemClass } from './item-classes';
 
 export interface SplitItemInput {
   typeClass: string;
   description?: string;
   conditionGrade?: string;
+  /** A shelf by id or barcode. Omitted, the stow is directed — see `split`. */
   binId?: string;
 }
 
@@ -29,6 +32,7 @@ export class BatchService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly custody: CustodyService,
+    private readonly stow: StowService,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
   ) {}
 
@@ -64,14 +68,58 @@ export class BatchService {
     return created;
   }
 
+  /**
+   * Split a batch into individually tracked items.
+   *
+   * This is the same act as an intake — a container becomes units, each unit
+   * gets an identity, a shelf and a charge — so it now obeys the same three
+   * rules, which it previously did not.
+   *
+   * THE CLASS IS VOCABULARY. A split entry could name any class it liked,
+   * including one that does not exist, while `/intake/items` had rejected
+   * unknown classes since Part 14. Two doors into the same table cannot disagree
+   * about what may come through them.
+   *
+   * THE STORAGE TERMS ARE SET AT RECEIPT. `oversized` is copied from the class
+   * here exactly as intake does it, so a sealed case decanted out of a batch is
+   * billed as the bulky thing it is rather than as a card.
+   *
+   * EVERY UNIT IS STOWED. A split entry with no bin used to produce an item
+   * shelved nowhere — a record saying the platform has custody of something it
+   * cannot say the location of, which is the one thing the custody trail exists
+   * to prevent. An entry that names a shelf still uses it; one that does not is
+   * directed to a shelf with room, the same way intake's `autoStow` is.
+   *
+   * The stow is resolved BEFORE the transaction opens, because it reads the
+   * whole item table to count shelves and there is no reason to hold a batch row
+   * locked while it does.
+   */
   async split(actorId: string, batchId: string, items: SplitItemInput[]) {
+    if (items.length === 0) throw AppError.validation('A split needs at least one item');
+
+    const prepared: { spec: SplitItemInput; binId: string; oversized: boolean }[] = [];
+    for (const spec of items) {
+      if (!isKnownItemClass(spec.typeClass)) {
+        throw AppError.validation(`Unknown item class "${spec.typeClass}"`);
+      }
+      const cls = itemClass(spec.typeClass)!;
+      const named = spec.binId?.trim();
+      const target = named
+        ? await this.stow.resolveBin(named)
+        : await this.stow.suggest({ oversized: cls.oversized });
+      if (!target.active) {
+        throw AppError.validation(`Bin ${target.barcode} is out of service — stow this somewhere else`);
+      }
+      prepared.push({ spec, binId: target.id, oversized: cls.oversized });
+    }
+
     return this.db.transaction(async (tx) => {
       const [b] = await tx.select().from(batch).where(eq(batch.id, batchId)).for('update').limit(1);
       if (!b) throw AppError.notFound('Batch not found');
       if (b.status === 'split') throw AppError.validation('Batch already split');
 
       const created = [];
-      for (const spec of items) {
+      for (const { spec, binId, oversized } of prepared) {
         const serial = makeItemSerial();
         const item = await this.custody.createWithIntake(tx, {
           ownerId: b.ownerId,
@@ -80,12 +128,20 @@ export class BatchService {
           typeClass: spec.typeClass,
           description: spec.description,
           conditionGrade: spec.conditionGrade,
-          binId: spec.binId,
+          binId,
+          oversized,
           sourceBatchId: batchId,
           actorId,
           eventType: 'batch_split',
         });
-        await this.billing.charge(tx, { userId: b.ownerId, actionType: 'intake', itemId: item.id });
+        await this.billing.charge(tx, {
+          userId: b.ownerId,
+          actionType: 'intake',
+          itemId: item.id,
+          // The class travels with the charge so a class-specific intake rule can
+          // resolve, exactly as it does on the `/intake/items` path.
+          itemClass: spec.typeClass,
+        });
         created.push(item);
       }
 

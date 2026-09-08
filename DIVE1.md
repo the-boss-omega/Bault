@@ -18,7 +18,7 @@ bug can violate them. Everything below explains how that is achieved.
 
 ## How this document is organized
 
-It is split into twenty-three parts, each covering a coherent slice of the code:
+It is split into thirty-six parts, each covering a coherent slice of the code:
 
 - **Part 1 — Repository, Monorepo & Shared Packages**: the root tooling, `@bault/config`,
   `@bault/adapters`, `@bault/contracts`, and infra.
@@ -98,9 +98,69 @@ It is split into twenty-three parts, each covering a coherent slice of the code:
   fee quoted from the same function that charges it, a payout rail that was wired to nothing,
   a chargeback the ledger can finally record, and a price list a collector can read before
   being charged.
+- **Part 24 — Stow It Wherever It Fits**: the changelog for the *most recent* revision — a
+  bin's capacity deleted because nothing ever enforced it, directed (chaotic) stow in its
+  place, shelving that knows which building it is in and what size of goods it takes, a shelf
+  identified by a minted serial instead of a counted-up name, every warehouse identifier
+  accepted as the barcode Bault printed rather than an id printed nowhere, a batch split held
+  to the same rules as an intake, a parcel that cannot be closed out against nothing, and the header
+  pill that claimed to show a status finally showing one.
+- **Part 25 — The Published Word**: the changelog for the *most recent* revision — a FAQ that had
+  spent a month telling collectors Bault could not do things it does, re-audited entry by entry; a
+  third availability value because a limit is not an absence; the accepted-and-refused list published
+  from the module that enforces it; the tracker rule stated before somebody loses one; and customs
+  guidance that cites its authority rather than inventing a threshold.
+- **Part 26 — The Adversarial Pass**: the changelog for the *most recent* revision — the suite driven
+  from the wrong side for the first time, which found a sandbox payment adapter that settled a $5,000
+  top-up against a fake token, thirty-six routes that answered 500 to a typo, and a test tree with no
+  isolation between cases.
+- **Part 27 — Closing the Perimeter**: the changelog for the *most recent* revision — PayPal wired as
+  the real rail with capture-not-charge semantics and a settled-amount check, webhooks verified by
+  asking PayPal rather than by ignoring a header, and the perimeter that did not exist: security
+  headers, CORS, rate limiting, graceful shutdown, and an OpenAPI explorer that is no longer served
+  to the world by default.
+- **Part 28 — The Screens, and the Break-Even Line**: the changelog for the *most recent* revision —
+  the first tests that ever rendered a component, which found a working password shipped in the login
+  form; the adversarial suites moved into `tests3/`; and Break-Even Watch, a custodian telling a
+  collector when a card has cost more than it is worth.
+- **Part 29 — Shelf Yield, and a System Instead of a Stylesheet**: the changelog for the *most
+  recent* revision — the operator half of the break-even engine, built on revenue attribution that
+  had to be fixed first; and a design pass that retired a mathematics font being asked for 54 weights
+  it did not have, replaced twenty-one ad-hoc font sizes with a ten-step scale, added a dark theme,
+  and gave every field a label it is actually associated with.
+- **Part 30 — Band 1: Money and Ownership, Driven by Hand**: a UX pass over every money-moving
+  action, which found a buyer able to accept their own offer and take a card at their own price,
+  every validation failure in the product answering "Bad Request Exception", and a double-clicked
+  Buy button reporting two purchases.
+- **Part 31 — The End-to-End Audit: Every Action, Driven by Hand**: the whole product rather than
+  one band of it. Thirty defects,
+  including a counter-offer that could never be concluded by the buyer and could be self-accepted
+  by the seller (a regression from Part 30's own fix), an administrator able to lock themselves out
+  of the console permanently, an address form whose default country cost people the cheapest
+  postage, nine service buttons that spent money without saying how much, and forty fields that
+  announced their help text as their own name.
+- **Part 32 — One Receiving Bench, a Stack at a Time, With a Camera**: the inbound warehouse
+  rebuilt around the physical work. Parcels and intake were two tabs for one job; arrivals were
+  booked in one box at a time; and nothing anywhere in the product could be photographed, because
+  no route in the API had ever accepted image bytes.
+- **Part 33 — The Words, the Globe, and Asking for Something Else**: a vault that holds comics and sealed boxes calling all twelve of its item
+  classes "cards", three different names for putting money in on one screen, a language button that
+  printed a Hebrew word on the English sign-in page, and the addition of a custom request: asking
+  for something the service list has no button for, quoted by a person before anything is charged.
+- **Part 34 — The Rows Were on the Wrong Form**: a
+  correction to Part 32. The multi-row form moved off the parcel bench and onto the intake bench,
+  where a box's several different units each need their own class, condition, serial and
+  photographs; `quantity` left the bench with it; and the batch route repeated Part 32's atomicity
+  bug and was fixed by pre-validating every unit before writing any.
+- **Part 35 — Rayquaza Only, and a Test That Keeps It That Way**: the named non-Rayquaza collectibles cleared out of test fixtures, doc comments
+  and the documentation itself for the third time, and the repository-wide test that makes a fourth
+  unnecessary.
+- **Part 36 — Printing the Labels a Run Produced**: the changelog for the *most recent* revision —
+  the intake bench books in a box now, so its labels print as one job in one dialog, one label per
+  page, instead of one dialog per unit.
 
 **Precedence: later parts win.** Where Parts 1–8 disagree with a later changelog part, the
-changelog part is current; among Parts 9–23, the highest-numbered one is current. The
+changelog part is current; among Parts 9–36, the highest-numbered one is current. The
 file-by-file sections in Parts 1–8 have been corrected in place wherever the code they
 quoted no longer exists, so they should be accurate on their own terms too.
 
@@ -2862,7 +2922,7 @@ END;
 $$;
 ```
 
-This final block resolves a concrete type mismatch baked into the schema, and understanding *why it is needed* requires connecting back to the helpers. Recall from `_helpers.ts` that `pkId()` produces a genuine **`uuid`** primary key column. But the *reference* columns across the schema — `owner_id`, `requester_id`, `item_id`, and the many `referenceId`/`targetId`/`buyerId`/`sellerId` fields used throughout `seed.ts` — are declared as **`text`**, not `uuid`. (You can see the seed treating IDs as opaque strings everywhere: `referenceId: refItemId`, `itemIds: [lebron]`, `targetId: charizard`, etc.) So whenever a query JOINs a reference column to a primary key — `... JOIN item ON custody_event.item_id = item.id` — Postgres is asked to evaluate `text = uuid`. Postgres has **no built-in equality operator** for `text = uuid`, and it will not implicitly coerce between them by default, so such a JOIN fails with an operator-does-not-exist error.
+This final block resolves a concrete type mismatch baked into the schema, and understanding *why it is needed* requires connecting back to the helpers. Recall from `_helpers.ts` that `pkId()` produces a genuine **`uuid`** primary key column. But the *reference* columns across the schema — `owner_id`, `requester_id`, `item_id`, and the many `referenceId`/`targetId`/`buyerId`/`sellerId` fields used throughout `seed.ts` — are declared as **`text`**, not `uuid`. (You can see the seed treating IDs as opaque strings everywhere: `referenceId: refItemId`, `itemIds: [...]`, `targetId: ...`, etc.) So whenever a query JOINs a reference column to a primary key — `... JOIN item ON custody_event.item_id = item.id` — Postgres is asked to evaluate `text = uuid`. Postgres has **no built-in equality operator** for `text = uuid`, and it will not implicitly coerce between them by default, so such a JOIN fails with an operator-does-not-exist error.
 
 The fix is to create an **implicit cast** from `text` to `uuid`. `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT` tells Postgres it may automatically (implicitly) convert a `text` value to `uuid` using the type's input/output functions (`WITH INOUT` means "use `uuid`'s text-input function to parse the string"). Once this cast exists, `text = uuid` type-checks: the planner coerces the `text` side to `uuid` and uses the native `uuid` equality operator, so **every cross-table JOIN between a text FK column and a uuid PK just works.** The comment states exactly this: "This implicit I/O cast lets those comparisons coerce the text side to uuid, fixing every cross-table JOIN."
 
@@ -2988,10 +3048,10 @@ Four physical storage bins/shelves across two zones (`A`, `B`) with capacities 5
 
 ```ts
 const INTAKE = 500; const SERVICE = 2000; const SHIP = 3500;
-const LEBRON = 150_000; const FEE = 7_500; const TOPUP = 500_000; const WITHDRAW = 100_000;
+const SALE = 150_000; const FEE = 7_500; const TOPUP = 500_000; const WITHDRAW = 100_000;
 ```
 
-Named cent constants make the money flows legible: intake $5, service $20, shipping $35, the LeBron sale $1,500, its 5% fee $75 (note `FEE = 7_500 = 5% of 150_000`, exactly matching the marketplace_fee rule), a $5,000 wallet top-up, and a $1,000 withdrawal. The numeric separators (`150_000`) are readability sugar.
+Named cent constants make the money flows legible: intake $5, service $20, shipping $35, the seeded sale $1,500, its 5% fee $75 (note `FEE = 7_500 = 5% of 150_000`, exactly matching the marketplace_fee rule), a $5,000 wallet top-up, and a $1,000 withdrawal. The numeric separators (`150_000`) are readability sugar.
 
 Three closures encapsulate the repeated write patterns:
 
@@ -3011,18 +3071,17 @@ Two more insert helpers:
 The remainder constructs the concrete story, and every branch upholds the consistency contract:
 
 - **Step 5 — top-ups:** Red and Golden each get a $5,000 top-up (`topup(red, TOPUP)`, `topup(golden, TOPUP)`), giving them spendable wallet balances before they incur charges.
-- **Step 6 — nine items, each with a complete history** (every one of them also writing a `binTransfer` row alongside its custody event). **Every one is a real, identifiable collectible**, not placeholder text — see "The dataset is real" below**:**
-  - **(a) Charizard** (Red, stored): intake custody event (actor Hermon) + intake image + intake charge, then a *professional photography* service — second image version, a completed `serviceRequest`, and a service charge. This demonstrates the "intake event + image + charge" base pattern plus a service overlay.
-  - **(b) Pikachu** (Red, stored): base intake trio, plus an `itemChangeHistory` row recording a grade correction (`conditionGrade` PSA 7 → PSA 8). Corrections are recorded as *new* history rows, echoing the append-only philosophy.
-  - **(c) Blue-Eyes White Dragon** (Red, listed): base intake, a **relocate** (bin A-002 → B-001) that writes both a `relocate` custody event and a `binTransfer` row carrying the old *and* new bin, then a `state_change` custody event (stored → listed), an active `listing` at $8,000, and a *pending* `offer` from Golden at $7,000. Exercises the marketplace listing + offer path (and the transfer ledger) without completing a sale.
-  - **(d) LeBron rookie** — the full sale: intaken by *Golden* (owner set to golden in the intake custody event), listed, then **sold to Red**. The sale is recorded as a coherent bundle: an `ownership_transfer` custody event (golden → red), a `state_change` back to stored, three ledger rows (Red `purchase` debit $1,500, Golden `sale_credit` credit $1,500, Golden `fee` debit $75), and a `transaction` row — carrying a `TXN-` code — capturing the whole deal with `frozenPricing` (the fee model snapshotted at sale time). Note the item's `ownerId` is `red` (final owner) while the *intake* custody event set `newOwnerId: golden` (original owner) — the custody chain tells the true ownership history even though the item row shows only the current owner. This is the richest consistency example: money, custody, and ownership all move together. It is also the transaction the seeded dispute references.
-  - **(e) Luka Prizm** (Red, shipped): intake trio, a `state_change` (stored → shipped), a `shipment` row (DHL Express, rush, tracking + label) carrying its `SHP-` Shipment ID *and* the operator's completed fulfillment record (`packageWeightGrams`, `fulfillmentNotes`, the `fulfillment` payload with the verified item ids, `fulfilledBy`, `fulfilledAt`), and a shipping charge. The item leaves the vault (`binId: null`, `lifecycleState: 'shipped'`).
-  - **(f)+(g) Black Lotus + Mickey Mantle** — a **batch**: one `batch` row (status `split`) is created for Golden, and both items reference it via `sourceBatchId`. Their custody events are `batch_split` (not `intake`), reflecting that they arrived together and were split apart by Hermon. Mantle additionally gets a grading flow: an `itemChangeHistory` grade set (null → PSA 7), a completed `third_party_grading` service request, and a service charge.
-  - **(h) Bulbasaur** — a **donation**: intaken by Golden, then ownership transferred to `platform` and state changed to the terminal `donated`, with a `transaction` row of type `transfer` (price `null` — no money changes hands, but it is still a recorded transaction), a completed `donation` service request, and a service charge. The transfer to the platform custodian is what keeps "every item has exactly one owner" true through a donation.
-  - **(i) Sealed Evolutions booster box** — a **lot**: `isLot: true`, `lotSize: 36`, stored and counted as a *single* item with a `LOT-` serial. It is the fixture the warehouse console's "Break Lot" panel acts on; breaking it intakes all 36 contained items individually.
-- **Step 7 — swap proposal:** a *pending* `swapProposal` where Red offers Pikachu for Golden's Black Lotus (`proposerApproved: true`, `responderApproved: false`). Exercises the swap path in a mid-negotiation state.
+- **Step 6 — eight items, each with a complete history** (every one of them also writing a `binTransfer` row alongside its custody event). **Every one is a real, identifiable collectible** — the seeded catalogue is eight Rayquaza cards, each carrying its real set, number, rarity, illustrator and TCG id, and each with its own photograph on disk keyed by serial. Two further Rayquaza cards (`SN-EVS194-0009`, `SN-EVS218-0010`) are deliberately **not** seeded: their photographs ship with the app so they are the material an operator books in by hand when exercising intake.
+  - **(a) `SN-DR97-0001` — 2003 EX Dragon, Rayquaza ex #97/97** (Red, stored): intake custody event (actor Hermon) + intake image + intake charge, then a *professional photography* service — second image version, a completed `serviceRequest`, and a service charge. This demonstrates the "intake event + image + charge" base pattern plus a service overlay.
+  - **(b) `SN-DX102-0002` — 2005 EX Deoxys, Rayquaza ex #102/107** (Golden, stored): base intake trio, plus an `itemChangeHistory` row recording a grade correction. Corrections are recorded as *new* history rows, echoing the append-only philosophy.
+  - **(c) `SN-DX107-0003` — 2005 EX Deoxys, Rayquaza ★ Gold Star #107/107** (Red, listed): base intake, a **relocate** that writes both a `relocate` custody event and a `binTransfer` row carrying the old *and* new bin, then a `state_change` (stored → listed), an active `listing`, and a *pending* `offer` from Golden. Exercises the marketplace listing + offer path (and the transfer ledger) without completing a sale.
+  - **(d) `SN-DF97-0004` — 2006 EX Dragon Frontiers, Rayquaza ex δ #97/101** (Golden, stored) — the full sale: listed, then **sold**. The sale is recorded as a coherent bundle: an `ownership_transfer` custody event, a `state_change` back to stored, three ledger rows (buyer `purchase` debit, seller `sale_credit` credit, seller `fee` debit), and a `transaction` row carrying a `TXN-` code with `frozenPricing` (the fee model snapshotted at sale time). The custody chain tells the true ownership history even though the item row shows only the current owner. It is also the transaction the seeded dispute references.
+  - **(e) `SN-SV146-0006` — 2009 Supreme Victors, Rayquaza C LV.X #146/147** (Golden, shipped): intake trio, a `state_change` (stored → shipped), a `shipment` row carrying its `SHP-` Shipment ID *and* the operator's completed fulfillment record (`packageWeightGrams`, `fulfillmentNotes`, the `fulfillment` payload with the verified item ids, `fulfilledBy`, `fulfilledAt`), and a shipping charge. The item leaves the vault (`binId: null`, `lifecycleState: 'shipped'`).
+  - **(f) `SN-CL10-0005` — 2011 Call of Legends, Rayquaza #SL10/95** (Red, stored) and **(g) `SN-ROS104-0007` — 2015 XY Roaring Skies, Rayquaza-EX Full Art #104/108** (Golden, stored): a **batch** — one `batch` row (status `split`), both items referencing it via `sourceBatchId`. Their custody events are `batch_split` rather than `intake`, reflecting that they arrived together and were split apart. One of them additionally carries a grading flow: an `itemChangeHistory` grade set, a completed `third_party_grading` service request, and a service charge.
+  - **(h) `SN-ROS105-0008` — 2015 XY Roaring Skies, M Rayquaza-EX Full Art #105/108** (Red, stored): the eighth of the set, completing the four-each split between the two collectors.
+- **Step 7 — swap proposal:** a *pending* `swapProposal` where Red offers one of their Rayquaza for one of Golden's (`proposerApproved: true`, `responderApproved: false`). Exercises the swap path in a mid-negotiation state.
 - **Step 8 — withdrawal:** Golden withdraws $1,000 — a paid `withdrawal` row plus the matching ledger **debit** (`withdrawal`). This is money legitimately *leaving* the system, balanced against Golden's sale credits and top-up.
-- **Step 9 — dispute:** a `dispute` (with a `DSP-` code, status `investigating`) opened by Eldar against the **real LeBron sale transaction**. Disputes always reference an actual recorded transaction — there is no synthetic dispute data anywhere.
+- **Step 9 — dispute:** a `dispute` (with a `DSP-` code, status `investigating`) opened by Eldar against the **real seeded sale transaction**. Disputes always reference an actual recorded transaction — there is no synthetic dispute data anywhere.
 - **Step 10 — audit + outbox:** three `auditRecord` rows (mirroring what `AuditInterceptor` would write for real state-changing requests) and two `outboxMessage` rows (mirroring what the transactional outbox worker would emit). Seeding these directly gives the dashboard/worker something to show, with a comment noting they are "normally interceptor/worker-driven."
 - **Step 11 — notifications, addresses:** three `notification` rows — each carrying a rendered, human-readable `message` string in its jsonb content, not just a raw payload — a `notificationPreference` where Golden opts *out* of `hold_placed` notifications (so the worker will skip them for Golden), and two default US `shippingAddress` rows for Red and Golden.
 
@@ -3032,17 +3091,17 @@ A standing rule governs this file: **every seeded item is a genuine collectible,
 
 ```ts
 typeClass: 'Basketball Card',
-description: '2003 Topps Chrome LeBron James Rookie Draft Pick #1 #111 · PSA cert 63359664',
+description: '2003 Pokémon EX Dragon — Rayquaza ex #97/97 · Rare Holo EX · art by Hikaru Koike · ex3-97',
 conditionGrade: 'PSA 9',
 ```
 
-The nine items span the categories the platform is built for — Pokémon (Base Set Charizard, Japanese Promo Pikachu Illustrator, Shadowless Bulbasaur), Yu-Gi-Oh! (a 1st Edition LOB-001 Blue-Eyes White Dragon), basketball (the Topps Chrome LeBron rookie, a Panini Prizm Luka Dončić rookie), baseball (the 1952 Topps Mickey Mantle #311), Magic: The Gathering (an Alpha Black Lotus, graded BGS 9 with 9/9/9/9 subgrades), and a sealed XY Evolutions booster box as the lot fixture.
+The eight items are a single-subject collection: every one is a Rayquaza card, spanning twenty years of the Pokémon TCG from the 2003 EX Dragon `Rayquaza ex #97/97` to the 2015 Roaring Skies `M Rayquaza-EX #105/108`, with two 2021 Evolving Skies alternate arts held back on disk as intake material. Each carries its real set, collector number, rarity, illustrator and TCG id.
 
 Three consequences make this more than cosmetic polish:
 
-- **The photographs resolve.** Each item's `serialNumber` (`SN-CHAR-0001`, `SN-MANTLE-0007`, …) is the filename of a real photograph in the repo-root `assets/images/` folder, which `vite.config.ts` serves at `/images/<SERIAL>.jpg`. `shared/CardPhoto.tsx` derives the URL from the serial alone, so the vault, marketplace and admin views show the actual card with no wiring in between. Change a serial here and its photo silently stops resolving — the two are coupled by convention, and this is the one place that convention is authored.
-- **The grades are internally consistent.** Mantle's completed grading request records `certificateNumber: '04005319'`, the same cert quoted in its description, and the `itemChangeHistory` row sets `conditionGrade` to the matching `PSA 7`. Charizard's professional-photography fulfillment references the same `objectKey` as its second `itemImage` version. The fixtures agree with each other, so a screen that joins them cannot display a contradiction.
-- **The prices are plausible.** The Blue-Eyes listing at $8,000 with a $7,000 offer, and the LeBron sale at $1,500, are in the neighbourhood of what those cards in those grades actually trade for. A demo where a Black Lotus is worth $12 undermines the product it is demonstrating.
+- **The photographs resolve.** Each item's `serialNumber` (`SN-DR97-0001`, `SN-DX107-0003`, …) is the filename of a real photograph in the repo-root `assets/images/` folder, which `vite.config.ts` serves at `/images/<SERIAL>.png`. `shared/CardPhoto.tsx` derives the URL from the serial alone, so the vault, marketplace and admin views show the actual card with no wiring in between. Change a serial here and its photo silently stops resolving — the two are coupled by convention, and this is the one place that convention is authored.
+- **The grades are internally consistent.** The completed grading request's `certificateNumber` matches the cert quoted in its item's description, and the `itemChangeHistory` row sets `conditionGrade` to the matching grade. The professional-photography fulfillment references the same `objectKey` as its item's second `itemImage` version. The fixtures agree with each other, so a screen that joins them cannot display a contradiction.
+- **The prices are plausible.** The listing prices and the seeded sale are in the neighbourhood of what those Rayquaza in those grades actually trade for. A demo where a Gold Star is worth $12 undermines the product it is demonstrating.
 
 The point of the rule is that the seed doubles as the demo. Anyone evaluating the platform sees a vault that looks like a real collection, which is only possible if the fixtures are held to the same standard as the UI.
 
@@ -9834,7 +9893,7 @@ and they are deliberately distinct. The **API's** `item_image` table plus signed
 object-storage URLs handles per-item *operational* photography — the intake scan
 the operator takes, and the professional shoot a customer pays for. Those are
 per-tenant data, access-controlled, and versioned. The **`assets/` folder** holds
-*catalogue* photography — the stock picture of what a 1999 Base Set Charizard
+*catalogue* photography — the stock picture of what a 2003 EX Dragon Rayquaza ex
 looks like — which is shipped with the app, identical for everyone, and needs no
 authorization at all. Serving the latter as static files avoids building a signed
 URL flow for images that are not secret, and keeps the demo working with no object
@@ -11083,7 +11142,7 @@ a URL-significant character, even though the minted format never does.
 
 The doc comment draws the boundary that makes this legitimate rather than a
 shortcut: these are **catalogue photographs** — the stock picture of what a
-1999 Base Set Charizard looks like — shipped with the app, identical for every user,
+2003 EX Dragon Rayquaza ex looks like — shipped with the app, identical for every user,
 and not secret. They are deliberately *not* the API's `item_image` records, which are
 the per-item intake scans and paid professional shoots living in object storage
 behind signed URLs and access control. Two pipelines, two trust levels, and only one
@@ -11126,7 +11185,7 @@ since the seeded photographs run to several megabytes each.
 
 Both components take `title` as well as `serialNumber`, and pass it to
 `t('photo.showOf', { title })` for the `aria-label`, so a screen reader announces
-"Show photo of *1952 Topps Mickey Mantle*" rather than a generic "show photo" repeated
+"Show photo of *2005 EX Deoxys Rayquaza Gold Star*" rather than a generic "show photo" repeated
 down the page. The visible content is an emoji or an image, so the accessible name has
 to come from the label.
 
@@ -12179,7 +12238,7 @@ price, since no money changes hands but ownership still moves.
 
 **Disputes reference reality.** `openDispute` verifies the transaction exists and
 400s otherwise, `GET /admin/transactions` feeds a picker of real transactions, and
-the seed opens a dispute against the actual LeBron sale.
+the seed opens a dispute against the actual seeded sale.
 
 **Notifications became readable.** They were stored as the raw domain-event payload
 and rendered with `JSON.stringify`, which is why the feed looked like a tuple of
@@ -12509,29 +12568,31 @@ The dataset upholds a standing rule: **every seeded item is a genuine collectibl
 described exactly as its slab reads, with a real photograph and catalogue information
 matching the certification.** No placeholder descriptions anywhere.
 
-The nine items now span Pokémon (Base Set Charizard, Japanese Promo Pikachu
-Illustrator, Shadowless Bulbasaur), Yu-Gi-Oh! (1st Edition LOB-001 Blue-Eyes White
-Dragon), basketball (Topps Chrome LeBron rookie, Panini Prizm Luka Dončić rookie),
-baseball (1952 Topps Mickey Mantle #311), Magic: The Gathering (Alpha Black Lotus, BGS
-9 with 9/9/9/9 subgrades) and a sealed XY Evolutions booster box as the lot fixture.
-Each description carries year, set, card number and the grader's certificate number,
-and each `conditionGrade` is the grade that certificate corresponds to.
+The catalogue is a single-subject collection: **every seeded item is a Rayquaza
+card**, spanning twenty years of the Pokémon TCG from the 2003 EX Dragon
+`Rayquaza ex #97/97` to the 2015 Roaring Skies `M Rayquaza-EX #105/108`, with two
+2021 Evolving Skies alternate arts held back on disk as the material an operator
+books in by hand. Each description carries year, set, collector number, rarity,
+illustrator and TCG id, and each `conditionGrade` is the grade its certificate
+corresponds to.
 
 Three things make this structural rather than decorative, and they are the reasons the
 rule is worth keeping:
 
-1. **Serial numbers are photo filenames.** `SN-CHAR-0001` in the seed is
-   `assets/images/SN-CHAR-0001.jpg` on disk and `/images/SN-CHAR-0001.jpg` in the
+1. **Serial numbers are photo filenames.** `SN-DR97-0001` in the seed is
+   `assets/images/SN-DR97-0001.png` on disk and `/images/SN-DR97-0001.png` in the
    browser. The coupling is by convention with nothing to enforce it, so the seed is
    the single place that convention is authored — changing a serial silently breaks a
    photo.
-2. **The fixtures agree with each other.** Mantle's grading service request records
-   the same certificate number quoted in its description, and its `itemChangeHistory`
-   row sets the matching grade; Charizard's photography fulfillment references the same
-   `objectKey` as its second image version. No joined view can display a contradiction.
-3. **Prices are plausible** — the Blue-Eyes listing at $8,000 against a $7,000 offer,
-   the LeBron sale at $1,500. A demo where an Alpha Black Lotus is worth $12 argues
-   against the product it exists to demonstrate.
+2. **The fixtures agree with each other.** The grading service request records the
+   same certificate number quoted in its item's description, and that item's
+   `itemChangeHistory` row sets the matching grade; the photography fulfillment
+   references the same `objectKey` as its item's second image version. No joined view
+   can display a contradiction.
+3. **Prices are plausible** — the listing and offer, and the seeded sale, sit in the
+   neighbourhood of what those Rayquaza in those grades actually trade for. A demo
+   where a Gold Star is worth $12 argues against the product it exists to
+   demonstrate.
 
 The seed's summary log gained a second line printing the **generated owner IDs** for
 Red, Golden and Hermon. That is a necessity, not a nicety: intake IDs are randomized
@@ -12684,6 +12745,28 @@ handled explicitly: `shell: true` resolves `pnpm.cmd`, the command is passed as 
 
 `pnpm dev:api`, `pnpm dev:web` and `pnpm dev:worker` are unchanged and still work
 standalone. `test:web` was added for the new suite.
+
+### The port check (added 31 August 2026)
+
+The script now refuses to start when something is already bound to the API's port,
+and it checks BEFORE spawning anything.
+
+Without it, the failure is a raw `EADDRINUSE` followed by twelve frames of Nest
+internals — which names what happened and nothing about what to do, and buries the
+one useful word under a wall of module paths. Worse, it arrives *after* the API has
+been spawned, so this script's own diagnostics then report the second-order
+symptom ("the API exited") rather than the cause.
+
+The check distinguishes the two cases, because the fix differs. A liveness probe
+against `/healthz` answering means the port belongs to **another Bault API** —
+almost always a `pnpm dev` whose terminal was closed instead of being stopped with
+Ctrl-C, leaving its child holding the port. A bare TCP connection that succeeds
+where the probe failed means **something unrelated** is there. Either way the
+message names the platform-appropriate command to free it, and mentions that
+`API_PORT` in the root `.env` is the other way out.
+
+Verified by occupying the port with a decoy listener and running the script: it
+exits with the sentence rather than the stack trace.
 
 ## `apps/web/src/shared/api.ts`
 
@@ -18057,3 +18140,3013 @@ an arriving payment to a cash-in request is still a person reading a statement
 and pressing Complete. That is honest — it is what the reference service does
 too — but the reference is what makes it possible, and nothing validates that a
 collector actually put theirs in.
+
+---
+
+# Part 24 — Stow It Wherever It Fits
+
+**Completed: 30 August 2026.**
+
+This part is a pass over the **intake workflow end to end** — the whole journey
+from a box arriving at a facility to a card sitting on a shelf with a label on
+it — with one instruction at the front of it:
+
+> There is no capacity. Put it wherever there is room.
+
+That sentence removes a column. What it exposes is that the column was standing
+in for a model of the warehouse the platform did not otherwise have, and that
+once the fake constraint is gone, several real ones have to be named: which
+building a shelf is in, what size of goods it takes, whether it is still in
+service, and who decides where a thing goes. The rest of the pass is the
+workflow being read straight through against how a high-volume fulfilment
+operation actually receives goods, and the gaps that reading found.
+
+---
+
+## 1. Executive summary
+
+| # | What changed | Before | After |
+| --- | --- | --- | --- |
+| 24.1 | Bin capacity | A number nobody enforced, drawn as a utilisation bar | **Deleted**, column and all |
+| 24.2 | Choosing a shelf | A dropdown of every bin in the company | **Directed stow** — the system names one with room |
+| 24.3 | Shelving and buildings | A bin sat in no facility | Every bin **names its facility**; the stow is scoped to it |
+| 24.4 | Oversized goods | The taxonomy knew; nothing downstream could act | Bins declare **oversized storage**; the stow matches |
+| 24.5 | Retiring a shelf | No way to say a bin was out of service | **`active` flag** — never a delete |
+| 24.6 | Driving the console | Every endpoint took the internal id only | **Barcodes and serials resolve** everywhere |
+| 24.7 | Batch split | No class check, no storage terms, could shelve nothing | Held to the **same three rules as an intake** |
+| 24.8 | Closing a parcel out | One click, even with nothing booked in, and billed | **Refused** unless the box really was empty and somebody says why |
+| 24.9 | The receive bench | Contents booked in on a different tab | The **parcel leads**, and is closed out where the work ends |
+| 24.10 | A shelf's identity | `BIN-A-001` — a name, counted up per zone | A minted **serial**, `BIN-` plus eight unambiguous characters |
+
+Ten changes, two migrations, one new service, and a console whose inbound half
+now reads left to right the way the physical work does.
+
+---
+
+## 2. Capacity, and why deleting a number is the change
+
+`bin.capacity` was an `integer NOT NULL DEFAULT 0`, set when an operator created
+a shelf. Three things read it, all of them in the browser:
+
+- `WarehouseConsole.tsx` divided the shelf's item count by it to draw a
+  `used / capacity` figure;
+- a badge went amber at 80% (`const NEAR_CAPACITY = 0.8`) and red at 100%;
+- an overview metric counted how many bins were past the amber line and offered
+  it as the operator's "act now" number.
+
+Nothing in `apps/api` ever read it. Not `IntakeService`, not `RelocateService`,
+not `CustodyService`. An operator could stow the hundredth item into a bin
+declared to hold ten and the system would take it without a word — and then go
+on colouring that row red forever, on every screen, for the rest of the bin's
+life. It was a number that produced anxiety and no decisions, which is the worst
+kind of number to have in a warehouse.
+
+It also encoded the wrong model of a shelf. Capacity says a bin holds N things.
+A bin holds as many things as physically go into it, and what goes into it
+depends entirely on what they are: a bin that is full of sealed cases at four is
+nowhere near full of sleeved cards at four hundred. A single integer cannot
+express that, and the taxonomy that could — Part 14's `oversized` flag — was not
+consulted anywhere near it.
+
+The person who knows whether a bin has room is the person standing in front of
+it. The system's job is to record where the item went, not to hold an opinion
+about whether it should have.
+
+So the column is dropped. Not deprecated, not defaulted to zero and ignored —
+dropped, in `0018_stow_wherever_it_fits.sql`, along with every derived status the
+console drew from it. `warehouse.status.full`, `warehouse.status.nearCapacity`,
+`warehouse.metric.nearCapacity`, `warehouse.bins.utilisation`,
+`warehouse.bins.capacity` and `warehouse.bins.colCapacity` are gone from both
+message catalogues. A key that no longer exists cannot be quietly reintroduced by
+a component that still remembers the concept.
+
+### What replaces it on screen
+
+Nothing, in the sense of a ratio — there is no denominator to have. What the
+Locations table shows now is `itemCount`: how many items are on that shelf right
+now, a fact rather than a claim. The overview metric that used to count
+near-capacity bins now counts the **inbound backlog** (`awaitingOpen +
+awaitingProcessing` from `GET /parcels/workflow/status`), with the age of the
+oldest waiting parcel underneath it. That is the honest "act now" number on a
+receiving bench: boxes waiting, and how long the oldest has waited.
+
+---
+
+## 3. The migration — `0018_stow_wherever_it_fits.sql`
+
+```sql
+ALTER TABLE "bin" DROP COLUMN IF EXISTS "capacity";
+ALTER TABLE "bin" ADD COLUMN IF NOT EXISTS "facility_id" text;
+ALTER TABLE "bin" ADD COLUMN IF NOT EXISTS "oversized" boolean DEFAULT false NOT NULL;
+ALTER TABLE "bin" ADD COLUMN IF NOT EXISTS "active"    boolean DEFAULT true  NOT NULL;
+
+UPDATE "bin"
+   SET "facility_id" = (SELECT "id" FROM "facility" WHERE "role" = 'primary' ORDER BY "code" LIMIT 1)
+ WHERE "facility_id" IS NULL;
+
+CREATE INDEX IF NOT EXISTS "bin_facility_idx" ON "bin" ("facility_id");
+CREATE INDEX IF NOT EXISTS "item_bin_idx"     ON "item" ("bin_id");
+```
+
+Each of the three added columns is something the table should have had from the
+beginning, and each one becomes load-bearing the moment capacity is gone.
+
+**`facility_id`.** A bin sat in no building. Bault has had more than one since
+Part 15 — a `primary` site that stores goods and a `forwarding` site that stores
+nothing — and the intake form happily offered a New Jersey shelf for a parcel
+sitting in Delaware. Nothing checked. "Wherever there is room" is meaningless
+until it means "wherever **in this building** there is room", because the only
+person who can act on the answer is carrying the box. The backfill is to the
+primary facility, which is where every existing bin in fact is: it is the only
+site that stores anything.
+
+It is `text` rather than a typed reference, matching `parcel.facility_id` and
+every other cross-module id in this schema — the modular monolith does not put
+foreign keys across module boundaries, and Postgres compares the `text` column
+against `facility.id`'s `uuid` without complaint.
+
+**`oversized`.** The taxonomy has known since Part 14 which classes are bulky —
+`oversized_card`, `sealed_case`, `memorabilia` — and nothing downstream could do
+anything with it beyond a hint on the intake form. A directed stow that ignored
+it would send a six-kilo case to a card shelf. A bin now declares whether it is
+oversized storage, and the assignment matches the item's class to the shelf's
+kind. Two kinds of storage, not a size model: two kinds is what the building has.
+
+**`active`.** A bin being emptied, moved, or taken out of service had no way to
+say so. Deleting it is not available and never will be — items reference their
+bin forever, and `bin_transfer` references bins that items left years ago — so,
+exactly as `facility.active` does for an address, this is a flag. An inactive bin
+still resolves, still shows its history, keeps everything it holds, and is simply
+never handed out again; it empties as its contents are picked.
+
+The two indexes are what the assignment query needs. It groups `item` by `bin_id`
+to find the emptiest shelf and filters `bin` by facility, and did both sides with
+a sequential scan.
+
+The seed grows two oversized shelves to match — `BIN-O-001` and `BIN-O-002` in
+zone O — because without at least one, the directed stow has nowhere to send a
+sealed case and has to say so rather than improvise.
+
+---
+
+## 3.5 A shelf gets a serial — `0019_bins_get_a_serial.sql`
+
+Once the shelving had a facility, a kind and a service state, the thing it still
+did not have was an **identity**. It had a name.
+
+```ts
+export function makeShelfBarcode(zone: string, index: number): string {
+  return `BIN-${zone.toUpperCase()}-${String(index).padStart(3, '0')}`;
+}
+```
+
+with the index supplied by the caller as `count(*) + 1` over the bins already in
+that zone. `BIN-A-001`, `BIN-A-002`, `BIN-B-001`. It reads well, and every one of
+its properties is wrong for an identifier.
+
+**It was a sequence, and sequences race.** The count was computed in the
+application, outside any transaction that could hold it. Two operators building
+out zone A at the same moment both read four, both propose `BIN-A-005`, and the
+second is rejected by `bin_barcode_unique` — with an error about a barcode
+rather than about what happened, and no retry. The create simply fails.
+
+**It was not stable.** The count is of the bins that exist *now*. Bins are never
+deleted, so today that number only rises; but any future archival, any restore
+from a partial backup, any bulk load in a different order, and the next shelf
+minted in zone A claims a number that a physical label in the building already
+carries. An identifier whose correctness depends on a count never having gone
+down is not an identifier.
+
+**It leaked, and it encoded place.** `BIN-B-007` tells anybody holding it roughly
+how much shelving the building has. Worse, it bakes the zone into the identity of
+the shelf, so moving a rack from zone B to zone C leaves two options: rename it —
+invalidating the printed label and every scan of it that was ever recorded — or
+leave it lying about where it is.
+
+So a bin now carries a `serial_number`: `BIN-` plus eight characters drawn at
+random from the alphabet in `shared/ids.ts`, the one that omits `0`/`O` and
+`1`/`I` because a person reads these off a label. `ID_PREFIX.bin` had been sitting
+in that file unused since Part 1 — the machinery to do this correctly existed
+before the code that did it wrongly was written.
+
+```ts
+export function makeBinSerial(): string {
+  return prefixedId(ID_PREFIX.bin);      // BIN-K7M2QX4P
+}
+export function makeBinBarcode(serial: string): string {
+  return serial;                          // one string on the label
+}
+```
+
+The barcode **is** the serial, exactly as `makeItemBarcode` returns an item's
+serial unchanged. One string, one identity, and no second identifier that can
+disagree with it.
+
+The zone stays — as a separate column, which is what it always should have been
+on its own: a human-readable label for a part of the building, free to change
+without touching the identity of anything standing in it. The schema comment says
+so explicitly, because the temptation to reconstruct the old scheme by
+concatenating them is obvious.
+
+### 3.5.1 The backfill, and why renaming a shelf is safe here
+
+```sql
+UPDATE "bin" AS b SET "serial_number" = s.value
+  FROM (SELECT "bin"."id" AS id,
+               'BIN-' || string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+                                           (floor(random() * 32) + 1)::int, 1), '') AS value
+          FROM "bin", generate_series(1, 8)
+         GROUP BY "bin"."id") AS s
+ WHERE b."id" = s.id AND b."serial_number" IS NULL;
+
+UPDATE "bin" SET "barcode" = "serial_number" WHERE "barcode" <> "serial_number";
+```
+
+Two things about this are worth pausing on.
+
+**The `generate_series` cross join is load-bearing.** The obvious way to write
+the mint is a scalar subquery selecting eight random characters — and it
+correlates with nothing, so Postgres is free to evaluate it once as an InitPlan
+and hand *every* shelf the same serial, straight into the unique index. Grouping
+eight generated rows per bin id forces one draw per shelf.
+
+**Overwriting the barcode is safe, and it would not be for an item.** Nothing in
+this database references a bin by its barcode. `item.bin_id`,
+`custody_event.prev_bin_id` / `new_bin_id`, and `bin_transfer.from_bin_id` /
+`to_bin_id` all hold the bin's uuid, so every trail, count, report and timeline
+survives the rename untouched. What does not survive is a label already printed
+and stuck to a shelf — and those have to be reprinted, which the Locations table
+has a button for on every row. The old sequential name is deliberately **not**
+kept in a column anywhere: keeping it would leave two identifiers for one shelf
+and invite code to pick the wrong one.
+
+### 3.5.2 The field that had to go
+
+`createBin` no longer accepts a barcode, and `CreateBinDto` no longer declares
+one. That is the part of this change that actually holds: given a text field for
+an identifier, an operator will type `BIN-A-001`, and the shelf is back to having
+a name — the sequence, the zone baked into the identity, and the collision with
+the next one, all restored by hand.
+
+Because the global `ValidationPipe` runs with `forbidNonWhitelisted: true`, a
+caller that sends one is refused outright with a 400 rather than having it
+silently dropped, which is the behaviour the new test pins. The seed mints
+through `makeBinSerial()` for the same reason: it does not get to hand-write
+`BIN-A-001` either, because nothing else can.
+
+Everything that displays a shelf now shows the serial — the Locations table
+(with the serial printed under the bars, because it is what an operator reads
+aloud when a scanner will not read), the directed-stow readout on the intake
+bench, the console log lines, and `InventoryService.labelRows`, which builds the
+shelf-cut inventory report's row labels and is the thing somebody carries to the
+shelf to compare against. `StowService.resolveBin` matches serial and barcode as
+two separate predicates even though they hold the same string today: they are two
+columns, and a resolver that knew about only one of them would be a silent trap
+the day they ever diverge.
+
+---
+
+## 4. `StowService` — the location kernel
+
+`apps/api/src/modules/cst/stow.service.ts` is new, lives in the global `CstModule`
+and is exported from it, so `INV`'s intake and batch split can both reach it. It
+does two jobs, both of them about the gap between a warehouse and a form.
+
+### 4.1 Directed stow
+
+The old intake form presented every bin in the company as a `<select>` of
+UUID-backed options and made the operator choose. That is not how goods are put
+away anywhere that puts away goods at volume. Nobody reserves a shelf for a class
+of item, and nobody scrolls a list to decide. They are **sent** to a location
+that has room, or they stow into whichever location they are standing at and scan
+it. The technique has a name — chaotic, or random, stow — and its correctness
+comes from the scan being recorded, not from a plan having been followed.
+
+`suggest()` is the first half of that:
+
+```ts
+async suggest(input: { facilityId?: string | null; oversized?: boolean } = {}) {
+  const eligible = await this.listStowable(input);
+  const chosen = eligible[0];
+  if (!chosen) throw AppError.validation(/* which of the two things is missing */);
+  return chosen;
+}
+```
+
+and `listStowable` is the rule, stated plainly:
+
+```ts
+all
+  .filter((b) =>
+    b.active &&
+    b.oversized === wantOversized &&
+    (input.facilityId ? b.facilityId === input.facilityId : true))
+  .sort((a, b) => a.itemCount - b.itemCount || a.barcode.localeCompare(b.barcode));
+```
+
+Of the bins **in this building** that take **this kind of goods** and are **in
+service**, hand out the one holding the fewest items. With capacity gone there is
+no such thing as a shelf that is "out of room" as far as the database is
+concerned, so the only defensible rule is to spread the load. Ties break on
+barcode so the answer is stable: an operator who asks twice in a row is sent to
+the same place, which matters because they are walking there.
+
+The oversized match is exact in **both** directions, and the second direction is
+the one worth stating. An oversized class only ever goes to oversized shelving —
+obviously. But ordinary goods are also never sent to it, because that shelving is
+the scarce kind, and filling it with sleeved cards is how a warehouse runs out of
+the one thing it cannot improvise.
+
+`listWithCounts()` underneath does the counting in one query, with a grouped
+sub-select over `item.bin_id` left-joined onto `bin`, plus a join to `facility`
+for the code. It is what `GET /custody/bins` returns now, which is why the
+console's Locations table can show a real number per shelf without a second
+round trip.
+
+### 4.2 Scanning
+
+Every identifier in this system is printed on a label as a Code 128 barcode.
+`BIN-A-001` is stuck on the shelf. `BC-…` is stuck on the item, with the serial
+readable underneath it. And every warehouse endpoint accepted **only the internal
+UUID**, which appears on no label anywhere in the building. The relocate panel
+had two fields labelled "Scan item" and "Scan shelf", and an operator holding a
+scanner physically could not drive either of them: scanning the label Bault
+itself printed produced a string the API would not accept.
+
+`resolveBin` takes the id or the shelf barcode; `resolveItem` takes the id, the
+item barcode, or the serial. Both are case-insensitive, because a scanner is
+exact but a person typing `bin-a-001` should not be told the shelf does not
+exist.
+
+One detail is load-bearing enough to have its own constant:
+
+```ts
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+```
+
+The primary keys here are genuine `uuid` columns. Postgres does not merely fail
+to match `'BIN-A-001'` against one — it raises `invalid input syntax for type
+uuid` and the entire query dies with a 500. So the id comparison has to be
+**omitted** from the `OR`, not merely expected to miss, whenever what came off
+the scanner is a barcode. This was caught by the new integration suite on its
+first run, which is the argument for the suite.
+
+---
+
+## 5. `IntakeService` — who decides where a thing goes
+
+`IntakeItemInput.binId` was `string` and mandatory. It is now optional, joined by
+`autoStow?: boolean`, and the doc comment carries the distinction that matters:
+
+> Optional in the input, never in the outcome.
+
+Every item still ends up on a shelf. Requirement 10.3 is untouched — an item with
+no location is a record saying the platform has custody of something it cannot
+find, which is the one thing the custody trail exists to prevent. What changed is
+**who chooses** the shelf.
+
+### 5.1 The order of the checks
+
+`intakeItem` used to open with the bin:
+
+```ts
+if (!input.binId) throw AppError.validation('A bin is required for every item');
+await this.assertBinExists(input.binId);
+// …then the class, the owner, the parcel
+```
+
+It now settles the class first, then the owner, then the parcel, and only then
+the shelf. That is not tidying: which shelf is right **depends** on the class
+(oversized or not) and on the parcel (which building the goods are in), so the
+shelf cannot be decided before both are known. The old order was only possible
+because the bin was a value passed through rather than a decision made.
+
+### 5.2 `resolveStowBin`
+
+```ts
+const named = input.binId?.trim();
+if (named)          { /* the operator scanned a shelf — see the guards below */ }
+if (input.autoStow) { return (await this.stow.suggest({ facilityId, oversized })).id; }
+throw AppError.validation('A bin is required for every item — scan a shelf, or ask for one');
+```
+
+Three ways in, ordered by who knows best. An operator who scanned a shelf has the
+strongest claim: they are standing in front of it and can see whether the card
+fits. Failing that, `autoStow` asks the system. Failing both, the intake is
+refused — an item with nowhere to be is not receivable, and silently inventing a
+location would put goods on a shelf nobody was told to walk to. The existing test
+that a bin-less intake is rejected still passes unchanged, because sending
+neither field is still an error; it was only renamed to say what it now means.
+
+Two guards apply to an explicitly named bin, and both are cases a directed stow
+could never trip by construction:
+
+- **A decommissioned shelf is refused.** It is being emptied; adding to it undoes
+  that work.
+- **A shelf in another building is refused** when the intake came out of a
+  parcel. This one is not recoverable later. The record would say the card is in
+  New Jersey while the card is in Delaware, and every count, pick and shipment
+  after that reads the record, not the shelf.
+
+The resolved bin id — never the barcode the caller may have typed — is written
+onto `effective.binId` before `createOne` runs, because `createOne` writes it
+straight to `item.bin_id` and a barcode is not an id.
+
+---
+
+## 6. Batch split, brought into line
+
+`BatchService.split` is the *other* door into `custody.createWithIntake`, and it
+had drifted badly from the first one. Splitting a batch is the same act as an
+intake — a container becomes units, each unit gets an identity, a shelf and a
+charge — and it obeyed none of the three rules the `/intake/items` path had
+acquired since Part 14:
+
+- **The class was free text again.** A split entry could name any class it liked,
+  including one that does not exist, while `/intake/items` had rejected unknown
+  classes for two revisions. Two doors into the same table cannot disagree about
+  what may come through them.
+- **The storage terms were never set.** `oversized` was left at its default, so a
+  sealed case decanted out of a batch was billed for storage as though it were a
+  card — the exact bug Part 14 fixed on the other path.
+- **A unit could be shelved nowhere.** `binId` was optional and unchecked, so an
+  entry that omitted it produced an item with `bin_id = NULL`. A record saying
+  Bault has custody of something and cannot say where it is.
+
+All three are fixed, and the third is fixed with the same directed stow: an entry
+that names a shelf uses it, one that does not is sent to a shelf with room. The
+charge now carries `itemClass` too, so a class-specific intake rule resolves here
+exactly as it does on the other path.
+
+The stow is resolved **before** the transaction opens. It reads the whole item
+table to count shelves, and there is no reason to hold a batch row locked
+`FOR UPDATE` while it does.
+
+---
+
+## 7. The parcel that produced nothing
+
+`ParcelService.process` is the single point at which the per-package fee is
+charged, and the transition table stops it being charged twice. What it did not
+stop was being charged for **nothing at all**.
+
+Closing an opened parcel that had produced zero items was one click. It charged
+the collector a processing fee for the work of unpacking and cataloguing, and
+left a record saying the box had been dealt with. There are exactly two ways a
+box can be empty at that moment:
+
+1. it really did arrive empty — the contents were lost or stolen in transit;
+2. somebody pressed the button before booking the contents in.
+
+The second is by far the more likely, and nothing distinguished them. So the
+default answer is now to refuse:
+
+```ts
+if (contents.length === 0 && !statedEmptyReason) {
+  throw new AppError(ErrorCode.CONFLICT,
+    'Nothing has been booked in from this parcel — receive its contents first, ' +
+    'or record why it is empty', 409);
+}
+```
+
+`emptyReason` is the operator asserting the first case, in words, onto the
+append-only `parcel_event` trail beside the charge it justified — which is what
+turns it into a finding rather than a slip. The event's metadata carries
+`closedEmpty: true` alongside the item count, so the two cases are separable
+later without reading prose.
+
+This is reconciliation, and it is the step the workflow was missing. A receiving
+operation compares what came out of the box against what was expected; Bault
+compared nothing against nothing and billed for the comparison.
+
+### 7.1 The count the bench could not see
+
+`listQueue` now carries `itemCount` — a grouped sub-select over
+`item.source_parcel_id` — so every row on the inbound bench says how many units
+have come out of that box so far. Before this, an operator looking at an opened
+parcel could not tell, without leaving the page, whether they had booked in three
+of its cards or none of them. It is one number, and it is the number the whole
+guard in §7 is about.
+
+---
+
+## 8. The console: one bench, one box, one unit at a time
+
+The operator-facing half of this pass is `WarehouseConsole.tsx` and
+`ParcelQueue.tsx`, and the shape of the fix is: **the box leads**.
+
+### 8.1 What the journey used to be
+
+Open the Parcels tab. Receive the box. Open it and record the condition. Read a
+hint telling you to go to the Intake tab. Go to the Intake tab. Find the parcel
+again in a second dropdown. Type the owner. Pick a shelf from a list of every
+shelf in the company. Book the contents. Go back to the Parcels tab. Find the box
+a third time. Press Close out — a button nothing prevented you from having
+pressed twenty minutes earlier.
+
+### 8.2 What it is now
+
+An opened parcel offers **Book contents**, not Close out. Pressing it lifts the
+parcel id into the console and switches to the intake bench with that box already
+selected, its owner filled in and locked, and its running unit count on screen.
+Each unit is booked with the shelf the system directs you to — displayed by
+barcode and zone, with what is currently on it — or with a shelf you scan
+instead. After each submit the suggestion is re-asked and the parcel count
+re-read, because the shelf just used is one item fuller and the box is one unit
+emptier; both numbers would otherwise be stale by the time the operator reaches
+for the next card. **Close out parcel** sits at the end of that work, next to the
+count, and the empty-reason field appears only when the count is zero — which is
+exactly when the API will demand one.
+
+The shared `focusParcelId` state lives in `WarehouseConsole` rather than in
+either panel, because it is the one thing the two genuinely share. That is the
+difference between one workflow and two screens that happen to be adjacent.
+
+### 8.3 Relocate, and the scanner that could not be used
+
+Both fields are now free text taking printed barcodes, with `BC-…` and
+`BIN-A-001` as placeholders, and the endpoint resolves both ends through
+`StowService`. The response echoes the resolved `itemId` and `binId` so a caller
+never has to guess what its scan matched.
+
+### 8.4 Locations
+
+Creating a shelf asks for the zone, optionally a barcode, the facility (offered
+only when more than one **storing** site exists — a forwarding facility holds
+nothing, so a bin there would be a shelf in a building with no shelves), and
+whether it is oversized storage. It no longer asks for a capacity. The table
+shows barcode with its printable label, zone and facility code, storage kind,
+item count, status, and a button to take the shelf out of service or bring it
+back.
+
+---
+
+## 9. Tests
+
+`tests/integration/inv-stow.test.ts` is new — 10 cases over four groups:
+
+- **directed stow**: no bin carries a `capacity` property at all; every shelf is
+  identified by a minted serial matching `/^BIN-[A-Z2-9]{8}$/`, with the barcode
+  equal to it, the zone absent from it, and no two alike; a caller that tries to
+  name a shelf is refused with a 400; the suggestion is the emptiest eligible
+  shelf and no stowable bin is emptier; an auto-stowed item lands on exactly the
+  suggested shelf and that shelf's count goes up by one; an oversized class lands
+  on oversized shelving and carries `oversized` itself; an intake naming no shelf
+  and asking for none is still refused.
+- **scanning**: intake by shelf barcode; relocate driven entirely by the item's
+  printed barcode and the shelf's; a scan matching nothing gives a 400, not a
+  500 — which is the regression the `UUID` guard in §4.2 exists for.
+- **a shelf out of service**: never offered by `stowable`, refuses an intake
+  aimed at it, and comes back when reactivated, because it was never deleted.
+- **the parcel**: the full walk — receive → open → *premature close refused with
+  409* → book two units → the queue row reads 2 → close out → a second close is
+  refused; and separately, a genuinely empty parcel closing only against a
+  stated reason.
+
+The existing `inv-intake.test.ts` case for a bin-less intake keeps passing and
+was only re-described. Full suite after the pass: **146 web, 192 integration, 10
+contract, 1 concurrency, 2 property — all green**, with `pnpm build`, `pnpm
+typecheck` and `pnpm lint` clean (lint warnings unchanged at 32, all
+pre-existing).
+
+---
+
+## 9.1 The suites put the catalogue back
+
+Running those suites is what exposed the problem this section is really about.
+
+The e2e tests drive the real HTTP stack against the real, seeded database on
+purpose — that is what makes them worth having, and it is why the `UUID` bug in
+§4.2 was caught by the first run rather than by a reviewer. The cost is that
+every intake they perform creates a **real item**, in a real collector's vault,
+with a real append-only custody trail. After one full run the database held 120
+items: the eight seeded Rayquaza cards, and **112 anonymous fixtures** — blank
+descriptions, `BC-…` serials, no photographs — sitting alongside the catalogue in
+the collectors' vaults, in every shelf count, and in every line of the inventory
+report.
+
+They cannot be cleaned up by deleting them, and the reason is the platform
+working as designed. An item is never deleted (Principle I); its custody events,
+bin transfers and change history live on append-only tables that the triggers in
+`0001_append_only.sql` protect. A targeted `DELETE` would either be refused or
+leave 260 trail rows pointing at nothing — a corrupt database traded for a tidy
+one. The only way back is the seed's `TRUNCATE … RESTART IDENTITY`, which is
+explicitly the dev-only escape hatch for exactly this, and which works because
+TRUNCATE does not fire row triggers.
+
+So the reset stopped being something a developer has to remember. `pnpm test` is
+now `scripts/test.mjs`, in the same spirit as `dev.mjs` not leaving the API/web
+start order to memory: it runs the five suites in order, then re-seeds, and exits
+with the suites' own status so CI still fails when they fail. The reset runs
+whether they passed or not — a failed run leaves more residue, not less, so
+making the cleanup conditional on success would have been backwards. `pnpm
+db:reset` is the same thing on its own, and `--no-reset` holds the dataset when
+the point is to inspect what a failure left behind.
+
+The seed's own reset grew one piece to make that complete. pg-boss keeps its
+**own schema**, so the TRUNCATE list — which names forty-odd tables — never
+touched it, and after a run the job queue held 150 rows of history for work done
+on rows that no longer existed, with queued `outbox.dispatch` jobs pointed at a
+table that had just been emptied underneath them. `pgboss.job` and
+`pgboss.archive` are now cleared with the rest, guarded on the schema existing at
+all so that a checkout which has never started the worker still seeds. `queue`,
+`schedule`, `subscription` and `version` are deliberately left alone: those are
+pg-boss's configuration and its schema version, and emptying them would leave the
+worker unable to start. `job` is partitioned one table per queue, and TRUNCATE on
+the parent empties every partition while keeping the partitions themselves.
+
+Verified end to end: a full `pnpm test` — 351 tests green — leaves 8 items, all
+Rayquaza, all with photographs, 14 custody events, no fixture accounts, and an
+empty job queue.
+
+---
+
+## 10. What this pass did not do
+
+### 10.1 A bin still cannot say it is physically full
+
+Which is the honest consequence of the instruction, and worth stating rather than
+hiding. The system spreads goods across shelving and records where they went; if
+a shelf is genuinely out of space, the operator scans a different one and nothing
+is recorded about the first. There is no "mark this shelf full" affordance, so
+the directed stow will keep offering that shelf until enough of its contents are
+picked. Taking it out of service is the blunt instrument available, and it is
+blunt: it stops the shelf being offered for anything, permanently, until somebody
+turns it back on.
+
+### 10.2 Nothing verifies that the stow happened where it was directed
+
+The suggestion is guidance. An operator sent to `BIN-A-001` who walks to
+`BIN-B-002` and submits without switching to Scan writes `BIN-A-001` onto the
+item, and the record is wrong in a way nothing can detect until somebody goes
+looking for the card. A real fulfilment centre closes this by making the stow
+scan mandatory — you cannot complete the action without scanning the location you
+are actually at. Doing that here means the auto path becomes "here is where to
+go, now confirm you got there", and it was left out of this pass because it makes
+every single-item intake a two-step action and that trade deserves its own
+decision.
+
+### 10.3 The pick side is untouched
+
+Directed stow's whole justification is that retrieval is guided too: nobody
+remembers where anything is, the system tells you. Bault's outbound flow still
+shows an operator a shipment and a list of item ids, with no route, no location
+ordering, and no sense that four of the six items are in the same zone.
+Everything needed for that now exists on the record; nothing uses it.
+
+### 10.4 Printed shelf labels went stale in one migration
+
+Every existing shelf was renamed by `0019`, so any label already stuck to a
+physical bin now disagrees with the database. Nothing in the product warns about
+this, produces a reprint sheet, or tracks which shelves have had their new label
+applied — the Locations table has a per-row print button and that is the whole
+of the migration story. It was acceptable here because no facility is live yet
+(the seeded addresses still read `SET REAL ADDRESS — placeholder`), and it would
+not be acceptable a second time.
+
+### 10.5 A bin has no zone hierarchy
+
+`zone` is a free-text string. Zone A and zone B are just labels; there is no
+aisle, no rack, no level, no notion that A is next to B and O is at the far end
+of the building. A stow assignment that spreads load evenly across a building
+with real geography would be sending operators on long walks, and nothing here
+could tell.
+
+### 10.6 The `item_bin_idx` index arrived late
+
+`item.bin_id` had no index until this migration, which means every shelf-cut
+inventory report, every bin count and every stow assignment has been sequentially
+scanning the item table since Part 1. It is fixed here because the stow
+assignment made it acute, not because anybody noticed the report.
+
+### 10.7 Facility is nullable on `bin`
+
+Because the column was added to a table that already had rows. The backfill
+covers every one of them and `createBin` always resolves a facility, so in
+practice it is never null — but the type says it can be, and the stow assignment
+correspondingly has to treat a null facility as "matches nothing when a facility
+was asked for". A later migration can tighten it to `NOT NULL` once there is
+confidence no row escaped.
+
+### 10.8 A failing run's evidence is now cleared with everything else
+
+`pnpm test` resets the database when it finishes, including when it finishes
+badly (§9.1) — which is the right default, because a failed run leaves *more*
+residue than a green one, but it does mean the rows a failure produced are gone
+before anybody can look at them. `pnpm test --no-reset` (or
+`BAULT_TEST_NO_RESET=1`) holds them, and that has to be remembered in advance
+rather than decided after seeing the failure. A better arrangement would keep
+the dataset when a suite fails and clear it at the start of the next run
+instead; this one is blunt, and deliberately so.
+
+### 10.9 Fixture items are still not *marked*, only swept up afterwards
+
+Test accounts get both halves of the treatment: they are minted into a reserved
+`fixture.bault.test` domain, and `AdmService.listUsers` filters that domain out,
+so a fixture account is invisible in the product even while it exists. Items have
+only the second half. They are cleared after the run, but while the run is
+happening they are indistinguishable from the catalogue, and anybody with the app
+open during a test run sees them.
+
+Marking them properly is harder than it was for accounts, and the reason is worth
+stating: a test item's whole purpose is to be an ordinary item. It is booked in
+through the real intake endpoint precisely so the real intake path is what gets
+exercised, and an API that accepted a "this one does not count" flag would be
+offering production a way to hide inventory. The tractable version is to have the
+suites own their items through fixture *accounts* rather than the seeded
+personas, and filter the warehouse-wide views by owner — but several suites
+deliberately assert that a seeded collector sees an item in *their own* vault, so
+that is a real refactor of the test tree rather than a change to one helper.
+
+---
+
+## 11. The account pill
+
+One change in this pass is not about intake at all, and belongs here because it
+was the same reading of the product: an element that looked like it carried
+information and did not.
+
+The application shell's page header opened with a pill reading **"Signed in as
+Collector"** beside a green dot, and each of those three parts was wrong in its
+own way.
+
+**The dot was decoration.** It was hard-coded to the success colour — `background:
+var(--success)` with no variant anywhere — so it was green on every account, in
+every state, forever. It had the exact shape of a status indicator and indicated
+nothing. Meanwhile the platform has a real status to put there: an account can be
+`suspended`, which Part 13's debt policy applies automatically once a negative
+balance passes its threshold, and which Part 17 made survivable by leaving the
+helpdesk open so the locked-out holder can still pay. `SessionProfile.status`
+already travels with the profile for exactly that reason, and the shell already
+reads it to decide which destinations exist. The one place it was not shown was
+the control that looked like it was showing it.
+
+**The role was already on screen.** The account menu two controls to the right
+renders the name and the role together. Spending the header's most prominent
+horizontal space restating the role in a sentence is chrome.
+
+**The identifier was missing.** `@username` is the operational identity in this
+product. It is the `C/O` line a seller writes on a parcel (Part 15), the string
+an operator types to route an arrival (Part 24 §5), and the only identifier a
+collector is ever asked to quote. It is permanent and unique by trigger
+(Requirement 4.1). Having it permanently on screen is worth more than a sentence
+about a role.
+
+So `StatusPill` became `AccountPill`, and it renders one of two things:
+
+```tsx
+suspended
+  ? <span className="status-pill status-pill--warning">Account suspended</span>
+  : <span className="status-pill">@{username} · {roleLabel}</span>
+```
+
+with the dot taking the warning colour in the first case and the success colour
+in the second — which is now a statement rather than a decoration. The role is
+kept, set quieter beside the username behind a hairline rule, because it is
+context for the identifier rather than a peer of it. Both states carry a `title`
+spelling the status out in words, and the suspended one names the consequence:
+the helpdesk is the only section open until the balance is settled.
+
+`username` is optional on the prop, and that is not defensive coding. The login
+response does not carry it — it arrives with the `/me/profile` request that fills
+the session in — so there is exactly one frame after every sign-in where it is
+absent, and rendering a bare `@` for that frame would flash a broken identifier
+on every single sign-in. The pill falls back to the role alone for it.
+
+`app.signedInAs` is retired from both catalogues, replaced by
+`app.account.activeHint`, `app.account.suspended` and
+`app.account.suspendedHint`.
+
+---
+
+# Part 25 — The Published Word
+
+**Completed: 31 August 2026.**
+
+Part 24 ended with a parity audit against the reference service's published FAQ,
+and that audit produced a result nobody expected:
+
+> Nothing is missing as capability. What is missing is published policy.
+
+Not one of the thirty-one features the reference service advertises was absent
+because Bault could not do it. Every gap had the same shape — a rule Bault
+already enforced, in code, on every write path, that no customer could read
+anywhere. And underneath that sat a worse problem of the same kind: Bault's own
+FAQ page was actively telling collectors that Bault could not do things it had
+been doing for weeks.
+
+This part closes both. It adds almost no capability. It publishes what was
+already true.
+
+---
+
+## 1. Executive summary
+
+| # | What changed | Before | After |
+| --- | --- | --- | --- |
+| 25.1 | The FAQ's own verdicts | 17 entries denied live capabilities | Re-audited against the code; 29 adapted, 2 partial |
+| 25.2 | Availability vocabulary | `adapted` / `unavailable` | Adds `partial` — a limit is not an absence |
+| 25.3 | Rot | Nothing caught a stale verdict | Three guards in `faq-legal.test.ts` |
+| 25.4 | What Bault accepts | Enforced, published nowhere | `GET /content/intake-policy`, public, derived from the validator |
+| 25.5 | Inbound trackers | Destroyed on arrival, unannounced | Stated in advance, with why the outbound add-on is not a contradiction |
+| 25.6 | Destination customs | A correct invoice and silence | Per-destination guidance, each claim carrying its authority |
+| 25.7 | Customs readiness | Nothing before dispatch | Warnings and guidance on the shipment, before it leaves |
+
+---
+
+## 2. The FAQ was lying, and the lie had a mechanism
+
+`faqContent.ts` carries thirty-one entries copied verbatim from the reference
+service, each with three fields that are Bault's own editorial addition:
+`category`, `availability` and `baultNote`. The quoted text is untouchable; those
+three are Bault's assessment of whether it does the thing described.
+
+They were captured on **3 August 2026** and never revisited. In the four weeks
+that followed, Bault shipped facilities and inbound parcels, customs paperwork,
+group shipments, shipment editing and merge, insurance, the tracker add-on,
+`video_review`, `condition_inspection`, Simple/Personalised service modes, and
+self-service card top-up.
+
+By 31 August, **seventeen of the twenty-one entries marked `unavailable`
+described capabilities that were live.** A collector opening the FAQ tab was
+told, in Bault's own words on Bault's own page:
+
+- "Bault has no U.S. package-forwarding address" — two facilities, addressed per
+  account as `Bault C/O <username>`.
+- "Bault exposes no endpoint for editing a shipment after it is requested" —
+  `shipment-edit.service.ts`, with add, remove, merge and cancel.
+- "Bault offers no shipment insurance" — 1.5% of declared value, $5,000 ceiling,
+  signature forced above $500.
+- "Bault has no group-shipment option" — `group-shipment.service.ts`.
+- "Bault offers no GPS tracking add-on" — a $30 add-on, gated on $500 of cover.
+
+This is worse than an out-of-date page. It is a page that talks a paying customer
+out of a feature they are already entitled to.
+
+All thirty-one verdicts were re-audited against the current API — the modules and
+the routes they expose, not the metadata — and rewritten. The result is 29
+`adapted` and 2 `partial`. Nothing is `unavailable`.
+
+### 2.1 `partial`, and why two values were not enough
+
+The original vocabulary had two values, and it forced a bad choice. "Bault has no
+such capability" and "Bault does most of this, but not the part about lodging a
+broker instruction" are different answers, and collapsing them made a live
+capability read as an absence — which is precisely how the Australia entry and
+the tutorials entry ended up looking like holes.
+
+`partial` is rendered in the warning tone rather than greyed out, and — this is
+the part that matters — it is **not** hidden by the "entries that do not apply"
+filter. A thing Bault does, with a stated limit, is a thing people should find.
+
+The two remaining partials are the honest ones:
+
+- **Shipping to Australia** — Bault generates the invoice and publishes the
+  guidance, and does not lodge a FedEx assembly order or any broker-side
+  clearance instruction, which is most of what that entry is about.
+- **How do I make a shipment request** — the written guides exist; the source
+  answers with video tutorials and Bault has none.
+
+### 2.2 The filter, and a toggle that had nothing to reveal
+
+`FaqLegalPage` filtered on `availability !== 'adapted'`, which with the new
+vocabulary would have hidden every partial. It now hides only `unavailable` —
+and since no entry currently is, the "also show entries that do not apply"
+checkbox is rendered only when at least one exists:
+
+```tsx
+{HAS_UNAVAILABLE && ( <label className="check"> … </label> )}
+```
+
+A permanent toggle that changes nothing is not merely dead chrome. It implies a
+set of excluded answers, and there isn't one.
+
+### 2.3 The rot guard
+
+A test cannot re-audit the API from the browser tree. What it can catch is the
+*shape* of the failure, and that is what three new cases in `faq-legal.test.ts`
+do.
+
+The important one is a contradiction check. A set of denial phrases — `Bault has
+no`, `Bault offers no`, `Bault cannot`, `Bault publishes no`, `Bault exposes no`
+— may not appear in the note of an entry marked `adapted`. Those two statements
+cannot both be true, and it is exactly the pair that accumulated silently for a
+month. The other two require every note to make a substantive statement about
+Bault (a stub note is how a stale entry hides), and require every `partial` to
+name its own limit rather than shrug.
+
+The module docblock now carries the history as a warning, because the next person
+to add a capability is the one who has to re-check these two fields.
+
+---
+
+## 3. What Bault accepts — `intake-policy.ts`
+
+The closed taxonomy has been enforced on every write path since Part 14. The
+prohibited categories have produced a recorded arrival disposal and a
+notification for just as long. What did not exist was the sentence telling a
+collector any of it **before** they posted a box, so the rule was discoverable
+exactly one way: by having something refused, destroyed and written up.
+
+The design decision that matters is where the text comes from.
+
+```ts
+export function intakePolicy(): IntakePolicy {
+  return {
+    acceptedClasses: ITEM_CLASSES.map(…),
+    refusedCategories: DISPOSAL_CATEGORIES.map(…),
+    outcomes: DISPOSAL_OUTCOMES,
+    lotThreshold: LOT_MIN_SIZE,
+    rules: RULES,
+  };
+}
+```
+
+It is **derived, at request time, from the very modules the intake path validates
+against**. A hand-written policy page is a second copy of a rule, and a second
+copy drifts: add a class to the taxonomy and the page silently starts lying —
+which is the failure this whole part exists to fix, so repeating it would have
+been remarkable. Here, adding a class publishes it and removing one unpublishes
+it, because the page and the validator read the same array.
+
+The prose that cannot be derived — what a refusal means for the collector — is
+held to the FAQ's rule: every sentence states something the code does.
+
+`GET /content/intake-policy` is **`@Public()`**, and that is the point rather
+than a convenience. The failure being closed is somebody posting a box without
+knowing the rule, and a person deciding whether to use Bault at all has no
+session to read it with. `GET /shipping/destinations/:country` is public for the
+same reason and is the only public route on an otherwise authenticated
+controller: "can Bault even ship to my country, and what will I owe at the far
+end" is asked before there is a parcel, and usually before there is an account.
+
+### 3.1 The tracker rule, stated
+
+The rule people actually needed:
+
+> Do not put a tracker in a parcel you send us. A GPS tracker or AirTag found in
+> an arriving parcel is removed and destroyed, and you are told that it was.
+
+And, in the same breath, the thing that would otherwise read as hypocrisy: Bault
+sells a tracker as an outbound add-on. The policy says why that is not a
+contradiction — an outbound tracker travels in a parcel Bault packed, declared
+and insured, and is handed to the recipient on delivery; an inbound one arrives
+undeclared in somebody else's freight, which is what the carriers restrict.
+
+### 3.2 A judgement is not a refusal
+
+`no_value` sits in the same `DISPOSAL_CATEGORIES` array as the prohibited items
+but carries `prohibited: false`, and the page splits on that flag into two
+panels. Telling somebody their box of commons was "prohibited" would be a false
+statement about their property, made by the platform that destroyed it.
+
+---
+
+## 4. Customs — `destinations.ts` and the readiness check
+
+Bault produced a correct commercial invoice for every international parcel and
+then said nothing at all about what happens when it lands. The audit's one
+genuinely unattempted item.
+
+The hard part was never the data. It is that **Bault must not invent customs
+facts.** Thresholds move, VAT rules change, and a platform that publishes a
+confident figure it made up has handed somebody a number they will plan around.
+So each destination states three things and no more: what Bault does (knowable
+from the code, identical everywhere), who pays (the recipient of record — a Bault
+policy, so it can be stated flatly), and **where the rules live** — a named link
+to the destination's own customs authority, so the collector reads the current
+threshold from the body that sets it rather than from a cache of it here.
+
+`notHandled` is the field that earns the module. A collector planning around a
+clearance step Bault does not perform is exactly who this exists for, and telling
+them afterwards is telling them too late. Australia's entry names the FedEx
+assembly order in as many words.
+
+An unlisted country returns `specific: null` with the universal notes intact, and
+the UI renders that as "we have not written guidance for this destination yet" —
+an honest absence rather than a generic paragraph impersonating advice. Four
+destinations are written up rather than forty for the same reason: a named entry
+has been checked, so an unnamed one falling back is a signal instead of a gap
+being papered over.
+
+### 4.1 Readiness — the question that came first
+
+`CustomsService.invoice` answers "what did you declare". `CustomsService.readiness`
+answers the question that comes before it and had nowhere to be asked: *am I
+about to send this somewhere it will get stuck, and what will the recipient owe?*
+
+It **reports rather than blocks**. A missing declared value or an estimated
+weight is surfaced as an actionable warning, never an error that refuses the
+shipment — Bault cannot know an estimate is wrong, only that it is an estimate,
+and refusing on that basis would ground parcels nobody had a problem with.
+
+It never states a duty figure, for the reason above. And on a domestic parcel it
+returns empty guidance rather than a page of rules that do not apply.
+
+---
+
+## 5. Tests
+
+`tests/integration/inv-intake-policy.test.ts` — 12 cases, and they are mostly
+about the two properties that make a published rule trustworthy.
+
+**It is reachable.** The policy is fetched with `new Client()` — no session at
+all — because the person who most needs it does not have one.
+
+**It cannot drift.** The strongest case in the file walks every published class
+and books an item in under it, asserting a 201 each time, then asserts that a
+class *not* published is refused. A page listing a class the validator rejects is
+worse than no page, and this is the only way to catch that mechanically. The lot
+threshold is checked the same way: the published number is read from the policy
+and then exercised against the intake path on both sides of it.
+
+The rest: every refusal category must carry a real published reason (not the
+`No published reason for this category yet.` fallback), the tracker rule must
+exist by name and mention destruction, `no_value` must not be marked prohibited,
+destination guidance must carry an `https` authority link, must name the assembly
+order it does not handle, must be case-insensitive, and — the guard that keeps
+the module honest — **must contain no percentage and no currency figure in any of
+its prose**, in any destination, because that is what inventing a customs fact
+would look like.
+
+Plus three in `faq-legal.test.ts` (§2.3). Suite after the pass: **149 web, 10
+contract, 204 integration, 1 concurrency, 2 property — 366 green**, with build,
+typecheck and lint clean.
+
+---
+
+## 6. What this pass did not do
+
+### 6.1 There is still no video
+
+The written guides cover every workflow with ordered steps and a real hash route
+each. The reference service answers the same questions with recordings, and for a
+multi-step warehouse flow that is a genuine difference in how learnable the thing
+is. `guideContent.ts` has carried a `video: null` on every guide since Part 21
+specifically so the absence is a fact in the data rather than a gap in the page,
+and it is still null.
+
+### 6.2 Four destinations is not a customs product
+
+It is four countries checked by hand. There is no coverage of the EU as a bloc,
+no HS-code refinement beyond the single default heading for printed matter, and
+no handling of the case where a collector's own declared value is implausible for
+the item class — which is the one place Bault has enough data to say something
+useful and says nothing.
+
+### 6.3 The policy page cannot be versioned or cited
+
+It is generated fresh on every request, which is what makes it undriftable, and
+it also means there is no way to say "the policy as it stood on the day your
+parcel was refused". For a document that governs the destruction of somebody's
+property, that is a real omission, and the fix is not obvious: a snapshot would
+reintroduce exactly the second copy this design removed.
+
+### 6.4 The integration suite is not idempotent against a dirty database
+
+Discovered by running it twice without the reset between (`pnpm test --no-reset`,
+then again). Four cases fail on the second pass — `acc-identity` asserts a legacy
+account's name that an earlier run has already corrected. It is pre-existing and
+was invisible while every run reset first. The reset added in Part 24 §9.1 hides
+it rather than fixing it, and a suite that can only pass from a known state is a
+suite with a hidden dependency on that state.
+
+---
+
+# Part 26 — The Adversarial Pass
+
+**Completed: 31 August 2026.**
+
+Every suite in this repository until now drove the product from the side that is
+allowed to drive it. This part does the opposite on purpose, and it found three
+defects — one of which is the most serious thing in this document.
+
+Four new suites, 67 new cases, and a total of **438 green**.
+
+---
+
+## 1. The critical one: a $5,000 top-up with a fake token
+
+Probing `POST /finance/checkout` as an ordinary collector:
+
+```
+paymentMethodToken: "pm_totally_fake"   →  { "status": "succeeded" }
+balance: $4,167.00  →  $9,167.00
+```
+
+That is not a simulation. A real balance moved, on the real API, against a token
+that names nothing.
+
+The cause is not a bug in the payment code. `SandboxPaymentAdapter` is *honest*
+about what it is — `createTopup` returns `succeeded` without contacting anybody
+and `verifyWebhook` ignores its signature argument — and it was bound
+**unconditionally**:
+
+```ts
+{ provide: PAYMENT_ADAPTER, useFactory: () => new SandboxPaymentAdapter() },
+```
+
+with a comment saying real providers "are swapped in by changing only this
+factory, per env". Meanwhile `PAYMENT_PROVIDER=stripe` sat in both `.env` and
+`.env.example`, read by nobody. The configuration said one thing and the code did
+another, and nothing anywhere connected them.
+
+Deployed as it stood, any account could mint unlimited store credit, spend it on
+other collectors' cards through the atomic purchase path, and cash it out to a
+bank account through a real payout request. Every downstream invariant would have
+held perfectly — the ledger would have balanced, the custody trail would have been
+complete — because none of them are wrong. The money was simply never real.
+
+### 1.1 The fix is a refused boot
+
+`createPaymentAdapter` now decides from validated config, and refuses rather than
+degrades:
+
+| `PAYMENT_PROVIDER` | Not production | Production |
+| --- | --- | --- |
+| `sandbox` | sandbox adapter | **boot refused** |
+| anything else | **boot refused** | **boot refused** |
+
+The second row is the one that matters. A named provider with no implementation
+must not fall back to the sandbox — a fallback here is the same catastrophe
+wearing a more reassuring name. `.env` and `.env.example` now say `sandbox`
+explicitly, with a comment saying what it does, because a config value that lies
+about the code is how this happened.
+
+Verified by the failure itself: with the old `PAYMENT_PROVIDER=stripe` still in
+`.env`, the API refused to start and named the reason. A loud, cheap failure in
+place of a quiet, expensive one.
+
+`tests/contract/payment-provider-gate.test.ts` pins both halves — the adapter's
+unsafe behaviour is asserted so nobody can "fix" it into merely *looking* safe,
+and the decision table is asserted so the fallback cannot come back.
+
+**Still open:** `POST /webhooks/payment` is `@Public()` and its handler is a stub
+with the comment *"A real implementation credits the ledger for a 'topup.settled'
+event here"*. Nothing is credited today, so there is no live hole — but the line
+that closes it is the line that opens it, and the signature check behind it is a
+no-op. Implementing that TODO without first implementing `verifyWebhook` would
+recreate this bug in a worse place.
+
+---
+
+## 2. Every route taking an id answered 500 on a typo
+
+Thirty-six route/input combinations, across nine modules:
+
+```
+GET /vault/items/not-a-uuid        → 500
+GET /parcels/not-a-uuid            → 500
+GET /support/tickets/not-a-uuid    → 500
+POST /parcels/not-a-uuid/open      → 500   … and thirty-two more
+```
+
+Primary keys here are genuine `uuid` columns, and Postgres does not merely fail
+to match a non-UUID against one: it aborts the statement with `22P02
+invalid_text_representation`. That reached `AllExceptionsFilter` as an unknown
+exception and became an opaque 500. A stale bookmark, a typo, or a crawler
+produced an unhandled server error and an alert.
+
+The response body never leaked the database message — the filter's opaque-500
+branch was doing its job — so this is a reliability and observability defect
+rather than a disclosure one. It is still wrong: the caller is told nothing
+actionable, and a 500 rate that tracks user typos makes real incidents
+invisible.
+
+**Fixed in the filter, not with `ParseUUIDPipe`,** and deliberately. Several of
+these ids are legitimately not UUIDs — `/custody/items/:itemId/relocate` takes
+the barcode printed on the item and the bin routes take a shelf serial, both from
+Part 24 — so a blanket UUID pipe would break scanning, which is the one thing the
+warehouse console is driven by.
+
+The trade-off is stated in the code: this also converts a 22P02 caused by *our
+own* code into a 400 where it would previously have been a loud 500. The log line
+survives, so the evidence does; what changes is that a caller's typo stops paging
+anybody.
+
+While there, a second hole in the same filter: middleware errors carrying their
+own status were falling through to the 500 branch, so a 200 KB request body
+answered **500 instead of 413**.
+
+---
+
+## 3. Cross-test interference, and what it revealed
+
+`PUT /notifications/preferences/channel` is a **master switch** — it turns a
+channel off for every event at once. A new test drove it against a shared seeded
+account and walked away, which broke `not-channels-and-content.test.ts`'s
+assertions about that account's default email matrix. A suite-order-dependent
+failure that appears only in a full run.
+
+The test now restores what it changes. The underlying property is the finding:
+**the integration suite has no per-test isolation.** Every case shares five
+seeded accounts, so anything mutating account-level state is a landmine for
+whatever runs after it. This is the same defect recorded in Part 25 §6.4 from the
+other direction, and the reset added in Part 24 §9.1 hides both rather than
+fixing either.
+
+Also found: `tests/integration/helpers/http.ts` had **no `put` method at all**,
+so the two PUT routes were structurally unreachable from any test. Nothing was
+covering them because nothing could.
+
+---
+
+## 4. What the new suites cover
+
+| Suite | Cases | What it asserts |
+| --- | --- | --- |
+| `sec-authorization.test.ts` | 20 | Anonymous → 401 on every non-public route; customer → 403 on staff routes; operator → 403 on admin routes; and eleven cross-tenant probes |
+| `sec-validation.test.ts` | 19 | Negative/zero/absurd money; malformed ids across 36 combinations; unknown and wrong-typed fields; oversized bodies; XSS and SQL-shaped strings |
+| `fin-invariants.test.ts` | 10 | Balance ≡ Σ(ledger) through funding, charges, a sale and a cash-out; atomicity; separation of duties; the pricing snapshot |
+| `flows-lifecycle.test.ts` | 18 | The helpdesk end to end, arrival disposals, the admin surface, buyout, and every illegal state transition |
+| `payment-provider-gate.test.ts` | 5 | §1 |
+
+The cross-tenant probes are the ones worth naming, because they are what a
+malicious customer would actually try: reading another collector's item, timeline
+and storage position; reading and writing their support ticket; cancelling their
+parcel; shipping their card; listing their card for sale; **sending your own card
+to a stranger's saved address**; deleting their address. All eleven were already
+correctly refused — the authorization layer held on every probe.
+
+Two more that passed and are worth stating: a forged session cookie is rejected,
+and the password-reset endpoint returns the same status for a known and an
+unknown address, so it is not an account-existence oracle.
+
+---
+
+## 5. What this pass did not do
+
+### 5.1 Fifty-one endpoints have no behavioural test
+
+Reachable, in some cases only as an authorization probe, but never exercised for
+what they do. The list is in the report published with this pass; the ones that
+matter most are `PATCH /admin/items/:id` (an admin can rewrite an item's owner,
+bin and lifecycle state — the single most dangerous route in the product),
+`POST /parcels/:id/dispose`, `POST /marketplace/listings/:id/remove`, and the
+whole escrow cancel path.
+
+### 5.2 There is no test that the web app renders
+
+146 of the 149 "web" tests are pure functions — the message catalogue, routing,
+names, the FAQ data. Not one mounts a component. Every screen in
+`apps/web/src/areas` is unverified by anything except `tsc`, and the console is
+where an operator does the physical work.
+
+### 5.3 No load, soak or failure-injection testing
+
+One concurrency test (no double sale). Nothing establishes what happens when the
+database is slow, pg-boss is down, the SMTP host times out, or two operators
+process the same parcel simultaneously. The worker's only error handling is a
+top-level `main().catch`.
+
+### 5.4 The infrastructure gaps are not defects, but they are blockers
+
+Found by reading `main.ts` rather than by testing: **no rate limiting anywhere**
+(the login route is brute-forceable), no `helmet`, no CORS configuration, and
+Swagger served unconditionally at `/docs` including in production. There is no
+graceful shutdown, no request correlation id, and the comment promising
+observability ("full logger/Sentry wiring arrives in T022") describes work that
+never arrived.
+
+---
+
+# Part 27 — Closing the Perimeter
+
+**Completed: 31 August 2026.**
+
+Part 26 audited the product from the wrong side and produced a list of seven
+things that had to be true before anybody could take real money through it. This
+part does them, and makes one design decision that shapes the rest:
+
+> The way to be production-ready without a bank account is not a fake payment
+> rail. It is the real one, pointed at the provider's own test environment.
+
+**454 tests green.**
+
+---
+
+## 1. PayPal, because that is the rail
+
+The reference service takes money three ways, and its own FAQ names them:
+PayPal Goods & Services through its website checkout (automatic), PayPal
+Friends & Family sent directly (reconciled by hand), and bank transfer via Wise
+or Revolut (also by hand). Cash-outs go back as PayPal payouts.
+
+Bault already had the manual half — the wallet-request workflow reconciles a
+bank transfer against a statement, which is exactly what the reference service
+does with Wise. What it had no implementation of at all was the automatic half.
+
+`PayPalPaymentAdapter` follows PayPal's own model rather than pretending to be a
+card processor, and three properties matter.
+
+**A top-up is a CAPTURE, never a charge.** The SPA creates an order, the payer
+approves it in PayPal's window, and the adapter captures the id that comes back.
+That ordering is the whole security property, and it is what makes the Part 26
+vulnerability inexpressible: an order id cannot be guessed, and a capture only
+succeeds if a real person approved that exact order.
+
+```ts
+const orderId = req.paymentMethodToken?.trim();
+if (!orderId) {
+  throw new Error('No PayPal order to capture. The payer must approve an order first…');
+}
+```
+
+The absence of a token is an error rather than a fallback, because the fallback
+*was* the bug.
+
+**The adapter reports what settled, and the caller checks it.** `ProviderResult`
+grew `settledAmountMinor` and `settledCurrency`, because there is a real attack
+that capture alone does not stop: approve an order for $1, then ask to be
+credited $5,000. The capture legitimately succeeds. Only the settled figure says
+for how much.
+
+```ts
+if (result.settledAmountMinor !== undefined &&
+    result.settledAmountMinor !== input.amountMinor) {
+  throw new AppError(ErrorCode.CONFLICT, `The provider settled … Nothing has been credited.`, 409);
+}
+```
+
+Refused rather than reconciled downward. Crediting the smaller figure would
+silently accept a request that was trying to defraud us; refusing leaves the
+money with PayPal, where a support ticket sorts out an honest client bug.
+
+**A cash-out is a payout, and acceptance is not settlement.** PayPal accepts a
+payout batch and settles asynchronously, so the adapter returns `pending` on
+acceptance. Returning `succeeded` would tell a collector their money had arrived
+before it had moved.
+
+### 1.1 Webhooks are verified by asking PayPal
+
+The old interface was `verifyWebhook(rawBody: string, signature: string)`,
+synchronous, and the only implementation ignored its second argument. Real
+verification needs five transmission headers and the webhook id, and it is a
+network call — so the interface changed shape:
+
+```ts
+verifyWebhook(delivery: { rawBody: string; headers: Record<string, string | undefined> }):
+  Promise<WebhookEvent>;
+```
+
+A missing header is a **failed verification, not a skipped one**. "No signature"
+is the single case an attacker controls completely, so treating it as absence of
+evidence rather than evidence of absence is how that route becomes a mint. The
+constructor refuses to build without `PAYPAL_WEBHOOK_ID` for the same reason: an
+adapter that cannot verify should not exist.
+
+### 1.2 Testing everything without a bank account
+
+This is the requirement that drove the design, and the answer is
+`PAYPAL_ENVIRONMENT=sandbox`.
+
+It is not a mock. It is PayPal's real API at `api-m.sandbox.paypal.com`, with
+real OAuth, real order capture, real payout batches, real webhook signatures
+verified by PayPal itself — moving money that is not real. **Every code path is
+the live path.** Nothing about the integration is left untested by running it,
+which is precisely what a mock cannot promise.
+
+So it is a production-*safe* configuration rather than a development one, and it
+is allowed with `NODE_ENV=production`. `handlesRealMoney` is false there, so the
+product can say so out loud rather than looking identical to the live rail. Going
+live is one word.
+
+The in-memory `SandboxPaymentAdapter` survives for the test suite — it needs no
+credentials — and is refused in production twice over: by the env schema and
+again by the factory.
+
+### 1.3 The configuration that lied
+
+`PAYMENT_PROVIDER` defaulted to `stripe`, was documented, was validated by the
+schema, and was **read by nobody**. A validated value nobody consumes is worse
+than no value, because it reads as a control. It is now
+`z.enum(['paypal', 'sandbox'])` with no default, and half-configured PayPal
+fails the boot:
+
+```
+- PAYPAL_CLIENT_ID: PAYPAL_CLIENT_ID is required when PAYMENT_PROVIDER=paypal
+- PAYPAL_CLIENT_SECRET: …
+- PAYPAL_WEBHOOK_ID: …
+```
+
+---
+
+## 2. The rest of the perimeter
+
+**Security headers.** `helmet`, with CSP off — this process serves a JSON API
+and an OpenAPI explorer, not the SPA, so the CSP that matters belongs on
+whatever serves the front end and a default one here would break the explorer
+while protecting nothing. Verified: `X-Frame-Options`,
+`Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`.
+
+**CORS, named or nothing.** The session is an httpOnly cookie, so credentials
+must be allowed for a cross-origin SPA — which makes a permissive origin a
+session-riding hole rather than a convenience. Empty `CORS_ORIGINS` means
+same-origin only, which is what the dev proxy gives.
+
+**Graceful shutdown.** `enableShutdownHooks()`. On an append-only ledger the
+difference between a clean rollback and a severed write is not academic.
+
+**The OpenAPI explorer is opt-in.** It was served unconditionally,
+unauthenticated, in every environment. `EXPOSE_API_DOCS` now gates it, and in
+production the schema additionally demands `API_DOCS_PASSWORD` before the switch
+may be on.
+
+**Placeholder addresses are withheld.** `FacilityService.inboundAddressesFor`
+filters any facility whose `line1` still matches `/placeholder|SET REAL ADDRESS/i`
+when `NODE_ENV=production`. It filters rather than throws: one configured
+facility and one forgotten one should still let collectors ship to the
+configured one. This is the last point before that string reaches a customer who
+would write it on a parcel.
+
+### 2.1 Rate limiting, and getting it wrong twice
+
+There was none anywhere. Two buckets now: a generous `default` so an operator
+scanning at a bench is never throttled, and a tighter `auth` bucket for routes
+that check a credential.
+
+Two mistakes worth recording, because both were caught by the suite rather than
+by reading:
+
+**Ten was too tight.** Collectors behind one office NAT or one carrier's egress
+share an address. A ten-per-minute sign-in budget locks out real people while
+barely inconveniencing a script that can rotate addresses. The default is thirty,
+and the routes that actually *send mail to a stranger* —
+`password/reset-request` and `verify-email/resend` — carry their own hard-coded
+five, deliberately not configurable, because there is no deployment where a
+higher number is right.
+
+**The config was doing nothing.** `@Throttle({ auth: { limit: 10 } })` on the
+login route **overrides** the configured `auth` throttler, so
+`AUTH_RATE_LIMIT_PER_MINUTE` was silently inert and every deployment got ten
+regardless of what it asked for. The decorator now reads the value from config.
+This is the same failure as §1.3 in miniature: a setting that looks like a
+control and controls nothing.
+
+**A 429 read as a server fault.** `ThrottlerException` reached the client as
+`{"code":"internal","message":"ThrottlerException: Too Many Requests"}` because
+429 was missing from the status map. A throttled caller was being told the server
+had broken. There is now a `rate_limited` code and a message saying to wait.
+413 joined the map at the same time.
+
+---
+
+## 3. What was NOT done, and why
+
+**Terms of Service and Privacy Policy are still unpublished.** They are blockers
+and they remain blockers. Writing them would mean authoring a document that reads
+as binding while having been drafted by nobody — which is the exact failure
+`legalContent.ts` was built to refuse, and it refuses it for good reason. A
+custody platform holding other people's property and money needs these written by
+someone who can be responsible for them.
+
+**The webhook handler is still a stub.** Its verification is now real, which was
+the dangerous half. The half that credits a ledger is deliberately still
+unwritten: it should be built alongside the first live PayPal integration, with
+the settled-amount check that `POST /finance/checkout` now has, and not before.
+
+---
+
+## 4. Tests
+
+`tests/contract/paypal-adapter.test.ts` — 14 cases against a stubbed `fetch`, so
+they run anywhere with no credentials. The construction guards; that a top-up
+with no approved order is refused; that a capture reports what settled and that
+a $1 approval against a $5,000 request reports $1; that `PENDING` is not called
+success; that a payout is `pending` on acceptance and carries the right amount
+and recipient; that a webhook is refused when PayPal says `FAILURE`, when the
+body is not JSON, and — five separate cases — when **any one** of the five
+transmission headers is missing.
+
+`sec-authorization.test.ts` gains the rate-limit case: twelve rapid password-reset
+requests must produce a 429, and that 429 must carry `rate_limited` and a message
+telling the caller to wait.
+
+The pre-existing `payment-adapter.test.ts` was updated for the new interface
+rather than deleted — the sandbox is still contractually required to be honest
+about handling no real money.
+
+Total: **149 web, 30 contract, 272 integration (269 + 3 environment-skipped),
+1 concurrency, 2 property = 454.**
+
+---
+
+# Part 28 — The Screens, and the Break-Even Line
+
+**Completed: 31 August 2026.**
+
+Three things: the first tests that ever rendered a component, a reorganisation of
+the adversarial suites into `tests3/`, and Break-Even Watch.
+
+**489 tests green** across eight projects.
+
+---
+
+## 1. Nothing had ever rendered
+
+The production audit's sharpest finding about the front end was that 146 of the
+149 "web" cases were pure functions and **not one mounted a component**. Every
+screen in `apps/web/src/areas` — the vault a collector reads, the bench an
+operator works — was verified by `tsc` and nothing else. A type checker cannot
+see a button wired to the wrong handler, a form that submits the wrong field, an
+empty state that never renders, or an error that never reaches the screen.
+
+A new `ux` project fixes that: jsdom, `.tsx` files, `@testing-library/react`, and
+its own setup. Four pieces of scaffolding were needed and each is a fact about
+the app worth recording.
+
+**React had to be aliased.** It is a dependency of `apps/web`, not the root, and
+pnpm links a package only into the package that declares it — so a test at the
+repository root could not resolve `react/jsx-runtime` and every `.tsx` failed to
+transform. Aliasing to the web app's own copy keeps the root manifest clean and
+guarantees the tests render against the exact React the application ships.
+
+**jsdom implements neither `matchMedia` nor `scrollTo`**, and the shell calls
+both on mount, so every render threw before an assertion ran.
+
+**The suite runs in English.** `DEFAULT_LOCALE` is Hebrew, which is right for the
+product and wrong for a test file — assertions would have to match Hebrew and a
+reader could not tell what the screen says. `I18nProvider` reads its initial
+locale from `localStorage`, so one line in the setup makes every query legible.
+Translation coverage stays where it belongs, in `i18n-catalogue.test.ts`.
+
+**`cleanup()` between cases.** Without it the second test in a file queries a DOM
+still containing the first test's component, and `getByRole` throws "found
+multiple elements" for reasons unrelated to the code under test.
+
+### 1.1 The finding: a working password shipped in the login form
+
+```ts
+const [identifier, setIdentifier] = useState('red@bault.dev');
+const [password, setPassword] = useState('11111111');
+```
+
+A real seeded account and its real password, typed into the login screen of every
+build including a production one. And underneath the form, worse:
+
+> Demo users (password 11111111): red@bault.dev · golden@bault.dev (collectors) ·
+> hermon@bault.dev (warehouse) · eldar@bault.dev (manager)
+
+Every seeded account and the shared password, printed on screen for anyone who
+opened the page.
+
+Both are genuinely useful locally, so neither was deleted — both are now behind
+`import.meta.env.DEV`, which is false in every `vite build` output. The
+convenience survives exactly where it belongs and nowhere else, and a test
+stubs the flag to assert the other branch.
+
+### 1.2 What the 24 rendering tests cover
+
+**Signing in.** That the submitted payload is what the person typed; that a
+refusal reaches the screen; that a stale error is cleared on retry rather than
+sitting under a fresh attempt; that the two ways out of a failed sign-in are
+wired to their handlers.
+
+**The receive bench.** That the directed stow is displayed by shelf serial with
+what is on that shelf; that selecting an oversized class re-asks for oversized
+shelving (`oversized=true` in the query) rather than sending a sealed case to a
+card shelf; that a normal intake submits `autoStow: true` and **no** `binId`;
+that switching to Scan submits the scanned serial and `autoStow: false`, because
+the operator standing in front of a shelf outranks the system; and that when no
+shelf is available the reason is on screen and the submit button is disabled, so
+a card cannot be recorded in no location.
+
+**The shelf list.** That it shows item counts and *never* a `12 / 50` ratio — a
+denominator reappearing would mean the fake capacity had come back.
+
+**The account pill.** All three states, including the one-frame fallback after
+sign-in where the username has not loaded yet.
+
+**The intake policy page.** That it renders what the API publishes rather than a
+second copy of the rules; that a safety refusal and a judgement about value are
+in *different panels*, because telling somebody their box of commons was
+"prohibited" is a false statement about their property made by the platform that
+destroyed it; and that a failure shows its reason rather than an empty frame.
+
+**The vault.** Loading, populated, empty, and failed.
+
+### 1.3 A finding from the scaffolding
+
+Every field is `<label class="field"><span class="field-label">Caption</span>
+<input/><span class="field-hint">…</span></label>`. The control is associated
+with its label **by nesting**, so the label's accessible name is the caption and
+the hint run together — `getByLabelText('Owner username')` finds nothing, because
+the label's text is `Owner usernameThe customer's permanent identifier…`.
+
+That is not just a testing inconvenience. It is what a screen reader announces:
+every field is read out with its help text glued to its name. An `htmlFor`/`id`
+pair with `aria-describedby` for the hint would fix both. The test file works
+around it with a documented helper rather than pretending it is fine.
+
+---
+
+## 2. `tests3/` — the adversarial suites, kept apart
+
+The eight suites written to attack the product now live in `tests3/`, split the
+way the originals are: `core` needs a live API and a seeded database,
+`core-contract` needs neither.
+
+They are separated because they are a different *kind* of test. Everything under
+`tests/` drives a flow from the side that is allowed to drive it. These drive it
+from the wrong side, and that is what found the sandbox adapter settling fake
+money, thirty-six routes answering 500 to a typo, and a password-reset endpoint
+usable as a mail cannon.
+
+`scripts/test.mjs` runs all eight projects in order — `web`, `ux`, `contract`,
+`core-contract`, `integration`, `core`, `concurrency`, `property` — and still
+re-seeds afterwards.
+
+---
+
+## 3. Break-Even Watch
+
+The point at which a card costs more to keep than it is worth, said out loud.
+
+Every vault profits from silence here. A modest card sits on a shelf for years
+accruing storage and nobody tells the owner, because storage is the revenue. The
+reference service's own fee schedule makes the arithmetic explicit — an extra 10%
+of the intake cost per 90 days after the included period — and then leaves the
+collector to do it.
+
+`GET /vault/break-even` does it for them: what each card has cost, what the next
+twelve months will cost, and what one like it actually sold for here.
+
+### 3.1 The honesty problem, and how it is handled
+
+**Bault has no price feed.** A platform that invents a valuation in order to
+advise somebody to sell has done something considerably worse than saying
+nothing. So the service never states a value it cannot source, and reports which
+of three grades it used:
+
+| Basis | What it is |
+| --- | --- |
+| `sold_comparable` | The median of what cards of this CLASS actually sold for on Bault's own marketplace, with the count |
+| `own_asking_price` | What the owner themselves is asking, used only when no sale exists |
+| `unknown` | Nothing. The row reports cost alone |
+
+A real transaction outranks an asking price, because an asking price is what one
+hopeful person wants. And `unknown` is not a failure mode: *"this has cost you
+$14, will cost $9 more this year, and we have no idea what it is worth"* is a
+true and useful sentence. `unknownValueCount` is reported in the summary because
+that number is the honest limit on everything else on the page.
+
+An item with no value signal can never be marked past break-even. There is no
+line to be past.
+
+### 3.2 Two implementation decisions
+
+**Spending is counted, never derived.** Every past figure is read from the
+`charge` table — what was actually billed — for the same reason `storageFor`
+does it: a missed sweep must not become a number nobody was charged. Only the
+forward projection is computed, and it is derived from this item's own observed
+rate rather than from today's pricing rule, so an item on legacy terms is
+projected on legacy terms.
+
+**The comparable is computed once per request.** A vault of two hundred cards
+would otherwise run two hundred median queries. The join is
+`transaction.itemIds @> to_jsonb(item.id::text)` — qualified and cast, because an
+unqualified `id` is ambiguous across the two tables and the jsonb array holds
+text rather than uuid. That exact mistake produced a 500 on the first run.
+
+### 3.3 Why a custodian can afford to say this
+
+Because every exit is billable. A card that leaves is sold (commission), culled
+(a disposal fee) or shipped home (a shipping fee) — and the shelf it frees takes
+stock that earns. The interests genuinely line up, which is the only reason this
+can be built honestly rather than as a gesture. It is also why no competitor will
+copy it: telling a customer to stop paying you is only possible when storage is
+not the whole business model.
+
+### 3.4 Tests
+
+11 cases in `tests3/integration/vlt-break-even.test.ts`, most of them about what
+it refuses to claim: that an unknown value stays null with no comparable count
+and no break-even verdict; that a `sold_comparable` is always backed by at least
+one real transaction; that a real sale outranks the owner's own asking price;
+that a card booked in seconds ago shows its intake charge and **zero** storage,
+which a clock-derived figure would already have invented; that the watch covers
+only cards still on a shelf; that the worst position sorts first; that a
+collector sees only their own; and that every summary figure is the sum of the
+rows it claims to summarise.
+
+---
+
+# Part 29 — Shelf Yield, and a System Instead of a Stylesheet
+
+**Completed: 31 August 2026.**
+
+Two things, and the second is the larger: the operator half of the Break-Even
+engine, and a design pass that replaced a stylesheet with a system.
+
+**515 tests green** across eight projects.
+
+---
+
+## 1. Shelf Yield
+
+Break-Even Watch answers "is this card worth keeping" for a collector. This
+answers "is this SHELF worth what it holds" for the operator. Same charges, same
+custody trail, different unit and different audience.
+
+Nobody in this industry measures it, and the reason is structural: the metric
+only becomes actionable if you are willing to tell a customer to take a card
+away, and a vault whose whole business model is storage will never do that. It
+is precisely because Bault's exits are billable — sale, cull, ship-home — that an
+empty shelf is worth more to it than a full unprofitable one.
+
+### 1.1 The thing that had to be fixed first
+
+A yield number computed from partial revenue is worse than no yield number, and
+the revenue was partial.
+
+The `charge` table holds intake, storage, services and shipping, each keyed to
+its item. It does **not** hold the marketplace commission. A sale writes no
+charge row at all — `PurchaseService` prices the fee, then writes only ledger
+rows, and the fee lands as a `ledger_record` of type `fee` pointing at the
+**listing**:
+
+```ts
+{ userId: l.sellerId, type: 'fee', amount: fee.amount, direction: 'debit',
+  referenceType: 'listing', referenceId: listingId }
+```
+
+So a yield built on charges alone would report **zero revenue for every card that
+actually sold**, and score the most profitable shelves in the building as the
+deadest. `revenueByItem` therefore reads both sources and joins the commission
+back through `listing.item_id`. Confirmed on the seeded data: total revenue on
+shelf reads $88.00, not the $75.00 the charge table alone would give — the
+difference being exactly the $13 commission from the seeded sale.
+
+### 1.2 Occupancy comes from the transfer ledger, not from `receivedAt`
+
+A card that arrived a year ago and moved shelf last week has occupied *this*
+shelf for a week. Charging the year to it would make every recently reorganised
+zone look catastrophic. `slotDaysByItem` reads the latest `bin_transfer` per
+item, which works for a card that has never moved because the first shelving is
+itself a transfer row. This is the append-only trail from Part 24 earning its
+keep: no other design could answer the question at all.
+
+### 1.3 What it will not claim
+
+**Revenue per shelf-month, never margin.** Bault's rent, labour and insurance are
+not in this database. A "profit per shelf" figure computed without them would be
+a confident number about something nobody measured, so the service does not
+produce one and the screen says so where the money is rather than in a footnote —
+with a test asserting the word "profit" appears nowhere except inside that
+disclaimer.
+
+A shelf with zero slot-days reports a **null** yield rather than a division by
+zero dressed as infinity: a shelf loaded this morning has earned money over no
+time, which is an unknown yield, not a spectacular one.
+
+Three rollups: by shelf (worst first, empties last — an empty shelf is capacity,
+not a problem), by zone (`NJ / A`, because zone A in New Jersey is not zone A in
+Delaware), and by customer (the uncomfortable one: who is subsidised by whom).
+Admin-only — a warehouse operator has no business reading customer
+profitability — with 11 tests in `tests3/`.
+
+---
+
+## 2. The design pass
+
+The brief was a system rather than screen-by-screen polish. The audit that
+preceded it found four things worth fixing and one that was close to
+embarrassing.
+
+### 2.1 The interface was set in a mathematics font
+
+`Libertinus Math`. A math typesetting face, shipping **one weight**, against a
+stylesheet making **54 bold and semibold declarations**. Every heading, every
+emphasised figure and every button label in the product was a synthetic bold —
+the browser smearing a 400 outline sideways. That is visible at any size and is
+the clearest possible tell of an interface nobody set type for.
+
+Worse: the default locale is **Hebrew**, and neither Libertinus nor its STIX
+fallback covers a single Hebrew glyph. The default experience fell through to
+Rubik/Assistant — not self-hosted either — and from there to whatever serif the
+machine happened to have. The product's own primary language was rendering in an
+unspecified font.
+
+The UI is now set in the platform's own interface family: SF Pro, Segoe UI
+Variable, Roboto. Real optical-sized UI faces with genuine weights, full Hebrew
+coverage, screen hinting — and `font-synthesis: none`, so a faked bold can never
+come back. It also keeps the project's stated principle of making no third-party
+request to render its own text, and keeps it *better* than before, because now
+nothing falls back to a guess.
+
+Identity does not come from an exotic file. It comes from the scale, from the
+navy-and-gold palette, from the spacing — and from the mono face, which is the
+most characteristic decision in the system: **everything in Bault has an
+identifier**, and every serial, shelf code, parcel code and money figure is now
+set in mono with tabular figures. A serial always looks like a serial; a column
+of money always lines up. Nothing else is mono.
+
+### 2.2 Twenty-one font sizes is not a scale
+
+Including `12.5px`, `13.5px`, `14.5px` and `11.5px` — quarter-point nudges made
+screen by screen, which is exactly what makes a product feel assembled rather
+than designed. There are now **ten steps**, named, and nothing may sit between
+them. Every size in the stylesheet was migrated onto them.
+
+### 2.3 A theme, because there wasn't one
+
+Zero occurrences of `prefers-color-scheme` in 3,762 lines. There are now two
+palettes and a control that cycles light → dark → system.
+
+The dark palette is **not an inversion**. The navy that carries structure in
+light becomes the *ground* in dark, so the rail barely changes and the workspace
+comes up to meet it — the two read as one product rather than a theme and its
+negative.
+
+Three states, as browsers actually report them: an explicit choice stamps
+`data-theme`, and "system" stamps **nothing**, leaving the media query to decide.
+That is why the dark media block is guarded as `:root:not([data-theme='light'])`
+and repeated under `[data-theme='dark']` — so a toggle wins in both directions.
+`ThemeProvider` keeps listening to the OS after boot, because somebody whose
+laptop switches at sunset should watch this switch with it.
+
+### 2.4 Fields were labelled by nesting
+
+Found by the rendering tests in Part 28 and fixed here. Every field was
+`<label class="field"><span class="field-label">Caption</span><input/><span
+class="field-hint">Help</span></label>` — the control associated with its label
+only by containment, so the accessible name was the caption **and the hint run
+together**. A screen reader announced "Owner usernameThe customer's permanent
+identifier as shown on the parcel" as the *name* of the field.
+
+The new `Field` component points the label at the control by id, attaches the
+hint with `aria-describedby`, and swaps the hint for an error with `role="alert"`
+when there is one. Sign-in is converted as the reference implementation; the old
+markup still renders correctly, so the rest can migrate without a flag day.
+
+### 2.5 States that were missing
+
+- **Busy.** `Button` gained `loading`, which disables the control, announces
+  `aria-busy` and swaps the icon for a spinner so the button does not change
+  width mid-action. A form whose only feedback is that nothing happens gets
+  pressed twice, and on a money-moving action that is a real problem.
+- **Disabled** was `opacity` alone — a label dimmed below readable contrast on a
+  control that still looked pressable. It now flattens to a surface colour and
+  takes `cursor: not-allowed`.
+- **Focus** had seven `:focus-visible` rules for a keyboard user who touches
+  dozens of controls. One rule now covers everything focusable, with a gold
+  variant on the navy rail where teal would disappear.
+- **Status badges** carried colour alone — roughly one man in twelve cannot
+  separate the red and green they use. Tones now carry a border and a weight as
+  well as a hue, so the difference survives greyscale, print, and the reader.
+
+### 2.6 Reading measure, tables, and one more breakpoint
+
+Prose stops at `68ch`. A workspace is up to 1560px wide and a paragraph set
+across all of it cannot be read — the eye loses the line returning. Table
+headers became uppercase micro-labels with tracking, rows got a hover so the eye
+does not lose its place across columns, and a 640px breakpoint turns
+`.dt-wrap--stack` tables into per-row records with their column names as labels,
+rather than a grid squeezed until it is unreadable.
+
+### 2.7 Layout stopped being written inline
+
+130 inline `style={{}}` blocks — a margin here, a max-height there — which is how
+spacing drifts out of a system one screen at a time. The repeated ones are now
+utilities (`.stack-top`, `.list-unbounded`, `.panel-note`, `.row-baseline`);
+93 remain, and the ones that should remain are genuinely one-off — a column
+width, a progress bar's percentage, which is what inline style is for.
+
+---
+
+## 3. The Shelf Yield screen, designed rather than tabulated
+
+Worth its own note, because it is where the system was applied rather than
+described.
+
+A yield table is a wall of numbers, and the job a person brings to it is not
+"read the numbers" — it is **find the worst shelf**. So: the worst shelf is the
+first row; every row carries a bar as well as a figure, scaled against the best
+performer *on screen* rather than an absolute maximum, so the comparison happens
+by looking; empty shelves are excluded from the table and counted in a metric
+where "empty" means something good; and the two things that need acting on — dead
+items, long-idle stock — are badges rather than something to infer from a column.
+
+It also sits **first** in the admin section, before the management tables. The
+others are opened by somebody who already knows what they came to do. This is the
+one that tells them.
+
+---
+
+## 4. Tests
+
+39 rendering tests now, up from 24. The new ones assert what the system
+*promises* rather than how it looks — a screenshot test would pin the appearance
+and miss all of it:
+
+- clicking a field's caption focuses its control; the accessible name is the
+  caption alone and the hint is its description; an error replaces the hint and
+  is announced;
+- a loading button is disabled, announces `aria-busy`, and swallows a second
+  click; a merely disabled button does *not* announce busy, because "you cannot
+  do this yet" and "I am doing this" are different states;
+- the theme defaults to system and stamps nothing, cycles through three states,
+  persists, and names the current one so the control is not a mystery;
+- shelf yield puts the worst shelf first, keeps empty shelves out of the table
+  but in the metric, flags the dead ones, shows a skeleton rather than an empty
+  table while loading, offers a retry on failure — and never says "profit"
+  outside its own disclaimer.
+
+---
+
+# Part 30 — Band 1: Money and Ownership, Driven by Hand
+
+**Completed: 2 September 2026.**
+
+The first band of a UX proofing pass: every action that moves money or changes
+who owns something, exercised as a person drives it rather than as a test asserts
+it. Three defects, and two of them could not have been caught by a happy-path
+test because both **succeeded** when they should have refused.
+
+**525 tests green.**
+
+---
+
+## 1. A buyer could accept their own offer
+
+The serious one.
+
+`OfferService.loadParticipating` asserted that the actor was *a* participant —
+either side of the negotiation — and `accept` used it with no further check:
+
+```ts
+async accept(actorId, offerId, idempotencyKey) {
+  const { o } = await this.loadParticipating(actorId, offerId);   // buyer OR seller
+  await this.db.update(offer).set({ status: 'accepted' })…
+  const result = await this.purchase.purchase(o.buyerId, o.listingId, key, o.amount);
+}
+```
+
+So a buyer could offer $40 on a $100 listing, accept their own offer, and take
+the card at their own price. **Verified by doing it**: the item left the seller's
+vault and appeared in the buyer's, for $40, with the seller never consulted.
+
+The error was conflating two different questions. *Participation* is who may look
+at an offer and who may end it. *Permission* is who may agree to it — and only
+the person who owns the item may agree to part with it. `assertSeller` now
+separates them, and covers `counter` for the same reason: a buyer who could
+counter their own offer could walk the price down and wait for a seller looking
+at the original number.
+
+`reject` deliberately stays open to both, because a seller declining and a buyer
+withdrawing are the same state change, and refusing the buyer would leave money
+committed against an offer they no longer want honoured. The response now says
+`by: 'buyer' | 'seller'` so the notification and the history can word it
+correctly.
+
+---
+
+## 2. Every validation failure said "Bad Request Exception"
+
+Systemic, across all 164 routes.
+
+```json
+{ "error": { "code": "validation_failed",
+             "message": "Bad Request Exception", "details": {} } }
+```
+
+That is Nest's internal class name. It names no field, states no rule, and tells
+a person nothing they can do — the exact failure the error-shape contract exists
+to prevent. It fired on a missing idempotency key, a zero amount, an unknown
+funding source, an absent destination account, an offer of nothing, and every
+mistyped field in the product.
+
+The detail was never missing. `ValidationPipe` builds a complete list of which
+property broke which constraint; `BadRequestException` carries it in the payload
+while its `.message` is the class name; and the filter, seeing no `code`, fell
+back to that message and discarded the list.
+
+Fixed at the pipe rather than the filter — `exceptionFactory` builds the app's
+own shape directly, so the payload already carries `code` and the filter passes
+it through untouched. `details.violations` matches the shape the wallet-request
+rules already produced, so a client has one thing to read for every kind of
+validation failure instead of two. Nested DTOs report a dotted path
+(`items.0.typeClass`), because a bare `typeClass` names nothing findable in an
+array of twelve.
+
+The difference in practice:
+
+| Before | After |
+| --- | --- |
+| Bad Request Exception | Check these fields: identifier, password. |
+| Bad Request Exception | destinationAccount must be a string. |
+| Bad Request Exception | Check these fields: itemIds, itemId. |
+
+That last one is worth keeping. It was produced by a probe sending `itemIds` to a
+route that takes `itemId` — and the new message diagnosed a mistake the old one
+had made *undiagnosable*.
+
+---
+
+## 3. Buying twice said "Purchased" twice
+
+Not a double charge — the idempotency layer held, the money moved once, and the
+same transaction came back. But it came back as an ordinary 201 with nothing to
+distinguish it, so a double-clicked Buy button produced two success messages and
+left a buyer reasonable grounds to think they had bought two.
+
+`PurchaseResult` now carries `replayed?: true` on a replay, matching the flag
+`POST /finance/checkout` already returned — one convention for "you have already
+done this" rather than two behaviours for the same situation. The marketplace
+says *"You already bought this — it is in your vault. Nothing was charged twice."*
+
+---
+
+## 4. Smaller: a fee nobody would state
+
+Cancelling a shipment after a rate is selected costs $25. The warning shown
+before the button said *"charges a restocking fee"* — asking somebody to accept a
+cost nobody was willing to name, while the figure sat in a server-side constant.
+
+`RESTOCKING_FEE_MINOR` is now published on `GET /shipping/services` beside the
+insurance ceiling and the payment window, and the warning names it.
+
+---
+
+## 5. What passed, and one correction
+
+Most of Band 1 held up well, and several messages are exemplary:
+
+- *"A request that is submitted cannot be completed; approve it first."*
+- *"An identical request (WR-JZLWQ7YW) is already open. Wait for it to be decided,
+  or cancel it first."* — naming the code you need.
+- *"No collector with username nobody-here"* / *"That is your own account"*.
+- The confirmation-token flow: bad token refused, single use enforced, a replay
+  answering `410 token_expired`.
+- Raising a cash-out moves no balance; approving a cash-in credits nothing;
+  completing twice is refused.
+- Self-dealing on a listing is blocked with its own error code.
+
+**A correction to something recorded earlier in this session.** It was reported
+that the "Add money" panel offers Bank transfer and PayPal Friends & Family and
+then dead-ends, telling the user to use the form below. That is what the *API*
+does to a direct caller, and it is right to do it — but it is not what the UI
+does. The panel disables unavailable routes in the select, and for an available
+non-instant route it replaces the amount field and button with the account
+details, the reference note, and *"Once you have sent it, raise a cash-in request
+below."* No dead button exists. The API guard is defence in depth, not a path
+anybody walks.
+
+---
+
+## 6. What Band 1 could not check
+
+Stated rather than implied, because the pass claims less than it might appear to.
+
+**Rendered layout.** The rendering suite is jsdom: it can assert what is in the
+document, what is disabled, and what a control is named, but not what anything
+looks like. Narrow-viewport behaviour, RTL mirroring and dark-theme contrast were
+checked by reading the stylesheet, not by seeing them.
+
+**Keyboard traversal.** Focus assertions work in jsdom; tab ORDER through a real
+form does not.
+
+**Hebrew.** String presence is covered by the catalogue test. Whether a Hebrew
+sentence reads naturally, or is clipped by a control sized for English, is not.
+
+Any of the three would need a real browser — Playwright against the running app —
+which is a tool this repository does not yet have.
+
+---
+
+# Part 31 — The End-to-End Audit: Every Action, Driven by Hand
+
+**Completed: 4 September 2026.**
+
+A pass over the whole product rather than one band of it: every screen, every
+action, and every variation of every action — boundaries, repeats, wrong person,
+wrong order, unknown values, empty states, first run. Thirty defects, and the
+worst of them was one this session had introduced three days earlier.
+
+**576 tests green. 0 lint errors.**
+
+---
+
+## 1. The fix that moved the hole instead of closing it
+
+Part 30 recorded a serious defect: a buyer could accept their own offer and take
+a card at their own price. The fix was `assertSeller` — only the seller may
+accept. That was right for an opening offer and **wrong for every counter**, and
+it failed in both directions at once.
+
+Driving a negotiation by hand, from both sides:
+
+```
+201  seller counters $80
+403  BUYER accepts the seller's counter   →  "Only the seller can accept an offer."
+201  SELLER accepts their own counter     →  $80 taken, card moved
+```
+
+So a counter-offer could be sent and **never concluded** — the buyer's only exit
+from a negotiation was to walk away — while the seller could accept the price
+*they* had just named and have it execute against the buyer's wallet. That is the
+same hole as before, on the other side of the table. Verified by doing it: the
+card was in the buyer's vault and $80 had left their balance, with the buyer
+never having agreed to anything.
+
+The error was in the rule, not the code. Being on the selling side of a listing
+is not what entitles you to agree to a price; **not having named it** is. So the
+rule is now:
+
+> The party who proposed a price may not also accept it.
+
+That needs the proposer recorded, which `offer` did not do — `buyerId` names the
+same person on every offer in a chain, and inferring it from `parentOfferId`
+stops working the moment both sides may counter. Migration **0020** adds
+`proposed_by`, backfilled from the behaviour in force when the existing rows were
+written (a root offer could only come from the buyer, a counter only from the
+seller).
+
+With the proposer known, three more things fell out:
+
+- **Countering is open to both sides.** A buyer who is countered can counter back,
+  which is what a negotiation is. It also means a buyer can revise their own
+  offer in one step instead of withdrawing, finding the listing again and
+  starting over.
+- **The offers panel was asking the wrong question.** It branched on `direction`
+  — which side of the *listing* you are on — so a buyer was always shown
+  "Waiting on the seller" and no controls whatsoever, even while holding a
+  counter addressed to them. It now branches on `yourTurn`, which the API
+  computes from the proposer. When it is your turn: accept, counter, decline.
+  When it is not: **withdraw** — a real action that existed in the API and was
+  reachable from nowhere in the product.
+- **A superseded offer says what happened to it.** `409 "Offer is not pending"` is
+  a status column read aloud. A countered offer did not end, it *moved*, and the
+  reader has to be pointed at where: *"That offer was answered with a
+  counter-offer — respond to the counter instead."*
+
+---
+
+## 2. Three more ways an offer went wrong
+
+**An offer was not checked against the buyer's wallet until somebody accepted
+it.** So the failure landed on the wrong person entirely: the *seller* pressed
+Accept and was told **"Insufficient wallet balance"** — an error about somebody
+else's money, phrased as if it were their own. An offer is a commitment to pay,
+so it is checked when it is made:
+
+> An offer commits you to pay it if it is accepted, and your balance is $41.37.
+> Add money first, or offer less.
+
+**And when the acceptance did fail, it left wreckage.** The status write happened
+*before* the purchase and outside its transaction, so a failed acceptance left the
+offer marked `accepted` with no sale behind it: the card never moved, the listing
+stayed live, and neither party could touch the offer again because it was no
+longer pending. A dead record that read as a completed deal. Purchase now runs
+first and the acceptance is recorded after it, so a failure leaves the offer
+exactly as it was — which is the truth.
+
+**A buyer could stack unlimited open offers on one listing.** A probe put six on
+a single card ($0.01, $50, $51, $52, $9,999, $999,999), all pending at once, each
+independently acceptable, presented to the seller as a wall of prices from the
+same person. One open offer per buyer per listing now, with a partial unique
+index behind it, and the refusal names the one that is open. And an offer *above*
+the asking price is refused rather than banked:
+
+> The asking price is $75.00. You can buy it now for that — an offer above it
+> would only cost you more.
+
+---
+
+## 3. A country field that cost people the cheapest postage
+
+`shipping_address.country` was `@IsString()` and the address form pre-filled it
+with the literal word **"Israel"**.
+
+Every rule in `carriers.ts` reads that column as an ISO 3166-1 alpha-2 code:
+
+```ts
+const international = parcel.destination.country !== 'US';
+if (!service.countries.includes(parcel.destination.country)) …
+```
+
+So an address saved with the default was routed as international and then refused
+by the one international service Israel is actually contracted for — `IL` is on
+ePacket's list, `"Israel"` is not. The collector lost the cheapest service they
+qualified for, and the refusal read **"ePacket International is not contracted to
+ISRAEL"**, which blames a carrier for a text box.
+
+Fixed at every level it was broken at:
+
+- `shp/countries.ts` derives the destination list **from the carrier table
+  itself**, so nothing can offer a route that does not exist and the list cannot
+  drift from the contracts it describes — drifting silently is how this worked.
+- `IsShippableCountry` validates it, accepting a full country name and
+  normalising it, because somebody who typed "United States" said something
+  unambiguous. Only a value naming no destination at all is refused, and the
+  refusal explains rather than dumping thirty-three codes at the reader.
+- The form is a **select**, with no pre-filled default: a country nobody checked
+  is how this happened.
+- Address cards and the shipment composer show the country's *name* — storing a
+  code and then printing "San Francisco, US" swaps one unreadable value for
+  another.
+- Migration **0021** translates the rows already saved, so an address created
+  before the fix starts quoting the right rates instead of waiting for somebody
+  to notice and re-type it.
+
+The white-glove form's country field — a 4rem text box asking a collector to type
+a two-letter code from memory — is the same select now.
+
+---
+
+## 4. Nine buttons that spent money without saying how much
+
+Every service on a card is billed the instant the request is created. That is how
+`ServiceRequestService.create` has always worked. The card drawer offered nine of
+them as plain buttons with a one-line description, and **not one named a price**.
+
+Donation charged $20 to give a card away, and the confirmation dialog for that
+irreversible act did not mention money at all.
+
+The figures were never secret — `GET /pricing/list` publishes every rule and the
+Help section renders the whole table. They were simply nowhere near the button. A
+price list in another section is documentation; a price on the control is a
+decision somebody can actually make. Each action now carries its own rate,
+resolved from the same pricing rule the server bills under, and the confirmation
+for an irreversible one states the charge.
+
+**And the same service could be ordered twice.** Nothing stopped it: a
+double-clicked "Professional photography" produced `SR-TLJ3EFY5` *and*
+`SR-UVXY72FU` — two charges, two identical jobs in the operator queue, one card.
+Nothing in the product said the first request existed either; the drawer offered
+the button again as though nothing had been asked for. Now one open request of a
+kind per card, refused by name:
+
+> A photo shoot has already been requested for this card (SR-TLJ3EFY5) and is
+> waiting on the warehouse.
+
+and `GET /vault/items/:id` reports what is open so the button says so instead of
+being pressed again.
+
+While there: **every one of those buttons was `gold`.** Nine primary actions in
+one list is the same as none — the eye has nothing to land on, and "donate this
+card forever" carried the identical weight as "take a photo of it".
+
+---
+
+## 5. An administrator could lock themselves out permanently
+
+`PATCH /admin/users/:id` with your own id and `status: 'suspended'` returned
+**200**. The very next admin request answered `account_suspended`.
+
+Every route on the console sits behind the admin role *and* the suspension guard,
+so the one person who could lift the suspension was the person who could no
+longer make a request. Nothing in the product could undo it — it needed a hand on
+the database. Demoting yourself to `user` had the same effect through a different
+door.
+
+The guard is narrow on purpose: an administrator may still edit their own name,
+which is ordinary and locks nobody out. Only the two fields that revoke your own
+access are refused, and the refusal says what to do instead — ask another
+administrator, which is also the only way the change gets seen by somebody.
+
+---
+
+## 6. A capability with no way to reach it
+
+`POST` and `DELETE /custody/items/:id/hold` have existed since custody was built.
+The customer's vault has an entire **Hold** scope, which tells the owner:
+
+> A held card stays here until the warehouse releases it.
+
+The warehouse console had no hold control anywhere. The only way to freeze a card
+or release one was to call the API by hand.
+
+There is a panel now, shaped like the relocate panel beside it because it is the
+same gesture at the same bench. And the endpoints stopped overstating themselves:
+both answered `hold_placed` / `hold_released` whatever happened, so an operator
+who scanned a card that was already frozen was told the hold had just been placed.
+The data was always right — `setHold` returns early and writes no second custody
+event — but the bench was told a story about work it had not done, on the one
+screen whose whole job is saying what happened to a card.
+
+---
+
+## 7. Forty fields that told a screen reader the wrong name
+
+The `Field` primitive was written to fix a specific bug, documented at length in
+its own source:
+
+```
+<label class="field">
+  <span class="field-label">Owner username</span>
+  <input/>
+  <span class="field-hint">The customer's permanent identifier…</span>
+</label>
+```
+
+The control is associated with its label by **nesting**, so the accessible name
+is the caption *and the hint run together*: a screen reader announces "Owner
+usernameThe customer's permanent identifier as shown on the parcel" as the NAME
+of the field.
+
+`Field` had been applied to **two** places. Forty fields across fifteen files
+still had the bug, including every field on sign-up, the password panel, the
+address form, the wallet-request forms and nine on the warehouse bench.
+
+All forty are converted. One change made that safe to do mechanically: `htmlFor`
+became **optional**. It was required, which meant every conversion had to invent
+an id — and a literal id is wrong the moment a field renders inside a list,
+because then there are several of it and the label points at the first. `Field`
+now mints one with `useId` and attaches it to its child.
+
+The proof it worked is in the test suite: `tests/ux/warehouse-bench.test.tsx`
+carried a hand-written DOM walk whose comment explained that `getByLabelText`
+could not be used *because of this bug*. That helper is now one line of
+`getByLabelText`, and it fails if anything reintroduces the pattern.
+
+---
+
+## 8. The confirmation guarding the irreversible actions
+
+Three faults in one component, all on the dialog that asks whether to donate a
+card or crack a slab:
+
+- **No focus trap.** Only the drawer had one. Tab from the dialog's last button
+  moved focus into the page behind it, where Enter would act on whatever it
+  landed on.
+- **Escape closed the wrong thing.** Both overlays listen on `document` in the
+  capture phase, and capture handlers fire in registration order — so the
+  *drawer*, which mounts first, saw Escape first and called `stopPropagation()`.
+  Pressing Escape on the confirmation closed the whole drawer and took the
+  confirmation with it, losing the reader's place on a card they were part-way
+  through deciding about. An overlay stack now decides; the topmost one is the
+  one a person means.
+- **Its two buttons were hand-rolled `<button className="btn">`** — the only
+  buttons in the product that opted out of the `Button` primitive. So the control
+  that most needed a spinner and `aria-busy` had neither, and Cancel stayed live
+  while the irreversible thing was already running.
+
+---
+
+## 9. Messages written for whoever wrote the DTO
+
+Part 30 fixed "Bad Request Exception". What replaced it was a large improvement
+and still not a sentence for a person:
+
+| Before | After |
+| --- | --- |
+| Check these fields: label, recipient, line1, city, country, postalCode. | Label, recipient, street address, city, postal code are required. Choose a destination country from the list — Bault ships to 33 of them… |
+| destinationAccount must be a string. | destination account is required. |
+| status must be one of the following values: pending, active, suspended, closed. | status has to be one of: pending, active, suspended, closed. |
+| Check these fields: quantity. | quantity must be an integer number. |
+| Check these fields: channel, enabled. | channel has to be one of: in_app, email. enabled must be a boolean value. |
+
+`line1` and `postalCode` are property names, not the words on the form. "Must be
+a string" is what a validator library says about an *absent* value — a person
+reading it has been handed the type system's opinion of their mistake. And a flat
+list of names gives no clue whether the fields are missing or merely wrong, which
+is the one thing a reader needs in order to act.
+
+Four rules do the work, all at the single pipe every route passes through:
+property paths become the words the form uses; a type constraint on something
+nobody sent reads as "required"; an enum nobody chose reads as "required" rather
+than listing seven legal values; and missing, wrong and *unknown* fields are
+stated separately because they call for different actions. A DTO that wrote its
+own message keeps it — those are sentences somebody meant.
+
+**And amounts got their currency back.** Twelve of the sixteen places that quoted
+money in a message built the string at the call site and dropped the symbol, so a
+shipment refusal read *"Short by 45.00"* and a top-up limit read *"The smallest
+top-up is 10.00"*, while four others printed a `$` and made the rest look like a
+different product. `formatMinor` is now the one way an amount reaches a sentence.
+
+---
+
+## 10. Two-thirds of the notification catalogue was untranslated
+
+The server emits **37** event types. The SPA had labels for **12**.
+
+`eventLabel` falls back to the raw event type, so the feed badged the other
+twenty-five as `wallet_request_completed`, `escrow_funded`, `payment_reversed` —
+the database enum, in both languages. The preferences matrix fell through to the
+server's own English `label`, leaving a Hebrew reader with two-thirds of their
+notification settings in English.
+
+All thirty-seven are translated, and a test now fails if the server gains an
+event the client cannot name. The fallbacks stay as a safety net; what is not
+acceptable is shipping with the safety net load-bearing.
+
+The vault's timeline had the same disease in miniature: `event.kind.replace(/_/g,
+' ')` — the custody enum with its underscores taken out, so a chain of custody
+read "ownership transfer" and "state change" in English to every reader. That is
+the most trust-critical panel in a vaulting product.
+
+---
+
+## 11. A marketplace you could not narrow
+
+Browse offered a free-text box over the description and the type class, and
+nothing else: no way to see only graded slabs, no price range, and one fixed order
+(newest first) with no control over it. Somebody looking for a slab under $200 had
+to read the whole shelf; somebody comparing prices had to do it by eye. Those are
+the first two things anybody does on a marketplace.
+
+Type, condition, a price range and a sort, applied **in SQL**. That last part is
+the substance: the query is capped at 200 rows, so narrowing a page in the client
+would silently hide matches that fell off the end of an unfiltered page, and a
+filter that quietly lies is worse than no filter at all.
+
+---
+
+## 12. Dead ends
+
+**Signing in with an address that was never confirmed.** The API refused
+correctly. The sign-in page could not tell that refusal from any other, so it
+printed the sentence and offered "Forgot password" — which does not help — and
+"Sign up", which answers that the address is already registered.
+`POST /auth/verify-email/resend` existed the whole time, and the only page in the
+signed-out app that could reach it was the one you arrive at *by following the
+link they no longer have*. A closed loop. The refusal has its own code now
+(`email_unverified`) and the way out is offered where the door was shut.
+
+**An empty vault on day one.** The vault is where a new account lands, and an
+empty one said:
+
+> **No active cards**
+> Cards appear here once the warehouse books them in.
+
+A description of something that will never happen unless the reader does
+something first, with no hint as to what. The whole product begins with sending
+cards in, and the address to send them to is one section away.
+
+**Composing a shipment with no saved address.** The empty state told somebody to
+go and manage their addresses and gave them no way to do it — the form lives on
+another section entirely, and nothing on screen said which.
+
+**Sign-up's dead button.** Username, first name and last name each explained
+themselves inline. Email and password — the other two the submit button gated on
+— said nothing at all, so somebody who typed `nope` into the address field met a
+disabled control with no statement of why. The form could also be submitted twice
+by pressing it twice: sign-in has had a busy state since it was written, and
+sign-up, the one form in the product that creates an account, had none.
+
+---
+
+## 13. Smaller things, fixed while passing
+
+- `api` had no `put`, so the notifications page hand-rolled its own `fetch` that
+  threw a plain `Error` — those two calls, alone in the app, could not be told
+  apart from a network failure by anything branching on `ApiError.kind`.
+- Two inline `style={{ flex: '1 1 220px' }}` props, differing (220px and 200px)
+  for no reason anybody could state.
+- A module named `servicePrices` had grown a country list; it is its own module.
+
+---
+
+## 14. What this pass could not check
+
+The same three limits Part 30 recorded, unchanged, and worth restating because
+this pass covered far more ground and claims no more certainty about them:
+
+**Rendered layout.** The rendering suite is jsdom. It asserts what is in the
+document, what a control is named, what is disabled and where focus went — which
+is exactly what most of these defects were about — but it cannot see anything.
+Narrow-viewport behaviour, RTL mirroring and dark-theme contrast were checked by
+reading the stylesheet.
+
+**Real keyboard traversal.** Focus assertions work; tab order through a real form
+does not.
+
+**Hebrew as prose.** Every string added here has both catalogues, and a test
+enforces that. Whether a Hebrew sentence reads naturally, or is clipped by a
+control sized for English, is still unverified.
+
+All three need Playwright against the running app, which this repository does not
+have. Thirteen data tables also scroll horizontally on a phone rather than
+stacking, where nine others stack — an inconsistency that was measured and left
+alone, because a contained horizontal scroll is a legitimate treatment for a wide
+table and changing thirteen of them on a hunch is not an improvement.
+
+---
+
+# Part 32 — One Receiving Bench, a Stack at a Time, With a Camera
+
+**Completed: 4 September 2026.**
+
+Three changes to the inbound half of the warehouse, and they are the same
+complaint three times over: **the product described the work instead of fitting
+it.**
+
+**604 tests green. 0 lint errors.**
+
+---
+
+## 1. Parcels and intake were two tabs for one piece of work
+
+Every intake begins with a parcel. A box is received, it is opened, and its
+contents are booked in — one continuous job at one bench, with the box open on
+the table the whole time.
+
+The console split it across two tabs. Pressing **Book contents** on a parcel row
+called `goTab('intake')` and moved the operator to a different screen; the box
+was then closed out from over there, because that is where the count of what had
+come out of it lived. So working through a single box crossed a tab boundary
+twice, and the two facts an operator needs at once — *what state is this box in*
+and *what has come out of it* — were never on screen together.
+
+It is one **Receiving** tab now, reading top to bottom the way the work goes:
+
+1. **Receive** the stack that just came off the van.
+2. **The queue** — every box on the bench and what each one needs next.
+3. **The intake bench** — emptying the box you are holding, and closing it out at
+   the end of that.
+
+"Book contents" no longer navigates. It points the bench below at that parcel and
+brings it into view. Nothing about the API changed; what changed is that the
+screen stopped being organised by which table a row lives in.
+
+What *left* the receiving tab is relocate, hold, break-lot and disposal. Those
+act on cards that are already on a shelf, and they were on the intake tab only
+because that is where the scan fields happened to live — five unrelated forms
+under a heading about receiving. They are on **Inventory**, which is what they
+are about.
+
+`#/warehouse/parcels` and `#/warehouse/intake` both redirect to the bench, so an
+operator's bookmark for either half still lands on the work rather than on a
+section fallback.
+
+---
+
+## 2. Arrivals were booked in one at a time
+
+A courier drops a dozen boxes and the operator works down the pile. The receive
+form took **one**, and cleared itself afterwards — so the facility was re-chosen
+and the carrier re-typed for every box in the run, and there was no way to see
+the delivery as a whole or to correct row three before committing any of it.
+
+The form is now a stack of rows, and **what is shared is asked once**: the
+facility and the carrier sit above the rows, because they are the same for a
+whole delivery and asking twelve times is asking twelve times for the same
+answer. Everything that genuinely differs per box — who it is for, its tracking
+number, whether it came from abroad, what it looks like — is on the row. A
+trailing blank row is ignored rather than refused: it is the one the operator has
+not reached yet.
+
+`POST /parcels/receive/batch` takes the run and is **all or nothing**. A partial
+success would leave somebody reading a list of results to work out which four of
+seven boxes are now on the system, and — worse — the obvious recovery is to fix
+the bad row and press the button again, which would receive the first four a
+second time.
+
+**That guarantee was wrong when it was first written, and a test caught it.**
+`receiveMany` was a loop over `receive`, and `receive` opens its own transaction,
+so row one committed before row two failed. The refusal named the bad row and
+invited exactly the duplicate-receive it was supposed to prevent. `receive` is
+now a thin wrapper around a `receiveIn(tx, …)` that takes the caller's
+transaction, and the batch puts the whole stack in one — which is what the doc
+comment had been claiming all along. The test that found it asserts the queue
+length is unchanged after a refused run.
+
+---
+
+## 3. Nothing could be photographed. Anywhere. At all.
+
+This is the one that had been sitting in plain sight.
+
+`StorageAdapter.putObject` has existed since T020. `item_image` has existed since
+custody was built. The photography service records an object key for a shoot —
+and **no route in the API had ever accepted image bytes.** The only pictures in
+the product are the catalogue files in `assets/images` that Vite serves
+statically, keyed by serial number. The pipeline was built at both ends with
+nothing in the middle.
+
+The consequences were exactly where you would expect:
+
+- A box recorded as `contents_damaged` was a sentence with nothing attached — the
+  operator's word against the customer's, weeks later, about a box that has since
+  been flattened.
+- A card booked onto a shelf wore a generated placeholder in its owner's vault
+  until somebody paid for a professional shoot.
+
+**`POST /media/uploads`** is the missing middle. It takes base64 in JSON — the
+API is JSON end to end, and a multipart parser for one route buys back a third of
+the payload in exchange for a second body-parsing path with its own error shape —
+validates the content type and the *decoded* size, and returns a key. Bytes go
+one way and are never sent again; every route that attaches an image takes keys,
+which is the convention the wallet request already used for its supporting
+document. The body limit in `main.ts` is set deliberately **above**
+`MAX_IMAGE_BYTES`, so an oversized photo is refused by the service with a
+sentence naming the limit rather than by Express with a bare 413.
+
+Three places take photographs now:
+
+- **Receiving** — how the box turned up, before it is opened. That is the only
+  moment it can be taken.
+- **Opening** — what the arrival check actually found, beside the sentence about
+  it.
+- **Intake** — the card itself, stored as `item_image` type `intake`, which is
+  the pipeline the vault drawer *already* reads. So the operator's photograph is
+  in the owner's vault the moment the card lands there. On a bulk intake every
+  copy gets the same photographs, which is the truth: one shot of a run of twelve
+  identical commons describes all twelve.
+
+Migration **0022** adds `parcel_photo`. Deliberately not a row in `item_image`: a
+parcel photograph is evidence about a *container*, taken before anybody knows
+what is inside, and it has to outlive the box being emptied. `arrival` and
+`condition` are recorded as distinct kinds rather than inferred from timing,
+because "this is how it turned up" and "this is what the check found" answer
+different questions.
+
+The parcel's **owner** can see its photographs. That is the whole point of taking
+them — a stranger gets `404`, not `403`, because telling somebody that another
+person's parcel id exists is itself a leak.
+
+`PhotoInput` is the control: it uploads each file on selection rather than on
+submit, so an operator can photograph a box while they are still typing its
+tracking number and a slow upload never sits between them and the button. It sets
+`capture="environment"`, which asks a phone for the rear camera directly — the
+alternative at a receiving bench is a file picker pointed at a photo somebody has
+to take in another app first.
+
+---
+
+## 4. One thing worth recording about the migration
+
+`0022` was written with `"id" text PRIMARY KEY NOT NULL` and no default, while
+every other table in this schema uses `pkId()` — `uuid ... DEFAULT
+gen_random_uuid()`. The first insert failed on the not-null constraint, and it
+failed *inside* the batch receive, so the error a probe saw was a raw Postgres
+message wrapped in "Parcel 1 of 3".
+
+The migration was corrected in place and re-applied rather than patched by a
+follow-up, because it had only ever been applied to a development database and a
+corrective `0023` would leave two migrations describing one table for no reason a
+future reader could reconstruct.
+
+---
+
+# Part 33 — The Words, the Globe, and Asking for Something Else
+
+**Completed: 4 September 2026.**
+
+The rest of a list of eight requests. Three were done in Parts 31 and 32
+(marketplace filters, the intake/parcel merge, photographs at the bench); this
+part is the remaining five.
+
+**623 tests green. 0 lint errors.**
+
+---
+
+## 1. A vault holds twelve kinds of thing, and the product called all of them
+cards
+
+The taxonomy is: trading card, graded slab, oversized card, sealed pack, sealed
+box, sealed case, collection box, **raw comic**, **graded comic**, memorabilia,
+small collectible, other. Three of those are cards.
+
+Fifty-seven strings in the English catalogue said "card". So a collector storing
+a graded comic read:
+
+> **No active cards** — Cards appear here once the warehouse books them in.
+> A held card stays here until the warehouse releases it.
+> We looked at the card and it matches the description.
+
+about their comic. And the API said "This card has no grade recorded" and "Say
+how many cards are in it".
+
+Forty-eight of the fifty-seven are now "collectible", or "item" where the
+sentence is about the record rather than the object, or nothing at all where the
+noun was doing no work — `vault.scope.active` went from "Active cards" to
+"Active", which is what a scope control on a page titled Vault should have said
+in the first place.
+
+**Nine keep the word, deliberately**, and a test now names them: the payment
+sense (`money.route.card`, `wallet.request.funding.card`), the two item classes
+that genuinely are cards, `consign.channel.card_show` — a card show is a real
+kind of event — and the three Ship My Cards FAQ strings, which are reproduced
+verbatim and must not be edited. The test fails on any *other* string that
+acquires the word, so this cannot quietly come back.
+
+---
+
+## 2. Three names for putting money in
+
+On one screen. The tab said **Cash in**. The panel inside it said **Add money**.
+The ledger row and the whole `wallet.topup.*` family said **Top up**. Nothing on
+the page agreed with the tab that had led to it, and a reader had to work out
+that all three were the same thing.
+
+"Cash in" and "cash out" win because they are what the REQUEST is called
+everywhere else in the product — `wallet_request`, the `WR-` codes, the admin
+queue, the tab strip, the API's own vocabulary. The other two are survivors of an
+earlier model in which money moved directly, and that model is gone.
+
+Twenty-six strings in both languages, plus six server-side sentences ("The
+smallest top-up is $10.00", "Only a top-up can be charged back"). In Hebrew
+"טעינה" — loading a wallet — became "הפקדה", a deposit, which is the word the
+cash-in tab already used. A test now fails on any string that reintroduces "top
+up" or "add funds".
+
+---
+
+## 3. The sign-in page had a Hebrew word for a language button
+
+The signed-out shell carried a text button that printed the name of the OTHER
+language: "English" on the Hebrew page, and **"עברית" on the English one**. A
+Hebrew word sitting alone on the sign-in card of an English build reads as a
+stray label rather than as a way to change anything — and it toggled between
+exactly two languages, so it could never grow a third without lying about what
+pressing it would do.
+
+It is the shell's `LanguageSwitcher` now: a globe with a menu that names every
+language **in its own script** and marks the one in force with `aria-checked`.
+That control already existed and had been used everywhere except the one page
+where it matters most, because a language chooser is the single control that has
+to be recognisable to somebody who cannot read the page it is on. Which means an
+icon, not a word.
+
+---
+
+## 4. "Can you also…" — the request with no button
+
+The vault offered nine services and every one was a fixed thing Bault had decided
+to sell. A collector who wanted anything else — sleeve these before you ship
+them, weigh this box, check the seal is intact, put those two in one parcel — had
+exactly one route: **a support ticket**.
+
+A ticket is a conversation. It has no price, no operator queue, no completion,
+and no link to the collectible it is about. So work agreed in a thread had to be
+re-entered by hand as something else, or it quietly did not happen.
+
+A custom request is an ordinary service request: same queue, same fulfilment
+form, same appearance in the item's timeline. One thing about it is different,
+and it is the thing that makes it work — **nobody knows what it costs until
+somebody reads it.** So it is quoted before it is billed, which is the shape
+`buyout` already established:
+
+1. the collector describes what they want — **free**, and billed nothing;
+2. an operator quotes a price *and a scope*, or declines with a reason;
+3. the collector accepts the quote, and **that** is what charges the wallet;
+4. the operator does the work and completes it.
+
+Four things in that are load-bearing:
+
+**Asking is free.** A charge on the question would stop people asking, and the
+questions are how Bault finds out which services it ought to be selling as
+standard. The form says so, because the reasonable fear about a box marked
+"custom" is exactly that it will cost something unknown.
+
+**The scope is required.** A collector accepting a figure is agreeing to whatever
+the operator understood the ask to be, and "we will do it for $30" with nothing
+behind it is not something anybody can agree to — the same reason a buyout quote
+must carry its rationale. The operator sees the ask, in the collector's own
+words, directly above the field they are pricing.
+
+**A decline carries a reason.** "We cannot do that" with nothing after it leaves
+the collector guessing whether to ask differently or stop asking.
+
+**The price is re-read inside the transaction**, so what is billed is what was
+quoted and never a figure supplied by whoever pressed the button. And completion
+is refused unless the collector accepted, so nobody can do unrequested work and
+then present it as done.
+
+Two details worth recording. The charge is written **straight to the ledger**
+rather than through the billing port: every other charge in the platform resolves
+its amount from a pricing RULE — `BillableAction` deliberately carries no amount,
+so no caller can invent a figure — and a custom request has no rule by
+definition. It is recorded as an ordinary `fee` debit against the request,
+exactly as consignment records its commission. And `create` grew an
+`allowDuplicate` flag, used only here: two photo shoots on one card is a double
+charge for one job, while "sleeve this" and "weigh this" are two different pieces
+of work that share a type only because the type means "not on the list".
+
+---
+
+## 5. Booking a run in at once — already there, now pinned
+
+`quantity` on intake already did the right thing, and this part only added the
+test that says so: twelve copies produce **twelve records, twelve distinct
+serials, twelve distinct barcodes and twelve intake charges**.
+
+It is worth having the test because the distinction it defends is the one that
+generated the original question. A **lot** is one record standing for many
+things, tracked and charged as one, with a `LOT-` serial. A **quantity** is N
+separate records that happen to have been typed once. The interface offers both,
+a few centimetres apart, and they are not the same instrument — the test now
+fails if either starts behaving like the other.
+
+---
+
+## 6. One thing the tests caught
+
+`tests/ux/customer-screens.test.tsx` asserts the vault renders an empty state
+rather than a blank frame, and it matched on the literal phrase "no active
+cards". Renaming that string to "Nothing in your vault yet" broke it — the empty
+state was still there, and the test could not see it.
+
+The matcher was rewritten to be loose about the phrasing and strict about there
+being one, which is what it was always trying to say. A test that pins the exact
+marketing copy of an empty state fails every time somebody improves the wording,
+and teaches people to stop improving the wording.
+
+---
+
+# Part 34 — The Rows Were on the Wrong Form
+
+**Completed: 5 September 2026.**
+
+A correction to Part 32, and the retirement of `quantity` from the bench.
+
+**633 tests green. 0 lint errors.**
+
+---
+
+## The rows moved
+
+Part 32 turned the parcel receive form into a list of rows so a courier's whole
+delivery could be booked in at once. That was the wrong form to put them on, and
+the reason is what each piece of work actually is.
+
+**Receiving a parcel is a scan and a label** — one field's worth per box.
+Stacking a dozen of them saves a dozen facility selections and nothing else.
+
+**A box holds several different things.** A Rayquaza ex, a sealed pack and a
+comics, each needing its own class, its own condition, its own serial and its own
+photographs. Typing those through a form that cleared itself between each meant
+re-entering the owner and the parcel every time, and never seeing the box's
+contents as a list before committing any of it.
+
+So the parcel form is one box again, and the intake bench is the list. What is
+genuinely shared — the owner, the parcel the units came out of, where they are
+being stowed — stays above the rows and is answered once.
+
+`POST /parcels/receive/batch` stays. The single form posts one entry to it: the
+route is what makes that submission atomic, it costs nothing to keep, and a bench
+that later wants to scan a stack has it waiting.
+
+## `quantity` is gone from the bench
+
+It booked N copies of ONE description. That is the right instrument for a run of
+identical commons and the wrong one for everything else, and it was standing in
+for a job it could not do — twelve rows describing twelve different things.
+
+The API field survives, still tested, because a bulk run of identical commons is
+a real thing to want and `POST /intake/items` still serves it. What is gone is
+the stepper, which was the only way the bench had to say "there are several
+things in this box" and could only say "there are several of this thing".
+
+The lot checkbox is now offered **only while there is one unit**. A lot is one
+record standing for many things; it cannot describe a submission of four, so it
+is hidden rather than shown and then ignored.
+
+## The same atomicity bug, caught the same way
+
+`intakeUnits` was written as a loop over `intakeItem`, and `intakeItem` opens its
+own transaction per unit — so a bad row nine deep left the first eight on the
+shelves while the operator read a refusal naming row nine and inviting them to
+fix it and press again, which would have booked those eight in twice.
+
+This is precisely the bug the parcel batch had in Part 32, written a second time
+by the same hand, and found the same way: a probe that counted the vault before
+and after a refused run.
+
+The parcel fix was to take the caller's transaction. That is not available here —
+`intakeItem` resolves a shelf, bills through the billing port and writes custody
+events through `CustodyService.run`, and each of those owns its own transaction
+boundary. So the guarantee is bought from the other end: **everything that can be
+rejected is rejected before anything is written**, by `assertReceivable`, running
+the same checks in the same order as the write path. A narrow window survives — a
+shelf filling up between the check and the write — and it fails loudly on the
+unit that hits it rather than silently.
+
+Both directions are now pinned by tests that count the rows afterwards, which is
+the only assertion that would have caught either.
+
+---
+
+# Part 35 — Rayquaza Only, and a Test That Keeps It That Way
+
+**Completed: 5 September 2026.**
+
+Clearing the non-Rayquaza collectibles out of the code. For the third time — which
+is the point of this part.
+
+**636 tests green. 0 lint errors.**
+
+---
+
+## What was still in there
+
+The seeded catalogue has been ten real Rayquaza cards for a long time: each with
+its real set, collector number, rarity, illustrator and TCG id, each with its own
+photograph on disk keyed by serial. The database was cleared. The named
+collectibles came back anyway, through three doors nobody was watching:
+
+**Test fixtures.** Two graded cards from other sports and franchises in the
+escrow suite, another in the intake suite, and two more in the receiving-bench
+suite — the last two written in this session, hours after the rule was restated.
+
+**Doc comments.** Four separate explanations of why `quantity` is the wrong
+instrument, every one illustrated with a box holding somebody else's card.
+
+**The documentation itself.** DIVE1's own precedence note claims the file-by-file
+sections "have been corrected in place wherever the code they quoted no longer
+exists". They had not been. A full page of Part 2 still walked through a nine-item
+mixed catalogue item by item — Pokémon, Yu-Gi-Oh!, basketball, baseball and Magic
+— with their custody events and their prices, none of which the product has held
+since it was replaced. `docs/dive1/part2.md` carried the same page.
+
+Naming them here would put them straight back, which is the trap this part
+exists to close: the sweep below reads this file too, and it caught this very
+paragraph on the first run.
+
+Every replacement comes from the seeded catalogue, so a fixture description is
+now a card that actually exists here. Where a test needed a *different item
+class* rather than a different card — the multi-unit intake case — the class
+stayed and the card changed: a graded Gold Star instead of a graded comic, and a
+sealed Evolving Skies pack named as the set the Rayquaza V and VMAX come from.
+
+## What deliberately keeps other names
+
+`faqContent.ts` reproduces **Ship My Cards' own price list, verbatim**, and that
+list mentions comics and other categories. It is badged as quoted third-party
+copy, and an existing test protects it from exactly this kind of edit. Rewriting
+a quotation to suit us would be a worse fault than the one being fixed.
+
+The item taxonomy also still has `comic_raw`, `comic_graded` and `memorabilia`.
+Those are *classes the vault can hold*, not cards in it, and Part 33 changed the
+interface specifically because a vault that holds comics should not call
+everything a card.
+
+## The part that matters
+
+Two clearings did not hold, because nothing could see a fixture description or a
+sentence in a comment. `tests/web/rayquaza-only.test.ts` now walks every `.ts`,
+`.tsx`, `.md`, `.css` and `.sql` file in the repository and fails on any of
+seventeen named collectibles, with the two exemptions written down and reasoned.
+It also checks the positive case: every seeded serial has a photograph on disk,
+and every seeded description names a Rayquaza.
+
+That last assertion is the standing rule made executable — *every seeded item is
+a genuine collectible, described exactly as its slab reads, with a real photograph
+and catalogue information matching it* — and it is the first time anything has
+enforced it.
+
+---
+
+# Part 36 — Printing the Labels a Run Produced
+
+**Completed: 5 September 2026.**
+
+**646 tests green. 0 lint errors.**
+
+---
+
+## What was already there, and what was not
+
+Every label the bench rendered already carried its own print button:
+`BarcodeLabel` is `Barcode` plus `BarcodePrintButton`, and the intake bench has
+rendered one per created item since intake was built. So printing *a* barcode was
+never missing.
+
+What was missing is what changed underneath it. `printBarcode` opens **one dialog
+per label**, which was exactly right when the bench booked in one unit at a time.
+Part 34 turned it into a form that books in a box — a Rayquaza ex, a sealed pack
+and a graded Gold Star in one submission — and a run of twelve then meant twelve
+trips to the print dialog, twelve confirmations, and no way for an operator who
+missed one to tell which.
+
+## Print all, in one dialog
+
+`printBarcodes` takes the whole run and writes a single document into the hidden
+print iframe, one label per page. Two details carry the weight:
+
+**`page-break-after: always` on every label but the last.** That is what makes a
+run of twelve come out as twelve label-stock pages rather than twelve barcodes
+crammed onto one sheet. The last one is exempt, so printing a single label does
+not eject a blank sheet out behind it — which is the bug the obvious version of
+this has.
+
+**An unencodable payload is skipped, not printed.** Code 128B covers printable
+ASCII; anything outside it has no symbol, and a label with no barcode on it is
+worse than no label at all, because it looks printed. If nothing in the run can
+be encoded, no dialog opens.
+
+`printBarcode` is now a one-element call into it, so the per-label button — the
+reprint of the one that jammed — goes through the same path.
+
+## Where it sits
+
+At the end of the bench, under a heading that says what it is: *"Labels for what
+you just booked in — print these and stick one on each item before it goes to its
+shelf."* Set off from the form above it by a rule, because it is an outcome
+rather than another field: the operator has finished typing and is now walking to
+the printer.
+
+The barcode is what every later scan reads — the shelf scan, the pick, the
+dispatch — so the print control is the last thing on the bench rather than
+something to go and find afterwards.
+
+## One thing the suite caught
+
+`warehouse-bench.test.tsx` stubs the whole Barcode module, and a stub that is
+missing an export throws at import time. That surfaces as an *unhandled error*
+after the run rather than as a failed assertion — the projects all reported green
+and the run still exited non-zero — which is a genuinely confusing way to find
+out. The mock now mirrors every export, with a comment saying it has to keep pace.

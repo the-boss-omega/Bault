@@ -12,6 +12,7 @@ import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { externalPayment } from './pay.schema';
 import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 import { FUNDING_ROUTES, isInstantRoute } from './money-terms';
+import { formatMinor } from '../../shared/money';
 
 /**
  * Self-service top-up — putting money in without waiting for a person.
@@ -108,10 +109,10 @@ export class CheckoutService {
 
     const limits = WALLET_REQUEST_LIMITS.cash_in;
     if (!Number.isInteger(input.amountMinor) || input.amountMinor < limits.minMinor) {
-      throw AppError.validation(`The smallest top-up is ${(limits.minMinor / 100).toFixed(2)}.`);
+      throw AppError.validation(`The smallest cash-in is ${formatMinor(limits.minMinor)}.`);
     }
     if (input.amountMinor > limits.maxMinor) {
-      throw AppError.validation(`The largest top-up is ${(limits.maxMinor / 100).toFixed(2)}.`);
+      throw AppError.validation(`The largest cash-in is ${formatMinor(limits.maxMinor)}.`);
     }
     if (!input.idempotencyKey?.trim()) throw AppError.validation('An idempotency key is required');
 
@@ -138,6 +139,41 @@ export class CheckoutService {
 
     if (result.status === 'failed') {
       throw new AppError(ErrorCode.CONFLICT, 'The payment was declined. Nothing has been charged.', 409);
+    }
+
+    /**
+     * Credit what the PROVIDER says it took, or nothing.
+     *
+     * This is the guard the whole rail turns on. `amountMinor` is a number the
+     * caller sent; `settledAmountMinor` is what the provider reports actually
+     * moved. With PayPal the two can differ in exactly the way that matters: a
+     * payer approves an order for $1 and the client asks to be credited $5,000.
+     * Capturing succeeds — a real order really was approved — and only the
+     * settled figure says for how much.
+     *
+     * A mismatch is refused rather than reconciled downward, and the payment row
+     * is not written. Crediting the smaller figure would silently accept a
+     * request that was trying to defraud us; refusing leaves the money with
+     * PayPal, where a support ticket can sort out an honest client bug.
+     *
+     * `undefined` is tolerated because a provider is not obliged to report it
+     * (and the sandbox echoes the request). It is a check on a claim, not a
+     * requirement that every provider make one.
+     */
+    if (result.settledAmountMinor !== undefined && result.settledAmountMinor !== input.amountMinor) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        `The provider settled ${formatMinor(result.settledAmountMinor)} but this cash-in asked ` +
+          `for ${formatMinor(input.amountMinor)}. Nothing has been credited.`,
+        409,
+      );
+    }
+    if (result.settledCurrency !== undefined && result.settledCurrency !== DEFAULT_CURRENCY) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        `The provider settled in ${result.settledCurrency}, not ${DEFAULT_CURRENCY}. Nothing has been credited.`,
+        409,
+      );
     }
 
     return this.db.transaction(async (tx) => {

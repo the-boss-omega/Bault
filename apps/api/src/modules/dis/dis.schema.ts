@@ -24,8 +24,15 @@ export const serviceRequestType = pgEnum('service_request_type', [
   'condition_inspection',
   /** Cracking a graded card out of its holder. Irreversible. */
   'deslab',
-  /** The bulk cull of cards worth less than the storage they will accrue. */
+  /** The bulk cull of items worth less than the storage they will accrue. */
   'remove_commons',
+  /**
+   * Something the service list does not offer, priced by a person.
+   *
+   * The only request type that is quoted before it is billed, because nobody
+   * knows what it costs until somebody reads it. See `CustomRequestService`.
+   */
+  'custom',
 ]);
 
 export const serviceRequestStatus = pgEnum('service_request_status', [

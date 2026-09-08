@@ -115,7 +115,21 @@ export class AuthService {
     if (!u || !(await argon2.verify(u.passwordHash, password))) {
       throw AppError.unauthenticated('Invalid credentials');
     }
-    if (u.status === 'pending') throw AppError.forbidden('Verify your email before signing in');
+    /**
+     * The password was right. The address was never confirmed.
+     *
+     * This is the one refusal at sign-in that the person can resolve themselves,
+     * and the sign-in page had nothing to offer them: it printed the sentence
+     * and left them with "Forgot password", which does not help, and "Sign up",
+     * which reports the address as already registered. Somebody who signed up a
+     * week ago and lost the mail could not get in by any route in the product,
+     * even though `POST /auth/verify-email/resend` existed the whole time.
+     */
+    if (u.status === 'pending') {
+      throw AppError.emailUnverified(
+        'Your email address has not been confirmed yet. Check your inbox for the link we sent — we can send a fresh one.',
+      );
+    }
     /**
      * A SUSPENDED account may still authenticate. That is a change, and a
      * deliberate one.

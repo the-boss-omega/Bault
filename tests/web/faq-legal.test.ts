@@ -67,10 +67,71 @@ describe('FAQ content copied from Ship My Cards', () => {
 
   it('states, for every entry, whether Bault supports the workflow', () => {
     for (const entry of FAQ.entries) {
-      expect(['adapted', 'unavailable']).toContain(entry.availability);
+      expect(['adapted', 'partial', 'unavailable']).toContain(entry.availability);
       // No entry is imported silently: each carries a note saying what Bault
       // does differently, or why the entry does not apply.
       expect(entry.baultNote.trim().length).toBeGreaterThan(20);
+    }
+  });
+
+  /**
+   * The rot guard.
+   *
+   * `availability` and `baultNote` were captured once and left alone while the
+   * product was built out underneath them. By the time anybody looked, seventeen
+   * entries marked `unavailable` described capabilities Bault had been shipping
+   * for weeks — the FAQ was telling paying customers Bault could not do things
+   * it does.
+   *
+   * A test cannot re-audit the API from here. What it CAN do is catch the shape
+   * of that failure: a flat denial sitting on an entry that says Bault supports
+   * the thing. Those two cannot both be true, and it is exactly the
+   * contradiction that accumulated last time.
+   */
+  const DENIALS = [
+    /\bBault has no\b/i,
+    /\bBault offers no\b/i,
+    /\bBault does not provide\b/i,
+    /\bBault cannot\b/i,
+    /\bBault operates no\b/i,
+    /\bBault publishes no\b/i,
+    /\bBault exposes no\b/i,
+    /\bno such capability\b/i,
+  ];
+
+  it('never denies a capability on an entry that says Bault supports it', () => {
+    const offenders: string[] = [];
+    for (const entry of FAQ.entries) {
+      if (entry.availability !== 'adapted') continue;
+      for (const denial of DENIALS) {
+        if (denial.test(entry.baultNote)) offenders.push(`[${entry.sourceIndex}] ${entry.id}`);
+      }
+    }
+    expect(offenders, `marked "adapted" but denies the capability: ${offenders.join(' | ')}`).toEqual(
+      [],
+    );
+  });
+
+  it('explains, on every entry, what Bault actually does', () => {
+    for (const entry of FAQ.entries) {
+      // A one-line shrug is how a stale entry hides. Every note has to make a
+      // real statement about Bault's own behaviour.
+      expect(entry.baultNote.length, `${entry.id} has a stub note`).toBeGreaterThan(60);
+      expect(entry.baultNote, `${entry.id} never mentions Bault`).toMatch(/Bault/);
+    }
+  });
+
+  it('marks a partial entry as partial rather than as absent', () => {
+    // The partials are the audit's real gaps: the mechanism exists and part of
+    // what the source describes does not. Collapsing them into "unavailable" is
+    // what made a live capability read as an absence.
+    const partial = FAQ.entries.filter((e) => e.availability === 'partial');
+    expect(partial.length).toBeGreaterThan(0);
+    for (const entry of partial) {
+      // A partial has to name the missing part, or it is just a shrug.
+      expect(entry.baultNote, `${entry.id} does not name its limit`).toMatch(
+        /\bdoes NOT\b|\bhas no\b|\bno video\b|is ShipMyCards'/,
+      );
     }
   });
 

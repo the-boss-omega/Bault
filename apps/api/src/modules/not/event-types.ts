@@ -89,6 +89,9 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   { key: 'swap_completed', category: 'marketplace', label: 'A swap completes', emailByDefault: true },
   { key: 'transfer_completed', category: 'marketplace', label: 'A gift transfer completes', emailByDefault: true },
   { key: 'buyout_quoted', category: 'marketplace', label: 'Bault quotes you for a buyout', emailByDefault: true },
+  { key: 'custom_request_raised', category: 'custody', label: 'We have your custom request', emailByDefault: false },
+  { key: 'custom_request_quoted', category: 'custody', label: 'Your custom request is priced', emailByDefault: true },
+  { key: 'custom_request_declined', category: 'custody', label: 'A custom request cannot be done', emailByDefault: true },
 
   /* ---- shipping ---- */
   { key: 'shipment_out', category: 'shipping', label: 'A shipment is dispatched', emailByDefault: true },
@@ -120,7 +123,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   /* ---- money ---- */
   { key: 'wallet_request_submitted', category: 'money', label: 'Your wallet request is received', emailByDefault: false },
   { key: 'wallet_request_completed', category: 'money', label: 'Your wallet request is settled', emailByDefault: true },
-  { key: 'topup_settled', category: 'money', label: 'A top-up settles', emailByDefault: true },
+  { key: 'topup_settled', category: 'money', label: 'A cash-in settles', emailByDefault: true },
   { key: 'payment_reversed', category: 'money', label: 'A payment into your wallet is reversed', emailByDefault: true },
 
   /* ---- support ---- */

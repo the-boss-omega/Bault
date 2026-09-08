@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useI18n } from '../../../shared/i18n';
+import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { SignInPage } from './SignInPage';
 import { SignUpPage } from './SignUpPage';
 import { ForgotPasswordPage } from './ForgotPasswordPage';
@@ -37,8 +37,6 @@ export interface SessionUser {
  * in the product that is not the application shell's one.
  */
 export function AuthShell({ children }: { children: ReactNode }) {
-  const { t, toggleLocale } = useI18n();
-
   return (
     <div className="auth-shell">
       <div className="auth-box">
@@ -47,20 +45,27 @@ export function AuthShell({ children }: { children: ReactNode }) {
             B
           </span>
           <span className="auth-brand-word">Bault</span>
+
+          {/*
+            THE SAME LANGUAGE CONTROL THE REST OF THE PRODUCT USES.
+
+            This was a text button that printed the name of the OTHER language:
+            "English" on the Hebrew page, and "עברית" on the English one — a
+            Hebrew word sitting on the sign-in screen of an English build, which
+            reads as a stray label rather than as a way to change anything. It
+            also toggled between exactly two languages, so it could never grow a
+            third without becoming a lie.
+
+            `LanguageSwitcher` is a globe with a menu that names every language in
+            its own script and marks the current one. It is what the signed-in
+            shell has always used, and a language chooser is the one control that
+            has to be recognisable to somebody who cannot read the page it is on —
+            which is an icon, not a word.
+          */}
+          <LanguageSwitcher />
         </div>
 
         {children}
-
-        <div className="auth-lang">
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={toggleLocale}
-            aria-label={t('app.switchLanguageLabel')}
-          >
-            {t('app.switchLanguage')}
-          </button>
-        </div>
       </div>
     </div>
   );

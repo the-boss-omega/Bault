@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AdmService } from './adm.service';
+import { ShelfYieldService } from './shelf-yield.service';
 import { AdmController } from './adm.controller';
 
 /**
@@ -8,6 +9,6 @@ import { AdmController } from './adm.controller';
  */
 @Module({
   controllers: [AdmController],
-  providers: [AdmService],
+  providers: [AdmService, ShelfYieldService],
 })
 export class AdmModule {}

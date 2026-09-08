@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { BreakEvenService } from './break-even.service';
 import { VaultService, type VaultScope } from './vault.service';
 
 const SCOPES: readonly VaultScope[] = ['active', 'hold', 'history'];
@@ -14,7 +15,23 @@ function toScope(value: string | undefined): VaultScope {
 @ApiTags('VLT')
 @Controller('vault')
 export class VltController {
-  constructor(private readonly vault: VaultService) {}
+  constructor(
+    private readonly vault: VaultService,
+    private readonly breakEven: BreakEvenService,
+  ) {}
+
+  /**
+   * Break-Even Watch — what each card has cost you, against what one like it
+   * actually sold for here.
+   *
+   * A custodian telling a collector to stop paying it. Honest about its own
+   * limits: where Bault has no way to price a card, the row says so and reports
+   * the cost alone rather than inventing a comparison to justify advice.
+   */
+  @Get('break-even')
+  breakEvenWatch(@CurrentUser() user: AuthUser) {
+    return this.breakEven.summaryFor(user.id);
+  }
 
   /**
    * `scope` selects the vault state the customer is looking at: `active` (the

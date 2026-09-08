@@ -3,12 +3,13 @@ import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
 import {
   NAME_PART_MAX,
+  PASSWORD_MIN,
   isValidNamePart,
   isValidUsername,
   normalizeNamePart,
   normalizeUsername,
 } from '../../../shared/names';
-import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
+import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 
 /**
  * Sign-up page — its own page, separate from sign-in.
@@ -41,21 +42,44 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sign-in has had this since it was written; sign-up did not, so the one form
+  // in the product that creates an account was also the one that could be
+  // submitted twice by pressing the button twice.
+  const [busy, setBusy] = useState(false);
   const t = useT();
 
   const normalizedUsername = normalizeUsername(username);
   const usernameOk = isValidUsername(normalizedUsername);
   const firstOk = isValidNamePart(normalizeNamePart(firstName));
   const lastOk = isValidNamePart(normalizeNamePart(lastName));
+  /**
+   * Email and password are checked here for the same reason the other three
+   * are: they gate the button.
+   *
+   * They were the two that did not. The button disabled on `!email.trim()` and
+   * `password.length < 8`, so somebody who typed `nope` into the address field,
+   * or a six-character password, saw a dead button and no statement of what was
+   * wrong with it — while the field directly above explained itself. A disabled
+   * control that will not say why is worse than an enabled one that fails, and
+   * every other field on this form already did better.
+   *
+   * The address test is the shape the API's `@IsEmail` accepts, kept loose on
+   * purpose: this is here to catch a typo, not to adjudicate RFC 5322.
+   */
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const passwordOk = password.length >= PASSWORD_MIN;
   // Only complain once something has been typed — an empty field a user has not
   // reached yet is not an error, it is a field they have not reached yet.
   const usernameError = username.length > 0 && !usernameOk;
   const firstNameError = firstName.length > 0 && !firstOk;
   const lastNameError = lastName.length > 0 && !lastOk;
+  const emailError = email.length > 0 && !emailOk;
+  const passwordError = password.length > 0 && !passwordOk;
 
   async function register(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setBusy(true);
     try {
       // The response names the new account by its USERNAME. No intake ID is
       // issued any more, and nothing asks the user to keep one.
@@ -72,6 +96,8 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       setRegistered(t('auth.registerSuccess', { username: created.username }));
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -124,69 +150,96 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     <form className="auth-card" onSubmit={register}>
       <h2>{t('auth.signUpTitle')}</h2>
 
-      <label className="field">
-        <span className="field-label">{t('auth.email')}</span>
+      {/*
+        `Field` throughout rather than a wrapping <label>.
+        A <label> that encloses BOTH the caption and the hint takes all of that
+        text as the control's accessible name, so this form announced its address
+        field as "EmailWe send a confirmation link here" — and the four fields
+        that carried hints or errors each did the same. `Field` points the label
+        at the control by id and attaches the hint with `aria-describedby`, which
+        is where a description belongs.
+      */}
+      <Field
+        label={t('auth.email')}
+        htmlFor="signup-email"
+        hint={t('auth.emailHint')}
+        error={emailError ? t('auth.emailInvalid') : undefined}
+      >
         <input
+          id="signup-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
+          aria-invalid={emailError}
           dir="ltr"
         />
-      </label>
+      </Field>
 
-      <label className="field">
-        <span className="field-label">{t('auth.username')}</span>
+      <Field
+        label={t('auth.username')}
+        htmlFor="signup-username"
+        hint={t('auth.usernameHint')}
+        error={usernameError ? t('auth.usernameInvalid') : undefined}
+      >
         <input
+          id="signup-username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoComplete="username"
           aria-invalid={usernameError}
-          aria-describedby="signup-username-hint"
           dir="ltr"
         />
-        <span className={usernameError ? 'field-error' : 'field-hint'} id="signup-username-hint">
-          {usernameError ? t('auth.usernameInvalid') : t('auth.usernameHint')}
-        </span>
-      </label>
+      </Field>
 
       <div className="form-grid">
-        <label className="field">
-          <span className="field-label">{t('auth.firstName')}</span>
+        <Field
+          label={t('auth.firstName')}
+          htmlFor="signup-first"
+          error={firstNameError ? t('auth.nameInvalid') : undefined}
+        >
           <input
+            id="signup-first"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             autoComplete="given-name"
             maxLength={NAME_PART_MAX}
             aria-invalid={firstNameError}
           />
-          {firstNameError && <span className="field-error">{t('auth.nameInvalid')}</span>}
-        </label>
+        </Field>
 
-        <label className="field">
-          <span className="field-label">{t('auth.lastName')}</span>
+        <Field
+          label={t('auth.lastName')}
+          htmlFor="signup-last"
+          error={lastNameError ? t('auth.nameInvalid') : undefined}
+        >
           <input
+            id="signup-last"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             autoComplete="family-name"
             maxLength={NAME_PART_MAX}
             aria-invalid={lastNameError}
           />
-          {lastNameError && <span className="field-error">{t('auth.nameInvalid')}</span>}
-        </label>
+        </Field>
       </div>
 
-      <label className="field">
-        <span className="field-label">{t('auth.password')}</span>
+      <Field
+        label={t('auth.password')}
+        htmlFor="signup-password"
+        hint={t('auth.passwordHint')}
+        error={passwordError ? t('auth.passwordTooShort', { min: PASSWORD_MIN }) : undefined}
+      >
         <input
+          id="signup-password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
+          aria-invalid={passwordError}
           dir="ltr"
         />
-        <span className="field-hint">{t('auth.passwordHint')}</span>
-      </label>
+      </Field>
 
       {error && <ErrorState message={error} />}
 
@@ -194,7 +247,8 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
         variant="gold"
         type="submit"
         block
-        disabled={!usernameOk || !firstOk || !lastOk || password.length < 8 || !email.trim()}
+        loading={busy}
+        disabled={!usernameOk || !firstOk || !lastOk || !passwordOk || !emailOk}
       >
         {t('auth.signUp')}
       </Button>

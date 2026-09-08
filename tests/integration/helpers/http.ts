@@ -28,6 +28,12 @@ export class Client {
   get = (p: string) => this.request('GET', p);
   post = (p: string, b?: unknown) => this.request('POST', p, b);
   patch = (p: string, b?: unknown) => this.request('PATCH', p, b);
+  /**
+   * Added because it was missing, which made the two PUT routes
+   * (`/notifications/preferences` and `.../channel`) structurally untestable —
+   * no suite could reach them, so nothing did.
+   */
+  put = (p: string, b?: unknown) => this.request('PUT', p, b);
   del = (p: string) => this.request('DELETE', p);
 }
 

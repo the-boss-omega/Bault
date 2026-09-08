@@ -9,28 +9,43 @@ import {
   parcelStatusLabel,
   type ParcelQueueRow,
 } from '../../shared/parcels';
-import type { InboundAddress } from '../../shared/parcels';
 import {
   Button,
   EmptyState,
   ErrorState,
+  Field,
   Panel,
   SkeletonTable,
   StatusBadge,
   SuccessNote,
 } from '../../shared/ui/primitives';
-import { IconBox, IconInbox, IconPlus, IconShipping } from '../../shared/ui/icons';
+import { IconBox, IconInbox, IconShipping } from '../../shared/ui/icons';
+import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 
 /**
  * The warehouse's inbound bench.
  *
- * A parcel moves left to right: received → opened → processed, with two side
- * exits (unclaimed, disposed) and one detour (forwarded, when it landed at a
- * site that stores nothing). Every control here is one of those moves, and the
- * row only ever offers the moves that are legal for its current status — the API
- * enforces the same table, so a button that would 409 is never drawn.
+ * A parcel moves left to right: received → opened → its contents booked in →
+ * processed, with two side exits (unclaimed, disposed) and one detour
+ * (forwarded, when it landed at a site that stores nothing). Every control here
+ * is one of those moves, and the row only ever offers the moves that are legal
+ * for its current status — the API enforces the same table, so a button that
+ * would 409 is never drawn.
+ *
+ * An opened parcel now offers Book contents rather than Process. That is the
+ * step that was missing from the bench: the work of unpacking a box happens on
+ * the intake form, and an operator who reached this row was told, in a hint,
+ * to go and find it. Pressing it opens the intake form already pointed at this
+ * box, and the box is closed out from there — at the end of the work, next to
+ * the count of what came out of it.
  */
-export function ParcelQueue({ onChanged }: { onChanged?: () => Promise<void> | void }) {
+export function ParcelQueue({
+  onChanged,
+  onBookContents,
+}: {
+  onChanged?: () => Promise<void> | void;
+  onBookContents?: (parcelId: string) => void;
+}) {
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<ParcelQueueRow[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -66,10 +81,7 @@ export function ParcelQueue({ onChanged }: { onChanged?: () => Promise<void> | v
   );
 
   return (
-    <>
-      <ReceiveParcelPanel onReceived={act} />
-
-      <Panel title={t('parcelQueue.title')} subtitle={t('parcelQueue.subtitle')} flush>
+    <Panel title={t('parcelQueue.title')} subtitle={t('parcelQueue.subtitle')} flush>
         {(message || error) && (
           <div style={{ padding: 'var(--sp-4) var(--sp-6) 0' }}>
             {error ? <ErrorState message={error} /> : message ? <SuccessNote>{message}</SuccessNote> : null}
@@ -89,6 +101,9 @@ export function ParcelQueue({ onChanged }: { onChanged?: () => Promise<void> | v
                   <th scope="col">{t('parcelQueue.col.owner')}</th>
                   <th scope="col">{t('parcelQueue.col.where')}</th>
                   <th scope="col">{t('parcelQueue.col.received')}</th>
+                  <th scope="col" className="td-end">
+                    {t('parcelQueue.col.units')}
+                  </th>
                   <th scope="col">{t('parcelQueue.col.status')}</th>
                   <th scope="col">{t('parcelQueue.col.actions')}</th>
                 </tr>
@@ -119,6 +134,9 @@ export function ParcelQueue({ onChanged }: { onChanged?: () => Promise<void> | v
                       )}
                     </td>
                     <td dir="ltr">{row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}</td>
+                    {/* What has actually come out of the box so far. Before this
+                        the only way to find out was to leave the page. */}
+                    <td className="td-end num">{row.itemCount.toLocaleString()}</td>
                     <td>
                       <StatusBadge tone={PARCEL_TONE[row.status] ?? 'neutral'}>
                         {parcelStatusLabel(t, row.status)}
@@ -128,7 +146,7 @@ export function ParcelQueue({ onChanged }: { onChanged?: () => Promise<void> | v
                       )}
                     </td>
                     <td>
-                      <ParcelActions row={row} onAct={act} t={t} />
+                      <ParcelActions row={row} onAct={act} onBookContents={onBookContents} t={t} />
                     </td>
                   </tr>
                 ))}
@@ -136,126 +154,6 @@ export function ParcelQueue({ onChanged }: { onChanged?: () => Promise<void> | v
             </table>
           </div>
         )}
-      </Panel>
-    </>
-  );
-}
-
-/* ============================================================
-   Receiving
-   ============================================================ */
-
-/**
- * Book a physical arrival in.
- *
- * The label is typed as written. It is normalised and looked up, and if it
- * resolves to nothing the parcel is still recorded — as `unclaimed`, with the
- * raw string kept. Refusing to record an arrival because its label is wrong
- * would mean the platform's answer to "somebody's property is on our shelf and
- * we don't know whose" is to have no record of it at all.
- */
-function ReceiveParcelPanel({
-  onReceived,
-}: {
-  onReceived: (fn: () => Promise<unknown>, ok: string) => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const [facilities, setFacilities] = useState<InboundAddress[]>([]);
-  const [facilityCode, setFacilityCode] = useState('');
-  const [addressedTo, setAddressedTo] = useState('');
-  const [carrier, setCarrier] = useState('');
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [internationalOrigin, setInternationalOrigin] = useState(false);
-  const [notes, setNotes] = useState('');
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
-        setFacilities(list);
-        const preferred = list.find((f) => f.role === 'primary') ?? list[0];
-        if (preferred) setFacilityCode(preferred.code);
-      } catch {
-        /* the panel still works if the list fails; the field is a free choice */
-      }
-    })();
-  }, []);
-
-  const normalized = normalizeUsername(addressedTo);
-  const labelLooksValid = addressedTo.trim() === '' || isValidUsername(normalized);
-
-  async function receive() {
-    await onReceived(
-      () =>
-        api.post('/parcels/receive', {
-          facilityCode,
-          addressedTo: addressedTo.trim() || undefined,
-          carrier: carrier.trim() || undefined,
-          trackingNumber: trackingNumber.trim() || undefined,
-          internationalOrigin,
-          notes: notes.trim() || undefined,
-        }),
-      t('parcelQueue.received'),
-    );
-    setAddressedTo('');
-    setTrackingNumber('');
-    setNotes('');
-    setInternationalOrigin(false);
-  }
-
-  return (
-    <Panel title={t('parcelQueue.receive.title')} subtitle={t('parcelQueue.receive.subtitle')}>
-      <div className="stack stack--tight">
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">{t('parcelQueue.receive.facility')}</span>
-            <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
-              {facilities.map((f) => (
-                <option key={f.code} value={f.code}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">{t('parcelQueue.receive.label')}</span>
-            <input
-              value={addressedTo}
-              onChange={(e) => setAddressedTo(e.target.value)}
-              aria-invalid={!labelLooksValid}
-              dir="ltr"
-            />
-            <span className="field-hint">{t('parcelQueue.receive.labelHint')}</span>
-          </label>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.carrier')}</span>
-            <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.tracking')}</span>
-            <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} dir="ltr" />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('warehouse.notes')}</span>
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </label>
-        </div>
-
-        <div className="row">
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={internationalOrigin}
-              onChange={(e) => setInternationalOrigin(e.target.checked)}
-            />
-            {t('inbound.register.international')}
-          </label>
-          <span className="spacer" />
-          <Button variant="gold" icon={<IconPlus />} disabled={!facilityCode} onClick={() => void receive()}>
-            {t('parcelQueue.receive.submit')}
-          </Button>
-        </div>
-      </div>
     </Panel>
   );
 }
@@ -267,16 +165,26 @@ function ReceiveParcelPanel({
 function ParcelActions({
   row,
   onAct,
+  onBookContents,
   t,
 }: {
   row: ParcelQueueRow;
   onAct: (fn: () => Promise<unknown>, ok: string) => Promise<void>;
+  onBookContents?: (parcelId: string) => void;
   t: TranslateFn;
 }) {
   const [opening, setOpening] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [condition, setCondition] = useState(PARCEL_CONDITIONS[0]?.key ?? 'sound');
   const [conditionNotes, setConditionNotes] = useState('');
+  /**
+   * What the arrival check actually saw.
+   *
+   * A box recorded as `contents_damaged` used to be a sentence with nothing
+   * attached — the operator's word against the customer's, weeks later. The
+   * pictures go on the parcel, and its owner can see them.
+   */
+  const [conditionPhotos, setConditionPhotos] = useState<PhotoRef[]>([]);
   const [claimUsername, setClaimUsername] = useState('');
 
   // A forwarding site holds nothing, so anything sitting there needs the second
@@ -307,15 +215,9 @@ function ParcelActions({
     return (
       <div className="fulfill-form">
         <div className="field-row">
-          <label className="field">
-            <span className="field-label">{t('parcelQueue.receive.label')}</span>
-            <input
-              value={claimUsername}
-              onChange={(e) => setClaimUsername(e.target.value)}
-              dir="ltr"
-              style={{ width: '10rem' }}
-            />
-          </label>
+          <Field label={t('parcelQueue.receive.label')}>
+            <input value={claimUsername} onChange={(e) => setClaimUsername(e.target.value)} dir="ltr" />
+          </Field>
         </div>
         <div className="actions">
           <Button
@@ -375,8 +277,7 @@ function ParcelActions({
       <div className="fulfill-form">
         <span className="hint">{t('parcelQueue.open.legend')}</span>
         <div className="field-row">
-          <label className="field">
-            <span className="field-label">{t('parcelQueue.open.condition')}</span>
+          <Field label={t('parcelQueue.open.condition')}>
             <select value={condition} onChange={(e) => setCondition(e.target.value)}>
               {PARCEL_CONDITIONS.map((c) => (
                 <option key={c.key} value={c.key}>
@@ -384,16 +285,19 @@ function ParcelActions({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span className="field-label">{t('parcelQueue.open.notes')}</span>
-            <input
-              value={conditionNotes}
-              onChange={(e) => setConditionNotes(e.target.value)}
-              style={{ width: '14rem' }}
-            />
-          </label>
+          </Field>
+          <Field label={t('parcelQueue.open.notes')} className="field--grow">
+            <input value={conditionNotes} onChange={(e) => setConditionNotes(e.target.value)} />
+          </Field>
         </div>
+
+        <PhotoInput
+          purpose="parcel"
+          value={conditionPhotos}
+          onChange={setConditionPhotos}
+          label={t('parcelQueue.open.photos')}
+          hint={t('parcelQueue.open.photosHint')}
+        />
         <div className="actions">
           <Button
             size="sm"
@@ -405,6 +309,7 @@ function ParcelActions({
                   api.post(`/parcels/${row.id}/open`, {
                     condition,
                     conditionNotes: conditionNotes.trim(),
+                    photoKeys: photoKeys(conditionPhotos),
                   }),
                 t('parcelQueue.opened'),
               ).then(() => setOpening(false))
@@ -421,17 +326,25 @@ function ParcelActions({
     );
   }
 
-  // status === 'opened' — book the contents in on the Intake tab, then close it out.
+  /**
+   * status === 'opened' — the box is on the bench with its lid off.
+   *
+   * The only move offered is the next piece of physical work: take the contents
+   * out and book them in. Closing the box out lives at the end of that, on the
+   * intake bench, where the operator can see how many units came out of it —
+   * and the API refuses to close one that produced nothing unless somebody
+   * states, in writing, that it really arrived empty.
+   */
   return (
     <div className="actions">
-      <Button
-        size="sm"
-        variant="gold"
-        onClick={() => void onAct(() => api.post(`/parcels/${row.id}/process`), t('parcelQueue.processed'))}
-      >
-        {t('parcelQueue.action.process')}
+      <Button size="sm" variant="gold" icon={<IconBox />} onClick={() => onBookContents?.(row.id)}>
+        {t('parcelQueue.action.bookContents')}
       </Button>
-      <span className="field-hint">{t('parcelQueue.processHint', { code: row.code })}</span>
+      <span className="field-hint">
+        {row.itemCount > 0
+          ? t('parcelQueue.bookedSoFar', { count: row.itemCount })
+          : t('parcelQueue.nothingBooked')}
+      </span>
     </div>
   );
 }

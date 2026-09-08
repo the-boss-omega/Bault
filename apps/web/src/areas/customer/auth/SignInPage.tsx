@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { api } from '../../../shared/api';
+import { ApiError, api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
-import { Button, ErrorState } from '../../../shared/ui/primitives';
+import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
 
 /**
@@ -21,19 +21,62 @@ export function SignInPage({
   onGoToForgotPassword: () => void;
 }) {
   // ONE identifier field: the email or the username, either on its own.
-  const [identifier, setIdentifier] = useState('red@bault.dev');
-  const [password, setPassword] = useState('11111111');
+  //
+  // EMPTY in any build that is not a local dev server. These two fields shipped
+  // pre-filled with `red@bault.dev` / `11111111` — a real seeded account and its
+  // real password, typed into the login screen of every build including a
+  // production one. Convenient locally and indefensible in a deployment: it
+  // publishes a working credential to anybody who loads the page.
+  //
+  // `import.meta.env.DEV` is false in every `vite build` output, so the
+  // convenience survives exactly where it belongs and nowhere else.
+  const [identifier, setIdentifier] = useState(import.meta.env.DEV ? 'red@bault.dev' : '');
+  const [password, setPassword] = useState(import.meta.env.DEV ? '11111111' : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * The sign-in refusal that has a remedy, held apart from the rest.
+   *
+   * Somebody who signed up and never clicked the link was told their address is
+   * unconfirmed and then left on a page offering "Forgot password" — which does
+   * not help — and "Sign up", which answers that the address is already
+   * registered. `POST /auth/verify-email/resend` existed the whole time, and the
+   * only page in the signed-out app that could reach it was the one you arrive
+   * at by following the very link they no longer have. A closed loop, so the way
+   * out is offered here, where the door was shut.
+   */
+  const [unverified, setUnverified] = useState(false);
+  const [resent, setResent] = useState(false);
   const t = useT();
 
   async function login(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setUnverified(false);
+    setResent(false);
     try {
       const user = await api.post<SessionUser>('/auth/login', { identifier, password });
       onSignedIn(user);
+    } catch (err) {
+      setError((err as Error).message);
+      setUnverified(err instanceof ApiError && err.code === 'email_unverified');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * The address is whatever was typed into the identifier field. When that was a
+   * username rather than an email the endpoint answers exactly as it answers an
+   * unknown address — a confirmation that a link is on its way, asserting
+   * nothing about whether an account exists — so nothing here has to guess.
+   */
+  async function resendVerification() {
+    setBusy(true);
+    try {
+      await api.post('/auth/verify-email/resend', { email: identifier.trim() });
+      setResent(true);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -45,31 +88,47 @@ export function SignInPage({
     <form className="auth-card" onSubmit={login}>
       <h2>{t('auth.signInTitle')}</h2>
 
-      <label className="field">
-        <span className="field-label">{t('auth.identifier')}</span>
+      {/* `Field` rather than a wrapping <label>: the caption is a real
+          <label for>, so clicking it focuses the input and a screen reader
+          announces the caption alone as the field's name instead of the caption
+          and its hint run together. */}
+      <Field label={t('auth.identifier')} hint={t('auth.identifierHint')} htmlFor="signin-identifier">
         <input
+          id="signin-identifier"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
           autoComplete="username"
+          aria-describedby="signin-identifier-hint"
           dir="ltr"
         />
-        <span className="field-hint">{t('auth.identifierHint')}</span>
-      </label>
+      </Field>
 
-      <label className="field">
-        <span className="field-label">{t('auth.password')}</span>
+      <Field label={t('auth.password')} htmlFor="signin-password">
         <input
+          id="signin-password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           dir="ltr"
         />
-      </label>
+      </Field>
 
       {error && <ErrorState message={error} />}
 
-      <Button variant="gold" type="submit" block disabled={busy}>
+      {/* The remedy, directly under the refusal that needs it. */}
+      {unverified &&
+        (resent ? (
+          <SuccessNote>{t('auth.verifyResent')}</SuccessNote>
+        ) : (
+          <Button variant="secondary" block disabled={busy} onClick={() => void resendVerification()}>
+            {t('auth.verifyResend')}
+          </Button>
+        ))}
+
+      {/* Busy rather than merely disabled: a form whose only feedback is that
+          nothing happens gets pressed twice. */}
+      <Button variant="gold" type="submit" block loading={busy}>
         {t('auth.signIn')}
       </Button>
 
@@ -88,7 +147,10 @@ export function SignInPage({
         </button>
       </p>
 
-      <p className="auth-demo">{t('auth.demoUsers')}</p>
+      {/* The same rule, for the same reason, and this one is worse: it printed
+          every seeded account AND the shared password on screen for anyone who
+          opened the page. */}
+      {import.meta.env.DEV && <p className="auth-demo">{t('auth.demoUsers')}</p>}
     </form>
   );
 }

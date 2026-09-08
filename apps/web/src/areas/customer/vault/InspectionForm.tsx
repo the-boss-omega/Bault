@@ -59,11 +59,11 @@ export function InspectionForm({
   }
 
   return (
-    <div className="stack stack--tight" style={{ marginBlockStart: 'var(--sp-4)' }}>
+    <div className="stack stack--tight stack-top">
       <h3 className="drawer-heading">{t('inspect.title')}</h3>
       <p className="field-hint">{t('inspect.intro')}</p>
 
-      <ul className="check-list" style={{ maxHeight: 'none' }}>
+      <ul className="check-list list-unbounded">
         {areas.map((area) => (
           <li key={area}>
             <label className="check">

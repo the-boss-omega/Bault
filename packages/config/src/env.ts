@@ -69,11 +69,67 @@ const EnvSchema = z.object({
   STORAGE_ACCESS_KEY: z.string(),
   STORAGE_SECRET_KEY: z.string(),
 
-  // External providers — optional in dev (empty string allowed), required in prod
-  // is enforced by the individual adapters when they are actually used (T020+).
-  PAYMENT_PROVIDER: z.string().default('stripe'),
-  PAYMENT_API_KEY: z.string().optional().default(''),
-  PAYMENT_WEBHOOK_SECRET: z.string().optional().default(''),
+  /**
+   * Which payment rail takes and returns money.
+   *
+   *   `paypal`  — the rail the reference service uses. Real API, real webhook
+   *               signatures, real capture semantics. Point it at PayPal's own
+   *               sandbox with `PAYPAL_ENVIRONMENT=sandbox` to exercise the
+   *               entire product end to end with fake money and no bank account.
+   *   `sandbox` — an in-memory fake that settles everything and verifies
+   *               nothing. Development only; the adapter factory REFUSES to
+   *               construct it when NODE_ENV=production.
+   *
+   * There is no default, and that is deliberate. The previous default was
+   * `stripe`, which nothing implemented and nothing read, so the configuration
+   * said one thing while an in-memory fake settled fake money underneath it.
+   */
+  PAYMENT_PROVIDER: z.enum(['paypal', 'sandbox']),
+
+  /**
+   * Which PayPal to talk to.
+   *
+   * `sandbox` is a first-class, production-safe configuration: the code path is
+   * identical to live, so nothing about the integration is left untested by
+   * running it. What differs is that the money is not real — which the product
+   * states out loud rather than hiding.
+   */
+  PAYPAL_ENVIRONMENT: z.enum(['sandbox', 'live']).default('sandbox'),
+  PAYPAL_CLIENT_ID: z.string().optional().default(''),
+  PAYPAL_CLIENT_SECRET: z.string().optional().default(''),
+  /** Issued by PayPal per webhook endpoint. Without it nothing can be verified. */
+  PAYPAL_WEBHOOK_ID: z.string().optional().default(''),
+  /** Where a cash-out is sent from, shown on the payout. */
+  PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Bault cash-out'),
+
+  /**
+   * Browser origins allowed to call this API with credentials.
+   *
+   * Comma-separated. Empty means same-origin only, which is what the Vite dev
+   * proxy gives locally. A production deployment serving the SPA from a
+   * different host has to name it here; the alternative — a permissive default —
+   * is a session-riding hole.
+   */
+  CORS_ORIGINS: z.string().optional().default(''),
+
+  /** Requests per minute per IP against the whole API. */
+  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
+  /**
+   * The much tighter budget for credential and mail-sending routes: sign-in,
+   * registration, password reset, verification resend.
+   */
+  /**
+   * Ten was too tight. Collectors behind one office NAT, or one mobile carrier's
+   * egress, share an IP — and a shared IP hitting a ten-per-minute sign-in
+   * budget locks out real people while barely inconveniencing a script that can
+   * rotate addresses. Thirty is the compromise; the routes that actually send
+   * mail to a stranger carry their own, much tighter bucket instead.
+   */
+  AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
+
+  /** Serve the OpenAPI explorer. Off by default; see the production check below. */
+  EXPOSE_API_DOCS: z.coerce.boolean().default(false),
+  API_DOCS_PASSWORD: z.string().optional().default(''),
 
   SHIPPING_PROVIDER: z.string().default('shipstation'),
   SHIPPING_API_KEY: z.string().optional().default(''),
@@ -181,16 +237,53 @@ const EnvSchema = z.object({
   SENTRY_DSN: z.string().optional().default(''),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 }).superRefine((env, ctx) => {
-  // SMTP credentials are conditionally required: demanding them unconditionally
-  // would stop a fresh checkout booting, and defaulting them to something would
-  // hand the operator a mail path that silently fails.
-  if (env.EMAIL_PROVIDER !== 'smtp') return;
-  for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const) {
-    if (env[key].trim() === '') {
+  const require = (key: keyof typeof env, when: string) => {
+    if (String(env[key] ?? '').trim() === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: [key],
-        message: `${key} is required when EMAIL_PROVIDER=smtp`,
+        message: `${key} is required when ${when}`,
+      });
+    }
+  };
+
+  // SMTP credentials are conditionally required: demanding them unconditionally
+  // would stop a fresh checkout booting, and defaulting them to something would
+  // hand the operator a mail path that silently fails.
+  if (env.EMAIL_PROVIDER === 'smtp') {
+    for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const) {
+      require(key, 'EMAIL_PROVIDER=smtp');
+    }
+  }
+
+  // PayPal cannot be half-configured. A missing webhook id in particular is not
+  // a degraded mode: it means webhooks cannot be authenticated, and an
+  // unauthenticated webhook that credits a ledger is an open mint.
+  if (env.PAYMENT_PROVIDER === 'paypal') {
+    for (const key of ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID'] as const) {
+      require(key, 'PAYMENT_PROVIDER=paypal');
+    }
+  }
+
+  // The two configurations that must never reach a real deployment.
+  if (env.NODE_ENV === 'production') {
+    if (env.PAYMENT_PROVIDER === 'sandbox') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['PAYMENT_PROVIDER'],
+        message:
+          'PAYMENT_PROVIDER=sandbox settles every payment without contacting anybody. Use ' +
+          'PAYMENT_PROVIDER=paypal with PAYPAL_ENVIRONMENT=sandbox to test against a real ' +
+          'provider with fake money.',
+      });
+    }
+    // Serving the OpenAPI explorer publicly in production hands an attacker a
+    // complete route map. Opting in is allowed; doing it by accident is not.
+    if (env.EXPOSE_API_DOCS && !env.API_DOCS_PASSWORD) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['API_DOCS_PASSWORD'],
+        message: 'API_DOCS_PASSWORD is required when EXPOSE_API_DOCS=true in production',
       });
     }
   }

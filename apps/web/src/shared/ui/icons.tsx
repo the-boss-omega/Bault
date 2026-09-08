@@ -543,3 +543,40 @@ export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/* ============================================================
+   Theme
+   ============================================================
+   Three icons for three states. `system` gets a display rather than a
+   half-moon, because "follow the machine" is a different idea from "dark" and
+   drawing it as a variation of one of the other two makes the cycle unreadable.
+   ============================================================ */
+
+export function IconSun(p: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...p}>
+      <circle cx="12" cy="12" r="4" />
+      <path
+        d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function IconMoon(p: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...p}>
+      <path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconMonitor(p: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...p}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M9 20h6M12 16v4" strokeLinecap="round" />
+    </svg>
+  );
+}

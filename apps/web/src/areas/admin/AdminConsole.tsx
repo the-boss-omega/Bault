@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
+import { ShelfYieldPanel } from './ShelfYieldPanel';
 import { CardPhotoButton } from '../../shared/CardPhoto';
 import { BarcodePrintButton } from '../../shared/Barcode';
 import { dollarsToCents, formatDate, formatUsd } from '../../shared/money';
@@ -68,10 +69,18 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
   closed: 'neutral',
 };
 
-const TABS = ['users', 'requests', 'items', 'pricing', 'disputes', 'storage'] as const;
+/**
+ * `yield` sits FIRST, before the management tables.
+ *
+ * The others are opened by an administrator who already knows what they came to
+ * do — find a user, settle a dispute, change a price. Shelf Yield is the one
+ * that tells them what to do, so it is what the section opens on.
+ */
+const TABS = ['yield', 'users', 'requests', 'items', 'pricing', 'disputes', 'storage'] as const;
 type SectionKey = (typeof TABS)[number];
 
 const TAB_LABEL: Record<SectionKey, MessageKey> = {
+  yield: 'admin.section.yield',
   users: 'admin.section.users',
   requests: 'admin.section.requests',
   items: 'admin.section.items',
@@ -130,6 +139,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 
       {message && <SuccessNote>{message}</SuccessNote>}
       {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
+
+      {section === 'yield' && (
+        <TabPanel tab="yield">
+          <ShelfYieldPanel />
+        </TabPanel>
+      )}
 
       {section === 'users' && (
         <TabPanel tab="users">

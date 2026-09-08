@@ -5,16 +5,15 @@ import { isValidUsername, normalizeUsername } from '../../shared/names';
 import {
   DISPOSAL_CATEGORIES,
   DISPOSAL_OUTCOMES,
-  ITEM_CLASSES,
-  itemClassOption,
 } from '../../shared/itemClasses';
 import { useRoute, useNavigation } from '../../shared/routing';
-import { Barcode, BarcodeLabel, BarcodePrintButton } from '../../shared/Barcode';
+import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
 import {
   Button,
   ContextTabs,
   EmptyState,
   ErrorState,
+  Field,
   MetricCard,
   Panel,
   SkeletonTable,
@@ -36,23 +35,70 @@ import {
 import { ServiceQueue } from './ServiceQueue';
 import { GradingSubmissions } from './GradingSubmissions';
 import { ParcelQueue } from './ParcelQueue';
+import { ReceiveParcels } from './ReceiveParcels';
+import { IntakeBench } from './IntakeBench';
 import { SupportQueue } from './SupportQueue';
-import type { ParcelQueueRow } from '../../shared/parcels';
+import type { InboundAddress, ParcelWorkflow } from '../../shared/parcels';
 
+/**
+ * A shelf, as the console sees one.
+ *
+ * `itemCount` is what replaced `capacity`. The difference is not cosmetic: the
+ * old field was a number an operator typed once and nothing enforced, which the
+ * console then divided into to draw a utilisation bar and an amber "near
+ * capacity" badge that meant nothing. This is a count of what is actually on
+ * the shelf. It informs; it does not adjudicate.
+ */
 interface Bin {
   id: string;
+  /**
+   * The shelf's identity, minted rather than named.
+   *
+   * It used to be `BIN-<zone>-<nnn>`, counted up per zone — a name, with a
+   * name's problems: it raced between two operators building out the same zone,
+   * it leaked how much shelving the building has, and it baked the zone into the
+   * shelf's identity, so moving a shelf between zones meant renaming it and
+   * invalidating the label stuck to it. The zone below is now purely a label.
+   */
+  serialNumber: string;
   barcode: string;
   zone: string;
-  capacity: number;
+  /** Oversized shelving — the kind that takes a sealed case, not a card. */
+  oversized: boolean;
+  /** A shelf out of service is never deleted, only stopped being stowed into. */
+  active: boolean;
+  itemCount: number;
+  facilityId: string | null;
+  facilityCode: string | null;
 }
 
+/** `GET /custody/bins/suggest` — where the system says to put the next thing. */
 interface ReportRow {
   key: string | null;
   label: string | null;
   count: number;
 }
 
-const TABS = ['overview', 'parcels', 'intake', 'inventory', 'shipments', 'locations', 'services', 'support'] as const;
+/**
+ * ONE RECEIVING TAB, not two.
+ *
+ * `parcels` and `intake` were separate tabs, and the split cut the single piece
+ * of work they describe in half. Every intake begins with a parcel: a box is
+ * received, it is opened, and its contents are booked in. Pressing "Book
+ * contents" on the parcel bench SWITCHED TABS to a form on another screen, and
+ * closing the box out happened over there too — so the operator moved back and
+ * forth between two places to work through one box, and the count of what had
+ * come out of it was visible on one of them at a time.
+ *
+ * They are now one tab that reads top to bottom the way the work goes: receive
+ * the stack, see the queue, book the contents of the box you are holding, close
+ * it out. Nothing navigates; "Book contents" points the bench below at that box.
+ *
+ * What moved to `inventory` — relocate, hold, break-lot, disposal — is work on
+ * cards that are ALREADY on a shelf. It was on the intake tab only because that
+ * is where the scan fields happened to live.
+ */
+const TABS = ['overview', 'receiving', 'inventory', 'shipments', 'locations', 'services', 'support'] as const;
 type WarehouseTab = (typeof TABS)[number];
 
 const CUT_LABEL: Record<string, MessageKey> = {
@@ -62,17 +108,20 @@ const CUT_LABEL: Record<string, MessageKey> = {
   item_class: 'warehouse.report.cut.itemClass',
 };
 
-/** A bin is flagged once it is 80% full — the operator's real "act now" signal. */
-const NEAR_CAPACITY = 0.8;
-
 /**
  * Warehouse console (T054), rebuilt on the shared application shell.
  *
  * The rail, header and workspace are exactly the ones every other section uses;
- * only the contextual tabs below the title belong to the warehouse. Operator
- * flows are unchanged: bulk intake with a mandatory bin, relocate, lot breaking,
- * scan-verified shipment fulfillment, bin management, the inventory report and
- * the service queue.
+ * only the contextual tabs below the title belong to the warehouse.
+ *
+ * The inbound half of it now reads left to right the way the physical work
+ * does: a box arrives and is received, it is opened and checked, its contents
+ * are booked in one unit at a time onto a shelf the system directs the operator
+ * to, and the box is closed out against the count of what came out of it. What
+ * is gone is the arrangement where booking contents in meant leaving the parcel
+ * bench for a different tab, choosing a shelf from a dropdown of every shelf in
+ * the company, and coming back to close the box with nothing checking that
+ * anything had been booked at all.
  */
 export function WarehouseConsole() {
   const { t } = useI18n();
@@ -85,7 +134,27 @@ export function WarehouseConsole() {
   const [bins, setBins] = useState<Bin[]>([]);
   const [shelfRows, setShelfRows] = useState<ReportRow[] | null>(null);
   const [queueCount, setQueueCount] = useState<number | null>(null);
+  const [inbound, setInbound] = useState<ParcelWorkflow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The parcel the operator is working through, set by "Book contents" on the
+   * parcel bench and read by the intake panel.
+   *
+   * It is held here rather than in either panel because it is the one piece of
+   * state the two share: pressing Book contents on a box has to open the intake
+   * form already pointed at that box, which is the whole difference between one
+   * workflow and two screens that happen to be adjacent.
+   */
+  const [focusParcelId, setFocusParcelId] = useState<string>('');
+  /**
+   * Bumped after a batch of arrivals is booked in, to remount the queue below.
+   *
+   * Receiving used to live INSIDE the queue component, so it could just reload
+   * itself. It is its own panel now — the two are different jobs at the same
+   * bench — and this is the one thread between them: boxes were received, so the
+   * list of boxes is stale.
+   */
+  const [queueVersion, setQueueVersion] = useState(0);
 
   const tab: WarehouseTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as WarehouseTab)
@@ -101,12 +170,14 @@ export function WarehouseConsole() {
 
   const loadSummary = useCallback(async () => {
     try {
-      const [report, queue] = await Promise.all([
+      const [report, queue, workflow] = await Promise.all([
         api.get<{ rows: ReportRow[] } | ReportRow[]>('/custody/report?cut=shelf'),
         api.get<unknown[]>('/services/queue'),
+        api.get<ParcelWorkflow>('/parcels/workflow/status'),
       ]);
       setShelfRows(Array.isArray(report) ? report : report.rows);
       setQueueCount(queue.length);
+      setInbound(workflow);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -114,21 +185,45 @@ export function WarehouseConsole() {
     }
   }, []);
 
+  /**
+   * Run a receive and refresh what it invalidated.
+   *
+   * Shaped like the queue's own `act` so the receiving panel does not have to
+   * know anything about the console: hand it a call and a sentence, and it
+   * reports whichever of the two happened.
+   */
+  const receiveParcels = useCallback(
+    async (fn: () => Promise<unknown>, ok: string) => {
+      try {
+        await fn();
+        append(ok);
+        setQueueVersion((v) => v + 1);
+        await loadSummary();
+      } catch (e) {
+        append(t('warehouse.log.intakeError', { message: (e as Error).message }));
+      }
+    },
+    [append, loadSummary, t],
+  );
+
   useEffect(() => {
     void loadBins();
     void loadSummary();
   }, [loadBins, loadSummary]);
 
-  /** Items in stock, and how full each bin is — derived from the shelf report. */
+  /**
+   * Items in stock, and how much shelving is in service.
+   *
+   * There is no "bins near capacity" figure any more, and there is nothing to
+   * put in its place derived from bins — a shelf has no fullness the database
+   * knows about. The honest "act now" number on an inbound bench is the backlog
+   * of boxes, which is what the overview shows instead.
+   */
   const stats = useMemo(() => {
     const rows = shelfRows ?? [];
     const total = rows.reduce((sum, r) => sum + r.count, 0);
-    const countByBin = new Map(rows.filter((r) => r.key).map((r) => [r.key as string, r.count]));
-    const nearCapacity = bins.filter((b) => {
-      const used = countByBin.get(b.id) ?? 0;
-      return b.capacity > 0 && used / b.capacity >= NEAR_CAPACITY;
-    }).length;
-    return { total, nearCapacity, countByBin };
+    const inService = bins.filter((b) => b.active).length;
+    return { total, inService };
   }, [shelfRows, bins]);
 
   const tabs = TABS.map((key) => ({ key, label: t(`warehouse.tab.${key}` as MessageKey) }));
@@ -141,7 +236,7 @@ export function WarehouseConsole() {
         active={tab}
         onSelect={goTab}
         actions={
-          <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('intake')}>
+          <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('receiving')}>
             {t('warehouse.addInventory')}
           </Button>
         }
@@ -160,12 +255,18 @@ export function WarehouseConsole() {
               footer={t('warehouse.metric.itemsNote')}
             />
             <MetricCard
-              label={t('warehouse.metric.nearCapacity')}
-              value={shelfRows === null ? '—' : stats.nearCapacity}
+              label={t('warehouse.metric.inboundBacklog')}
+              value={inbound === null ? '—' : inbound.awaitingOpen + inbound.awaitingProcessing}
               icon={<IconAlert />}
               tone="amber"
               footer={
-                <ViewAllLink onClick={() => goTab('locations')}>{t('warehouse.viewLocations')}</ViewAllLink>
+                inbound?.oldestWaitingHours != null ? (
+                  <span className="hint">
+                    {t('warehouse.metric.oldestWaiting', { hours: inbound.oldestWaitingHours })}
+                  </span>
+                ) : (
+                  <ViewAllLink onClick={() => goTab('receiving')}>{t('warehouse.viewParcels')}</ViewAllLink>
+                )
               }
             />
             <MetricCard
@@ -179,7 +280,7 @@ export function WarehouseConsole() {
             />
             <MetricCard
               label={t('warehouse.metric.locations')}
-              value={bins.length}
+              value={stats.inService}
               icon={<IconLocation />}
               tone="violet"
               footer={
@@ -217,28 +318,42 @@ export function WarehouseConsole() {
         </TabPanel>
       )}
 
-      {tab === 'parcels' && (
-        <TabPanel tab="parcels">
-          <ParcelQueue onChanged={loadSummary} />
-        </TabPanel>
-      )}
+      {tab === 'receiving' && (
+        <TabPanel tab="receiving">
+          {/* 1. The stack that just came off the van. */}
+          <ReceiveParcels onReceived={receiveParcels} />
 
-      {tab === 'intake' && (
-        <TabPanel tab="intake">
-          <Panel title={t('warehouse.intake.legend')} subtitle={t('warehouse.intake.subtitle')}>
-            <IntakePanel bins={bins} onLog={append} onDone={loadSummary} />
-          </Panel>
+          {/* 2. What is on the bench, and what each box needs next. */}
+          <ParcelQueue
+            key={queueVersion}
+            onChanged={loadSummary}
+            onBookContents={(parcelId) => {
+              setFocusParcelId(parcelId);
+              // Same page, so the bench below is brought into view rather than
+              // the operator being moved to it.
+              requestAnimationFrame(() => {
+                // Optional-called: bringing the bench into view is a courtesy,
+                // and an environment without smooth scrolling (or a bench that
+                // has not painted yet) must not take the click down with it.
+                document
+                  .getElementById('intake-bench')
+                  ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+              });
+            }}
+          />
 
-          <Panel title={t('warehouse.relocate.legend')}>
-            <RelocatePanel bins={bins} onLog={append} onDone={loadSummary} />
-          </Panel>
-
-          <Panel title={t('warehouse.lots.legend')} flush>
-            <LotsPanel onLog={append} onDone={loadSummary} />
-          </Panel>
-
-          <Panel title={t('warehouse.disposal.legend')} subtitle={t('warehouse.disposal.subtitle')}>
-            <DisposalPanel onLog={append} />
+          {/* 3. Emptying the box, and closing it out at the end of that. */}
+          <Panel
+            id="intake-bench"
+            title={t('warehouse.intake.legend')}
+            subtitle={t('warehouse.intake.subtitle')}
+          >
+            <IntakeBench
+              initialParcelId={focusParcelId}
+              onLog={append}
+              onDone={loadSummary}
+              onParcelClosed={() => setFocusParcelId('')}
+            />
           </Panel>
 
           {log.length > 0 && (
@@ -255,6 +370,27 @@ export function WarehouseConsole() {
 
       {tab === 'inventory' && (
         <TabPanel tab="inventory">
+          {/*
+            Work on cards ALREADY on a shelf. It sat on the intake tab only
+            because that is where the scan fields happened to live, and it made
+            the receiving bench a page of five unrelated forms.
+          */}
+          <Panel title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
+            <RelocatePanel onLog={append} onDone={loadSummary} />
+          </Panel>
+
+          <Panel title={t('warehouse.hold.legend')} subtitle={t('warehouse.hold.subtitle')}>
+            <HoldPanel onLog={append} onDone={loadSummary} />
+          </Panel>
+
+          <Panel title={t('warehouse.lots.legend')} flush>
+            <LotsPanel onLog={append} onDone={loadSummary} />
+          </Panel>
+
+          <Panel title={t('warehouse.disposal.legend')} subtitle={t('warehouse.disposal.subtitle')}>
+            <DisposalPanel onLog={append} />
+          </Panel>
+
           <InventoryTab bins={bins} t={t} />
         </TabPanel>
       )}
@@ -269,13 +405,7 @@ export function WarehouseConsole() {
 
       {tab === 'locations' && (
         <TabPanel tab="locations">
-          <BinsPanel
-            bins={bins}
-            counts={stats.countByBin}
-            reloadBins={loadBins}
-            onLog={append}
-            t={t}
-          />
+          <BinsPanel bins={bins} reloadBins={loadBins} onLog={append} t={t} />
         </TabPanel>
       )}
 
@@ -361,7 +491,10 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
 
 /**
  * The inventory table. On the shelf cut each row is joined to its bin so the
- * operator sees utilisation and a real stock status, not just a count.
+ * operator sees where the shelf is, what kind of shelving it is, and whether it
+ * is still in service — the three things that decide whether more goods can go
+ * there. What it no longer shows is a utilisation ratio, because the denominator
+ * it was drawn against was a number nobody enforced.
  */
 function InventoryRows({
   rows,
@@ -395,7 +528,7 @@ function InventoryRows({
             <th scope="col" className="td-end">
               {t('warehouse.report.colCount')}
             </th>
-            {isShelf && <th scope="col">{t('warehouse.bins.utilisation')}</th>}
+            {isShelf && <th scope="col">{t('warehouse.bins.kind')}</th>}
             {isShelf && <th scope="col">{t('admin.col.status')}</th>}
           </tr>
         </thead>
@@ -403,7 +536,6 @@ function InventoryRows({
           {rows.map((row, index) => {
             const bin = row.key ? byId.get(row.key) : undefined;
             const used = row.count;
-            const ratio = bin && bin.capacity > 0 ? used / bin.capacity : null;
             return (
               <tr key={`${row.key ?? 'none'}-${index}`}>
                 <td data-label={cutKey ? t(cutKey) : cut}>
@@ -416,24 +548,18 @@ function InventoryRows({
                   {used.toLocaleString()}
                 </td>
                 {isShelf && (
-                  <td data-label={t('warehouse.bins.utilisation')} className="num">
-                    {bin ? (
-                      <span dir="ltr">
-                        {used} / {bin.capacity}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
+                  <td data-label={t('warehouse.bins.kind')}>
+                    {bin ? t(bin.oversized ? 'warehouse.bins.kind.oversized' : 'warehouse.bins.kind.standard') : '—'}
                   </td>
                 )}
                 {isShelf && (
                   <td data-label={t('admin.col.status')}>
-                    {ratio === null ? (
+                    {!bin ? (
                       <StatusBadge>{t('warehouse.status.unshelved')}</StatusBadge>
-                    ) : ratio >= 1 ? (
-                      <StatusBadge tone="error">{t('warehouse.status.full')}</StatusBadge>
-                    ) : ratio >= NEAR_CAPACITY ? (
-                      <StatusBadge tone="warning">{t('warehouse.status.nearCapacity')}</StatusBadge>
+                    ) : !bin.active ? (
+                      <StatusBadge tone="warning">{t('warehouse.status.outOfService')}</StatusBadge>
+                    ) : used === 0 ? (
+                      <StatusBadge>{t('warehouse.status.empty')}</StatusBadge>
                     ) : (
                       <StatusBadge tone="success">{t('warehouse.status.inStock')}</StatusBadge>
                     )}
@@ -452,277 +578,19 @@ function InventoryRows({
    Intake
    ============================================================ */
 
-/** Bulk intake with a quantity stepper (1–100), a MANDATORY bin, and lot support. */
-function IntakePanel({
-  bins,
-  onLog,
-  onDone,
-}: {
-  bins: Bin[];
-  onLog: (line: string) => void;
-  onDone: () => Promise<void>;
-}) {
-  const { t } = useI18n();
-  // The owner is named by their PERMANENT USERNAME. The OW- intake ID is retired
-  // from this form: it is not offered, not defaulted, and not typed. The API
-  // still accepts one on `/intake/items` so a parcel bearing an old pre-printed
-  // label can be received, but that is a compatibility path, not a workflow.
-  const [ownerUsername, setOwnerUsername] = useState('');
-  // A key from the shared taxonomy, not free text. The API rejects anything it
-  // does not know, so the control has to offer exactly what the API accepts.
-  const [typeClass, setTypeClass] = useState<string>(ITEM_CLASSES[0]?.key ?? 'trading_card');
-  const [description, setDescription] = useState('');
-  const [conditionGrade, setConditionGrade] = useState('');
-  const [binId, setBinId] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  // Optional pre-assigned serial. Left blank the API mints one, which is the norm.
-  // It matters for a card that already has a catalogue photograph on file: photos
-  // are stored as /images/<SERIAL>, so booking the card in under that same serial
-  // is what makes its picture appear. Only meaningful for a single item — a bulk
-  // intake must mint a distinct serial per copy.
-  const [serialNumber, setSerialNumber] = useState('');
-  const [isLot, setIsLot] = useState(false);
-  const [lotSize, setLotSize] = useState(2);
-  // Barcodes minted by the most recent intake, so the operator can print the
-  // physical labels for exactly the items they just booked in.
-  const [labels, setLabels] = useState<{ id: string; barcode: string }[]>([]);
-  /**
-   * The open parcel these items are coming out of, if any.
-   *
-   * Choosing one fills in the owner and locks it, because the API refuses items
-   * booked into a parcel that belongs to somebody else — better to make that
-   * impossible to express than to explain it in an error.
-   */
-  const [openParcels, setOpenParcels] = useState<ParcelQueueRow[]>([]);
-  const [parcelId, setParcelId] = useState('');
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const queue = await api.get<ParcelQueueRow[]>('/parcels');
-        setOpenParcels(queue.filter((p) => p.status === 'opened' && p.ownerUsername));
-      } catch {
-        /* the parcel link is optional; hand intake still works without it */
-      }
-    })();
-  }, []);
-
-  const clampQty = (n: number) => Math.max(1, Math.min(100, Math.trunc(n) || 1));
-
-  const normalizedOwner = normalizeUsername(ownerUsername);
-  const ownerOk = isValidUsername(normalizedOwner);
-
-  const selectedClass = itemClassOption(typeClass);
-  // The lot controls are hidden entirely for classes that cannot arrive in bulk
-  // (a single graded slab is never "a lot"), and a lot below the threshold is
-  // announced here rather than being silently converted by the API without the
-  // operator knowing why they got N labels back instead of one.
-  const lotAllowed = selectedClass?.lotEligible ?? true;
-  const lotMin = selectedClass?.lotMinSize;
-  const lotWillSplit = isLot && lotAllowed && lotMin !== undefined && lotSize < lotMin;
-
-  async function intake() {
-    if (!binId) {
-      onLog(t('intake.binRequired'));
-      return;
-    }
-    if (!ownerOk) {
-      onLog(t('warehouse.intake.ownerUsernameInvalid'));
-      return;
-    }
-    // The API honours an explicit serial only when no quantity is sent, since a
-    // bulk intake has to mint one per copy. Omit quantity for that single case.
-    const serial = quantity === 1 ? serialNumber.trim() : '';
-    try {
-      const res = await api.post<{ id: string; barcode: string } | Array<{ id: string; barcode: string }>>(
-        '/intake/items',
-        {
-          ownerUsername: normalizedOwner,
-          typeClass,
-          description: description || undefined,
-          conditionGrade: conditionGrade || undefined,
-          binId,
-          serialNumber: serial || undefined,
-          quantity: serial ? undefined : quantity,
-          // Never send a lot for a class that cannot be one — the checkbox is
-          // hidden in that case, but its state survives a class change.
-          isLot: isLot && lotAllowed,
-          lotSize: isLot && lotAllowed ? lotSize : undefined,
-          parcelId: parcelId || undefined,
-        },
-      );
-      // A bulk intake returns the array; a single intake returns the one item.
-      const created = Array.isArray(res) ? res : [res];
-      setLabels(created);
-      onLog(t('intake.bulkDone', { count: created.length }));
-      await onDone();
-    } catch (e) {
-      onLog(t('warehouse.log.intakeError', { message: (e as Error).message }));
-    }
-  }
-
-  return (
-    <div className="stack stack--tight">
-      <div className="form-grid">
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.parcel')}</span>
-          <select
-            value={parcelId}
-            onChange={(e) => {
-              const next = e.target.value;
-              setParcelId(next);
-              const chosen = openParcels.find((p) => p.id === next);
-              if (chosen?.ownerUsername) setOwnerUsername(chosen.ownerUsername);
-            }}
-          >
-            <option value="">{t('warehouse.intake.noParcel')}</option>
-            {openParcels.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.code} — {p.ownerUsername}
-              </option>
-            ))}
-          </select>
-          <span className="field-hint">{t('warehouse.intake.parcelHint')}</span>
-        </label>
-
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.ownerUsername')}</span>
-          <input
-            value={ownerUsername}
-            onChange={(e) => setOwnerUsername(e.target.value)}
-            aria-invalid={ownerUsername.length > 0 && !ownerOk}
-            aria-describedby="intake-owner-hint"
-            disabled={parcelId !== ''}
-            dir="ltr"
-          />
-          <span
-            className={ownerUsername.length > 0 && !ownerOk ? 'field-error' : 'field-hint'}
-            id="intake-owner-hint"
-          >
-            {ownerUsername.length > 0 && !ownerOk
-              ? t('warehouse.intake.ownerUsernameInvalid')
-              : t('warehouse.intake.ownerUsernameHint')}
-          </span>
-        </label>
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.typeClass')}</span>
-          <select value={typeClass} onChange={(e) => setTypeClass(e.target.value)}>
-            {ITEM_CLASSES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {t(c.labelKey)}
-              </option>
-            ))}
-          </select>
-          {selectedClass?.oversized && (
-            <span className="field-hint">{t('warehouse.intake.oversizedHint')}</span>
-          )}
-        </label>
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.description')}</span>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.condition')}</span>
-          <input value={conditionGrade} onChange={(e) => setConditionGrade(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.serialNumber')}</span>
-          <input
-            value={serialNumber}
-            onChange={(e) => setSerialNumber(e.target.value)}
-            placeholder={t('warehouse.intake.serialNumberPlaceholder')}
-            disabled={quantity !== 1}
-            dir="ltr"
-          />
-          <span className="field-hint">{t('warehouse.intake.serialNumberHint')}</span>
-        </label>
-        <label className="field">
-          <span className="field-label">{t('intake.binRequired')}</span>
-          <select value={binId} onChange={(e) => setBinId(e.target.value)} required>
-            <option value="">{t('intake.selectBin')}</option>
-            {bins.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.barcode} — {b.zone}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="field">
-          <span className="field-label">{t('intake.quantity')}</span>
-          <span className="stepper">
-            <Button size="sm" aria-label="−" onClick={() => setQuantity((q) => clampQty(q - 1))}>
-              −
-            </Button>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={quantity}
-              onChange={(e) => setQuantity(clampQty(Number(e.target.value)))}
-              dir="ltr"
-              aria-label={t('intake.quantity')}
-            />
-            <Button size="sm" aria-label="+" onClick={() => setQuantity((q) => clampQty(q + 1))}>
-              +
-            </Button>
-          </span>
-        </div>
-      </div>
-
-      <div className="row">
-        {lotAllowed && (
-          <label className="check">
-            <input type="checkbox" checked={isLot} onChange={(e) => setIsLot(e.target.checked)} />
-            {t('intake.isLot')}
-          </label>
-        )}
-        {lotAllowed && isLot && (
-          <label className="check">
-            {t('intake.lotSize')}
-            <input
-              type="number"
-              min={1}
-              value={lotSize}
-              onChange={(e) => setLotSize(Math.max(1, Number(e.target.value)))}
-              dir="ltr"
-              style={{ width: '6rem' }}
-            />
-          </label>
-        )}
-        <span className="spacer" />
-        <Button variant="gold" icon={<IconPlus />} disabled={!binId || !typeClass} onClick={intake}>
-          {t('warehouse.intake.submit')}
-        </Button>
-      </div>
-
-      {lotWillSplit && (
-        <p className="field-hint">{t('intake.lotTooSmall', { min: lotMin ?? 0, count: lotSize })}</p>
-      )}
-
-      {labels.length > 0 && (
-        <>
-          <h3 className="panel-title" style={{ fontSize: 15 }}>
-            {t('warehouse.intake.lastLabels')}
-          </h3>
-          <ul className="card-grid">
-            {labels.map((l) => (
-              <li key={l.id} className="card">
-                <BarcodeLabel value={l.barcode} caption={description || typeClass} />
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-}
-
+/**
+ * Move something that is already in the vault to another shelf.
+ *
+ * Both fields take what a scanner produces. The item field accepts the BC-
+ * barcode printed on the item's own label (or its serial); the shelf field
+ * accepts the BIN- barcode on the shelf. Before this, both ends of a relocate
+ * demanded the internal id — a string that is printed on nothing — so the one
+ * way this form could not be driven was with the scanner it was named after.
+ */
 function RelocatePanel({
-  bins,
   onLog,
   onDone,
 }: {
-  bins: Bin[];
   onLog: (line: string) => void;
   onDone: () => Promise<void>;
 }) {
@@ -732,7 +600,9 @@ function RelocatePanel({
 
   async function relocate() {
     try {
-      await api.post(`/custody/items/${scanItem}/relocate`, { binId: scanBin });
+      await api.post(`/custody/items/${encodeURIComponent(scanItem.trim())}/relocate`, {
+        binId: scanBin.trim(),
+      });
       onLog(t('warehouse.log.relocateDone', { item: scanItem, bin: scanBin }));
       setScanItem('');
       setScanBin('');
@@ -743,29 +613,104 @@ function RelocatePanel({
   }
 
   return (
-    <div className="form-grid" style={{ alignItems: 'end' }}>
-      <label className="field">
-        <span className="field-label">{t('warehouse.relocate.scanItem')}</span>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} dir="ltr" />
-      </label>
-      <label className="field">
-        <span className="field-label">{t('warehouse.relocate.scanShelf')}</span>
-        <select value={scanBin} onChange={(e) => setScanBin(e.target.value)}>
-          <option value="">{t('intake.selectBin')}</option>
-          {bins.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.barcode} — {b.zone}
-            </option>
-          ))}
-        </select>
-      </label>
+    <div className="form-grid row-baseline">
+      <Field label={t('warehouse.relocate.scanItem')} hint={t('warehouse.relocate.scanItemHint')}>
+        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="BC-…" dir="ltr" />
+      </Field>
+      <Field label={t('warehouse.relocate.scanShelf')} hint={t('warehouse.relocate.scanShelfHint')}>
+        <input value={scanBin} onChange={(e) => setScanBin(e.target.value)} placeholder="BIN-XXXXXXXX" dir="ltr" />
+      </Field>
       <div className="field">
         <span className="field-label" aria-hidden="true">
           &nbsp;
         </span>
-        <Button variant="navy" icon={<IconScan />} disabled={!scanItem || !scanBin} onClick={relocate}>
+        <Button
+          variant="navy"
+          icon={<IconScan />}
+          disabled={!scanItem.trim() || !scanBin.trim()}
+          onClick={relocate}
+        >
           {t('warehouse.relocate.submit')}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Place or lift a hold, by scan.
+ *
+ * Shaped like `RelocatePanel` deliberately: it is the same gesture at the same
+ * bench — scan the card, press the thing. The two actions sit side by side
+ * rather than behind a toggle, because an operator holding a card knows which
+ * one they mean and a toggle would make them read before acting.
+ *
+ * The API is idempotent and now says so, so scanning a card that is already
+ * frozen reports that it was already frozen instead of claiming the hold was
+ * just placed.
+ */
+function HoldPanel({
+  onLog,
+  onDone,
+}: {
+  onLog: (line: string) => void;
+  onDone: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [scanItem, setScanItem] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function act(hold: boolean) {
+    const id = scanItem.trim();
+    setBusy(true);
+    try {
+      const path = `/custody/items/${encodeURIComponent(id)}/hold`;
+      const res = hold
+        ? await api.post<{ changed: boolean }>(path)
+        : await api.del<{ changed: boolean }>(path);
+      onLog(
+        t(
+          res.changed
+            ? hold
+              ? 'warehouse.log.holdPlaced'
+              : 'warehouse.log.holdReleased'
+            : hold
+              ? 'warehouse.log.holdAlready'
+              : 'warehouse.log.holdNone',
+          { item: id },
+        ),
+      );
+      setScanItem('');
+      await onDone();
+    } catch (e) {
+      onLog(t('warehouse.log.holdError', { message: (e as Error).message }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="form-grid row-baseline">
+      <Field label={t('warehouse.hold.scanItem')} hint={t('warehouse.hold.scanItemHint')}>
+        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="BC-…" dir="ltr" />
+      </Field>
+      <div className="field">
+        <span className="field-label" aria-hidden="true">
+          &nbsp;
+        </span>
+        <div className="actions">
+          <Button
+            variant="secondary"
+            icon={<IconAlert />}
+            disabled={busy || !scanItem.trim()}
+            onClick={() => void act(true)}
+          >
+            {t('warehouse.hold.place')}
+          </Button>
+          <Button variant="ghost" disabled={busy || !scanItem.trim()} onClick={() => void act(false)}>
+            {t('warehouse.hold.release')}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1111,68 +1056,136 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
    Locations (bins & shelves)
    ============================================================ */
 
-/** INV-01: create bins (barcode auto-generated when omitted) + list all bins. */
+/**
+ * Shelving.
+ *
+ * Creating one asks for the two things the stow assignment needs, plus the zone
+ * label: which building the shelf is in, and whether it is oversized storage.
+ *
+ * It used to ask for two more. A CAPACITY, which nothing enforced and which the
+ * table then drew a utilisation bar against — a number that produced a red badge
+ * and no decision. And a BARCODE, which is why shelves ended up called
+ * `BIN-A-001`: given a field, an operator names the thing. The serial is minted
+ * by the API now and cannot be typed, because a shelf that can be named is a
+ * shelf whose identity encodes a zone it might be moved out of and an ordinal
+ * that races the next operator to claim it.
+ *
+ * A shelf is never deleted: items reference their bin forever, and the transfer
+ * ledger references bins that items left long ago. Taking one out of service is
+ * a flag. It keeps everything it holds, stops being handed out by the directed
+ * stow, and empties as its contents are picked.
+ */
 function BinsPanel({
   bins,
-  counts,
   reloadBins,
   onLog,
   t,
 }: {
   bins: Bin[];
-  counts: Map<string, number>;
   reloadBins: () => Promise<void>;
   onLog: (line: string) => void;
   t: TranslateFn;
 }) {
   const [zone, setZone] = useState('');
-  const [capacity, setCapacity] = useState('10');
-  const [barcode, setBarcode] = useState('');
+  const [oversized, setOversized] = useState(false);
+  const [facilityCode, setFacilityCode] = useState('');
+  const [facilities, setFacilities] = useState<InboundAddress[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
+        // Only a storing site can hold a shelf. A forwarding facility holds
+        // nothing by definition — everything that lands there is sent onward —
+        // so offering one here would invite a bin in a building with no shelves.
+        const storing = list.filter((f) => f.role === 'primary');
+        setFacilities(storing);
+        if (storing[0]) setFacilityCode(storing[0].code);
+      } catch {
+        /* the API defaults a new bin to the primary facility on its own */
+      }
+    })();
+  }, []);
 
   async function create() {
     try {
       const bin = await api.post<Bin>('/custody/bins', {
         zone,
-        capacity: Number(capacity),
-        barcode: barcode || undefined,
+        facilityCode: facilityCode || undefined,
+        oversized,
       });
-      onLog(t('warehouse.log.binCreated', { barcode: bin.barcode, zone: bin.zone }));
+      onLog(t('warehouse.log.binCreated', { serial: bin.serialNumber, zone: bin.zone }));
       setZone('');
-      setBarcode('');
+      setOversized(false);
       await reloadBins();
     } catch (e) {
       onLog(t('warehouse.log.binCreateError', { message: (e as Error).message }));
     }
   }
 
+  async function setActive(b: Bin, active: boolean) {
+    setBusy(b.id);
+    try {
+      await api.patch(`/custody/bins/${b.id}`, { active });
+      onLog(
+        t(active ? 'warehouse.log.binReturned' : 'warehouse.log.binRetired', {
+          serial: b.serialNumber,
+        }),
+      );
+      await reloadBins();
+    } catch (e) {
+      onLog(t('warehouse.log.binCreateError', { message: (e as Error).message }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <>
       <Panel title={t('warehouse.bins.legend')} subtitle={t('warehouse.bins.subtitle')}>
-        <div className="form-grid" style={{ alignItems: 'end' }}>
+        <div className="form-grid row-baseline">
           <label className="field">
             <span className="field-label">{t('warehouse.bins.zone')}</span>
             <input value={zone} onChange={(e) => setZone(e.target.value)} />
           </label>
-          <label className="field">
-            <span className="field-label">{t('warehouse.bins.capacity')}</span>
-            <input type="number" min={0} value={capacity} onChange={(e) => setCapacity(e.target.value)} dir="ltr" />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('warehouse.bins.barcode')}</span>
-            <input value={barcode} onChange={(e) => setBarcode(e.target.value)} dir="ltr" />
-          </label>
+          {facilities.length > 1 && (
+            <label className="field">
+              <span className="field-label">{t('warehouse.bins.facility')}</span>
+              <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
+                {facilities.map((f) => (
+                  <option key={f.code} value={f.code}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="field">
             <span className="field-label" aria-hidden="true">
               &nbsp;
             </span>
-            <Button variant="gold" icon={<IconPlus />} disabled={!zone || capacity === ''} onClick={create}>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={oversized}
+                onChange={(e) => setOversized(e.target.checked)}
+              />
+              {t('warehouse.bins.oversized')}
+            </label>
+          </div>
+          <div className="field">
+            <span className="field-label" aria-hidden="true">
+              &nbsp;
+            </span>
+            <Button variant="gold" icon={<IconPlus />} disabled={!zone} onClick={create}>
               {t('warehouse.bins.create')}
             </Button>
           </div>
         </div>
       </Panel>
 
-      <Panel title={t('warehouse.metric.locations')} flush>
+      <Panel title={t('warehouse.metric.locations')} subtitle={t('warehouse.bins.listSubtitle')} flush>
         {bins.length === 0 ? (
           <EmptyState title={t('warehouse.bins.empty')} text={t('warehouse.bins.emptyText')} icon={<IconLocation />} />
         ) : (
@@ -1180,47 +1193,60 @@ function BinsPanel({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th scope="col">{t('warehouse.bins.colBarcode')}</th>
+                  <th scope="col">{t('warehouse.bins.colSerial')}</th>
                   <th scope="col">{t('warehouse.bins.colZone')}</th>
+                  <th scope="col">{t('warehouse.bins.kind')}</th>
                   <th scope="col" className="td-end">
-                    {t('warehouse.bins.utilisation')}
+                    {t('warehouse.bins.colItems')}
                   </th>
                   <th scope="col">{t('admin.col.status')}</th>
+                  <th scope="col" className="td-tight" />
                 </tr>
               </thead>
               <tbody>
-                {bins.map((b) => {
-                  const used = counts.get(b.id) ?? 0;
-                  const ratio = b.capacity > 0 ? used / b.capacity : 0;
-                  return (
-                    <tr key={b.id}>
-                      {/* Shelf labels get printed and stuck on the physical bin. */}
-                      <td dir="ltr">
-                        <div className="barcode-label">
-                          <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />
-                          <BarcodePrintButton value={b.barcode} caption={`Zone ${b.zone}`} />
-                        </div>
-                      </td>
-                      <td>{b.zone}</td>
-                      <td className="td-end num">
-                        <span dir="ltr">
-                          {used} / {b.capacity}
-                        </span>
-                      </td>
-                      <td>
-                        {ratio >= 1 ? (
-                          <StatusBadge tone="error">{t('warehouse.status.full')}</StatusBadge>
-                        ) : ratio >= NEAR_CAPACITY ? (
-                          <StatusBadge tone="warning">{t('warehouse.status.nearCapacity')}</StatusBadge>
-                        ) : used === 0 ? (
-                          <StatusBadge>{t('warehouse.status.empty')}</StatusBadge>
-                        ) : (
-                          <StatusBadge tone="success">{t('warehouse.status.inStock')}</StatusBadge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {bins.map((b) => (
+                  <tr key={b.id}>
+                    {/* Shelf labels get printed and stuck on the physical bin. The
+                        serial is printed under the bars because it is what an
+                        operator reads out when the scanner will not read. */}
+                    <td dir="ltr">
+                      <div className="barcode-label">
+                        <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />
+                        <code>{b.serialNumber}</code>
+                        <BarcodePrintButton value={b.barcode} caption={`Zone ${b.zone}`} />
+                      </div>
+                    </td>
+                    <td data-label={t('warehouse.bins.colZone')}>
+                      {b.zone}
+                      {b.facilityCode && <span className="dt-sub">{b.facilityCode}</span>}
+                    </td>
+                    <td data-label={t('warehouse.bins.kind')}>
+                      {t(b.oversized ? 'warehouse.bins.kind.oversized' : 'warehouse.bins.kind.standard')}
+                    </td>
+                    <td data-label={t('warehouse.bins.colItems')} className="td-end num">
+                      {b.itemCount.toLocaleString()}
+                    </td>
+                    <td data-label={t('admin.col.status')}>
+                      {!b.active ? (
+                        <StatusBadge tone="warning">{t('warehouse.status.outOfService')}</StatusBadge>
+                      ) : b.itemCount === 0 ? (
+                        <StatusBadge>{t('warehouse.status.empty')}</StatusBadge>
+                      ) : (
+                        <StatusBadge tone="success">{t('warehouse.status.inStock')}</StatusBadge>
+                      )}
+                    </td>
+                    <td className="td-tight">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy === b.id}
+                        onClick={() => void setActive(b, !b.active)}
+                      >
+                        {t(b.active ? 'warehouse.bins.retire' : 'warehouse.bins.return')}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

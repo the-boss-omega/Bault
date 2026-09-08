@@ -10,6 +10,7 @@
  * will insure up to, and how long they take. Everything else follows from those,
  * including what it costs. So that is what a tier is here.
  */
+import { formatMinor } from '../../shared/money';
 
 export interface GradingTier {
   key: string;
@@ -124,7 +125,7 @@ export function checkTier(tier: GradingTier, declaredMinor: number): TierProblem
   if (declaredMinor > tier.maxDeclaredMinor) {
     problems.push({
       field: 'declaredMinor',
-      message: `${tier.label} covers declared values up to ${(tier.maxDeclaredMinor / 100).toFixed(2)}. Choose a higher tier.`,
+      message: `${tier.label} covers declared values up to ${formatMinor(tier.maxDeclaredMinor)}. Choose a higher tier.`,
     });
   }
   // The inverse guard: a low-value card on the walkthrough tier is somebody
@@ -132,7 +133,7 @@ export function checkTier(tier: GradingTier, declaredMinor: number): TierProblem
   if (tier.requiresApproval && declaredMinor < WALKTHROUGH_THRESHOLD_MINOR) {
     problems.push({
       field: 'tier',
-      message: `${tier.label} is for cards declared above ${(WALKTHROUGH_THRESHOLD_MINOR / 100).toFixed(2)}. A lower tier costs less and covers this.`,
+      message: `${tier.label} is for cards declared above ${formatMinor(WALKTHROUGH_THRESHOLD_MINOR)}. A lower tier costs less and covers this.`,
     });
   }
   return problems;

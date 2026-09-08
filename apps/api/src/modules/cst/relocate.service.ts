@@ -13,11 +13,13 @@ export class RelocateService {
     return this.custody.run((tx) => this.custody.relocate(tx, itemId, binId, actorId));
   }
 
-  placeHold(itemId: string, actorId: string): Promise<void> {
+  /** Resolves true when a hold was actually placed, false when one was already on. */
+  placeHold(itemId: string, actorId: string): Promise<boolean> {
     return this.custody.run((tx) => this.custody.setHold(tx, itemId, true, actorId));
   }
 
-  releaseHold(itemId: string, actorId: string): Promise<void> {
+  /** Resolves true when a hold was actually lifted, false when there was none. */
+  releaseHold(itemId: string, actorId: string): Promise<boolean> {
     return this.custody.run((tx) => this.custody.setHold(tx, itemId, false, actorId));
   }
 }

@@ -20,6 +20,7 @@ import {
   DetailRow,
   EmptyState,
   ErrorState,
+  Field,
   MetricCard,
   Panel,
   SkeletonTable,
@@ -471,11 +472,9 @@ function RegisterParcelForm({
             <span className="field-label">{t('inbound.register.carrier')}</span>
             <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
           </label>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.tracking')}</span>
+          <Field label={t('inbound.register.tracking')} hint={t('inbound.register.trackingHint')}>
             <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} dir="ltr" />
-            <span className="field-hint">{t('inbound.register.trackingHint')}</span>
-          </label>
+          </Field>
           <label className="field">
             <span className="field-label">{t('inbound.register.contents')}</span>
             <input value={declaredContents} onChange={(e) => setDeclaredContents(e.target.value)} />

@@ -127,6 +127,48 @@
       "when": 1785073300000,
       "tag": "0017_money_in_money_out",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785073400000,
+      "tag": "0018_stow_wherever_it_fits",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785073500000,
+      "tag": "0019_bins_get_a_serial",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785073600000,
+      "tag": "0020_an_offer_knows_who_made_it",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785073700000,
+      "tag": "0021_an_address_names_a_country_by_its_code",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785073800000,
+      "tag": "0022_a_parcel_can_be_photographed",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785073900000,
+      "tag": "0023_ask_for_something_we_do_not_list",
+      "breakpoints": true
     }
   ]
 }

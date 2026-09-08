@@ -658,6 +658,24 @@ function ShipmentDrawer({
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * What cancelling would cost, fetched so the warning can name it.
+   *
+   * Loaded lazily and only when the drawer is open — it is one small published
+   * constant, and asking for it on every list render would be a request per card
+   * for a number that does not change.
+   */
+  const [restockingFeeMinor, setRestockingFeeMinor] = useState<number | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const svc = await api.get<{ restockingFeeMinor: number }>('/shipping/services');
+        setRestockingFeeMinor(svc.restockingFeeMinor ?? null);
+      } catch {
+        /* the warning falls back to an em dash; cancelling still works */
+      }
+    })();
+  }, []);
 
   /**
    * A request that has not been picked can be called off for nothing; one that
@@ -785,8 +803,13 @@ function ShipmentDrawer({
         <p className="field-hint">{t('ship.customsOnFile')}</p>
       )}
 
+      {/* What happens at the far end. Shown on any parcel crossing a border,
+          including one with nothing declared yet — that is precisely the case
+          worth warning about. */}
+      {shipment.destinationCountry !== 'US' && <CustomsReadiness shipmentId={shipment.id} />}
+
       {(payable || cancellable) && (
-        <div className="row" style={{ marginBlockStart: 'var(--sp-4)' }}>
+        <div className="row stack-top">
           {payable && (
             <Button
               variant="gold"
@@ -815,7 +838,14 @@ function ShipmentDrawer({
           </label>
           {/* Said plainly BEFORE the button, not in a receipt afterwards. */}
           <span className="field-hint">
-            {shipment.status === 'rates_selected' ? t('ship.cancelFeeWarning') : t('ship.cancelFree')}
+            {shipment.status === 'rates_selected'
+              ? t('ship.cancelFeeWarning', {
+                  // Named, not implied. The figure is published on
+                  // `/shipping/services`; a warning that says "a fee" is asking
+                  // somebody to accept a cost nobody was willing to state.
+                  amount: restockingFeeMinor === null ? '—' : formatUsd(restockingFeeMinor),
+                })
+              : t('ship.cancelFree')}
           </span>
           <div className="row">
             <Button
@@ -890,6 +920,26 @@ function RequestTable({
     }
   }
 
+  /**
+   * A custom request is the second thing a collector has to answer.
+   *
+   * The routes are separate from the buyout's because the two are opposite
+   * trades: accepting a buyout quote CREDITS the wallet, and accepting a custom
+   * quote DEBITS it. Sharing one handler would have made the difference a
+   * parameter, and the difference is the whole point.
+   */
+  async function answerCustomQuote(request: MyRequest, action: 'accept' | 'decline') {
+    setBusy(true);
+    try {
+      await api.post(`/services/custom/${request.id}/${action}-quote`);
+      await onChanged?.(action === 'accept' ? t('custom.quoteAccepted') : t('custom.quoteDeclined'));
+    } catch (e) {
+      onError?.((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Panel title={title} subtitle={subtitle} flush>
       {requests === null ? (
@@ -912,6 +962,11 @@ function RequestTable({
                 <tr key={request.id}>
                   <td data-label={t('services.colService')} className="dt-primary">
                     {serviceTypeLabel(t, request.type)}
+                    {request.type === 'custom' && (
+                      <span className="dt-sub">
+                        {String((request.typeFields as { summary?: string } | null)?.summary ?? '')}
+                      </span>
+                    )}
                   </td>
                   <td data-label={t('services.colStatus')}>
                     <StatusBadge tone={STATUS_TONE[request.status] ?? 'neutral'}>
@@ -922,6 +977,42 @@ function RequestTable({
                     {formatDate(request.createdAt, locale)}
                   </td>
                   <td className="td-tight">
+                    {/*
+                      What the collector asked for, in their own words — without
+                      it a row reads "A custom request", which names the type and
+                      not the thing.
+                    */}
+                    {request.type === 'custom' && <CustomRequestRow request={request} />}
+
+                    {request.type === 'custom' &&
+                      (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
+                        <div className="actions">
+                          <span className="hint">
+                            {t('custom.quotedAt', {
+                              amount: formatUsd(
+                                Number((request.typeFields as { priceMinor?: number })?.priceMinor ?? 0),
+                              ),
+                            })}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="gold"
+                            disabled={busy}
+                            onClick={() => void answerCustomQuote(request, 'accept')}
+                          >
+                            {t('custom.acceptQuote')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => void answerCustomQuote(request, 'decline')}
+                          >
+                            {t('custom.declineQuote')}
+                          </Button>
+                        </div>
+                      )}
+
                     {request.type === 'buyout' &&
                       (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
                         <div className="actions">
@@ -958,5 +1049,149 @@ function RequestTable({
         </div>
       )}
     </Panel>
+  );
+}
+
+/**
+ * What a custom request currently says, beyond its status badge.
+ *
+ * The three states a collector needs to be able to tell apart are: nobody has
+ * looked at it yet, somebody quoted it (and the buttons beside this are live),
+ * and somebody said no — with the reason, because a refusal without one leaves
+ * them guessing whether to ask differently or stop asking.
+ */
+function CustomRequestRow({ request }: { request: MyRequest }) {
+  const { t } = useI18n();
+  const fields = (request.typeFields as Record<string, unknown> | null) ?? {};
+  const stage = String(fields.stage ?? '');
+
+  if (stage === 'awaiting_quote') return <span className="hint">{t('custom.awaitingQuote')}</span>;
+  if (stage === 'declined') {
+    return <span className="hint">{t('custom.declinedBy', { reason: String(fields.declineReason ?? '') })}</span>;
+  }
+  if (stage === 'accepted') return <span className="hint">{t('custom.inProgress')}</span>;
+  if (stage === 'done') return <span className="hint">{String(fields.completionNotes ?? '')}</span>;
+  if (stage === 'quoted') return <span className="hint">{String(fields.scope ?? '')}</span>;
+  return null;
+}
+
+/* ============================================================
+   Customs readiness
+   ============================================================ */
+
+interface ReadinessWarning {
+  code: string;
+  message: string;
+}
+
+interface DestinationSpecific {
+  country: string;
+  name: string;
+  authority: { name: string; url: string };
+  notes: string[];
+  notHandled: string[];
+}
+
+interface Readiness {
+  destinationCountry: string;
+  international: boolean;
+  ready: boolean;
+  warnings: ReadinessWarning[];
+  guidance: { universal: string[]; specific: DestinationSpecific | null };
+}
+
+/**
+ * What will happen to this parcel at the border, before it leaves.
+ *
+ * The commercial invoice answers "what did you declare"; this answers the
+ * question that comes first and had nowhere to be asked — "am I about to send
+ * this somewhere it will get stuck, and what will the person receiving it owe".
+ *
+ * Three things it deliberately will not do. It never states a duty figure:
+ * thresholds move, and a number Bault made up is a number somebody plans
+ * around, so the destination's own authority is linked instead. It reports
+ * rather than blocks, because an estimated weight is a fact worth knowing and
+ * not grounds to refuse a parcel. And it names what Bault does NOT do at the
+ * destination — a collector expecting Bault to lodge a clearance instruction it
+ * has never lodged is exactly who this panel exists for.
+ */
+function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
+  const { t } = useI18n();
+  const [data, setData] = useState<Readiness | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setData(await api.get<Readiness>(`/shipping/shipments/${shipmentId}/customs/readiness`));
+      } catch {
+        /* guidance is additive — a shipment page still works without it */
+      }
+    })();
+  }, [shipmentId]);
+
+  if (!data || !data.international) return null;
+  const spec = data.guidance.specific;
+
+  return (
+    <div className="stack stack--tight stack-top">
+      <h3 className="panel-title" style={{ fontSize: 15, margin: 0 }}>
+        {t('customs.title', { country: spec?.name ?? data.destinationCountry })}
+      </h3>
+
+      {data.warnings.length > 0 && (
+        <ul className="check-list list-unbounded">
+          {data.warnings.map((w) => (
+            <li key={w.code}>
+              <span>
+                <StatusBadge tone="warning">{t('customs.check')}</StatusBadge>{' '}
+                <span className="hint">{w.message}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <ul className="check-list list-unbounded">
+        {data.guidance.universal.map((line) => (
+          <li key={line}>
+            <span className="hint">{line}</span>
+          </li>
+        ))}
+        {spec?.notes.map((line) => (
+          <li key={line}>
+            <span className="hint">{line}</span>
+          </li>
+        ))}
+      </ul>
+
+      {spec ? (
+        <>
+          {spec.notHandled.length > 0 && (
+            <>
+              <p className="field-hint" style={{ margin: 0 }}>
+                <strong>{t('customs.notHandled')}</strong>
+              </p>
+              <ul className="check-list list-unbounded">
+                {spec.notHandled.map((line) => (
+                  <li key={line}>
+                    <span className="hint">{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="field-hint">
+            {t('customs.authority')}{' '}
+            <a href={spec.authority.url} target="_blank" rel="noopener noreferrer">
+              {spec.authority.name}
+            </a>
+          </p>
+        </>
+      ) : (
+        /* An honest absence. A generic paragraph pretending to be
+           destination advice would be worse than saying we have not written it. */
+        <p className="field-hint">{t('customs.noGuidance', { country: data.destinationCountry })}</p>
+      )}
+    </div>
   );
 }

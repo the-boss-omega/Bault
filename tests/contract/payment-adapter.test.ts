@@ -18,8 +18,13 @@ describe('contract: PaymentAdapter', () => {
     });
     expect(res.providerRef).toMatch(/^sbx_charge_/);
     expect(['succeeded', 'pending', 'failed']).toContain(res.status);
-    // The result carries NO card fields — only an opaque provider ref.
-    expect(Object.keys(res)).toEqual(['providerRef', 'status']);
+    // The result carries NO card fields — only an opaque provider ref and the
+    // figures the provider reported, which the caller checks against what it
+    // asked for before crediting anything.
+    expect(Object.keys(res).sort()).toEqual(
+      ['providerRef', 'settledAmountMinor', 'settledCurrency', 'status'].sort(),
+    );
+    expect(JSON.stringify(res)).not.toMatch(/pan|cvv|card_number/i);
   });
 
   it('createTopup and createPayout return provider refs', async () => {
@@ -29,9 +34,23 @@ describe('contract: PaymentAdapter', () => {
     expect(payout.providerRef).toMatch(/^sbx_payout_/);
   });
 
-  it('verifyWebhook parses a signed event payload', () => {
-    const event = adapter.verifyWebhook(JSON.stringify({ id: 'evt_1', type: 'topup.settled', data: {} }), 'sig');
+  /**
+   * `verifyWebhook` is ASYNC and takes the whole delivery — body AND headers —
+   * because real verification is a network call against the provider using
+   * several transmission headers, not a string compare. The interface changed
+   * shape when PayPal arrived; this asserts the new one.
+   */
+  it('verifyWebhook parses a delivery and returns the event', async () => {
+    const event = await adapter.verifyWebhook({
+      rawBody: JSON.stringify({ id: 'evt_1', type: 'topup.settled', data: {} }),
+      headers: { 'x-anything': 'ignored by the sandbox' },
+    });
     expect(event.id).toBe('evt_1');
     expect(event.type).toBe('topup.settled');
+  });
+
+  it('declares itself as not handling real money', () => {
+    expect(adapter.handlesRealMoney).toBe(false);
+    expect(adapter.providerName).toBe('sandbox');
   });
 });

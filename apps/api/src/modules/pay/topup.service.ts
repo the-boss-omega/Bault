@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
+import type { WebhookDelivery } from '@bault/adapters';
 import { PAYMENT_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { PaymentAdapter } from '@bault/adapters';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
@@ -59,8 +60,10 @@ export class TopupService {
   }
 
   /** Signed, idempotent webhook (real providers). Deduped by provider event id. */
-  async handleWebhook(rawBody: string, signature: string): Promise<void> {
-    const event = this.payment.verifyWebhook(rawBody, signature);
+  async handleWebhook(delivery: WebhookDelivery): Promise<void> {
+    // Throws on anything it cannot authenticate. Nothing below this line runs
+    // for a delivery the provider did not vouch for.
+    const event = await this.payment.verifyWebhook(delivery);
     const [existing] = await this.db
       .select({ id: externalPayment.id })
       .from(externalPayment)

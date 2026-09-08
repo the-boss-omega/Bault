@@ -1,45 +1,110 @@
 /* ============================================================
    Bault design system.
 
-   A single light theme built on the Bault palette: deep navy rail,
-   warm gold accents, a very light cool-gray workspace and white panels.
+   ONE system, two themes, and a type scale everything is measured on.
 
    Direction is inherited from <html dir>, which the i18n provider flips
    between rtl (he) and ltr (en). Every rule uses CSS logical properties,
    so the whole shell — including the navigation rail and the detail
    drawer — mirrors to the leading/trailing edge automatically.
+
+   ------------------------------------------------------------
+   WHY THE TYPEFACE CHANGED
+   ------------------------------------------------------------
+   The interface was set in Libertinus Math — a mathematical typesetting
+   face — and the stylesheet asked it for 54 different bold and semibold
+   declarations. The family ships ONE weight. Every heading, every emphasised
+   figure and every button label in the product was therefore a synthetic
+   bold: the browser smearing a 400 outline sideways. That is visible at any
+   size and is the single clearest tell of an interface nobody set type for.
+
+   Worse, the DEFAULT locale is Hebrew, and neither Libertinus nor its STIX
+   fallback covers a single Hebrew glyph. The default experience fell through
+   to Rubik/Assistant — not self-hosted either — and from there to whatever
+   serif the machine happened to have. The product's own primary language was
+   rendering in an unspecified font.
+
+   So the UI is now set in the platform's own interface face: SF Pro on Apple,
+   Segoe UI Variable on Windows, Roboto on Android, Inter/Cantarell on Linux.
+   Every one is a real optical-sized UI family with genuine weights, full
+   Hebrew coverage, and hinting tuned for screens. It also keeps the project's
+   stated principle — no third-party request to render its own text — and keeps
+   it *better* than before, because now nothing falls back to a guess.
+
+   Identity does not come from an exotic file. It comes from the scale below,
+   from the mono face carrying every serial, shelf and money figure (this is a
+   product where everything has a number), from the navy-and-gold palette, and
+   from the spacing.
    ============================================================ */
 
-/* Libertinus Math, self-hosted (SIL Open Font License 1.1 — the licence text
-   ships next to the font at /fonts/OFL.txt). Self-hosted rather than linked to a
-   CDN so the app makes no third-party request to render its own text, and so the
-   required face is actually present instead of silently falling back to a
-   platform serif on machines that do not have it installed.
-
-   The family ships a single 400 weight. `font-synthesis: weight` is left on so
-   headings still read as heavier, but weight alone is never the only signal of
-   hierarchy in this stylesheet — size, colour and spacing carry it too. */
-@font-face {
-  font-family: 'Libertinus Math';
-  src: url('/fonts/LibertinusMath-Regular.woff2') format('woff2');
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 
   /* ============================================================
-     The Bault palette. Six named colours, used unequally on purpose:
-     Soft Ice carries the workspace, Deep Ink Navy the structural
-     surfaces, Graphite the text, and Electric Teal / Achievement Gold
-     / Signal Mint appear only where they mean something (focus,
-     premium emphasis, success). Every ramp below is derived from one
-     of the six so tints stay in the same family.
+     TYPE
      ============================================================ */
 
-  /* ---- Deep Ink Navy: structural and hero surfaces ---- */
+  /**
+   * The interface face. Real weights, full Hebrew coverage, no network.
+   * `-apple-system` and `BlinkMacSystemFont` must lead for Safari.
+   */
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI',
+    Roboto, 'Helvetica Neue', 'Noto Sans Hebrew', Arial, sans-serif;
+
+  /**
+   * The mono face, and the most characteristic decision in this system.
+   *
+   * Everything in Bault has an identifier — BIN-QJLTDJH4 on a shelf,
+   * SN-DR97-0001 on a card, PKG-… on a parcel, an amount on a ledger row. All
+   * of them are read aloud, compared down a column, or typed from a label into
+   * a scanner. All of them are set in mono, so a serial always LOOKS like a
+   * serial and a column of money always lines up. Nothing else is.
+   */
+  --font-mono:
+    ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono',
+    Menlo, Consolas, monospace;
+
+  /**
+   * The scale. Ten steps, and nothing may sit between them.
+   *
+   * The old stylesheet had 21 distinct sizes including 12.5px, 13.5px and
+   * 14.5px — quarter-point nudges made screen by screen, which is what makes a
+   * product feel assembled rather than designed. These are the only sizes.
+   */
+  --fs-micro: 11px;   /* uppercase eyebrows, table headers */
+  --fs-caption: 12px; /* hints, timestamps, meta */
+  --fs-sm: 13px;      /* dense table cells, secondary text */
+  --fs-base: 14px;    /* controls, most body copy in a dense app */
+  --fs-md: 15px;      /* reading copy, panel body */
+  --fs-lg: 17px;      /* panel titles */
+  --fs-xl: 20px;      /* section headings */
+  --fs-2xl: 26px;     /* page titles */
+  --fs-3xl: 34px;     /* hero figures */
+  --fs-4xl: 44px;     /* the balance, and nothing else */
+
+  --lh-tight: 1.2;   /* headings and figures */
+  --lh-snug: 1.35;   /* controls, table cells */
+  --lh-normal: 1.55; /* reading copy */
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /** Uppercase micro-labels need air or they read as a smudge. */
+  --track-label: 0.06em;
+  --track-tight: -0.011em; /* large sizes only; UI faces are set for text sizes */
+
+  /* ============================================================
+     PALETTE — light
+     ============================================================
+     Six named colours used unequally on purpose. Navy carries structure,
+     gold means "premium / selected" and appears rarely, teal means
+     "interactive", and the status three are deliberately outside the brand so
+     a failure can never be mistaken for an accent.
+     ============================================================ */
+
   --navy: #0b1f33;
   --navy-900: #071523;
   --navy-800: #0b1f33;
@@ -47,7 +112,6 @@
   --navy-600: #17324b;
   --navy-500: #1e3d59;
 
-  /* ---- Achievement Gold: premium emphasis, active rail selector ---- */
   --gold: #e0b44c;
   --gold-bright: #edc76a;
   --gold-deep: #b78f33;
@@ -55,36 +119,31 @@
   --gold-surface: rgba(224, 180, 76, 0.18);
   --gold-surface-strong: rgba(224, 180, 76, 0.32);
 
-  /* ---- Electric Teal: focus and active interaction ---- */
   --teal: #00b8a9;
   --teal-strong: #009a8e;
   --teal-surface: rgba(0, 184, 169, 0.14);
 
-  /* ---- Signal Mint: success and positive status ---- */
   --mint: #80e1d1;
 
-  /* ---- Graphite: neutral dark surfaces ---- */
   --graphite: #26323d;
   --graphite-soft: #3a4956;
 
-  /* ---- Surfaces: Soft Ice dominant ---- */
-  --bg: #f3f7f8;
+  /* Surfaces. A slight cool bias rather than a neutral grey — chosen, not
+     inherited. */
+  --bg: #f2f6f8;
   --surface: #ffffff;
   --surface-2: #eaf1f3;
   --surface-3: #dde8eb;
+  --surface-sunken: #e6eef0;
   --border: #dbe5e9;
   --border-strong: #c1d0d6;
 
-  /* ---- Text: Graphite-led ---- */
-  --text: #26323d;
-  --text-2: #5b6b78;
-  --text-muted: #8798a3;
+  --text: #1a252f;
+  --text-2: #566672;
+  --text-muted: #7d8d98;
   --text-on-navy: #f3f7f8;
+  --text-on-accent: #071523;
 
-  /* ---- Status. Success reads as Signal Mint; info borrows Electric
-         Teal so "active/interactive" stays one colour across the app.
-         Warning and error stay outside the palette on purpose — a
-         failure must not be mistakable for premium gold. ---- */
   --success: #0f7a63;
   --success-bg: #e2f7f2;
   --error: #b3322c;
@@ -96,7 +155,17 @@
   --violet: #4f4a86;
   --violet-bg: #eeedf7;
 
-  /* ---- Spacing (8px system) ---- */
+  /* Colours that were hard-coded mid-stylesheet, named so both themes can
+     answer for them. */
+  --success-strong: var(--success-strong);
+  --error-strong: var(--error-strong);
+  --warning-strong: var(--warning-strong);
+  --warning-tint: var(--warning-tint);
+  --link: var(--link);
+
+  /* ============================================================
+     SPACE — a 4px base, named by intent as well as by size
+     ============================================================ */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -106,44 +175,66 @@
   --sp-8: 32px;
   --sp-10: 40px;
   --sp-12: 48px;
+  --sp-16: 64px;
 
-  /* ---- Radius ---- */
+  /** Named rhythms, so a panel's padding is a decision made once. */
+  --gap-field: var(--sp-2);    /* label → control */
+  --gap-group: var(--sp-4);    /* control → control */
+  --gap-section: var(--sp-6);  /* panel → panel */
+  --gap-page: var(--sp-8);     /* header → first panel */
+  --pad-panel: var(--sp-6);
+  --pad-cell: var(--sp-3) var(--sp-4);
+
+  /* ============================================================
+     RADIUS — four steps, down from six
+     ============================================================ */
   --r-xs: 6px;
-  --r-sm: 9px;
-  --r-md: 11px;
-  --r-lg: 14px;
-  --r-xl: 16px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
   --r-pill: 999px;
 
-  /* ---- Elevation ---- */
-  --shadow-card: 0 4px 14px rgba(11, 31, 51, 0.06);
-  --shadow-pop: 0 10px 32px rgba(11, 31, 51, 0.12);
+  /* ============================================================
+     ELEVATION — three levels, each with a job
+     ============================================================
+     Resting surface, floating thing, and the rail. A fourth would be
+     decoration; anything above the drawer is a modal and gets a scrim
+     instead of a bigger shadow.
+     ============================================================ */
+  --shadow-card: 0 1px 2px rgba(11, 31, 51, 0.04), 0 4px 14px rgba(11, 31, 51, 0.06);
+  --shadow-pop: 0 2px 6px rgba(11, 31, 51, 0.08), 0 12px 32px rgba(11, 31, 51, 0.14);
   --shadow-hero: 0 12px 34px rgba(11, 31, 51, 0.18);
   --shadow-rail: 0 0 40px rgba(11, 31, 51, 0.22);
-  /* Cast along the rail's trailing edge only while it is expanded. */
   --shadow-rail-open: 12px 0 36px rgba(11, 31, 51, 0.26);
+  --ring: 0 0 0 3px var(--teal-surface);
 
-  /* ---- Motion ---- */
-  --dur-xs: 120ms;
-  --dur-sm: 150ms;
+  /* ============================================================
+     MOTION
+     ============================================================
+     Short enough to feel like response rather than animation. Anything a
+     person triggers resolves inside 200ms; only the rail, which is a
+     deliberate reveal, is allowed longer.
+     ============================================================ */
+  --dur-xs: 90ms;
+  --dur-sm: 130ms;
   --dur-md: 180ms;
   --dur-lg: 220ms;
-  /* The rail opens a little slower than it closes: expanding is a deliberate
-     reveal, collapsing should get out of the way. */
   --dur-rail-open: 200ms;
   --dur-rail-close: 165ms;
-  /* The gold selector's travel between destinations. */
   --dur-selector: 190ms;
   --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ---- Layout ---- */
+  /* ============================================================
+     LAYOUT
+     ============================================================ */
   --rail-w: 76px;
   --rail-w-open: 232px;
   --drawer-w: 420px;
   --content-max: 1560px;
+  /** Reading copy stops here; a 1560px-wide paragraph is unreadable. */
+  --measure: 68ch;
 
-  /* ---- Layers ---- */
   --z-content: 1;
   --z-sticky: 30;
   --z-popover: 70;
@@ -151,23 +242,110 @@
   --z-drawer: 90;
   --z-modal: 100;
 
-  /* Libertinus Math is the required primary face. It is a math/serif family
-     with a smaller x-height and narrower counters than an interface sans, so
-     the base size is raised from 15px to 16px and the line-height opened up
-     rather than shrinking type to fit — controls were re-measured against the
-     new proportions instead of being compressed.
-
-     STIX Two Math is the fallback with the closest metrics; Hebrew has no
-     coverage in either, so the Hebrew faces the app already shipped with stay
-     at the end of the stack and take over per-glyph for RTL content. */
-  --font-body: 'Libertinus Math', 'STIX Two Math', 'Rubik', 'Assistant', serif;
-  --font-numeric: 'Libertinus Math', 'STIX Two Math', serif;
-
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.55;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  font-synthesis: none; /* real weights only — never a faked bold again */
+}
+
+/* ============================================================
+   PALETTE — dark
+   ============================================================
+   Not an inversion. The navy that carries structure in the light theme
+   becomes the GROUND in dark, which is why the two feel like one product
+   rather than a theme and its negative: the rail barely changes, and the
+   workspace comes to meet it.
+
+   Three states, as browsers actually report them: an explicit choice stamps
+   `data-theme`, and the default "system" setting stamps nothing — so the
+   media query is guarded against an explicit light choice, and the
+   `[data-theme='dark']` block repeats the tokens so a toggle wins in both
+   directions.
+   ============================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0a1420;
+    --surface: #0f1d2c;
+    --surface-2: #16283a;
+    --surface-3: #1e3348;
+    --surface-sunken: #0a1420;
+    --border: #24384c;
+    --border-strong: #35506a;
+
+    --text: #e8eef4;
+    --text-2: #a3b4c2;
+    --text-muted: #7b8fa0;
+
+    --success: #4ec9a6;
+    --success-bg: #0e2f28;
+    --success-strong: #6fd8b8;
+    --error: #f08a84;
+    --error-bg: #341614;
+    --error-strong: #f4a7a2;
+    --warning: #e0a94e;
+    --warning-bg: #33260e;
+    --warning-strong: #edc274;
+    --warning-tint: #2a2010;
+    --info: #3fc8bb;
+    --info-bg: #0d2e2c;
+    --violet: #9b95d8;
+    --violet-bg: #21203a;
+    --link: #8fa9ea;
+
+    --gold-surface: rgba(224, 180, 76, 0.16);
+    --gold-surface-strong: rgba(224, 180, 76, 0.28);
+    --teal-surface: rgba(0, 184, 169, 0.18);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.36);
+    --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.5);
+    --shadow-hero: 0 12px 34px rgba(0, 0, 0, 0.5);
+    --shadow-rail: 0 0 40px rgba(0, 0, 0, 0.5);
+    --shadow-rail-open: 12px 0 36px rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0a1420;
+  --surface: #0f1d2c;
+  --surface-2: #16283a;
+  --surface-3: #1e3348;
+  --surface-sunken: #0a1420;
+  --border: #24384c;
+  --border-strong: #35506a;
+
+  --text: #e8eef4;
+  --text-2: #a3b4c2;
+  --text-muted: #7b8fa0;
+
+  --success: #4ec9a6;
+  --success-bg: #0e2f28;
+  --success-strong: #6fd8b8;
+  --error: #f08a84;
+  --error-bg: #341614;
+  --error-strong: #f4a7a2;
+  --warning: #e0a94e;
+  --warning-bg: #33260e;
+  --warning-strong: #edc274;
+  --warning-tint: #2a2010;
+  --info: #3fc8bb;
+  --info-bg: #0d2e2c;
+  --violet: #9b95d8;
+  --violet-bg: #21203a;
+  --link: #8fa9ea;
+
+  --gold-surface: rgba(224, 180, 76, 0.16);
+  --gold-surface-strong: rgba(224, 180, 76, 0.28);
+  --teal-surface: rgba(0, 184, 169, 0.18);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.36);
+  --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-hero: 0 12px 34px rgba(0, 0, 0, 0.5);
+  --shadow-rail: 0 0 40px rgba(0, 0, 0, 0.5);
+  --shadow-rail-open: 12px 0 36px rgba(0, 0, 0, 0.55);
 }
 
 *,
@@ -180,7 +358,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-ui);
 }
+
+/* ============================================================
+   Headings — one scale, applied
+   ============================================================
+   Sizes come from the scale and nowhere else, and `text-wrap: balance` stops
+   a two-word orphan on the second line of every panel title.
+   ============================================================ */
 
 h1,
 h2,
@@ -188,11 +374,32 @@ h3,
 h4,
 h5 {
   margin: 0;
-  font-weight: 700;
   color: var(--text);
-  /* Libertinus is a serif with generous sidebearings — the tightening that
-     suited Inter crowds it, so tracking sits at 0 for headings. */
-  letter-spacing: 0;
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--track-tight);
+}
+
+h2 {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+}
+
+h3 {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+
+h4,
+h5 {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
 }
 
 p {
@@ -206,27 +413,38 @@ ol {
 }
 
 a {
-  color: var(--info);
+  color: var(--link);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
 }
 
 code,
 .code {
-  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
-  font-size: 0.86em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   padding: 0.1em 0.4em;
 }
 
-/* Tabular figures keep money, ids, dates and quantities aligned down a column.
-   Applied to every numeric surface the requirements name: balances, card and
-   serial numbers, dates, quantities, transaction values and admin metrics. */
+/* ============================================================
+   Everything with a number in it
+   ============================================================
+   Mono AND tabular. A serial that changes width between rows cannot be
+   scanned down a column, and money that does not line up cannot be compared —
+   which is most of what anybody does on these screens.
+   ============================================================ */
+
 .num,
 .amt,
 .hero-value,
 .metric-value,
 .data-table td.num,
+.data-table th.num,
 .detail-amount,
 .price,
 .code,
@@ -235,10 +453,21 @@ time,
 .stat-value,
 .rail-count,
 .state-count,
+.mono,
 .detail-value[dir='ltr'],
 .data-table td[dir='ltr'] {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
+  letter-spacing: 0;
+}
+
+/* A figure is read at a glance; it gets the weight, not the decoration. */
+.hero-value,
+.metric-value,
+.stat-value {
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
 }
 
 ::selection {
@@ -346,7 +575,7 @@ time,
   background: linear-gradient(150deg, var(--gold-bright), var(--gold-deep));
   color: var(--navy-900);
   font-weight: 800;
-  font-size: 20px;
+  font-size: var(--fs-xl);
   letter-spacing: -0.03em;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.28);
 }
@@ -371,7 +600,7 @@ time,
 
 .rail-word {
   display: block;
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.2;
@@ -379,7 +608,7 @@ time,
 
 .rail-sub {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -393,7 +622,7 @@ time,
   inset-inline-start: 0;
   width: var(--rail-w);
   text-align: center;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -443,7 +672,7 @@ time,
   font: inherit;
   /* Nudged up from 14px: Libertinus has a smaller x-height than the sans this
      replaced, so the same nominal size reads noticeably smaller. */
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 500;
   text-align: start;
   cursor: pointer;
@@ -505,7 +734,7 @@ time,
   border-radius: var(--r-pill);
   background: var(--gold);
   color: var(--navy-900);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   line-height: 20px;
   text-align: center;
@@ -546,7 +775,7 @@ time,
      gold wash that strengthens toward the trailing edge where the mechanism is.
      The brightness is deliberately held back here — the notch and rivet below
      are what should catch the eye, not the plate. */
-  background: linear-gradient(to var(--sel-dir, right), var(--graphite), #2c3a46 60%, var(--bronze));
+  background: linear-gradient(to var(--sel-dir, right), var(--graphite), var(--graphite) 60%, var(--bronze));
   box-shadow: inset 0 0 0 1px rgba(224, 180, 76, 0.3);
   transition: transform var(--dur-selector) var(--ease-out),
     height var(--dur-selector) var(--ease-out), background var(--dur-rail-open) var(--ease-out),
@@ -559,7 +788,7 @@ time,
   background: linear-gradient(
     to var(--sel-dir, right),
     var(--graphite),
-    #33404c 55%,
+    var(--graphite) 55%,
     var(--gold-surface)
   );
 }
@@ -595,7 +824,7 @@ time,
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff3d2, var(--gold) 55%, var(--bronze));
+  background: radial-gradient(circle at 35% 30%, var(--warning-tint), var(--gold) 55%, var(--bronze));
   box-shadow: 0 0 0 1px rgba(11, 31, 51, 0.55);
 }
 
@@ -621,7 +850,7 @@ time,
 }
 
 .page-title {
-  font-size: 29px;
+  font-size: var(--fs-2xl);
   font-weight: 680;
   letter-spacing: -0.022em;
   line-height: 1.15;
@@ -633,7 +862,7 @@ time,
   align-items: center;
   gap: 6px;
   margin-block-start: 6px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -670,14 +899,38 @@ time,
   align-items: center;
   gap: var(--sp-2);
   height: 36px;
-  padding-inline: 14px;
+  padding-inline: 12px 14px;
   border-radius: var(--r-pill);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   white-space: nowrap;
+}
+
+/* The identifier carries the weight; the role is context set beside it. */
+.status-pill-main {
+  color: var(--text-1);
+  letter-spacing: 0.01em;
+}
+
+.status-pill-sub {
+  padding-inline-start: var(--sp-2);
+  border-inline-start: 1px solid var(--border);
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.status-pill--warning {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.status-pill--warning .status-pill-main,
+.status-pill--warning .status-pill-sub {
+  color: var(--warning);
 }
 
 .status-dot {
@@ -686,6 +939,11 @@ time,
   border-radius: 50%;
   background: var(--success);
   box-shadow: 0 0 0 3px rgba(47, 140, 76, 0.15);
+}
+
+.status-dot--warning {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px rgba(168, 114, 15, 0.18);
 }
 
 /* ---- Icon buttons (bell, close, row menu) ---- */
@@ -729,7 +987,7 @@ time,
   position: absolute;
   inset-block-end: 3px;
   inset-inline-end: 4px;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -757,7 +1015,7 @@ time,
   border-radius: var(--r-pill);
   background: var(--gold);
   color: var(--navy-900);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -798,7 +1056,7 @@ time,
   border-radius: 50%;
   background: linear-gradient(150deg, var(--navy-600), var(--navy-800));
   color: #fff;
-  font-size: 12px;
+  font-size: var(--fs-caption);
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -845,7 +1103,7 @@ time,
 }
 
 .menu-name {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 650;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -853,7 +1111,7 @@ time,
 
 .menu-sub {
   margin-block-start: 2px;
-  font-size: 12px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
@@ -874,7 +1132,7 @@ time,
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-base);
   text-align: start;
   cursor: pointer;
   transition: background var(--dur-xs) var(--ease);
@@ -901,7 +1159,7 @@ time,
 
 .menu-item-note {
   margin-inline-start: auto;
-  font-size: 12px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
@@ -917,7 +1175,7 @@ time,
 }
 
 .pop-title {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 650;
 }
 
@@ -943,13 +1201,13 @@ time,
 }
 
 .pop-row-title {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
 .pop-row-text {
   margin-block-start: 2px;
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -959,7 +1217,7 @@ time,
 
 .pop-row-date {
   margin-block-start: 4px;
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   color: var(--text-muted);
 }
 
@@ -1030,14 +1288,14 @@ time,
 }
 
 .panel-title {
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 650;
   letter-spacing: -0.01em;
 }
 
 .panel-subtitle {
   margin-block-start: 3px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -1095,7 +1353,7 @@ time,
   background: transparent;
   color: var(--text-2);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 550;
   white-space: nowrap;
   cursor: pointer;
@@ -1145,7 +1403,7 @@ time,
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -1225,7 +1483,7 @@ time,
 .btn--sm {
   min-height: 36px;
   padding-inline: 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .btn--sm svg {
@@ -1263,7 +1521,7 @@ time,
   background: transparent;
   color: var(--navy-800);
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease);
@@ -1295,7 +1553,7 @@ time,
   background: var(--surface);
   color: var(--text-2);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease);
@@ -1357,7 +1615,7 @@ input,
 select,
 textarea {
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-base);
   min-height: 42px;
   padding: 9px 12px;
   border: 1px solid var(--border-strong);
@@ -1410,18 +1668,18 @@ input[type='search'] {
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-2);
 }
 
 .field-hint {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
 .field-error {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   font-weight: 550;
   color: var(--error);
 }
@@ -1441,7 +1699,7 @@ input[type='search'] {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  font-size: 14px;
+  font-size: var(--fs-base);
   cursor: pointer;
 }
 
@@ -1455,7 +1713,7 @@ input[type='search'] {
 .money-input span {
   position: absolute;
   inset-inline-start: 13px;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text-muted);
   pointer-events: none;
@@ -1465,7 +1723,7 @@ input[type='search'] {
   width: 100%;
   min-height: 52px;
   padding-inline-start: 30px;
-  font-size: 20px;
+  font-size: var(--fs-xl);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -1478,7 +1736,7 @@ input[type='search'] {
   position: relative;
   overflow: hidden;
   padding: var(--sp-8);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   background: linear-gradient(120deg, var(--navy-700) 0%, var(--navy-800) 45%, var(--navy-900) 100%);
   color: var(--text-on-navy);
   box-shadow: var(--shadow-hero);
@@ -1492,7 +1750,7 @@ input[type='search'] {
 }
 
 .hero-label {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1501,7 +1759,7 @@ input[type='search'] {
 
 .hero-value {
   margin-block-start: var(--sp-3);
-  font-size: 52px;
+  font-size: var(--fs-4xl);
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.03em;
@@ -1528,7 +1786,7 @@ input[type='search'] {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-on-navy);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
 }
 
@@ -1539,7 +1797,7 @@ input[type='search'] {
 }
 
 .hero-note {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: rgba(228, 233, 255, 0.55);
 }
 
@@ -1620,13 +1878,13 @@ input[type='search'] {
 }
 
 .metric-label {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text-2);
 }
 
 .metric-value {
-  font-size: 30px;
+  font-size: var(--fs-3xl);
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.025em;
@@ -1636,7 +1894,7 @@ input[type='search'] {
 .metric-foot {
   margin-block-start: auto;
   padding-block-start: var(--sp-1);
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
@@ -1678,12 +1936,12 @@ input[type='search'] {
 }
 
 .flow-label {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .flow-value {
-  font-size: 20px;
+  font-size: var(--fs-xl);
   font-weight: 680;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -1701,7 +1959,7 @@ input[type='search'] {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .data-table caption {
@@ -1718,7 +1976,7 @@ input[type='search'] {
   border-block-end: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -1777,7 +2035,7 @@ input[type='search'] {
 .dt-sub {
   display: block;
   margin-block-start: 2px;
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
@@ -1855,7 +2113,7 @@ input[type='search'] {
   border-radius: var(--r-pill);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1891,7 +2149,7 @@ input[type='search'] {
 
 .pill--gold {
   background: rgba(224, 180, 76, 0.16);
-  color: #8a6812;
+  color: var(--warning-strong);
 }
 
 .pill--violet {
@@ -1930,8 +2188,8 @@ input[type='search'] {
   flex-direction: column;
   width: min(var(--drawer-w), 100vw);
   background: var(--surface);
-  border-start-start-radius: var(--r-xl);
-  border-end-start-radius: var(--r-xl);
+  border-start-start-radius: var(--r-lg);
+  border-end-start-radius: var(--r-lg);
   animation: drawer-in var(--dur-lg) var(--ease-out);
 }
 
@@ -1964,13 +2222,13 @@ input[type='search'] {
 
 .drawer-title {
   flex: 1 1 auto;
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 650;
 }
 
 .drawer-subtitle {
   margin-block-start: 3px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -2018,21 +2276,21 @@ input[type='search'] {
 
 .detail-label {
   flex: 0 0 40%;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
 .detail-value {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 550;
   overflow-wrap: anywhere;
 }
 
 .detail-value-sub {
   margin-block-start: 2px;
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   font-weight: 400;
   color: var(--text-muted);
 }
@@ -2046,7 +2304,7 @@ input[type='search'] {
 }
 
 .detail-amount-label {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   font-weight: 550;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -2055,7 +2313,7 @@ input[type='search'] {
 
 .detail-amount-value {
   margin-block-start: 6px;
-  font-size: 32px;
+  font-size: var(--fs-3xl);
   font-weight: 700;
   letter-spacing: -0.025em;
 }
@@ -2084,7 +2342,7 @@ input[type='search'] {
   max-height: 92vh;
   padding: var(--sp-6);
   background: var(--surface);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow-pop);
   animation: pop-in var(--dur-md) var(--ease-out);
 }
@@ -2102,7 +2360,7 @@ input[type='search'] {
 
 .modal-head h4 {
   flex: 1 1 auto;
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 650;
 }
 
@@ -2164,13 +2422,13 @@ input[type='search'] {
 }
 
 .empty-title {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 650;
 }
 
 .empty-text {
   max-width: 46ch;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -2186,8 +2444,8 @@ input[type='search'] {
   border: 1px solid rgba(201, 50, 43, 0.28);
   border-radius: var(--r-md);
   background: var(--error-bg);
-  color: #8f231e;
-  font-size: 13.5px;
+  color: var(--error-strong);
+  font-size: var(--fs-sm);
 }
 
 .errorbox svg {
@@ -2215,8 +2473,8 @@ input[type='search'] {
   border: 1px solid rgba(47, 140, 76, 0.28);
   border-radius: var(--r-md);
   background: var(--success-bg);
-  color: #24713d;
-  font-size: 13.5px;
+  color: var(--success-strong);
+  font-size: var(--fs-sm);
   font-weight: 550;
 }
 
@@ -2238,8 +2496,8 @@ input[type='search'] {
   border: 1px solid rgba(49, 93, 197, 0.22);
   border-radius: var(--r-md);
   background: var(--info-bg);
-  color: #27479b;
-  font-size: 13.5px;
+  color: var(--link);
+  font-size: var(--fs-sm);
 }
 
 /* ---- Skeletons ---- */
@@ -2272,7 +2530,7 @@ input[type='search'] {
 
 .skel-hero {
   min-height: 188px;
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
 }
 
 .skel-metric {
@@ -2317,13 +2575,13 @@ input[type='search'] {
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 650;
   color: var(--navy-800);
 }
 
 .card-desc {
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   color: var(--text-2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2336,13 +2594,13 @@ input[type='search'] {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
 .card .price {
   margin-block: var(--sp-1);
-  font-size: 21px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--navy-800);
@@ -2405,7 +2663,7 @@ input[type='search'] {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
-  font-size: 15px;
+  font-size: var(--fs-md);
   line-height: 1;
   cursor: pointer;
 }
@@ -2476,11 +2734,11 @@ input[type='search'] {
 .auth-brand .rail-mark {
   width: 44px;
   height: 44px;
-  font-size: 22px;
+  font-size: var(--fs-xl);
 }
 
 .auth-brand-word {
-  font-size: 24px;
+  font-size: var(--fs-2xl);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -2491,18 +2749,18 @@ input[type='search'] {
   gap: var(--sp-4);
   padding: var(--sp-8);
   background: var(--surface);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   box-shadow: 0 24px 60px rgba(8, 12, 36, 0.4);
 }
 
 .auth-card h2 {
-  font-size: 22px;
+  font-size: var(--fs-xl);
   text-align: center;
 }
 
 .auth-switch {
   text-align: center;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   color: var(--text-2);
 }
 
@@ -2510,16 +2768,28 @@ input[type='search'] {
   padding: var(--sp-3);
   border-radius: var(--r-sm);
   background: var(--surface-2);
-  font-size: 12px;
+  font-size: var(--fs-caption);
   line-height: 1.55;
   color: var(--text-2);
   text-align: center;
 }
 
-.auth-lang {
+/*
+ * The brand row on the signed-out pages carries the language control.
+ *
+ * It used to be a text button in a footer that printed the name of the OTHER
+ * language. It is the shell's globe switcher now, pushed to the trailing edge of
+ * the brand row — top of the card, where somebody who cannot read the form looks
+ * first.
+ */
+.auth-brand {
   display: flex;
-  justify-content: center;
-  margin-block-start: var(--sp-4);
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.auth-brand .pop-wrap {
+  margin-inline-start: auto;
 }
 
 .auth-lang .btn {
@@ -2557,7 +2827,7 @@ input[type='search'] {
    ============================================================ */
 
 .hint {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--text-muted);
 }
 
@@ -2615,7 +2885,7 @@ input[type='search'] {
   max-height: 15rem;
   overflow-y: auto;
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
 }
 
 .log li {
@@ -2644,7 +2914,7 @@ input[type='search'] {
   border-radius: var(--r-pill);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2677,7 +2947,7 @@ input[type='search'] {
 
 .badge--sold {
   background: rgba(224, 180, 76, 0.16);
-  color: #8a6812;
+  color: var(--warning-strong);
 }
 
 /* Legacy table styling, aligned with the new data table. */
@@ -2692,7 +2962,7 @@ input[type='search'] {
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .table th,
@@ -2707,7 +2977,7 @@ input[type='search'] {
 .table thead th {
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -2727,7 +2997,7 @@ input[type='search'] {
   width: 100%;
   min-width: 6rem;
   min-height: 36px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .table td input[type='checkbox'] {
@@ -2797,11 +3067,11 @@ input[type='search'] {
   .mobile-bar .rail-mark {
     width: 32px;
     height: 32px;
-    font-size: 16px;
+    font-size: var(--fs-md);
   }
 
   .mobile-bar-title {
-    font-size: 15px;
+    font-size: var(--fs-md);
     font-weight: 650;
   }
 
@@ -2853,7 +3123,7 @@ input[type='search'] {
   }
 
   .page-title {
-    font-size: 24px;
+    font-size: var(--fs-2xl);
   }
 
   .metric-grid {
@@ -2865,7 +3135,7 @@ input[type='search'] {
   }
 
   .hero-value {
-    font-size: 38px;
+    font-size: var(--fs-4xl);
   }
 
   .panel-head,
@@ -2883,7 +3153,7 @@ input[type='search'] {
     inset-inline: 0;
     width: 100%;
     max-height: 92vh;
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
     animation: sheet-in var(--dur-lg) var(--ease-out);
   }
 
@@ -2940,7 +3210,7 @@ input[type='search'] {
 
   .dt-wrap--stack .data-table td::before {
     content: attr(data-label);
-    font-size: 11.5px;
+    font-size: var(--fs-micro);
     font-weight: 650;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -3021,7 +3291,7 @@ input[type='search'] {
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: 17px;
+  font-size: var(--fs-lg);
   color: var(--text);
 }
 
@@ -3049,7 +3319,7 @@ input[type='search'] {
   background: var(--surface);
   color: var(--text-2);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--fs-md);
   cursor: pointer;
   white-space: nowrap;
   transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease),
@@ -3089,7 +3359,7 @@ input[type='search'] {
   border-radius: var(--r-pill);
   background: var(--surface-3);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 
@@ -3226,7 +3496,7 @@ input[type='search'] {
 .drawer-heading {
   margin-block-start: var(--sp-6);
   margin-block-end: var(--sp-2);
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 
 .drawer-actions {
@@ -3239,6 +3509,242 @@ input[type='search'] {
   margin-block-start: 4px;
 }
 
+/*
+ * A service button states its own price.
+ *
+ * Every service on a card is billed the moment the button is pressed, and not
+ * one of them said so — the figures lived in a price table in the Help section,
+ * which is documentation rather than a decision. The label sits at the start,
+ * the charge at the end, and the two are pushed apart so a column of them reads
+ * down the trailing edge.
+ */
+.action-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  inline-size: 100%;
+}
+
+/*
+ * The end of an intake run: the labels for what was just booked in.
+ *
+ * Set off from the form above it, because it is an outcome rather than another
+ * field — the operator has finished typing and is now going to the printer.
+ */
+.intake-labels {
+  padding-block-start: var(--sp-4);
+  margin-block-start: var(--sp-2);
+  border-block-start: 1px solid var(--border);
+}
+
+/* ============================================================
+   Photographs at the bench
+   ============================================================ */
+
+/*
+ * Present to assistive technology, invisible on screen.
+ *
+ * `display: none` would take the file input out of the accessibility tree along
+ * with the layout, and the Add-a-photo button drives it programmatically — a
+ * hidden-but-real input is exactly what that needs.
+ */
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The strip of thumbnails under a photo field.
+ *
+ * Square, fixed and wrapping: a receiving bench attaches one to six pictures and
+ * the row must not reflow the form around them as they arrive. The add control
+ * is the last item in the same list, so it sits where the next photo will.
+ */
+.photo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-thumb {
+  position: relative;
+  inline-size: 72px;
+  block-size: 72px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.photo-thumb img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-thumb--pending .skel {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Sits on the image, so it reads as belonging to that photo and not to the row. */
+.photo-remove {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  inline-size: 22px;
+  block-size: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  border: none;
+}
+
+.photo-remove svg {
+  inline-size: 13px;
+  block-size: 13px;
+}
+
+.photo-field {
+  gap: var(--sp-2);
+}
+
+/* ============================================================
+   The receiving bench: a stack of parcels
+   ============================================================ */
+
+/*
+ * One card per box in the run.
+ *
+ * The rows are visually separated rather than being a table, because each one
+ * carries a form AND a photo strip — a table row that contains a photo strip is
+ * a table row that has stopped being a row.
+ */
+.parcel-rows {
+  display: grid;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.parcel-row {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.parcel-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* The number the refusal names when a row is bad ("Parcel 3 of 7: …"). */
+.parcel-row-index {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--navy-800);
+  color: #fff;
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.parcel-row-head .icon-btn {
+  margin-inline-start: auto;
+}
+
+/*
+ * The marketplace filter bar.
+ *
+ * A row of narrow controls above the shelf, wrapping rather than scrolling so a
+ * phone stacks them instead of hiding the last one off the edge. It sits inside
+ * the panel body above the grid — not in the panel's tool slot, which holds the
+ * one control (search) that was already there and is the only one wide enough to
+ * need the room.
+ */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  padding-block-end: var(--sp-4);
+  margin-block-end: var(--sp-4);
+  border-block-end: 1px solid var(--border);
+}
+
+.filter-bar .btn {
+  /* Sits on the baseline of the controls rather than the top of the row. */
+  margin-block-end: 2px;
+}
+
+/*
+ * A field sized for a toolbar rather than a form.
+ *
+ * Deliberately not a fixed width: the type and sort selects need room for their
+ * longest option, the price boxes do not, and a single number would make one of
+ * them wrong.
+ */
+.field--compact {
+  flex: 0 1 auto;
+  min-inline-size: 7rem;
+}
+
+.field--compact .field-label {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  /* Two per row on a phone: five controls in a column is a page of scrolling
+     before the first listing. */
+  .field--compact {
+    flex: 1 1 calc(50% - var(--sp-3));
+  }
+}
+
+/*
+ * A field that takes the spare width of its row.
+ *
+ * Replaces two inline `style={{ flex: '1 1 220px' }}` props that were the only
+ * layout in the product expressed as a literal in JSX. The number differed
+ * between the two (220px and 200px) for no reason anybody could state.
+ */
+.field--grow {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+.action-price {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  opacity: 0.75;
+}
+
 .drawer-note,
 .ask-notice {
   display: flex;
@@ -3247,7 +3753,7 @@ input[type='search'] {
   margin-block-start: var(--sp-3);
   padding: var(--sp-3);
   border-radius: var(--r-md);
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.45;
 }
 
@@ -3335,7 +3841,7 @@ input[type='search'] {
   max-width: 70ch;
   padding: var(--sp-3);
   border-radius: var(--r-lg);
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 
 .ask-bubble--you {
@@ -3350,7 +3856,7 @@ input[type='search'] {
 }
 
 .ask-who {
-  font-size: 12px;
+  font-size: var(--fs-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -3416,7 +3922,7 @@ input[type='search'] {
   background: var(--surface);
   color: var(--text-2);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-base);
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease),
     border-color var(--dur-sm) var(--ease);
@@ -3508,7 +4014,7 @@ input[type='search'] {
   padding: var(--sp-3);
   margin-block-end: var(--sp-4);
   border-radius: var(--r-md);
-  font-size: 14.5px;
+  font-size: var(--fs-base);
   line-height: 1.5;
 }
 
@@ -3530,14 +4036,14 @@ input[type='search'] {
   padding-inline-start: var(--sp-4);
   border-inline-start: 2px solid var(--border);
   color: var(--text-2);
-  font-size: 15px;
+  font-size: var(--fs-md);
   line-height: 1.6;
 }
 
 .faq-source-answer h4,
 .faq-source-answer h5 {
   margin-block: var(--sp-4) var(--sp-2);
-  font-size: 15px;
+  font-size: var(--fs-md);
   color: var(--text);
 }
 
@@ -3586,7 +4092,7 @@ input[type='search'] {
 
 .legal-toc-title {
   margin-block-end: var(--sp-2);
-  font-size: 14px;
+  font-size: var(--fs-base);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -3605,7 +4111,7 @@ input[type='search'] {
 
 .legal-section h3 {
   margin-block-end: var(--sp-2);
-  font-size: 16px;
+  font-size: var(--fs-md);
 }
 
 /* Legal text is line-broken by its author; those breaks are part of the
@@ -3613,7 +4119,7 @@ input[type='search'] {
 .legal-pre {
   margin: 0;
   font: inherit;
-  font-size: 14.5px;
+  font-size: var(--fs-base);
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -3730,4 +4236,364 @@ input[type='search'] {
     box-shadow: none;
     border-color: #999;
   }
+}
+
+/* ============================================================
+   ADDITIONS — the system layer
+   ============================================================
+   Everything below was either missing or scattered across component files as
+   inline style. Kept at the end so it wins on order without needing
+   specificity tricks — the cascade does the work.
+   ============================================================ */
+
+/* ---- Fields, properly associated -------------------------------------- */
+
+/**
+ * `.field-label` is now a real <label for>, so clicking the caption focuses the
+ * control and a screen reader announces the caption alone as the field's name.
+ * The hint is attached by aria-describedby instead of being glued into it.
+ */
+.field > .field-label {
+  display: block;
+  cursor: pointer;
+}
+
+/** Weight, not colour, carries a field caption. It is a name, not a note. */
+.field-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+  line-height: var(--lh-snug);
+}
+
+.field-hint,
+.field-error {
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: var(--measure);
+}
+
+.field-error {
+  font-weight: var(--fw-medium);
+  color: var(--error);
+}
+
+/** A field in error states it on the control too, not only under it. */
+.field:has(.field-error) input,
+.field:has(.field-error) select,
+.field:has(.field-error) textarea,
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--error);
+}
+
+/* ---- Buttons: one busy state, one disabled state ---------------------- */
+
+/**
+ * Disabled was previously only `opacity`, which dims the label to a contrast
+ * ratio nobody can read and still leaves the control looking pressable. It now
+ * flattens to a surface colour and takes `not-allowed`, so "you cannot do this
+ * yet" is legible rather than merely faint.
+ */
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.btn--gold:disabled,
+.btn--navy:disabled {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.btn--loading {
+  cursor: progress;
+}
+
+.btn-spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-block-start-color: transparent;
+  animation: btn-spin 620ms linear infinite;
+  flex: none;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Focus: one ring, everywhere -------------------------------------- */
+
+/**
+ * There were seven `:focus-visible` rules for a keyboard user who touches
+ * dozens of controls. One rule, on everything focusable, with a ring that
+ * reads on both themes and on the navy rail.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+.rail :where(a, button):focus-visible {
+  outline-color: var(--gold-bright);
+}
+
+/* ---- Reading measure --------------------------------------------------- */
+
+/**
+ * Prose stops at 68 characters. A workspace is up to 1560px wide, and a
+ * paragraph set across all of it cannot be read — the eye loses the line.
+ */
+.panel-subtitle,
+.empty-state p,
+.hint,
+.lede {
+  max-width: var(--measure);
+}
+
+/* ---- Loading: skeletons that match what replaces them ------------------ */
+
+/**
+ * A spinner says "wait"; a skeleton says "a table is coming, this wide, with
+ * this many rows". The difference is whether the layout jumps when it lands.
+ */
+@keyframes skel-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.skel,
+.skel-block,
+.skel-metric {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 50%,
+    var(--surface-2) 100%
+  );
+  border-radius: var(--r-sm);
+  animation: skel-pulse 1.4s var(--ease) infinite;
+}
+
+/* ---- Status badges: shape as well as colour ---------------------------- */
+
+/**
+ * Colour alone is not a signal — roughly one in twelve men cannot separate the
+ * red and green these badges use. A tone now carries a weight and a border as
+ * well as a hue, so the difference survives being printed, screenshotted in
+ * greyscale, or seen by somebody who does not distinguish them.
+ */
+.badge,
+.status-badge {
+  font-weight: var(--fw-semibold);
+  border: 1px solid transparent;
+  letter-spacing: var(--track-label);
+}
+
+.badge--error,
+.status-badge--error {
+  border-color: color-mix(in srgb, var(--error) 30%, transparent);
+}
+
+.badge--warning,
+.status-badge--warning {
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+}
+
+.badge--success,
+.status-badge--success {
+  border-color: color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+/* ---- Tables: scannable, and never wider than the page ------------------ */
+
+.dt-wrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.data-table th {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/** The row a cursor is on, so the eye does not lose its place across columns. */
+.data-table tbody tr {
+  transition: background var(--dur-xs) var(--ease);
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+/* ---- Micro-interaction: feedback on press ------------------------------ */
+
+/**
+ * A button that does not move under the finger feels broken on touch, where
+ * there is no hover to confirm the target was hit.
+ */
+.btn:not(:disabled):active,
+.icon-btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+}
+
+/* ---- Theme control ----------------------------------------------------- */
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---- Shelf yield ------------------------------------------------------- */
+
+/**
+ * The yield bar. A number in a cell is compared by reading; a bar is compared
+ * by looking, which is the entire job of this screen — find the worst shelf.
+ */
+.yield-bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 80px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.yield-bar > span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: var(--r-pill);
+  background: var(--teal);
+}
+
+.yield-bar--dead > span {
+  background: var(--warning);
+}
+
+.yield-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 140px;
+}
+
+/* ---- Responsive: one more breakpoint, and tables that survive ---------- */
+
+@media (max-width: 640px) {
+  :root {
+    --pad-panel: var(--sp-4);
+  }
+
+  .page-title {
+    font-size: var(--fs-xl);
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /** A stacked table row reads as a small record rather than a squeezed grid. */
+  .dt-wrap--stack .data-table,
+  .dt-wrap--stack .data-table tbody,
+  .dt-wrap--stack .data-table tr,
+  .dt-wrap--stack .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .dt-wrap--stack .data-table thead {
+    display: none;
+  }
+
+  .dt-wrap--stack .data-table tr {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: var(--sp-3);
+    margin-block-end: var(--sp-3);
+    background: var(--surface);
+  }
+
+  .dt-wrap--stack .data-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: var(--fs-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-block-end: 2px;
+  }
+}
+
+/* ---- Utilities, so layout stops being written inline --------------------- */
+
+/**
+ * 130 inline `style={{}}` blocks were scattered through the components — a
+ * margin here, a max-height there — which is how spacing drifts out of a system
+ * one screen at a time. These are the repeated ones, named. Anything genuinely
+ * one-off (a column width, a bar's percentage) stays inline, which is what
+ * inline style is actually for.
+ */
+
+.stack-top {
+  margin-block-start: var(--gap-group);
+}
+
+.stack-top-lg {
+  margin-block-start: var(--gap-section);
+}
+
+/** A list that has already been scoped by a filter should not scroll as well. */
+.list-unbounded {
+  max-height: none;
+}
+
+/** Row of controls that sit on a shared baseline with their labels above. */
+.row-baseline {
+  align-items: end;
+}
+
+/** Prose inside a flush panel needs the padding the panel gave up. */
+.panel-note {
+  padding: 0 var(--pad-panel) var(--gap-group);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  max-width: var(--measure);
 }

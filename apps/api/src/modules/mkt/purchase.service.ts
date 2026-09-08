@@ -19,6 +19,14 @@ export interface PurchaseResult {
   itemId: string;
   price: number;
   fee: number;
+  /**
+   * True when this call returned an earlier purchase rather than making one.
+   *
+   * Absent on a first purchase, so a client can branch on it. Matches the flag
+   * `POST /finance/checkout` already returns — one convention for "you have
+   * already done this", rather than two behaviours for the same situation.
+   */
+  replayed?: boolean;
 }
 
 /**
@@ -60,7 +68,19 @@ export class PurchaseService {
   ): Promise<PurchaseResult> {
     const endpoint = `purchase:${listingId}`;
     const replay = await this.idempotency.lookup(idempotencyKey, endpoint);
-    if (replay) return replay.body as PurchaseResult;
+    if (replay) {
+      /**
+       * A repeat of a purchase that already happened, marked as such.
+       *
+       * It was returned as an ordinary 201 with the original transaction and no
+       * indication anything unusual had occurred — so a double-clicked Buy
+       * button produced two success messages and left a buyer with reasonable
+       * grounds to think they had bought two of something. Nothing was charged
+       * twice; the UI simply could not tell the difference and said the wrong
+       * thing. `POST /finance/checkout` already answers this way.
+       */
+      return { ...(replay.body as PurchaseResult), replayed: true };
+    }
 
     const result: PurchaseResult = await this.db.transaction(async (tx) => {
       const [l] = await tx.select().from(listing).where(eq(listing.id, listingId)).for('update').limit(1);

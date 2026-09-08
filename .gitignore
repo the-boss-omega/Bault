@@ -24,3 +24,5 @@ coverage/
 
 # Local data volumes
 /data/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

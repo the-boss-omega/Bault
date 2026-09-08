@@ -1,6 +1,18 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -16,6 +28,14 @@ class RegisterParcelDto {
   @IsOptional() @IsString() expectedAt?: string;
 }
 
+/**
+ * At most this many photographs on one step.
+ *
+ * Six is a box from every side plus the label. A cap exists so a bench cannot
+ * accidentally attach a phone's whole camera roll to one parcel.
+ */
+const MAX_PHOTOS = 6;
+
 class ReceiveParcelDto {
   @IsString() facilityCode!: string;
   @IsOptional() @IsString() @MaxLength(64) addressedTo?: string;
@@ -23,12 +43,42 @@ class ReceiveParcelDto {
   @IsOptional() @IsString() @MaxLength(120) trackingNumber?: string;
   @IsOptional() @IsBoolean() internationalOrigin?: boolean;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  /** Keys from `POST /media/uploads` — never image bytes on this route. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) photoKeys?: string[];
+}
+
+/**
+ * A stack of boxes, booked in together.
+ *
+ * A courier drops a dozen at once and the operator works down the pile; the
+ * single-parcel form cleared itself between each, so the facility and the
+ * carrier were re-chosen every time and there was no way to see the run as a
+ * whole. `ArrayMaxSize` is a sanity bound, not a workflow limit.
+ */
+class ReceiveManyDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ReceiveParcelDto)
+  parcels!: ReceiveParcelDto[];
 }
 
 class OpenParcelDto {
   @IsIn(['sound', 'packaging_damaged', 'contents_damaged'])
   condition!: 'sound' | 'packaging_damaged' | 'contents_damaged';
   @IsString() @MinLength(1) @MaxLength(1000) conditionNotes!: string;
+  /** What the arrival check actually saw — evidence, not a sentence about it. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) photoKeys?: string[];
+}
+
+/**
+ * The only way to close out a parcel that produced no items: the operator
+ * states, in words, that it really did arrive empty. Absent, an empty parcel is
+ * refused rather than billed — see `ParcelService.process`.
+ */
+class ProcessParcelDto {
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(1000) emptyReason?: string;
 }
 
 class ClaimParcelDto {
@@ -114,6 +164,33 @@ export class ParcelController {
     return this.parcels.receive(user.id, dto);
   }
 
+  /**
+   * Several arrivals in one gesture — all of them, or none.
+   *
+   * Declared before `parcels/:id/...` for the same reason `listings/mine` is: the
+   * route table is ordered, and a literal segment that sits after a parameter is
+   * unreachable.
+   */
+  @Roles('warehouse_operator', 'admin')
+  @Post('parcels/receive/batch')
+  receiveMany(@Body() dto: ReceiveManyDto, @CurrentUser() user: AuthUser) {
+    return this.parcels.receiveMany(user.id, dto.parcels);
+  }
+
+  /**
+   * The photographs on one parcel.
+   *
+   * Same visibility rule as the parcel itself: `detailFor` decides whether this
+   * caller may see the box at all, and the photographs follow it — a collector
+   * gets the pictures of their own arrival, which is the point of taking them.
+   */
+  @Get('parcels/:id/photos')
+  async photos(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    await this.parcels.detailFor(user.id, id, staff);
+    return this.parcels.photos(id);
+  }
+
   @Roles('warehouse_operator', 'admin')
   @Post('parcels/:id/forward')
   forward(@Param('id') id: string, @CurrentUser() user: AuthUser) {
@@ -128,8 +205,12 @@ export class ParcelController {
 
   @Roles('warehouse_operator', 'admin')
   @Post('parcels/:id/process')
-  process(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.parcels.process(user.id, id);
+  process(
+    @Param('id') id: string,
+    @Body() dto: ProcessParcelDto | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.parcels.process(user.id, id, dto?.emptyReason);
   }
 
   @Roles('warehouse_operator', 'admin')

@@ -5,7 +5,8 @@ import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
 import { CustodyService } from '../cst/custody.service';
-import { bin, item } from '../cst/cst.schema';
+import { StowService } from '../cst/stow.service';
+import { bin, item, itemImage } from '../cst/cst.schema';
 import { parcel } from './parcel.schema';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { userAccount } from '../acc/acc.schema';
@@ -28,7 +29,27 @@ export interface IntakeItemInput {
   typeClass: string;
   description?: string;
   conditionGrade?: string;
-  binId: string; // mandatory — every item must have a bin (Requirement 10.3)
+  /**
+   * Where it is being stowed — the shelf's BARCODE as readily as its internal
+   * id, because the barcode is what is printed on the shelf and therefore what
+   * a scanner produces.
+   *
+   * Optional in the input, never in the outcome: every item still ends up on a
+   * shelf (Requirement 10.3). What changed is who decides which one. Leave this
+   * out and set `autoStow`, and the system directs the stow — the arrangement a
+   * high-volume warehouse actually uses, where nobody reserves a shelf for a
+   * class of goods and nobody scrolls a list to choose one. Send neither and the
+   * intake is refused, because an item with nowhere to be is not receivable.
+   */
+  binId?: string;
+  /**
+   * Ask the system where this goes instead of naming a shelf.
+   *
+   * It answers with the emptiest active shelf of the right kind in the building
+   * the goods are actually in — the parcel's facility, when the intake came out
+   * of a parcel. See `StowService.suggest`.
+   */
+  autoStow?: boolean;
   /**
    * What it weighs, in grams, if the operator put it on the scale.
    *
@@ -53,6 +74,14 @@ export interface IntakeItemInput {
    * it is set, it is what links a collector's purchase to the cards it produced.
    */
   parcelId?: string;
+  /**
+   * Photographs of the thing being booked in, as object keys already uploaded
+   * through `POST /media/uploads` — keys, never bytes.
+   *
+   * Written as `item_image` rows of type `intake`, which is the pipeline the
+   * customer's card drawer already reads.
+   */
+  photoKeys?: string[];
 }
 
 /**
@@ -68,6 +97,7 @@ export class IntakeService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly custody: CustodyService,
+    private readonly stow: StowService,
     private readonly outbox: OutboxService,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
   ) {}
@@ -110,9 +140,55 @@ export class IntakeService {
     throw AppError.validation('An owner username is required to receive an item.');
   }
 
-  private async assertBinExists(binId: string): Promise<void> {
-    const [row] = await this.db.select({ id: bin.id }).from(bin).where(eq(bin.id, binId)).limit(1);
-    if (!row) throw AppError.validation(`Bin ${binId} does not exist`);
+  /**
+   * Settle which shelf this is going on.
+   *
+   * Three ways in, ordered by who knows best. An operator who scanned a shelf
+   * has the strongest claim — they are standing in front of it — so a named bin
+   * always wins. Failing that, `autoStow` asks the system, which answers with
+   * the emptiest suitable shelf in the right building. Failing both, the intake
+   * is refused: an item with nowhere to be is not receivable, and silently
+   * inventing a location would put goods on a shelf nobody was told to walk to.
+   *
+   * The two guards on an explicitly named bin are ones a directed stow could
+   * never trip by construction. A DECOMMISSIONED shelf is refused because it is
+   * being emptied, and adding to it undoes that work. A shelf in ANOTHER
+   * BUILDING is refused because it is not a mistake anybody recovers from later:
+   * the record would say the card is in New Jersey while the card is in
+   * Delaware, and every count, pick and shipment after that reads the record.
+   */
+  private async resolveStowBin(
+    input: IntakeItemInput,
+    oversized: boolean,
+    parcelFacilityId: string | null,
+  ): Promise<string> {
+    const named = input.binId?.trim();
+    if (named) {
+      const target = await this.stow.resolveBin(named);
+      if (!target.active) {
+        throw AppError.validation(`Bin ${target.barcode} is out of service — stow this somewhere else`);
+      }
+      if (parcelFacilityId) {
+        const [row] = await this.db
+          .select({ facilityId: bin.facilityId })
+          .from(bin)
+          .where(eq(bin.id, target.id))
+          .limit(1);
+        if (row?.facilityId && row.facilityId !== parcelFacilityId) {
+          throw AppError.validation(
+            `Bin ${target.barcode} is at a different facility from the parcel — the goods are not there`,
+          );
+        }
+      }
+      return target.id;
+    }
+
+    if (input.autoStow) {
+      const chosen = await this.stow.suggest({ facilityId: parcelFacilityId, oversized });
+      return chosen.id;
+    }
+
+    throw AppError.validation('A bin is required for every item — scan a shelf, or ask for one');
   }
 
   /**
@@ -123,9 +199,14 @@ export class IntakeService {
    * been charged and the parcel closed out, so adding to it afterwards would
    * quietly extend a finished record.
    */
-  private async assertParcelOpenFor(parcelId: string, ownerId: string): Promise<void> {
+  private async assertParcelOpenFor(parcelId: string, ownerId: string) {
     const [row] = await this.db
-      .select({ id: parcel.id, ownerId: parcel.ownerId, status: parcel.status })
+      .select({
+        id: parcel.id,
+        ownerId: parcel.ownerId,
+        status: parcel.status,
+        facilityId: parcel.facilityId,
+      })
       .from(parcel)
       .where(eq(parcel.id, parcelId))
       .limit(1);
@@ -136,16 +217,108 @@ export class IntakeService {
     if (row.status !== 'opened') {
       throw AppError.validation(`Parcel must be open to book items out of it (it is ${row.status})`);
     }
+    return row;
   }
 
   /**
    * Intake one item (or a lot treated as one item). When `quantity` > 1 this is
    * called N times so a single submit yields N full item records.
+   *
+   * The order of the checks is deliberate. The class is settled first, because
+   * everything else keys off it — the lot rule, the storage terms, and now the
+   * kind of shelving the goods need. Then the owner, then the parcel, and only
+   * then the shelf: which shelf is right depends on the class and on which
+   * building the parcel is sitting in, so it cannot be decided before both are
+   * known.
    */
-  async intakeItem(actorId: string, input: IntakeItemInput) {
-    if (!input.binId) throw AppError.validation('A bin is required for every item');
-    await this.assertBinExists(input.binId);
+  /**
+   * Book several DIFFERENT units in one gesture.
+   *
+   * `quantity` books N copies of one description, which is right for a run of
+   * identical commons and wrong for the ordinary case: a box holds a Rayquaza ex,
+   * a sealed pack and a graded Gold Star, and the bench was typing them one at a time
+   * through a form that cleared itself between each. What is shared — the owner,
+   * the parcel it came out of, where it is being stowed — was re-entered every
+   * time, and the operator could not see the box's contents as a list before
+   * committing any of it.
+   *
+   * Each unit carries its own class, description, condition, serial and
+   * photographs. Nothing is shared except what genuinely is.
+   *
+   * ALL OR NOTHING, for the reason the parcel batch is: a partial success leaves
+   * the operator working out which four of nine units are on the system, and the
+   * obvious recovery — fix the bad row and press again — would double the four
+   * that worked.
+   */
+  async intakeUnits(actorId: string, units: readonly IntakeItemInput[]) {
+    /**
+     * EVERY UNIT IS CHECKED BEFORE ANY UNIT IS WRITTEN.
+     *
+     * `intakeItem` opens its own transaction per unit, so a loop over it commits
+     * as it goes: a bad row nine deep left the first eight on the shelves while
+     * the operator read a refusal that named row nine and invited them to fix it
+     * and press again — which would have booked those eight in twice. The parcel
+     * batch had exactly this bug and it was caught the same way, by a test that
+     * counted the rows afterwards.
+     *
+     * Wrapping the whole run in one transaction would be the tidier fix and is
+     * not available here: `intakeItem` resolves a shelf, bills through the
+     * billing port and writes custody events through `CustodyService.run`, each
+     * of which owns its own transaction boundary. So the guarantee is bought the
+     * other way round — everything that can be rejected is rejected up front,
+     * against the same rules the write path applies, and only then does anything
+     * get written.
+     *
+     * What survives is a narrow window: a shelf that fills up, or an owner
+     * suspended, between the check and the write. Both fail loudly on the unit
+     * that hits them rather than silently, and neither is reachable by anything
+     * the operator typed.
+     */
+    for (const [index, unit] of units.entries()) {
+      try {
+        await this.assertReceivable(unit);
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : 'could not be booked in';
+        throw AppError.validation(`Unit ${index + 1} of ${units.length}: ${reason}`);
+      }
+    }
 
+    const created: unknown[] = [];
+    for (const [index, unit] of units.entries()) {
+      try {
+        // Each unit re-asks for a shelf, because the one just handed out is now
+        // fuller and the next unit may be a different class entirely.
+        const one = await this.intakeItem(actorId, unit);
+        created.push(...(Array.isArray(one) ? one : [one]));
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : 'could not be booked in';
+        throw AppError.validation(`Unit ${index + 1} of ${units.length}: ${reason}`);
+      }
+    }
+    return created;
+  }
+
+  /**
+   * Everything about one unit that can be decided without writing anything.
+   *
+   * Deliberately the same checks `intakeItem` performs, in the same order, so a
+   * unit that passes here is one the write path will accept: the class has to be
+   * vocabulary, the owner has to resolve, the parcel has to be that owner's and
+   * open, and a lot has to be a class that can be one.
+   */
+  private async assertReceivable(input: IntakeItemInput): Promise<void> {
+    if (!isKnownItemClass(input.typeClass)) {
+      throw AppError.validation(`Unknown item class "${input.typeClass}"`);
+    }
+    const cls = itemClass(input.typeClass)!;
+    if (input.isLot === true && !cls.lotEligible) {
+      throw AppError.validation(`${cls.label} cannot be received as a lot`);
+    }
+    const ownerId = await this.resolveOwner(input);
+    if (input.parcelId) await this.assertParcelOpenFor(input.parcelId, ownerId);
+  }
+
+  async intakeItem(actorId: string, input: IntakeItemInput) {
     // The class is vocabulary now, not free text: per-class pricing, the lot rule
     // and the oversized flag all key off it, and none of them can act on a value
     // nobody defined.
@@ -159,7 +332,11 @@ export class IntakeService {
     // A parcel, when given, has to be this owner's and has to be open. Booking
     // items out of somebody else's box, or out of one nobody has opened yet,
     // would make the parcel's contents record a fiction.
-    if (input.parcelId) await this.assertParcelOpenFor(input.parcelId, ownerId);
+    const sourceParcel = input.parcelId
+      ? await this.assertParcelOpenFor(input.parcelId, ownerId)
+      : null;
+
+    const binId = await this.resolveStowBin(input, cls.oversized, sourceParcel?.facilityId ?? null);
 
     let quantity = Math.max(1, Math.min(100, Math.trunc(input.quantity ?? 1)));
     let lot = input.isLot === true;
@@ -190,6 +367,9 @@ export class IntakeService {
 
     const effective: IntakeItemInput = {
       ...input,
+      // The RESOLVED shelf, not whatever the caller typed: `createOne` writes
+      // this straight onto the item, and a barcode is not an id.
+      binId,
       isLot: lot,
       lotSize: lot ? lotSize : undefined,
       // A converted lot mints one serial per piece, so an explicitly-supplied
@@ -244,6 +424,29 @@ export class IntakeService {
         itemId: createdItem.id,
         itemClass: input.typeClass,
       });
+      /**
+       * The bench's own photographs of the card, stored against the item.
+       *
+       * `item_image` has existed since custody was built and nothing ever wrote
+       * a row into it outside the seed — the photography service records a key
+       * for a shoot it never receives. These are type `intake`, version 1, which
+       * is exactly what the vault drawer already reads and renders, so a card
+       * photographed while it is being booked in has a real picture in its
+       * owner's vault immediately rather than the generated placeholder it wore
+       * until somebody paid for a professional shoot.
+       */
+      const photoKeys = (input.photoKeys ?? []).map((k) => k.trim()).filter(Boolean);
+      if (photoKeys.length > 0) {
+        await tx.insert(itemImage).values(
+          photoKeys.map((objectKey, index) => ({
+            itemId: createdItem.id,
+            type: 'intake' as const,
+            version: index + 1,
+            objectKey,
+          })),
+        );
+      }
+
       await this.outbox.emit(tx, {
         aggregateType: 'item',
         aggregateId: createdItem.id,
