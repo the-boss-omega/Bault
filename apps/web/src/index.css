@@ -2481,6 +2481,10 @@ input[type='search'] {
   border-block-end: var(--border-w) solid var(--line);
   vertical-align: middle;
   color: var(--ink-body);
+  /* A cell holds whatever the row holds — a carrier's name, an operator's note,
+     an escrow deal's description — so it resolves its own direction from its own
+     first strong character rather than from the page's. */
+  unicode-bidi: plaintext;
 }
 
 .data-table tbody tr:last-child td,
@@ -3658,8 +3662,15 @@ input[type='search'] {
   transform: none;
 }
 
-/* A card with no photograph on disk. It says so, in words, on the stage — a
-   1.6rem emoji at 40% opacity was a shrug where an answer belongs. */
+/*
+ * A card with no photograph on disk. It says so, in words, on the stage — a
+ * 1.6rem emoji at 40% opacity was a shrug where an answer belongs.
+ *
+ * The ink is the ON-DARK ink, because `.photo-thumb` is always on the
+ * photography stage — in a register row, in a sheet, in a table cell. Secondary
+ * ink measured 3.12:1 against it and axe found it on every marketplace surface
+ * that had an item with no catalogue photograph.
+ */
 .photo-thumb-empty {
   display: grid;
   place-items: center;
@@ -3669,7 +3680,7 @@ input[type='search'] {
   font-size: var(--fs-caption);
   line-height: var(--lh-snug);
   text-align: center;
-  color: var(--ink-2);
+  color: var(--ink-on-dark-2);
   opacity: 1;
 }
 
@@ -6240,9 +6251,8 @@ textarea[aria-invalid='true'] {
   object-fit: contain;
 }
 
-/* On the dark stage the same placeholder needs light ink. */
+/* On the sheet's stage it is larger, because there is room for it to be. */
 .drawer .stage .photo-thumb-empty {
-  color: var(--ink-on-dark);
   font-size: var(--fs-sm);
 }
 

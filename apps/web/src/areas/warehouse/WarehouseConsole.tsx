@@ -367,7 +367,21 @@ export function WarehouseConsole() {
             <IntakeBench
               initialParcelId={focusParcelId}
               onLog={append}
-              onDone={loadSummary}
+              onDone={async () => {
+                await loadSummary();
+                /*
+                 * The BOX is stale too, not only the counters.
+                 *
+                 * Booking a unit out of a parcel changes that parcel's row —
+                 * its unit count, and the line under its button that reads
+                 * "Nothing has come out of this parcel yet". Only `loadSummary`
+                 * ran here, so after an intake the queue still said nothing had
+                 * come out of the box while the bench three inches below it said
+                 * one unit had. Two statements about the same box, contradicting
+                 * each other on one screen.
+                 */
+                setQueueVersion((v) => v + 1);
+              }}
               onParcelClosed={() => setFocusParcelId('')}
             />
           </Panel>

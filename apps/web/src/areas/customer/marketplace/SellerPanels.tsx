@@ -15,14 +15,7 @@ import {
   type MyOffer,
   type MySwap,
 } from '../../../shared/market';
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  Panel,
-  SkeletonTable,
-  StatusBadge,
-} from '../../../shared/ui/primitives';
+import { Button, EmptyState, Panel, SkeletonTable, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconMarketplace, IconTag } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';

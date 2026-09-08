@@ -3449,7 +3449,7 @@ const en: Record<MessageKey, string> = {
   // ---- Inbound bench: directed stow, scanning, closing a box out ----
   'parcelQueue.col.units': 'Units',
   'parcelQueue.action.bookContents': 'Book contents',
-  'parcelQueue.bookedSoFar': '{count} units booked from this parcel so far.',
+  'parcelQueue.bookedSoFar': '{count} booked from this parcel so far.',
   'parcelQueue.nothingBooked': 'Nothing has come out of this parcel yet.',
   'warehouse.viewParcels': 'View parcels',
   'warehouse.metric.inboundBacklog': 'Parcels awaiting work',
@@ -3463,7 +3463,7 @@ const en: Record<MessageKey, string> = {
   'warehouse.intake.stowSearching': 'Finding a shelf…',
   'warehouse.intake.stowScan': 'Scan shelf',
   'warehouse.intake.stowScanHint': 'The serial printed on the shelf label.',
-  'warehouse.intake.parcelProgress': 'Parcel {code} — {count} units booked in.',
+  'warehouse.intake.parcelProgress': 'Parcel {code} — {count} booked in so far.',
   'warehouse.intake.closeParcel': 'Close out parcel',
   'warehouse.intake.parcelClosed': 'Parcel {code} closed out and charged',
   'warehouse.intake.emptyReason': 'Why is it empty',

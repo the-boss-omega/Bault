@@ -20,7 +20,7 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { IconMarketplace, IconSearch, IconTag } from '../../../shared/ui/icons';
+import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';

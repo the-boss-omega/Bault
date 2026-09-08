@@ -119,10 +119,23 @@ export function IntakeBench({
     void loadParcels();
   }, [loadParcels]);
 
-  // Arriving from "Book contents": the box that was pressed is the box this is about.
+  /*
+   * Arriving from "Book contents": the box that was pressed is the box this is
+   * about — and the bench has to go and FETCH it.
+   *
+   * The list of open parcels was loaded once, on mount. A box only becomes open
+   * when an operator presses "Open and check" on the bench above, which happens
+   * after that mount — so pressing "Book contents" on the box they had just
+   * opened set an id that was not in the list, `parcel` resolved to null, the
+   * owner did not lock, and the dropdown showed nothing selected. The flow
+   * worked only if you reloaded the page between opening the box and emptying
+   * it, which is not a step anybody would think to take.
+   */
   useEffect(() => {
-    if (initialParcelId) setParcelId(initialParcelId);
-  }, [initialParcelId]);
+    if (!initialParcelId) return;
+    setParcelId(initialParcelId);
+    void loadParcels();
+  }, [initialParcelId, loadParcels]);
 
   const parcel = openParcels.find((p) => p.id === parcelId) ?? null;
 
