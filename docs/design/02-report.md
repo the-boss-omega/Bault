@@ -3,7 +3,7 @@
 The "Custody Grade" pass on Bault: what changed, what was verified, what was left
 alone, and what is still open.
 
-**Branch:** `design/custody-grade`, eleven commits.
+**Branch:** `design/custody-grade`, 14 commits off `master` at `df1f050`.
 **Design system:** [`DESIGN.md`](../../DESIGN.md).
 **Audit and baseline:** [`01-audit.md`](01-audit.md), [`00-stack-notes.md`](00-stack-notes.md).
 **Screenshots:** [`audit/before/`](audit/before/) and [`audit/after/`](audit/after/) — 66 and 73

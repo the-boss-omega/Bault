@@ -448,23 +448,26 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                   roleLabel={roleLabel}
                   suspended={suspended}
                 />
-                {/* Shell settings, together: language and theme are the same
-                    kind of choice — they change the frame, not the content —
-                    so they sit side by side rather than one in the header and
-                    one buried in a menu. */}
-                <ThemeToggle />
-                <LanguageSwitcher />
-                <NotificationBell
-                  items={notifications.items}
-                  unseen={notifications.unseen}
-                  onOpen={() => {
-                    void notifications.reload();
-                    notifications.markSeen();
-                  }}
-                  onViewAll={() => goto('notifications')}
-                  renderTitle={(n) => eventLabel(t, n.eventType)}
-                  renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
-                />
+                {/* Shell settings, together and SEGMENTED: theme, language and
+                    the bell are the same kind of control — they act on the frame
+                    rather than on the content — so they are one object with
+                    hairlines between them, not three separately-bordered boxes
+                    strung along the end of the header. */}
+                <span className="ph-controls">
+                  <ThemeToggle />
+                  <LanguageSwitcher />
+                  <NotificationBell
+                    items={notifications.items}
+                    unseen={notifications.unseen}
+                    onOpen={() => {
+                      void notifications.reload();
+                      notifications.markSeen();
+                    }}
+                    onViewAll={() => goto('notifications')}
+                    renderTitle={(n) => eventLabel(t, n.eventType)}
+                    renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+                  />
+                </span>
                 <UserMenu
                   initials={initialsFrom(user.firstName, user.lastName, user.email)}
                   name={fullName(user.firstName, user.lastName) || user.email || t('menu.account')}

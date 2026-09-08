@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
-import { ITEM_CLASSES } from '../../../shared/itemClasses';
+import { ITEM_CLASSES, itemClassLabel } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Amount, Serial } from '../../../shared/ui/Serial';
@@ -177,11 +177,24 @@ export function MarketplacePage() {
 
       {tab === 'browse' && (
         <TabPanel tab="browse">
-          <Panel
-            title={t('market.listings')}
-            subtitle={listings === null ? undefined : t('market.listingsCount', { count: listings.length })}
-            tools={
-              <div className="search">
+          {/*
+            No section header over the shelf.
+
+            The tab strip already says "Browse" and the page already says
+            "Marketplace"; a third band repeating "Active listings / 1 listing"
+            sat between them with the search box exiled to its far right, a
+            thousand pixels from the five filters it belongs with. The search is
+            the first filter, the count is the result, and both live in the
+            filter bar now.
+          */}
+          <Panel flush>
+            {/*
+              The filter bar. Ordered the way somebody narrows a shelf: what they
+              are looking for, what kind of thing, what condition it is in, what
+              they are willing to pay, and only then how to order what is left.
+            */}
+            <div className="filter-bar" role="group" aria-label={t('market.filters')}>
+              <div className="search field--grow">
                 <IconSearch />
                 <input
                   type="search"
@@ -191,14 +204,7 @@ export function MarketplacePage() {
                   onChange={(e) => setQ(e.target.value)}
                 />
               </div>
-            }
-          >
-            {/*
-              The filter bar. Ordered the way somebody narrows a shelf: what kind
-              of thing, what condition it is in, what they are willing to pay, and
-              only then how to order what is left.
-            */}
-            <div className="filter-bar" role="group" aria-label={t('market.filters')}>
+
               <Field label={t('market.filter.type')} className="field--compact">
                 <select value={type} onChange={(e) => setParams({ type: e.target.value })}>
                   <option value="">{t('market.filter.anyType')}</option>
@@ -256,6 +262,16 @@ export function MarketplacePage() {
                   {t('market.filter.clear')}
                 </Button>
               )}
+
+              <span className="spacer" />
+
+              {listings !== null && (
+                <span className="vault-count">
+                  {listings.length === 1
+                    ? t('market.listingsCountOne')
+                    : t('market.listingsCount', { count: listings.length })}
+                </span>
+              )}
             </div>
 
             {listings === null ? (
@@ -282,7 +298,13 @@ export function MarketplacePage() {
                 }
               />
             ) : (
-              <ul className="card-grid">
+              <ul className="card-grid card-grid--listings">
+                <li className="register-head" aria-hidden="true">
+                  <span />
+                  <span>{t('market.mine.col.price')}</span>
+                  <span>{t('vault.col.state')}</span>
+                  <span />
+                </li>
                 {listings.map((listing) => (
                   <li key={listing.id} className="card card--interactive card--listing">
                     {/* The photograph is the pitch: a fixed 4:5 stage, the shape
@@ -295,22 +317,24 @@ export function MarketplacePage() {
                       />
                     </div>
 
-                    {/* THE PRICE IS THE FIRST TEXT LINE. It used to be the
-                        fourth thing in the tile, under a bold `trading_card` and
-                        two lines of truncated catalogue string. */}
-                    <p className="price">
-                      <Amount>{formatUsd(listing.askingPrice)}</Amount>
-                    </p>
+                    <div className="card-id">
+                      {/* THE PRICE IS THE FIRST TEXT LINE. It used to be the
+                          fourth thing in the tile, under a bold `trading_card`
+                          and two lines of truncated catalogue string. */}
+                      <p className="price">
+                        <Amount>{formatUsd(listing.askingPrice)}</Amount>
+                      </p>
+                      <h3 className="card-title">
+                        <Serial value={listing.serialNumber} />
+                      </h3>
+                      <p className="card-desc" title={listing.description || undefined}>
+                        {listing.description || '—'}
+                      </p>
+                    </div>
 
-                    <h3 className="card-title">
-                      <Serial value={listing.serialNumber} lead />
-                    </h3>
-                    <p className="card-desc" title={listing.description || undefined}>
-                      {listing.description || '—'}
-                    </p>
-                    <div className="card-meta">
+                    <div className="card-state">
                       <span>{t('vault.condition', { grade: listing.conditionGrade ?? '—' })}</span>
-                      <span className="ltr-run">{listing.typeClass}</span>
+                      <span className="card-sub">{itemClassLabel(t, listing.typeClass)}</span>
                     </div>
 
                     <div className="actions">
@@ -320,7 +344,7 @@ export function MarketplacePage() {
                       <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
                         {t('market.buy')}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setOffering(listing)}>
+                      <Button variant="secondary" size="sm" onClick={() => setOffering(listing)}>
                         {t('market.makeOffer')}
                       </Button>
                     </div>

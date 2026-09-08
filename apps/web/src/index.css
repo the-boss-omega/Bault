@@ -1226,12 +1226,38 @@ time,
   opacity: 0.6;
 }
 
+/*
+ * The header's controls, as ONE group.
+ *
+ * They were four separately-bordered boxes of slightly different widths with
+ * 12px between them, plus an account line and an avatar, strung along the end of
+ * the header — six loose objects reading as six decisions. Segmented into one
+ * control with hairlines between, the way the vault's scope control already is,
+ * so the header has two things in it (who you are, and the shell's settings)
+ * rather than six.
+ */
 .ph-actions {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   flex: 0 0 auto;
-  padding-block-start: 2px;
+}
+
+.ph-controls {
+  display: flex;
+  align-items: stretch;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-input);
+}
+
+.ph-controls > * {
+  border-inline-start: var(--border-w) solid var(--line);
+}
+
+.ph-controls > *:first-child {
+  border-inline-start: 0;
 }
 
 /* ---- Signed-in status pill ---- */
@@ -1305,27 +1331,34 @@ time,
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text-2);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-input);
+  color: var(--ink-2);
   cursor: pointer;
-  transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease),
-    border-color var(--dur-sm) var(--ease);
+  touch-action: manipulation;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
 .icon-btn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--ink);
 }
 
 .icon-btn.is-on {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+/* Inside the segmented group the container owns the border. */
+.ph-controls .icon-btn,
+.ph-controls .pop-wrap > .icon-btn {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .icon-btn--bare {
@@ -1366,9 +1399,11 @@ time,
   height: 16px;
   padding-inline: 4px;
   border-radius: var(--r-pill);
-  background: var(--gold);
-  color: var(--navy-900);
-  font-size: var(--fs-micro);
+  /* The last gold object in the product. A count of unread notifications is not
+     money, and brass is money's colour. */
+  background: var(--custody);
+  color: var(--ink-on-accent);
+  font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   line-height: 16px;
   text-align: center;
@@ -3382,37 +3417,84 @@ input[type='search'] {
 }
 
 /* ============================================================
-   The vault register — a row per holding, not a card per holding
+   The vault register — columns, and a header over them
    ============================================================
-   The vault was a grid of rounded cards inside a rounded panel inside a page,
-   each card giving 72px to a collector's photograph and the rest to a truncated
-   catalogue string. Four holdings filled a 1440px screen and said nothing about
-   what any of them cost.
+   The first pass made this a list of rows and stopped there, which is only half
+   a register. Every field after the photograph sat in ONE flexible column,
+   packed to the start edge, so the state began at whatever x the serial happened
+   to end at, the condition at whatever x the state ended at, and nothing lined
+   up between one row and the next — while a 400px void sat in the middle of
+   every row because that one column had all the width and none of the content.
 
-   It is a register now: one row per card, ruled, with the photograph at the
-   scale a photograph deserves, then the serial, then the state, then what it is
-   costing to keep. The whole row is one control — `.card-hit` stretched over it
-   — so click and keyboard focus land in one place while the headings, marks and
-   nested links inside stay real elements.
+   Five real columns, the same on every row, with a header naming them:
+
+     photograph │ identity │ state │ where it is │ what it has cost
+
+   That is what lets somebody run their eye down "state" without reading four
+   other fields on the way, and it is the whole difference between a list and a
+   register.
    ============================================================ */
 
+/*
+ * `.card-grid` is a stacked list of rows. Nine surfaces use it — addresses, the
+ * storefront, the shipment composer's picker, the help panels — and most of them
+ * are a list of ONE kind of thing with two or three fields.
+ *
+ * The five-column register is a MODIFIER, not the default. It was the default
+ * for about ten minutes and it silently broke the other six: their rows have
+ * three children, so the fourth and fifth tracks collapsed and everything
+ * shifted. A register is a specific shape for a specific job, and a class that
+ * every list already carries is not the place to declare it.
+ */
 .card-grid {
   display: flex;
   flex-direction: column;
   gap: 0;
   list-style: none;
-  border-block-start: var(--border-w) solid var(--line-strong);
 }
 
+/** The vault register: photograph, identity, state, where, cost. */
+.card-grid--register {
+  --register-cols: 56px minmax(12rem, 1fr) 13rem 13rem 12rem;
+}
+
+/* The header. `aria-hidden` because this is a list, not a table — a screen
+   reader gets each row's own labelled content, and a row of bare column names
+   read out before it would be noise. */
+.register-head {
+  display: grid;
+  grid-template-columns: var(--register-cols);
+  align-items: baseline;
+  column-gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-4);
+  padding-inline-start: calc(var(--sp-4) + 3px);
+  border-block-end: var(--border-w) solid var(--line-strong);
+  background: var(--surface-sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.register-head-end {
+  text-align: end;
+}
+
+/*
+ * A row. By default it is a simple stack — a heading, some lines, maybe some
+ * actions — which is what the address list, the storefront and the shipment
+ * picker need and all they have ever needed.
+ *
+ * It becomes a GRID only inside a register. Making the grid the default put an
+ * address card's label in a 56px photograph column and truncated its street to
+ * "1200…", which is what happens when a specific shape is declared on a generic
+ * class.
+ */
 .card {
   position: relative;
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: var(--sp-4);
-  row-gap: var(--sp-1);
-  padding: var(--sp-4) var(--sp-4) var(--sp-4) 0;
-  padding-inline-start: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
   background: none;
   border: 0;
   /* Reserved on every row, painted only when the row has a state to declare. */
@@ -3420,6 +3502,15 @@ input[type='search'] {
   border-block-end: var(--border-w) solid var(--line);
   border-radius: 0;
   box-shadow: none;
+}
+
+.card-grid--register .card,
+.card-grid--listings .card {
+  display: grid;
+  grid-template-columns: var(--register-cols);
+  align-items: center;
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-1);
 }
 
 .card--interactive {
@@ -3444,31 +3535,27 @@ input[type='search'] {
  */
 .card-art {
   position: relative;
-  grid-row: 1 / span 4;
-  width: 64px;
+  width: 56px;
   aspect-ratio: 4 / 5;
   overflow: hidden;
   border-radius: var(--radius);
   background: var(--surface-stage);
 }
 
+.card-id {
+  min-width: 0;
+}
+
 .card-title {
-  grid-column: 2;
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
   font-weight: var(--fw-medium);
   line-height: var(--lh-snug);
   color: var(--ink);
-  /* Catalogue strings are Latin even in Hebrew; isolate them or the bidi
-     algorithm moves the leading year to the end of the line. */
   unicode-bidi: plaintext;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .card-desc {
-  grid-column: 2;
+  margin-block-start: 1px;
   font-size: var(--fs-sm);
   color: var(--ink-2);
   unicode-bidi: plaintext;
@@ -3478,8 +3565,30 @@ input[type='search'] {
   overflow: hidden;
 }
 
+.card-state,
+.card-where {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-body);
+}
+
+/* The qualifying line under a cell's value: a condition, a departure reason. */
+.card-sub {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Kept for the surfaces that still lay their meta out inline (storefront,
+   addresses), which are lists of one kind of thing rather than registers. */
 .card-meta {
-  grid-column: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3488,33 +3597,38 @@ input[type='search'] {
   color: var(--ink-2);
 }
 
-/* The amount on a marketplace tile: first text line, not a decoration. */
-.card .price {
-  grid-column: 3;
-  grid-row: 1;
-  margin-block: 0;
-  direction: ltr;
-  unicode-bidi: isolate;
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--track-tight);
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  text-align: end;
-}
+/*
+ * Below the width the five columns need, the register folds into two: the
+ * photograph, and everything else stacked beside it. Nothing is dropped — a
+ * phone gets the same fields in the same order, one under the other.
+ */
+@media (max-width: 1099px) {
+  .card-grid--register {
+    --register-cols: 56px minmax(0, 1fr);
+  }
 
-.card .actions {
-  grid-column: 3;
-  position: relative;
-  z-index: 2;
-  display: flex;
-  gap: var(--sp-2);
-  margin-block-start: auto;
-  padding-block-start: var(--sp-2);
-}
+  .register-head {
+    display: none;
+  }
 
-.card .actions .btn {
-  flex: 0 0 auto;
+  .card-grid--register .card,
+  .card-grid--listings .card {
+    align-items: start;
+  }
+
+  .card-state,
+  .card-where {
+    grid-column: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+  }
+
+  .card-grid--register .watch {
+    grid-column: 2;
+    align-items: flex-start;
+  }
 }
 
 /* ---- Item photo thumbnails ---- */
@@ -4366,6 +4480,15 @@ input[type='search'] {
   font-weight: var(--fw-semibold);
 }
 
+/* The count of what is on screen, beside the control that chose it. */
+.vault-count {
+  align-self: center;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .vault-history-note {
   padding: var(--sp-3) 0 0;
   color: var(--ink-2);
@@ -4739,11 +4862,19 @@ input[type='search'] {
   min-inline-size: 7rem;
 }
 
+/*
+ * The LAST tracked-out uppercase eyebrow in the product.
+ *
+ * The audit named this pattern as the default chrome of every heading and every
+ * table header, and the token and register passes cleared it everywhere except
+ * here — the marketplace filter bar, where TYPE / CONDITION / PRICE FROM went on
+ * shouting at 11px. A filter caption is a label like any other.
+ */
 .field--compact .field-label {
-  font-size: var(--fs-micro);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
 }
 
 @media (max-width: 640px) {
@@ -5210,16 +5341,25 @@ input[type='search'] {
     overflow-x: auto;
   }
 
-  /* The label would wrap the control past the viewport; the tooltip and the
-     aria-label still name it. */
-  .state-control .state-label {
+  /*
+   * The labels STAY on a phone.
+   *
+   * They were hidden here because they wrapped the control past the viewport —
+   * but what that left was three near-identical segments distinguished by a
+   * small glyph and a number, on the control that decides which of three
+   * collections you are looking at. The icon goes instead: it was never carrying
+   * the meaning, and dropping it fits "Active / On hold / History" in 358px with
+   * room to spare.
+   */
+  .state-control .state-icon {
     display: none;
   }
 
   .state-control {
-    flex: 1;
+    flex: 1 1 auto;
     justify-content: center;
-    padding-inline: var(--sp-3);
+    padding-inline: var(--sp-2);
+    font-size: var(--fs-sm);
   }
 }
 
@@ -5726,29 +5866,48 @@ textarea[aria-invalid='true'] {
 
 /* ---- Break-Even Watch -------------------------------------------------- */
 
+/*
+ * Break-Even Watch, as the register's last column.
+ *
+ * End-aligned, because it is money and money aligns on the decimal with the
+ * money above it. The caption that used to sit to the RIGHT of the figure —
+ * "$5.00 ……… Spent so far", with the reader's eye crossing a gap to reach it —
+ * is the column header now, which is where a caption repeated on every row
+ * belongs.
+ */
 .watch {
-  grid-column: 3;
-  grid-row: 2 / span 2;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 4px;
-  min-width: 120px;
-  align-self: end;
+  min-width: 0;
 }
 
 .watch-line {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--sp-2);
+  max-width: 100%;
   font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
   color: var(--ink-2);
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The bar is 100% of the cell, not of the text beside it. */
+.watch .proportion {
+  inline-size: 100%;
 }
 
 .watch-amount {
   direction: ltr;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
+  font-size: var(--fs-base);
   color: var(--ink);
   font-weight: var(--fw-medium);
 }
@@ -6125,67 +6284,79 @@ textarea[aria-invalid='true'] {
 /* ============================================================
    The marketplace listing row
    ============================================================
-   The same register row as the vault, with two differences that follow from the
-   job rather than from taste.
+   The same register as the vault, with the columns the job needs:
 
-   The photograph is larger, because on a shelf of things for sale the
-   photograph IS the pitch — it is the only thing a buyer can inspect.
+     photograph │ price + identity │ condition │ the two actions
 
-   And the PRICE IS THE FIRST TEXT LINE. It used to be the fourth thing in the
-   tile, below a bold `trading_card` and two lines of truncated catalogue string,
-   in the mono face at the same weight as a barcode. Somebody browsing a
-   marketplace is reading prices; everything else on the row is qualifying one.
+   The photograph is larger, because on a shelf of things for sale it IS the
+   pitch — it is the only thing a buyer can inspect. And the PRICE IS THE FIRST
+   TEXT LINE; it used to be the fourth thing in the tile, below a bold
+   `trading_card` and two lines of truncated catalogue string, in the mono face
+   at the same weight as a barcode.
    ============================================================ */
 
-.card--listing {
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+/*
+ * No `auto` in a register's column list.
+ *
+ * Every row is its own grid — they are `<li>` elements, not table rows — so an
+ * `auto` or a `min-content` track resolves against THAT row's content and lands
+ * at a different width on the header, which has none. The header's "State" sat
+ * 150px to the end side of the condition it was labelling. Every track is either
+ * fixed or `1fr`, and then all the rows agree.
+ */
+.card-grid--listings {
+  --register-cols: 88px minmax(14rem, 1fr) 11rem 13rem;
 }
 
 .card--listing .card-art {
-  width: 96px;
+  width: 88px;
 }
 
 .card--listing .price {
-  grid-column: 2;
-  grid-row: 1;
+  display: block;
+  margin-block: 0 2px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
   text-align: start;
 }
 
-.card--listing .card-title {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.card--listing .card-desc {
-  grid-column: 2;
-  grid-row: 3;
-}
-
-.card--listing .card-meta {
-  grid-column: 2;
-  grid-row: 4;
-}
-
 .card--listing .actions {
-  grid-column: 3;
-  grid-row: 1 / span 4;
-  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
   margin-block-start: 0;
   padding-block-start: 0;
 }
 
-@media (max-width: 640px) {
-  .card--listing {
-    grid-template-columns: 72px minmax(0, 1fr);
+/* The filter bar is a row of controls that wraps, with the search taking the
+   spare width and the count sitting at the end of it. */
+.filter-bar {
+  align-items: flex-end;
+}
+
+.filter-bar .search {
+  min-inline-size: 14rem;
+}
+
+@media (max-width: 1099px) {
+  .card-grid--listings {
+    --register-cols: 72px minmax(0, 1fr);
   }
 
   .card--listing .card-art {
     width: 72px;
   }
 
+  .card--listing .card-state,
   .card--listing .actions {
     grid-column: 2;
-    grid-row: 5;
+    justify-content: flex-start;
   }
 }
 

@@ -537,6 +537,19 @@ export function VaultPage() {
             );
           })}
         </div>
+
+        <span className="spacer" />
+
+        {/* The count of what is on screen, and the one bulk action that acts on
+            it — beside the control that chose them, not in a band of their own. */}
+        {items !== null && (
+          <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
+        )}
+        {scope === 'active' && cullWindowDays !== null && (
+          <Button size="sm" variant={culling ? 'secondary' : 'ghost'} onClick={() => setCulling((v) => !v)}>
+            {culling ? t('cull.close') : t('cull.open')}
+          </Button>
+        )}
       </div>
 
       {status && <SuccessNote>{status}</SuccessNote>}
@@ -555,29 +568,17 @@ export function VaultPage() {
         />
       )}
 
-      {/* Culling is bulk, destructive and rare, so it is a mode rather than a
-          control sitting permanently over the collection — and it belongs to the
-          register it acts on rather than floating, right-aligned, above it. Only
-          offered on the active scope: there is nothing to cull among held or
-          departed cards. */}
-      <Panel
-        title={t(`vault.scope.${scope}` as MessageKey)}
-        subtitle={
-          items === null ? undefined : t('vault.assetsCount', { count: items.length })
-        }
-        tools={
-          scope === 'active' && cullWindowDays !== null ? (
-            <Button
-              size="sm"
-              variant={culling ? 'secondary' : 'ghost'}
-              onClick={() => setCulling((v) => !v)}
-            >
-              {culling ? t('cull.close') : t('cull.open')}
-            </Button>
-          ) : undefined
-        }
-        flush
-      >
+      {/*
+        No section header above the register.
+
+        The page already says "My vault", the scope control already says which of
+        the three views you are in, and a third band repeating "Active / 3 items"
+        between them was one heading too many — it also sat 74px below the filter
+        row and 28px above the register, so it attached itself to the wrong
+        thing. The count moves beside the scope control, where the number belongs;
+        the cull mode moves beside it, where the action belongs.
+      */}
+      <Panel flush>
         {scope === 'history' && (
           <p className="hint vault-history-note">{t('vault.history.note')}</p>
         )}
@@ -620,7 +621,8 @@ export function VaultPage() {
             }
           />
         ) : (
-          <ul className="card-grid">
+          <ul className="card-grid card-grid--register">
+            <RegisterHead t={t} scope={scope} />
             {items.map((item) => (
               <CardTile
                 key={item.id}
@@ -710,17 +712,20 @@ function CardTile({
         )}
       </div>
 
-      {/* The serial IS the identity, so it leads — isolated LTR so a Hebrew row
-          cannot reorder it, and selectable, because somebody is going to paste
-          it into an email. */}
-      <h3 className="card-title">
-        <Serial value={item.serialNumber} lead />
-      </h3>
-      <p className="card-desc" title={name}>
-        {name}
-      </p>
+      {/* IDENTITY. The serial leads — isolated LTR so a Hebrew row cannot
+          reorder it, and selectable, because somebody is going to paste it into
+          an email — with the catalogue name under it. */}
+      <div className="card-id">
+        <h3 className="card-title">
+          <Serial value={item.serialNumber} lead />
+        </h3>
+        <p className="card-desc" title={name}>
+          {name}
+        </p>
+      </div>
 
-      <div className="card-meta">
+      {/* STATE. Its own column, so a reader can run their eye down it. */}
+      <div className="card-state">
         {historical ? (
           <StatusBadge tone="neutral">
             {t('vault.historical.status', { state: stateLabel(t, item.lifecycleState) })}
@@ -730,7 +735,7 @@ function CardTile({
         ) : (
           <StatusBadge tone={meta?.tone ?? 'neutral'}>{stateLabel(t, item.lifecycleState)}</StatusBadge>
         )}
-        <span>{t('vault.condition', { grade: item.conditionGrade ?? '—' })}</span>
+        <span className="card-sub">{t('vault.condition', { grade: item.conditionGrade ?? '—' })}</span>
         {item.isLot && !item.lotBroken && (
           <StatusBadge tone="violet">{t('vault.lotOf', { count: item.lotSize })}</StatusBadge>
         )}
@@ -740,6 +745,10 @@ function CardTile({
         {item.oversized && !historical && (
           <StatusBadge tone="warning">{t('vault.oversized')}</StatusBadge>
         )}
+      </div>
+
+      {/* WHERE IT IS — or, for a departed item, where it went. */}
+      <div className="card-where">
         {historical ? (
           <>
             {item.departedAt && (
@@ -748,9 +757,7 @@ function CardTile({
               </span>
             )}
             {item.departureReason && (
-              <span className="hint ltr-run">
-                {t('vault.historical.reason', { reason: item.departureReason })}
-              </span>
+              <span className="card-sub ltr-run">{item.departureReason}</span>
             )}
           </>
         ) : (
@@ -762,7 +769,7 @@ function CardTile({
       </div>
 
       {/*
-        What this card is costing, on the row rather than three clicks away.
+        WHAT IT IS COSTING, on the row rather than three clicks away.
 
         The API has computed this all along and nothing has ever shown it: a
         `GET /vault/break-even` that counts what has actually been billed against
@@ -771,7 +778,29 @@ function CardTile({
         there is no honest value signal the bar is absent and the figure stands
         alone, which is a true and useful sentence rather than a gap.
       */}
-      {watch && !historical && <Watch row={watch} t={t} />}
+      {watch && !historical ? <Watch row={watch} t={t} /> : <div className="watch" />}
+    </li>
+  );
+}
+
+/**
+ * The register's column header.
+ *
+ * The single change that turns a list of rows into a register you can read down.
+ * Before this, state, condition and location each began at whatever x the text
+ * before them happened to end at, so nothing lined up between one row and the
+ * next and the eye had to re-find every field on every line — while a 400px void
+ * sat in the middle of every row because all the content was packed into one
+ * flexible column.
+ */
+function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
+  return (
+    <li className="register-head" aria-hidden="true">
+      <span />
+      <span>{t('vault.col.item')}</span>
+      <span>{t('vault.col.state')}</span>
+      <span>{scope === 'history' ? t('vault.historical.dateLabel') : t('vault.col.where')}</span>
+      <span className="register-head-end">{scope === 'history' ? '' : t('vault.col.cost')}</span>
     </li>
   );
 }
@@ -793,7 +822,6 @@ function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
     <div className="watch">
       <div className="watch-line">
         <span className="watch-amount">{formatUsd(row.totalSpentMinor)}</span>
-        <span>{t('vault.watch.spent')}</span>
       </div>
       {known ? (
         <>
