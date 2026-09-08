@@ -22,6 +22,10 @@ import { notification, notificationPreference } from '../modules/not/notificatio
 import { shippingAddress } from '../modules/acc/address.schema';
 import { facility } from '../modules/inv/facility.schema';
 import { consignmentEvent } from '../modules/dis/consignment-event.schema';
+import { parcel, parcelEvent } from '../modules/inv/parcel.schema';
+import { arrivalDisposal } from '../modules/inv/disposal.schema';
+import { supportTicket, supportMessage } from '../modules/sup/sup.schema';
+import { escrowDeal, escrowEvent } from '../modules/esc/escrow.schema';
 import { ID_PREFIX, prefixedId } from '../shared/ids';
 import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
 
@@ -181,13 +185,14 @@ async function main(): Promise<void> {
   // Custodian that receives donated/consigned items (keeps single-owner-never-deleted
   // true once a donation is accepted). It owns nothing in this dataset — the seeded
   // donation request is still open — but the account must exist for that flow to run.
-  await mkUser('platform@bault.dev', 'platform', 'admin', 'Platform', 'Custodian');
+  const platformAcc = await mkUser('platform@bault.dev', 'platform', 'admin', 'Platform', 'Custodian');
 
   const eldar = eldarAcc.id;
   const hermon = hermonAcc.id;
   const red = redAcc.id;
   const golden = goldenAcc.id;
   const veteran = veteranAcc.id;
+  const platform = platformAcc.id;
 
   // -------------------------------------------------------------------------
   // 3. PRICING RULES. Each rule states WHAT it is (description), HOW MUCH
@@ -1081,6 +1086,8 @@ async function main(): Promise<void> {
    * the same van. Dates are relative to the seed run so they never go stale.
    */
   const days = (n: number) => new Date(Date.now() + n * 86_400_000);
+  /** Same idea at a finer grain, backwards: `minutes(90)` is ninety minutes AGO. */
+  const minutes = (n: number) => new Date(Date.now() - n * 60_000);
   await db.insert(consignmentEvent).values([
     {
       name: 'Philly Non-Sports Card Show',
@@ -1110,12 +1117,430 @@ async function main(): Promise<void> {
     },
   ]);
 
+
+  // -------------------------------------------------------------------------
+  // 12. THE STATES A SCREEN HAS TO DRAW.
+  //
+  //     Everything above seeds the happy path: items on shelves, a sale that
+  //     completed, money that moved. That is enough to prove the system works
+  //     and not nearly enough to DESIGN it, because the states a product is
+  //     judged on are the ones it was never photographed in — a frozen card, a
+  //     card that has left, a box nobody can attribute, an account locked out of
+  //     everything except the one screen that can unlock it.
+  //
+  //     None of these is decoration. Each is a real row in the real table the
+  //     real screen reads, seeded so those screens can be built against data
+  //     instead of against imagination.
+  // -------------------------------------------------------------------------
+
+  /**
+   * (i) A card Red no longer has.
+   *
+   * The ninth catalogued Rayquaza, booked in and then GIVEN AWAY: donated to the
+   * platform custodian for the youth-league raffle. It exists so the vault's
+   * History scope has something in it for the collector the demo signs in as.
+   *
+   * It is a donation rather than a shipment for a reason worth writing down.
+   * `VaultService.listHistory` finds a departed card two ways — the customer is
+   * the PREVIOUS OWNER of an ownership transfer, or a custody event names them
+   * as `new_owner_id` on a change into a terminal state. Nothing in the
+   * application ever writes the second shape: `CustodyService.changeState` does
+   * not set `new_owner_id`, and no code path writes a `dispatch` event at all.
+   * A card the customer still owns but has shipped home is therefore invisible
+   * in History — including Golden's SN-SV146-0006, seeded long before this pass.
+   *
+   * That is an API bug, and the seed is not the place to hide it. Writing a
+   * `new_owner_id` onto a state change here would make this one row appear while
+   * every row the running product creates stayed missing, which is worse than
+   * the bug. So Red's departure is modelled as the thing that genuinely works,
+   * the bug is reported in docs/design/01-audit.md, and the second branch stays
+   * empty until somebody fixes the query.
+   *
+   * The tenth card (SN-EVS218-0010) is still deliberately unseeded, so the
+   * warehouse intake bench keeps a real, photographed item to book in.
+   */
+  const rayAltArt = await mkItem({
+    ownerId: platform, serialNumber: 'SN-EVS194-0009', barcode: 'BC-EVS194-0009',
+    typeClass: 'trading_card',
+    description: '2021 Pokémon SWSH Evolving Skies — Rayquaza V (Alternate Full Art) #194/203 · Rare Ultra · art by Ryuta Fuse · swsh7-194',
+    conditionGrade: 'Raw', lifecycleState: 'donated', binId: binB1,
+  });
+  await custody({ itemId: rayAltArt, eventType: 'intake', newOwnerId: red, newBinId: binB1, newState: 'stored', actorId: hermon, reason: 'intake' });
+  await transfer(rayAltArt, null, binB1, hermon, 'intake');
+  await img(rayAltArt, 'intake', 1, 'images/sn-evs194-0009-intake.jpg');
+  await bill(red, 'intake', INTAKE, rayAltArt);
+  await db.insert(serviceRequest).values({
+    code: prefixedId(ID_PREFIX.serviceRequest),
+    type: 'donation', requesterId: red, itemId: rayAltArt, status: 'completed',
+    typeFields: { note: 'For the youth league raffle. No conditions.' },
+    fulfillment: { recipient: 'Bault platform custodian', notes: 'Accepted for the youth-league raffle. Ownership moved; the card stays on shelf B until the raffle van goes.' },
+    fulfilledBy: eldar,
+    fulfilledAt: minutes(4_320),
+  });
+  await custody({
+    itemId: rayAltArt, eventType: 'ownership_transfer', prevOwnerId: red, newOwnerId: platform,
+    actorId: eldar, reason: 'donation accepted — youth league raffle',
+  });
+  await custody({
+    itemId: rayAltArt, eventType: 'state_change', prevState: 'stored', newState: 'donated',
+    actorId: eldar, reason: 'donated',
+  });
+
+  /**
+   * The M Rayquaza is FROZEN.
+   *
+   * Red bought it described as Near Mint; the condition was corrected to Raw on
+   * arrival, and that correction is already in `item_change_history` above. This
+   * is what follows from it: Red disputed the sale, and a disputed card does not
+   * move — it cannot be listed, shipped, swapped or deslabbed while two people
+   * disagree about what it is.
+   *
+   * `hold_flag` and the `hold_placed` custody event are set together on purpose.
+   * The flag is what the vault query filters on; the event is what the register
+   * prints, and it carries the REASON, because a frozen card whose freeze has no
+   * stated cause is indistinguishable from a bug.
+   */
+  await db.update(item).set({ holdFlag: true }).where(eq(item.id, rayMega));
+  await custody({
+    itemId: rayMega, eventType: 'hold_placed', actorId: eldar,
+    reason: 'Dispute opened on the sale: sold as Near Mint, received Raw. Held until the dispute closes.',
+  });
+
+  /**
+   * (j) A collector locked out of everything except the helpdesk.
+   *
+   * The hardest state in this product to get right, and the only one with no
+   * data at all. Dana owes for storage, the debt sweep suspended the account,
+   * and the API answers 403 to every route except the ticket ones — so the ONE
+   * screen that can get her out of it is the one screen she can reach. Sign in
+   * with dana@bault.dev / 11111111 to see it.
+   */
+  const danaAcc = await mkUser('dana@bault.dev', 'dana', 'user', 'Dana', 'Okonkwo');
+  const dana = danaAcc.id;
+  await db.update(userAccount).set({ status: 'suspended' }).where(eq(userAccount.id, dana));
+
+  // -------------------------------------------------------------------------
+  // 12b. THE HELPDESK — a thread in each state a queue can be in.
+  // -------------------------------------------------------------------------
+  const mkTicket = async (v: {
+    userId: string;
+    category: 'parcel' | 'shipment' | 'item' | 'billing' | 'account' | 'private_sale' | 'other';
+    subject: string;
+    status: 'open' | 'awaiting_customer' | 'resolved';
+    assignedTo?: string;
+    relatedType?: string;
+    relatedId?: string;
+    messages: { author: string; role: 'customer' | 'staff'; body: string; minutesAgo: number }[];
+  }) => {
+    const newest = Math.min(...v.messages.map((m) => m.minutesAgo));
+    const ticketId = one(
+      await db
+        .insert(supportTicket)
+        .values({
+          code: prefixedId(ID_PREFIX.ticket),
+          userId: v.userId,
+          category: v.category,
+          subject: v.subject,
+          status: v.status,
+          assignedTo: v.assignedTo ?? null,
+          relatedType: v.relatedType ?? null,
+          relatedId: v.relatedId ?? null,
+          lastMessageAt: minutes(newest),
+          resolvedAt: v.status === 'resolved' ? minutes(newest) : null,
+          resolvedBy: v.status === 'resolved' ? (v.assignedTo ?? hermon) : null,
+        })
+        .returning({ id: supportTicket.id }),
+    ).id;
+    await db.insert(supportMessage).values(
+      v.messages.map((m) => ({
+        ticketId,
+        authorId: m.author,
+        authorRole: m.role,
+        body: m.body,
+        createdAt: minutes(m.minutesAgo),
+      })),
+    );
+    return ticketId;
+  };
+
+  await mkTicket({
+    userId: dana,
+    category: 'account',
+    subject: 'My account is suspended and I cannot cash in to clear it',
+    status: 'open',
+    messages: [
+      {
+        author: dana, role: 'customer', minutesAgo: 90,
+        body: 'I got the email saying my account is suspended for unpaid storage. I want to pay it, but the wallet will not open. What do I do?',
+      },
+    ],
+  });
+
+  await mkTicket({
+    userId: red,
+    category: 'item',
+    subject: 'M Rayquaza-EX arrived as Raw, not Near Mint',
+    status: 'awaiting_customer',
+    assignedTo: hermon,
+    relatedType: 'item',
+    relatedId: rayMega,
+    messages: [
+      {
+        author: red, role: 'customer', minutesAgo: 2880,
+        body: 'The listing said Near Mint. The card that landed has soft corners and a print line through the holo. I have opened a dispute.',
+      },
+      {
+        author: hermon, role: 'staff', minutesAgo: 2760,
+        body: 'Thanks — the card is held and will not move while the dispute is open. Our intake photographs are on the item page; the corner is visible in the arrival shot. Would you like us to send it for a third-party grade, at our cost, before anybody decides anything?',
+      },
+    ],
+  });
+
+  await mkTicket({
+    userId: golden,
+    category: 'billing',
+    subject: 'What is the $5.00 charge on 5 September?',
+    status: 'resolved',
+    assignedTo: eldar,
+    messages: [
+      { author: golden, role: 'customer', minutesAgo: 14_400, body: 'There is a $5.00 debit I do not recognise.' },
+      {
+        author: eldar, role: 'staff', minutesAgo: 14_280,
+        body: 'That is the intake fee for the Roaring Skies Rayquaza-EX, charged when it was booked in. Open the ledger line and it names the pricing rule and the version that was in force that day.',
+      },
+      { author: golden, role: 'customer', minutesAgo: 14_220, body: 'Understood, thank you.' },
+    ],
+  });
+
+  // -------------------------------------------------------------------------
+  // 12c. PARCELS — boxes, including the two kinds that are not simple.
+  //
+  //      A receiving bench with nothing on it cannot be designed either. Three
+  //      parcels: one a collector has announced and nobody has seen, one sitting
+  //      unopened on the bench right now, and one that arrived addressed to a
+  //      username that does not exist — somebody's property that Bault is
+  //      holding and may not open.
+  // -------------------------------------------------------------------------
+  const mkParcel = async (v: {
+    ownerId: string | null;
+    addressedTo: string;
+    status: 'expected' | 'received' | 'unclaimed';
+    carrier?: string;
+    trackingNumber?: string;
+    declaredContents?: string;
+    internationalOrigin?: boolean;
+    expectedAt?: Date;
+    receivedAt?: Date;
+    unclaimedAt?: Date;
+    receivedBy?: string;
+    notes?: string;
+    events: { type: string; from?: string; to?: string; actor?: string; notes: string; at: Date }[];
+  }) => {
+    const row = one(
+      await db
+        .insert(parcel)
+        .values({
+          code: prefixedId(ID_PREFIX.parcel),
+          ownerId: v.ownerId,
+          addressedTo: v.addressedTo,
+          facilityId: njFacility,
+          status: v.status,
+          carrier: v.carrier ?? null,
+          trackingNumber: v.trackingNumber ?? null,
+          declaredContents: v.declaredContents ?? null,
+          internationalOrigin: v.internationalOrigin ?? false,
+          expectedAt: v.expectedAt ?? null,
+          receivedAt: v.receivedAt ?? null,
+          unclaimedAt: v.unclaimedAt ?? null,
+          receivedBy: v.receivedBy ?? null,
+          notes: v.notes ?? null,
+        })
+        .returning({ id: parcel.id, code: parcel.code }),
+    );
+    await db.insert(parcelEvent).values(
+      v.events.map((e) => ({
+        parcelId: row.id,
+        eventType: e.type,
+        fromStatus: e.from ?? null,
+        toStatus: e.to ?? null,
+        actorId: e.actor ?? null,
+        facilityId: njFacility,
+        notes: e.notes,
+        occurredAt: e.at,
+      })),
+    );
+    return row;
+  };
+
+  await mkParcel({
+    ownerId: red,
+    addressedTo: 'red',
+    status: 'expected',
+    carrier: 'USPS',
+    trackingNumber: '9400100000000000000001',
+    declaredContents: 'Two raw Rayquaza singles from a private sale, top-loaders in a bubble mailer.',
+    expectedAt: days(2),
+    events: [
+      { type: 'registered', to: 'expected', notes: 'Registered by the collector before dispatch.', at: minutes(600) },
+    ],
+  });
+
+  await mkParcel({
+    ownerId: golden,
+    addressedTo: 'golden',
+    status: 'received',
+    carrier: 'DHL',
+    trackingNumber: 'JD0140000000000001',
+    declaredContents: 'One sealed booster box.',
+    internationalOrigin: true,
+    receivedAt: minutes(45),
+    receivedBy: hermon,
+    events: [
+      { type: 'registered', to: 'expected', notes: 'Registered by the collector before dispatch.', at: days(-4) },
+      { type: 'received', from: 'expected', to: 'received', actor: hermon, notes: 'Signed for at the NJ dock. Outer carton sound, tape intact.', at: minutes(45) },
+    ],
+  });
+
+  await mkParcel({
+    ownerId: null,
+    // The label as it was actually written. It resolves to nobody: there is no
+    // account `r.ashwod`, and guessing that it means `red` is precisely what the
+    // platform must not do with somebody else's unopened property.
+    addressedTo: 'r.ashwod',
+    status: 'unclaimed',
+    carrier: 'UPS',
+    trackingNumber: '1Z999AA10123456784',
+    receivedAt: days(-6),
+    receivedBy: hermon,
+    unclaimedAt: days(-6),
+    notes: 'Handwritten label, no return address, no phone number. Held unopened.',
+    events: [
+      { type: 'received', to: 'received', actor: hermon, notes: 'Arrived with no resolvable recipient.', at: days(-6) },
+      { type: 'unclaimed', from: 'received', to: 'unclaimed', actor: hermon, notes: 'Addressed to "r.ashwod", which is not an account. Holding period started; box not opened.', at: days(-6) },
+    ],
+  });
+
+  /**
+   * A prohibited arrival.
+   *
+   * Not an item and never was: a lithium cell cannot be shelved, so recording it
+   * as one would mean booking a thing into a vault it never entered. It gets its
+   * own append-only row saying what turned up, what happened to it and who
+   * decided — because the collector is entitled to know that something addressed
+   * to them arrived and did not survive.
+   */
+  await db.insert(arrivalDisposal).values({
+    code: prefixedId(ID_PREFIX.disposal),
+    ownerId: red,
+    category: 'lithium_battery',
+    outcome: 'destroyed',
+    description: 'A 3.7 V lithium pouch cell packed loose beside the cards, taped to the inner flap.',
+    notes:
+      'Refused at the arrival check. Carrier and facility both prohibit loose cells. Photographed, removed to the battery bin, cards booked in normally. The collector was notified the same day.',
+    actorId: hermon,
+    occurredAt: days(-9),
+  });
+
+  // -------------------------------------------------------------------------
+  // 12d. CUSTOM REQUESTS — one at each of the three steps.
+  //
+  //      Ask (free) → an operator proposes a price and a scope → the collector
+  //      accepts. All three exist at once so the step register can be drawn with
+  //      the current step actually marked, rather than mocked.
+  // -------------------------------------------------------------------------
+  await db.insert(serviceRequest).values([
+    {
+      code: prefixedId(ID_PREFIX.serviceRequest),
+      type: 'custom', requesterId: red, itemId: rayGoldStar, status: 'requested',
+      typeFields: {
+        stage: 'awaiting_quote',
+        summary: 'Sleeve and double-boot before it goes to the show',
+        detail:
+          'If the Gold Star travels to Philly I want it in a perfect-fit sleeve inside a semi-rigid, not just a top-loader. Can you do that before it goes on the van?',
+      },
+    },
+    {
+      code: prefixedId(ID_PREFIX.serviceRequest),
+      type: 'custom', requesterId: red, itemId: rayLegends, status: 'in_progress',
+      typeFields: {
+        stage: 'quoted',
+        summary: 'Photograph the back under raking light',
+        detail:
+          'The back looks like it has a surface scratch under the right kind of light. Before I decide about grading I want a photograph that shows it, or shows that it is not there.',
+        priceMinor: 1_800,
+        scope:
+          'Two additional photographs of the reverse under raking light at 30° and 60°, added to the item as a new professional version. No handling out of the sleeve.',
+        quotedBy: hermon,
+        quotedAt: minutes(300).toISOString(),
+      },
+    },
+    {
+      code: prefixedId(ID_PREFIX.serviceRequest),
+      type: 'custom', requesterId: golden, itemId: rayDeoxys, status: 'completed',
+      typeFields: {
+        stage: 'done',
+        summary: 'Weigh the sealed box and record it',
+        detail:
+          'Before it goes into storage I want the sealed weight on record, in case anyone ever asks whether it was opened.',
+        priceMinor: 900,
+        scope: 'Weigh on the calibrated bench scale to 1 g, photograph the display, record the figure on the item.',
+        quotedBy: hermon,
+        quotedAt: minutes(9_000).toISOString(),
+        acceptedAt: minutes(8_940).toISOString(),
+      },
+      fulfillment: { weightGrams: 1_042, notes: 'Weighed twice on the bench scale, 1 042 g both times. Photograph of the display attached.' },
+      fulfilledBy: hermon,
+      fulfilledAt: minutes(8_800),
+    },
+  ]);
+
+  // -------------------------------------------------------------------------
+  // 12e. ONE ESCROW DEAL, mid-inspection.
+  //
+  //      The inspection gate is the whole product: the card is in Bault's hands,
+  //      the buyer's money has already left their spendable balance, and nobody
+  //      is released until a person has compared the thing to its description.
+  //      Seeded at exactly that moment, so the seal mark has a state to mean.
+  // -------------------------------------------------------------------------
+  const DEAL_VALUE = 145_000; // $1,450.00
+  const DEAL_FEE = 2_500; // the floor: 1% of $1,450 is under the $25 minimum
+  const deal = one(
+    await db
+      .insert(escrowDeal)
+      .values({
+        code: prefixedId(ID_PREFIX.escrow),
+        raisedBy: golden,
+        raiserRole: 'seller',
+        counterpartyUserId: red,
+        description:
+          'A second copy of the 2003 Pokémon EX Dragon — Rayquaza ex #97/97 · Rare Holo EX · art by Hikaru Koike · ex3-97. Raw, described as Near Mint: centred front, no whitening on the back edges.',
+        valueMinor: DEAL_VALUE,
+        currency: CUR,
+        feeMinor: DEAL_FEE,
+        status: 'inspecting',
+        settlement: 'buyer_vault',
+        fundingSource: 'wallet',
+        fundedAt: days(-3),
+        fundingAttestedBy: eldar,
+        fundingReference: 'Wallet hold against Red Ashwood',
+        itemReceivedAt: days(-1),
+      })
+      .returning({ id: escrowDeal.id }),
+  ).id;
+  await db.insert(escrowEvent).values([
+    { dealId: deal, eventType: 'raised', toStatus: 'proposed', actorId: golden, notes: 'Seller raised the deal.', occurredAt: days(-6) },
+    { dealId: deal, eventType: 'agreed', fromStatus: 'proposed', toStatus: 'agreed', actorId: red, notes: 'Buyer agreed to the description and the value.', occurredAt: days(-5) },
+    { dealId: deal, eventType: 'funded', fromStatus: 'agreed', toStatus: 'funded', actorId: eldar, notes: 'Held from the buyer wallet. The amount has left the spendable balance.', occurredAt: days(-3) },
+    { dealId: deal, eventType: 'item_received', fromStatus: 'funded', toStatus: 'inspecting', actorId: hermon, notes: 'Card received at NJ and logged in. Inspection opens against the written description.', occurredAt: days(-1) },
+  ]);
+
   await pool.end();
   // eslint-disable-next-line no-console
   console.log(
-    '✔ seed complete: 6 users, 6 bins (4 standard, 2 oversized), 8 items (4 Red / 4 Golden), 1 batch, 2 listings, 1 offer, ' +
-      '1 swap, 1 transaction, 1 dispute, 3 service requests, 1 shipment, 1 withdrawal, ' +
-      '4 wallet requests, 3 notifications, 2 addresses, 2 shows.',
+    '✔ seed complete: 7 users (1 suspended), 6 bins (4 standard, 2 oversized), 9 items (4 Red / 4 Golden / 1 donated to the custodian), ' +
+      '1 batch, 2 listings, 1 offer, 1 swap, 1 transaction, 1 dispute, 7 service requests, 1 shipment, ' +
+      '1 withdrawal, 4 wallet requests, 3 notifications, 2 addresses, 2 shows, 3 support tickets, ' +
+      '3 parcels, 1 arrival disposal, 1 escrow deal.',
   );
   // eslint-disable-next-line no-console
   console.log(
@@ -1126,8 +1551,17 @@ async function main(): Promise<void> {
     '  intake IDs are retired: only "veteran" carries one, so the pre-printed-label fallback stays exercised.',
   );
   console.log(
+    '  states seeded for the interface — every one of these had no data before:\n' +
+      '    FROZEN    SN-ROS105-0008, held while the sale dispute runs\n' +
+      '    DEPARTED  SN-EVS194-0009, donated away; history intact, nothing deleted\n' +
+      '    SUSPENDED dana@bault.dev — signs in, reaches the helpdesk and nothing else\n' +
+      '    PARCELS   one expected, one unopened on the bench, one addressed to nobody\n' +
+      '    REFUSED   a lithium cell, destroyed and recorded\n' +
+      '    CUSTOM    one request at each of the three steps\n' +
+      '    ESCROW    one deal stopped at the inspection gate',
+  );
+  console.log(
     '  NOT seeded (intake test material, photos already on disk):\n' +
-      '    SN-EVS194-0009  2021 Evolving Skies Rayquaza V (Alt Full Art) #194/203\n' +
       '    SN-EVS218-0010  2021 Evolving Skies Rayquaza VMAX (Alt Art secret) #218/203',
   );
 }
