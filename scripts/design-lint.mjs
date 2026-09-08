@@ -114,8 +114,29 @@ const cssCode = stripComments(css).split('\n');
 const PHYSICAL_CSS =
   /(?:^|[\s;{])(margin|padding|border)-(left|right)\b|(?:^|[\s;{])(left|right)\s*:|text-align\s*:\s*(left|right)\b/;
 
+/**
+ * A declared, explained exemption.
+ *
+ * `/* design-lint-allow: <why> *​/` on the line itself or on either of the two
+ * lines above it silences every rule for that line. The comment is stripped
+ * before the rules run (so the prose in it is never itself a finding), which is
+ * why the ORIGINAL text is what is searched here.
+ *
+ * Exemptions are declared rather than argued with. A rule that cannot be
+ * escaped gets switched off wholesale the first time it is wrong; one that can
+ * be escaped in writing, in the file, next to the thing it excuses, stays on.
+ */
+const cssRaw = css.split('\n');
+function allowed(index) {
+  for (let i = Math.max(0, index - 2); i <= index; i += 1) {
+    if (cssRaw[i]?.includes('design-lint-allow')) return true;
+  }
+  return false;
+}
+
 cssCode.forEach((line, i) => {
   const n = i + 1;
+  if (allowed(i)) return;
   if (PHYSICAL_CSS.test(line)) {
     report(rel, n, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
   }

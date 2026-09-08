@@ -169,6 +169,20 @@
   --oxblood-mark: #8c2b2b;
   --oxblood-wash: #f5e8e7;
 
+  /* ---- On the dark surfaces ----
+     The photography stage and the landing field are the only dark grounds in a
+     light product, and the ink on them is not the ink anywhere else. Named here
+     rather than written as `rgba(243, 244, 242, 0.55)` five times, which is how
+     a palette acquires colours nobody chose. */
+  --ink-on-dark-2: rgba(243, 244, 242, 0.72);
+  --ink-on-dark-3: rgba(243, 244, 242, 0.5);
+  --line-on-dark: rgba(243, 244, 242, 0.16);
+  /** Custody green lifted to clear AA against the stage. */
+  --custody-on-dark: #4fbfa2;
+
+  /** The scrim under an overlay. One value, whatever is being covered. */
+  --scrim: rgba(17, 19, 24, 0.46);
+
   /* ============================================================
      SPACE — 4px base
      ============================================================ */
@@ -428,6 +442,12 @@
     --oxblood-mark: #e79191;
     --oxblood-wash: #2f1717;
 
+    --ink-on-dark-2: rgba(240, 241, 238, 0.72);
+    --ink-on-dark-3: rgba(240, 241, 238, 0.5);
+    --line-on-dark: rgba(240, 241, 238, 0.16);
+    --custody-on-dark: #4fbfa2;
+    --scrim: rgba(0, 0, 0, 0.6);
+
     --navy-900: #0b0d10;
     --navy-700: #1b1e23;
     --navy-600: #23272d;
@@ -478,6 +498,12 @@
   --oxblood: #e79191;
   --oxblood-mark: #e79191;
   --oxblood-wash: #2f1717;
+
+  --ink-on-dark-2: rgba(240, 241, 238, 0.72);
+  --ink-on-dark-3: rgba(240, 241, 238, 0.5);
+  --line-on-dark: rgba(240, 241, 238, 0.16);
+  --custody-on-dark: #4fbfa2;
+  --scrim: rgba(0, 0, 0, 0.6);
 
   --navy-900: #0b0d10;
   --navy-700: #1b1e23;
@@ -1079,6 +1105,8 @@ time,
   height: 6px;
   border-radius: 50%;
   background: var(--custody-mark);
+  /* design-lint-allow: a knockout ring, not elevation — it punches the rail
+     ground out from behind the dot so the mark reads at 6px. */
   box-shadow: 0 0 0 2px var(--surface-sunken);
   transition: opacity var(--dur-fast) var(--ease);
 }
@@ -1276,8 +1304,8 @@ time,
 }
 
 .icon-btn svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
 }
 
 .bell-badge {
@@ -1294,6 +1322,8 @@ time,
   font-weight: var(--fw-semibold);
   line-height: 16px;
   text-align: center;
+  /* design-lint-allow: a knockout ring, not elevation — the badge sits on the
+     bell glyph and needs the header ground between them. */
   box-shadow: 0 0 0 2px var(--surface);
 }
 
@@ -1329,16 +1359,16 @@ time,
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(150deg, var(--navy-600), var(--navy-800));
-  color: #fff;
+  background: var(--ink);
+  color: var(--ink-on-dark);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
 }
 
 .user-trigger svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Popovers / menus ---- */
@@ -1401,7 +1431,7 @@ time,
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  padding: 9px var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
@@ -1418,8 +1448,8 @@ time,
 }
 
 .menu-item svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   color: var(--text-muted);
   flex: 0 0 auto;
 }
@@ -1862,8 +1892,8 @@ time,
 }
 
 .link-more svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 [dir='rtl'] .link-more svg {
@@ -1876,8 +1906,8 @@ time,
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-height: 38px;
-  padding-inline: 12px;
+  min-height: 36px;
+  padding-inline: var(--sp-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -1896,8 +1926,8 @@ time,
 }
 
 .control svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .control select {
@@ -1940,15 +1970,15 @@ time,
 .search svg {
   position: absolute;
   inset-inline-start: 12px;
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   color: var(--text-muted);
   pointer-events: none;
 }
 
 .search input {
   width: 100%;
-  padding-inline-start: 38px;
+  padding-inline-start: 36px;
 }
 
 /* ---- Form controls ---- */
@@ -2080,8 +2110,8 @@ input[type='search'] {
 
 .money-input input {
   width: 100%;
-  min-height: 52px;
-  padding-inline-start: 30px;
+  min-height: 48px;
+  padding-inline-start: 32px;
   font-size: var(--fs-xl);
   font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
@@ -2872,7 +2902,7 @@ input[type='search'] {
   display: grid;
   place-items: center;
   min-height: 200px;
-  color: rgba(243, 244, 242, 0.5);
+  color: var(--ink-on-dark-3);
   font-size: var(--fs-sm);
 }
 
@@ -3178,7 +3208,7 @@ input[type='search'] {
   align-items: flex-start;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border: 1px solid rgba(201, 50, 43, 0.28);
+  border: var(--border-w) solid color-mix(in srgb, var(--oxblood) 32%, transparent);
   border-radius: var(--r-md);
   background: var(--error-bg);
   color: var(--error-strong);
@@ -3207,7 +3237,7 @@ input[type='search'] {
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid rgba(47, 140, 76, 0.28);
+  border: var(--border-w) solid color-mix(in srgb, var(--custody) 32%, transparent);
   border-radius: var(--r-md);
   background: var(--success-bg);
   color: var(--success-strong);
@@ -3223,14 +3253,14 @@ input[type='search'] {
 
 /* Same banner, amber: informational rather than celebratory. */
 .okbox--warning {
-  border-color: rgba(168, 114, 15, 0.3);
+  border-color: color-mix(in srgb, var(--amber) 32%, transparent);
   background: var(--warning-bg);
   color: var(--warning);
 }
 
 .infobox {
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid rgba(49, 93, 197, 0.22);
+  border: var(--border-w) solid color-mix(in srgb, var(--frost) 32%, transparent);
   border-radius: var(--r-md);
   background: var(--info-bg);
   color: var(--link);
@@ -3456,8 +3486,8 @@ input[type='search'] {
 .photo-btn {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -3478,9 +3508,13 @@ input[type='search'] {
 .barcode {
   display: inline-block;
   padding: var(--sp-1);
+  /* A barcode is read by a scanner, not by a person. Pure white behind pure
+     black is the quiet zone the symbology requires, and it does not follow the
+     theme: a Code 128 label on a dark surface does not scan.
+     design-lint-allow: scanner contrast */
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
   line-height: 0;
 }
 
@@ -3636,7 +3670,7 @@ input[type='search'] {
 .auth-lede {
   font-size: var(--fs-md);
   line-height: var(--lh-normal);
-  color: rgba(243, 244, 242, 0.72);
+  color: var(--ink-on-dark-2);
   max-width: 54ch;
 }
 
@@ -3647,11 +3681,11 @@ input[type='search'] {
   gap: var(--sp-3) var(--sp-8);
   margin: 0;
   padding-block-start: var(--sp-4);
-  border-block-start: var(--border-w) solid rgba(243, 244, 242, 0.16);
+  border-block-start: var(--border-w) solid var(--line-on-dark);
 }
 
 .auth-custody dt {
-  color: rgba(243, 244, 242, 0.55);
+  color: var(--ink-on-dark-3);
   font-size: var(--fs-caption);
 }
 
@@ -3668,12 +3702,12 @@ input[type='search'] {
 
 /* On the dark stage the state mark needs the light end of the accent. */
 .auth-custody .pill--success {
-  border-inline-start-color: #4fbfa2;
-  color: #4fbfa2;
+  border-inline-start-color: var(--custody-on-dark);
+  color: var(--custody-on-dark);
 }
 
 .auth-caption {
-  color: rgba(243, 244, 242, 0.45);
+  color: var(--ink-on-dark-3);
   font-size: var(--fs-caption);
   line-height: var(--lh-snug);
   max-width: 60ch;
@@ -3924,8 +3958,8 @@ input[type='search'] {
     align-items: center;
     gap: var(--sp-3);
     padding: var(--sp-3) var(--sp-4);
-    background: var(--navy-800);
-    color: #fff;
+    background: var(--ink);
+    color: var(--ink-on-dark);
   }
 
   .mobile-bar .rail-mark {
@@ -3970,7 +4004,7 @@ input[type='search'] {
     position: fixed;
     inset: 0;
     z-index: calc(var(--z-rail) - 1);
-    background: rgba(11, 31, 51, 0.4);
+    background: var(--scrim);
   }
 
   .page-header {
@@ -4528,8 +4562,8 @@ input[type='search'] {
   block-size: 22px;
   padding: 0;
   border-radius: 50%;
-  background: rgb(0 0 0 / 0.6);
-  color: #fff;
+  background: var(--scrim);
+  color: var(--ink-on-dark);
   border: none;
 }
 
@@ -4583,9 +4617,9 @@ input[type='search'] {
   inline-size: 24px;
   block-size: 24px;
   border-radius: 50%;
-  background: var(--navy-800);
-  color: #fff;
-  font-size: var(--fs-micro);
+  background: var(--ink);
+  color: var(--ink-on-dark);
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4832,7 +4866,7 @@ input[type='search'] {
 .search--wide {
   flex: 1 1 100%;
   max-width: 720px;
-  min-height: 46px;
+  min-height: 44px;
   padding-inline: var(--sp-3);
   gap: var(--sp-2);
   background: var(--surface);
@@ -4853,8 +4887,9 @@ input[type='search'] {
 }
 
 .search--wide:focus-within {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px var(--teal-surface);
+  border-color: var(--custody);
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
 }
 
 .chip-row {
@@ -4882,9 +4917,9 @@ input[type='search'] {
 }
 
 .chip.is-on {
-  background: var(--graphite);
-  border-color: var(--graphite);
-  color: #fff;
+  background: var(--surface-sunken);
+  border-color: var(--ink-2);
+  color: var(--ink);
 }
 
 .chip:focus-visible {
@@ -5091,7 +5126,7 @@ input[type='search'] {
 
   .vault-search {
     flex-basis: 100%;
-    height: 54px;
+    height: 44px;
   }
 
   .state-controls {
@@ -5168,6 +5203,8 @@ input[type='search'] {
   }
 
   .legal-pre {
+    /* design-lint-allow: print. Ink on paper is black, whatever the reader had
+       their screen set to. */
     color: #000;
   }
 
@@ -5182,6 +5219,8 @@ input[type='search'] {
 
   .panel {
     box-shadow: none;
+    /* design-lint-allow: print. A hairline that survives a laser printer is not
+       the hairline that reads on a screen. */
     border-color: #999;
   }
 }
@@ -5269,8 +5308,8 @@ textarea[aria-invalid='true'] {
 }
 
 .btn-spinner {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid currentColor;
   border-block-start-color: transparent;
@@ -5420,8 +5459,8 @@ textarea[aria-invalid='true'] {
 /* ---- Theme control ----------------------------------------------------- */
 
 .theme-toggle svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Shelf yield ------------------------------------------------------- */
