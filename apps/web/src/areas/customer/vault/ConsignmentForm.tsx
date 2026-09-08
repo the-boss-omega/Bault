@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { channelLabel, type ConsignmentChannel, type ConsignmentEvent } from '../../../shared/market';
-import { Button, Field, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
 /**
  * Choose where a card is sold, and for how much.
@@ -131,14 +131,12 @@ export function ConsignmentForm({
         </Field>
       )}
 
-      <div className="field">
-        <span className="field-label">{t('consign.asking')}</span>
-        <div className="money-input">
-          <span aria-hidden="true">$</span>
-          <input inputMode="decimal" dir="ltr" value={price} onChange={(e) => setPrice(e.target.value)} />
-        </div>
-        <span className="field-hint">{t('consign.askingHint')}</span>
-      </div>
+      <MoneyField
+        label={t('consign.asking')}
+        value={price}
+        onChange={setPrice}
+        hint={t('consign.askingHint')}
+      />
 
       {problems.length > 0 && (
         <ul className="check-list list-unbounded">

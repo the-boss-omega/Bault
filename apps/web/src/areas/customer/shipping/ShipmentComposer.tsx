@@ -10,7 +10,7 @@ import {
   type QuotedRate,
   type ServiceCatalogue,
 } from '../../../shared/carriers';
-import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation, IconShipping } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
 import { countryName, useShippingCountries } from '../../../shared/countries';
@@ -278,21 +278,19 @@ export function ShipmentComposer({
 
       <Panel title={t('ship.protection')} subtitle={t('ship.protectionSubtitle')}>
         <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-          <div className="field">
-            <span className="field-label">{t('ship.insuredValue')}</span>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input inputMode="decimal" dir="ltr" value={insured} onChange={(e) => setInsured(e.target.value)} />
-            </div>
-            <span className="field-hint">
-              {catalogue
+          <MoneyField
+            label={t('ship.insuredValue')}
+            value={insured}
+            onChange={setInsured}
+            hint={
+              catalogue
                 ? t('ship.insuredHint', {
                     max: formatUsd(catalogue.maxInsuredValueMinor),
                     threshold: formatUsd(catalogue.signatureRequiredAboveMinor),
                   })
-                : ''}
-            </span>
-          </div>
+                : undefined
+            }
+          />
 
           <label className="check">
             <input
@@ -306,14 +304,12 @@ export function ShipmentComposer({
           {signatureForced && <span className="field-hint">{t('ship.signatureForced')}</span>}
 
           {international && (
-            <div className="field">
-              <span className="field-label">{t('ship.customsValue')}</span>
-              <div className="money-input">
-                <span aria-hidden="true">$</span>
-                <input inputMode="decimal" dir="ltr" value={declared} onChange={(e) => setDeclared(e.target.value)} />
-              </div>
-              <span className="field-hint">{t('ship.customsHint')}</span>
-            </div>
+            <MoneyField
+              label={t('ship.customsValue')}
+              value={declared}
+              onChange={setDeclared}
+              hint={t('ship.customsHint')}
+            />
           )}
 
           {(catalogue?.addOns ?? []).map((a) => (

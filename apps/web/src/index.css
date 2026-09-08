@@ -132,7 +132,19 @@
   /* ---- Ink. Three weights, all measured against --surface-page. ---- */
   --ink: #111318;      /* headings — 16.7:1, AAA */
   --ink-body: #2a2d33; /* body — 12.5:1, AAA */
-  --ink-2: #676c74;    /* secondary — 4.8:1, AA */
+  /*
+   * Secondary ink, and it is darker than the page alone would require.
+   *
+   * #676c74 cleared AA on the page ground at 4.79:1 — but the register header,
+   * the navigation rail and every other sunken surface are one step darker than
+   * the page, and the same ink measures 4.43:1 there and fails. axe found it on
+   * 61 of 104 screen/locale/viewport combinations, always on a `<th>` or on the
+   * rail's wordmark.
+   *
+   * A secondary colour has to clear the bar on the DARKEST surface it is used
+   * on, not the lightest.
+   */
+  --ink-2: #62676f;    /* 5.16:1 on the page, 4.74:1 on the sunken surface */
   --ink-on-dark: #f3f4f2;
   --ink-on-accent: #ffffff;
 

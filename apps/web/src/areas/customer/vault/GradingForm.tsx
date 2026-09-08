@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { tierLabel, type GradingTier } from '../../../shared/grading';
-import { Button, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
 /**
  * Send a card away to be graded — at a chosen service level.
@@ -108,14 +108,12 @@ export function GradingForm({
         </p>
       )}
 
-      <div className="field">
-        <span className="field-label">{t('grade.declared')}</span>
-        <div className="money-input">
-          <span aria-hidden="true">$</span>
-          <input inputMode="decimal" dir="ltr" value={declared} onChange={(e) => setDeclared(e.target.value)} />
-        </div>
-        <span className="field-hint">{t('grade.declaredHint')}</span>
-      </div>
+      <MoneyField
+        label={t('grade.declared')}
+        value={declared}
+        onChange={setDeclared}
+        hint={t('grade.declaredHint')}
+      />
 
       {problems.length > 0 && (
         <ul className="check-list list-unbounded">
