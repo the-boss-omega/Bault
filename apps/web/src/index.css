@@ -3506,100 +3506,257 @@ input[type='search'] {
 }
 
 /* ============================================================
-   Auth screens
+   The anonymous surface — the only public face this product has
+   ============================================================
+   A landing page and a sign-in form on one screen. Two columns at ≥900px: the
+   photography stage and its custody line on the start side, the form on the end
+   side. Below that the stage becomes a band above the form, because on a phone
+   the form is why anybody opened this.
+
+   It was a 440px white card floating in the middle of a navy radial gradient,
+   with a gold `B` above it and a paragraph of demo credentials underneath.
    ============================================================ */
 
 .auth-shell {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: var(--sp-6);
-  background: radial-gradient(120% 100% at 50% 0%, var(--navy-700), var(--navy-900) 70%);
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 0;
+  padding: 0;
+  background: var(--surface-page);
 }
 
+@media (min-width: 900px) {
+  .auth-shell:not(.auth-shell--bare) {
+    grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+    /* `align-content: start` from the base rule would leave the stage the
+       height of its content and a band of page ground under it; the stage is a
+       full-height field. */
+    align-content: stretch;
+    align-items: stretch;
+    min-height: 100vh;
+  }
+}
+
+/* Opened from a link in an email: one sentence and a button, centred. */
+.auth-shell--bare {
+  place-content: center;
+  place-items: center;
+  padding: var(--sp-8) var(--sp-6);
+}
+
+/* ---- The stage ---- */
+
+.auth-stage {
+  display: grid;
+  gap: var(--sp-8);
+  align-content: center;
+  padding: var(--sp-16) var(--sp-8);
+  padding-inline-start: max(var(--sp-8), env(safe-area-inset-left));
+  background: var(--surface-stage);
+  color: var(--ink-on-dark);
+}
+
+@media (min-width: 900px) {
+  .auth-stage {
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--sp-12);
+  }
+}
+
+.auth-stage-photo .photo-thumb {
+  inline-size: min(240px, 45vw);
+  aspect-ratio: 4 / 5;
+  background: transparent;
+  border: 0;
+}
+
+.auth-stage-photo .photo-thumb-img {
+  object-fit: contain;
+}
+
+.auth-pitch {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+/*
+ * On a phone the stage is a band, not a screen.
+ *
+ * At marketing density the full-height stage filled the entire first viewport
+ * and pushed the sign-in form below the fold — on the surface whose whole job,
+ * for anybody who already has an account, is the form. The photograph and the
+ * headline share a row, the rest runs under them, and the form starts within one
+ * short scroll.
+ */
+@media (max-width: 899px) {
+  .auth-stage {
+    grid-template-columns: 132px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--sp-5);
+    padding: var(--sp-8) var(--sp-5);
+    padding-block-start: max(var(--sp-8), env(safe-area-inset-top));
+  }
+
+  .auth-stage-photo .photo-thumb {
+    inline-size: 132px;
+  }
+
+  .auth-pitch {
+    grid-column: 2;
+    gap: var(--sp-3);
+  }
+
+  .auth-lede,
+  .auth-custody,
+  .auth-caption {
+    grid-column: 1 / -1;
+  }
+
+  .auth-box {
+    padding-block: var(--sp-8);
+  }
+}
+
+/* The ONLY place the display face appears. Marketing sizes, marketing rhythm. */
+.auth-headline {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3.2vw, 48px);
+  font-weight: 500;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--ink-on-dark);
+  text-wrap: balance;
+  max-width: 20ch;
+}
+
+.auth-lede {
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  color: rgba(243, 244, 242, 0.72);
+  max-width: 54ch;
+}
+
+/* The custody line: the same three facts the item sheet opens with. */
+.auth-custody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-8);
+  margin: 0;
+  padding-block-start: var(--sp-4);
+  border-block-start: var(--border-w) solid rgba(243, 244, 242, 0.16);
+}
+
+.auth-custody dt {
+  color: rgba(243, 244, 242, 0.55);
+  font-size: var(--fs-caption);
+}
+
+.auth-custody dd {
+  margin: 0;
+  margin-block-start: 2px;
+  color: var(--ink-on-dark);
+  font-size: var(--fs-base);
+}
+
+.auth-custody .serial {
+  color: var(--ink-on-dark);
+}
+
+/* On the dark stage the state mark needs the light end of the accent. */
+.auth-custody .pill--success {
+  border-inline-start-color: #4fbfa2;
+  color: #4fbfa2;
+}
+
+.auth-caption {
+  color: rgba(243, 244, 242, 0.45);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: 60ch;
+}
+
+/* ---- The form ---- */
+
 .auth-box {
-  width: min(100%, 440px);
+  display: grid;
+  align-content: center;
+  gap: var(--sp-6);
+  width: 100%;
+  max-width: 460px;
+  margin-inline: auto;
+  padding: var(--sp-12) var(--sp-6);
+  padding-inline-end: max(var(--sp-6), env(safe-area-inset-right));
 }
 
 .auth-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--sp-3);
-  margin-block-end: var(--sp-6);
-  color: #fff;
+  margin-block-end: 0;
+  color: var(--ink);
 }
 
 .auth-brand .rail-mark {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   font-size: var(--fs-xl);
 }
 
 .auth-brand-word {
-  font-size: var(--fs-2xl);
-  font-weight: var(--fw-semibold);
-  letter-spacing: -0.01em;
-}
-
-.auth-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-  padding: var(--sp-8);
-  background: var(--surface);
-  border-radius: var(--r-lg);
-  box-shadow: 0 24px 60px rgba(8, 12, 36, 0.4);
-}
-
-.auth-card h2 {
+  font-family: var(--font-display);
   font-size: var(--fs-xl);
-  text-align: center;
-}
-
-.auth-switch {
-  text-align: center;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-
-.auth-demo {
-  padding: var(--sp-3);
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  font-size: var(--fs-caption);
-  line-height: 1.55;
-  color: var(--text-2);
-  text-align: center;
-}
-
-/*
- * The brand row on the signed-out pages carries the language control.
- *
- * It used to be a text button in a footer that printed the name of the OTHER
- * language. It is the shell's globe switcher now, pushed to the trailing edge of
- * the brand row — top of the card, where somebody who cannot read the form looks
- * first.
- */
-.auth-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .auth-brand .pop-wrap {
   margin-inline-start: auto;
 }
 
-.auth-lang .btn {
-  color: rgba(255, 255, 255, 0.8);
-  border-color: rgba(255, 255, 255, 0.24);
-  background: transparent;
+/* The form is a form on the page, not a card floating over an illustration. */
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-group);
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.auth-lang .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+.auth-card h2 {
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  text-align: start;
+}
+
+.auth-switch {
+  text-align: start;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+/*
+ * The demo accounts.
+ *
+ * A real thing on a real screen: this build ships with seeded accounts and
+ * saying so plainly is more honest than hiding them behind a README. Set as a
+ * quiet note under a rule rather than a centred grey box.
+ */
+.auth-demo {
+  padding: var(--sp-3) 0 0;
+  border-block-start: var(--border-w) solid var(--line);
+  border-radius: 0;
+  background: none;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-normal);
+  color: var(--ink-2);
+  text-align: start;
 }
 
 /* Boot splash */

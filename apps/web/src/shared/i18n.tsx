@@ -24,6 +24,11 @@ export type MessageVars = Record<string, string | number>;
 const he = {
   // ---- App shell ----
   'app.title': 'Bault — כספת ושוק לפריטי אספנות',
+  'auth.landing.headline': 'מישהו מחזיק את זה עכשיו. אתם רואים בדיוק מה, איפה, ומה זה עולה.',
+  'auth.landing.lede': 'Bault שומרת פריטי אספנות ומנהלת את הרישום היחיד של הבעלות עליהם. כל פריט נושא מספר סידורי, כל תזוזה נרשמת ואי אפשר למחוק אותה, וכל חיוב מציג את הכלל שלפיו חושב.',
+  'auth.landing.state': 'בכספת',
+  'auth.landing.whereLabel': 'איפה',
+  'auth.landing.where': 'Bault New Jersey · אזור B',
   'app.loading': 'טוען…',
   'app.logout': 'התנתק',
   'admin.section.yield': 'תשואת מדפים',
@@ -2099,6 +2104,11 @@ export type MessageKey = keyof typeof he;
 const en: Record<MessageKey, string> = {
   // ---- App shell ----
   'app.title': 'Bault — Collectibles Vault & Marketplace',
+  'auth.landing.headline': 'Somebody is holding this right now. You can see exactly what, where, and what it costs.',
+  'auth.landing.lede': 'Bault holds collectibles and keeps the only record of who owns them. Every item carries a serial, every movement is written down and cannot be erased, and every charge shows the rule that priced it.',
+  'auth.landing.state': 'In the vault',
+  'auth.landing.whereLabel': 'Where',
+  'auth.landing.where': 'Bault New Jersey · Zone B',
   'app.loading': 'Loading…',
   'app.logout': 'Sign out',
   'admin.section.yield': 'Shelf yield',

@@ -55,8 +55,9 @@ import { AdminConsole } from './areas/admin/AdminConsole';
  * Root component and application shell.
  *
  * The shell — navigation rail, page header, workspace — is mounted once and
- * stays mounted: switching section only moves the gold selector, swaps the
- * title/breadcrumb and re-renders the workspace body. Role gating is unchanged:
+ * stays mounted: switching section only moves the custody rule on the active
+ * rail item, swaps the title/breadcrumb and re-renders the workspace body. Role
+ * gating is unchanged:
  *   - every role gets the collector features (vault, wallet, marketplace,
  *     services, shipping, notifications, profile);
  *   - staff (warehouse_operator / admin) also get the warehouse console;
@@ -217,7 +218,11 @@ export default function App() {
   if ((TOKEN_ROUTES as readonly string[]).includes(route.section)) {
     const token = route.params.token ?? null;
     return (
-      <AuthShell>
+      /* `bare`: no landing stage. Somebody who has clicked a link in an email to
+         confirm an address or reset a password is not being sold anything —
+         they want one sentence and a button, and a shop window in front of it
+         is an obstacle. */
+      <AuthShell bare>
         {route.section === 'verify-email' ? (
           <VerifyEmailPage token={token} />
         ) : (
