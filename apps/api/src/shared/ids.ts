@@ -5,7 +5,7 @@ import { randomInt } from 'node:crypto';
  *
  * Every entity type gets a scannable, glanceable code with its own prefix so a
  * warehouse operator or admin can tell what an ID refers to at a glance:
- *   OW-  owner (intake)      BC-  item/barcode      BIN- storage bin
+ *   OW-  owner (intake)      SN-  item serial       BIN- storage bin
  *   SHP- shipment            SR-  service request   DSP- dispute
  *   LOT- lot / batch         TXN- marketplace transaction
  *   DSL- arrival disposal (something that arrived and was not accepted)
@@ -24,7 +24,7 @@ export function prefixedId(prefix: string, length = 8): string {
 
 export const ID_PREFIX = {
   owner: 'OW',
-  item: 'BC',
+  item: 'SN',
   bin: 'BIN',
   shipment: 'SHP',
   serviceRequest: 'SR',
@@ -39,6 +39,10 @@ export const ID_PREFIX = {
   shipmentGroup: 'GRP',
   /** A private deal with Bault standing in the middle. */
   escrow: 'ESC',
+  /** A product the Bault store sells. */
+  houseListing: 'HSE',
+  /** One copy of it, sold. */
+  houseOrder: 'ORD',
 } as const;
 
 export const newShipmentCode = () => prefixedId(ID_PREFIX.shipment);

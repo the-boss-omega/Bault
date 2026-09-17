@@ -51,4 +51,35 @@ export class SessionService {
       .set({ revokedAt: new Date() })
       .where(eq(loginSession.tokenHash, hashToken(rawToken)));
   }
+
+  /**
+   * Revoke every session this user holds.
+   *
+   * A password change is the moment somebody who believes their account is
+   * compromised acts on it — and until now it changed the password and nothing
+   * else, so a stolen cookie kept working afterwards. That is the exact opposite
+   * of what the person pressing the button believes they are doing.
+   *
+   * `exceptRawToken` keeps the caller's own session alive, so changing a
+   * password from the profile page does not sign the person out of the page they
+   * are standing on. A RESET passes nothing — the person is holding a link from
+   * their inbox, not a session, and everything that exists at that moment is
+   * suspect.
+   *
+   * Returns how many sessions were ended, because "signed out 3 other devices"
+   * is a materially different message from "signed out 0", and the caller
+   * cannot know which without being told.
+   */
+  async revokeAllFor(userId: string, exceptRawToken?: string): Promise<number> {
+    const conditions = [eq(loginSession.userId, userId), isNull(loginSession.revokedAt)];
+    if (exceptRawToken) {
+      conditions.push(sql`${loginSession.tokenHash} <> ${hashToken(exceptRawToken)}`);
+    }
+    const revoked = await this.db
+      .update(loginSession)
+      .set({ revokedAt: new Date() })
+      .where(and(...conditions))
+      .returning({ id: loginSession.id });
+    return revoked.length;
+  }
 }

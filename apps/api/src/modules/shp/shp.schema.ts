@@ -141,6 +141,11 @@ export const shipment = pgTable('shipment', {
   cancelReason: text('cancel_reason'),
   /** What cancelling actually cost. Zero when nothing had been done yet. */
   restockingFeeMinor: integer('restocking_fee_minor').notNull().default(0),
+  /**
+   * The box the collector chose to have it sent in — a key from `SHIPPING_BOXES`.
+   * Null: priced on weight alone, and the warehouse picks the box.
+   */
+  boxSize: text('box_size'),
   cost: amountMinor('cost'),
   currency: currency(),
   status: shipmentStatus('status').notNull().default('requested'),

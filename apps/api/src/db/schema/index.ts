@@ -16,6 +16,7 @@ export * from '../../modules/not/notification.schema';
 export * from '../../modules/pay/pay.schema';
 export * from '../../modules/prc/prc.schema';
 export * from '../../modules/mkt/mkt.schema';
+export * from '../../modules/mkt/house.schema';
 export * from '../../modules/dis/dis.schema';
 export * from '../../modules/dis/consignment-event.schema';
 export * from '../../modules/dis/grading-submission.schema';

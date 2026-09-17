@@ -25,6 +25,7 @@ import { DirectShipService } from './direct-ship.service';
 import { DispatchService } from './dispatch.service';
 import { HumanFulfilmentService } from './human-fulfilment.service';
 import { shippingCountries } from './countries';
+import { SHIPPING_BOX_KEYS } from './boxes';
 
 /** The options every shipment path accepts, so the shapes cannot drift apart. */
 class ShipmentOptionsDto {
@@ -39,6 +40,8 @@ class ShipmentOptionsDto {
   @IsOptional() @IsIn(['simple', 'personalised']) serviceMode?: 'simple' | 'personalised';
   /** Per-item customs values, keyed by item id. Apportioned by weight if absent. */
   @IsOptional() @IsObject() perItemCustomsValues?: Record<string, number>;
+  /** A box from the catalogue. Null clears it: priced on weight, the warehouse picks. */
+  @IsOptional() @IsIn(SHIPPING_BOX_KEYS) boxSize?: string | null;
 }
 
 class CreateShipmentDto extends ShipmentOptionsDto {

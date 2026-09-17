@@ -1,4 +1,6 @@
 import 'reflect-metadata';
+import { timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
@@ -8,6 +10,7 @@ import { loadEnv } from '@bault/config';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/errors/all-exceptions.filter';
 import { validationException } from './shared/errors/validation-error';
+import { StructuredLogger, requestContext } from './shared/observability/logger';
 
 /**
  * Application entry point.
@@ -22,10 +25,26 @@ import { validationException } from './shared/errors/validation-error';
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
 
+  /**
+   * Logging that an aggregator can read and a person can correlate.
+   *
+   * The old line here was `logger: ['error', 'warn', 'log']` with a note that
+   * "full logger wiring arrives in T022". What arrived in T022 was the health
+   * checks; the logger did not. `LOG_LEVEL` sat in the env schema unread, output
+   * had no timestamps, no levels an aggregator could filter on, and nothing tied
+   * a line to the request that produced it.
+   */
   const app = await NestFactory.create(AppModule, {
-    // Structured logs; full logger/Sentry wiring arrives in T022.
-    logger: ['error', 'warn', 'log'],
+    logger: new StructuredLogger('api'),
+    bufferLogs: false,
   });
+
+  /**
+   * Before everything else, so every log line from this request — including the
+   * ones written by helmet, the validation pipe and the exception filter — is
+   * tagged with the same id, and the caller gets that id back on the response.
+   */
+  app.use(requestContext);
 
   /**
    * Security headers.
@@ -112,6 +131,39 @@ async function bootstrap(): Promise<void> {
         `(docs disabled; set EXPOSE_API_DOCS=true to serve them)`,
     );
     return;
+  }
+
+  /**
+   * The password that was required and enforced nothing.
+   *
+   * `API_DOCS_PASSWORD` has been mandatory in production whenever the explorer
+   * was switched on — and nothing read it. Setting it bought exactly the
+   * confidence that the route map was protected, and none of the protection: a
+   * complete list of all 164 routes was served to anyone who asked for `/docs`.
+   *
+   * Basic auth rather than a session check, because the caller is a person with
+   * a browser and no account — the explorer's whole audience is somebody who is
+   * not signed in yet. Compared in constant time, because a password compared
+   * with `===` leaks its length and prefix to anyone patient enough to measure.
+   */
+  if (env.API_DOCS_PASSWORD) {
+    app.use('/docs', (req: IncomingMessage & { headers: Record<string, string | undefined> }, res: ServerResponse, next: () => void) => {
+      const header = req.headers.authorization ?? '';
+      const supplied = header.startsWith('Basic ')
+        ? Buffer.from(header.slice(6), 'base64').toString('utf8').split(':').slice(1).join(':')
+        : '';
+      const expected = Buffer.from(env.API_DOCS_PASSWORD);
+      const given = Buffer.from(supplied);
+      const ok =
+        given.length === expected.length && timingSafeEqual(given, expected);
+      if (!ok) {
+        res.statusCode = 401;
+        res.setHeader('WWW-Authenticate', 'Basic realm="Bault API docs"');
+        res.end('Unauthorized');
+        return;
+      }
+      next();
+    });
   }
 
   const openApiConfig = new DocumentBuilder()

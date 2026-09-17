@@ -4,6 +4,7 @@ import { createDb } from './client';
 import { userAccount } from '../modules/acc/acc.schema';
 import { item, bin, itemImage, custodyEvent, itemChangeHistory, binTransfer, batch } from '../modules/cst/cst.schema';
 import { listing, transaction, offer, swapProposal } from '../modules/mkt/mkt.schema';
+import { houseListing } from '../modules/mkt/house.schema';
 import {
   ledgerRecord,
   externalPayment,
@@ -54,7 +55,7 @@ import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
  *
  * Conventions the seed upholds:
  *  - Every amount is USD in cents (Requirement 7.1) — no shekels/agorot anywhere.
- *  - Owner IDs are OW-, item labels BC-, lots LOT-, bins BIN-, shipments SHP-,
+ *  - Owner IDs are OW-, item labels SN-, lots LOT-, bins BIN-, shipments SHP-,
  *    service requests SR-, disputes DSP-, transactions TXN- (Requirement 9).
  *  - Every pricing rule states its description, value, scope and billing trigger
  *    (Requirement 14.1).
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
   await pool.query(`TRUNCATE TABLE
     user_account, verification_token, login_session,
     item, bin, item_image, custody_event, item_change_history, bin_transfer, batch,
-    listing, "transaction", offer, swap_proposal,
+    listing, "transaction", offer, swap_proposal, house_listing, house_order,
     ledger_record, external_payment, charge, withdrawal,
     wallet_request, wallet_request_event,
     pricing_rule, service_request, shipment,
@@ -661,7 +662,7 @@ async function main(): Promise<void> {
 
   // (a) EX Dragon Rayquaza ex — Red, stored, professionally photographed.
   const rayDragon = await mkItem({
-    ownerId: red, serialNumber: 'SN-DR97-0001', barcode: 'BC-DR97-0001',
+    ownerId: red, serialNumber: 'SN-DR97-0001', barcode: 'SN-DR97-0001',
     typeClass: 'trading_card',
     description: '2003 Pokémon EX Dragon — Rayquaza ex #97/97 · Rare Holo EX · art by Hikaru Koike · ex3-97',
     conditionGrade: 'Raw', lifecycleState: 'stored', binId: binA1,
@@ -686,7 +687,7 @@ async function main(): Promise<void> {
   const goldenBatch = one(await db.insert(batch).values({ ownerId: golden, status: 'split' }).returning({ id: batch.id })).id;
 
   const rayDeoxys = await mkItem({
-    ownerId: golden, serialNumber: 'SN-DX102-0002', barcode: 'BC-DX102-0002',
+    ownerId: golden, serialNumber: 'SN-DX102-0002', barcode: 'SN-DX102-0002',
     typeClass: 'trading_card',
     description: '2005 Pokémon EX Deoxys — Rayquaza ex #102/107 · Rare Holo EX · art by Shin-ichi Yoshikawa · ex8-102',
     conditionGrade: 'Raw', lifecycleState: 'stored', binId: binA2, sourceBatchId: goldenBatch,
@@ -700,7 +701,7 @@ async function main(): Promise<void> {
   //     standing offer from Golden. Relocated once, so the transfer ledger shows
   //     a real source → destination move.
   const rayGoldStar = await mkItem({
-    ownerId: red, serialNumber: 'SN-DX107-0003', barcode: 'BC-DX107-0003',
+    ownerId: red, serialNumber: 'SN-DX107-0003', barcode: 'SN-DX107-0003',
     typeClass: 'trading_card',
     description: '2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star) #107/107 · Rare Holo Star · art by Masakazu Fukuda · ex8-107',
     conditionGrade: 'Raw', lifecycleState: 'listed', binId: binB1,
@@ -721,7 +722,7 @@ async function main(): Promise<void> {
   //     so it sits in the operator's service queue waiting to be closed with a
   //     real returned grade; nothing about a grade is asserted here.
   const rayDelta = await mkItem({
-    ownerId: golden, serialNumber: 'SN-DF97-0004', barcode: 'BC-DF97-0004',
+    ownerId: golden, serialNumber: 'SN-DF97-0004', barcode: 'SN-DF97-0004',
     typeClass: 'trading_card',
     description: '2006 Pokémon EX Dragon Frontiers — Rayquaza ex δ (Delta Species) #97/101 · Rare Holo EX · art by Ryo Ueda · ex15-97',
     conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB1,
@@ -741,7 +742,7 @@ async function main(): Promise<void> {
   // (e) Call of Legends Rayquaza — Red, stored, unremarkable on purpose: a plain
   //     shelved item with nothing pending against it.
   const rayLegends = await mkItem({
-    ownerId: red, serialNumber: 'SN-CL10-0005', barcode: 'BC-CL10-0005',
+    ownerId: red, serialNumber: 'SN-CL10-0005', barcode: 'SN-CL10-0005',
     typeClass: 'trading_card',
     description: '2011 Pokémon Call of Legends — Rayquaza #SL10/95 · Rare Holo (Shiny Legendary subset) · art by Noriko Hotta · col1-SL10',
     conditionGrade: 'Raw', lifecycleState: 'stored', binId: binA1,
@@ -754,7 +755,7 @@ async function main(): Promise<void> {
   // (f) Supreme Victors C LV.X — Golden shipped it home (rush). Ownership stays
   //     with Golden; only custody of the physical card leaves the vault.
   const rayLevelX = await mkItem({
-    ownerId: golden, serialNumber: 'SN-SV146-0006', barcode: 'BC-SV146-0006',
+    ownerId: golden, serialNumber: 'SN-SV146-0006', barcode: 'SN-SV146-0006',
     typeClass: 'trading_card',
     description: '2009 Pokémon Supreme Victors — Rayquaza C LV.X #146/147 · Rare Holo LV.X (Pokémon SP) · art by Shizurow · pl3-146',
     conditionGrade: 'Raw', lifecycleState: 'shipped', binId: null,
@@ -783,7 +784,7 @@ async function main(): Promise<void> {
   // (g) Roaring Skies Rayquaza-EX — Golden's, second half of the batch above, with
   //     an OPEN donation request so the DIS donation path has a live example.
   const rayFullArt = await mkItem({
-    ownerId: golden, serialNumber: 'SN-ROS104-0007', barcode: 'BC-ROS104-0007',
+    ownerId: golden, serialNumber: 'SN-ROS104-0007', barcode: 'SN-ROS104-0007',
     typeClass: 'trading_card',
     description: '2015 Pokémon XY Roaring Skies — Rayquaza-EX (Full Art) #104/108 · Rare Ultra · art by Ryo Ueda · xy6-104',
     conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB2, sourceBatchId: goldenBatch,
@@ -801,7 +802,7 @@ async function main(): Promise<void> {
   // (h) M Rayquaza-EX — intaken by Golden, LISTED, then SOLD to Red. This is the
   //     one full sale record: custody transfer, both ledger legs, fee, and a TXN.
   const rayMega = await mkItem({
-    ownerId: red, serialNumber: 'SN-ROS105-0008', barcode: 'BC-ROS105-0008',
+    ownerId: red, serialNumber: 'SN-ROS105-0008', barcode: 'SN-ROS105-0008',
     typeClass: 'trading_card',
     description: '2015 Pokémon XY Roaring Skies — M Rayquaza-EX (Full Art, Δ Evolution) #105/108 · Rare Ultra · art by 5ban Graphics · xy6-105',
     conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB2,
@@ -831,6 +832,29 @@ async function main(): Promise<void> {
   ).id;
   // The condition was corrected on arrival, giving the item a real change history.
   await db.insert(itemChangeHistory).values({ itemId: rayMega, actorId: hermon, field: 'conditionGrade', oldValue: 'Near Mint', newValue: 'Raw' });
+
+  // THE BAULT STORE — the business's own copies, which were never booked in and so
+  // have no serial or barcode until somebody buys one. Each product is a real print
+  // whose catalogue scan is already on disk (`photoRef`), described in exactly the
+  // words the vault uses for another copy of the same card. Raw, because that is
+  // what the scans show. No orders are seeded: buying one is the demo.
+  await db.insert(houseListing).values([
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2011 Pokémon Call of Legends — Rayquaza #SL10/95 · Rare Holo (Shiny Legendary subset) · art by Noriko Hotta · col1-SL10',
+      conditionGrade: 'Raw', photoRef: 'SN-CL10-0005', askingPrice: 3_500, currency: CUR, stock: 3, createdBy: eldar,
+    },
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2015 Pokémon XY Roaring Skies — Rayquaza-EX (Full Art) #104/108 · Rare Ultra · art by Ryo Ueda · xy6-104',
+      conditionGrade: 'Raw', photoRef: 'SN-ROS104-0007', askingPrice: 4_900, currency: CUR, stock: 2, createdBy: eldar,
+    },
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2006 Pokémon EX Dragon Frontiers — Rayquaza ex δ (Delta Species) #97/101 · Rare Holo EX · art by Ryo Ueda · ex15-97',
+      conditionGrade: 'Raw', photoRef: 'SN-DF97-0004', askingPrice: 16_500, currency: CUR, stock: 1, createdBy: eldar,
+    },
+  ]);
 
   // NOT SEEDED, ON PURPOSE — the remaining two cards of the ten are left out of the
   // database so the warehouse intake flow can be exercised end to end against real
@@ -1025,12 +1049,12 @@ async function main(): Promise<void> {
     { actorId: red, action: 'POST /api/v1/marketplace/listings/:id/purchase', targetEntity: 'transaction', targetId: saleTxn },
   ]);
   await db.insert(outboxMessage).values([
-    { aggregateType: 'item', aggregateId: rayDragon, eventType: 'item_received', payload: { itemId: rayDragon, ownerId: red, barcode: 'BC-DR97-0001' } },
+    { aggregateType: 'item', aggregateId: rayDragon, eventType: 'item_received', payload: { itemId: rayDragon, ownerId: red, barcode: 'SN-DR97-0001' } },
     {
       aggregateType: 'listing',
       aggregateId: goldStarListing,
       eventType: 'offer_received',
-      payload: { listingId: goldStarListing, sellerId: red, amount: GOLD_STAR_OFFER, itemId: rayGoldStar, barcode: 'BC-DX107-0003', itemDescription: goldStarName },
+      payload: { listingId: goldStarListing, sellerId: red, amount: GOLD_STAR_OFFER, itemId: rayGoldStar, barcode: 'SN-DX107-0003', itemDescription: goldStarName },
     },
   ]);
 
@@ -1044,8 +1068,8 @@ async function main(): Promise<void> {
       eventType: 'item_received',
       content: {
         itemId: rayDragon,
-        barcode: 'BC-DR97-0001',
-        message: 'Item BC-DR97-0001 was received into your vault and shelved.',
+        barcode: 'SN-DR97-0001',
+        message: 'Item SN-DR97-0001 was received into your vault and shelved.',
       },
     },
     {
@@ -1063,8 +1087,8 @@ async function main(): Promise<void> {
       eventType: 'item_received',
       content: {
         itemId: rayDeoxys,
-        barcode: 'BC-DX102-0002',
-        message: 'Item BC-DX102-0002 was received into your vault and shelved.',
+        barcode: 'SN-DX102-0002',
+        message: 'Item SN-DX102-0002 was received into your vault and shelved.',
       },
     },
   ]);
@@ -1160,7 +1184,7 @@ async function main(): Promise<void> {
    * warehouse intake bench keeps a real, photographed item to book in.
    */
   const rayAltArt = await mkItem({
-    ownerId: platform, serialNumber: 'SN-EVS194-0009', barcode: 'BC-EVS194-0009',
+    ownerId: platform, serialNumber: 'SN-EVS194-0009', barcode: 'SN-EVS194-0009',
     typeClass: 'trading_card',
     description: '2021 Pokémon SWSH Evolving Skies — Rayquaza V (Alternate Full Art) #194/203 · Rare Ultra · art by Ryuta Fuse · swsh7-194',
     conditionGrade: 'Raw', lifecycleState: 'donated', binId: binB1,
@@ -1538,7 +1562,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(
     '✔ seed complete: 7 users (1 suspended), 6 bins (4 standard, 2 oversized), 9 items (4 Red / 4 Golden / 1 donated to the custodian), ' +
-      '1 batch, 2 listings, 1 offer, 1 swap, 1 transaction, 1 dispute, 7 service requests, 1 shipment, ' +
+      '1 batch, 2 listings, 3 store products, 1 offer, 1 swap, 1 transaction, 1 dispute, 7 service requests, 1 shipment, ' +
       '1 withdrawal, 4 wallet requests, 3 notifications, 2 addresses, 2 shows, 3 support tickets, ' +
       '3 parcels, 1 arrival disposal, 1 escrow deal.',
   );

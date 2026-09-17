@@ -108,6 +108,86 @@ describe('SHP outbound shipping', () => {
     expect(cheapest(lightFar)).toBeGreaterThan(cheapest(lightHome));
   });
 
+  /* ---------------- the box ---------------- */
+
+  it('publishes the boxes a parcel can go out in', async () => {
+    const collector = await signIn(SEED.collector);
+    const boxes = (await collector.get('/shipping/services')).body.boxes as Array<{ key: string; dimensionsCm: { length: number }; maxContentsGrams: number }>;
+    expect(boxes.map((b) => b.key)).toEqual(['rigid_mailer', 'small', 'medium', 'large', 'extra_large']);
+    for (const b of boxes) {
+      expect(b.dimensionsCm.length).toBeGreaterThan(0);
+      expect(b.maxContentsGrams).toBeGreaterThan(0);
+    }
+  });
+
+  it('quotes more for the same contents in a bigger box', async () => {
+    const { item } = await itemFor();
+    const collector = await signIn(SEED.collector);
+    const us = await addressFor(collector, US);
+    const quote = async (boxSize?: string) =>
+      (await collector.post('/shipping/quote', { itemIds: [item.id], addressId: us, boxSize })).body;
+    const ground = (q: { rates: { serviceKey: string; totalMinor: number }[] }) =>
+      q.rates.find((r) => r.serviceKey === 'usps_ground')!.totalMinor;
+
+    const unchosen = await quote();
+    const mailer = await quote('rigid_mailer');
+    const large = await quote('large');
+
+    expect(unchosen.boxSize).toBeNull();
+    expect(mailer.boxSize).toBe('rigid_mailer');
+    expect(mailer.optionProblems).toEqual([]);
+    expect(ground(large)).toBeGreaterThan(ground(mailer));
+  });
+
+  it('refuses a box the contents do not fit, and says why', async () => {
+    const { item } = await itemFor('sealed_box');
+    const collector = await signIn(SEED.collector);
+    const us = await addressFor(collector, US);
+
+    const quote = (
+      await collector.post('/shipping/quote', { itemIds: [item.id], addressId: us, boxSize: 'rigid_mailer' })
+    ).body;
+    expect(quote.optionProblems.map((p: { rule: string }) => p.rule)).toContain('box_contents');
+
+    // And a request cannot be created around it — the quote was the courtesy.
+    const created = await collector.post('/shipping/shipments', {
+      itemIds: [item.id],
+      addressId: us,
+      boxSize: 'rigid_mailer',
+    });
+    expect(created.status).toBe(400);
+
+    const unknown = await collector.post('/shipping/quote', { itemIds: [item.id], addressId: us, boxSize: 'crate' });
+    expect(unknown.status).toBe(400);
+  });
+
+  it('charges the boxed price it quoted, because the box is stored on the request', async () => {
+    const { item } = await itemFor();
+    const collector = await signIn(SEED.collector);
+    const us = await addressFor(collector, US);
+    await fundWallet(SEED.collector, 20_000);
+
+    const quoted = (
+      await collector.post('/shipping/quote', { itemIds: [item.id], addressId: us, boxSize: 'large' })
+    ).body.rates.find((r: { serviceKey: string }) => r.serviceKey === 'usps_ground');
+
+    const s = (
+      await collector.post('/shipping/shipments', { itemIds: [item.id], addressId: us, boxSize: 'large' })
+    ).body;
+    expect(s.boxSize).toBe('large');
+
+    const selected = await collector.post(`/shipping/shipments/${s.id}/select-rate`, {
+      carrier: quoted.carrier,
+      serviceLevel: quoted.serviceLevel,
+    });
+    expect(selected.status).toBe(201);
+    expect(selected.body.cost).toBe(quoted.totalMinor);
+
+    // The warehouse sees the box it has to pack it in.
+    const operator = await signIn(SEED.operator);
+    expect((await operator.get(`/shipping/shipments/${s.id}`)).body.boxSize).toBe('large');
+  });
+
   it('charges more for rush, as a Bault handling line rather than a carrier one', async () => {
     const { item } = await itemFor();
     const collector = await signIn(SEED.collector);

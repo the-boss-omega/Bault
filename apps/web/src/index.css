@@ -4014,6 +4014,355 @@ input[type='search'] {
 }
 
 /* ============================================================
+   The landing page
+   ------------------------------------------------------------
+   `areas/customer/marketing/LandingPage.tsx` — the first public surface this
+   product has had. It reuses the auth screen's stage wholesale (the same dark
+   photography ground, the same custody line, the same serial) and then does the
+   thing the auth screen could not: keeps going, at marketing density, through
+   what is promised, what it costs and how an item moves.
+
+   Nothing here is a card. Every section is a heading, a rule and spacing —
+   `--gap-section` at marketing density is 96px, and that space IS the grouping.
+   ============================================================ */
+
+.landing {
+  min-height: 100vh;
+  display: grid;
+  align-content: start;
+  background: var(--surface-page);
+  color: var(--ink-body);
+}
+
+/* ---- The bar ---- */
+
+.landing-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-block: var(--sp-4);
+  padding-inline: max(var(--sp-6), env(safe-area-inset-left)) max(var(--sp-6), env(safe-area-inset-right));
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.landing-word {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.landing-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
+}
+
+/* ---- The stage: the one dark surface, and the whole pitch ---- */
+
+.landing-stage {
+  display: grid;
+  gap: var(--sp-8);
+  align-content: center;
+  padding-block: var(--sp-16);
+  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
+  background: var(--surface-stage);
+  color: var(--ink-on-dark);
+}
+
+@media (min-width: 900px) {
+  .landing-stage {
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--sp-12);
+    padding-block: var(--sp-24);
+  }
+}
+
+.landing-stage-photo .photo-thumb {
+  inline-size: min(280px, 56vw);
+  aspect-ratio: 4 / 5;
+  background: transparent;
+  border: 0;
+}
+
+/* This is evidence. Cropping it hides the corner somebody is trying to see. */
+.landing-stage-photo .photo-thumb-img {
+  object-fit: contain;
+}
+
+.landing-pitch {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+/* The display face, at the one size on the site that earns it. */
+.landing-headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(36px, 4.4vw, 64px);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--ink-on-dark);
+  text-wrap: balance;
+  max-width: 18ch;
+}
+
+.landing-lede {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  color: var(--ink-on-dark-2);
+  max-width: 62ch;
+}
+
+/* The custody line: the same three facts the item sheet opens with. */
+.landing-custody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-8);
+  margin: 0;
+  padding-block-start: var(--sp-4);
+  border-block-start: var(--border-w) solid var(--line-on-dark);
+}
+
+.landing-custody dt {
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-caption);
+}
+
+.landing-custody dd {
+  margin: 0;
+  margin-block-start: 2px;
+  color: var(--ink-on-dark);
+  font-size: var(--fs-base);
+}
+
+.landing-custody .serial {
+  color: var(--ink-on-dark);
+}
+
+/* On the dark stage the state mark needs the light end of the accent. */
+.landing-custody .pill--success {
+  border-inline-start-color: var(--custody-on-dark);
+  color: var(--custody-on-dark);
+}
+
+.landing-caption {
+  margin: 0;
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: 64ch;
+}
+
+.landing-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-block-start: var(--sp-2);
+}
+
+/*
+ * A secondary control ON THE STAGE takes the stage's ink, not the page's.
+ *
+ * `.btn--secondary` is drawn for the light ground: a hairline in `--line` over
+ * `--surface-page`. Dropped onto the photography stage it is a pale rectangle
+ * competing with the photograph for the brightest thing on screen. Same
+ * component, same geometry, same focus ring — only the two colours it borrows
+ * change, which is what the on-dark tokens exist for.
+ */
+.landing-stage .btn--secondary {
+  background: transparent;
+  border-color: var(--line-on-dark);
+  color: var(--ink-on-dark);
+}
+
+.landing-stage .btn--secondary:hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--ink-on-dark-3);
+}
+
+/* ---- Sections below the fold ---- */
+
+.landing-section,
+.landing-close {
+  display: grid;
+  gap: var(--sp-4);
+  align-content: start;
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-block: var(--gap-section);
+  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.landing-h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.landing-sub {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  color: var(--ink-2);
+  max-width: 68ch;
+}
+
+/*
+ * A claim is a rule and the text under it.
+ *
+ * Not a bordered tile, not a tinted box, not an icon above a heading — all
+ * three are named in DESIGN.md's anti-patterns, and all three were in this
+ * product. The 2px custody rule is the same mark a selected rail destination
+ * and an active register row take.
+ */
+.landing-claims {
+  display: grid;
+  gap: var(--sp-8);
+  padding-block-start: var(--sp-4);
+}
+
+@media (min-width: 720px) {
+  .landing-claims {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.landing-claims article {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-4);
+  border-block-start: 2px solid var(--custody);
+}
+
+.landing-claims h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--ink);
+}
+
+.landing-claims p {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--ink-body);
+}
+
+/* ---- The price register ---- */
+
+.landing-price-table {
+  margin-block-start: var(--sp-4);
+}
+
+.landing-price-what {
+  display: block;
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+}
+
+/* The storage terms, under the thing they are the terms of. */
+.landing-terms {
+  display: block;
+  margin-block-start: 2px;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
+}
+
+/* Storage has no single figure, so the cell says what it has instead of a sum. */
+.landing-included {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+.landing-footnote {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.landing-steps {
+  padding-block-start: var(--sp-4);
+}
+
+/* ---- The close ---- */
+
+.landing-close {
+  gap: var(--sp-5);
+  border-block-end: 0;
+}
+
+.landing-foot {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-block: var(--sp-8);
+  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
+  padding-block-end: max(var(--sp-8), env(safe-area-inset-bottom));
+  border-block-start: var(--border-w) solid var(--line);
+}
+
+/*
+ * On a phone, marketing density is too much air.
+ *
+ * `--gap-section` is 96px at this density, which is right when three claims sit
+ * side by side and is three screens of nothing when they are stacked. The
+ * padding drops; nothing else about the page changes.
+ */
+@media (max-width: 719px) {
+  .landing-bar {
+    padding-inline: var(--sp-5);
+  }
+
+  /*
+   * The bar stacks rather than squeezing.
+   *
+   * Brand, globe, Sign in and Open an account are four items of unshrinkable
+   * width — each is a word or an icon that cannot be made narrower — and on a
+   * 390px screen they fit only by leaving the two controls almost touching the
+   * brand. Giving the actions a row of their own costs one line of height and
+   * buys a tap target that is not adjacent to the thing beside it.
+   */
+  .landing-bar-actions {
+    flex-basis: 100%;
+    margin-inline-start: 0;
+    justify-content: start;
+  }
+
+  .landing-stage {
+    gap: var(--sp-6);
+    padding-block: var(--sp-12);
+    padding-inline: var(--sp-5);
+  }
+
+  .landing-section,
+  .landing-close,
+  .landing-foot {
+    padding-block: var(--sp-12);
+    padding-inline: var(--sp-5);
+  }
+}
+
+/* ============================================================
    Misc legacy utilities kept in the new system
    ============================================================ */
 
@@ -5827,6 +6176,36 @@ textarea[aria-invalid='true'] {
   align-items: end;
 }
 
+/**
+ * The way out of a dead end on the receiving bench.
+ *
+ * When the directed stow has nowhere to send the box, the refusal is followed
+ * by the shelf form itself rather than by directions to another tab. It is
+ * inset and bordered because it is a second job appearing inside the first one,
+ * and an operator should be able to see where the bench stops and the repair
+ * begins.
+ */
+.stow-rescue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.stow-rescue .field {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.stow-rescue .field-hint {
+  flex: 1 0 100%;
+}
+
 /** Prose inside a flush panel needs the padding the panel gave up. */
 .panel-note {
   padding: 0 var(--pad-panel) var(--gap-group);
@@ -6538,4 +6917,47 @@ textarea[aria-invalid='true'] {
 .chart-axis-label {
   flex: 1 1 auto;
   text-align: center;
+}
+
+/**
+ * The render-failure fallback.
+ *
+ * Centred and quiet on purpose: it is the one screen a person reaches by
+ * accident, and it should read as a message rather than as damage. It takes the
+ * page's own tokens so it is correct in both themes and in both directions.
+ */
+.error-boundary {
+  max-width: var(--measure);
+  margin: var(--sp-10) auto;
+  padding: var(--sp-6);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.error-boundary h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  color: var(--ink);
+}
+
+.error-boundary p {
+  margin: 0;
+  color: var(--ink-body);
+}
+
+/* Not mono: this is an error message, not a serial. Mono is for codes. */
+.error-boundary-detail {
+  font-size: var(--fs-caption);
+  color: var(--oxblood);
+  overflow-wrap: anywhere;
+}
+
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
 }

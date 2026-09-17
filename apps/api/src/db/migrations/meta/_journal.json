@@ -169,6 +169,27 @@
       "when": 1785073900000,
       "tag": "0023_ask_for_something_we_do_not_list",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785074000000,
+      "tag": "0024_the_queries_that_run_on_every_request",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785074100000,
+      "tag": "0025_the_box_a_parcel_goes_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785074200000,
+      "tag": "0026_bault_sells_its_own_cards",
+      "breakpoints": true
     }
   ]
 }

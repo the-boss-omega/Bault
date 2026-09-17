@@ -54,20 +54,20 @@ afterEach(() => {
 });
 
 const LABELS = [
-  { value: 'BC-MTORBD2B-9531', caption: '2003 EX Dragon Rayquaza ex #97/97' },
-  { value: 'BC-MTORBD2O-2244', caption: '2021 Evolving Skies sealed pack' },
-  { value: 'BC-MTORBD2Z-8482', caption: '2005 EX Deoxys Rayquaza Gold Star #107/107' },
+  { value: 'SN-MTORBD2B-9531', caption: '2003 EX Dragon Rayquaza ex #97/97' },
+  { value: 'SN-MTORBD2O-2244', caption: '2021 Evolving Skies sealed pack' },
+  { value: 'SN-MTORBD2Z-8482', caption: '2005 EX Deoxys Rayquaza Gold Star #107/107' },
 ];
 
 describe('printing one label', () => {
   it('opens a single dialog carrying the barcode and its caption', () => {
-    printBarcode('BC-MTORBD2B-9531', '2003 EX Dragon Rayquaza ex #97/97');
+    printBarcode('SN-MTORBD2B-9531', '2003 EX Dragon Rayquaza ex #97/97');
 
     expect(printCalls).toBe(1);
     expect(printed).toContain('<svg');
     expect(printed).toContain('2003 EX Dragon Rayquaza ex #97/97');
     // The payload is in the title so the print queue names the job usefully.
-    expect(printed).toContain('<title>BC-MTORBD2B-9531</title>');
+    expect(printed).toContain('<title>SN-MTORBD2B-9531</title>');
   });
 
   it('ejects no blank page after it', () => {
@@ -76,13 +76,13 @@ describe('printing one label', () => {
      * than crammed onto one sheet — but the LAST one must not, or printing a
      * single label pushes an empty sheet out behind it.
      */
-    printBarcode('BC-MTORBD2B-9531');
+    printBarcode('SN-MTORBD2B-9531');
     expect(printed).toContain('class="label last"');
     expect(printed).toContain('.label.last { page-break-after: auto');
   });
 
   it('escapes a caption rather than injecting it', () => {
-    printBarcode('BC-MTORBD2B-9531', '<script>alert(1)</script>');
+    printBarcode('SN-MTORBD2B-9531', '<script>alert(1)</script>');
     expect(printed).not.toContain('<script>alert(1)</script>');
     expect(printed).toContain('&lt;script&gt;');
   });
@@ -119,11 +119,11 @@ describe('printing a whole intake run', () => {
      * Code 128B covers printable ASCII. Anything outside it has no symbol, and a
      * label with no barcode on it is worse than no label — it looks printed.
      */
-    printBarcodes([{ value: 'BC-GOOD-0001' }, { value: 'ראיקוואזה' }]);
+    printBarcodes([{ value: 'SN-GOOD-0001' }, { value: 'ראיקוואזה' }]);
 
     expect(printCalls).toBe(1);
     expect(printed.match(/class="label/g)).toHaveLength(1);
-    expect(printed).toContain('BC-GOOD-0001');
+    expect(printed).toContain('SN-GOOD-0001');
   });
 
   it('opens no dialog at all when nothing can be printed', () => {

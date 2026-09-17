@@ -37,8 +37,10 @@ import { GradingSubmissions } from './GradingSubmissions';
 import { ParcelQueue } from './ParcelQueue';
 import { ReceiveParcels } from './ReceiveParcels';
 import { IntakeBench } from './IntakeBench';
+import { HouseOrdersPanel } from './HouseOrdersPanel';
 import { SupportQueue } from './SupportQueue';
 import type { InboundAddress, ParcelWorkflow } from '../../shared/parcels';
+import { boxLabel } from '../../shared/carriers';
 
 /**
  * A shelf, as the console sees one.
@@ -386,6 +388,10 @@ export function WarehouseConsole() {
             />
           </Panel>
 
+          {/* 4. Cards sold from the Bault store: on the record already, still in
+              the store's box. Label them and put them on a shelf. */}
+          <HouseOrdersPanel onLog={append} />
+
           {log.length > 0 && (
             <Panel title={t('warehouse.log.title')} flush>
               <ul className="log">
@@ -611,7 +617,7 @@ function InventoryRows({
 /**
  * Move something that is already in the vault to another shelf.
  *
- * Both fields take what a scanner produces. The item field accepts the BC-
+ * Both fields take what a scanner produces. The item field accepts the SN-
  * barcode printed on the item's own label (or its serial); the shelf field
  * accepts the BIN- barcode on the shelf. Before this, both ends of a relocate
  * demanded the internal id — a string that is printed on nothing — so the one
@@ -645,7 +651,7 @@ function RelocatePanel({
   return (
     <div className="form-grid row-baseline">
       <Field label={t('warehouse.relocate.scanItem')} hint={t('warehouse.relocate.scanItemHint')}>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="BC-…" dir="ltr" />
+        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="SN-…" dir="ltr" />
       </Field>
       <Field label={t('warehouse.relocate.scanShelf')} hint={t('warehouse.relocate.scanShelfHint')}>
         <input value={scanBin} onChange={(e) => setScanBin(e.target.value)} placeholder="BIN-XXXXXXXX" dir="ltr" />
@@ -722,7 +728,7 @@ function HoldPanel({
   return (
     <div className="form-grid row-baseline">
       <Field label={t('warehouse.hold.scanItem')} hint={t('warehouse.hold.scanItemHint')}>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="BC-…" dir="ltr" />
+        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="SN-…" dir="ltr" />
       </Field>
       <div className="field">
         <span className="field-label" aria-hidden="true">
@@ -953,6 +959,7 @@ interface ShipmentDetail {
   carrier: string | null;
   itemIds: string[];
   destinationAddress: string;
+  boxSize: string | null;
 }
 
 /**
@@ -1028,6 +1035,13 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
         <div className="stack stack--tight">
           <p className="infobox" dir="auto">
             {detail.destinationAddress}
+          </p>
+          {/* The collector was quoted for this box. Packing it in a bigger one
+              ships a parcel that costs more than they paid. */}
+          <p className="field-hint">
+            {detail.boxSize
+              ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
+              : t('warehouse.dispatch.anyBox')}
           </p>
 
           <div className="field">

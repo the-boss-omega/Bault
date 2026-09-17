@@ -9,6 +9,7 @@ import { shippingAddress } from '../acc/address.schema';
 import { itemWeightGrams } from '../inv/item-classes';
 import { DEFAULT_COUNTRY_OF_ORIGIN, DEFAULT_HS_CODE, needsCustoms } from './shipping-options';
 import type { Destination, ParcelProfile } from './carriers';
+import { checkBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
 /** One line of the commercial invoice — per item, because customs is per item. */
 export interface CustomsLine {
@@ -86,6 +87,27 @@ export class ParcelProfileService {
   }
 
   /**
+   * The box that was chosen, and whether these contents fit in it.
+   *
+   * Every path that stores or prices a box asks the same question, so it is
+   * answered once.
+   */
+  boxFor(
+    boxSize: string | null | undefined,
+    items: (typeof item.$inferSelect)[],
+    measurements: ItemMeasurements,
+  ): { box: ShippingBox | undefined; problems: BoxProblem[] } {
+    const box = shippingBox(boxSize);
+    return {
+      box,
+      problems: checkBox(box, {
+        totalWeightGrams: measurements.totalWeightGrams,
+        typeClasses: items.map((i) => i.typeClass),
+      }),
+    };
+  }
+
+  /**
    * Resolve where the parcel is going.
    *
    * A saved address is preferred over free text because it carries a real
@@ -105,7 +127,16 @@ export class ParcelProfileService {
         .limit(1);
       if (!a || a.userId !== userId) throw AppError.notFound('Address not found');
       return {
-        destination: { country: a.country.toUpperCase(), postalCode: a.postalCode },
+        // The whole address, not two fields of it. A saved address already has
+        // the street and city a carrier needs; throwing them away here is what
+        // made a real rate impossible to ask for.
+        destination: {
+          country: a.country.toUpperCase(),
+          postalCode: a.postalCode,
+          name: a.recipient,
+          street1: a.line1,
+          city: a.city,
+        },
         formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${a.postalCode}, ${a.country}`,
         recipientName: a.recipient,
       };
@@ -176,12 +207,14 @@ export class ParcelProfileService {
     insuredValueMinor: number;
     signatureRequired: boolean;
     originFacilityCode?: string | null;
-    dimensionsCm?: { length: number; width: number; height: number };
+    /** The box the collector chose, if they chose one. */
+    box?: ShippingBox;
   }): ParcelProfile {
     return {
       destination: args.destination,
       weightGrams: args.measurements.totalWeightGrams,
-      dimensionsCm: args.dimensionsCm,
+      dimensionsCm: args.box?.dimensionsCm,
+      packagingGrams: args.box?.tareGrams,
       itemCount: args.itemCount,
       // A domestic parcel has no customs value at all, whatever was typed.
       customsValueMinor: needsCustoms(args.destination.country) ? args.declaredValueMinor : 0,

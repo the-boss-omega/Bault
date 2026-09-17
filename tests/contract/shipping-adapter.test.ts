@@ -57,6 +57,28 @@ describe('contract: ShippingAdapter', () => {
     expect(heavy[0]!.costMinor).toBeGreaterThan(light[0]!.costMinor);
   });
 
+  it('charges more for a bigger box of the same weight', async () => {
+    // A carrier sells space as well as lift: a shoebox of sleeved commons bills
+    // on its volume, not on the few hundred grams it weighs.
+    const mailer = await adapter.getRates({
+      ...domestic,
+      dimensionsCm: { length: 25, width: 18, height: 3 },
+      packagingGrams: 60,
+    });
+    const box = await adapter.getRates({
+      ...domestic,
+      dimensionsCm: { length: 45, width: 35, height: 25 },
+      packagingGrams: 60,
+    });
+    expect(box[0]!.costMinor).toBeGreaterThan(mailer[0]!.costMinor);
+  });
+
+  it('weighs the box it was told about instead of the flat allowance', async () => {
+    const flat = await adapter.getRates(domestic);
+    const heavyBox = await adapter.getRates({ ...domestic, packagingGrams: 3_000 });
+    expect(heavyBox[0]!.costMinor).toBeGreaterThan(flat[0]!.costMinor);
+  });
+
   it('charges more for a further destination', async () => {
     const near = await adapter.getRates({
       ...domestic,

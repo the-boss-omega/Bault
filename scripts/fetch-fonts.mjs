@@ -19,6 +19,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Buffer } from 'node:buffer';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const fontDir = join(repoRoot, 'assets', 'fonts');

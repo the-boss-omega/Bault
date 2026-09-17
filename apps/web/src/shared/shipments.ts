@@ -48,6 +48,8 @@ export interface ShipmentSummary {
   insurancePremiumMinor: number;
   signatureRequired: boolean;
   addOns: { key: string }[];
+  /** The box it was priced in, or null when the warehouse picks. */
+  boxSize: string | null;
   /** The CUSTOMER's notes, not the operator's fulfilment notes. */
   customerNotes: string | null;
   groupId: string | null;

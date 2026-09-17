@@ -16,6 +16,18 @@ export default defineConfig(({ mode }) => {
   const fileEnv = { ...loadEnv(mode, repoRoot, ''), ...loadEnv(mode, appDir, '') };
   const api = resolveApiProxyTarget(fileEnv);
 
+  /**
+   * Hosts this dev server may be reached by, beyond loopback.
+   *
+   * Read from the .env files first and the process environment second, so it
+   * behaves like `API_PORT` — set once in `.env` and forgotten — while still
+   * allowing a one-off `WEB_PUBLIC_HOST=… pnpm dev` for a temporary tunnel.
+   */
+  const publicHosts = (fileEnv.WEB_PUBLIC_HOST ?? process.env.WEB_PUBLIC_HOST ?? '')
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
   // Printed once at startup so the target is never a mystery when a call fails.
   // eslint-disable-next-line no-console
   console.log(`[vite] /api → ${api.target} (from ${api.source})`);
@@ -28,6 +40,25 @@ export default defineConfig(({ mode }) => {
     publicDir: '../../assets',
     server: {
       port: 5173,
+      /**
+       * Showing the app from somewhere that is not this laptop.
+       *
+       * Vite refuses a request whose `Host` header it does not recognise — a
+       * deliberate protection against DNS-rebinding, and the thing that makes a
+       * tunnel answer "Blocked request. This host is not allowed." rather than
+       * serving the app.
+       *
+       * `WEB_PUBLIC_HOST` opens exactly the hosts you name, comma-separated —
+       * from the repo-root `.env` like every other setting here, or inline:
+       *
+       *   WEB_PUBLIC_HOST=192.168.1.50,demo.trycloudflare.com
+       *
+       * Named hosts rather than `true`, because `true` disables the check
+       * altogether and the protection is worth keeping for the other 99% of the
+       * time. `host: true` binds 0.0.0.0 only when a public host is named, so
+       * the default stays loopback-only.
+       */
+      ...(publicHosts.length > 0 ? { host: true, allowedHosts: publicHosts } : {}),
       // Proxy API calls to the NestJS backend during development so the browser
       // talks to one origin (avoids CORS entirely — no preflight, no CORS config
       // on the API — and matches the production reverse-proxy setup).

@@ -188,7 +188,7 @@ describe('booking in a box of different units', () => {
     const classes = within(bench).getAllByLabelText(/type \/ class/i);
     await user.selectOptions(classes[1]!, 'graded_slab');
 
-    post.mockResolvedValue([{ id: 'i1', barcode: 'BC-1' }, { id: 'i2', barcode: 'BC-2' }]);
+    post.mockResolvedValue([{ id: 'i1', barcode: 'SN-1' }, { id: 'i2', barcode: 'SN-2' }]);
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/intake/items/batch', expect.anything()));
@@ -212,7 +212,7 @@ describe('booking in a box of different units', () => {
     await user.type(within(bench).getByLabelText(/owner username/i), 'red');
     await user.type(within(bench).getAllByLabelText(/description/i)[0]!, 'Only this one');
 
-    post.mockResolvedValue([{ id: 'i1', barcode: 'BC-1' }]);
+    post.mockResolvedValue([{ id: 'i1', barcode: 'SN-1' }]);
     await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
 
     const [, body] = post.mock.calls.find(([p]) => p === '/intake/items/batch')!;
@@ -367,7 +367,7 @@ describe('photographs', () => {
     await user.upload(inputs[0] as HTMLInputElement, file());
     await waitFor(() => expect(post).toHaveBeenCalledWith('/media/uploads', expect.anything()));
 
-    post.mockResolvedValue([{ id: 'i1', barcode: 'BC-1' }]);
+    post.mockResolvedValue([{ id: 'i1', barcode: 'SN-1' }]);
     await user.type(within(bench).getByLabelText(/owner username/i), 'red');
     await user.type(within(bench).getByLabelText(/description/i), 'Photographed');
     await user.click(within(bench).getByRole('button', { name: /^intake$/i }));
@@ -398,8 +398,8 @@ describe('the labels an intake produces', () => {
     await user.type(descriptions[1]!, 'Rayquaza Gold Star 107/107');
 
     post.mockResolvedValue([
-      { id: 'i1', barcode: 'BC-AAAA1111-0001' },
-      { id: 'i2', barcode: 'BC-BBBB2222-0002' },
+      { id: 'i1', barcode: 'SN-AAAA1111-0001' },
+      { id: 'i2', barcode: 'SN-BBBB2222-0002' },
     ]);
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
@@ -417,5 +417,55 @@ describe('the labels an intake produces', () => {
     const bench = await waitFor(() => panel(/receive bench/i));
     expect(within(bench).queryByRole('button', { name: /print all/i })).toBeNull();
     expect(screen.queryByText(/labels for what you just booked in/i)).toBeNull();
+  });
+});
+
+describe('when there is nowhere to put it', () => {
+  /**
+   * The directed stow refuses for exactly two reasons — no shelving of the kind
+   * this run needs, or none in this building — and both of them used to end the
+   * run. The operator stood at an open box reading "create one before stowing
+   * this", with the form that does it on another tab: leave the bench, lose the
+   * units already typed into it, come back and start the box again.
+   */
+  it('offers the shelf form at the refusal, and asks again once one exists', async () => {
+    const user = userEvent.setup();
+    let shelfExists = false;
+    get.mockImplementation((path: string) => {
+      if (path.startsWith('/custody/bins/suggest')) {
+        return shelfExists
+          ? Promise.resolve({ id: 'b9', serialNumber: 'BIN-NEWSHELF', zone: 'C-2', itemCount: 0 })
+          : Promise.reject(new Error('No active bin is available here — create one before stowing this'));
+      }
+      return apiFor()(path);
+    });
+    post.mockImplementation((path: string) => {
+      if (path !== '/custody/bins') return Promise.resolve([]);
+      shelfExists = true;
+      return Promise.resolve({ id: 'b9', serialNumber: 'BIN-NEWSHELF', zone: 'C-2' });
+    });
+
+    renderConsole();
+    const bench = await waitFor(() => panel(/receive bench/i));
+    await within(bench).findByText(/no active bin is available/i);
+
+    await user.type(within(bench).getByLabelText(/zone for the new shelf/i), 'C-2');
+    await user.click(within(bench).getByRole('button', { name: /create a shelf here/i }));
+
+    // The kind and the building are taken from the run, not asked for again:
+    // they are the two facts that just failed to match.
+    const [, body] = post.mock.calls.find(([p]) => p === '/custody/bins')!;
+    expect(body).toMatchObject({ zone: 'C-2', oversized: false });
+
+    // And the answer comes back from where it always does, not from the create.
+    await waitFor(() => expect(within(bench).getByText('BIN-NEWSHELF')).toBeInTheDocument());
+    expect(within(bench).queryByLabelText(/zone for the new shelf/i)).toBeNull();
+  });
+
+  it('stays out of the way while there is somewhere to go', async () => {
+    renderConsole();
+    const bench = await waitFor(() => panel(/receive bench/i));
+    await within(bench).findByText('BIN-QJLTDJH4');
+    expect(within(bench).queryByRole('button', { name: /create a shelf here/i })).toBeNull();
   });
 });

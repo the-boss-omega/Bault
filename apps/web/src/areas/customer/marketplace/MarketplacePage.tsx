@@ -24,6 +24,7 @@ import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
+import { HouseStorePanel } from './HouseStorePanel';
 import { loadProfile } from '../../../shared/session';
 
 interface Listing {
@@ -38,7 +39,7 @@ interface Listing {
   imageUrl?: string;
 }
 
-const TABS = ['browse', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
+const TABS = ['browse', 'house', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
 
 /**
@@ -353,6 +354,18 @@ export function MarketplacePage() {
               </ul>
             )}
           </Panel>
+        </TabPanel>
+      )}
+
+      {tab === 'house' && (
+        <TabPanel tab="house">
+          <HouseStorePanel
+            onBought={async (m) => {
+              setStatus(m);
+              await reloadItems();
+            }}
+            onError={setError}
+          />
         </TabPanel>
       )}
 

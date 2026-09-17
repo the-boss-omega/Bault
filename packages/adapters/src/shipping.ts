@@ -1,9 +1,55 @@
 /**
- * Shipping adapter (T020) — ShipStation / Easyship behind one interface.
+ * Shipping adapter (T020) — a carrier API behind one interface.
  * Provides carrier rates, label purchase, and tracking. Rush handling is a flag.
+ *
+ * Two implementations: `EasyPostShippingAdapter` (real carriers, real labels)
+ * and `SandboxShippingAdapter` (invented prices, fake labels). The choice is
+ * made from validated config in `AdaptersModule`, and the sandbox is refused in
+ * production — a customer charged for a label that cannot be printed is the
+ * worst failure this module has.
  */
+
+/**
+ * A postal address, as a carrier needs it.
+ *
+ * Only `country` and `postalCode` are required, because that is all the sandbox
+ * ever needed and all the quoting flow could originally supply. A REAL carrier
+ * cannot rate on that alone — it needs a street — so `EasyPostShippingAdapter`
+ * refuses a request missing one, loudly, rather than quoting a number that would
+ * change at label time.
+ */
+export interface ShipAddress {
+  country: string;
+  postalCode: string;
+  name?: string;
+  company?: string;
+  street1?: string;
+  street2?: string;
+  city?: string;
+  /** State / province, in the carrier's two-letter form where there is one. */
+  region?: string;
+  phone?: string;
+  email?: string;
+}
+
+/**
+ * The packaging allowance when nobody has said which box.
+ *
+ * Packaging is not weightless: a parcel is the cards plus the box, and quoting the
+ * contents alone under-declares every shipment.
+ */
+export const DEFAULT_PACKAGING_GRAMS = 120;
+
 export interface RateRequest {
-  destination: { country: string; postalCode: string };
+  destination: ShipAddress;
+  /**
+   * Where the parcel physically ships FROM — the facility holding the goods.
+   *
+   * Optional only because the sandbox never used it. A real carrier prices on
+   * the origin/destination pair, so quoting without it is quoting a different
+   * shipment than the one that will be bought.
+   */
+  origin?: ShipAddress;
   items: { weightGrams: number }[];
   rush: boolean;
   /**
@@ -17,6 +63,11 @@ export interface RateRequest {
   services?: { carrier: string; serviceLevel: string }[];
   /** Outer dimensions in cm, where the caller knows them. Drives dim weight. */
   dimensionsCm?: { length: number; width: number; height: number };
+  /**
+   * What the box and its padding weigh, where the caller knows the box.
+   * Omitted means {@link DEFAULT_PACKAGING_GRAMS}.
+   */
+  packagingGrams?: number;
   /** Whether the carrier must collect a signature. Some services surcharge it. */
   signatureRequired?: boolean;
 }
@@ -27,6 +78,18 @@ export interface Rate {
   costMinor: number;
   currency: string;
   estimatedDays: number;
+  /**
+   * The provider's own handles for this quote.
+   *
+   * A real carrier does not let you buy "FedEx 2Day at $18.50" — you buy THE
+   * RATE IT QUOTED, by id, against the shipment it was quoted for. Carrying them
+   * here is what makes `buyLabel` able to purchase the exact price the collector
+   * was shown, instead of re-rating at label time and charging something else.
+   *
+   * Undefined for the sandbox, which has nothing to refer to.
+   */
+  providerShipmentId?: string;
+  providerRateId?: string;
 }
 
 export interface LabelResult {
@@ -113,7 +176,7 @@ export class SandboxShippingAdapter implements ShippingAdapter {
 
     // Packaging is not weightless. A parcel is the cards plus the box, and
     // quoting the contents alone under-declares every shipment.
-    const packagedGrams = actualGrams + 120;
+    const packagedGrams = actualGrams + (req.packagingGrams ?? DEFAULT_PACKAGING_GRAMS);
 
     const dimGrams = req.dimensionsCm
       ? Math.round(

@@ -36,7 +36,8 @@ import {
   IconWallet,
   IconWarehouse,
 } from './shared/ui/icons';
-import { AuthPage, AuthShell, type SessionUser } from './areas/customer/auth/AuthPage';
+import { AuthPage, AuthShell, type AuthMode, type SessionUser } from './areas/customer/auth/AuthPage';
+import { LandingPage } from './areas/customer/marketing/LandingPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
 import { ResetPasswordPage } from './areas/customer/auth/ResetPasswordPage';
 import { VaultPage } from './areas/customer/vault/VaultPage';
@@ -175,6 +176,33 @@ type BootState =
  */
 const TOKEN_ROUTES = ['verify-email', 'reset-password'] as const;
 
+/**
+ * The anonymous routes that are a FORM, and which form each one opens on.
+ *
+ * Everything else an anonymous visitor can ask for falls into one of two cases,
+ * and they want opposite things:
+ *
+ *   - THE BARE ROOT (`#/`, or no hash at all) is somebody arriving. They get
+ *     `LandingPage`, which is what this product spent its whole life without:
+ *     an answer to "what is this and what does it cost" that does not require an
+ *     account to read.
+ *   - A DEEP LINK (`#/vault`, `#/wallet`, …) is somebody who had a session and
+ *     no longer does. They get the sign-in form, exactly as before, because
+ *     answering "take me back to my vault" with a shop window is an obstacle
+ *     rather than a welcome.
+ *
+ * `#/welcome` is the landing page addressed by name, so the sign-in screen can
+ * link back to it and a visitor can return to it without clearing the hash.
+ */
+const AUTH_ROUTES: Record<string, AuthMode> = {
+  signin: 'signIn',
+  signup: 'signUp',
+  forgot: 'forgot',
+};
+
+/** Routes that answer with the marketing page rather than with a form. */
+const LANDING_ROUTES = ['', 'welcome'];
+
 export default function App() {
   const { t } = useI18n();
   const route = useRoute();
@@ -232,6 +260,26 @@ export default function App() {
     );
   }
 
+  /**
+   * The landing page does not wait for the session probe, and does not fail with it.
+   *
+   * It is a PUBLIC page. It asks who is signed in for nothing, renders nothing
+   * that depends on the answer, and fetches its own figures from a route that
+   * is `@Public()` on the server for exactly this reason. Putting it behind the
+   * probe bought two bad screens and no correctness: a spinner in front of a
+   * page that was ready, and — when the API is unreachable — a full-screen
+   * error where the marketing site should be. Somebody arriving at Bault for
+   * the first time while the database is down should still be able to read what
+   * Bault is; they find out the rest when they press Sign in, which is the
+   * control that actually needs a backend.
+   *
+   * It stays below `TOKEN_ROUTES` because those carry a token and are more
+   * specific, and above the boot states because it outranks all three.
+   */
+  if (boot.status !== 'ready' && LANDING_ROUTES.includes(route.section)) {
+    return <LandingPage />;
+  }
+
   if (boot.status === 'loading') {
     return (
       <div className="boot">
@@ -269,6 +317,7 @@ export default function App() {
   if (boot.status === 'anonymous') {
     return (
       <AuthPage
+        initialMode={AUTH_ROUTES[route.section] ?? 'signIn'}
         onSignedIn={(u) => {
           setBoot({ status: 'ready', user: u });
           navigate(

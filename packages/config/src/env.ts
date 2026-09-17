@@ -63,6 +63,20 @@ const EnvSchema = z.object({
   SESSION_COOKIE_NAME: z.string().default('session'),
 
   // Object storage (item images)
+  /**
+   * Which storage adapter is wired in `AdaptersModule`.
+   *
+   *   `s3`      — a real S3-compatible bucket (MinIO locally, any S3 API in
+   *               production). The five STORAGE_* values below configure it.
+   *   `sandbox` — an in-memory fake that ACCEPTS bytes AND THROWS THEM AWAY.
+   *
+   * The sandbox is refused in production, for the same reason the payment
+   * sandbox is: every photograph an operator takes of a customer's card, and
+   * every picture of a damaged arrival, is silently discarded while the database
+   * records a key that will never resolve. That is data loss wearing the costume
+   * of a working feature.
+   */
+  STORAGE_PROVIDER: z.enum(['s3', 'sandbox']).default('sandbox'),
   STORAGE_ENDPOINT: z.string().url(),
   STORAGE_REGION: z.string(),
   STORAGE_BUCKET: z.string(),
@@ -131,8 +145,26 @@ const EnvSchema = z.object({
   EXPOSE_API_DOCS: z.coerce.boolean().default(false),
   API_DOCS_PASSWORD: z.string().optional().default(''),
 
-  SHIPPING_PROVIDER: z.string().default('shipstation'),
-  SHIPPING_API_KEY: z.string().optional().default(''),
+  /**
+   * Which shipping adapter is wired in `AdaptersModule`.
+   *
+   *   `easypost` — real carriers (USPS, UPS, FedEx, DHL), real rates, real
+   *                labels. An `EZTK…` key is EasyPost's TEST mode: every code
+   *                path identical to live, no money spent, no real label. That
+   *                is a production-safe way to exercise the integration.
+   *   `sandbox`  — invented prices, a fake tracking number and a label URL that
+   *                resolves to nothing.
+   *
+   * The sandbox is refused in production. A collector charged for a label that
+   * cannot be printed is the worst failure this module has, and it used to be
+   * the only thing on offer: `SHIPPING_PROVIDER` defaulted to "shipstation" and
+   * was read by NOTHING, so naming a provider changed nothing at all.
+   */
+  SHIPPING_PROVIDER: z.enum(['easypost', 'sandbox']).default('sandbox'),
+  /** `EZTK…` for test mode, `EZAK…` for production. */
+  EASYPOST_API_KEY: z.string().optional().default(''),
+  /** Override the API host. Only a test harness should ever set this. */
+  EASYPOST_BASE_URL: z.string().optional().default(''),
 
   /**
    * Which email adapter is wired in `AdaptersModule`:
@@ -250,6 +282,22 @@ const EnvSchema = z.object({
   // SMTP credentials are conditionally required: demanding them unconditionally
   // would stop a fresh checkout booting, and defaulting them to something would
   // hand the operator a mail path that silently fails.
+  if (env.SHIPPING_PROVIDER === 'easypost') {
+    require('EASYPOST_API_KEY', "SHIPPING_PROVIDER=easypost");
+  }
+
+  if (env.STORAGE_PROVIDER === 's3') {
+    for (const key of [
+      'STORAGE_ENDPOINT',
+      'STORAGE_REGION',
+      'STORAGE_BUCKET',
+      'STORAGE_ACCESS_KEY',
+      'STORAGE_SECRET_KEY',
+    ] as const) {
+      require(key, 'STORAGE_PROVIDER=s3');
+    }
+  }
+
   if (env.EMAIL_PROVIDER === 'smtp') {
     for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const) {
       require(key, 'EMAIL_PROVIDER=smtp');
@@ -265,8 +313,67 @@ const EnvSchema = z.object({
     }
   }
 
-  // The two configurations that must never reach a real deployment.
+  // The configurations that must never reach a real deployment.
   if (env.NODE_ENV === 'production') {
+    /**
+     * Storage that discards what it is given.
+     *
+     * `SandboxStorageAdapter.putObject` returns the key and writes nothing. In
+     * production that means every intake photograph and every arrival-condition
+     * photograph is lost the moment it is uploaded, while `item_image` and
+     * `parcel_photo` rows are written pointing at keys that resolve to nothing —
+     * so the loss is invisible until somebody opens a damage claim and finds the
+     * evidence gone.
+     */
+    if (env.STORAGE_PROVIDER === 'sandbox') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['STORAGE_PROVIDER'],
+        message:
+          'STORAGE_PROVIDER=sandbox accepts photographs and discards them. Use STORAGE_PROVIDER=s3 ' +
+          'with the STORAGE_* credentials pointed at a real bucket.',
+      });
+    }
+
+    /**
+     * Shipping that cannot ship.
+     *
+     * The sandbox quotes invented prices and `buyLabel` returns a tracking
+     * number beginning `SBX` with a label key that resolves to nothing. In
+     * production that means taking a collector's money for a service that
+     * cannot be performed — and the shipment still transitions to `shipped`, so
+     * nothing in the product says otherwise.
+     */
+    if (env.SHIPPING_PROVIDER === 'sandbox') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SHIPPING_PROVIDER'],
+        message:
+          'SHIPPING_PROVIDER=sandbox invents rates and cannot buy a label, so a shipment charged ' +
+          'for here can never be posted. Use SHIPPING_PROVIDER=easypost — an EZTK test key is a ' +
+          'production-safe way to run the real integration without spending money.',
+      });
+    }
+
+    /**
+     * Mail that goes to a log file.
+     *
+     * `EMAIL_PROVIDER=console` is the right default for a fresh checkout and a
+     * catastrophe in production: account verification and password reset are
+     * then completable only by somebody who can read the server log, which means
+     * no customer can complete either one — and the ones who try have had their
+     * reset token printed to stdout.
+     */
+    if (env.EMAIL_PROVIDER === 'console') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['EMAIL_PROVIDER'],
+        message:
+          'EMAIL_PROVIDER=console writes every message to the server log instead of sending it, so ' +
+          'nobody can verify an address or reset a password. Set EMAIL_PROVIDER=smtp.',
+      });
+    }
+
     if (env.PAYMENT_PROVIDER === 'sandbox') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

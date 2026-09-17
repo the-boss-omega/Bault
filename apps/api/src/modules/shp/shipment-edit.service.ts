@@ -9,6 +9,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
+import { shippingBox } from './boxes';
 import { ShipmentService, type ShipmentActor, type ShipmentOptionsInput } from './shipment.service';
 import {
   MAX_INSURED_VALUE_MINOR,
@@ -95,6 +96,13 @@ export class ShipmentEditService {
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
     const measurements = this.profiles.measure(items);
+    // Undefined keeps the box; null clears it. The contents are re-checked either
+    // way, because adding a sealed box to a parcel can outgrow the mailer.
+    const boxSize = patch.boxSize === undefined ? s.boxSize : patch.boxSize;
+    const { box, problems: boxProblems } = this.profiles.boxFor(boxSize, items, measurements);
+    if (boxProblems.length > 0) {
+      throw AppError.validation(boxProblems[0]!.message, { problems: boxProblems });
+    }
     // Rebuilt rather than patched: the apportionment depends on the whole item
     // set, so a stale line for a removed card would put value on a card that is
     // not in the box.
@@ -110,6 +118,7 @@ export class ShipmentEditService {
         declaredValueMinor,
         signatureRequired,
         addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+        boxSize: box?.key ?? null,
         customsLines,
         rushFlag: patch.rush ?? s.rushFlag,
         customerNotes:
@@ -175,6 +184,17 @@ export class ShipmentEditService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor)
       : null;
 
+    // Two parcels in one box need the bigger of the two boxes — and if even that
+    // cannot hold the combined contents, nobody has chosen a box that works, so
+    // the choice goes back to the warehouse rather than being priced on a lie.
+    const volume = (key: string | null) => {
+      const d = shippingBox(key)?.dimensionsCm;
+      return d ? d.length * d.width * d.height : 0;
+    };
+    const biggerBox = volume(source.boxSize) > volume(target.boxSize) ? source.boxSize : target.boxSize;
+    const mergedBox = this.profiles.boxFor(biggerBox, items, measurements);
+    const boxSize = mergedBox.problems.length === 0 ? (mergedBox.box?.key ?? null) : null;
+
     const notes = [target.customerNotes, source.customerNotes].filter(Boolean).join(' · ') || null;
     const now = new Date();
 
@@ -187,6 +207,7 @@ export class ShipmentEditService {
           insuredValueMinor,
           signatureRequired,
           addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+          boxSize,
           customsLines,
           customerNotes: notes,
           rushFlag: target.rushFlag || source.rushFlag,

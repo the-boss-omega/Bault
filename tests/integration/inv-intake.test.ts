@@ -17,8 +17,9 @@ describe('INV intake & custody', () => {
     expect(item.lifecycleState).toBe('stored');
     // Every item is shelved on intake — a bin is mandatory (Requirement 10.3).
     expect(item.binId).toBeTruthy();
-    // Item labels carry the BC- prefix (Requirement 9.2).
-    expect(item.barcode).toMatch(/^BC-/);
+    // Item labels carry the SN- prefix (Requirement 9.2), and the barcode is the serial.
+    expect(item.serialNumber).toMatch(/^SN-/);
+    expect(item.barcode).toBe(item.serialNumber);
     const itemId = item.id as string;
 
     // Custody history has the intake event.

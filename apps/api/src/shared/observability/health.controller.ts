@@ -1,4 +1,4 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
@@ -27,14 +27,24 @@ export class HealthController {
     return { status: 'ok' };
   }
 
+  /**
+   * Readiness, answered with a STATUS CODE.
+   *
+   * This used to catch the failure and return `{ status: 'degraded', db: false }`
+   * with a 200. A load balancer reads the code, not the body — so a node whose
+   * database had gone away announced itself as healthy and kept taking traffic,
+   * which is the one thing a readiness probe exists to prevent. The body is
+   * unchanged for anything reading it by hand; what changed is that a degraded
+   * node now answers 503 and is pulled out of rotation.
+   */
   @Public()
   @Get('readyz')
-  async ready(): Promise<{ status: 'ok' | 'degraded'; db: boolean }> {
+  async ready(): Promise<{ status: 'ok'; db: true }> {
     try {
       await this.db.execute(sql`select 1`);
-      return { status: 'ok', db: true };
     } catch {
-      return { status: 'degraded', db: false };
+      throw new ServiceUnavailableException({ status: 'degraded', db: false });
     }
+    return { status: 'ok', db: true };
   }
 }

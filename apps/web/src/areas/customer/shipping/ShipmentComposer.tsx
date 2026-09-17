@@ -3,6 +3,8 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import {
+  boxLabel,
+  formatBoxDimensions,
   formatWeight,
   ruleLabel,
   serviceLabel,
@@ -72,6 +74,7 @@ export function ShipmentComposer({
   const [signature, setSignature] = useState(false);
   const [addOns, setAddOns] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  const [boxSize, setBoxSize] = useState('');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -120,8 +123,9 @@ export function ShipmentComposer({
       signatureRequired: effectiveSignature,
       addOns,
       customerNotes: notes.trim() || undefined,
+      boxSize: boxSize || null,
     }),
-    [selectedIds, addressId, rush, insuredMinor, declaredMinor, effectiveSignature, addOns, notes],
+    [selectedIds, addressId, rush, insuredMinor, declaredMinor, effectiveSignature, addOns, notes, boxSize],
   );
 
   /**
@@ -267,6 +271,21 @@ export function ShipmentComposer({
               </select>
             </Field>
 
+            {/* The box changes the price — a carrier bills on size as well as
+                weight — so it is asked here, before the quote, not at the packing
+                bench after the price was already given. */}
+            <Field label={t('ship.boxSize')} hint={t('ship.boxSizeHint')}>
+              <select value={boxSize} onChange={(e) => setBoxSize(e.target.value)}>
+                <option value="">{t('ship.box.none')}</option>
+                {(catalogue?.boxes ?? []).map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {boxLabel(t, b)} — {formatBoxDimensions(b)},{' '}
+                    {t('ship.boxUpTo', { weight: formatWeight(b.maxContentsGrams) })}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <label className="check">
               <input type="checkbox" checked={rush} onChange={(e) => setRush(e.target.checked)} />
               {t('shipping.rush')}
@@ -348,11 +367,22 @@ export function ShipmentComposer({
         ) : (
           <>
             {quote.weightEstimated && <p className="field-hint">{t('ship.weightEstimated')}</p>}
+            <p className="field-hint">
+              {quote.boxSize
+                ? t('ship.pricedInBox', { box: boxLabel(t, { key: quote.boxSize }) })
+                : t('ship.pricedOnWeight')}
+            </p>
 
             {quote.optionProblems.map((p) => (
               <p key={p.field} className="drawer-note drawer-note--hold">
                 <IconAlert />
-                <span>{p.message}</span>
+                <span>
+                  {p.rule === 'box_weight'
+                    ? t('ship.boxTooHeavy')
+                    : p.rule === 'box_contents'
+                      ? t('ship.boxWrongContents')
+                      : p.message}
+                </span>
               </p>
             ))}
 

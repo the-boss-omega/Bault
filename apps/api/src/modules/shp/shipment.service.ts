@@ -12,14 +12,15 @@ import { WalletService } from '../pay/wallet.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
+import { facility } from '../inv/facility.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
 import { ParcelProfileService } from './parcel-profile.service';
+import { SHIPPING_BOXES } from './boxes';
 import {
   CARRIER_SERVICES,
-  billableWeightGrams,
   checkService,
   findService,
   type CarrierService,
@@ -64,6 +65,8 @@ export interface ShipmentOptionsInput {
   customerNotes?: string;
   serviceMode?: 'simple' | 'personalised';
   perItemCustomsValues?: Record<string, number>;
+  /** A key from `SHIPPING_BOXES`. Null or absent: priced on weight, the warehouse picks. */
+  boxSize?: string | null;
 }
 
 export interface CreateShipmentInput extends ShipmentOptionsInput {
@@ -97,6 +100,8 @@ export interface QuotedRate extends Rate {
 export interface Quote {
   destination: { country: string; postalCode: string };
   totalWeightGrams: number;
+  /** The box this was priced in, or null when it was priced on weight alone. */
+  boxSize: string | null;
   /** True when any item's weight came from its class rather than a scale. */
   weightEstimated: boolean;
   itemCount: number;
@@ -196,6 +201,7 @@ export class ShipmentService {
     return {
       services: CARRIER_SERVICES,
       addOns: SHIPMENT_ADD_ONS,
+      boxes: SHIPPING_BOXES,
       maxInsuredValueMinor: MAX_INSURED_VALUE_MINOR,
       signatureRequiredAboveMinor: SIGNATURE_REQUIRED_ABOVE_MINOR,
       paymentWindowDays: PAYMENT_WINDOW_DAYS,
@@ -240,13 +246,17 @@ export class ShipmentService {
     const signatureRequired = Boolean(input.signatureRequired) || signatureForced(insuredValueMinor);
     const addOns = input.addOns ?? [];
 
-    const optionProblems = checkOptions({
-      insuredValueMinor,
-      signatureRequired,
-      customsValueMinor: declaredValueMinor,
-      destinationCountry: destination.country,
-      addOns,
-    });
+    const { box, problems: boxProblems } = this.profiles.boxFor(input.boxSize, items, measurements);
+    const optionProblems = [
+      ...checkOptions({
+        insuredValueMinor,
+        signatureRequired,
+        customsValueMinor: declaredValueMinor,
+        destinationCountry: destination.country,
+        addOns,
+      }),
+      ...boxProblems,
+    ];
 
     const profile = this.profiles.toProfile({
       destination,
@@ -255,6 +265,7 @@ export class ShipmentService {
       declaredValueMinor,
       insuredValueMinor,
       signatureRequired,
+      box,
     });
 
     const rates = await this.priceServices(profile, addOns, input.rush ?? false);
@@ -262,6 +273,7 @@ export class ShipmentService {
     return {
       destination,
       totalWeightGrams: measurements.totalWeightGrams,
+      boxSize: box?.key ?? null,
       weightEstimated: measurements.anyEstimated,
       itemCount: items.length,
       insuredValueMinor,
@@ -304,7 +316,15 @@ export class ShipmentService {
 
     const carrierRates = await this.shipping.getRates({
       destination: profile.destination,
+      // Where the parcel physically leaves from. A real carrier prices on the
+      // origin/destination pair, so quoting without it prices a different
+      // shipment than the one that gets bought.
+      origin: await this.originAddress(),
       items: [{ weightGrams: profile.weightGrams }],
+      // The box, when one was chosen. The carrier bills dimensional weight from
+      // these itself, so nothing here scales its price a second time.
+      dimensionsCm: profile.dimensionsCm,
+      packagingGrams: profile.packagingGrams,
       rush,
       signatureRequired: profile.signatureRequired,
     });
@@ -316,10 +336,7 @@ export class ShipmentService {
       );
       if (!rate) continue; // the adapter does not sell it to this destination
       const problems = checkService(service, profile);
-      const carrierCost =
-        service.flatCostMinor !== undefined
-          ? service.flatCostMinor
-          : this.dimAdjusted(service, profile, rate.costMinor);
+      const carrierCost = service.flatCostMinor !== undefined ? service.flatCostMinor : rate.costMinor;
 
       quoted.push({
         ...rate,
@@ -345,17 +362,31 @@ export class ShipmentService {
   }
 
   /**
-   * Apply dimensional weight where the service prices on it.
+   * The address parcels ship FROM — the primary storage facility.
    *
-   * The adapter quotes on the weight it was given; a service with a published
-   * divisor bills the greater of that and the parcel's volume. Without real
-   * dimensions this is a no-op, which is honest — it becomes meaningful the
-   * moment an operator records a box size.
+   * Read from the facility table rather than configured separately, so it is the
+   * same address collectors are told to post to and there is one place to change
+   * it. A forwarding site stores nothing, so it can never be an origin.
+   *
+   * Left undefined when the facility still carries a placeholder street, which
+   * makes the real adapter refuse with a sentence naming the problem instead of
+   * quoting against a fictional origin.
    */
-  private dimAdjusted(service: CarrierService, profile: ParcelProfile, quoted: number): number {
-    const billable = billableWeightGrams(service, profile);
-    if (billable <= profile.weightGrams || profile.weightGrams === 0) return quoted;
-    return Math.round((quoted * billable) / profile.weightGrams);
+  private async originAddress() {
+    const [site] = await this.db
+      .select()
+      .from(facility)
+      .where(and(eq(facility.role, 'primary'), eq(facility.active, true)))
+      .limit(1);
+    if (!site || /placeholder|SET REAL ADDRESS/i.test(site.line1)) return undefined;
+    return {
+      name: site.name,
+      street1: site.line1,
+      city: site.city,
+      region: site.region,
+      postalCode: site.postalCode,
+      country: site.country.toUpperCase(),
+    };
   }
 
   private async priceAddOns(keys: string[]): Promise<number> {
@@ -424,6 +455,10 @@ export class ShipmentService {
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
     const measurements = this.profiles.measure(items);
+    const { box, problems: boxProblems } = this.profiles.boxFor(input.boxSize, items, measurements);
+    if (boxProblems.length > 0) {
+      throw AppError.validation(boxProblems[0]!.message, { problems: boxProblems });
+    }
     const customsLines = needsCustoms(destination.country)
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
       : null;
@@ -444,6 +479,9 @@ export class ShipmentService {
         insuredValueMinor,
         signatureRequired,
         addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+        // Stored, because picking a service re-rates from the shipment row: a
+        // box that lived only in the quote would be charged as no box at all.
+        boxSize: box?.key ?? null,
         customsLines,
         customerNotes: input.customerNotes?.trim() || null,
         status: 'requested',
@@ -516,6 +554,8 @@ export class ShipmentService {
       insurancePremiumMinor: s.insurancePremiumMinor,
       signatureRequired: s.signatureRequired,
       addOns: (s.addOns as { key: string }[]) ?? [],
+      // What the parcel goes out in, so whoever packs it uses the box it was priced in.
+      boxSize: s.boxSize,
       customerNotes: s.customerNotes,
       groupId: s.groupId,
       paymentDueAt: s.paymentDueAt,
@@ -564,6 +604,7 @@ export class ShipmentService {
         declaredValueMinor: s.declaredValueMinor,
         insuredValueMinor: s.insuredValueMinor,
         signatureRequired: s.signatureRequired,
+        box: this.profiles.boxFor(s.boxSize, items, measurements).box,
       }),
     };
   }

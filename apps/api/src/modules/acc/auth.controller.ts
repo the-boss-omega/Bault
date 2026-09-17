@@ -132,12 +132,49 @@ export class AuthController {
     return { status: 'password_changed' };
   }
 
+  /**
+   * The caller's own cookie is passed down so their current session survives and
+   * every OTHER one they hold is ended. The count comes back because "signed out
+   * 3 other devices" and "signed out 0" are different facts, and the person who
+   * just changed their password because they were worried deserves the first one
+   * stated rather than implied.
+   */
   @Throttle(CREDENTIAL_ROUTE)
   @Post('password/change')
   @HttpCode(200)
-  async change(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
-    await this.passwords.change(user.id, dto.currentPassword, dto.newPassword);
-    return { status: 'password_changed' };
+  async change(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+  ) {
+    const { otherSessionsEnded } = await this.passwords.change(
+      user.id,
+      dto.currentPassword,
+      dto.newPassword,
+      this.rawSessionToken(req),
+    );
+    return { status: 'password_changed', otherSessionsEnded };
+  }
+
+  /**
+   * Sign out everywhere else, without changing the password.
+   *
+   * The revocation existed only as a side effect of changing a password, which
+   * made "I think somebody is using my account" a thing you could only act on by
+   * also picking a new password. They are separate worries and this is the
+   * separate answer.
+   */
+  @Post('sessions/revoke-others')
+  @HttpCode(200)
+  async revokeOtherSessions(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    const ended = await this.sessions.revokeAllFor(user.id, this.rawSessionToken(req));
+    return { status: 'sessions_revoked', otherSessionsEnded: ended };
+  }
+
+  /** The raw session cookie on this request, if there is one. */
+  private rawSessionToken(req: Request): string | undefined {
+    if (!req.headers.cookie) return undefined;
+    return parseCookie(req.headers.cookie)[env.SESSION_COOKIE_NAME];
   }
 
   private setSessionCookie(res: Response, rawToken: string, expiresAt: Date): void {

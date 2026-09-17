@@ -8,6 +8,8 @@ import { MarketReadService } from './market-read.service';
 import { MktController } from './mkt.controller';
 import { OfferController } from './offer.controller';
 import { TradeController } from './trade.controller';
+import { HouseStoreController } from './house-store.controller';
+import { HouseStoreService } from './house-store.service';
 
 /**
  * MKT module (marketplace). Injects the global kernels — CST (custody), PRC
@@ -16,7 +18,7 @@ import { TradeController } from './trade.controller';
  * and transfers.
  */
 @Module({
-  controllers: [MktController, OfferController, TradeController],
+  controllers: [MktController, OfferController, TradeController, HouseStoreController],
   providers: [
     ListingService,
     BrowseService,
@@ -24,6 +26,7 @@ import { TradeController } from './trade.controller';
     OfferService,
     TradeService,
     MarketReadService,
+    HouseStoreService,
   ],
 })
 export class MktModule {}

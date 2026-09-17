@@ -36,21 +36,21 @@ export interface SessionUser {
  * that if it is ever swapped, the serial and the caption cannot fall out of step
  * with each other and start describing a different card than the one on screen.
  */
-const LANDING_SERIAL = 'SN-DX107-0003';
-const LANDING_TITLE =
+export const LANDING_SERIAL = 'SN-DX107-0003';
+export const LANDING_TITLE =
   '2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star) #107/107 · Rare Holo Star · art by Masakazu Fukuda · ex8-107';
 
 /**
- * The signed-out chrome — and the only public face this product has.
+ * The signed-out chrome for the pages that take a password.
  *
- * THERE IS NO MARKETING SITE. The whole application is behind authentication;
- * the only anonymous surfaces are sign-in, sign-up, forgot-password and the
- * email-verification link. So this screen is the landing page, and it was a
+ * There IS a marketing page now — `marketing/LandingPage.tsx`, which anonymous
+ * visitors meet first — but this screen was the whole public face of the product
+ * for a long time, and the reason it looks the way it does still holds. It was a
  * 440px white card floating on a navy radial gradient with a gold `B` above it
  * and a paragraph of demo credentials underneath — a login box, doing the job of
  * a shop window.
  *
- * It is a landing page now, and it is built out of the same argument the product
+ * It is a shop window now, and it is built out of the same argument the product
  * makes everywhere else: A REAL ITEM, PHOTOGRAPHED, WITH ITS SERIAL AND ITS
  * CUSTODY LINE. Not an illustration of a vault door, not a stock photograph of
  * somebody smiling at a laptop — the actual thing Bault is holding, lit on the
@@ -152,13 +152,29 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
   );
 }
 
+/** Which form is on screen. Switched from inside, or opened directly on one. */
+export type AuthMode = 'signIn' | 'signUp' | 'forgot';
+
 /**
  * The signed-out entry point. Sign-in, sign-up and "forgot password" remain
  * SEPARATE pages — this only decides which one is on screen, and each page owns
  * its own form and fields.
+ *
+ * `initialMode` exists because the landing page has two calls to action and they
+ * mean different things: "Open an account" must arrive on the sign-up form, and
+ * arriving on the sign-in form with a link underneath is asking somebody to make
+ * the same choice twice. It is the STARTING mode only — the links between the
+ * three forms still work as they always did, so a visitor who guessed wrong is
+ * one click from the right one and never a page load.
  */
-export function AuthPage({ onSignedIn }: { onSignedIn: (user: SessionUser) => void }) {
-  const [mode, setMode] = useState<'signIn' | 'signUp' | 'forgot'>('signIn');
+export function AuthPage({
+  onSignedIn,
+  initialMode = 'signIn',
+}: {
+  onSignedIn: (user: SessionUser) => void;
+  initialMode?: AuthMode;
+}) {
+  const [mode, setMode] = useState<AuthMode>(initialMode);
 
   return (
     <AuthShell>

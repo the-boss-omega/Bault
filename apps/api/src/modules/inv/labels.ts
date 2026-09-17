@@ -10,9 +10,10 @@ import { ID_PREFIX, prefixedId } from '../../shared/ids';
  * flows. Kept dependency-free here; visual rendering lives in the web console.
  */
 export function makeItemSerial(): string {
-  // Item IDs carry the BC- ("barcode") prefix so every scannable item label is
-  // recognizable at a glance across the warehouse and marketplace.
-  return `BC-${Date.now().toString(36).toUpperCase()}-${randomInt(1000, 9999)}`;
+  // Item serials carry the SN- ("serial number") prefix so every scannable item
+  // label is recognizable at a glance across the warehouse and marketplace. The
+  // barcode is this same string (see makeItemBarcode).
+  return `${ID_PREFIX.item}-${Date.now().toString(36).toUpperCase()}-${randomInt(1000, 9999)}`;
 }
 
 /**

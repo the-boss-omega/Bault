@@ -28,9 +28,23 @@
  */
 
 /** Where the parcel is going. Country is ISO 3166-1 alpha-2. */
+/**
+ * Where a parcel is going.
+ *
+ * `country` + `postalCode` were once the whole of it, which was enough for the
+ * sandbox's crude distance band and is NOT enough for a real carrier — EasyPost
+ * rates on the origin/destination pair and needs a street. The extra fields are
+ * optional so a free-text destination still quotes (and is refused by the real
+ * adapter with a sentence naming what is missing) rather than failing at the
+ * type level.
+ */
 export interface Destination {
   country: string;
   postalCode: string;
+  name?: string;
+  street1?: string;
+  city?: string;
+  region?: string;
 }
 
 export interface CarrierService {
@@ -216,8 +230,13 @@ export function findService(carrier: string, serviceLevel: string): CarrierServi
 export interface ParcelProfile {
   destination: Destination;
   weightGrams: number;
-  /** Longest × middle × shortest, in cm. Used only where dim weight applies. */
+  /**
+   * Outer dimensions of the chosen box, in cm. Sent to the carrier, which bills
+   * dimensional weight itself. Absent when nobody chose a box.
+   */
   dimensionsCm?: { length: number; width: number; height: number };
+  /** What the chosen box weighs. Absent when nobody chose a box. */
+  packagingGrams?: number;
   itemCount: number;
   /** Total declared customs value. Zero on a domestic parcel. */
   customsValueMinor: number;
@@ -289,7 +308,9 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
       limit: parcel.destination.country,
     });
   }
-  if (parcel.weightGrams > service.maxWeightGrams) {
+  // The box counts towards the ceiling once it is known: a carrier weighs the
+  // parcel, not what is inside it.
+  if (parcel.weightGrams + (parcel.packagingGrams ?? 0) > service.maxWeightGrams) {
     problems.push({
       rule: 'weight',
       message: `${service.carrier} ${service.serviceLevel} carries up to ${lb(service.maxWeightGrams)}.`,
@@ -339,23 +360,4 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
 /** Services that can actually carry this parcel. */
 export function eligibleServices(parcel: ParcelProfile): CarrierService[] {
   return CARRIER_SERVICES.filter((s) => checkService(s, parcel).length === 0);
-}
-
-/**
- * Billable weight: the greater of what it weighs and what its size says it
- * weighs.
- *
- * This is not a Bault invention and it is not a rounding trick — a carrier sells
- * space in an aircraft, and a shoebox of sleeved commons occupies the same space
- * as something four times its mass. Services without a divisor bill actual
- * weight.
- */
-export function billableWeightGrams(service: CarrierService, parcel: ParcelProfile): number {
-  if (!service.dimDivisor || !parcel.dimensionsCm) return parcel.weightGrams;
-  const { length, width, height } = parcel.dimensionsCm;
-  // The divisor is published in cubic-inches-per-pound, so the volume is
-  // converted rather than the divisor.
-  const cubicInches = (length * width * height) / 16.387;
-  const dimPounds = cubicInches / service.dimDivisor;
-  return Math.max(parcel.weightGrams, Math.round(dimPounds * 453.592));
 }

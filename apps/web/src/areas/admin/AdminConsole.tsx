@@ -22,6 +22,7 @@ import {
 } from '../../shared/ui/primitives';
 import { IconBox, IconGavel, IconPlus, IconReceipt, IconUsers } from '../../shared/ui/icons';
 import { WalletRequestsSection } from './WalletRequestsSection';
+import { HouseStoreSection } from './HouseStoreSection';
 
 /**
  * `GET /admin/users`.
@@ -76,7 +77,7 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
  * do — find a user, settle a dispute, change a price. Shelf Yield is the one
  * that tells them what to do, so it is what the section opens on.
  */
-const TABS = ['yield', 'users', 'requests', 'items', 'pricing', 'disputes', 'storage'] as const;
+const TABS = ['yield', 'users', 'requests', 'items', 'house', 'pricing', 'disputes', 'storage'] as const;
 type SectionKey = (typeof TABS)[number];
 
 const TAB_LABEL: Record<SectionKey, MessageKey> = {
@@ -84,6 +85,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   users: 'admin.section.users',
   requests: 'admin.section.requests',
   items: 'admin.section.items',
+  house: 'admin.section.house',
   pricing: 'admin.section.pricing',
   disputes: 'admin.section.disputes',
   storage: 'admin.section.storage',
@@ -179,6 +181,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
               </div>
             )}
           </Panel>
+        </TabPanel>
+      )}
+
+      {section === 'house' && (
+        <TabPanel tab="house">
+          <HouseStoreSection onMsg={setMessage} onError={setError} />
         </TabPanel>
       )}
 
