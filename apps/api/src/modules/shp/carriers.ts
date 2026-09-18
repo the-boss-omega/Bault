@@ -27,6 +27,8 @@
  * value while the SPA fetches the actual list from `GET /shipping/services`.
  */
 
+import { DIM_DIVISOR } from '@bault/adapters';
+
 /** Where the parcel is going. Country is ISO 3166-1 alpha-2. */
 /**
  * Where a parcel is going.
@@ -145,7 +147,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 2,
     transitDaysMax: 2,
-    dimDivisor: 139,
+    dimDivisor: DIM_DIVISOR,
   },
   {
     key: 'epacket',
@@ -185,7 +187,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 2,
     transitDaysMax: 5,
-    dimDivisor: 139,
+    dimDivisor: DIM_DIVISOR,
   },
   {
     /**

@@ -100,8 +100,17 @@ export interface QuotedRate extends Rate {
 export interface Quote {
   destination: { country: string; postalCode: string };
   totalWeightGrams: number;
-  /** The box this was priced in, or null when it was priced on weight alone. */
+  /**
+   * The box this was priced in.
+   *
+   * Never null any more when anything fits: an unchosen box is now the one
+   * the warehouse would reach for, so the quote carries real dimensions
+   * rather than pricing on weight alone. Null only when nothing in the
+   * catalogue takes these contents.
+   */
   boxSize: string | null;
+  /** True when Bault picked the box rather than the collector. */
+  boxAutoSelected: boolean;
   /** True when any item's weight came from its class rather than a scale. */
   weightEstimated: boolean;
   itemCount: number;
@@ -246,7 +255,7 @@ export class ShipmentService {
     const signatureRequired = Boolean(input.signatureRequired) || signatureForced(insuredValueMinor);
     const addOns = input.addOns ?? [];
 
-    const { box, problems: boxProblems } = this.profiles.boxFor(input.boxSize, items, measurements);
+    const { box, problems: boxProblems, boxAutoSelected } = this.profiles.boxFor(input.boxSize, items, measurements);
     const optionProblems = [
       ...checkOptions({
         insuredValueMinor,
@@ -274,6 +283,7 @@ export class ShipmentService {
       destination,
       totalWeightGrams: measurements.totalWeightGrams,
       boxSize: box?.key ?? null,
+      boxAutoSelected,
       weightEstimated: measurements.anyEstimated,
       itemCount: items.length,
       insuredValueMinor,

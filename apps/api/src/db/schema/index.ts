@@ -26,6 +26,7 @@ export * from '../../modules/inv/disposal.schema';
 export * from '../../modules/inv/facility.schema';
 export * from '../../modules/inv/parcel.schema';
 export * from '../../modules/sup/sup.schema';
+export * from '../../modules/mem/mem.schema';
 export * from '../../modules/shp/shp.schema';
 export * from '../../shared/idempotency/idempotency.schema';
 export * from '../../shared/confirmation/confirmation.schema';

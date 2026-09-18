@@ -4363,6 +4363,135 @@ input[type='search'] {
 }
 
 /* ============================================================
+   Membership
+   ------------------------------------------------------------
+   `areas/customer/membership/MembershipPage.tsx`. One comparison register and
+   a row of offers — deliberately NOT three pricing cards side by side with the
+   middle one scaled up and ribboned, which is the identical-rounded-cards
+   anti-pattern in the one place it is most tempting. Comparing a tier means
+   reading one row across three columns, and a row is what a table has.
+   ============================================================ */
+
+/* What is left this cycle: a definition list, not a grid of tiles. */
+.mem-allowances {
+  display: grid;
+  gap: var(--gap-group);
+  margin: 0;
+  padding-block-start: var(--sp-2);
+}
+
+@media (min-width: 720px) {
+  .mem-allowances {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+.mem-allowance dt {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.mem-allowance dd {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  margin-block-start: var(--sp-1);
+  color: var(--ink);
+}
+
+.mem-unlimited {
+  color: var(--custody);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- The comparison register ---- */
+
+/*
+ * A tier heading carries three things and they are three different sizes: the
+ * name, the figure, and who it is for. Stacked rather than run together with
+ * middle dots, which is the meta-string pattern the system retired.
+ */
+.mem-table thead th {
+  vertical-align: bottom;
+}
+
+.mem-tier-name {
+  display: block;
+  color: var(--ink);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.mem-tier-price {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--brass);
+  font-size: var(--fs-base);
+}
+
+.mem-tier-for {
+  display: block;
+  margin-block-start: var(--sp-1);
+  max-width: 22ch;
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+/*
+ * "Not in this tier" is an em dash in the secondary ink, never a zero.
+ *
+ * Zero reads as "included, and you have none left", which is a different fact
+ * and the one thing a comparison table must not blur.
+ */
+.mem-not-included {
+  color: var(--ink-2);
+}
+
+.mem-perks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--ink-body);
+}
+
+/* ---- The offers ---- */
+
+.mem-offers {
+  display: grid;
+  margin-block-start: var(--gap-group);
+  border-block-start: var(--border-w) solid var(--line-strong);
+}
+
+/* The confirmation sentence replaces the one-liner in place, so the price and
+   the control never move while somebody is reading what they are agreeing to. */
+.offer .offer-note {
+  transition: none;
+}
+
+.mem-uncovered {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--sp-3);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--ink-body);
+}
+
+.mem-uncovered li {
+  padding-inline-start: var(--sp-4);
+  border-inline-start: 2px solid var(--line-strong);
+}
+
+/* ============================================================
    Misc legacy utilities kept in the new system
    ============================================================ */
 

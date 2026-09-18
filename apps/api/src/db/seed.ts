@@ -14,6 +14,7 @@ import {
   walletRequestEvent,
 } from '../modules/pay/pay.schema';
 import { pricingRule } from '../modules/prc/prc.schema';
+import { MEMBERSHIP_TIERS } from '../modules/mem/tiers';
 import { serviceRequest } from '../modules/dis/dis.schema';
 import { shipment } from '../modules/shp/shp.schema';
 import { dispute } from '../modules/adm/adm.schema';
@@ -450,6 +451,34 @@ async function main(): Promise<void> {
       description: 'Collect your cards in person at a show Bault is attending',
       billingTrigger: 'per_event' as const,
     },
+    /**
+     * Membership, derived from the catalogue rather than retyped.
+     *
+     * `mem/tiers.ts` owns what a tier COVERS, because that is a product shape.
+     * The price belongs here, effective-dated like every other, so it can move
+     * without a deploy and the figure a member was charged is frozen onto that
+     * charge. Generating the rows from the catalogue is what stops the two
+     * drifting: a tier added there appears here, priced, or the build fails.
+     *
+     * `parameters` carries the storage allowance because the WORKER needs it and
+     * the worker is a separate process with no access to the API's modules. It
+     * reads the cap out of the rule in SQL, exactly as the storage sweep already
+     * reads `freeDays` and `periodDays` from the storage rule.
+     */
+    ...MEMBERSHIP_TIERS.map((t) => ({
+      actionType: t.feeActionType,
+      model: 'fixed' as const,
+      value: t.listPriceMinor,
+      description: `${t.key[0]!.toUpperCase()}${t.key.slice(1)} membership — storage for ${t.storedItems} items, ${t.perCycle.intake} intakes a month`,
+      billingTrigger: 'monthly' as const,
+      parameters: {
+        storedItems: t.storedItems,
+        insuredShipments: t.insuredShipments,
+        insuredValueCapMinor: t.insuredValueCapMinor,
+        postageCreditMinor: t.postageCreditMinor,
+        commissionWaivedOnMinor: t.commissionWaivedOnMinor,
+      },
+    })),
     {
       actionType: 'parcel_processing',
       model: 'fixed' as const,

@@ -31,6 +31,7 @@ import {
   IconManagement,
   IconMarketplace,
   IconMenu,
+  IconShield,
   IconShippingServices,
   IconVault,
   IconWallet,
@@ -38,6 +39,7 @@ import {
 } from './shared/ui/icons';
 import { AuthPage, AuthShell, type AuthMode, type SessionUser } from './areas/customer/auth/AuthPage';
 import { LandingPage } from './areas/customer/marketing/LandingPage';
+import { MembershipPage } from './areas/customer/membership/MembershipPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
 import { ResetPasswordPage } from './areas/customer/auth/ResetPasswordPage';
 import { VaultPage } from './areas/customer/vault/VaultPage';
@@ -88,6 +90,9 @@ const SECTIONS: readonly SectionSpec[] = [
   // purchases become on their way in.
   { key: 'inbound', labelKey: 'tab.inbound', titleKey: 'inbound.title', icon: <IconInbox /> },
   { key: 'wallet', labelKey: 'tab.wallet', titleKey: 'wallet.title', icon: <IconWallet /> },
+  // Directly after the wallet: a subscription is a money decision, and the
+  // thing somebody wants to see next to it is the balance it comes out of.
+  { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
   {
     key: 'shipping-services',
@@ -538,6 +543,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             {section === 'inbound' && <InboundPage />}
             {section === 'support' && <SupportPage suspended={suspended} />}
             {section === 'wallet' && <WalletPage />}
+            {section === 'membership' && <MembershipPage />}
             {section === 'marketplace' && <MarketplacePage />}
             {section === 'shipping-services' && <ShippingServicesPage />}
             {section === 'faq' && <FaqLegalPage />}

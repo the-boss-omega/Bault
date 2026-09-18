@@ -89,6 +89,50 @@ export function shippingBox(key: string | null | undefined): ShippingBox | undef
   return key ? BY_KEY.get(key) : undefined;
 }
 
+/** Outer volume in cm³ — the ordering "smallest box that fits" is built on. */
+function volumeCm3(box: ShippingBox): number {
+  return box.dimensionsCm.length * box.dimensionsCm.width * box.dimensionsCm.height;
+}
+
+/** The catalogue, smallest first. Computed once; the catalogue is a constant. */
+const BY_VOLUME = [...SHIPPING_BOXES].sort((a, b) => volumeCm3(a) - volumeCm3(b));
+
+/**
+ * The box the warehouse would reach for, worked out from the contents.
+ *
+ * THIS IS WHERE A PARCEL'S DIMENSIONS COME FROM, and it is worth being explicit
+ * because the obvious assumption is wrong: **nothing is ever measured.** Bault
+ * does not know how tall a slab is and has no reason to — what it knows is the
+ * item's CLASS and its WEIGHT, and those two are enough, because the dimensions
+ * that get billed are the BOX's, and there are only five boxes.
+ *
+ * So the chain is:
+ *
+ *   item class + weight  →  the smallest box that will take them  →  its known
+ *   outer L×W×H  →  dimensional weight  →  the carrier's price.
+ *
+ * The reference service does the same thing and says so: *"We use custom-sized
+ * boxes to help keep dimensional weight (and cost) efficient."* The warehouse
+ * picks the box; the customer never had to know what a dim divisor is. The
+ * difference here is only WHEN: they pick at the packing bench and bill the
+ * postage afterwards, and Bault quotes before anybody commits — so the box has
+ * to be predicted rather than observed, and this is the prediction.
+ *
+ * Smallest-that-fits is exactly the packer's own rule, and it is the cheapest
+ * for the collector, because every box bigger than necessary is volume they pay
+ * for and do not use.
+ *
+ * Returns `undefined` when nothing in the catalogue will take these contents —
+ * over 30 kg, or an oversized class with the weight of a small one. The caller
+ * surfaces that as a problem rather than silently picking the largest box.
+ */
+export function chooseBox(contents: {
+  totalWeightGrams: number;
+  typeClasses: string[];
+}): ShippingBox | undefined {
+  return BY_VOLUME.find((box) => checkBox(box, contents).length === 0);
+}
+
 export interface BoxProblem {
   field: 'boxSize';
   /** So the SPA can phrase it without parsing English. */

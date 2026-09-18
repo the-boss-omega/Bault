@@ -26,6 +26,7 @@ import { ShpModule } from './modules/shp/shp.module';
 import { EscModule } from './modules/esc/esc.module';
 import { AdmModule } from './modules/adm/adm.module';
 import { SupModule } from './modules/sup/sup.module';
+import { MemModule } from './modules/mem/mem.module';
 
 // Global guards + interceptors
 import { SessionAuthGuard } from './modules/acc/session-auth.guard';
@@ -87,6 +88,7 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
     EscModule,
     AdmModule,
     SupModule,
+    MemModule,
   ],
   controllers: [AppController],
   providers: [

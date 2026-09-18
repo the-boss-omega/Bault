@@ -9,7 +9,7 @@ import { shippingAddress } from '../acc/address.schema';
 import { itemWeightGrams } from '../inv/item-classes';
 import { DEFAULT_COUNTRY_OF_ORIGIN, DEFAULT_HS_CODE, needsCustoms } from './shipping-options';
 import type { Destination, ParcelProfile } from './carriers';
-import { checkBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
+import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
 /** One line of the commercial invoice — per item, because customs is per item. */
 export interface CustomsLine {
@@ -96,15 +96,31 @@ export class ParcelProfileService {
     boxSize: string | null | undefined,
     items: (typeof item.$inferSelect)[],
     measurements: ItemMeasurements,
-  ): { box: ShippingBox | undefined; problems: BoxProblem[] } {
-    const box = shippingBox(boxSize);
-    return {
-      box,
-      problems: checkBox(box, {
-        totalWeightGrams: measurements.totalWeightGrams,
-        typeClasses: items.map((i) => i.typeClass),
-      }),
+  ): { box: ShippingBox | undefined; problems: BoxProblem[]; boxAutoSelected: boolean } {
+    const contents = {
+      totalWeightGrams: measurements.totalWeightGrams,
+      typeClasses: items.map((i) => i.typeClass),
     };
+
+    const chosen = shippingBox(boxSize);
+    if (chosen) return { box: chosen, problems: checkBox(chosen, contents), boxAutoSelected: false };
+
+    /**
+     * Nobody picked one, so pick the one the warehouse would.
+     *
+     * This used to answer `undefined`, which meant no dimensions reached the
+     * carrier, which meant the parcel was billed on weight alone plus a flat
+     * 120 g — and a light-but-bulky parcel was under-quoted by whatever its
+     * volume was worth. The quote was then the charge, so Bault absorbed the
+     * difference on every unboxed shipment.
+     *
+     * The fix is not to make the collector choose. Most people have no idea what
+     * a dimensional divisor is and should not have to: the warehouse was always
+     * going to pick a box, and `chooseBox` picks the same one it would — the
+     * smallest that fits. An explicit choice still wins, because a collector who
+     * wants their card in a bigger box for their own reasons may have one.
+     */
+    return { box: chooseBox(contents), problems: [], boxAutoSelected: true };
   }
 
   /**

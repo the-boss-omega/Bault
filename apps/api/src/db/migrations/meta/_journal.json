@@ -190,6 +190,13 @@
       "when": 1785074200000,
       "tag": "0026_bault_sells_its_own_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1785074300000,
+      "tag": "0027_one_fee_instead_of_thirty",
+      "breakpoints": true
     }
   ]
 }

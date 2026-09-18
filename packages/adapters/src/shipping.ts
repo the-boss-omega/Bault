@@ -40,6 +40,46 @@ export interface ShipAddress {
  */
 export const DEFAULT_PACKAGING_GRAMS = 120;
 
+/**
+ * The dimensional-weight divisor, in cubic inches per pound.
+ *
+ * A carrier sells space as well as lift, and bills whichever is greater. The
+ * divisor is how the space is converted into a weight:
+ *
+ *     dimensional pounds = (L × W × H in inches) / DIM_DIVISOR
+ *
+ * **167, because that is the figure the reference service publishes.** Its FAQ
+ * states the formula as `(L × W × H) / 167` and quotes prices against it, so a
+ * Bault quote computed with a different divisor is a quote for a different
+ * parcel. It was 139 here — the domestic retail figure FedEx and UPS use for
+ * some US services — which is the more expensive end and over-quoted every
+ * boxed parcel by about 20%.
+ *
+ * One constant, exported, so the adapter and the carrier catalogue cannot drift
+ * apart on the number that decides the price.
+ */
+export const DIM_DIVISOR = 167;
+
+/** Cubic centimetres per cubic inch — the other half of the conversion. */
+export const CM3_PER_IN3 = 16.387;
+
+/** Grams in a pound. */
+export const GRAMS_PER_LB = 453.592;
+
+/**
+ * What a box's outer dimensions weigh, as far as a carrier is concerned.
+ *
+ * Returns 0 when no box is known, which is the honest answer: with no
+ * dimensions there is no volume to bill, so the parcel prices on actual weight
+ * alone and a light-but-bulky one is under-quoted. That is the reason Bault
+ * chooses a box rather than leaving it blank.
+ */
+export function dimensionalGrams(dims?: { length: number; width: number; height: number }): number {
+  if (!dims) return 0;
+  const cubicInches = (dims.length * dims.width * dims.height) / CM3_PER_IN3;
+  return Math.round((cubicInches / DIM_DIVISOR) * GRAMS_PER_LB);
+}
+
 export interface RateRequest {
   destination: ShipAddress;
   /**
@@ -178,11 +218,9 @@ export class SandboxShippingAdapter implements ShippingAdapter {
     // quoting the contents alone under-declares every shipment.
     const packagedGrams = actualGrams + (req.packagingGrams ?? DEFAULT_PACKAGING_GRAMS);
 
-    const dimGrams = req.dimensionsCm
-      ? Math.round(
-          ((req.dimensionsCm.length * req.dimensionsCm.width * req.dimensionsCm.height) / 16.387 / 139) * 453.592,
-        )
-      : 0;
+    // A carrier bills the greater of what the parcel weighs and what its volume
+    // is worth. One shared function, so the divisor lives in exactly one place.
+    const dimGrams = dimensionalGrams(req.dimensionsCm);
     const billableKg = Math.max(packagedGrams, dimGrams) / 1000;
 
     const wanted = req.services;

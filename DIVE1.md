@@ -18,7 +18,7 @@ bug can violate them. Everything below explains how that is achieved.
 
 ## How this document is organized
 
-It is split into forty-two parts, each covering a coherent slice of the code:
+It is split into forty-four parts, each covering a coherent slice of the code:
 
 - **Part 1 — Repository, Monorepo & Shared Packages**: the root tooling, `@bault/config`,
   `@bault/adapters`, `@bault/contracts`, and infra.
@@ -191,8 +191,21 @@ It is split into forty-two parts, each covering a coherent slice of the code:
   the session probe, because a public page should not go dark when the database
   does.
 
+- **Part 43 — Showing It To Somebody Who Is Not Here**: `WEB_PUBLIC_HOST` opened
+  the dev server, which answers `GET /src/**/*.tsx` with the transpiled source — so
+  the one setting whose purpose is "let somebody else see this" pointed at the one
+  server that hands them the code. A `preview` block puts the same allow-list on the
+  built bundle, which has no `.tsx` and no sourcemaps in it.
+
+- **Part 44 — One Fee Instead of Thirty, and the Box Nobody Measured**: the
+  dimensional divisor corrected to the 167 the reference service publishes, and the
+  box a parcel goes in chosen automatically — nothing is ever measured, because the
+  dimensions are the BOX's and there are five of them; plus membership, where one
+  fixed monthly fee means the services in a tier are not billed again, every
+  allowance has a ceiling, and running out of one never charges anybody anything.
+
 **Precedence: later parts win.** Where Parts 1–8 disagree with a later changelog part, the
-changelog part is current; among Parts 9–42, the highest-numbered one is current. The
+changelog part is current; among Parts 9–44, the highest-numbered one is current. The
 file-by-file sections in Parts 1–8 have been corrected in place wherever the code they
 quoted no longer exists, so they should be accurate on their own terms too.
 
@@ -22066,3 +22079,231 @@ it scrolls sideways in either direction.
 Files: `apps/web/src/areas/customer/marketing/LandingPage.tsx` (new),
 `tests/ux/landing.test.tsx` (new), and edits to `App.tsx`, `auth/AuthPage.tsx`,
 `shared/i18n.tsx` (56 keys in both catalogues) and `index.css`.
+
+---
+
+# Part 43 — Showing It To Somebody Who Is Not Here
+
+One small change, and it is worth writing down because the setting it fixes was
+pointing at the wrong server in a way that looked right.
+
+`vite.config.ts` already had a tunnel affordance, added deliberately and
+documented at length: `WEB_PUBLIC_HOST` names the hosts the dev server will
+answer to, so that a Cloudflare or ngrok hostname gets the app instead of
+*"Blocked request. This host is not allowed."* The comment even names
+`demo.trycloudflare.com` as the example.
+
+It works. The problem is what it opens.
+
+## A dev server's job is to serve source
+
+Vite serves modules, and it serves them as files. `GET /src/areas/customer/
+marketing/LandingPage.tsx` against `pnpm dev` answers **200, with the transpiled
+file** — every identifier, every doc comment, the lot. `/@fs/` paths outside the
+project root are refused (403, `server.fs.allow` doing its job), so this is not a
+filesystem escape; it is simply the dev server doing what a dev server is for.
+
+Which means the one setting in this repository whose entire purpose is *"let
+somebody else see this"* pointed at the one server that hands them the source.
+Nobody had noticed, because on a LAN — which is what it was added for — that is
+nothing at all.
+
+## The built app, and the two things it does not inherit
+
+`vite preview` serves `dist/` and only `dist/`. There is no `.tsx` in there, no
+sourcemap is emitted, and the minifier strips the comments, so the same request
+answers with `index.html` through the SPA fallback. That is the server to put a
+tunnel in front of.
+
+It needed a `preview` block, because two of the three settings that matter are
+NOT inherited from `server`:
+
+- **`allowedHosts` is checked separately**, against `preview.allowedHosts`. So
+  before this change, `WEB_PUBLIC_HOST` let a tunnel through to the server that
+  leaks source and blocked it from the server that does not — exactly the wrong
+  way round, and silently.
+- **`host`** likewise, so the default stays loopback-only.
+
+`proxy` **is** inherited, which is the good news and was worth confirming rather
+than assuming: `/api` reaches the API on one origin under `preview` exactly as it
+does under `dev`, so the session cookie needs no special handling for the same
+reason it needs none there — no `Domain` attribute, `Path=/`, `sameSite: 'lax'`,
+scoped by the browser to the origin it actually requested.
+
+Verified by hand, on the built bundle: an allowed host answers 200, an unlisted
+one answers 403, and `/src/...tsx` answers with `index.html` rather than a
+component.
+
+## One trap left in place, on purpose
+
+`WEB_PUBLIC_HOST` is read as `fileEnv.WEB_PUBLIC_HOST ?? process.env.WEB_PUBLIC_HOST`,
+and the repo-root `.env` sets it. `??` only falls through on null or undefined, so
+an empty string in `.env` wins over the environment and an inline
+`WEB_PUBLIC_HOST=… pnpm preview` is ignored while a value is present in the file.
+That is the same precedence every other setting in this file uses — the `.env` is
+the source of truth and the inline form is the override for when it is absent —
+and changing it here alone would make this one key behave unlike its neighbours.
+Noted rather than fixed.
+
+---
+
+# Part 44 — One Fee Instead of Thirty, and the Box Nobody Measured
+
+Two passes. The first answers a question about the shipping code that turns out
+to have a better answer than the one that was in the product; the second is a
+capability the reference service does not have at all.
+
+## The divisor was the wrong number
+
+The reference service publishes its dimensional-weight formula and it is
+`(L x W x H) / 167`. Bault used **139** - the domestic retail figure FedEx and
+UPS apply to some US services, and the more expensive end of the two. Every
+boxed parcel was being over-quoted by about a fifth against the service Bault is
+modelled on.
+
+It is now one exported constant, `DIM_DIVISOR`, with `dimensionalGrams()` beside
+it, so the adapter that prices a parcel and the carrier catalogue that publishes
+the divisor cannot drift apart on the number that decides the price.
+
+## Nothing is measured, and nothing needs to be
+
+The question worth writing down, because it is the first one anybody asks of
+this code: *how can a quote bill dimensional weight when nobody measured
+anything at intake?*
+
+Nothing is measured. An item contributes only its WEIGHT - from a scale at the
+bench, or the typical figure for its class in `item-classes.ts`. The DIMENSIONS
+are the box's, and there are five boxes, and their outer sizes are constants in
+`boxes.ts`. So the chain is:
+
+    item class + weight  ->  the smallest box that fits  ->  its known LxWxH
+    ->  dimensional weight  ->  the carrier's price
+
+The reference service does the same thing and says so - *"We use custom-sized
+boxes to help keep dimensional weight (and cost) efficient."* The warehouse picks
+the box. A collector never had to learn what a dim divisor is.
+
+The difference is only WHEN. They pick at the packing bench and bill the postage
+afterwards; Bault quotes before anybody commits, so the box has to be predicted
+rather than observed. `chooseBox` is that prediction, and it is the packer's own
+rule: the smallest box that takes the weight and accepts every class in the
+parcel. Smallest is also cheapest for the collector, because every box bigger
+than necessary is volume they pay for and do not use.
+
+Part 41 added a box PICKER, which was right and is kept - somebody who wants a
+bigger box may have one. What it did not do was handle the default. An unchosen
+box meant `dimensionsCm` was undefined, which meant zero dimensional weight,
+which meant a light parcel in a large box was quoted as though volume were free.
+The quote was then the charge, so Bault absorbed the difference on every unboxed
+shipment. `boxFor` now falls back to `chooseBox` and reports `boxAutoSelected`,
+so the quote says which box it priced.
+
+## Membership: one fixed fee, and services that are not billed again
+
+Bault's economics were entirely per-event, which is honest and is what the
+reference service does - it is explicitly pay-as-you-send, with no membership at
+all. It also means a collector cannot answer *"what does Bault cost me a month"*
+without adding up a list, and that the answer is different every month.
+
+Three tiers, and they are **not a discount scheme**. A discount still charges
+every time and still leaves the bill a surprise. A member pays one fixed amount
+and the services in their tier are simply not billed again.
+
+    FOLIO     a collection you keep. Storage stops being a clock you watch.
+    REGISTRY  a collection that is working: listing, selling, shipping.
+    TRUST     a collection held the way a trustee holds property.
+
+Named for what a collection IS at each stage rather than for a metal, because
+`DESIGN.md` rejects the whole gold-accent register and Gold/Platinum/Diamond is
+that same picture in words.
+
+### The three rules the catalogue enforces
+
+1. **Everything included has a ceiling.** Every allowance is a hard number, so
+   Bault's maximum cost per member per cycle is computable before anybody signs
+   up. That is what makes a fixed fee safe to sell, and there is a test that
+   fails if an allowance is ever made unbounded on something that is not bounded
+   by a human doing it by hand.
+2. **There is no overage rate. Anywhere.** When an allowance runs out the action
+   does not get billed at some higher number - it goes back to its ordinary
+   published price and takes the same explicit confirmation any paid action
+   takes. A member cannot be charged for something they did not press a button
+   on.
+3. **Allowances do not roll over.** Which is what keeps (1) true: a rolling
+   balance makes the maximum unbounded again.
+
+### One insertion point
+
+`BillingService.charge` is the single seam every fixed-price billable action in
+the product passes through - intake, both parcel fees, the flat service fee and
+every `service_fee:*` variant. The entitlement check goes there and nowhere
+else, so one check covers all of them and no caller has to remember. A tier that
+starts covering a new action needs a line in `tiers.ts` and nothing else.
+
+Two details in it are load-bearing. The allowance is checked BEFORE the price is
+resolved, because an included action does not need a price and resolving one
+would make an unpriced-but-included action throw. And `consume` runs inside the
+caller's transaction, so the allowance is spent if and only if the thing it
+covered actually commits - an intake that fails has not silently eaten one.
+
+The counter is incremented with a SQL `jsonb_set` against the period row rather
+than read-modify-written in JavaScript. Two intakes committing concurrently
+would otherwise both read `used: 3`, both write `4`, and hand out a free one -
+the same lost update a stored wallet balance would have, avoided the same way.
+
+### Storage, which is the reason most people would join
+
+Storage is billed by a SQL sweep in the worker, not through the billing port, so
+it needed its own treatment. The sweep now excludes items a membership covers,
+reading the allowance out of the tier's own pricing rule - `parameters ->>
+'storedItems'` - because the worker is a separate process with no access to the
+API's modules. That is the same trick the storage sweep already uses to read
+`freeDays` and `periodDays`, and the seed generates those parameters FROM the
+catalogue, so there is still one definition.
+
+Which items are covered when a member has more than their allowance: the
+**oldest** first. Newest-first would mean booking one card in moved an older
+card out of cover and started billing storage on something that had been free
+for months - exactly the surprise a subscription is sold to stop.
+
+### Failing closed, and why the worst case is mild
+
+A membership grants nothing outside a paid-up cycle. If the renewal job does not
+run, the cycle lapses and the member is billed the ordinary published price for
+what they do - after approving each one, like anybody else. Never twice, never
+silently. The next run opens their cycle and the allowances come back.
+
+### The open question, settled
+
+The proposal ended on one: does the commission waiver cover consignment?
+
+**No, and for a structural reason.** `marketplace_fee` is 5% of a sale between
+two Bault accounts and the whole of it is Bault's, so waiving it costs a number
+this system can cap. A consignment commission is not that - the code says it
+plainly: *"the partner's commission is deducted by the partner before they remit
+and never touches this ledger, so these are only ever Bault's share."* Waiving
+Bault's 1% on an auction-house sale is a rounding error dressed as a benefit;
+absorbing the partner's cut is paying a third party out of a subscription, for an
+amount Bault does not control. Either breaks the property everything else rests
+on. Consignment is in `UNCOVERED`, with a test asserting that nothing in
+`UNCOVERED` also appears in a tier's allowances.
+
+### What is not wired
+
+Said plainly, because the columns exist on the screen: the shipment inclusions
+(insurance premium, postage credit, rush) and the marketplace commission waiver
+are **not** deducted yet. Both are charged outside the billing port -
+`ShipmentService.chargeFor` builds one combined charge, and the purchase flow
+charges the percentage directly - so each needs its own check. An upgrade also
+charges a full cycle rather than prorating the unused remainder.
+
+None of them can charge a member something they did not approve. They bill at
+the ordinary price today, which is the safe direction to be incomplete in.
+
+Files: `modules/mem/*` (new), migration `0027`, `jobs/membership-renewal.ts`
+(new), `areas/customer/membership/MembershipPage.tsx` (new),
+`shared/membership.ts` (new), `tests/web/membership-tiers.test.ts`,
+`tests/web/shipping-boxes.test.ts` and `tests/ux/membership.test.tsx` (new), plus
+edits to `billing.service.ts`, `storage-fee.ts`, `boxes.ts`,
+`parcel-profile.service.ts`, `shipment.service.ts`, `carriers.ts`,
+`adapters/shipping.ts`, `seed.ts`, `App.tsx`, `i18n.tsx` and `index.css`.
