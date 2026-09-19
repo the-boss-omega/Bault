@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { formatUsd } from '../../../shared/money';
 import { navigate } from '../../../shared/routing';
-import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
 import { Button } from '../../../shared/ui/primitives';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
-import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
+import { DemoSlab, DEMO_SERIAL } from './DemoSlab';
 
 /**
  * The front door, and the first one this product has ever had.
@@ -22,12 +21,11 @@ import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
  * So this page is that answer, and it is built out of the same argument the rest
  * of the product makes rather than out of a separate marketing voice:
  *
- *   - THE PITCH IS A REAL ITEM. The same photograph, the same `Serial`, the same
- *     custody line and the same custody green the signed-in product uses, on the
- *     same dark photography stage. A landing page that promises a different
- *     product than the one behind it is a lie told twice, so the serial and the
- *     caption are imported from `AuthPage` rather than retyped — there is one
- *     definition of the card on the stage, and it cannot drift.
+ *   - THE PITCH IS A DEMONSTRATION, IN THE PRODUCT'S OWN PARTS. A real
+ *     photograph in a demo case (`DemoSlab`), and beside it the same `Serial`,
+ *     custody line and custody green the signed-in product uses — filled with
+ *     demo values. It once showed a real item's serial, site and zone; a page
+ *     anybody can open must never describe a collector's actual holdings.
  *   - THE PRICES ARE FETCHED, NEVER WRITTEN. `GET /pricing/list` is public
  *     precisely so somebody without an account can read what it costs, and it
  *     returns the rules the billing engine charges from. Hard-coding "from $5"
@@ -68,6 +66,23 @@ interface PriceList {
   groups: { group: string; entries: PriceEntry[] }[];
 }
 
+/** `GET /membership/tiers`, trimmed to what the page shows. Public, like the price list. */
+interface TierList {
+  tiers?: { key: string; priceMinor: number }[];
+}
+
+/** The membership tiers the page may name, in order — a tier it does not know is not shown. */
+const TIER_KEYS = ['folio', 'registry', 'trust'] as const;
+
+/** What Bault does, as six services — each a title and one line. */
+const SERVICES = ['sell', 'trade', 'grade', 'ship', 'address', 'escrow'] as const;
+
+/** The four facts under the hero: what happens to every item, said once. */
+const FACTS = ['photo', 'serial', 'record', 'fees'] as const;
+
+/** What makes Bault different — three claims the product actually keeps. */
+const DIFFERENCES = ['record', 'prices', 'membership'] as const;
+
 /**
  * A rule in the units it is actually stated in.
  *
@@ -88,10 +103,116 @@ function param(entry: PriceEntry | undefined, key: string): number | null {
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
 }
 
+/**
+ * Motion on this page is decoration, so it is the first thing to go: a reader
+ * who has asked the system for less motion gets none of it, and neither does an
+ * environment that cannot say (the test DOM, a thumbnail renderer).
+ */
+function motionAllowed(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/**
+ * Sections below the fold rise into place as they are scrolled to.
+ *
+ * Hidden only by JavaScript, and only once it knows it can show them again:
+ * the markup carries `data-reveal=""`, which the stylesheet does NOT hide. This
+ * hook flips an element to `pending` (hidden) only if an IntersectionObserver
+ * exists to flip it back to `shown`, and never touches one already on screen —
+ * so a page without script, without the observer, or with reduced motion shows
+ * everything, immediately, exactly as before.
+ */
+function useReveal(root: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = root.current;
+    if (!el || typeof IntersectionObserver === 'undefined' || !motionAllowed()) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          (entry.target as HTMLElement).dataset.reveal = 'shown';
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: '0px 0px -10% 0px', threshold: 0.12 },
+    );
+    for (const target of el.querySelectorAll<HTMLElement>('[data-reveal]')) {
+      if (target.getBoundingClientRect().top < window.innerHeight) continue;
+      target.dataset.reveal = 'pending';
+      observer.observe(target);
+    }
+    return () => observer.disconnect();
+  }, [root]);
+}
+
+/**
+ * The card leans toward a mouse pointer, and a light moves across it.
+ *
+ * Mouse only: on touch there is no hover to follow, and a card that jumps to
+ * wherever a thumb landed reads as a glitch. The values go into custom
+ * properties the stylesheet already bounds, so this never writes a transform
+ * of its own and cannot fight the entrance animation for one.
+ */
+function useCardTilt(ref: RefObject<HTMLDivElement | null>) {
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el || e.pointerType !== 'mouse' || !motionAllowed()) return;
+    const box = el.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
+    el.style.setProperty('--tilt-x', `${((0.5 - y) * 10).toFixed(2)}deg`);
+    el.style.setProperty('--tilt-y', `${((x - 0.5) * 12).toFixed(2)}deg`);
+    el.style.setProperty('--glare-x', `${(x * 100).toFixed(1)}%`);
+    el.style.setProperty('--glare-y', `${(y * 100).toFixed(1)}%`);
+    el.dataset.tilting = 'true';
+  };
+  const onPointerLeave = () => {
+    const el = ref.current;
+    if (!el) return;
+    for (const prop of ['--tilt-x', '--tilt-y', '--glare-x', '--glare-y']) el.style.removeProperty(prop);
+    delete el.dataset.tilting;
+  };
+  return { onPointerMove, onPointerLeave };
+}
+
 export function LandingPage() {
   const { t } = useI18n();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useReveal(pageRef);
+  const tilt = useCardTilt(cardRef);
   const [prices, setPrices] = useState<Map<string, PriceEntry> | null>(null);
   const [pricesFailed, setPricesFailed] = useState(false);
+  const [tiers, setTiers] = useState<{ key: string; priceMinor: number }[] | null>(null);
+
+  /**
+   * Membership prices come from the same place the membership page reads them.
+   * If the request fails, or answers with anything but a tier list, the section
+   * is left out entirely — a plan with no price is worse than no plan at all.
+   */
+  useEffect(() => {
+    let live = true;
+    void api
+      .get<TierList>('/membership/tiers')
+      .then((list) => {
+        if (!live || !Array.isArray(list?.tiers)) return;
+        const known = TIER_KEYS.flatMap((key) => {
+          const tier = list.tiers!.find((x) => x.key === key);
+          return tier && Number.isFinite(tier.priceMinor) ? [{ key, priceMinor: tier.priceMinor }] : [];
+        });
+        if (known.length > 0) setTiers(known);
+      })
+      .catch(() => {
+        /* no plans shown rather than plans without prices */
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -154,7 +275,7 @@ export function LandingPage() {
   const goSignIn = () => navigate({ section: 'signin' });
 
   return (
-    <div className="landing" data-density="marketing">
+    <div className="landing" data-density="marketing" ref={pageRef}>
       <header className="landing-bar">
         <span className="rail-mark" aria-hidden="true">
           B
@@ -174,7 +295,13 @@ export function LandingPage() {
       {/* ---- The stage. The one dark surface, and the whole pitch. ---- */}
       <section className="landing-stage" aria-labelledby="landing-headline">
         <div className="landing-stage-photo">
-          <CardPhotoThumb serialNumber={LANDING_SERIAL} title={LANDING_TITLE} />
+          <div className="landing-card" ref={cardRef} {...tilt}>
+            <DemoSlab />
+            {/* A foil card catches the light: one sweep on arrival, then an
+                occasional one, and a glare that follows the pointer. */}
+            <span className="landing-card-sheen" aria-hidden="true" />
+            <span className="landing-card-glare" aria-hidden="true" />
+          </div>
         </div>
 
         <div className="landing-pitch">
@@ -185,26 +312,29 @@ export function LandingPage() {
 
           {/* The custody line: what the platform actually knows about this
               object, in the components that state it everywhere else. */}
+          {/* What a record looks like — filled with demo values, never a
+              collector's real serial, site or zone. */}
           <dl className="landing-custody">
             <div>
               <dt>{t('vault.serial')}</dt>
               <dd>
-                <Serial value={LANDING_SERIAL} lead />
+                <Serial value={DEMO_SERIAL} lead />
               </dd>
+            </div>
+            <div>
+              <dt>{t('landing.grade')}</dt>
+              <dd>{t('landing.gradeValue')}</dd>
             </div>
             <div>
               <dt>{t('vault.item.state')}</dt>
               <dd>
-                <span className="pill pill--success">{t('auth.landing.state')}</span>
+                <span className="pill pill--success landing-live">
+                  <span className="landing-live-dot" aria-hidden="true" />
+                  {t('auth.landing.state')}
+                </span>
               </dd>
             </div>
-            <div>
-              <dt>{t('auth.landing.whereLabel')}</dt>
-              <dd className="ltr-run">{t('auth.landing.where')}</dd>
-            </div>
           </dl>
-
-          <p className="landing-caption ltr-run">{LANDING_TITLE}</p>
 
           <div className="landing-cta">
             <Button variant="gold" onClick={goSignUp}>
@@ -217,35 +347,63 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- Three promises, as ruled entries rather than three cards ---- */}
-      <section className="landing-section" aria-labelledby="landing-promises">
-        <h2 className="landing-h2" id="landing-promises">
-          {t('landing.promises.title')}
-        </h2>
-        <p className="landing-sub">{t('landing.promises.subtitle')}</p>
+      {/* ---- What happens to every item, in four facts ---- */}
+      <ul className="landing-facts" aria-label={t('landing.facts.label')}>
+        {FACTS.map((key) => (
+          <li key={key}>{t(`landing.fact.${key}` as MessageKey)}</li>
+        ))}
+      </ul>
 
-        <div className="landing-claims">
-          <article>
-            <h3>{t('landing.promise.serial.title')}</h3>
-            <p>{t('landing.promise.serial.body')}</p>
-          </article>
-          <article>
-            <h3>{t('landing.promise.register.title')}</h3>
-            <p>{t('landing.promise.register.body')}</p>
-          </article>
-          <article>
-            <h3>{t('landing.promise.money.title')}</h3>
-            <p>{t('landing.promise.money.body')}</p>
-          </article>
+      {/* ---- How it works, in the order the work happens ---- */}
+      <section className="landing-section" data-reveal="" aria-labelledby="landing-journey">
+        <h2 className="landing-h2" id="landing-journey">
+          {t('landing.journey.title')}
+        </h2>
+        <ol className="steps landing-steps">
+          {(['arrive', 'book', 'shelf', 'decide'] as const).map((key) => (
+            <li className="step" key={key}>
+              <span className="step-name">{t(`landing.journey.${key}.name` as MessageKey)}</span>
+              <span className="step-detail">{t(`landing.journey.${key}.detail` as MessageKey)}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* ---- Everything it does, one line each ---- */}
+      <section className="landing-section" data-reveal="" aria-labelledby="landing-services">
+        <h2 className="landing-h2" id="landing-services">
+          {t('landing.services.title')}
+        </h2>
+        <div className="landing-claims landing-services">
+          {SERVICES.map((key) => (
+            <article key={key}>
+              <h3>{t(`landing.service.${key}.title` as MessageKey)}</h3>
+              <p>{t(`landing.service.${key}.body` as MessageKey)}</p>
+            </article>
+          ))}
         </div>
       </section>
 
-      {/* ---- What it costs, read from the rules that do the charging ---- */}
-      <section className="landing-section" aria-labelledby="landing-prices">
+      {/* ---- What makes it different ---- */}
+      <section className="landing-section landing-why" data-reveal="" aria-labelledby="landing-why">
+        <h2 className="landing-h2" id="landing-why">
+          {t('landing.why.title')}
+        </h2>
+        <div className="landing-claims">
+          {DIFFERENCES.map((key) => (
+            <article key={key}>
+              <h3>{t(`landing.why.${key}.title` as MessageKey)}</h3>
+              <p>{t(`landing.why.${key}.body` as MessageKey)}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ---- Pricing, read from the rules that do the charging ---- */}
+      <section className="landing-section" data-reveal="" aria-labelledby="landing-prices">
         <h2 className="landing-h2" id="landing-prices">
           {t('landing.prices.title')}
         </h2>
-        <p className="landing-sub">{t('landing.prices.subtitle')}</p>
 
         {pricesFailed ? (
           <p className="hint">{t('landing.prices.unavailable')}</p>
@@ -298,50 +456,30 @@ export function LandingPage() {
         <p className="landing-footnote">{t('landing.prices.footnote')}</p>
       </section>
 
-      {/* ---- How a card moves, in the order the work happens ---- */}
-      <section className="landing-section" aria-labelledby="landing-journey">
-        <h2 className="landing-h2" id="landing-journey">
-          {t('landing.journey.title')}
-        </h2>
-        <p className="landing-sub">{t('landing.journey.subtitle')}</p>
-
-        <ol className="steps landing-steps">
-          {(['arrive', 'book', 'shelf', 'decide'] as const).map((key) => (
-            <li className="step" key={key}>
-              <span className="step-name">{t(`landing.journey.${key}.name` as MessageKey)}</span>
-              <span className="step-detail">
-                {t(`landing.journey.${key}.detail` as MessageKey)}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {/* ---- And the three ways it leaves ---- */}
-      <section className="landing-section" aria-labelledby="landing-out">
-        <h2 className="landing-h2" id="landing-out">
-          {t('landing.out.title')}
-        </h2>
-        <p className="landing-sub">{t('landing.out.subtitle')}</p>
-
-        <div className="landing-claims">
-          <article>
-            <h3>{t('landing.out.carrier.title')}</h3>
-            <p>{t('landing.out.carrier.body')}</p>
-          </article>
-          <article>
-            <h3>{t('landing.out.glove.title')}</h3>
-            <p>{t('landing.out.glove.body')}</p>
-          </article>
-          <article>
-            <h3>{t('landing.out.pickup.title')}</h3>
-            <p>{t('landing.out.pickup.body')}</p>
-          </article>
-        </div>
-      </section>
+      {/* ---- Memberships, priced from the tiers the billing engine uses ---- */}
+      {tiers !== null && (
+        <section className="landing-section" data-reveal="" aria-labelledby="landing-tiers">
+          <h2 className="landing-h2" id="landing-tiers">
+            {t('landing.tiers.title')}
+          </h2>
+          <p className="landing-sub">{t('landing.tiers.subtitle')}</p>
+          <div className="landing-tiers">
+            {tiers.map(({ key, priceMinor }) => (
+              <article key={key}>
+                <h3>{t(`membership.tier.${key}` as MessageKey)}</h3>
+                <p className="landing-tier-price">
+                  <span className="amount">{formatUsd(priceMinor)}</span>
+                  <span className="landing-tier-period">{t('landing.tiers.perMonth')}</span>
+                </p>
+                <p>{t(`membership.tierFor.${key}` as MessageKey)}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ---- The close ---- */}
-      <section className="landing-close" aria-labelledby="landing-close-h">
+      <section className="landing-close" data-reveal="" aria-labelledby="landing-close-h">
         <h2 className="landing-h2" id="landing-close-h">
           {t('landing.close.title')}
         </h2>

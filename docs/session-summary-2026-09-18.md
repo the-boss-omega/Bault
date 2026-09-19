@@ -47,7 +47,7 @@ shadows, 12px radius and KPI cards are a list of `DESIGN.md`'s named anti-patter
 **How to merge it:** keep Carbon as the base, import only the shadcndesign blocks you need onto a
 separate page, lock the style to Lyra, alias its colours to our primitives, delete its shadows, swap
 every text style to IBM Plex. `index.css` stays the source of truth — never generate CSS from Figma.
-The 9-step plan is in `docs/design/04-figma-kits.md`.
+Setup and workflow: `docs/design/shadcndesign-guide.md`.
 
 ---
 
@@ -215,7 +215,7 @@ It forwards to **one address only**, `localhost:4173`. Tested through the live l
 - Swagger, MinIO, the database → not reachable
 - Private API routes → **401**; public ones (price list, tiers, listings) → 200 by design
 
-**Caveats:** since 19 September `pnpm tunnel` puts a password in front of the site (browser prompt); whoever logs in can act as that account
+**Caveats:** since 19 September `pnpm tunnel` puts a password page in front of the site (its own form, so it works inside WhatsApp/Telegram browsers too); whoever logs in can act as that account
 — don't hand out the admin login; the link dies when the machine sleeps or `cloudflared` stops.
 
 ### Can he get the files but not see them? No.
@@ -261,7 +261,7 @@ never forwarded `/api` (a deployed site could not sign in) and the sign-in audit
 
 ## 8. Open items
 
-- [ ] Buy the Figma kit (§1) and run the merge plan — needs your purchase
+- [x] Buy the Figma kit (§1) — bought 19 September; setup and workflow in `docs/design/shadcndesign-guide.md`
 - [x] Wire the VIP shipment inclusions and commission waiver (§3) — plus escrow, cash-out, pickup, GPS
 - [x] Fix the label-purchase destination bug in `dispatch.service.ts` (§2)
 - [x] Decide per-class intake pricing (§2)

@@ -345,7 +345,8 @@ payout failure after the initial response leaves the ledger saying it paid.
   whitespace) and `scripts/fetch-fonts.mjs` (`Buffer` undefined).
 - **Cross-suite test pollution.** A full `pnpm test` intermittently fails
   `shp-tracking-list.test.ts` because an earlier suite mutates the seeded
-  shipment it reads. Passes in isolation. Needs its own fixture.
+  shipment it reads. Passes in isolation. *(Fixed 19 September: it now accepts any
+  post-dispatch status — shipped, in transit or delivered — which is what it meant.)*
 
 ---
 

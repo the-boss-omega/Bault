@@ -82,20 +82,24 @@ beforeEach(() => {
 });
 
 describe('the landing page', () => {
-  it('opens on a real item, with its serial, not on an illustration', async () => {
+  it('opens on a demonstration: a real photograph, and no real record around it', async () => {
     get.mockResolvedValue(PRICE_LIST);
     renderPage();
 
-    // The identity, in the component that states it everywhere else in the
-    // product. A landing page that promises a different product than the one
-    // behind it is a lie told twice.
-    expect(screen.getByText('SN-DX107-0003')).toBeInTheDocument();
-
-    // And the photograph of that exact serial — the filename IS the serial, so
-    // this cannot drift into being a picture of nothing.
+    // The Gold Star's photograph, in a demo case marked as a demo.
     const photo = document.querySelector('img');
     expect(photo).toBeTruthy();
     expect(photo!.getAttribute('src')).toContain('SN-DX107-0003');
+    expect(screen.getByText('Demo')).toBeInTheDocument();
+    expect(screen.getByText('Gem Mint 10')).toBeInTheDocument();
+
+    // But nothing that describes a real item: not its serial, not its site or
+    // zone. A public page must never publish a collector's holdings. (The
+    // footer names the company's facilities; the stage names no item's.)
+    expect(screen.getByText('DEMO-0000')).toBeInTheDocument();
+    expect(screen.queryByText('SN-DX107-0003')).toBeNull();
+    const stage = document.querySelector('.landing-stage') as HTMLElement;
+    expect(stage.textContent).not.toMatch(/Zone|New Jersey|Delaware|Arizona/);
 
     // Let the price fetch settle before the case ends, so its state update
     // happens inside the test rather than after it (React's act warning).
@@ -160,6 +164,33 @@ describe('the landing page', () => {
 
     await user.click(within(bar).getByRole('button', { name: /^sign in$/i }));
     expect(window.location.hash).toBe('#/signin');
+  });
+
+  it('prices the memberships from the tiers endpoint, and leaves them out when it fails', async () => {
+    get.mockImplementation((url: string) =>
+      url === '/membership/tiers'
+        ? Promise.resolve({
+            tiers: [
+              { key: 'folio', priceMinor: 3900 },
+              { key: 'registry', priceMinor: 19900 },
+              { key: 'trust', priceMinor: 69900 },
+            ],
+          })
+        : Promise.resolve(PRICE_LIST),
+    );
+    const { unmount } = renderPage();
+    expect(await screen.findByText('$39.00')).toBeInTheDocument();
+    expect(screen.getByText('$199.00')).toBeInTheDocument();
+    expect(screen.getByText('$699.00')).toBeInTheDocument();
+    unmount();
+
+    // No tier list, no section — never a plan without its price.
+    get.mockImplementation((url: string) =>
+      url === '/membership/tiers' ? Promise.reject(new Error('down')) : Promise.resolve(PRICE_LIST),
+    );
+    renderPage();
+    await screen.findByText('$5.00');
+    expect(screen.queryByRole('heading', { name: 'Memberships' })).toBeNull();
   });
 
   it('is one h1 followed by section headings, so it can be read by outline', async () => {

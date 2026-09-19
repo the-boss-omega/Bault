@@ -1,11 +1,11 @@
 <!doctype html>
 <!--
-  Hebrew-primary, full RTL shell.
-  `lang="he"` + `dir="rtl"` set the document's base direction so the whole app
-  lays out right-to-left by default; individual LTR fields (e.g. barcodes, emails)
-  opt back in locally.
+  English on a first visit, so the shell starts `lang="en"` + `dir="ltr"` — the
+  same as `DEFAULT_LOCALE`, so a new visitor never sees a right-to-left flash
+  before the app mounts. `I18nProvider` sets both attributes from the saved
+  locale, and Hebrew flips the whole document to RTL through logical properties.
 -->
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

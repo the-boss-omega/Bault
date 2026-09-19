@@ -48,11 +48,10 @@ if (!Element.prototype.scrollIntoView) {
 /**
  * Run every rendering test in English.
  *
- * `DEFAULT_LOCALE` is Hebrew, which is right for the product and wrong for a
- * test file: assertions would have to match Hebrew strings, and a reader of the
- * test could not tell what the screen says. `I18nProvider` reads its initial
- * locale from this key, so setting it once here makes every query in the suite
- * legible. The catalogue itself is covered by `tests/web/i18n-catalogue.test.ts`,
+ * `DEFAULT_LOCALE` is English now, but the suite pins it anyway: a test must
+ * not change meaning if the product's default moves again, and a reader should
+ * never have to wonder which language a query is matching. `I18nProvider` reads
+ * its initial locale from this key. The catalogue itself is covered by `tests/web/i18n-catalogue.test.ts`,
  * which is where translation coverage belongs.
  */
 import { beforeEach } from 'vitest';

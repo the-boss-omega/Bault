@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Plugin } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -84,7 +84,7 @@ export default defineConfig(({ mode }) => {
   console.log(`[vite] /api → ${api.target} (from ${api.source})`);
 
   return {
-    plugins: [react(), ...(previewPassword ? [previewBasicAuth(previewUser, previewPassword)] : [])],
+    plugins: [react(), ...(previewPassword ? [previewGate(previewUser, previewPassword)] : [])],
     // Card photos live in the repo-root assets/ folder, one file per item named by
     // its serial number. Pointing publicDir there serves them at /images/<SERIAL>.jpg
     // in dev and copies them into dist/ on build. Path is relative to this app root.
@@ -135,7 +135,20 @@ export default defineConfig(({ mode }) => {
             // The browser resends the tunnel's basic-auth header on every request,
             // including these. The API has no use for it, and a password it never
             // needed should not be in its request logs.
-            proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('authorization'));
+            //
+            // Same for the gate's own cookie: it proves the viewer typed the
+            // preview password, which is nothing the API should see or keep.
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('authorization');
+              const cookie = proxyReq.getHeader('cookie');
+              if (typeof cookie !== 'string') return;
+              const rest = cookie
+                .split(/;\s*/)
+                .filter((c) => c && !c.startsWith(`${PREVIEW_COOKIE}=`))
+                .join('; ');
+              if (rest) proxyReq.setHeader('cookie', rest);
+              else proxyReq.removeHeader('cookie');
+            });
             // Without this, a down backend answers the browser with an opaque
             // 500 + HTML body, which the SPA cannot tell apart from a real
             // server error. Turn it into a typed 503 the client can act on —
@@ -217,27 +230,119 @@ function collectErrorCodes(err: Error): string[] {
   return codes;
 }
 
+/** The cookie the preview gate sets once the password has been typed. */
+const PREVIEW_COOKIE = 'bault_preview';
+/** Where the gate's own form posts. Not a route the SPA or the API owns. */
+const PREVIEW_SIGN_IN = '/__preview/sign-in';
+
 /**
- * HTTP basic auth for `vite preview`, compared in constant time.
+ * The password in front of `vite preview`, as a PAGE rather than a browser prompt.
+ *
+ * It began as HTTP basic auth, which leans on the browser to draw its own
+ * sign-in box. Most do — but the built-in browsers of WhatsApp, Telegram,
+ * Instagram and Facebook often do not, and a link sent in a chat opens in
+ * exactly those. The viewer got a blank page reading "Sign in to view this
+ * preview." with nowhere to type anything: they could not reach Bault at all,
+ * and nothing was logged, because nothing reached it.
+ *
+ * So a browser now gets an ordinary form, served by this gate before anything
+ * else. The right password sets an HttpOnly cookie and redirects back to where
+ * the viewer was going; every later request (the page, the photographs, `/api`)
+ * carries the cookie. Basic auth is still accepted, so `curl -u` and scripts work
+ * as before, and anything that is not a page gets a plain 401.
  *
  * Registered directly in `configurePreviewServer` rather than in its returned
- * callback, which is what makes it run BEFORE Vite's own middlewares — the
- * static files and the `/api` proxy alike. A check that ran after the proxy
- * would guard the page and leave the API open behind it.
+ * callback, which makes it run BEFORE Vite's own middlewares — the static files
+ * and the `/api` proxy alike. A check that ran after the proxy would guard the
+ * page and leave the API open behind it.
  *
- * The comparison is on equal-length buffers with `timingSafeEqual`. A string
- * `===` returns as soon as a character differs, which tells a patient caller how
- * much of the password they have right.
+ *   - Comparisons are on equal-length buffers with `timingSafeEqual`; a string
+ *     `===` returns at the first differing character.
+ *   - The cookie is an HMAC under a key made fresh at every start, never the
+ *     password: restarting the preview signs everybody out, and the cookie is
+ *     worthless anywhere else.
+ *   - Ten wrong passwords from one address in fifteen minutes and the form stops
+ *     answering for that address until the window passes. The password is long
+ *     and random; this is so that guessing it is also slow.
  */
-function previewBasicAuth(user: string, password: string): Plugin {
-  const expected = Buffer.from(`${user}:${password}`);
+function previewGate(user: string, password: string): Plugin {
+  const expectedBasic = Buffer.from(`${user}:${password}`);
+  const expectedPassword = Buffer.from(password);
+  const token = Buffer.from(createHmac('sha256', randomBytes(32)).update(`${user}:${password}`).digest('hex'));
+  const failures = new Map<string, { count: number; since: number }>();
+  const WINDOW_MS = 15 * 60_000;
+  const MAX_FAILURES = 10;
+
+  const same = (a: Buffer, b: Buffer) => a.length === b.length && timingSafeEqual(a, b);
+  const clientOf = (req: IncomingMessage) =>
+    String(req.headers['cf-connecting-ip'] ?? req.socket.remoteAddress ?? 'unknown');
+  const cookieOf = (req: IncomingMessage) => {
+    const m = new RegExp(`(?:^|;\\s*)${PREVIEW_COOKIE}=([a-f0-9]+)`).exec(req.headers.cookie ?? '');
+    return m ? Buffer.from(m[1]!) : Buffer.alloc(0);
+  };
+  const basicOf = (req: IncomingMessage) => {
+    const header = req.headers.authorization ?? '';
+    return header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64') : Buffer.alloc(0);
+  };
+  /** Only a same-site path, so the form cannot be used to bounce somebody elsewhere. */
+  const safeNext = (raw: string | null) => (raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/');
+  const isHttps = (req: IncomingMessage) =>
+    String(req.headers['x-forwarded-proto'] ?? '').includes('https') ||
+    String(req.headers['cf-visitor'] ?? '').includes('https');
+
+  const sendPage = (res: ServerResponse, status: number, next: string, message: 'wrong' | 'locked' | null) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.end(gatePage(next, message));
+  };
+
   return {
-    name: 'bault-preview-basic-auth',
+    name: 'bault-preview-gate',
     configurePreviewServer(server) {
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        const header = req.headers.authorization ?? '';
-        const given = header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64') : Buffer.alloc(0);
-        if (given.length === expected.length && timingSafeEqual(given, expected)) return next();
+        const url = new URL(req.url ?? '/', 'http://preview.local');
+
+        if (url.pathname === PREVIEW_SIGN_IN && req.method === 'POST') {
+          const who = clientOf(req);
+          const now = Date.now();
+          const record = failures.get(who);
+          if (record && now - record.since > WINDOW_MS) failures.delete(who);
+          let body = '';
+          req.setEncoding('utf8');
+          req.on('data', (chunk: string) => {
+            body += chunk;
+            if (body.length > 4096) req.destroy();
+          });
+          req.on('end', () => {
+            const form = new URLSearchParams(body);
+            const target = safeNext(form.get('next'));
+            const current = failures.get(who);
+            if (current && current.count >= MAX_FAILURES) return sendPage(res, 429, target, 'locked');
+            if (same(Buffer.from(form.get('password') ?? ''), expectedPassword)) {
+              failures.delete(who);
+              res.statusCode = 303;
+              res.setHeader(
+                'Set-Cookie',
+                `${PREVIEW_COOKIE}=${token.toString()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200${isHttps(req) ? '; Secure' : ''}`,
+              );
+              res.setHeader('Location', target);
+              res.setHeader('Cache-Control', 'no-store');
+              return res.end();
+            }
+            failures.set(who, { count: (current?.count ?? 0) + 1, since: current?.since ?? now });
+            return sendPage(res, 401, target, 'wrong');
+          });
+          return;
+        }
+
+        if (same(cookieOf(req), token) || same(basicOf(req), expectedBasic)) return next();
+
+        // A page gets the form. Anything else — a script, an API call, curl —
+        // gets a plain 401, with the basic-auth challenge so a CLI still works.
+        const wantsPage = req.method === 'GET' && String(req.headers.accept ?? '').includes('text/html');
+        if (wantsPage) return sendPage(res, 401, url.pathname + url.search, null);
         res.statusCode = 401;
         res.setHeader('WWW-Authenticate', 'Basic realm="Bault preview", charset="UTF-8"');
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -245,4 +350,66 @@ function previewBasicAuth(user: string, password: string): Plugin {
       });
     },
   };
+}
+
+const escapeHtml = (v: string) =>
+  v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+/**
+ * The gate's page: self-contained (no script, no external file), both
+ * languages, and nothing about Bault beyond its name — somebody without the
+ * password learns only that there is a password.
+ */
+function gatePage(next: string, message: 'wrong' | 'locked' | null): string {
+  const notice =
+    message === 'wrong'
+      ? '<p class="err" role="alert">That password is not right. · הסיסמה לא נכונה.</p>'
+      : message === 'locked'
+        ? '<p class="err" role="alert">Too many attempts. Try again in 15 minutes. · יותר מדי ניסיונות. נסו שוב בעוד 15 דקות.</p>'
+        : '';
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bault — preview</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+    background: #16171b; color: #f3f4f2; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main, form { display: grid; gap: 16px; }
+  main { inline-size: min(100%, 360px); }
+  .mark { inline-size: 40px; block-size: 40px; display: grid; place-items: center; background: #f3f4f2;
+    color: #16171b; font: 600 22px/1 Georgia, serif; border-radius: 3px; }
+  h1 { margin: 0; font: 500 24px/1.25 Georgia, serif; }
+  p { margin: 0; color: rgba(243,244,242,.72); }
+  .he { direction: rtl; }
+  label { display: grid; gap: 8px; font-size: 14px; color: rgba(243,244,242,.72); }
+  input { font: inherit; padding: 12px; border-radius: 3px; border: 1px solid rgba(243,244,242,.3);
+    background: #0f1013; color: inherit; }
+  input:focus { outline: 2px solid #4fbfa2; outline-offset: 2px; }
+  button { font: 600 16px/1 system-ui, sans-serif; padding: 14px; border: 0; border-radius: 3px;
+    background: #0f5e4b; color: #fff; cursor: pointer; }
+  .err { color: #f0a3a3; }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark" aria-hidden="true">B</div>
+  <h1>This preview is private</h1>
+  <p>Enter the preview password you were sent. Your Bault account comes after this.</p>
+  <p class="he">זו תצוגה פרטית. הזינו את סיסמת התצוגה שקיבלתם — חשבון Bault מגיע אחרי זה.</p>
+  ${notice}
+  <form method="post" action="${PREVIEW_SIGN_IN}">
+    <input type="hidden" name="next" value="${escapeHtml(next)}">
+    <label>Preview password · סיסמת תצוגה
+      <input type="password" name="password" autocomplete="current-password" autofocus required>
+    </label>
+    <button type="submit">Continue · המשך</button>
+  </form>
+</main>
+</body>
+</html>`;
 }

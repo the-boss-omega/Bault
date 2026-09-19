@@ -115,8 +115,11 @@ describe('SHP shipment tracking list', () => {
     // History is not pruned: a delivered or dispatched shipment stays.
     const owner = await signIn(SEED.collector2);
     const list = (await owner.get('/shipping/shipments')).body as { status: string }[];
-    // The seed ships one of Golden's cards.
-    expect(list.some((s) => s.status === 'shipped')).toBe(true);
+    // The seed ships one of Golden's cards. Earlier suites may carry it on to
+    // in_transit or delivered — still dispatched, and still listed, which is
+    // what this asserts. Pinning 'shipped' made the test depend on suite order.
+    const dispatched = ['shipped', 'in_transit', 'delivered'];
+    expect(list.some((s) => dispatched.includes(s.status))).toBe(true);
   });
 });
 

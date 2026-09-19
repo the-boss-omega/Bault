@@ -18,7 +18,7 @@ bug can violate them. Everything below explains how that is achieved.
 
 ## How this document is organized
 
-It is split into forty-seven parts, each covering a coherent slice of the code:
+It is split into forty-eight parts, each covering a coherent slice of the code:
 
 - **Part 1 — Repository, Monorepo & Shared Packages**: the root tooling, `@bault/config`,
   `@bault/adapters`, `@bault/contracts`, and infra.
@@ -228,8 +228,16 @@ It is split into forty-seven parts, each covering a coherent slice of the code:
   real client address; a password on the tunnel; intake priced per class; and a
   production nginx that never forwarded `/api`.
 
+- **Part 48 — The Build Goes Green, and the Front Page Stops Showing Somebody's
+  Card**: six CI failures in a row — pnpm named twice, MinIO withdrawn from Docker
+  Hub twice, packages built after the typecheck that needed them, jsdom 30 on Node 20,
+  an API that could not start because it imported `express` without declaring it,
+  and a rate limiter doing its job on the test suite; then a landing page that
+  published a real collector's card, replaced by a labelled specimen, and the stage
+  given its own tempo — the card turns in, the pitch rises, foil catches the light.
+
 **Precedence: later parts win.** Where Parts 1–8 disagree with a later changelog part, the
-changelog part is current; among Parts 9–47, the highest-numbered one is current. The
+changelog part is current; among Parts 9–48, the highest-numbered one is current. The
 file-by-file sections in Parts 1–8 have been corrected in place wherever the code they
 quoted no longer exists, so they should be accurate on their own terms too.
 
@@ -22764,3 +22772,205 @@ FedEx/UPS retail divisor — about 20% more dimensional weight for the same box 
 and USPS uses 166. When a real carrier is wired it computes dimensional weight
 itself; the constant drives sandbox quotes and the catalogue a collector sees
 before a label is bought.
+
+# Part 48 — The Build Goes Green, and the Front Page Stops Showing Somebody's Card
+
+Two unrelated stretches of work, told in the order they happened.
+
+## The pipeline, one failure at a time
+
+Part 47 pushed the branch, and the first push was also the first time CI had run
+in a while. It failed six different ways in a row, and each fix only uncovered the
+next step. None of them was a product bug except one, and that one is the worth
+remembering.
+
+**pnpm named twice.** The workflow said `version: 9` to `pnpm/action-setup` and
+`package.json` said `"packageManager": "pnpm@9.15.0"`; the action refuses to guess
+between them. The workflow line is gone — `packageManager` is the one place.
+`actions/checkout` and `actions/setup-node` moved to v5, which run on Node 24 and
+end the Node 20 deprecation notice.
+
+**MinIO disappeared twice.** `bitnami/minio` was withdrawn from Docker Hub, and so
+was the official `minio/minio` — the local machine only had it because it was
+cached, which is also why the first replacement "worked" here and failed there. The
+image now comes from MinIO's own registry, `quay.io/minio/minio`, in CI and in
+`infra/docker-compose.yml`. In CI it is a step rather than a service container,
+because the official image needs `server /data` as its command and a service
+container cannot pass one; the image ships `mc`, which makes the bucket the Bitnami
+image used to make from an environment variable.
+
+**The packages were built after the typecheck that needed them.** `@bault/config`
+and `@bault/adapters` resolve through their `dist/`, which is not committed, and CI
+built them just before the integration suites. On a clean runner the worker's
+typecheck could not find them. Reproduced here by moving `dist/` aside; the build
+step now runs straight after install.
+
+**jsdom 30 does not load on Node 20.** Its undici needs `^22.22.2 || >=24.15`, and
+every DOM test worker died on `markAsUncloneable is not a function`. CI runs Node 24,
+the version development already used, and `engines` now says what the tooling
+needs. The Dockerfiles still build on `node:20-slim`; they run no tests, but Node 20
+is out of support and that is the next thing to move.
+
+**The API could not start — the real bug.** `main.ts` imports `json` from
+`express`, but `express` was only a dependency of `@nestjs/platform-express`, and
+pnpm does not hand a package its dependencies' dependencies. A clean install could
+not start the API at all. It was true on the development machine too: the running
+API had simply been started before the lockfile changed, and would have died on its
+next restart. `express` is now declared by `@bault/api`, at the version Nest uses.
+
+**Every sign-in after the thirtieth was refused.** The integration suites sign in
+hundreds of times a minute from one address; the developer `.env` raises the limits
+to 5,000 and 20,000, CI had no `.env`, and the limiter did exactly its job. The
+workflow sets the same test limits. No test depends on the limiter tripping.
+
+## The front page showed a collector's card
+
+The landing stage and the sign-in stage both showed `SN-DX107-0003`, the Gold Star
+— a real item, in Red's vault, with its real serial, custody state and site. A page
+anybody on the internet can open was publishing one account's holdings, which is the
+one thing the rest of the product is built never to do.
+
+It is now a specimen, and says so. `AuthPage.tsx` holds three constants instead of
+two: `LANDING_PHOTO` is `SN-EVS218-0010`, the one photographed card that is
+deliberately never seeded into anybody's vault; `LANDING_SERIAL` is
+`SN-SPECIMEN-0000`, a serial the intake generator cannot issue; and both stages
+carry a line reading *Example record — for illustration, not a customer's item*.
+The landing test now asserts the opposite of what it used to: the Gold Star's
+serial is ABSENT.
+
+## The stage moves
+
+Part 46 allowed the landing page exactly one animation and argued for it. It was
+then asked, directly, for more presence — so the page has its own tempo, scoped to
+`.landing` (`--dur-stage: 700ms`, `--stagger: 90ms`) and used nowhere behind the
+sign-in:
+
+- the card enters from the outside edge turning into place (48px and 4°, both
+  flipped by `:dir(rtl)`);
+- the pitch rises line by line after it, and a brass rule draws itself under the
+  headline from the reading edge;
+- the card is foil, so a light sweeps across it once on arrival and then every few
+  seconds, and it leans toward a mouse pointer with a glare that follows
+  (`useCardTilt` — mouse only; a card jumping to wherever a thumb landed reads as a
+  glitch);
+- "In the vault" has a slow live dot, the one looping motion;
+- sections further down rise as they are scrolled to, their pieces one after
+  another (`useReveal`).
+
+Two rules kept it honest. Nothing is hidden by the stylesheet alone: sections carry
+`data-reveal=""`, which is not hidden, and only the script flips one to `pending`
+once it knows an IntersectionObserver exists to flip it back — so no script, no
+observer, or reduced motion means everything is simply there. And everything obeys
+`prefers-reduced-motion`: the global block collapses the animations, and both hooks
+check the same query before hiding or tilting anything. Every overlay on the card is
+`pointer-events: none`, so the photograph still opens.
+
+Checked in a real browser, not only in the test DOM: a frame at 350ms shows the card
+mid-turn with the pitch not yet risen; a settled frame shows everything in place.
+
+## A password box that some browsers never draw
+
+A viewer on another network could not reach Bault at all, and the sign-in log
+showed nothing — because nothing reached it. The tunnel's password was HTTP basic
+auth, which relies on the browser to draw its own sign-in box, and the built-in
+browsers of WhatsApp, Telegram, Instagram and Facebook often do not. A link sent in
+a chat opens in exactly those, and showed a blank page reading "Sign in to view
+this preview." with nowhere to type.
+
+The gate in `vite.config.ts` (`previewGate`) now serves its own small page to a
+browser: one password field, both languages, no script. The right password sets an
+HttpOnly cookie — an HMAC under a key made fresh at each start, never the password —
+and redirects back to where the viewer was going; the proxy strips that cookie
+before `/api`, as it already stripped the basic-auth header. Basic auth still works,
+so `curl -u` and `scripts/tunnel.mjs` are unchanged, and anything that is not a page
+still gets a plain 401. Ten wrong passwords from one address in fifteen minutes and
+the form answers 429 until the window passes; the `next` target is same-site only.
+Checked on the live link with an in-app browser's user agent: form, cookie, Bault,
+a Bault sign-in, and the attempt in the log.
+
+## English first
+
+A first visit now opens in English. `DEFAULT_LOCALE` in `i18n.tsx` is `'en'`, and
+`index.html` starts `lang="en" dir="ltr"` to match, so a new visitor never sees a
+right-to-left flash before the app mounts. Nothing else moved: Hebrew is still a
+complete locale, the switcher still remembers a choice per browser (and that choice
+wins on every later visit), and it still flips the whole document through logical
+properties. The UX suite already pinned English for itself and still does, so a
+test never changes meaning when the product's default does.
+
+## A demonstration, not a specimen
+
+The specimen above still read as real: a plausible serial beside a real site and
+zone ("Bault New Jersey · Zone B"). The stage is now a DEMONSTRATION, built in
+`marketing/DemoSlab.tsx` and used by both the landing and the sign-in stage:
+
+- the Gold Star Rayquaza's photograph is back — the picture only (`DEMO_PHOTO`);
+  nothing else about that item appears anywhere;
+- it sits in a graded case drawn in CSS, labelled "Rayquaza ★ · Gold Star · EX
+  Deoxys" and "10 GEM MT", with a "Demo" tag. It names no grading company and
+  prints no certificate number, so it cannot pass for a real slab's label;
+- the record beside it holds demo values only: serial `DEMO-0000`, grade Gem
+  Mint 10, "In the vault". The Where row is gone from both stages, and
+  `auth.landing.where` / `whereLabel` are gone from the catalogue.
+
+The landing test asserts the photograph is the Gold Star's, the Gold Star's
+serial is absent, and the stage names no site or zone.
+
+## Fewer words
+
+Every section is now a title and at most one short line. The four section
+subtitles, the four journey details and the closing paragraph are gone — from the
+page and from the catalogue — and the lede, the three rules and the three ways out
+are one sentence each, in both languages. What the words stopped doing, the
+design picked up: the journey's steps carry a large brass numeral (a CSS counter
+scoped under `.landing`, because the shared `.steps` rules come later in the
+file), the stage has a low brass light behind the case from the side it stands
+on, and the price table's row labels read from the reading edge instead of the
+centre.
+
+## The landing page makes the pitch
+
+The page was accurate and said very little about what Bault actually does. It now
+follows the reference service's front page — a short hero, what you get, how it
+works, the services — and then adds the three things that service cannot say:
+
+- **Hero:** *Store it. Prove it. Sell it.* and one paragraph that says the whole
+  service: send it, we photograph and serialise it, and from your account you sell,
+  trade, grade or ship.
+- **Facts strip** under the stage: photographed on arrival, a serial for every item,
+  a history no one can alter, every price known before you pay.
+- **How it works:** the four steps, each with one line — the personal US address,
+  check-in, the vault, the decision.
+- **Everything your collection needs:** six services, each a title and one line —
+  selling (ownership moves inside the vault), trades and gifts, PSA/BGS grading,
+  shipping home, the US address for purchases, and escrow for outside deals.
+- **What makes Bault different**, on the one sunken band: proof of ownership that
+  nobody can rewrite, prices that name their rule, membership without surprises.
+- **Simple pricing** (the live table, unchanged), then **Memberships** priced from
+  `GET /membership/tiers` — public, like the price list. If that request fails the
+  section is left out; a plan is never shown without its price.
+- **Close:** *Start with a single item.*
+
+Every claim is one the product keeps, checked against the pricing rules, the tiers
+and the flows before it was written. No figure is typed into the page. The copy was
+written for both languages, and the catalogue test still finds Bault — never the
+reference service — in every string. The old promises and "three ways it leaves"
+sections, and their strings, are gone; their content lives in the new ones.
+
+## The test that depended on suite order
+
+`shp-tracking-list.test.ts` asked for Golden's seeded shipment to be `shipped`. Its
+own comment says what it means — a dispatched shipment is never pruned from the
+list — but earlier suites can carry that shipment on to `in_transit` or
+`delivered`, and then a full run failed while the suite alone passed. It now
+accepts any post-dispatch status, which is the claim it was written to defend. The
+readiness audit's housekeeping note about it is marked fixed.
+
+## Designing with the kit, as a document
+
+`docs/design/04-figma-kits.md` is the complete design process — the Bault + Lyra
+look, the four layers a design is made of (look, text, structure, behaviour) and
+where each lives, the components Bault already has and what to do for a widget it
+doesn't, putting a design in by hand, designing with Claude from the kit's
+screenshots, and the Figma plan needed. `docs/design/designing-bault.pdf` is the
+same content, printed from it in Bault's own fonts.

@@ -21,7 +21,7 @@ import { DEFAULT_LOCALE, LOCALES, MESSAGE_KEYS, hasMessage, t } from '../../apps
 describe('message catalogues', () => {
   it('exposes exactly the two supported locales, Hebrew first', () => {
     expect([...LOCALES]).toEqual(['he', 'en']);
-    expect(DEFAULT_LOCALE).toBe('he');
+    expect(DEFAULT_LOCALE).toBe('en');
   });
 
   it('resolves a known key in both locales', () => {

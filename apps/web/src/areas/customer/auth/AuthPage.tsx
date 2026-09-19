@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
-import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { DemoSlab, DEMO_SERIAL } from '../marketing/DemoSlab';
 import { Serial } from '../../../shared/ui/Serial';
 import { useI18n } from '../../../shared/i18n';
 import { SignInPage } from './SignInPage';
@@ -26,19 +26,6 @@ export interface SessionUser {
   firstName?: string | null;
   lastName?: string | null;
 }
-
-/**
- * The card on the landing stage.
- *
- * A seeded, catalogued item with its photograph on disk under this exact
- * serial — the Gold Star, which is the collection's centrepiece and the most
- * valuable thing in the demo vault. Named as constants rather than inlined so
- * that if it is ever swapped, the serial and the caption cannot fall out of step
- * with each other and start describing a different card than the one on screen.
- */
-export const LANDING_SERIAL = 'SN-DX107-0003';
-export const LANDING_TITLE =
-  '2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star) #107/107 · Rare Holo Star · art by Masakazu Fukuda · ex8-107';
 
 /**
  * The signed-out chrome for the pages that take a password.
@@ -80,12 +67,8 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
       {!bare && (
         <section className="auth-stage" aria-labelledby="auth-pitch">
           <div className="auth-stage-photo">
-            {/*
-              A real card, held by Bault, photographed. The serial is the
-              filename — the same coupling the whole product runs on — so this
-              cannot drift into being a picture of nothing.
-            */}
-            <CardPhotoThumb serialNumber={LANDING_SERIAL} title={LANDING_TITLE} />
+            {/* A demonstration, not a record — see DemoSlab. */}
+            <DemoSlab />
           </div>
 
           <div className="auth-pitch">
@@ -94,14 +77,17 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
             </h1>
             <p className="auth-lede">{t('auth.landing.lede')}</p>
 
-            {/* The custody line: what the platform actually knows about this
-                object, in the components that state it everywhere else. */}
+            {/* What a record looks like, filled with demo values only. */}
             <dl className="auth-custody">
               <div>
                 <dt>{t('vault.serial')}</dt>
                 <dd>
-                  <Serial value={LANDING_SERIAL} lead />
+                  <Serial value={DEMO_SERIAL} lead />
                 </dd>
+              </div>
+              <div>
+                <dt>{t('landing.grade')}</dt>
+                <dd>{t('landing.gradeValue')}</dd>
               </div>
               <div>
                 <dt>{t('vault.item.state')}</dt>
@@ -109,13 +95,7 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
                   <span className="pill pill--success">{t('auth.landing.state')}</span>
                 </dd>
               </div>
-              <div>
-                <dt>{t('auth.landing.whereLabel')}</dt>
-                <dd className="ltr-run">{t('auth.landing.where')}</dd>
-              </div>
             </dl>
-
-            <p className="auth-caption ltr-run">{LANDING_TITLE}</p>
           </div>
         </section>
       )}

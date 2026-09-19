@@ -13,7 +13,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
  */
 export type Locale = 'he' | 'en';
 
-export const DEFAULT_LOCALE: Locale = 'he';
+/**
+ * English on a first visit; a visitor's own choice (the language switcher,
+ * remembered in this browser) wins from then on. Hebrew stays a full,
+ * first-class locale — this only decides where somebody new starts.
+ */
+export const DEFAULT_LOCALE: Locale = 'en';
 export const LOCALES: readonly Locale[] = ['he', 'en'] as const;
 
 const STORAGE_KEY = 'bault.locale';
@@ -25,10 +30,8 @@ const he = {
   // ---- App shell ----
   'app.title': 'Bault — כספת ושוק לפריטי אספנות',
   'auth.landing.headline': 'מישהו מחזיק את זה עכשיו. אתם רואים בדיוק מה, איפה, ומה זה עולה.',
-  'auth.landing.lede': 'Bault שומרת פריטי אספנות ומנהלת את הרישום היחיד של הבעלות עליהם. כל פריט נושא מספר סידורי, כל תזוזה נרשמת ואי אפשר למחוק אותה, וכל חיוב מציג את הכלל שלפיו חושב.',
+  'auth.landing.lede': 'אחסון, מכירה ומשלוח של פריטי אספנות — עם מספר סידורי לכל פריט ומחיר ידוע מראש לכל שירות.',
   'auth.landing.state': 'בכספת',
-  'auth.landing.whereLabel': 'איפה',
-  'auth.landing.where': 'Bault New Jersey · אזור B',
   // ---- The landing page (marketing/LandingPage.tsx) ----
   // ---- Membership (customer/membership/MembershipPage.tsx) ----
   'tab.membership': 'מנוי',
@@ -103,25 +106,20 @@ const he = {
   'membership.uncovered.restocking_fee': 'דמי החזרה למדף — רק בביטול משלוח אחרי בחירת תעריף.',
   'landing.nav.signIn': 'כניסה',
   'landing.nav.signUp': 'פתיחת חשבון',
-  'landing.hero.headline': 'כספת שווה בדיוק כמה ששווה הרישום שלה.',
-  'landing.hero.lede':
-    'Bault שומרת פריטי אספנות ומנהלת את הרישום היחיד של מי הבעלים, איפה הם נמצאים ומה הם עלו עד היום. לכל פריט מונפק מספר סידורי, כל תזוזה נרשמת ואי אפשר למחוק אותה, וכל חיוב נושא איתו את הכלל שלפיו חושב.',
+  'landing.hero.headline': 'לאחסן. להוכיח. למכור.',
+  'landing.demo': 'הדגמה',
+  'landing.demoAlt': 'Rayquaza Gold Star — קלף להדגמה',
+  'landing.grade': 'ציון',
+  'landing.gradeValue': 'ג׳ם מינט 10',
+  'landing.hero.lede': 'שולחים את פריטי האספנות ל-Bault. אנחנו מצלמים כל פריט, מעניקים לו מספר סידורי קבוע ומאחסנים אותו בכספת. מהחשבון שלכם מוכרים, מחליפים, שולחים לדירוג או מקבלים הביתה — מתי שתחליטו.',
   'landing.hero.primary': 'פתיחת חשבון',
   'landing.hero.secondary': 'כניסה',
-  'landing.promises.title': 'שלושה דברים שנכונים לכל מה שנמצא כאן',
-  'landing.promises.subtitle': 'לא תכונות — חוקי יסוד. מסד הנתונים עצמו מסרב לשמור רשומה שמפרה אחד מהם.',
-  'landing.promise.serial.title': 'המספר הסידורי הוא הזהות',
-  'landing.promise.serial.body':
-    'פריט נקלט תחת מספר סידורי ש‑Bault מנפיקה, מדפיסה על התווית שלו ונושאת בכל רשומה שבה הוא מופיע אי פעם. אף אחד לא מקליד אותו, ולכן אי אפשר לטעות בו, והוא לעולם לא נקטע על המסך.',
-  'landing.promise.register.title': 'אי אפשר לכתוב את הרישום מחדש',
-  'landing.promise.register.body':
-    'אירועי משמורת ושורות בפנקס הן הוספה בלבד, והדבר נאכף בטריגרים של מסד הנתונים ולא בקוד שמעליו. שום דבר במערכת הזאת לא יכול למחוק תזוזה — גם לא Bault.',
-  'landing.promise.money.title': 'כל חיוב מציג את הכלל שלפיו חושב',
-  'landing.promise.money.body':
-    'מחיר הוא כלל עם תאריך, והכלל שהיה בתוקף ברגע החיוב נשמר יחד עם החיוב. שינוי מחיר מאוחר יותר לעולם לא משנה את מה שכבר שילמתם.',
-  'landing.prices.title': 'כמה זה עולה',
-  'landing.prices.subtitle':
-    'נקרא ישירות מכללי התמחור שמנוע החיוב גובה לפיהם — לא מספר שיווקי שהוקלד לתוך עמוד.',
+  'landing.facts.label': 'מה קורה לכל פריט',
+  'landing.fact.photo': 'מצולם עם ההגעה',
+  'landing.fact.serial': 'מספר סידורי לכל פריט',
+  'landing.fact.record': 'היסטוריה שאיש לא יכול לשנות',
+  'landing.fact.fees': 'כל מחיר ידוע לפני שמשלמים',
+  'landing.prices.title': 'מחירים פשוטים',
   'landing.prices.col.what': 'מה',
   'landing.prices.col.price': 'מחיר',
   'landing.prices.unavailable':
@@ -134,33 +132,40 @@ const he = {
   'landing.price.shipping': 'דמי טיפול על חבילה יוצאת',
   'landing.price.marketplace': 'מכירה כאן',
   'landing.price.cashOut': 'משיכת כסף',
-  'landing.journey.title': 'איך פריט זז',
-  'landing.journey.subtitle': 'לפי הסדר שבו העבודה באמת מתבצעת.',
-  'landing.journey.arrive.name': 'הוא מגיע',
-  'landing.journey.arrive.detail':
-    'לכל אספן יש כתובת קבלה משלו. חבילה מדווחת לפני שהיא נוחתת, כך שהיא לעולם לא קופסה אנונימית על שולחן.',
-  'landing.journey.book.name': 'הוא נקלט, מצולם ומקבל מספר סידורי',
-  'landing.journey.book.detail':
-    'יחידה אחת בכל פעם, בעמדת הקליטה, מול המצלמה. הסיווג, המצב והצילומים נכנסים לרישום שם — לא אחר כך, מהזיכרון.',
-  'landing.journey.shelf.name': 'הוא עולה על מדף עם שם',
-  'landing.journey.shelf.detail':
-    'העמדה מקבלת הנחיה לאן הוא מתאים ובאיזה בניין. התא רשום, ולכן «איפה זה» היא שאילתה ולא חיפוש.',
-  'landing.journey.decide.name': 'אתם מחליטים מה קורה איתו',
-  'landing.journey.decide.detail':
-    'להציג למכירה, למכור, להחליף, לשלוח לדירוג, לפתוח מהמארז, לפצל, לבטח או לשלוח הביתה. כל אחת מהפעולות מציגה את המחיר שלה לפני הכפתור שמבצע אותה.',
-  'landing.out.title': 'שלוש דרכים לצאת',
-  'landing.out.subtitle': 'אחת מהן היא חבילה. שתיים מהן הן אדם.',
-  'landing.out.carrier.title': 'עם חברת שילוח',
-  'landing.out.carrier.body':
-    'מתומחר לפני שמתחייבים, כולל ביטוח, חתימה ומסמכי מכס — וכל שירות שלא יכול לשאת את החבילה שלכם אומר באיזו מגבלה הוא נכשל, במקום להיעלם בשקט.',
-  'landing.out.glove.title': 'מסירה אישית',
-  'landing.out.glove.body':
-    'מישהו נוסע עם הפריט ומוסר אותו ליד. מתומחר לכל נסיעה בנפרד, כי הדרך מניו ג׳רזי למלון ביום שלישי איננה מחירון.',
-  'landing.out.pickup.title': 'באירוע אספנים',
-  'landing.out.pickup.body':
-    'הפריטים נוסעים לאירוע ש‑Bault ממילא משתתפת בו, ואתם ניגשים ולוקחים אותם. זה עולה שבריר מדמי משלוח, כי הרכב ממילא היה נוסע לשם.',
-  'landing.close.title': 'אין כאן שיחת מכירה.',
-  'landing.close.body': 'פתחו חשבון, קראו את המחירון המלא, והסתכלו על הכספת עם פריטים אמיתיים בתוכה.',
+  'landing.journey.title': 'איך זה עובד',
+  'landing.journey.arrive.name': 'שולחים לכתובת שלכם ב-Bault',
+  'landing.journey.arrive.detail': 'כתובת אישית בארה״ב — לחבילות שלכם ולכל מה שאתם קונים אונליין.',
+  'landing.journey.book.name': 'אנחנו קולטים',
+  'landing.journey.book.detail': 'נפתח, מצולם, מקבל מספר סידורי ועולה למדף. אתם מקבלים הודעה.',
+  'landing.journey.shelf.name': 'זה בכספת שלכם',
+  'landing.journey.shelf.detail': 'כל פריט בחשבון שלכם, עם התמונות וההיסטוריה המלאה שלו.',
+  'landing.journey.decide.name': 'אתם מחליטים מה הלאה',
+  'landing.journey.decide.detail': 'למכור, להחליף, לשלוח לדירוג או הביתה — בכמה לחיצות.',
+  'landing.services.title': 'כל מה שהאוסף שלכם צריך',
+  'landing.service.sell.title': 'מכירה לאספנים',
+  'landing.service.sell.body': 'מעלים למכירה בשניות. כשנמכר, הבעלות עוברת בתוך הכספת — בלי אריזה ובלי סיכון בדואר.',
+  'landing.service.trade.title': 'החלפות ומתנות',
+  'landing.service.trade.body': 'מחליפים עם כל אספן ב-Bault. שני הצדדים מאשרים לפני שמשהו זז.',
+  'landing.service.grade.title': 'דירוג',
+  'landing.service.grade.body': 'שולחים ל-PSA או ל-BGS ישר מהכספת. אנחנו אורזים, שולחים וקולטים בחזרה.',
+  'landing.service.ship.title': 'משלוח הביתה',
+  'landing.service.ship.body': 'משלוח מבוטח עם מעקב, בארה״ב ולחו״ל. דחוף, עם איתורן או מסירה אישית — כשזה חשוב.',
+  'landing.service.address.title': 'כתובת בארה״ב',
+  'landing.service.address.body': 'קונים מכל מוכר אמריקאי ושולחים ל-Bault. אנחנו מקבלים, מתעדים ומוסיפים לכספת.',
+  'landing.service.escrow.title': 'נאמנות לעסקאות חוץ',
+  'landing.service.escrow.body': 'מוכרים למישהו מחוץ ל-Bault? אנחנו מחזיקים את הכסף, בודקים את הפריט ומשחררים לשני הצדדים יחד.',
+  'landing.why.title': 'מה שונה ב-Bault',
+  'landing.why.record.title': 'הוכחת בעלות',
+  'landing.why.record.body': 'לכל פריט היסטוריה קבועה: של מי היה, איפה היה ומה חויב. איש לא יכול לשכתב אותה — גם לא אנחנו.',
+  'landing.why.prices.title': 'מחירים שאפשר לבדוק',
+  'landing.why.prices.body': 'כל חיוב מציין את הכלל שקבע אותו. המחירים בעמוד הזה הם המחירים האמיתיים, לא עלון.',
+  'landing.why.membership.title': 'מנוי בלי הפתעות',
+  'landing.why.membership.body': 'מחיר חודשי אחד, מכסות ידועות מראש, ושום חיוב מעבר להן בלי האישור שלכם.',
+  'landing.tiers.title': 'מנויים',
+  'landing.tiers.subtitle': 'שולחים באופן קבוע? מנוי חודשי מכסה את העבודה השגרתית. בלי מנוי משלמים רק על מה שמשתמשים.',
+  'landing.tiers.perMonth': 'לחודש',
+  'landing.close.title': 'מתחילים מפריט אחד.',
+  'landing.close.body': 'פותחים חשבון, מקבלים כתובת ושולחים את החבילה הראשונה. בלי התחייבות.',
   'landing.close.cta': 'פתיחת חשבון',
   'landing.foot':
     'Bault — כספת ושוק לפריטי אספנות. מתקנים בניו ג׳רזי ובדלאוור. התחשבנות בדולר אמריקאי.',
@@ -2328,10 +2333,8 @@ const en: Record<MessageKey, string> = {
   // ---- App shell ----
   'app.title': 'Bault — Collectibles Vault & Marketplace',
   'auth.landing.headline': 'Somebody is holding this right now. You can see exactly what, where, and what it costs.',
-  'auth.landing.lede': 'Bault holds collectibles and keeps the only record of who owns them. Every item carries a serial, every movement is written down and cannot be erased, and every charge shows the rule that priced it.',
+  'auth.landing.lede': 'Storage, sales and shipping for collectibles — a serial for every item and a known price for every service.',
   'auth.landing.state': 'In the vault',
-  'auth.landing.whereLabel': 'Where',
-  'auth.landing.where': 'Bault New Jersey · Zone B',
   // ---- The landing page (marketing/LandingPage.tsx) ----
   // ---- Membership (customer/membership/MembershipPage.tsx) ----
   'tab.membership': 'Membership',
@@ -2406,26 +2409,20 @@ const en: Record<MessageKey, string> = {
   'membership.uncovered.restocking_fee': 'The restocking fee — only when a shipment is cancelled after a rate was selected.',
   'landing.nav.signIn': 'Sign in',
   'landing.nav.signUp': 'Open an account',
-  'landing.hero.headline': 'A vault is worth exactly what its record is worth.',
-  'landing.hero.lede':
-    'Bault holds collectibles and keeps the only record of who owns them, where they are and what they have cost so far. Every item is minted a serial, every movement is written down and cannot be erased, and every charge carries the rule that priced it.',
+  'landing.hero.headline': 'Store it. Prove it. Sell it.',
+  'landing.demo': 'Demo',
+  'landing.demoAlt': 'Rayquaza Gold Star — a demo card',
+  'landing.grade': 'Grade',
+  'landing.gradeValue': 'Gem Mint 10',
+  'landing.hero.lede': 'Send your collectibles to Bault. We photograph every item, give it a permanent serial and keep it in our vault. From your account you can sell it, trade it, send it for grading or have it shipped home — whenever you decide.',
   'landing.hero.primary': 'Open an account',
   'landing.hero.secondary': 'Sign in',
-  'landing.promises.title': 'Three things that are true of everything in here',
-  'landing.promises.subtitle':
-    'Not features — invariants. The database itself refuses to hold a record that breaks one.',
-  'landing.promise.serial.title': 'The serial is the identity',
-  'landing.promise.serial.body':
-    'An item is booked in under a serial Bault mints, prints on its label and carries on every record it ever appears in. Nobody types it, so it cannot be mistyped, and it is never truncated on a screen.',
-  'landing.promise.register.title': 'The record cannot be rewritten',
-  'landing.promise.register.body':
-    'Custody events and ledger lines are append-only, enforced by database triggers rather than by the code above them. Nothing in this system can delete a movement — including Bault.',
-  'landing.promise.money.title': 'Every charge names its rule',
-  'landing.promise.money.body':
-    'A price is a dated rule, and the rule in force at the moment you were charged is stored alongside the charge. A later price change never rewrites what you already paid.',
-  'landing.prices.title': 'What it costs',
-  'landing.prices.subtitle':
-    'Read live from the pricing rules the billing engine charges from — not a brochure figure typed onto a page.',
+  'landing.facts.label': 'What happens to every item',
+  'landing.fact.photo': 'Photographed on arrival',
+  'landing.fact.serial': 'A serial for every item',
+  'landing.fact.record': 'A history no one can alter',
+  'landing.fact.fees': 'Every price known before you pay',
+  'landing.prices.title': 'Simple pricing',
   'landing.prices.col.what': 'What',
   'landing.prices.col.price': 'Price',
   'landing.prices.unavailable':
@@ -2438,34 +2435,40 @@ const en: Record<MessageKey, string> = {
   'landing.price.shipping': 'Handling on an outbound parcel',
   'landing.price.marketplace': 'Selling it here',
   'landing.price.cashOut': 'Taking money out',
-  'landing.journey.title': 'How an item moves',
-  'landing.journey.subtitle': 'In the order the work actually happens.',
-  'landing.journey.arrive.name': 'It arrives',
-  'landing.journey.arrive.detail':
-    'Every collector gets their own receiving address. A parcel is expected before it lands, so it is never an anonymous box on a bench.',
-  'landing.journey.book.name': 'It is booked in, photographed, given a serial',
-  'landing.journey.book.detail':
-    'One unit at a time, at the receiving bench, with the camera. Class, condition and photographs go on the record there — not afterwards, from memory.',
-  'landing.journey.shelf.name': 'It goes on a named shelf',
-  'landing.journey.shelf.detail':
-    'The bench is told where it fits and in which building. The bin is on the record, so “where is it” is a lookup rather than a search.',
-  'landing.journey.decide.name': 'You decide what happens to it',
-  'landing.journey.decide.detail':
-    'List it, sell it, trade it, grade it, crack it out, split it, insure it or send it home. Each one states its price before the button that buys it.',
-  'landing.out.title': 'Three ways it leaves',
-  'landing.out.subtitle': 'One of them is a parcel. Two of them are a person.',
-  'landing.out.carrier.title': 'By carrier',
-  'landing.out.carrier.body':
-    'Quoted before you commit, with insurance, signature and customs handled — and any service that cannot legally carry your parcel says which limit it failed instead of quietly disappearing.',
-  'landing.out.glove.title': 'White glove',
-  'landing.out.glove.body':
-    'Somebody drives it there and puts it in a hand. Quoted per journey, because the cost of getting a person from New Jersey to a hotel on a Tuesday is not something a rate table knows.',
-  'landing.out.pickup.title': 'At a show',
-  'landing.out.pickup.body':
-    'The items travel to a show Bault is already attending and you walk up and take them. It is a fraction of postage because the van was going anyway.',
-  'landing.close.title': 'There is no sales call.',
-  'landing.close.body':
-    'Open an account, read the whole price list, and look at the vault with real items in it.',
+  'landing.journey.title': 'How it works',
+  'landing.journey.arrive.name': 'Ship to your Bault address',
+  'landing.journey.arrive.detail': 'A personal US address — for your own parcels and anything you buy online.',
+  'landing.journey.book.name': 'We check it in',
+  'landing.journey.book.detail': 'Opened, photographed, given a serial and shelved. You get a notification.',
+  'landing.journey.shelf.name': 'It’s in your vault',
+  'landing.journey.shelf.detail': 'Every item in your account, with its photos and full history.',
+  'landing.journey.decide.name': 'You decide what’s next',
+  'landing.journey.decide.detail': 'Sell, trade, grade or ship — in a few taps.',
+  'landing.services.title': 'Everything your collection needs',
+  'landing.service.sell.title': 'Sell to collectors',
+  'landing.service.sell.body': 'List in seconds. When it sells, ownership moves inside the vault — nothing to pack, nothing at risk in the mail.',
+  'landing.service.trade.title': 'Trade and gift',
+  'landing.service.trade.body': 'Swap with any Bault collector. Both sides approve before anything moves.',
+  'landing.service.grade.title': 'Grading',
+  'landing.service.grade.body': 'Submit to PSA or BGS straight from the vault. We pack it, send it and check it back in.',
+  'landing.service.ship.title': 'Ship home',
+  'landing.service.ship.body': 'Insured, tracked shipping at home and abroad. Rush, GPS-tracked or hand-delivered when it matters.',
+  'landing.service.address.title': 'Your US address',
+  'landing.service.address.body': 'Buy from any US seller and ship it to us. We receive it, log it and add it to your vault.',
+  'landing.service.escrow.title': 'Escrow for outside deals',
+  'landing.service.escrow.body': 'Selling to someone outside Bault? We hold the payment, inspect the item, then settle both sides at once.',
+  'landing.why.title': 'What makes Bault different',
+  'landing.why.record.title': 'Proof of ownership',
+  'landing.why.record.body': 'Every item carries a permanent history: who owned it, where it was, what was charged. No one can rewrite it — not even us.',
+  'landing.why.prices.title': 'Prices you can check',
+  'landing.why.prices.body': 'Every charge names the rule that set it. The prices on this page are the live ones, not a brochure.',
+  'landing.why.membership.title': 'Membership without surprises',
+  'landing.why.membership.body': 'One monthly price, allowances stated upfront, and nothing charged beyond them without your approval.',
+  'landing.tiers.title': 'Memberships',
+  'landing.tiers.subtitle': 'Sending regularly? A monthly plan covers the routine work. Without one, you pay only for what you use.',
+  'landing.tiers.perMonth': 'a month',
+  'landing.close.title': 'Start with a single item.',
+  'landing.close.body': 'Open an account, get your address and send your first parcel. No commitment.',
   'landing.close.cta': 'Open an account',
   'landing.foot':
     'Bault — collectibles vault and marketplace. Facilities in New Jersey and Delaware. Settled in USD.',

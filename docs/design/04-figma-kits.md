@@ -1,147 +1,175 @@
-# Figma kits that fit Bault's design system
+# Designing Bault — from Figma to the live site
 
-**Question:** which Figma theme or kit can Bault adopt without abandoning what
-`DESIGN.md` already decided?
+*The complete process, 19 September 2026. Kit: shadcndesign Plus (Figma). Site: Bault's own React + CSS — no Tailwind, no shadcn code.*
 
-**Answer:** no off-the-shelf theme should *replace* the current look. The best fit
-is **IBM Carbon v11** as the component and pattern base, re-skinned with Bault's
-own tokens, plus a small number of patterns from **AWS Cloudscape** and
-**GOV.UK / MoJ**. Everything below was researched in September 2026. Licences
-marked "Figma default" are Figma Community's CC BY 4.0 default and were not read
-off each individual file.
+## At a glance
 
-## What any kit has to fit
+- **The look** is Bault + Lyra: Lyra's shapes, spacing and sections; Bault's colours and fonts. Set up once.
+- **A Figma design never imports itself.** It becomes part of the site when it is rebuilt as code: look → `index.css`, text → `i18n.tsx`, structure → the page's `.tsx` file, behaviour → React.
+- **You can do the look and the text alone.** Layouts and widgets are code — that part is fastest with me.
+- **With me:** send a screenshot of a kit section and say where it goes — or send a batch and say "use these where they fit best".
 
-- **The look is "a precision instrument, in daylight".** Trust comes from
-  precision and legibility, not mood: no vault doors, no dark neon dashboards.
-- **Every item view opens photo → serial → status.** Serials are IBM Plex Mono,
-  never truncated, and isolated left-to-right even inside Hebrew.
-- **The palette is neutral so the card photos carry the colour.** The ground is
-  a cool off-white (`--surface-page #f3f4f2`); the only dark surface is the photo
-  stage.
-- **Five accents, one job each:** custody green `#0f5b4a`, brass `#7a5f1f`
-  (money only), frost `#4a6e8f` (frozen), amber `#96591a` (warning), oxblood
-  `#8c2b2b` (irreversible).
-- **One of each shape token:** 3px radius (0 on tables and registers), 1px
-  border, one overlay shadow. No cards inside cards, no KPI tiles, no gradients.
-- **Type:** IBM Plex Sans and Plex Sans Hebrew, Plex Mono for codes, Frank Ruhl
-  Libre for display. A 10-step scale.
-- **Density and direction:** three densities (marketing / vault / warehouse) and
-  RTL built on logical properties only, enforced by `scripts/design-lint.mjs`.
+---
 
-## Shortlist
+## 1. The look: Bault + Lyra
 
-| # | Kit | Fit | Licence | Take | Don't take |
-|---|---|---|---|---|---|
-| 1 | **IBM Carbon v11**. [Figma file](https://www.figma.com/community/file/1157761560874207208), [kit page](https://carbondesignsystem.com/designing/kits/figma/) | 9/10 | Free. Figma default licence; code and icons Apache-2.0 | Data table (5 row sizes, toolbar, batch actions, expandable rows), structured list, progress indicator, inline notification, form field states, number input, date picker, file uploader, pagination, skeletons, copyable code snippet | IBM blue `#0f62fe`, inset focus ring, white `layer-01` panels, zebra rows, tiles, pill tags, the dark shell header, yellow warning, 0-radius buttons |
-| 2 | **AWS Cloudscape**. [Figma profile](https://www.figma.com/@cloudscape), [resources](https://cloudscape.design/get-started/for-designers/design-resources/) | 8/10 | Free; code Apache-2.0 | Table property filter and column preferences, split panel (list beside detail, for the warehouse bench), key-value pairs, status indicator, wizard, [bidirectionality guide](https://cloudscape.design/get-started/dev-guides/bidirectionality/) | AWS palette and fonts, rounded shadowed containers, dashboard board items |
-| 3 | **GOV.UK + MoJ kits**. [GOV.UK](https://www.figma.com/community/file/1543190867840891511), [MoJ](https://www.figma.com/community/file/1543193133973726850) | 7/10 | Free; `govuk-frontend` MIT. GDS Transport and crown restricted | Check-answers summary list (for the confirm sheet before irreversible actions), error summary, task list, MoJ Timeline (append-only, like the register) | Yellow focus, GDS Transport, black header, large body type, thick inputs |
-| 4 | **GitHub Primer**. [Primer Web](https://www.figma.com/community/file/854767373644076713) | 6.5/10 | Free; primitives MIT | Two-layer token naming (base → functional), Timeline, StateLabel, empty states, high-contrast theme idea | Branding, Mona Sans, 6px radius, pill counters, Octicons |
-| 5 | **USWDS Design Kit (beta)**. [Figma file](https://www.figma.com/community/file/1440921849343185329/uswds-design-kit-beta) | 6/10 | Public domain | Colour *grading* rule (a gap of 50+ grades guarantees AA contrast), step indicator, summary box | Public Sans, gov banner, bright blue |
-| 6 | **Obra shadcn/ui (Community)**. [Figma file](https://www.figma.com/community/file/1514746685758799870) | 4.5/10 | Free, MIT | Only its lean semantic-variable setup, as a model | Nearly everything visual |
+**Why not Lyra alone.** Lyra is shadcn's style; alone, Bault would look like thousands of other sites. Bault's colours carry meaning (custody green = safe in the vault, brass = grades and prices, oxblood = warning), IBM Plex has a matching Hebrew face, and Frank Ruhl Libre and the mono serials are what make it read as a vault. Lyra brings what Bault lacks: professional layouts, spacing and components.
 
-**Rejected:**
-- **Untitled UI PRO:** no RTL, a licence that bars exposing source, and a look
-  (Inter, purple, soft shadows, KPI cards) that is a list of `DESIGN.md`'s
-  anti-patterns.
-- **Radix Themes Figma:** the file is unofficial.
-- **Ant Design RTL:** the publisher is unverified, and the look conflicts.
-- **Generic fintech and NFT-auction kits:** dark with neon, which `DESIGN.md`
-  explicitly rejects.
+| From the kit (Lyra) | Kept from Bault |
+|---|---|
+| Spacing, sizes, text sizes | Custody green; brass for grades and prices; oxblood for warnings |
+| How buttons, inputs, tables and menus are built | IBM Plex Sans + Plex Sans Hebrew for text, Frank Ruhl Libre for headlines |
+| The page sections and layouts | Serial numbers in IBM Plex Mono |
+| Square, minimal corners | The dark photo stage for cards |
 
-## Why Carbon
+The "something new" is what we invent on top — like the graded-case card on the landing page.
 
-- It already uses **IBM Plex**, so there is no font change.
-- **Its Gray 10 theme is almost Bault's light theme:** background `#f4f4f4` vs
-  `#f3f4f2`, white fields, text `#161616` vs `#111318`. Gray 100 `#161616` is
-  almost the photo stage.
-- **Its colours are Figma variables**, so they can be repointed at Bault's tokens
-  rather than copied.
-- **Its component styles are RTL-safe:** the data table, notification and input
-  SCSS use only logical properties (83 logical, 0 physical, counted in
-  `@carbon/styles@1.115.0`).
-- **Caveat:** Carbon has no RTL *design* guidance
-  ([issue #3754](https://github.com/carbon-design-system/carbon-website/issues/3754)),
-  and the Figma kit is LTR. Borrow Cloudscape's bidirectionality rules for that.
+**Made once, at the start — this is where "keep our colours and fonts" happens:**
 
-## Merge plan
+1. Figma → *Local variables* → **Style** → duplicate the **Lyra** mode → rename it **Bault**.
+2. In the Bault mode change **only colours and fonts** (values: `shadcndesign-guide.md` §4). Everything else stays Lyra.
+3. Send me a screenshot of the variables panel (or a link, if Figma is connected). I copy the values into `apps/web/src/index.css` — the one file that holds every colour, size and font — and the whole site changes at once.
 
-`index.css` stays the source of truth. The merge happens in Figma.
+From then on: every section you drag in, set the frame to **Style: Bault**, and it already looks like the site.
 
-1. **Copy the kit.** Duplicate Carbon v11 into the Bault team. Keep only the
-   Gray 10 and Gray 100 modes, and rename them "Bault Light" and "Bault Dark".
-2. **Add the primitives.** Create a "Bault / Primitives" variable collection
-   holding the literal values from `:root` and the dark block of `index.css`.
-3. **Repoint Carbon's semantic variables at Bault's tokens:**
-   - `background` → `--surface-page`
-   - `layer-01` → `--surface-raised`
-   - `layer-02` → `--surface-sunken`
-   - `field-01` → `--surface-input`
-   - `border-subtle-01` → `--line`
-   - `border-strong-01` → `--line-strong`
-   - `text-primary` → `--ink`
-   - `text-secondary` → `--ink-2`
-   - `interactive`, `focus`, `button-primary` → `--custody`
-   - `support-error` → `--oxblood`
-   - `support-warning` → `--amber`
-   - `support-info` → `--frost`
-   - `background-inverse` → `--surface-stage`
-4. **Add what Carbon lacks:** brass and its variants, the `*-wash` values,
-   `surface-stage`, and the frozen/departed state rails.
-5. **Add density.** Create a "Density" collection with modes marketing / vault /
-   warehouse (`row-min-h` 56 / 44 / 34), and bind table row height to it.
-6. **Fix the number and type tokens.**
-   - Numbers: radius 3, flat radius 0, border 1, focus width 2, focus offset 2.
-   - Carbon's type steps: 20 → 18/22, 32 → 28/36, 42 → 48.
-7. **Strip the conflicts:**
-   - Tags become the Status component with a leading rule.
-   - Tiles are removed.
-   - Zebra rows are turned off.
-   - The batch action bar uses the ground colour instead of a brand fill.
-   - The focus ring becomes an outer 2px custody-green ring.
-8. **Check against the code.** Export the variables to DTCG JSON (e.g. with
-   Tokens Studio) and diff them against `index.css` in `design-lint.mjs`. Never
-   generate the CSS from Figma.
-9. **Handle RTL.** Keep mirrored Hebrew frames for the key templates in Figma;
-   the actual mirroring stays in CSS logical properties.
+---
 
-## Paid options (checked 13 September 2026, budget no object)
+## 2. What a design is made of — and where each part goes
 
-**No paid kit beats Carbon as the base.** None ships real RTL or Hebrew support
-in its Figma file, none starts closer to Bault's look, and none uses IBM Plex.
-Money is better spent on what Carbon lacks: customer-facing commerce patterns,
-and RTL mirroring in Figma.
+A screen in Figma is four things. Only the first two are "fonts, colours, spacing and text".
 
-| # | Kit | Price | Fit | Use it for | RTL |
-|---|---|---|---|---|---|
-| 1 | [shadcndesign Pro](https://www.shadcndesign.com/pricing) | Team (5 seats): $359 / $999 / $1,799 | 7/10 | E-commerce blocks (product lists, filters, cart, checkout, order summary). Its `Style` variable modes (square Lyra, compact Mira) as the model for Bault's density collection | None in Figma |
-| 2 | [Ant Design System for Figma](https://www.antforfigma.com/pricing) | Personal $149–$549; team price unconfirmed | 6.5/10 | Deepest back-office table patterns, compact mode | Unconfirmed |
-| 3 | [Untitled UI PRO](https://www.untitledui.com/pricing) | Studio $399 (8 seats) | 6/10 | Table cell variants, settings and detail pages. Its colours, radius and shadows can be repointed | Not mentioned |
-| 4 | [Obra shadcn/ui Pro](https://shadcn.obra.studio/products/obra-shadcn-ui-pro) | Team €299 | 6/10 | The leanest variable set to repoint; far fewer blocks | None |
-| 5 | [AlignUI Pro](https://pro.alignui.com/pricing) | Startup $399 | 5/10 | Wallet send-money and transaction flows, as reference only | None |
-| 6 | [MUI for Figma](https://mui.com/store/items/figma-react/) | $79 per editor | 4/10 | The Data Grid; the Material look is a mismatch | Not documented |
+| Layer | What it is | Where it lives in Bault | Who can do it |
+|---|---|---|---|
+| **Look** | colours, fonts, spacing, corners, sizes | `apps/web/src/index.css` (named values like `--custody`, `--sp-4`) | you, alone |
+| **Text** | every word, in Hebrew and English | `apps/web/src/shared/i18n.tsx` | you, alone |
+| **Structure** | what is on the page, and in what order | the page's `.tsx` file | code (React) |
+| **Behaviour** | what clicking does, where data comes from, empty / error / loading states | React logic + the Bault API | code |
 
-**What to buy:**
-- **shadcndesign Pro, Plus tier, Team licence ($999)**, for the marketplace and
-  checkout blocks. Premium's React code doesn't apply to Bault's plain-CSS app.
-- **[RTL Layout](https://www.rtllayout.com/) Team plan ($99 a year)**, to
-  generate mirrored Hebrew frames. Test it on a Hebrew frame first: Hebrew isn't
-  named on its site.
-- **Cheaper route:** Obra Pro team (€299) instead of shadcndesign.
+So: if your design only changes the **look** or the **text**, that's all you need. If it moves things, adds things, or has anything that *does* something — that's structure and behaviour, which is code.
 
-**How to merge it:** keep Carbon as the base and import only the blocks you need
-onto a separate page.
-1. Lock `Style` to Lyra and bind radius to Bault's 3 / 0 tokens.
-2. Alias the kit's colours to Bault's primitives and delete its shadows.
-3. Swap every text style to IBM Plex.
-4. Remove KPI tiles, cards inside cards, and gradients.
-5. Diff the exported variables against `index.css`.
+---
 
-## Two findings in Bault itself
+## 3. Complex widgets — what you already have
 
-- **Form-field borders fail WCAG 1.4.11 (non-text contrast, 3:1).**
-  `--line-strong #c3c6bf` measures 1.57:1 against the page, and `.control`'s
-  `--line` measures 1.23:1. Carbon's equivalent border is `#8d8d8d` (3.02:1). A
-  dedicated `--line-control` token is worth adding.
-- **`DESIGN.md` and the CSS disagree on `--ink-2`.** The document says `#676c74`;
-  the CSS has `#62676f`. By `DESIGN.md`'s own rule, the document is the one to fix.
+Bault has no component library (its only dependency is React). It has its **own** components, built to its design system — about thirty, plus ~60 icons:
+
+| Kind | What Bault has |
+|---|---|
+| Actions | `Button`, `IconButton` |
+| Forms | `Field` (label, hint, error), `MoneyField`, `PhotoInput` (camera/upload) |
+| Containers | `Panel`, `DetailDrawer` (side sheet), `ConfirmationModal` |
+| Navigation | `NavigationRail`, `PageHeader`, `ContextTabs` + `TabPanel`, `UserMenu`, `LanguageSwitcher`, `ThemeToggle`, `NotificationBell` |
+| Data | the `data-table` register, `StatusBadge` and status pills, `MetricCard`, bar charts, `timeline`, `stepper` / `steps`, chips, `Amount`, `Serial`, `Barcode` + label printing, card photo thumbnail and viewer |
+| Feedback | `EmptyState`, `ErrorState`, `SuccessNote`, skeleton loaders |
+| Icons | ~60 in `shared/ui/icons.tsx` |
+
+Most live in `apps/web/src/shared/ui/` (`primitives.tsx`, `DetailDrawer.tsx`, `NavigationRail.tsx`, `PageHeader.tsx`, `PhotoInput.tsx`, `Serial.tsx`, `icons.tsx`).
+
+**What Bault does *not* have yet:** a searchable dropdown (combobox), a date picker, a carousel / gallery slider, a range slider, tooltips and popovers, toast notifications, an accordion, pagination, multi-select filters, drag-and-drop.
+
+**When a kit design uses one of those, in this order:**
+
+1. **Reuse the closest Bault component.** A kit "card grid" is usually a Bault panel or register; a kit "modal" is `ConfirmationModal` or the `DetailDrawer`.
+2. **Build it in React.** Simple ones — accordion, tooltip, carousel, pagination — are a few dozen lines each, styled with Bault's values.
+3. **Add a proven library for the hard ones** — anything with complex keyboard and screen-reader rules (combobox, date picker, multi-select). The usual choice is **Radix UI primitives**: unstyled, accessible, and what shadcn itself is built on, so it matches the kit's behaviour exactly while Bault's CSS provides the look. For dates, **react-day-picker**. Every library is code the site ships and must keep updated — it's a decision per widget, not a default.
+
+**A widget is only finished when it:** works by keyboard, works right-to-left in Hebrew, works in dark mode, and works on a phone.
+
+---
+
+## 4. Route A — you design in Figma and put it in yourself
+
+### The whole process
+
+1. **Design it in Figma**, with the frame set to *Style: Bault*.
+2. **Read the values:** click each element in Figma. The right panel shows its size, spacing, colour and font.
+3. **Open the page's file** in the project, e.g. `apps/web/src/areas/customer/marketing/LandingPage.tsx`.
+4. **Write the structure** in React: the sections, headings, text and buttons, using Bault's existing pieces (`Button`, `Serial`, tables).
+5. **Write the look** in `apps/web/src/index.css`, using Bault's named values (`var(--sp-4)`, `var(--ink)`) that match what Figma showed.
+6. **Add the text** to `apps/web/src/shared/i18n.tsx`, in Hebrew and English.
+7. **Look at it:** run `pnpm dev:web`, open `http://localhost:5173`, and compare it with Figma until it matches.
+8. **Check it:** `pnpm --filter @bault/web typecheck` · `node scripts/design-lint.mjs` · `pnpm test:ux`.
+9. **Save it:** add a note to `DIVE1.md`, then commit and push to GitHub.
+
+Figma is the drawing; the code is the building. Steps 3–6 are the real work, and they need React and CSS.
+
+### Bault already has structure — so most changes are edits
+
+| Your design… | What you change |
+|---|---|
+| **Same layout, new look** (colours, spacing, fonts, corners) | only `index.css` — the structure stays; the most common case |
+| **Small layout changes** (move the price above the title, add a line, remove a section) | edit the existing tags in the page's `.tsx`: move one up, add one, delete one |
+| **Something new** (a section or screen that doesn't exist) | write new structure |
+
+### What "write the structure" means
+
+Describing in code **what is on the page, and in what order** — not how it looks. A Figma box with a title, a sentence and a button:
+
+```tsx
+<section className="landing-section">
+  <h2>{t('landing.close.title')}</h2>          {/* the title    */}
+  <p>{t('landing.close.body')}</p>             {/* the sentence */}
+  <Button variant="gold" onClick={goSignUp}>   {/* the button   */}
+    {t('landing.close.cta')}
+  </Button>
+</section>
+```
+
+- `<section>` is the box, `<h2>` a heading, `<p>` a paragraph, `<Button>` Bault's button.
+- `t('…')` pulls the words from `i18n.tsx`, so they show in English or Hebrew.
+- `className` is the name `index.css` uses to give the box its look.
+
+Your Figma layers panel is already this list: frame → title → text → button. Writing the structure is turning those layers into tags, in the same order.
+
+**Honestly:** the look and the text you can do alone today. Structure and behaviour are real React work — design it, handle the look and text, and hand the rest to me.
+
+---
+
+## 5. Route B — you design with me from their screenshots
+
+**Option 1 — you choose where each section goes.**
+
+1. Browse the kit in Figma (*Pro Blocks* → Landing / Application / E-commerce).
+2. Screenshot a section you like.
+3. Send it with one line: *"This one, for the marketplace listing page. Keep their layout, use our photos and prices."*
+4. I rebuild it in Bault — Bault + Lyra look, real data, both languages, phone and dark mode — send screenshots, and it goes live on the tunnel.
+5. You react in plain words ("tighter", "bigger photo", "the other one"). When you're happy I finish, test and write the DIVE1 note.
+
+**Option 2 — I choose.**
+
+1. Screenshot a batch you like (5–20), or give me Figma access to the whole kit.
+2. Say: *"Use these wherever you think they fit best."*
+3. I send a plan first — which section goes on which screen, and why ("E-commerce 4 for the store", "Application 12 for the vault list").
+4. You approve or change it; I build one screen at a time, and you review each before the next.
+
+**Screenshot tips:** capture the whole section; include its name from the Figma layers panel; screenshot its states (empty, hover, error) if it has them.
+
+**What I need besides the picture** — or I choose something sensible and tell you: the real text if you have it; where the data comes from; what each button does; the empty / error / loading states; a phone screenshot if the phone layout differs; real card photos only, never invented items.
+
+**Why the file still matters.** A screenshot is enough for me to build a screen *you* designed, because I rebuild with Bault's own parts rather than copying pixels. But the kit's value is its design decisions — layouts, spacing, how a checkout or a filter works — and I can only use what I can see.
+
+---
+
+## 6. Figma: which plan, and without it
+
+| Figma plan | I can read your designs | I can draw in your file | Cost |
+|---|---|---|---|
+| Starter (free) | yes — 20 requests a month | no | $0 |
+| Professional, Dev seat | yes — 200 a day | no | $12/month |
+| **Professional, Full seat** | yes — 200 a day | **yes** | **$16/month** |
+
+- Figma: *"You need a Full seat to write to Figma files with agents."* One month is enough for a design push; drop back to free after.
+- Free is enough for **you** to use the kit by hand, and for screenshots to me.
+- **Without Figma:** I design straight in the site, or as mockup pages, from your words, sketches or screenshots of sites you like. You lose moving things yourself — and the kit, which is a Figma file.
+
+---
+
+## 7. Suggested start
+
+1. Import the kit into Figma (free plan is fine).
+2. Make the **Bault** style mode (Lyra + our colours and fonts) and send me a screenshot of the variables.
+3. Screenshot 3–5 of their Landing sections you like.
+
+I apply the new look to the whole site, then rebuild the landing page from their sections — and we go from there.
+
+*Details: `shadcndesign-guide.md` (sign-in, what's in the kit, the colour values, setup for designing with me) · `DESIGN.md` (the rules) · `apps/web/src/index.css` (the real values).*

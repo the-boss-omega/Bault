@@ -465,6 +465,8 @@ describe('the words the product uses', () => {
       'faq.quotedNotice',
       // The landing page quotes the trading-card intake rule by name, not intake in general.
       'landing.price.intake',
+      // The demo on the landing stage IS a card.
+      'landing.demoAlt',
     ]);
 
     const strays = Object.entries(en)
