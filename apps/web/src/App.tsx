@@ -31,12 +31,15 @@ import {
   IconManagement,
   IconMarketplace,
   IconMenu,
+  IconShield,
   IconShippingServices,
   IconVault,
   IconWallet,
   IconWarehouse,
 } from './shared/ui/icons';
-import { AuthPage, AuthShell, type SessionUser } from './areas/customer/auth/AuthPage';
+import { AuthPage, AuthShell, type AuthMode, type SessionUser } from './areas/customer/auth/AuthPage';
+import { LandingPage } from './areas/customer/marketing/LandingPage';
+import { MembershipPage } from './areas/customer/membership/MembershipPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
 import { ResetPasswordPage } from './areas/customer/auth/ResetPasswordPage';
 import { VaultPage } from './areas/customer/vault/VaultPage';
@@ -55,8 +58,9 @@ import { AdminConsole } from './areas/admin/AdminConsole';
  * Root component and application shell.
  *
  * The shell — navigation rail, page header, workspace — is mounted once and
- * stays mounted: switching section only moves the gold selector, swaps the
- * title/breadcrumb and re-renders the workspace body. Role gating is unchanged:
+ * stays mounted: switching section only moves the custody rule on the active
+ * rail item, swaps the title/breadcrumb and re-renders the workspace body. Role
+ * gating is unchanged:
  *   - every role gets the collector features (vault, wallet, marketplace,
  *     services, shipping, notifications, profile);
  *   - staff (warehouse_operator / admin) also get the warehouse console;
@@ -86,6 +90,9 @@ const SECTIONS: readonly SectionSpec[] = [
   // purchases become on their way in.
   { key: 'inbound', labelKey: 'tab.inbound', titleKey: 'inbound.title', icon: <IconInbox /> },
   { key: 'wallet', labelKey: 'tab.wallet', titleKey: 'wallet.title', icon: <IconWallet /> },
+  // Directly after the wallet: a subscription is a money decision, and the
+  // thing somebody wants to see next to it is the balance it comes out of.
+  { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
   {
     key: 'shipping-services',
@@ -174,6 +181,33 @@ type BootState =
  */
 const TOKEN_ROUTES = ['verify-email', 'reset-password'] as const;
 
+/**
+ * The anonymous routes that are a FORM, and which form each one opens on.
+ *
+ * Everything else an anonymous visitor can ask for falls into one of two cases,
+ * and they want opposite things:
+ *
+ *   - THE BARE ROOT (`#/`, or no hash at all) is somebody arriving. They get
+ *     `LandingPage`, which is what this product spent its whole life without:
+ *     an answer to "what is this and what does it cost" that does not require an
+ *     account to read.
+ *   - A DEEP LINK (`#/vault`, `#/wallet`, …) is somebody who had a session and
+ *     no longer does. They get the sign-in form, exactly as before, because
+ *     answering "take me back to my vault" with a shop window is an obstacle
+ *     rather than a welcome.
+ *
+ * `#/welcome` is the landing page addressed by name, so the sign-in screen can
+ * link back to it and a visitor can return to it without clearing the hash.
+ */
+const AUTH_ROUTES: Record<string, AuthMode> = {
+  signin: 'signIn',
+  signup: 'signUp',
+  forgot: 'forgot',
+};
+
+/** Routes that answer with the marketing page rather than with a form. */
+const LANDING_ROUTES = ['', 'welcome'];
+
 export default function App() {
   const { t } = useI18n();
   const route = useRoute();
@@ -217,7 +251,11 @@ export default function App() {
   if ((TOKEN_ROUTES as readonly string[]).includes(route.section)) {
     const token = route.params.token ?? null;
     return (
-      <AuthShell>
+      /* `bare`: no landing stage. Somebody who has clicked a link in an email to
+         confirm an address or reset a password is not being sold anything —
+         they want one sentence and a button, and a shop window in front of it
+         is an obstacle. */
+      <AuthShell bare>
         {route.section === 'verify-email' ? (
           <VerifyEmailPage token={token} />
         ) : (
@@ -225,6 +263,26 @@ export default function App() {
         )}
       </AuthShell>
     );
+  }
+
+  /**
+   * The landing page does not wait for the session probe, and does not fail with it.
+   *
+   * It is a PUBLIC page. It asks who is signed in for nothing, renders nothing
+   * that depends on the answer, and fetches its own figures from a route that
+   * is `@Public()` on the server for exactly this reason. Putting it behind the
+   * probe bought two bad screens and no correctness: a spinner in front of a
+   * page that was ready, and — when the API is unreachable — a full-screen
+   * error where the marketing site should be. Somebody arriving at Bault for
+   * the first time while the database is down should still be able to read what
+   * Bault is; they find out the rest when they press Sign in, which is the
+   * control that actually needs a backend.
+   *
+   * It stays below `TOKEN_ROUTES` because those carry a token and are more
+   * specific, and above the boot states because it outranks all three.
+   */
+  if (boot.status !== 'ready' && LANDING_ROUTES.includes(route.section)) {
+    return <LandingPage />;
   }
 
   if (boot.status === 'loading') {
@@ -264,6 +322,7 @@ export default function App() {
   if (boot.status === 'anonymous') {
     return (
       <AuthPage
+        initialMode={AUTH_ROUTES[route.section] ?? 'signIn'}
         onSignedIn={(u) => {
           setBoot({ status: 'ready', user: u });
           navigate(
@@ -443,23 +502,26 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                   roleLabel={roleLabel}
                   suspended={suspended}
                 />
-                {/* Shell settings, together: language and theme are the same
-                    kind of choice — they change the frame, not the content —
-                    so they sit side by side rather than one in the header and
-                    one buried in a menu. */}
-                <ThemeToggle />
-                <LanguageSwitcher />
-                <NotificationBell
-                  items={notifications.items}
-                  unseen={notifications.unseen}
-                  onOpen={() => {
-                    void notifications.reload();
-                    notifications.markSeen();
-                  }}
-                  onViewAll={() => goto('notifications')}
-                  renderTitle={(n) => eventLabel(t, n.eventType)}
-                  renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
-                />
+                {/* Shell settings, together and SEGMENTED: theme, language and
+                    the bell are the same kind of control — they act on the frame
+                    rather than on the content — so they are one object with
+                    hairlines between them, not three separately-bordered boxes
+                    strung along the end of the header. */}
+                <span className="ph-controls">
+                  <ThemeToggle />
+                  <LanguageSwitcher />
+                  <NotificationBell
+                    items={notifications.items}
+                    unseen={notifications.unseen}
+                    onOpen={() => {
+                      void notifications.reload();
+                      notifications.markSeen();
+                    }}
+                    onViewAll={() => goto('notifications')}
+                    renderTitle={(n) => eventLabel(t, n.eventType)}
+                    renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+                  />
+                </span>
                 <UserMenu
                   initials={initialsFrom(user.firstName, user.lastName, user.email)}
                   name={fullName(user.firstName, user.lastName) || user.email || t('menu.account')}
@@ -481,6 +543,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             {section === 'inbound' && <InboundPage />}
             {section === 'support' && <SupportPage suspended={suspended} />}
             {section === 'wallet' && <WalletPage />}
+            {section === 'membership' && <MembershipPage />}
             {section === 'marketplace' && <MarketplacePage />}
             {section === 'shipping-services' && <ShippingServicesPage />}
             {section === 'faq' && <FaqLegalPage />}

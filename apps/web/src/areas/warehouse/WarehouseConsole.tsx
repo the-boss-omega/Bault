@@ -37,8 +37,10 @@ import { GradingSubmissions } from './GradingSubmissions';
 import { ParcelQueue } from './ParcelQueue';
 import { ReceiveParcels } from './ReceiveParcels';
 import { IntakeBench } from './IntakeBench';
+import { HouseOrdersPanel } from './HouseOrdersPanel';
 import { SupportQueue } from './SupportQueue';
 import type { InboundAddress, ParcelWorkflow } from '../../shared/parcels';
+import { boxLabel } from '../../shared/carriers';
 
 /**
  * A shelf, as the console sees one.
@@ -229,14 +231,30 @@ export function WarehouseConsole() {
   const tabs = TABS.map((key) => ({ key, label: t(`warehouse.tab.${key}` as MessageKey) }));
 
   return (
-    <>
+    /*
+      The whole console runs at WAREHOUSE density.
+
+      This screen is worked standing up, one hand on a scanner, and it was set at
+      exactly the same rhythm as the wallet: 24px panel padding, 16px field gaps,
+      56px table rows. The receiving bench needed three panels and 1,900px of
+      scroll to do one job.
+
+      `data-density` swaps four variables — panel padding, section gap, group
+      gap, row height — and drops the base size to 13px. Nothing else changes:
+      the same Panel, the same Register, the same Field, measured for the job
+      instead of rewritten for it.
+    */
+    <div data-density="warehouse">
       <ContextTabs
         label={t('warehouse.title')}
         tabs={tabs}
         active={tab}
         onSelect={goTab}
         actions={
-          <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('receiving')}>
+          /* Secondary, not primary. The bench below has the primary action of
+             every screen it appears on, and two gold buttons on one screen is
+             the same as none. */
+          <Button variant="secondary" icon={<IconPlus />} onClick={() => goTab('receiving')}>
             {t('warehouse.addInventory')}
           </Button>
         }
@@ -351,10 +369,28 @@ export function WarehouseConsole() {
             <IntakeBench
               initialParcelId={focusParcelId}
               onLog={append}
-              onDone={loadSummary}
+              onDone={async () => {
+                await loadSummary();
+                /*
+                 * The BOX is stale too, not only the counters.
+                 *
+                 * Booking a unit out of a parcel changes that parcel's row —
+                 * its unit count, and the line under its button that reads
+                 * "Nothing has come out of this parcel yet". Only `loadSummary`
+                 * ran here, so after an intake the queue still said nothing had
+                 * come out of the box while the bench three inches below it said
+                 * one unit had. Two statements about the same box, contradicting
+                 * each other on one screen.
+                 */
+                setQueueVersion((v) => v + 1);
+              }}
               onParcelClosed={() => setFocusParcelId('')}
             />
           </Panel>
+
+          {/* 4. Cards sold from the Bault store: on the record already, still in
+              the store's box. Label them and put them on a shelf. */}
+          <HouseOrdersPanel onLog={append} />
 
           {log.length > 0 && (
             <Panel title={t('warehouse.log.title')} flush>
@@ -423,7 +459,7 @@ export function WarehouseConsole() {
           <SupportQueue onChanged={loadSummary} />
         </TabPanel>
       )}
-    </>
+    </div>
   );
 }
 
@@ -581,7 +617,7 @@ function InventoryRows({
 /**
  * Move something that is already in the vault to another shelf.
  *
- * Both fields take what a scanner produces. The item field accepts the BC-
+ * Both fields take what a scanner produces. The item field accepts the SN-
  * barcode printed on the item's own label (or its serial); the shelf field
  * accepts the BIN- barcode on the shelf. Before this, both ends of a relocate
  * demanded the internal id — a string that is printed on nothing — so the one
@@ -615,7 +651,7 @@ function RelocatePanel({
   return (
     <div className="form-grid row-baseline">
       <Field label={t('warehouse.relocate.scanItem')} hint={t('warehouse.relocate.scanItemHint')}>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="BC-…" dir="ltr" />
+        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="SN-…" dir="ltr" />
       </Field>
       <Field label={t('warehouse.relocate.scanShelf')} hint={t('warehouse.relocate.scanShelfHint')}>
         <input value={scanBin} onChange={(e) => setScanBin(e.target.value)} placeholder="BIN-XXXXXXXX" dir="ltr" />
@@ -692,7 +728,7 @@ function HoldPanel({
   return (
     <div className="form-grid row-baseline">
       <Field label={t('warehouse.hold.scanItem')} hint={t('warehouse.hold.scanItemHint')}>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="BC-…" dir="ltr" />
+        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="SN-…" dir="ltr" />
       </Field>
       <div className="field">
         <span className="field-label" aria-hidden="true">
@@ -923,6 +959,7 @@ interface ShipmentDetail {
   carrier: string | null;
   itemIds: string[];
   destinationAddress: string;
+  boxSize: string | null;
 }
 
 /**
@@ -998,6 +1035,13 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
         <div className="stack stack--tight">
           <p className="infobox" dir="auto">
             {detail.destinationAddress}
+          </p>
+          {/* The collector was quoted for this box. Packing it in a bigger one
+              ships a parcel that costs more than they paid. */}
+          <p className="field-hint">
+            {detail.boxSize
+              ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
+              : t('warehouse.dispatch.anyBox')}
           </p>
 
           <div className="field">

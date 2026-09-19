@@ -9,6 +9,7 @@ import { shippingAddress } from '../acc/address.schema';
 import { itemWeightGrams } from '../inv/item-classes';
 import { DEFAULT_COUNTRY_OF_ORIGIN, DEFAULT_HS_CODE, needsCustoms } from './shipping-options';
 import type { Destination, ParcelProfile } from './carriers';
+import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
 /** One line of the commercial invoice — per item, because customs is per item. */
 export interface CustomsLine {
@@ -86,6 +87,43 @@ export class ParcelProfileService {
   }
 
   /**
+   * The box that was chosen, and whether these contents fit in it.
+   *
+   * Every path that stores or prices a box asks the same question, so it is
+   * answered once.
+   */
+  boxFor(
+    boxSize: string | null | undefined,
+    items: (typeof item.$inferSelect)[],
+    measurements: ItemMeasurements,
+  ): { box: ShippingBox | undefined; problems: BoxProblem[]; boxAutoSelected: boolean } {
+    const contents = {
+      totalWeightGrams: measurements.totalWeightGrams,
+      typeClasses: items.map((i) => i.typeClass),
+    };
+
+    const chosen = shippingBox(boxSize);
+    if (chosen) return { box: chosen, problems: checkBox(chosen, contents), boxAutoSelected: false };
+
+    /**
+     * Nobody picked one, so pick the one the warehouse would.
+     *
+     * This used to answer `undefined`, which meant no dimensions reached the
+     * carrier, which meant the parcel was billed on weight alone plus a flat
+     * 120 g — and a light-but-bulky parcel was under-quoted by whatever its
+     * volume was worth. The quote was then the charge, so Bault absorbed the
+     * difference on every unboxed shipment.
+     *
+     * The fix is not to make the collector choose. Most people have no idea what
+     * a dimensional divisor is and should not have to: the warehouse was always
+     * going to pick a box, and `chooseBox` picks the same one it would — the
+     * smallest that fits. An explicit choice still wins, because a collector who
+     * wants their card in a bigger box for their own reasons may have one.
+     */
+    return { box: chooseBox(contents), problems: [], boxAutoSelected: true };
+  }
+
+  /**
    * Resolve where the parcel is going.
    *
    * A saved address is preferred over free text because it carries a real
@@ -105,7 +143,16 @@ export class ParcelProfileService {
         .limit(1);
       if (!a || a.userId !== userId) throw AppError.notFound('Address not found');
       return {
-        destination: { country: a.country.toUpperCase(), postalCode: a.postalCode },
+        // The whole address, not two fields of it. A saved address already has
+        // the street and city a carrier needs; throwing them away here is what
+        // made a real rate impossible to ask for.
+        destination: {
+          country: a.country.toUpperCase(),
+          postalCode: a.postalCode,
+          name: a.recipient,
+          street1: a.line1,
+          city: a.city,
+        },
         formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${a.postalCode}, ${a.country}`,
         recipientName: a.recipient,
       };
@@ -176,12 +223,14 @@ export class ParcelProfileService {
     insuredValueMinor: number;
     signatureRequired: boolean;
     originFacilityCode?: string | null;
-    dimensionsCm?: { length: number; width: number; height: number };
+    /** The box the collector chose, if they chose one. */
+    box?: ShippingBox;
   }): ParcelProfile {
     return {
       destination: args.destination,
       weightGrams: args.measurements.totalWeightGrams,
-      dimensionsCm: args.dimensionsCm,
+      dimensionsCm: args.box?.dimensionsCm,
+      packagingGrams: args.box?.tareGrams,
       itemCount: args.itemCount,
       // A domestic parcel has no customs value at all, whatever was typed.
       customsValueMinor: needsCustoms(args.destination.country) ? args.declaredValueMinor : 0,

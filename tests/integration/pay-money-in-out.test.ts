@@ -259,7 +259,7 @@ describe('PAY money in and out', () => {
     const res = await fetch(`${base}/pricing/list`);
     expect(res.status).toBe(200);
     const list = (await res.json()) as {
-      groups: { group: string; entries: { actionType: string; model: string; value: number }[] }[];
+      groups: { group: string; entries: { actionType: string; itemClass: string | null; model: string; value: number }[] }[];
       note: string;
     };
 
@@ -270,8 +270,11 @@ describe('PAY money in and out', () => {
 
     // One entry per action/class — a superseded rule beside its replacement
     // turns a price list into a puzzle.
-    const keys = all.map((e) => e.actionType);
+    // Intake is priced per class, so the key is the pair, not the action.
+    const keys = all.map((e) => `${e.actionType}::${e.itemClass ?? ''}`);
     expect(new Set(keys).size).toBe(keys.length);
+    const card = all.find((e) => e.actionType === 'intake' && e.itemClass === 'trading_card');
+    expect(card?.value).toBe(100);
 
     // Grouped by what somebody is doing, not by action_type prefix.
     const shipping = list.groups.find((g) => g.group === 'shipping');

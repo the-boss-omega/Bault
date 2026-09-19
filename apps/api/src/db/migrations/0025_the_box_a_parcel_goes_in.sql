@@ -1,0 +1,18 @@
+-- 0025 — The box a parcel goes out in.
+--
+-- Every outbound quote priced the contents plus a flat 120 g allowance for
+-- "packaging", and nothing else. `dimensionsCm` was carried by the carrier
+-- catalogue and by both shipping adapters, and nothing ever filled it in — so a
+-- single card in a rigid mailer and a shoebox of sleeved commons that weighed the
+-- same were the same parcel to every carrier, and the second was under-quoted by
+-- whatever its volume was worth.
+--
+-- A collector can now choose the box (`SHIPPING_BOXES` in shp/boxes.ts). It is
+-- STORED on the shipment rather than living only in the quote, because picking a
+-- service re-rates from this row: a box the quote knew about and the row did not
+-- would be charged as no box at all, and the price a collector saw would not be
+-- the price they paid.
+--
+-- Nullable, and null means what every shipment before this meant: priced on
+-- weight, and the warehouse picks the box.
+ALTER TABLE "shipment" ADD COLUMN IF NOT EXISTS "box_size" text;

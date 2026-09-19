@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { barcodeSvg, type BarcodeOptions } from './barcode128';
 import { useT } from './i18n';
+import { IconPrint } from './ui/icons';
 
 /**
  * Scannable Code 128 barcode + a button that hands the label to the operating
@@ -169,7 +170,8 @@ export function BarcodePrintAllButton({
       title={t('barcode.printAll', { count: labels.length })}
       onClick={() => printBarcodes(labels)}
     >
-      🖨 {t('barcode.printAll', { count: labels.length })}
+      <IconPrint />
+      {t('barcode.printAll', { count: labels.length })}
     </button>
   );
 }
@@ -178,7 +180,7 @@ export function BarcodePrintAllButton({
 export function BarcodePrintButton({
   value,
   caption,
-  className = 'btn btn--ghost',
+  className = 'btn btn--ghost btn--sm',
 }: {
   value: string;
   caption?: string;
@@ -193,7 +195,8 @@ export function BarcodePrintButton({
       aria-label={t('barcode.printOf', { value })}
       onClick={() => printBarcode(value, caption)}
     >
-      🖨 {t('barcode.print')}
+      <IconPrint />
+      {t('barcode.print')}
     </button>
   );
 }

@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, ilike, not, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, not, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { FIXTURE_EMAIL_DOMAIN } from '../../shared/fixtures';
-import { userAccount } from '../acc/acc.schema';
+import { loginAttempt, userAccount } from '../acc/acc.schema';
 import { item, custodyEvent, itemChangeHistory } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
 import { transaction } from '../mkt/mkt.schema';
@@ -376,4 +376,69 @@ export class AdmService {
   listStorageFeeRuns() {
     return this.db.select().from(storageFeeRun).orderBy(sql`${storageFeeRun.runAt} desc`);
   }
+  /**
+   * Who signed in, and who tried to.
+   *
+   * Read from `login_attempt`, the append-only log every exit from
+   * `AuthService.login` writes to. Before it existed the honest answer to "has
+   * anybody been guessing passwords?" was "we would never know": failures were
+   * not recorded anywhere, and successes were an audit row with no user on it.
+   *
+   * The summary is the part an administrator acts on. A run of failures against
+   * one account from several addresses is somebody working through a list; the
+   * `suspicious` rows name the accounts that have crossed the line in the last
+   * day so nobody has to eyeball two hundred rows to see it.
+   */
+  async recentLogins(limit = 200) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const rows = await this.db
+      .select({
+        id: loginAttempt.id,
+        occurredAt: loginAttempt.occurredAt,
+        outcome: loginAttempt.outcome,
+        identifier: loginAttempt.identifier,
+        userId: loginAttempt.userId,
+        ip: loginAttempt.ip,
+        userAgent: loginAttempt.userAgent,
+        username: userAccount.username,
+        email: userAccount.email,
+        role: userAccount.role,
+      })
+      .from(loginAttempt)
+      .leftJoin(userAccount, eq(sql`${userAccount.id}::text`, loginAttempt.userId))
+      .orderBy(desc(loginAttempt.occurredAt))
+      .limit(Math.min(Math.max(limit, 1), 500));
+
+    const [totals] = await this.db
+      .select({
+        successes: sql<number>`count(*) filter (where ${loginAttempt.outcome} = 'success')::int`,
+        failures: sql<number>`count(*) filter (where ${loginAttempt.outcome} <> 'success')::int`,
+        failingAddresses: sql<number>`count(distinct ${loginAttempt.ip}) filter (where ${loginAttempt.outcome} <> 'success')::int`,
+      })
+      .from(loginAttempt)
+      .where(gte(loginAttempt.occurredAt, since));
+
+    /** Five failures in a day is past a typo and into a pattern. */
+    const suspicious = await this.db
+      .select({
+        identifier: loginAttempt.identifier,
+        failures: sql<number>`count(*)::int`,
+        addresses: sql<number>`count(distinct ${loginAttempt.ip})::int`,
+        lastAt: sql<Date>`max(${loginAttempt.occurredAt})`,
+      })
+      .from(loginAttempt)
+      .where(and(gte(loginAttempt.occurredAt, since), not(eq(loginAttempt.outcome, 'success'))))
+      .groupBy(loginAttempt.identifier)
+      .having(sql`count(*) >= 5`)
+      .orderBy(desc(sql`count(*)`));
+
+    return {
+      since,
+      last24h: totals ?? { successes: 0, failures: 0, failingAddresses: 0 },
+      suspicious,
+      attempts: rows,
+    };
+  }
+
 }

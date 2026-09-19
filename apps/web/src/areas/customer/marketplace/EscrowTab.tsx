@@ -9,15 +9,7 @@ import {
   type EscrowDeal,
   type EscrowEvent,
 } from '../../../shared/escrow';
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  Field,
-  Panel,
-  StatusBadge,
-  SuccessNote,
-} from '../../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { IconAlert, IconShield, IconUsers } from '../../../shared/ui/icons';
 
@@ -186,21 +178,18 @@ export function EscrowTab({ meId }: { meId: string | null }) {
             <input value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
           </Field>
 
-          <div className="field">
-            <span className="field-label">{t('esc.value')}</span>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input inputMode="decimal" dir="ltr" value={value} onChange={(e) => setValue(e.target.value)} />
-            </div>
-            {belowFloor && terms && (
-              <span className="field-hint">
-                {t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })}
-              </span>
-            )}
-            {feePreview !== null && !belowFloor && (
-              <span className="field-hint">{t('esc.feePreview', { amount: formatUsd(feePreview) })}</span>
-            )}
-          </div>
+          <MoneyField
+            label={t('esc.value')}
+            value={value}
+            onChange={setValue}
+            hint={
+              belowFloor && terms
+                ? t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })
+                : feePreview !== null
+                  ? t('esc.feePreview', { amount: formatUsd(feePreview) })
+                  : undefined
+            }
+          />
 
           <Field label={t('esc.settlement')} hint={t('esc.settlementHint')}>
             <select

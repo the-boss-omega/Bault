@@ -4,10 +4,10 @@ import { eq, or } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
-import { userAccount } from './acc.schema';
+import { loginAttempt, userAccount } from './acc.schema';
 import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../shared/names';
 import { VerificationService } from './verification.service';
-import { SessionService } from './session.service';
+import { SessionService, clampUserAgent, type ClientOrigin } from './session.service';
 import type { AuthUser } from '../sec/auth-context';
 
 /**
@@ -100,6 +100,7 @@ export class AuthService {
   async login(
     identifier: string,
     password: string,
+    origin: ClientOrigin = {},
   ): Promise<{ user: AuthUser; rawToken: string; expiresAt: Date }> {
     // Same normalization as registration, so a username typed in any casing
     // resolves to the row that was stored (Requirement: usernames normalized
@@ -112,7 +113,9 @@ export class AuthService {
       .limit(1);
 
     // Same error whether the account is unknown or the password is wrong (no user enumeration).
+    // Recorded either way — the log says which, the response does not.
     if (!u || !(await argon2.verify(u.passwordHash, password))) {
+      await this.recordAttempt(normalized, u?.id ?? null, 'bad_credentials', origin);
       throw AppError.unauthenticated('Invalid credentials');
     }
     /**
@@ -126,6 +129,7 @@ export class AuthService {
      * even though `POST /auth/verify-email/resend` existed the whole time.
      */
     if (u.status === 'pending') {
+      await this.recordAttempt(normalized, u.id, 'unverified', origin);
       throw AppError.emailUnverified(
         'Your email address has not been confirmed yet. Check your inbox for the link we sent — we can send a fresh one.',
       );
@@ -148,13 +152,44 @@ export class AuthService {
      *
      * `closed` remains a hard refusal: that state is terminal.
      */
-    if (u.status === 'closed') throw AppError.accountSuspended();
-    if (u.status !== 'active' && u.status !== 'suspended') throw AppError.accountSuspended();
+    if (u.status !== 'active' && u.status !== 'suspended') {
+      // `closed` and anything unrecognised: the password was right, the door stays shut.
+      await this.recordAttempt(normalized, u.id, 'refused', origin);
+      throw AppError.accountSuspended();
+    }
 
-    const { rawToken, expiresAt } = await this.sessions.create(u.id);
+    const { rawToken, expiresAt } = await this.sessions.create(u.id, origin);
+    await this.recordAttempt(normalized, u.id, 'success', origin);
     return { user: { id: u.id, role: u.role, status: u.status }, rawToken, expiresAt };
   }
 
+  /**
+   * One row per sign-in attempt, in `login_attempt`.
+   *
+   * Never allowed to break sign-in: if the log cannot be written the person
+   * still gets the answer they were owed, and the failure is logged instead. A
+   * security log that can lock everybody out when the disk is full is a denial
+   * of service with good intentions.
+   */
+  private async recordAttempt(
+    identifier: string,
+    userId: string | null,
+    outcome: 'success' | 'bad_credentials' | 'unverified' | 'refused',
+    origin: ClientOrigin,
+  ): Promise<void> {
+    try {
+      await this.db.insert(loginAttempt).values({
+        identifier: identifier.slice(0, 254),
+        userId,
+        outcome,
+        ip: origin.ip ?? null,
+        userAgent: clampUserAgent(origin.userAgent),
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[auth] could not record a sign-in attempt', e);
+    }
+  }
 }
 
 /** Postgres reports a violated UNIQUE index as SQLSTATE 23505. */

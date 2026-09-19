@@ -76,6 +76,12 @@ export class AdmController {
     return this.yield_.byCustomer();
   }
 
+  /** Sign-in attempts, successful and failed, with where they came from. */
+  @Get('logins')
+  logins() {
+    return this.adm.recentLogins();
+  }
+
   @Get('users')
   users() {
     return this.adm.listUsers();

@@ -26,3 +26,8 @@ coverage/
 /data/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Local files that must never be published: `assets/` is the web app
+# publicDir, so anything left in it ships in the bundle and is downloadable
+# from any deployed URL.
+_local/

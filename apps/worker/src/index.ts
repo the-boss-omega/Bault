@@ -9,6 +9,7 @@ import { refreshTracking } from './jobs/tracking-refresh';
 import { dispatchOutbox } from './jobs/outbox-dispatch';
 import { runStorageFees } from './jobs/storage-fee';
 import { expireUnpaidShipments } from './jobs/shipment-expiry';
+import { renewMemberships } from './jobs/membership-renewal';
 
 /**
  * Worker entry point.
@@ -52,6 +53,11 @@ async function main(): Promise<void> {
     // collector who tops up their wallet at 09:00 and cancels at 09:05 should
     // not find the parcel released at 03:00 the next morning regardless.
     { name: JobName.SHIPMENT_EXPIRY, cron: '20 * * * *', run: () => expireUnpaidShipments(pool) },
+    // Hourly, and BEFORE the storage sweep's 02:00 in the ordering that
+    // matters: a cycle that rolled overnight must be open again before the
+    // sweep asks which items a membership covers, or a member is billed
+    // storage for the hours between their renewal and the job that grants it.
+    { name: JobName.MEMBERSHIP_RENEWAL, cron: '40 * * * *', run: () => renewMemberships(pool) },
   ];
 
   for (const job of schedule) {

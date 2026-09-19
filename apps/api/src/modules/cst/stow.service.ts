@@ -48,7 +48,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * asking twice in a row is sent to the same place.
  *
  * SCANNING. Every identifier in this system is printed on a label as a barcode —
- * `BIN-…` on a shelf, `BC-…` on an item — and every warehouse endpoint used
+ * `BIN-…` on a shelf, `SN-…` on an item — and every warehouse endpoint used
  * to accept only the internal id, which appears on no label anywhere. An
  * operator with a scanner in their hand physically could not drive the console
  * with it. `resolveBin` and `resolveItem` take whatever the scanner produced.

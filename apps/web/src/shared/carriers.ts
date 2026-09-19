@@ -34,9 +34,19 @@ export interface AddOnInfo {
   description: string;
 }
 
+/** A box a parcel can go out in. Mirrors `SHIPPING_BOXES` in shp/boxes.ts. */
+export interface BoxInfo {
+  key: string;
+  label: string;
+  dimensionsCm: { length: number; width: number; height: number };
+  tareGrams: number;
+  maxContentsGrams: number;
+}
+
 export interface ServiceCatalogue {
   services: CarrierServiceInfo[];
   addOns: AddOnInfo[];
+  boxes: BoxInfo[];
   maxInsuredValueMinor: number;
   signatureRequiredAboveMinor: number;
   paymentWindowDays: number;
@@ -65,6 +75,19 @@ export interface QuotedRate {
   handlingMinor: number;
   insurancePremiumMinor: number;
   addOnsMinor: number;
+  /**
+   * What the member's tier paid towards this rate. `totalMinor` is already net
+   * of it; this is here so the card can SAY so rather than show a smaller number
+   * with no explanation.
+   */
+  membershipCover?: {
+    tier: string;
+    insuranceMinor: number;
+    postageMinor: number;
+    rushMinor: number;
+    addOns: Record<string, number>;
+  } | null;
+  coveredMinor?: number;
   totalMinor: number;
   recommended: boolean;
 }
@@ -72,6 +95,7 @@ export interface QuotedRate {
 export interface Quote {
   destination: { country: string; postalCode: string };
   totalWeightGrams: number;
+  boxSize: string | null;
   weightEstimated: boolean;
   itemCount: number;
   insuredValueMinor: number;
@@ -79,7 +103,7 @@ export interface Quote {
   signatureRequired: boolean;
   needsCustoms: boolean;
   rates: QuotedRate[];
-  optionProblems: { field: string; message: string }[];
+  optionProblems: { field: string; message: string; rule?: string }[];
 }
 
 const SERVICE_KEY: Record<string, MessageKey> = {
@@ -103,6 +127,26 @@ export function serviceLabel(
 ): string {
   const key = SERVICE_KEY[service.key ?? service.serviceKey ?? ''];
   return key ? t(key) : `${service.carrier} ${service.serviceLevel}`;
+}
+
+const BOX_KEY: Record<string, MessageKey> = {
+  rigid_mailer: 'ship.box.rigid_mailer',
+  small: 'ship.box.small',
+  medium: 'ship.box.medium',
+  large: 'ship.box.large',
+  extra_large: 'ship.box.extra_large',
+};
+
+/** A box's name, falling back to the server's English label for one this build does not know. */
+export function boxLabel(t: TranslateFn, box: { key: string; label?: string }): string {
+  const key = BOX_KEY[box.key];
+  return key ? t(key) : (box.label ?? box.key);
+}
+
+/** "33 × 25 × 15 cm". */
+export function formatBoxDimensions(box: BoxInfo): string {
+  const { length, width, height } = box.dimensionsCm;
+  return `${length} × ${width} × ${height} cm`;
 }
 
 /**

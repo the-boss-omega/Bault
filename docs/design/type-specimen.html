@@ -1,0 +1,243 @@
+<!doctype html>
+<!--
+  Bault type specimen. Open it directly from disk (file://) — the @font-face
+  URLs below are relative to this file, so it works without the dev server.
+
+  It exists to answer one question that a token table cannot: do Hebrew and
+  Latin read as ONE voice at display size, and does the UI face hold at 12px in
+  both scripts. Every pairing decision recorded in DESIGN.md was made here.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bault — type specimen</title>
+    <style>
+      @font-face {
+        font-family: 'IBM Plex Sans';
+        font-weight: 400;
+        src: url('../../assets/fonts/plex-sans-400-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Sans';
+        font-weight: 600;
+        src: url('../../assets/fonts/plex-sans-600-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Sans Hebrew';
+        font-weight: 400;
+        src: url('../../assets/fonts/plex-sans-hebrew-400-hebrew.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Sans Hebrew';
+        font-weight: 600;
+        src: url('../../assets/fonts/plex-sans-hebrew-600-hebrew.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        font-weight: 400;
+        src: url('../../assets/fonts/plex-mono-400-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Frank Ruhl Libre';
+        font-weight: 500;
+        src: url('../../assets/fonts/frank-ruhl-500-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Frank Ruhl Libre';
+        font-weight: 500;
+        src: url('../../assets/fonts/frank-ruhl-500-hebrew.woff2') format('woff2');
+        unicode-range: U+0590-05FF, U+FB1D-FB4F;
+      }
+      @font-face {
+        font-family: 'Frank Ruhl Libre';
+        font-weight: 700;
+        src: url('../../assets/fonts/frank-ruhl-700-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Frank Ruhl Libre';
+        font-weight: 700;
+        src: url('../../assets/fonts/frank-ruhl-700-hebrew.woff2') format('woff2');
+        unicode-range: U+0590-05FF, U+FB1D-FB4F;
+      }
+
+      :root {
+        --ui: 'IBM Plex Sans', 'IBM Plex Sans Hebrew', sans-serif;
+        --display: 'Frank Ruhl Libre', serif;
+        --mono: 'IBM Plex Mono', monospace;
+        --ink: #111318;
+        --graphite: #2a2d33;
+        --steel: #6b7078;
+        --line: #d9dbd7;
+      }
+      body {
+        margin: 0;
+        padding: 48px;
+        background: #f3f4f2;
+        color: var(--graphite);
+        font-family: var(--ui);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+      section {
+        max-width: 1100px;
+        margin: 0 0 56px;
+      }
+      h2 {
+        font-family: var(--ui);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--steel);
+        margin: 0 0 20px;
+        padding-block-end: 8px;
+        border-block-end: 1px solid var(--line);
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+        align-items: start;
+      }
+      .display {
+        font-family: var(--display);
+        font-weight: 500;
+        font-size: 48px;
+        line-height: 1.15;
+        color: var(--ink);
+        margin: 0 0 12px;
+      }
+      .display-64 {
+        font-size: 64px;
+      }
+      .scale p {
+        margin: 0 0 10px;
+        color: var(--ink);
+      }
+      .mono {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+      }
+      .tab {
+        font-variant-numeric: tabular-nums;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      td,
+      th {
+        padding: 6px 16px;
+        border-block-end: 1px solid var(--line);
+        text-align: start;
+      }
+      td.num {
+        text-align: end;
+        font-variant-numeric: tabular-nums;
+      }
+      .rtl {
+        direction: rtl;
+      }
+      .note {
+        font-size: 13px;
+        color: var(--steel);
+        max-width: 62ch;
+      }
+    </style>
+  </head>
+  <body>
+    <section>
+      <h2>Display — Frank Ruhl Libre, both scripts, 48px / 64px</h2>
+      <div class="pair">
+        <div>
+          <p class="display">Everything you own, in one place you can see it.</p>
+          <p class="display display-64">Custody, not storage.</p>
+        </div>
+        <div class="rtl">
+          <p class="display">כל מה שיש לכם, במקום אחד שאפשר לראות.</p>
+          <p class="display display-64">משמורת, לא אחסון.</p>
+        </div>
+      </div>
+      <p class="note">
+        One family across two scripts. Check: stroke contrast, x-height relative to cap-height,
+        and whether the Hebrew looks like the same hand as the Latin at 64px.
+      </p>
+    </section>
+
+    <section>
+      <h2>UI — IBM Plex Sans / IBM Plex Sans Hebrew, the whole scale</h2>
+      <div class="pair scale">
+        <div>
+          <p style="font-size: 36px; font-weight: 600">Break-Even Watch</p>
+          <p style="font-size: 28px; font-weight: 600">Inspected escrow</p>
+          <p style="font-size: 22px; font-weight: 600">Custody register</p>
+          <p style="font-size: 18px">Storage accrued since intake</p>
+          <p style="font-size: 16px">
+            The database, not the shelf, is the authority on who owns each item.
+          </p>
+          <p style="font-size: 14px">Frozen — actions are unavailable while a dispute is open.</p>
+          <p style="font-size: 13px; color: var(--steel)">Received 4 Mar 2026 · Bault New Jersey</p>
+          <p style="font-size: 12px; color: var(--steel)">SHELF · ZONE · ITEMS · REVENUE</p>
+        </div>
+        <div class="rtl">
+          <p style="font-size: 36px; font-weight: 600">מעקב נקודת איזון</p>
+          <p style="font-size: 28px; font-weight: 600">נאמנות בבדיקה</p>
+          <p style="font-size: 22px; font-weight: 600">יומן משמורת</p>
+          <p style="font-size: 18px">אחסון שנצבר מאז הקליטה</p>
+          <p style="font-size: 16px">מסד הנתונים, לא המדף, הוא הסמכות על מי מחזיק בכל פריט.</p>
+          <p style="font-size: 14px">מוקפא — הפעולות אינן זמינות כל עוד המחלוקת פתוחה.</p>
+          <p style="font-size: 13px; color: var(--steel)">נקלט 4 במרץ 2026 · Bault New Jersey</p>
+          <p style="font-size: 12px; color: var(--steel)">מדף · אזור · פריטים · הכנסה</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Codes — IBM Plex Mono, and nothing else</h2>
+      <p class="mono" style="font-size: 22px">SN-ROS105-0008</p>
+      <p class="mono" style="font-size: 16px">BIN-XHMHPADV · PKG-4QT7LM2E · SN-EVS218-0010</p>
+      <p class="note">
+        A serial must survive being read aloud, compared down a column and typed from a label.
+        Check 0/O and 1/l/I at 16px.
+      </p>
+    </section>
+
+    <section>
+      <h2>Money — Plex Sans with tabular numerals, decimal-aligned</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Charge</th>
+            <th class="num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Intake</td>
+            <td class="num">$5.00</td>
+          </tr>
+          <tr>
+            <td>Storage, Aug</td>
+            <td class="num">$12.40</td>
+          </tr>
+          <tr>
+            <td>Grading — PSA</td>
+            <td class="num">$1,275.00</td>
+          </tr>
+          <tr>
+            <td>Sale settlement</td>
+            <td class="num">$3,200.00</td>
+          </tr>
+          <tr>
+            <td>Platform fee</td>
+            <td class="num">−$160.00</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note">
+        Money is set in the UI face, not the mono face: it is prose that happens to be a number, and
+        tabular numerals already give it the column alignment mono was being used for.
+      </p>
+    </section>
+  </body>
+</html>

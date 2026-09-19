@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, useId } from 'react';
-import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
 /* ============================================================
@@ -149,6 +149,84 @@ export function Field({
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${id}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * An amount somebody types, with its currency mark.
+ *
+ * This existed as a hand-assembled shape repeated in nine files:
+ *
+ *   <div class="field">
+ *     <span class="field-label">Amount</span>
+ *     <div class="money-input"><span aria-hidden>$</span><input inputmode="decimal"></div>
+ *   </div>
+ *
+ * A `<span>` caption and a `<div>` wrapper — so nothing associated the label
+ * with the control. Some sites had grown an `id` and an `htmlFor` over time;
+ * five had not, and the axe sweep caught two of them (the wallet's cash-in form
+ * and the escrow form) because those were the screens it visited. The other
+ * three — the shipment composer, the consignment form and the grading form —
+ * have the identical shape and are converted with them: every one is a place
+ * where somebody types a number that moves real money.
+ *
+ * The association cannot be forgotten here, because the component owns both
+ * ends of it. `dir="ltr"` because an amount is a Latin run whatever the page
+ * direction, `inputMode="decimal"` for the numeric keypad, and `spellCheck` off
+ * because a red squiggle under a number is noise.
+ */
+export function MoneyField({
+  label,
+  hint,
+  error,
+  mark = '$',
+  value,
+  onChange,
+  id,
+  ...rest
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+  /** `$` for money, `%` for a rate. Decorative — the label says which. */
+  mark?: string;
+  value: string;
+  onChange: (value: string) => void;
+  id?: string;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'id'>) {
+  const generated = useId();
+  const controlId = id ?? generated;
+  const describedBy = error ? `${controlId}-error` : hint ? `${controlId}-hint` : undefined;
+
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={controlId}>
+        {label}
+      </label>
+      <div className="money-input">
+        <span aria-hidden="true">{mark}</span>
+        <input
+          {...rest}
+          id={controlId}
+          inputMode="decimal"
+          dir="ltr"
+          spellCheck={false}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+      {error ? (
+        <span className="field-error" id={`${controlId}-error`} role="alert">
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="field-hint" id={`${controlId}-hint`}>
           {hint}
         </span>
       ) : null}

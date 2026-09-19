@@ -6,7 +6,7 @@
  * seeded database, on purpose — that is what makes them worth having. The cost
  * is that every intake they perform creates a REAL item, in a real collector's
  * vault, with a real append-only custody trail. One full run leaves 112 of them:
- * blank descriptions, `BC-…` serials, no photographs, sitting alongside the
+ * blank descriptions, `SN-…` serials, no photographs, sitting alongside the
  * eight genuine Rayquaza cards in the seeded catalogue, in every shelf count and
  * in the inventory report.
  *

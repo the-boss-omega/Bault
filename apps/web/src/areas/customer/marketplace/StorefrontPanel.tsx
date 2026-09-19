@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { itemClassLabel } from '../../../shared/itemClasses';
+import { Amount, Serial } from '../../../shared/ui/Serial';
 import { formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
 import { Button, EmptyState, Panel, SuccessNote } from '../../../shared/ui/primitives';
-import { IconMarketplace, IconSearch } from '../../../shared/ui/icons';
+import { IconSearch } from '../../../shared/ui/icons';
 
 interface StorefrontListing {
   id: string;
@@ -100,18 +102,34 @@ export function StorefrontPanel({
             <EmptyState
               title={t('market.store.empty')}
               text={t('market.store.emptyText')}
-              icon={<IconMarketplace />}
             />
           ) : (
-            <ul className="card-grid">
+            /*
+              A public storefront is the vault's register, read-only: the same
+              columns, the same components, the same order — photograph, price,
+              serial, name. It was the last surface still titling an item with
+              its `type_class`, and the only listing surface not using the
+              register at all.
+            */
+            <ul className="card-grid card-grid--listings">
               {listings.map((l) => (
-                <li key={l.id} className="card">
-                  <CardPhotoThumb serialNumber={l.serialNumber} title={l.description || l.typeClass} />
-                  <h3 className="card-title">{l.typeClass}</h3>
-                  <p className="card-desc">{l.description || '—'}</p>
-                  <p className="price" dir="ltr">
-                    {formatUsd(l.askingPrice)}
-                  </p>
+                <li key={l.id} className="card card--listing">
+                  <div className="card-art">
+                    <CardPhotoThumb serialNumber={l.serialNumber} title={l.description || ''} />
+                  </div>
+                  <div className="card-id">
+                    <p className="price">
+                      <Amount>{formatUsd(l.askingPrice)}</Amount>
+                    </p>
+                    <h3 className="card-title">
+                      <Serial value={l.serialNumber} />
+                    </h3>
+                    <p className="card-desc">{l.description || '—'}</p>
+                  </div>
+                  <div className="card-state">
+                    <span className="card-sub">{itemClassLabel(t, l.typeClass)}</span>
+                  </div>
+                  <div />
                 </li>
               ))}
             </ul>

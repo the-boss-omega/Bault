@@ -167,9 +167,9 @@ export function clearLastVisitedSection(): void {
 }
 
 /**
- * Helpers bound to the current route: switch tab, or open/close a drawer, while
- * keeping everything else about the route (filters live in component state, the
- * selected record lives in the URL).
+ * Helpers bound to the current route: switch tab, open or close a record, and
+ * merge parameters — so the selected record AND the filters that produced the
+ * list it came from both live in the URL.
  */
 export function useNavigation(route: Route) {
   const goSection = useCallback(
@@ -188,6 +188,36 @@ export function useNavigation(route: Route) {
     [route.section, route.tab, route.params],
   );
 
+  /**
+   * Merge a set of parameters into the current route.
+   *
+   * This is what puts a marketplace FILTER in the URL rather than in component
+   * state. A filtered shelf is a place — it can be linked to, bookmarked,
+   * reloaded and sent to somebody — and holding it in `useState` meant a
+   * collector who found a graded slab under $200 had no way to show anybody
+   * else. A value of `''` or `null` removes its key rather than writing an empty
+   * parameter, so the hash of an unfiltered browse is `#/marketplace/browse` and
+   * not `#/marketplace/browse?type=&condition=&min=&max=`.
+   *
+   * `replace` by default: typing in a filter box should not fill the history
+   * with one entry per keystroke, and Back should leave the marketplace rather
+   * than walk backwards through a search.
+   */
+  const setParams = useCallback(
+    (next: Record<string, string | null | undefined>, options: { replace?: boolean } = {}) => {
+      const params = { ...route.params };
+      for (const [key, value] of Object.entries(next)) {
+        if (value === '' || value === null || value === undefined) delete params[key];
+        else params[key] = value;
+      }
+      navigate(
+        { section: route.section, tab: route.tab, params },
+        { replace: options.replace ?? true },
+      );
+    },
+    [route.section, route.tab, route.params],
+  );
+
   const closeRecord = useCallback(
     (key: string) => {
       const params = { ...route.params };
@@ -197,5 +227,5 @@ export function useNavigation(route: Route) {
     [route.section, route.tab, route.params],
   );
 
-  return { goSection, goTab, openRecord, closeRecord };
+  return { goSection, goTab, openRecord, closeRecord, setParams };
 }

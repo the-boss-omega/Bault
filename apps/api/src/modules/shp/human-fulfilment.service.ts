@@ -24,6 +24,7 @@ import {
   whiteGloveFeeAction,
 } from './fulfilment';
 import { formatMinor } from '../../shared/money';
+import { MembershipService } from '../mem/membership.service';
 
 /**
  * The two ways out of the vault that are a person rather than a parcel.
@@ -61,6 +62,7 @@ export class HumanFulfilmentService {
     private readonly outbox: OutboxService,
     private readonly profiles: ParcelProfileService,
     private readonly shipments: ShipmentService,
+    private readonly memberships: MembershipService,
   ) {}
 
   /* ------------------------------------------------------------------
@@ -334,16 +336,20 @@ export class HumanFulfilmentService {
       throw new AppError(ErrorCode.CONFLICT, 'That show is full for pickups', 409);
     }
 
-    const balance = await this.ledger.balanceOf(userId);
-    if (balance.amount < show.feeMinor) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `Short by ${formatMinor(show.feeMinor - balance.amount)}.`,
-        409,
-      );
-    }
-
     return this.db.transaction(async (tx) => {
+      /**
+       * A membership may cover the pickup. Worked out BEFORE the balance check,
+       * which used to run against the full fee outside the transaction — so a
+       * member whose tier pays for the pickup could be refused for being short of
+       * money they were never going to be charged.
+       */
+      const waiver = await this.memberships.waive(tx as Database, userId, 'show_pickup', show.feeMinor);
+      const feeMinor = show.feeMinor - waiver.waivedMinor;
+      const balance = await this.ledger.balanceOf(userId, tx as Database);
+      if (balance.amount < feeMinor) {
+        throw new AppError(ErrorCode.CONFLICT, `Short by ${formatMinor(feeMinor - balance.amount)}.`, 409);
+      }
+
       const [created] = await tx
         .insert(shipment)
         .values({
@@ -356,7 +362,7 @@ export class HumanFulfilmentService {
           destinationCountry: 'US',
           destinationPostalCode: '',
           customerNotes: input.customerNotes?.trim() || null,
-          cost: show.feeMinor,
+          cost: feeMinor,
           currency: DEFAULT_CURRENCY,
           status: 'rates_selected',
           // The show is the delivery date. Nothing is estimated about it.
@@ -365,14 +371,14 @@ export class HumanFulfilmentService {
         .returning();
       if (!created) throw AppError.validation('Failed to book the pickup');
 
-      if (show.feeMinor > 0) {
+      if (feeMinor > 0) {
         const [c] = await tx
           .insert(charge)
           .values({
             userId,
             actionType: 'shipping',
             pricingRuleSnapshot: { showPickup: true, eventId: show.id, showName: show.name },
-            amount: show.feeMinor,
+            amount: feeMinor,
             currency: DEFAULT_CURRENCY,
             paymentMeans: 'wallet',
             status: 'settled',
@@ -384,7 +390,7 @@ export class HumanFulfilmentService {
           {
             userId,
             type: 'service_charge',
-            amount: show.feeMinor,
+            amount: feeMinor,
             direction: 'debit',
             currency: DEFAULT_CURRENCY,
             referenceType: 'charge',

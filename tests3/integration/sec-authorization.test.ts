@@ -49,6 +49,7 @@ const STAFF_ONLY: readonly [string, string][] = [
   ['GET', '/support/queue'],
   ['GET', '/support/queue/count'],
   ['GET', '/escrow/queue'],
+  ['GET', '/marketplace/house/orders/queue'],
 ];
 
 /** Admin-only routes — a warehouse operator must not reach these either. */
@@ -61,6 +62,8 @@ const ADMIN_ONLY: readonly [string, string][] = [
   ['GET', '/admin/wallet-requests'],
   ['POST', '/pricing/rules'],
   ['GET', '/finance/chargebacks/reversible'],
+  ['GET', '/marketplace/house/manage'],
+  ['POST', '/marketplace/house/listings'],
 ];
 
 /** Routes that must answer with no session at all. */
@@ -71,6 +74,7 @@ const PUBLIC_ROUTES: readonly string[] = [
   '/content/intake-policy',
   '/pricing/list',
   '/marketplace/listings',
+  '/marketplace/house/listings',
   '/shipping/destinations/AU',
 ];
 

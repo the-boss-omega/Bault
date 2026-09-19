@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
 
 /**
@@ -51,6 +51,8 @@ export const shipmentGroup = pgTable(
     recipientName: text('recipient_name').notNull(),
     destinationCountry: text('destination_country').notNull().default('US'),
     destinationPostalCode: text('destination_postal_code').notNull(),
+    /** The structured address, carried from the shipment that opened the group. */
+    destinationDetail: jsonb('destination_detail'),
     status: shipmentGroupStatus('status').notNull().default('forming'),
     /** Free text the payer wants the warehouse to see. */
     notes: text('notes'),

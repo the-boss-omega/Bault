@@ -1,4 +1,4 @@
-import { useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useReducer, type ReactNode } from 'react';
 import { useT } from '../i18n';
 import {
   INITIAL_NAV_RAIL_STATE,
@@ -36,11 +36,17 @@ export interface NavDestination {
  * collapsed width permanently (`.workspace { margin-inline-start: var(--rail-w) }`),
  * so expanding and collapsing never shifts the page.
  *
- * The active destination is marked by the gold vault selector — a translucent
- * bronze surface with a machined gold notch on the rail's trailing edge, which
- * slides between rows. It is positioned by measurement and is rendered in BOTH
- * states, so the collapsed rail still says plainly where you are; `aria-current`
- * carries the same fact to assistive technology.
+ * The active destination is marked the way every other state in this product is
+ * marked: a 2px custody-green rule on the item's leading edge, its icon at full
+ * colour and its label at full weight. `aria-current="page"` carries the same
+ * fact to assistive technology, and the mark is present in BOTH rail states, so
+ * a collapsed rail still says plainly where you are.
+ *
+ * It used to be a separate element — a translucent bronze plate with a machined
+ * gold notch and a turned rivet — absolutely positioned, measured with a
+ * `ResizeObserver` on every expand, collapse and window resize, and animated
+ * between rows. Five decorative decisions and a layout read per frame to say
+ * "you are here", which a border now says with none.
  */
 export function NavigationRail({
   destinations,
@@ -136,9 +142,8 @@ export function NavigationRail({
 }
 
 /**
- * One block of rail items plus the sliding selector that belongs to it. The
- * selector is a single element positioned by measurement, so it animates between
- * rows; when the active destination lives in the other block it is hidden.
+ * One block of rail items. No measurement, no observer, no positioned element —
+ * the active row marks itself.
  */
 function RailGroup({
   destinations,
@@ -151,40 +156,8 @@ function RailGroup({
   onNavigate: (key: string) => void;
   foot?: boolean;
 }) {
-  const listRef = useRef<HTMLUListElement>(null);
-  const [selector, setSelector] = useState<{ top: number; height: number } | null>(null);
-  const activeIndex = destinations.findIndex((d) => d.key === active);
-
-  // Measure the active row after layout so the selector lands exactly on it,
-  // and re-measure whenever the rail resizes (expand/collapse, window resize).
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    if (activeIndex < 0) {
-      setSelector(null);
-      return;
-    }
-    function measure() {
-      // Query the rows specifically — the selector itself is also a child of
-      // this list, so a positional index would be off by one.
-      const el = list?.querySelectorAll<HTMLElement>(':scope > li')[activeIndex];
-      if (!el) return;
-      setSelector({ top: el.offsetTop, height: el.offsetHeight });
-    }
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(list);
-    return () => observer.disconnect();
-  }, [activeIndex, destinations.length]);
-
   return (
-    <ul ref={listRef} className={`rail-nav${foot ? ' rail-nav--foot' : ''}`}>
-      <span
-        className="rail-selector"
-        aria-hidden="true"
-        hidden={!selector}
-        style={selector ? { transform: `translateY(${selector.top}px)`, height: selector.height } : undefined}
-      />
+    <ul className={`rail-nav${foot ? ' rail-nav--foot' : ''}`}>
       {destinations.map((destination) => {
         const isActive = destination.key === active;
         return (

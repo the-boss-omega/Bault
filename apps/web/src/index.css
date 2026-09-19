@@ -1,170 +1,202 @@
+@import './fonts.css';
+
 /* ============================================================
-   Bault design system.
+   BAULT — CUSTODY GRADE
+   ============================================================
 
-   ONE system, two themes, and a type scale everything is measured on.
+   One design system, two themes, two scripts, three densities.
 
-   Direction is inherited from <html dir>, which the i18n provider flips
-   between rtl (he) and ltr (en). Every rule uses CSS logical properties,
-   so the whole shell — including the navigation rail and the detail
-   drawer — mirrors to the leading/trailing edge automatically.
+   THE IDEA. Bault holds other people's property and is the sole record of who
+   owns it, where it is and what it costs. The interface that says so should read
+   like a precision instrument in daylight — a well-run lab, or the back office
+   of a serious institution that happens to love trading cards. Trust here comes
+   from legibility and from never losing a decimal point, not from mood. So the
+   palette is neutral and the collector's photographs are the most saturated
+   thing on any screen.
 
-   ------------------------------------------------------------
-   WHY THE TYPEFACE CHANGED
-   ------------------------------------------------------------
-   The interface was set in Libertinus Math — a mathematical typesetting
-   face — and the stylesheet asked it for 54 different bold and semibold
-   declarations. The family ships ONE weight. Every heading, every emphasised
-   figure and every button label in the product was therefore a synthetic
-   bold: the browser smearing a 400 outline sideways. That is visible at any
-   size and is the single clearest tell of an interface nobody set type for.
+   WHAT THAT MEANS IN TOKENS.
 
-   Worse, the DEFAULT locale is Hebrew, and neither Libertinus nor its STIX
-   fallback covers a single Hebrew glyph. The default experience fell through
-   to Rubik/Assistant — not self-hosted either — and from there to whatever
-   serif the machine happened to have. The product's own primary language was
-   rendering in an unspecified font.
+     · One radius (3px), one border weight (1px), ONE shadow — and the shadow is
+       only ever under something floating. A panel is not a card; it is a heading
+       and a rule.
+     · Five accents, one job each, and none of them decorative: custody green
+       (in Bault's care), brass (money), frost (frozen), amber (warning),
+       oxblood (irreversible). If a colour appears, it is saying something.
+     · Ink in three weights on an off-white with a cool cast. No grey text on a
+       coloured ground, anywhere.
+     · Three densities off one set of variables, so a component gets denser in
+       the warehouse rather than being rewritten for it.
 
-   So the UI is now set in the platform's own interface face: SF Pro on Apple,
-   Segoe UI Variable on Windows, Roboto on Android, Inter/Cantarell on Linux.
-   Every one is a real optical-sized UI family with genuine weights, full
-   Hebrew coverage, and hinting tuned for screens. It also keeps the project's
-   stated principle — no third-party request to render its own text — and keeps
-   it *better* than before, because now nothing falls back to a guess.
+   THE DIRECTION IS INHERITED, NEVER BRANCHED ON. `<html dir>` is flipped by the
+   i18n provider; everything below is written in logical properties, so Hebrew
+   and English are the same layout mirrored, not two layouts.
 
-   Identity does not come from an exotic file. It comes from the scale below,
-   from the mono face carrying every serial, shelf and money figure (this is a
-   product where everything has a number), from the navy-and-gold palette, and
-   from the spacing.
+   THE LEGACY BLOCK at the end of `:root` maps the old navy/gold/teal vocabulary
+   onto this one. It is not a shim to be tolerated: 4 600 lines of stylesheet
+   reference those names, and re-pointing them is what makes the whole product
+   change at once instead of screen by screen. New rules use the new names.
    ============================================================ */
 
 :root {
   color-scheme: light dark;
 
   /* ============================================================
-     TYPE
+     TYPE — three faces, ten sizes, three weights
+     ============================================================
+
+     IBM Plex Sans and IBM Plex Sans Hebrew are one family across two scripts:
+     same designer, same skeleton, same vertical proportions. A Hebrew screen and
+     an English screen therefore share a rhythm instead of being asked to
+     resemble each other.
+
+     IBM Plex Mono carries codes. A serial, a bin, a parcel or a barcode — read
+     aloud, compared down a column, typed from a label into a scanner. NOTHING
+     ELSE is mono, and money in particular is not: money is prose that happens to
+     be a number, and `tabular-nums` already gives it the column alignment mono
+     was being borrowed for.
+
+     Frank Ruhl Libre is the display face, in BOTH scripts, at marketing sizes
+     only. It is a Hebrew family with a Latin companion drawn for it, so the two
+     scripts share a hand by construction. See docs/design/type-specimen.html.
      ============================================================ */
 
-  /**
-   * The interface face. Real weights, full Hebrew coverage, no network.
-   * `-apple-system` and `BlinkMacSystemFont` must lead for Safari.
-   */
-  --font-ui:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI',
-    Roboto, 'Helvetica Neue', 'Noto Sans Hebrew', Arial, sans-serif;
+  --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Hebrew', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-display: 'Frank Ruhl Libre', Georgia, 'Times New Roman', serif;
 
   /**
-   * The mono face, and the most characteristic decision in this system.
+   * Ten sizes. Nothing may sit between them, and the two that used to
+   * (11px eyebrows, 15px "reading copy") are folded onto their neighbours.
+   */
+  --fs-caption: 12px; /* table headers, timestamps, meta */
+  --fs-sm: 13px;      /* dense cells, warehouse body */
+  --fs-base: 14px;    /* controls, vault body */
+  --fs-md: 16px;      /* reading copy */
+  --fs-lg: 18px;      /* panel titles */
+  --fs-xl: 22px;      /* section headings */
+  --fs-2xl: 28px;     /* page titles */
+  --fs-3xl: 36px;     /* the one figure on a screen that deserves it */
+  --fs-4xl: 48px;     /* marketing */
+  --fs-5xl: 64px;     /* marketing, one line only */
+
+  --lh-tight: 1.15;  /* display */
+  --lh-snug: 1.35;   /* controls, table cells, headings in UI */
+  --lh-normal: 1.5;  /* body */
+
+  /**
+   * Three weights, and `bold` IS 600.
    *
-   * Everything in Bault has an identifier — BIN-QJLTDJH4 on a shelf,
-   * SN-DR97-0001 on a card, PKG-… on a parcel, an amount on a ledger row. All
-   * of them are read aloud, compared down a column, or typed from a label into
-   * a scanner. All of them are set in mono, so a serial always LOOKS like a
-   * serial and a column of money always lines up. Nothing else is.
+   * The loaded faces ship 400/500/600 and `font-synthesis: none` is set below,
+   * so a rule asking for 700 gets 600 back with no smearing — which is what it
+   * should have been asking for. (The old stylesheet asked for 550 twelve
+   * times, a weight that exists in no static face.)
    */
-  --font-mono:
-    ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono',
-    Menlo, Consolas, monospace;
-
-  /**
-   * The scale. Ten steps, and nothing may sit between them.
-   *
-   * The old stylesheet had 21 distinct sizes including 12.5px, 13.5px and
-   * 14.5px — quarter-point nudges made screen by screen, which is what makes a
-   * product feel assembled rather than designed. These are the only sizes.
-   */
-  --fs-micro: 11px;   /* uppercase eyebrows, table headers */
-  --fs-caption: 12px; /* hints, timestamps, meta */
-  --fs-sm: 13px;      /* dense table cells, secondary text */
-  --fs-base: 14px;    /* controls, most body copy in a dense app */
-  --fs-md: 15px;      /* reading copy, panel body */
-  --fs-lg: 17px;      /* panel titles */
-  --fs-xl: 20px;      /* section headings */
-  --fs-2xl: 26px;     /* page titles */
-  --fs-3xl: 34px;     /* hero figures */
-  --fs-4xl: 44px;     /* the balance, and nothing else */
-
-  --lh-tight: 1.2;   /* headings and figures */
-  --lh-snug: 1.35;   /* controls, table cells */
-  --lh-normal: 1.55; /* reading copy */
-
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
-  --fw-bold: 700;
+  --fw-bold: 600;
 
-  /** Uppercase micro-labels need air or they read as a smudge. */
-  --track-label: 0.06em;
-  --track-tight: -0.011em; /* large sizes only; UI faces are set for text sizes */
+  --track-label: 0.06em;   /* the few genuine small-caps labels that remain */
+  --track-tight: -0.01em;  /* display sizes only */
 
   /* ============================================================
-     PALETTE — light
+     GROUND — off-white with a cool cast, and true white reserved
      ============================================================
-     Six named colours used unequally on purpose. Navy carries structure,
-     gold means "premium / selected" and appears rarely, teal means
-     "interactive", and the status three are deliberately outside the brand so
-     a failure can never be mistaken for an accent.
+     Deliberately NOT warm cream: cream plus a serif is a mood, and this product
+     is not selling a mood. The cool cast keeps a photograph of a card looking
+     like the card rather than like a scan.
      ============================================================ */
 
-  --navy: #0b1f33;
-  --navy-900: #071523;
-  --navy-800: #0b1f33;
-  --navy-700: #12293f;
-  --navy-600: #17324b;
-  --navy-500: #1e3d59;
+  --surface-page: #f3f4f2;
+  /**
+   * A panel sits on the page, at the page's own colour. Panels are separated by
+   * spacing and a hairline, never by being a lighter rectangle with a shadow —
+   * which is the whole reason this product had cards inside cards inside cards.
+   */
+  --surface-raised: #f3f4f2;
+  /** One step darker: register rails, table headers, the disabled ground. */
+  --surface-sunken: #e9ebe7;
+  --surface-sunken-2: #dfe2dc;
+  /** True white, and ONLY for a field somebody types into. */
+  --surface-input: #ffffff;
+  /**
+   * The photography stage. The one local dark moment in a light product, and it
+   * exists for exactly one reason: a collector's card should be lit like an
+   * object, not like a row.
+   */
+  --surface-stage: #16181c;
 
-  --gold: #e0b44c;
-  --gold-bright: #edc76a;
-  --gold-deep: #b78f33;
-  --bronze: #7a6130;
-  --gold-surface: rgba(224, 180, 76, 0.18);
-  --gold-surface-strong: rgba(224, 180, 76, 0.32);
+  --line: #dcded9;
+  --line-strong: #c3c6bf;
 
-  --teal: #00b8a9;
-  --teal-strong: #009a8e;
-  --teal-surface: rgba(0, 184, 169, 0.14);
-
-  --mint: #80e1d1;
-
-  --graphite: #26323d;
-  --graphite-soft: #3a4956;
-
-  /* Surfaces. A slight cool bias rather than a neutral grey — chosen, not
-     inherited. */
-  --bg: #f2f6f8;
-  --surface: #ffffff;
-  --surface-2: #eaf1f3;
-  --surface-3: #dde8eb;
-  --surface-sunken: #e6eef0;
-  --border: #dbe5e9;
-  --border-strong: #c1d0d6;
-
-  --text: #1a252f;
-  --text-2: #566672;
-  --text-muted: #7d8d98;
-  --text-on-navy: #f3f7f8;
-  --text-on-accent: #071523;
-
-  --success: #0f7a63;
-  --success-bg: #e2f7f2;
-  --error: #b3322c;
-  --error-bg: #fbeae9;
-  --warning: #a8720f;
-  --warning-bg: #fdf1dc;
-  --info: #00857a;
-  --info-bg: #e0f5f2;
-  --violet: #4f4a86;
-  --violet-bg: #eeedf7;
-
-  /* Colours that were hard-coded mid-stylesheet, named so both themes can
-     answer for them. */
-  --success-strong: var(--success-strong);
-  --error-strong: var(--error-strong);
-  --warning-strong: var(--warning-strong);
-  --warning-tint: var(--warning-tint);
-  --link: var(--link);
+  /* ---- Ink. Three weights, all measured against --surface-page. ---- */
+  --ink: #111318;      /* headings — 16.7:1, AAA */
+  --ink-body: #2a2d33; /* body — 12.5:1, AAA */
+  /*
+   * Secondary ink, and it is darker than the page alone would require.
+   *
+   * #676c74 cleared AA on the page ground at 4.79:1 — but the register header,
+   * the navigation rail and every other sunken surface are one step darker than
+   * the page, and the same ink measures 4.43:1 there and fails. axe found it on
+   * 61 of 104 screen/locale/viewport combinations, always on a `<th>` or on the
+   * rail's wordmark.
+   *
+   * A secondary colour has to clear the bar on the DARKEST surface it is used
+   * on, not the lightest.
+   */
+  --ink-2: #62676f;    /* 5.16:1 on the page, 4.74:1 on the sunken surface */
+  --ink-on-dark: #f3f4f2;
+  --ink-on-accent: #ffffff;
 
   /* ============================================================
-     SPACE — a 4px base, named by intent as well as by size
+     ACCENTS — five, one job each, no decoration
+     ============================================================
+     Each has an INK value that passes AA as text on the page, a MARK value for
+     rules, rails and seals where 3:1 is the bar and the extra chroma is worth
+     having, and a WASH for the rare filled ground. Nothing else is coloured.
+     ============================================================ */
+
+  /** In Bault's care: verified, active, custody confirmed. 7.3:1. */
+  --custody: #0f5b4a;
+  --custody-mark: #0f5b4a;
+  --custody-wash: #e4ede9;
+
+  /** Money. Prices, wallet, ledger, fees. Never a highlight, never a border. */
+  --brass: #7a5f1f;      /* 5.5:1 as text */
+  --brass-mark: #9a7a2e; /* 3.7:1 — rules, seals and figures ≥ 22px only */
+  --brass-wash: #f1ecdf;
+
+  /** Frozen. A held card, a paused action, a state somebody else controls. */
+  --frost: #4a6e8f; /* 4.9:1 */
+  --frost-mark: #4a6e8f;
+  --frost-wash: #e7ecf1;
+
+  /** Warning. Break-Even Watch approaching, a deadline, a thing about to bite. */
+  --amber: #96591a;      /* 5.1:1 as text */
+  --amber-mark: #a8641a; /* 4.2:1 — rails and bars */
+  --amber-wash: #f6ece0;
+
+  /** Irreversible, destructive, disputed. 7.6:1. */
+  --oxblood: #8c2b2b;
+  --oxblood-mark: #8c2b2b;
+  --oxblood-wash: #f5e8e7;
+
+  /* ---- On the dark surfaces ----
+     The photography stage and the landing field are the only dark grounds in a
+     light product, and the ink on them is not the ink anywhere else. Named here
+     rather than written as `rgba(243, 244, 242, 0.55)` five times, which is how
+     a palette acquires colours nobody chose. */
+  --ink-on-dark-2: rgba(243, 244, 242, 0.72);
+  --ink-on-dark-3: rgba(243, 244, 242, 0.5);
+  --line-on-dark: rgba(243, 244, 242, 0.16);
+  /** Custody green lifted to clear AA against the stage. */
+  --custody-on-dark: #4fbfa2;
+
+  /** The scrim under an overlay. One value, whatever is being covered. */
+  --scrim: rgba(17, 19, 24, 0.46);
+
+  /* ============================================================
+     SPACE — 4px base
      ============================================================ */
   --sp-1: 4px;
   --sp-2: 8px;
@@ -176,63 +208,65 @@
   --sp-10: 40px;
   --sp-12: 48px;
   --sp-16: 64px;
+  --sp-24: 96px;
 
-  /** Named rhythms, so a panel's padding is a decision made once. */
-  --gap-field: var(--sp-2);    /* label → control */
-  --gap-group: var(--sp-4);    /* control → control */
-  --gap-section: var(--sp-6);  /* panel → panel */
-  --gap-page: var(--sp-8);     /* header → first panel */
+  /* ============================================================
+     DENSITY — one component, three jobs
+     ============================================================
+     The vault is the default. Marketing is generous because it is being read;
+     the warehouse is compact because it is being worked, standing up, one hand
+     on a scanner. These four variables are what every panel, row and field is
+     measured in, so switching `data-density` changes the rhythm of the whole
+     subtree rather than a component being written three times.
+     ============================================================ */
   --pad-panel: var(--sp-6);
-  --pad-cell: var(--sp-3) var(--sp-4);
+  --gap-section: var(--sp-6);
+  --gap-group: var(--sp-4);
+  --gap-field: var(--sp-2);
+  --gap-page: var(--sp-6);
+  --pad-cell: 10px var(--sp-4);
+  --row-min-h: 44px;
 
   /* ============================================================
-     RADIUS — four steps, down from six
+     SHAPE — one radius, one border, one shadow
      ============================================================ */
-  --r-xs: 6px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-pill: 999px;
+  --radius: 3px;
+  /** Tables, registers and photography stages have square corners. */
+  --radius-flat: 0;
+  --border-w: 1px;
+
+  /**
+   * The only shadow in the product, and it means "this is floating above the
+   * page and will go away": popover, sheet, dialog, toast. A resting surface
+   * never has one.
+   */
+  --shadow-overlay: 0 1px 2px rgba(17, 19, 24, 0.08), 0 12px 32px rgba(17, 19, 24, 0.16);
+
+  /* ---- Focus. One treatment, everywhere, both directions. ---- */
+  --focus-color: var(--custody);
+  --focus-width: 2px;
+  --focus-offset: 2px;
 
   /* ============================================================
-     ELEVATION — three levels, each with a job
+     MOTION — confirms, never entertains
      ============================================================
-     Resting surface, floating thing, and the rail. A fourth would be
-     decoration; anything above the drawer is a modal and gets a scrim
-     instead of a bigger shadow.
+     150–250 ms, ease-out, one purpose per animation. An irreversible action is
+     deliberately slower, because the pause is the point.
      ============================================================ */
-  --shadow-card: 0 1px 2px rgba(11, 31, 51, 0.04), 0 4px 14px rgba(11, 31, 51, 0.06);
-  --shadow-pop: 0 2px 6px rgba(11, 31, 51, 0.08), 0 12px 32px rgba(11, 31, 51, 0.14);
-  --shadow-hero: 0 12px 34px rgba(11, 31, 51, 0.18);
-  --shadow-rail: 0 0 40px rgba(11, 31, 51, 0.22);
-  --shadow-rail-open: 12px 0 36px rgba(11, 31, 51, 0.26);
-  --ring: 0 0 0 3px var(--teal-surface);
-
-  /* ============================================================
-     MOTION
-     ============================================================
-     Short enough to feel like response rather than animation. Anything a
-     person triggers resolves inside 200ms; only the rail, which is a
-     deliberate reveal, is allowed longer.
-     ============================================================ */
-  --dur-xs: 90ms;
-  --dur-sm: 130ms;
-  --dur-md: 180ms;
-  --dur-lg: 220ms;
-  --dur-rail-open: 200ms;
-  --dur-rail-close: 165ms;
-  --dur-selector: 190ms;
-  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 250ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ============================================================
      LAYOUT
      ============================================================ */
-  --rail-w: 76px;
+  --rail-w: 72px;
   --rail-w-open: 232px;
-  --drawer-w: 420px;
-  --content-max: 1560px;
-  /** Reading copy stops here; a 1560px-wide paragraph is unreadable. */
+  --drawer-w: 440px;
+  /** The item sheet. Wide enough for details and the custody register abreast. */
+  --sheet-w: min(960px, 100vw);
+  --content-max: 1440px;
   --measure: 68ch;
 
   --z-content: 1;
@@ -242,110 +276,262 @@
   --z-drawer: 90;
   --z-modal: 100;
 
+  /* ============================================================
+     LEGACY VOCABULARY → this system
+     ============================================================
+     Every name below is referenced by rules further down this file. Pointing
+     them here is what re-skins 4 600 lines at once; it is also the record of
+     which old idea became which new one.
+
+     The five that mattered most were BROKEN: `--success-strong`, `--error-strong`,
+     `--warning-strong`, `--warning-tint` and `--link` each declared themselves in
+     terms of themselves in this block, so in the light theme all five resolved to
+     nothing. `a { color: var(--link) }` was therefore invalid at computed-value
+     time, the declaration was discarded, and the property INHERITED — which is
+     why every link in the default theme computed to body ink and was invisible
+     as a link. They have real values now.
+     ============================================================ */
+
+  --navy: var(--ink);
+  --navy-900: #0b0d10;
+  --navy-800: var(--ink);
+  --navy-700: #1b1e23;
+  --navy-600: #23272d;
+  --navy-500: #2f343b;
+
+  --gold: var(--brass-mark);
+  --gold-bright: #b08f3c;
+  --gold-deep: var(--brass);
+  --bronze: var(--brass);
+  --gold-surface: var(--brass-wash);
+  --gold-surface-strong: #e7dcc1;
+
+  --teal: var(--custody);
+  --teal-strong: #0c4a3c;
+  --teal-surface: var(--custody-wash);
+  --mint: #7fb3a4;
+
+  --graphite: var(--ink-body);
+  --graphite-soft: var(--ink-2);
+
+  --bg: var(--surface-page);
+  --surface: var(--surface-raised);
+  --surface-2: var(--surface-sunken);
+  --surface-3: var(--surface-sunken-2);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+
+  --text: var(--ink-body);
+  --text-2: var(--ink-2);
+  --text-muted: var(--ink-2);
+  --text-on-navy: var(--ink-on-dark);
+  --text-on-accent: var(--ink-on-accent);
+
+  --success: var(--custody);
+  --success-bg: var(--custody-wash);
+  --success-strong: #0c4a3c;
+  --error: var(--oxblood);
+  --error-bg: var(--oxblood-wash);
+  --error-strong: #742222;
+  --warning: var(--amber);
+  --warning-bg: var(--amber-wash);
+  --warning-strong: #7d4a15;
+  --warning-tint: #faf3ea;
+  --info: var(--frost);
+  --info-bg: var(--frost-wash);
+  /** There is no violet in this system; it was a sixth status with no job. */
+  --violet: var(--ink-2);
+  --violet-bg: var(--surface-sunken);
+  --link: var(--custody);
+
+  /** One radius means the pill radius is the radius. There are no pills. */
+  --r-xs: var(--radius);
+  --r-sm: var(--radius);
+  --r-md: var(--radius);
+  --r-lg: var(--radius);
+  --r-pill: var(--radius);
+
+  /** One shadow means four of these are `none`. Elevation is for overlays. */
+  --shadow-card: none;
+  --shadow-pop: var(--shadow-overlay);
+  --shadow-hero: none;
+  --shadow-rail: none;
+  --shadow-rail-open: var(--shadow-overlay);
+  --ring: none;
+
+  --dur-xs: var(--dur-fast);
+  --dur-sm: var(--dur-fast);
+  --dur-md: var(--dur);
+  --dur-lg: var(--dur-slow);
+  --dur-rail-open: var(--dur);
+  --dur-rail-close: var(--dur-fast);
+  --dur-selector: var(--dur-fast);
+  --ease-out: var(--ease);
+
+  --fs-micro: var(--fs-caption);
+
   font-family: var(--font-ui);
   font-size: var(--fs-base);
   line-height: var(--lh-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-synthesis: none; /* real weights only — never a faked bold again */
+  font-synthesis: none; /* real weights only — never a faked bold */
+}
+
+/* ============================================================
+   DENSITY SCOPES
+   ============================================================
+   Applied with `data-density` on a section wrapper. The same Panel, the same
+   Register, the same Field — measured differently because the job is different.
+   ============================================================ */
+
+[data-density='marketing'] {
+  --pad-panel: var(--sp-16);
+  --gap-section: var(--sp-24);
+  --gap-group: var(--sp-8);
+  --gap-field: var(--sp-3);
+  --gap-page: var(--sp-16);
+  --pad-cell: var(--sp-4) var(--sp-5);
+  --row-min-h: 56px;
+}
+
+[data-density='warehouse'] {
+  --pad-panel: var(--sp-4);
+  --gap-section: var(--sp-4);
+  --gap-group: var(--sp-2);
+  --gap-field: var(--sp-1);
+  --gap-page: var(--sp-4);
+  --pad-cell: 6px var(--sp-3);
+  --row-min-h: 34px;
+  --fs-base: 13px;
 }
 
 /* ============================================================
    PALETTE — dark
    ============================================================
-   Not an inversion. The navy that carries structure in the light theme
-   becomes the GROUND in dark, which is why the two feel like one product
-   rather than a theme and its negative: the rail barely changes, and the
-   workspace comes to meet it.
+   Not an inversion, and not a second brand. The ground becomes the colour the
+   photography stage already is, the accents lift until they clear AA against
+   it, and every relationship in the light theme holds: money is still brass,
+   frozen is still frost, and the ink is still three weights apart.
 
-   Three states, as browsers actually report them: an explicit choice stamps
-   `data-theme`, and the default "system" setting stamps nothing — so the
-   media query is guarded against an explicit light choice, and the
-   `[data-theme='dark']` block repeats the tokens so a toggle wins in both
-   directions.
+   Three states, as browsers report them: an explicit choice stamps
+   `data-theme`, and the default "system" stamps nothing — so the media query is
+   guarded against an explicit light choice, and the `[data-theme='dark']` block
+   repeats the tokens so the toggle wins in both directions.
    ============================================================ */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0a1420;
-    --surface: #0f1d2c;
-    --surface-2: #16283a;
-    --surface-3: #1e3348;
-    --surface-sunken: #0a1420;
-    --border: #24384c;
-    --border-strong: #35506a;
+    --surface-page: #14161a;
+    --surface-raised: #14161a;
+    --surface-sunken: #1c1f24;
+    --surface-sunken-2: #24282e;
+    --surface-input: #1c1f24;
+    --surface-stage: #0c0d10;
 
-    --text: #e8eef4;
-    --text-2: #a3b4c2;
-    --text-muted: #7b8fa0;
+    --line: #2b2f36;
+    --line-strong: #3d434c;
 
-    --success: #4ec9a6;
-    --success-bg: #0e2f28;
-    --success-strong: #6fd8b8;
-    --error: #f08a84;
-    --error-bg: #341614;
-    --error-strong: #f4a7a2;
-    --warning: #e0a94e;
-    --warning-bg: #33260e;
-    --warning-strong: #edc274;
-    --warning-tint: #2a2010;
-    --info: #3fc8bb;
-    --info-bg: #0d2e2c;
-    --violet: #9b95d8;
-    --violet-bg: #21203a;
-    --link: #8fa9ea;
+    --ink: #f0f1ee;
+    --ink-body: #dcdee0;
+    --ink-2: #9aa0a8;
+    --ink-on-dark: #f0f1ee;
+    --ink-on-accent: #0b0d10;
 
-    --gold-surface: rgba(224, 180, 76, 0.16);
-    --gold-surface-strong: rgba(224, 180, 76, 0.28);
-    --teal-surface: rgba(0, 184, 169, 0.18);
+    --custody: #4fbfa2;
+    --custody-mark: #4fbfa2;
+    --custody-wash: #123029;
+    --brass: #c8a44e;
+    --brass-mark: #c8a44e;
+    --brass-wash: #2e2716;
+    --frost: #8fb4d2;
+    --frost-mark: #8fb4d2;
+    --frost-wash: #17232e;
+    --amber: #e0a055;
+    --amber-mark: #e0a055;
+    --amber-wash: #2e2113;
+    --oxblood: #e79191;
+    --oxblood-mark: #e79191;
+    --oxblood-wash: #2f1717;
 
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.36);
-    --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.5);
-    --shadow-hero: 0 12px 34px rgba(0, 0, 0, 0.5);
-    --shadow-rail: 0 0 40px rgba(0, 0, 0, 0.5);
-    --shadow-rail-open: 12px 0 36px rgba(0, 0, 0, 0.55);
+    --ink-on-dark-2: rgba(240, 241, 238, 0.72);
+    --ink-on-dark-3: rgba(240, 241, 238, 0.5);
+    --line-on-dark: rgba(240, 241, 238, 0.16);
+    --custody-on-dark: #4fbfa2;
+    --scrim: rgba(0, 0, 0, 0.6);
+
+    --navy-900: #0b0d10;
+    --navy-700: #1b1e23;
+    --navy-600: #23272d;
+    --navy-500: #2f343b;
+    --gold-bright: #d8b768;
+    --gold-surface: var(--brass-wash);
+    --gold-surface-strong: #3a3120;
+    --teal-strong: #6fd2b8;
+    --mint: #6fd2b8;
+    --success-strong: #6fd2b8;
+    --error-strong: #f0acac;
+    --warning-strong: #ecbb7f;
+    --warning-tint: #241a0e;
+
+    --shadow-overlay: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.55);
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #0a1420;
-  --surface: #0f1d2c;
-  --surface-2: #16283a;
-  --surface-3: #1e3348;
-  --surface-sunken: #0a1420;
-  --border: #24384c;
-  --border-strong: #35506a;
+  --surface-page: #14161a;
+  --surface-raised: #14161a;
+  --surface-sunken: #1c1f24;
+  --surface-sunken-2: #24282e;
+  --surface-input: #1c1f24;
+  --surface-stage: #0c0d10;
 
-  --text: #e8eef4;
-  --text-2: #a3b4c2;
-  --text-muted: #7b8fa0;
+  --line: #2b2f36;
+  --line-strong: #3d434c;
 
-  --success: #4ec9a6;
-  --success-bg: #0e2f28;
-  --success-strong: #6fd8b8;
-  --error: #f08a84;
-  --error-bg: #341614;
-  --error-strong: #f4a7a2;
-  --warning: #e0a94e;
-  --warning-bg: #33260e;
-  --warning-strong: #edc274;
-  --warning-tint: #2a2010;
-  --info: #3fc8bb;
-  --info-bg: #0d2e2c;
-  --violet: #9b95d8;
-  --violet-bg: #21203a;
-  --link: #8fa9ea;
+  --ink: #f0f1ee;
+  --ink-body: #dcdee0;
+  --ink-2: #9aa0a8;
+  --ink-on-dark: #f0f1ee;
+  --ink-on-accent: #0b0d10;
 
-  --gold-surface: rgba(224, 180, 76, 0.16);
-  --gold-surface-strong: rgba(224, 180, 76, 0.28);
-  --teal-surface: rgba(0, 184, 169, 0.18);
+  --custody: #4fbfa2;
+  --custody-mark: #4fbfa2;
+  --custody-wash: #123029;
+  --brass: #c8a44e;
+  --brass-mark: #c8a44e;
+  --brass-wash: #2e2716;
+  --frost: #8fb4d2;
+  --frost-mark: #8fb4d2;
+  --frost-wash: #17232e;
+  --amber: #e0a055;
+  --amber-mark: #e0a055;
+  --amber-wash: #2e2113;
+  --oxblood: #e79191;
+  --oxblood-mark: #e79191;
+  --oxblood-wash: #2f1717;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.36);
-  --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-hero: 0 12px 34px rgba(0, 0, 0, 0.5);
-  --shadow-rail: 0 0 40px rgba(0, 0, 0, 0.5);
-  --shadow-rail-open: 12px 0 36px rgba(0, 0, 0, 0.55);
+  --ink-on-dark-2: rgba(240, 241, 238, 0.72);
+  --ink-on-dark-3: rgba(240, 241, 238, 0.5);
+  --line-on-dark: rgba(240, 241, 238, 0.16);
+  --custody-on-dark: #4fbfa2;
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  --navy-900: #0b0d10;
+  --navy-700: #1b1e23;
+  --navy-600: #23272d;
+  --navy-500: #2f343b;
+  --gold-bright: #d8b768;
+  --gold-surface: var(--brass-wash);
+  --gold-surface-strong: #3a3120;
+  --teal-strong: #6fd2b8;
+  --mint: #6fd2b8;
+  --success-strong: #6fd2b8;
+  --error-strong: #f0acac;
+  --warning-strong: #ecbb7f;
+  --warning-tint: #241a0e;
+
+  --shadow-overlay: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 *,
@@ -432,12 +618,36 @@ code,
 }
 
 /* ============================================================
-   Everything with a number in it
+   Codes and figures — two different things, told apart
    ============================================================
-   Mono AND tabular. A serial that changes width between rows cannot be
-   scanned down a column, and money that does not line up cannot be compared —
-   which is most of what anybody does on these screens.
+   The old rule put money, dates, counts, serials, shelf codes and barcodes in
+   ONE mono bucket, on the reasoning that everything here has a number in it. It
+   does, and that is exactly why the bucket was wrong: when a price and a barcode
+   are set identically, neither one is saying what it is.
+
+   CODES are mono. A serial, a bin, a parcel code, a ticket code, a barcode
+   label — things that get read aloud, compared character by character, and
+   typed from a printed label into a scanner. Mono is doing real work there:
+   fixed advance width, a slashed zero, an unambiguous 1/l/I.
+
+   FIGURES are the UI face with tabular numerals. Money, quantities, dates,
+   percentages. `tabular-nums` already gives a column its alignment — which is
+   the only thing mono was being borrowed for — and the sans keeps a price
+   looking like a price instead of like a token to be transcribed.
    ============================================================ */
+
+.code,
+code,
+.mono,
+.rail-count,
+.state-count,
+.detail-value[dir='ltr'],
+.data-table td[dir='ltr'] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0;
+}
 
 .num,
 .amt,
@@ -447,16 +657,8 @@ code,
 .data-table th.num,
 .detail-amount,
 .price,
-.code,
-code,
 time,
-.stat-value,
-.rail-count,
-.state-count,
-.mono,
-.detail-value[dir='ltr'],
-.data-table td[dir='ltr'] {
-  font-family: var(--font-mono);
+.stat-value {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
   letter-spacing: 0;
@@ -470,14 +672,199 @@ time,
   line-height: var(--lh-tight);
 }
 
-::selection {
-  background: var(--gold-surface-strong);
+/* ============================================================
+   THE SERIAL
+   ============================================================
+   The identity of every object in this product, and the one component that has
+   to behave identically in both scripts.
+
+   `dir="ltr"` and `unicode-bidi: isolate` together are the whole point: a serial
+   is a Latin run, and inside a Hebrew sentence the bidi algorithm would
+   otherwise move its leading digits to the far end of the line — which is
+   exactly what was happening to dates and catalogue strings everywhere in the
+   product. Isolated, `SN-ROS105-0008` reads the same in both languages.
+
+   Never truncated, never wrapped mid-code, always selectable: somebody is going
+   to copy this into an email.
+   ============================================================ */
+
+.serial {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--ink);
+  -webkit-user-select: all;
+  user-select: all;
 }
 
+.serial--lead {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+
+.serial--quiet {
+  color: var(--ink-2);
+}
+
+/* A code that is not the subject: a bin, a parcel, a ticket, a tracking number.
+   Same isolation rules, less weight, and allowed to wrap between groups. */
+.code-inline {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   THE AMOUNT
+   ============================================================
+   Money names itself first: the figure leads, the label follows it. Tabular,
+   decimal-aligned in a column, and isolated so a Hebrew row cannot reorder
+   `$12.40` into something else.
+
+   The currency stays `$1,234.56` in both locales rather than switching to the
+   Hebrew convention of a trailing symbol. USD is the platform's only settlement
+   currency; a collector comparing a Bault price to a price guide is comparing
+   the same string; and a ledger column that changes shape when somebody switches
+   language is a column two people cannot read together. Recorded as a decision
+   in DESIGN.md, not as an oversight.
+   ============================================================ */
+
+.amount {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.amount--lead {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+}
+
+.amount--display {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+}
+
+/** Money that is Bault's price rather than the collector's balance. */
+.amount--brass {
+  color: var(--brass);
+}
+
+.amount--credit {
+  color: var(--custody);
+}
+
+.amount--debit {
+  color: var(--ink-body);
+}
+
+/**
+ * What the money is for, set immediately after it: `₪12.40 · Storage, Aug`.
+ * Never on its own line, never before the figure.
+ */
+.amount-for {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The figure and its caption travel together and wrap together. */
+.amount-with {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   BIDI ISOLATION
+   ============================================================
+   The single most common defect in the audit: a Latin run inside a Hebrew
+   paragraph, with nothing telling the bidi algorithm where it starts and stops.
+   "90 days included, then …" rendered as "days included, then … 90"; a full stop
+   migrated to the front of its sentence; every date read "8  2026 בספט׳".
+
+   `.ltr-run` is for text that IS Latin and should be laid out as such — a
+   catalogue description, an operator's English note, a carrier's tracking
+   number. `.bidi` is for text of unknown direction, where the browser should
+   work it out from the first strong character and, crucially, not let it leak
+   into the surrounding paragraph.
+   ============================================================ */
+
+.ltr-run {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+/*
+ * Text whose direction is not known in advance.
+ *
+ * `isolate` alone is NOT enough, and this is the trap: it fences the run off
+ * from its surroundings but still resolves that run's direction from the
+ * ELEMENT'S `direction`, which on a Hebrew page is rtl. A catalogue string
+ * beginning "2011 Pokémon Call of Legends…" starts with a digit — a neutral
+ * character, not a strong one — so the whole line was laid out right-to-left and
+ * the leading year migrated to the far end: "Pokémon Call of Legends … 2011".
+ * The audit caught it on the item title and it survived the first fix, because
+ * the first fix was `isolate`.
+ *
+ * `plaintext` is the CSS equivalent of `dir="auto"`: isolate, AND resolve the
+ * direction from the run's own first strong character. "Pokémon" wins, the line
+ * is laid out left-to-right inside a right-to-left page, and the year stays
+ * where it was written.
+ */
+.bidi {
+  unicode-bidi: plaintext;
+}
+
+/*
+ * A date, and it is NOT a Latin run.
+ *
+ * `Intl.DateTimeFormat('he-IL')` returns "8 בספט׳ 2026" — Hebrew text with
+ * Hebrew's own ordering. Forcing it left-to-right, which is what `.ltr-run`
+ * would do, lays it out backwards; leaving it unisolated in a cell whose
+ * direction disagrees with the locale reorders it the other way. `plaintext`
+ * gets it right in both directions without either mistake, and `nowrap` stops a
+ * narrow column breaking "8 בספט׳" from its year.
+ */
+.date {
+  unicode-bidi: plaintext;
+  white-space: nowrap;
+}
+
+/* Every date cell in a register, whether or not the component remembered. */
+.data-table td.td-date {
+  unicode-bidi: plaintext;
+  white-space: nowrap;
+}
+
+::selection {
+  background: var(--custody-wash);
+}
+
+/* ============================================================
+   Focus — one treatment, every control, both directions
+   ============================================================ */
+
 :focus-visible {
-  outline: 2px solid var(--info);
-  outline-offset: 2px;
-  border-radius: var(--r-xs);
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius);
 }
 
 /* ============================================================
@@ -515,7 +902,7 @@ time,
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-pop);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .skip-link:focus {
@@ -524,6 +911,15 @@ time,
 
 /* ============================================================
    Navigation rail
+   ============================================================
+   The rail used to be a navy monolith with a gold plate, a machined notch and a
+   turned rivet riding behind the active icon. It was the most designed object in
+   the product and it was decorating a list of eight links.
+
+   It is now the second surface with a hairline down its trailing edge, and the
+   active destination is marked the way every other state in this system is
+   marked: a 2px custody-green rail on the LEADING edge, ink at full weight, icon
+   at full colour. Nothing moves except the width.
    ============================================================ */
 
 .rail {
@@ -535,31 +931,37 @@ time,
   display: flex;
   flex-direction: column;
   padding: var(--sp-4) 0 var(--sp-3);
-  background: linear-gradient(180deg, var(--navy-700) 0%, var(--navy-800) 42%, var(--navy-900) 100%);
-  color: var(--text-on-navy);
+  /* Safe areas: the rail is full-bleed against the edge of the display. */
+  padding-block-start: max(var(--sp-4), env(safe-area-inset-top));
+  padding-block-end: max(var(--sp-3), env(safe-area-inset-bottom));
+  padding-inline-start: env(safe-area-inset-left);
+  background: var(--surface-sunken);
+  border-inline-end: var(--border-w) solid var(--line);
+  color: var(--ink-body);
   overflow: hidden;
-  /* Collapsing uses this duration (the .is-open rule is gone by then). */
-  transition: width var(--dur-rail-close) var(--ease-out),
-    box-shadow var(--dur-rail-close) var(--ease-out);
+  transition: width var(--dur-fast) var(--ease);
 }
 
 .rail.is-open {
   width: var(--rail-w-open);
-  /* The expanded rail floats over the workspace, so it casts along its own
-     trailing edge to separate itself from the content it covers. */
-  box-shadow: var(--shadow-rail-open);
-  transition: width var(--dur-rail-open) var(--ease-out),
-    box-shadow var(--dur-rail-open) var(--ease-out);
+  /* Expanded, it covers content — which is the one thing in this product that
+     is allowed a shadow, because it is temporarily floating. */
+  box-shadow: var(--shadow-overlay);
+  transition: width var(--dur) var(--ease);
 }
 
-/* ---- Brand ---- */
+/* ---- Brand ----
+   A wordmark, not a logo tile. The mark is the letter set in the display face
+   at the weight the wordmark uses, on the rail's own ground: Bault does not have
+   a commissioned logotype, and a gold gradient square with a B in it is what a
+   product puts there when it does not. */
 
 .rail-brand {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 44px;
-  padding-inline: 18px;
+  min-height: 40px;
+  padding-inline: 16px;
   margin-block-end: var(--sp-5);
   color: inherit;
   text-decoration: none;
@@ -571,13 +973,13 @@ time,
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: var(--r-md);
-  background: linear-gradient(150deg, var(--gold-bright), var(--gold-deep));
-  color: var(--navy-900);
-  font-weight: 800;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--ink-on-dark);
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
   font-size: var(--fs-xl);
-  letter-spacing: -0.03em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.28);
+  line-height: 1;
 }
 
 .rail-brand-text {
@@ -585,49 +987,42 @@ time,
   overflow: hidden;
   white-space: nowrap;
   opacity: 0;
-  transform: translateX(-6px);
-  transition: opacity var(--dur-md) var(--ease-out), transform var(--dur-md) var(--ease-out);
-}
-
-[dir='rtl'] .rail-brand-text {
-  transform: translateX(6px);
+  transition: opacity var(--dur) var(--ease);
 }
 
 .rail.is-open .rail-brand-text {
   opacity: 1;
-  transform: none;
 }
 
 .rail-word {
   display: block;
+  font-family: var(--font-display);
   font-size: var(--fs-lg);
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: var(--fw-semibold);
   line-height: 1.2;
+  color: var(--ink);
 }
 
 .rail-sub {
   display: block;
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(228, 233, 255, 0.5);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  color: var(--ink-2);
 }
 
-/* Collapsed: a tiny wordmark under the B so the brand is still readable. */
+/* Collapsed: the wordmark sits under the mark so the brand is still readable. */
 .rail-word-mini {
   position: absolute;
-  inset-block-start: 58px;
+  inset-block-start: 56px;
   inset-inline-start: 0;
   width: var(--rail-w);
   text-align: center;
-  font-size: var(--fs-micro);
-  font-weight: 650;
-  letter-spacing: 0.14em;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
-  color: rgba(228, 233, 255, 0.55);
-  transition: opacity var(--dur-sm) var(--ease-out);
+  color: var(--ink-2);
+  transition: opacity var(--dur-fast) var(--ease);
 }
 
 .rail.is-open .rail-word-mini {
@@ -640,8 +1035,8 @@ time,
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-inline: 10px;
+  gap: 1px;
+  padding-inline: 0;
   list-style: none;
 }
 
@@ -650,10 +1045,10 @@ time,
 }
 
 .rail-divider {
-  height: 1px;
-  margin: var(--sp-4) 18px;
+  height: var(--border-w);
+  margin: var(--sp-3) 16px;
   border: 0;
-  background: rgba(228, 233, 255, 0.13);
+  background: var(--line);
 }
 
 .rail-item {
@@ -663,175 +1058,122 @@ time,
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  min-height: 46px;
-  padding-inline: 8px;
+  min-height: 44px;
+  padding-inline: 0;
+  /* The state rail lives in this border, so it is always reserved and the row
+     never shifts when it lights up. */
   border: 0;
-  border-radius: var(--r-md);
+  border-inline-start: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: rgba(233, 237, 255, 0.8);
+  color: var(--ink-2);
   font: inherit;
-  /* Nudged up from 14px: Libertinus has a smaller x-height than the sans this
-     replaced, so the same nominal size reads noticeably smaller. */
-  font-size: var(--fs-md);
-  font-weight: 500;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
   text-align: start;
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--dur-sm) var(--ease), background var(--dur-sm) var(--ease);
+  touch-action: manipulation;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
 .rail-item:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+  background: var(--surface-sunken-2);
 }
 
 .rail-item.is-active {
-  color: #fff;
-  font-weight: 650;
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+  border-inline-start-color: var(--custody-mark);
+  background: var(--surface-page);
 }
 
 .rail-item:focus-visible {
-  outline: 2px solid var(--gold-bright);
-  outline-offset: -2px;
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: calc(-1 * var(--focus-width));
 }
 
 .rail-icon {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 40px;
+  width: calc(var(--rail-w) - 2px);
   height: 40px;
 }
 
 .rail-icon svg {
-  width: 21px;
-  height: 21px;
+  width: 20px;
+  height: 20px;
+}
+
+.rail-item.is-active .rail-icon {
+  color: var(--custody);
 }
 
 .rail-label {
   min-width: 0;
   overflow: hidden;
   opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity var(--dur-md) var(--ease-out), transform var(--dur-md) var(--ease-out);
-}
-
-[dir='rtl'] .rail-label {
-  transform: translateX(4px);
+  transition: opacity var(--dur) var(--ease);
 }
 
 .rail.is-open .rail-label {
   opacity: 1;
-  transform: none;
 }
 
-/* A count badge on the collapsed bell / expanded row. */
+/* A count on the expanded row. Tabular so two-digit counts do not shuffle. */
 .rail-count {
   margin-inline-start: auto;
+  margin-inline-end: var(--sp-4);
   min-width: 20px;
-  height: 20px;
-  padding-inline: 6px;
-  border-radius: var(--r-pill);
-  background: var(--gold);
-  color: var(--navy-900);
-  font-size: var(--fs-micro);
-  font-weight: 700;
-  line-height: 20px;
+  padding-inline: 5px;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-page);
+  color: var(--ink-body);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
   text-align: center;
   opacity: 0;
-  transition: opacity var(--dur-md) var(--ease-out);
+  transition: opacity var(--dur) var(--ease);
 }
 
 .rail.is-open .rail-count {
   opacity: 1;
 }
 
+/* Collapsed, the count becomes a dot: there is no room for a number, and a
+   number nobody can read is worse than a mark that says "something here". */
 .rail-dot {
   position: absolute;
-  inset-block-start: 9px;
-  inset-inline-start: 33px;
-  width: 8px;
-  height: 8px;
+  inset-block-start: 10px;
+  inset-inline-start: calc(var(--rail-w) / 2 + 6px);
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 0 0 2px var(--navy-800);
-  transition: opacity var(--dur-sm) var(--ease);
+  background: var(--custody-mark);
+  /* design-lint-allow: a knockout ring, not elevation — it punches the rail
+     ground out from behind the dot so the mark reads at 6px. */
+  box-shadow: 0 0 0 2px var(--surface-sunken);
+  transition: opacity var(--dur-fast) var(--ease);
 }
 
 .rail.is-open .rail-dot {
   opacity: 0;
 }
 
-/* ---- The gold vault selector ---- */
-
-.rail-selector {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline: 10px;
-  z-index: 1;
-  pointer-events: none;
-  border-radius: var(--r-md);
-  /* Collapsed: a dark Graphite plate behind the active icon, warmed by a muted
-     gold wash that strengthens toward the trailing edge where the mechanism is.
-     The brightness is deliberately held back here — the notch and rivet below
-     are what should catch the eye, not the plate. */
-  background: linear-gradient(to var(--sel-dir, right), var(--graphite), var(--graphite) 60%, var(--bronze));
-  box-shadow: inset 0 0 0 1px rgba(224, 180, 76, 0.3);
-  transition: transform var(--dur-selector) var(--ease-out),
-    height var(--dur-selector) var(--ease-out), background var(--dur-rail-open) var(--ease-out),
-    opacity var(--dur-sm) linear;
-}
-
-/* Expanded: the plate runs behind icon AND label, so the inner field turns to a
-   muted bronze tint that keeps the label legible against it. */
-.rail.is-open .rail-selector {
-  background: linear-gradient(
-    to var(--sel-dir, right),
-    var(--graphite),
-    var(--graphite) 55%,
-    var(--gold-surface)
-  );
-}
-
-[dir='rtl'] .rail-selector {
-  --sel-dir: left;
-}
-
-.rail-selector[hidden] {
-  display: none;
-}
-
-/* The mechanical notch: a machined gold bracket riding the rail's trailing edge. */
-.rail-selector::after {
-  content: '';
-  position: absolute;
-  inset-inline-end: -10px;
-  inset-block: 9px;
-  width: 4px;
-  border-start-start-radius: 3px;
-  border-end-start-radius: 3px;
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold), var(--gold-deep));
-  box-shadow: -1px 0 8px rgba(224, 180, 76, 0.5);
-}
-
-/* The rivet: a small turned detail that reads as a lock pin. */
-.rail-selector::before {
-  content: '';
-  position: absolute;
-  inset-inline-end: -8px;
-  inset-block-start: calc(50% - 3.5px);
-  z-index: 1;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--warning-tint), var(--gold) 55%, var(--bronze));
-  box-shadow: 0 0 0 1px rgba(11, 31, 51, 0.55);
-}
-
-/* The rail's pin control was removed with the pinning behaviour itself. The
-   rail now has exactly two states — collapsed, and expanded while hovered or
-   focused — so there is no persistent-open affordance to style, and nothing was
-   introduced to replace it. `.rail-foot` went with it. */
+/*
+ * The gold selector plate is gone, element and all.
+ *
+ * It was an absolutely-positioned span animated between rows behind the active
+ * item, carrying a gradient, an inset ring, a machined notch and a turned rivet
+ * — five decorative decisions, plus a `ResizeObserver` and an `offsetTop` read
+ * per layout, to say "you are here". `.rail-item.is-active` says it with a
+ * border. `NavigationRail` no longer renders the element.
+ */
 
 /* ============================================================
    Page header
@@ -851,10 +1193,10 @@ time,
 
 .page-title {
   font-size: var(--fs-2xl);
-  font-weight: 680;
-  letter-spacing: -0.022em;
-  line-height: 1.15;
-  color: var(--navy-800);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+  color: var(--ink);
 }
 
 .breadcrumb {
@@ -884,35 +1226,67 @@ time,
   opacity: 0.6;
 }
 
+/*
+ * The header's controls, as ONE group.
+ *
+ * They were four separately-bordered boxes of slightly different widths with
+ * 12px between them, plus an account line and an avatar, strung along the end of
+ * the header — six loose objects reading as six decisions. Segmented into one
+ * control with hairlines between, the way the vault's scope control already is,
+ * so the header has two things in it (who you are, and the shell's settings)
+ * rather than six.
+ */
 .ph-actions {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   flex: 0 0 auto;
-  padding-block-start: 2px;
+}
+
+.ph-controls {
+  display: flex;
+  align-items: stretch;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-input);
+}
+
+.ph-controls > * {
+  border-inline-start: var(--border-w) solid var(--line);
+}
+
+.ph-controls > *:first-child {
+  border-inline-start: 0;
 }
 
 /* ---- Signed-in status pill ---- */
 
+/*
+ * Who you are signed in as. A line, not a lozenge: it is standing information
+ * rather than a state that changed, and a rounded grey capsule beside four
+ * rounded grey icon buttons was five capsules in a row saying nothing to each
+ * other.
+ */
 .status-pill {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  height: 36px;
-  padding-inline: 12px 14px;
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-2);
+  height: 32px;
+  padding-inline: 0;
+  border-radius: 0;
+  background: none;
+  border: 0;
+  color: var(--ink-2);
   font-size: var(--fs-sm);
-  font-weight: 550;
+  font-weight: var(--fw-regular);
   white-space: nowrap;
 }
 
 /* The identifier carries the weight; the role is context set beside it. */
 .status-pill-main {
-  color: var(--text-1);
-  letter-spacing: 0.01em;
+  color: var(--ink);
+  font-weight: var(--fw-medium);
 }
 
 .status-pill-sub {
@@ -922,10 +1296,15 @@ time,
   font-weight: 500;
 }
 
+/* A suspended account is the one case where this line is a STATE, so it takes
+   the state treatment every other state in the system takes: a rule on the
+   leading edge, in the semantic colour, with the words still there. */
 .status-pill--warning {
-  background: var(--warning-bg);
-  border-color: var(--warning);
-  color: var(--warning);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--amber-mark);
+  background: none;
+  color: var(--amber);
+  font-weight: var(--fw-medium);
 }
 
 .status-pill--warning .status-pill-main,
@@ -934,16 +1313,16 @@ time,
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 0 3px rgba(47, 140, 76, 0.15);
+  background: var(--custody-mark);
+  box-shadow: none;
 }
 
 .status-dot--warning {
-  background: var(--warning);
-  box-shadow: 0 0 0 3px rgba(168, 114, 15, 0.18);
+  background: var(--amber-mark);
+  box-shadow: none;
 }
 
 /* ---- Icon buttons (bell, close, row menu) ---- */
@@ -952,27 +1331,34 @@ time,
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text-2);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-input);
+  color: var(--ink-2);
   cursor: pointer;
-  transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease),
-    border-color var(--dur-sm) var(--ease);
+  touch-action: manipulation;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
 .icon-btn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--ink);
 }
 
 .icon-btn.is-on {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+/* Inside the segmented group the container owns the border. */
+.ph-controls .icon-btn,
+.ph-controls .pop-wrap > .icon-btn {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .icon-btn--bare {
@@ -988,7 +1374,7 @@ time,
   inset-block-end: 3px;
   inset-inline-end: 4px;
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
   line-height: 1;
   color: var(--text-2);
@@ -1001,8 +1387,8 @@ time,
 }
 
 .icon-btn svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
 }
 
 .bell-badge {
@@ -1013,12 +1399,16 @@ time,
   height: 16px;
   padding-inline: 4px;
   border-radius: var(--r-pill);
-  background: var(--gold);
-  color: var(--navy-900);
-  font-size: var(--fs-micro);
-  font-weight: 700;
+  /* The last gold object in the product. A count of unread notifications is not
+     money, and brass is money's colour. */
+  background: var(--custody);
+  color: var(--ink-on-accent);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
   line-height: 16px;
   text-align: center;
+  /* design-lint-allow: a knockout ring, not elevation — the badge sits on the
+     bell glyph and needs the header ground between them. */
   box-shadow: 0 0 0 2px var(--surface);
 }
 
@@ -1054,16 +1444,16 @@ time,
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(150deg, var(--navy-600), var(--navy-800));
-  color: #fff;
+  background: var(--ink);
+  color: var(--ink-on-dark);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
 }
 
 .user-trigger svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Popovers / menus ---- */
@@ -1104,7 +1494,7 @@ time,
 
 .menu-name {
   font-size: var(--fs-base);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1126,7 +1516,7 @@ time,
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  padding: 9px var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
@@ -1143,8 +1533,8 @@ time,
 }
 
 .menu-item svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   color: var(--text-muted);
   flex: 0 0 auto;
 }
@@ -1176,7 +1566,7 @@ time,
 
 .pop-title {
   font-size: var(--fs-base);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
 }
 
 .pop-list {
@@ -1202,7 +1592,7 @@ time,
 
 .pop-row-title {
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .pop-row-text {
@@ -1271,32 +1661,48 @@ time,
 
 /* ---- Panels ---- */
 
+/*
+ * A panel is a heading and a rule.
+ *
+ * It was a white rounded rectangle with a border and a shadow, sitting on a
+ * page that also contained a grid of white rounded rectangles with borders and
+ * shadows, each holding white rounded rectangles with borders and shadows. Three
+ * nested elevations to show one list.
+ *
+ * Grouping is done with spacing and a rule, which is what grouping is. The only
+ * thing left of the old panel is its padding rhythm — and that now comes from
+ * the density scope, so the same panel is comfortable in the vault and tight on
+ * the bench.
+ */
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .panel-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--sp-4);
   flex-wrap: wrap;
-  padding: var(--sp-5) var(--sp-6);
-  border-block-end: 1px solid var(--border);
+  padding: 0 0 var(--sp-3);
+  border-block-end: var(--border-w) solid var(--line-strong);
 }
 
 .panel-title {
   font-size: var(--fs-lg);
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
 }
 
 .panel-subtitle {
   margin-block-start: 3px;
   font-size: var(--fs-sm);
-  color: var(--text-muted);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
+  max-width: var(--measure);
 }
 
 .panel-tools {
@@ -1307,7 +1713,7 @@ time,
 }
 
 .panel-body {
-  padding: var(--sp-6);
+  padding: var(--gap-group) 0 0;
 }
 
 .panel-body--flush {
@@ -1315,30 +1721,40 @@ time,
 }
 
 .panel-foot {
-  padding: var(--sp-3);
-  border-block-start: 1px solid var(--border);
+  padding: var(--sp-3) 0 0;
+  border-block-start: var(--border-w) solid var(--line);
   text-align: center;
 }
 
-/* ---- Contextual tabs ---- */
+/* ---- Contextual tabs ----
+
+   A row of destinations inside a section. Underlined, not boxed: the tab strip
+   was a floating white card with rounded corners and a shadow, which made the
+   navigation for a screen look like a piece of content on it.
+
+   The active mark is custody green and 2px, the same rule that marks the active
+   destination on the navigation rail — so "where am I" is answered by one shape
+   at both levels of the hierarchy. */
 
 .ctx-bar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--sp-4);
   flex-wrap: wrap;
-  padding: 0 var(--sp-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
+  padding: 0;
+  background: none;
+  border: 0;
+  border-block-end: var(--border-w) solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .ctx-tabs {
   display: flex;
   align-items: stretch;
-  gap: var(--sp-1);
+  gap: var(--sp-5);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 
@@ -1348,37 +1764,38 @@ time,
 
 .ctx-tab {
   position: relative;
-  padding: 15px var(--sp-4) 14px;
+  padding: var(--sp-3) 0;
   border: 0;
   background: transparent;
-  color: var(--text-2);
+  color: var(--ink-2);
   font: inherit;
   font-size: var(--fs-base);
-  font-weight: 550;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   cursor: pointer;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
-  transition: color var(--dur-sm) var(--ease), background var(--dur-sm) var(--ease);
+  border-radius: 0;
+  touch-action: manipulation;
+  transition: color var(--dur-fast) var(--ease);
 }
 
 .ctx-tab:hover {
-  color: var(--text);
-  background: var(--surface-2);
+  color: var(--ink);
+  background: transparent;
 }
 
 .ctx-tab.is-active {
-  color: var(--navy-800);
-  font-weight: 650;
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
 }
 
 .ctx-tab.is-active::after {
   content: '';
   position: absolute;
-  inset-inline: var(--sp-3);
-  inset-block-end: 0;
-  height: 3px;
-  border-radius: 2px 2px 0 0;
-  background: var(--gold);
+  inset-inline: 0;
+  inset-block-end: -1px;
+  height: 2px;
+  border-radius: 0;
+  background: var(--custody-mark);
 }
 
 .ctx-actions {
@@ -1389,106 +1806,133 @@ time,
   padding-block: var(--sp-2);
 }
 
-/* ---- Buttons ---- */
+/* ---- Buttons ----
+
+   Four jobs, and the weight of the control matches the weight of the decision.
+
+     primary      the one action this view exists for. Custody green, filled.
+     secondary    everything else that is a real action. Ink on the ground,
+                  hairline border.
+     quiet        an action that should be available but not offered. No border.
+     destructive  irreversible. Oxblood, and — where the action cannot be undone —
+                  routed through a confirmation sheet rather than fired on click.
+
+   The legacy variant names are kept because 40 files call them, and each is
+   pointed at the job it was actually doing: `gold` was always the primary,
+   `navy` was always the strong secondary, `ghost` was always the quiet one.
+
+   A loading button KEEPS ITS LABEL. A spinner that replaces the words is a
+   control that stops saying what it does at the exact moment somebody is
+   watching it, and it changes width while they look. */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--sp-2);
-  min-height: 44px;
-  padding-inline: 18px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text);
+  min-height: 40px;
+  padding-inline: 16px;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-input);
+  color: var(--ink-body);
   font: inherit;
   font-size: var(--fs-base);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease),
-    color var(--dur-sm) var(--ease), box-shadow var(--dur-sm) var(--ease);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 
 .btn svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+  border-color: var(--ink-2);
 }
 
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled='true'] {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
+/* ---- primary ---- */
 .btn--gold {
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
-  border-color: var(--gold-deep);
-  color: var(--navy-900);
-  box-shadow: 0 1px 2px rgba(126, 92, 14, 0.25);
+  background: var(--custody);
+  border-color: var(--custody);
+  color: var(--ink-on-accent);
+  font-weight: var(--fw-semibold);
 }
 
 .btn--gold:hover:not(:disabled) {
-  background: linear-gradient(180deg, #ecc251, var(--gold-bright));
-  border-color: var(--gold-deep);
+  background: var(--teal-strong);
+  border-color: var(--teal-strong);
 }
 
+/* ---- strong secondary: an action that is important but not THE action ---- */
 .btn--navy {
-  background: var(--navy-800);
-  border-color: var(--navy-800);
-  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ink-on-dark);
+  font-weight: var(--fw-semibold);
 }
 
 .btn--navy:hover:not(:disabled) {
-  background: var(--navy-700);
-  border-color: var(--navy-700);
+  background: var(--navy-600);
+  border-color: var(--navy-600);
 }
 
+/* ---- secondary ---- */
 .btn--secondary {
-  background: var(--surface);
-  border-color: var(--border-strong);
-  color: var(--navy-800);
+  background: var(--surface-input);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
+/* ---- quiet ---- */
 .btn--ghost {
   background: transparent;
   border-color: transparent;
-  color: var(--text-2);
-  font-weight: 550;
+  color: var(--ink-2);
+  font-weight: var(--fw-medium);
 }
 
 .btn--ghost:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface-sunken);
+  color: var(--ink);
 }
 
+/* ---- destructive ---- */
 .btn--danger {
-  background: var(--surface);
-  border-color: rgba(201, 50, 43, 0.35);
-  color: var(--error);
+  background: var(--surface-input);
+  border-color: var(--oxblood);
+  color: var(--oxblood);
+  font-weight: var(--fw-semibold);
 }
 
 .btn--danger:hover:not(:disabled) {
-  background: var(--error-bg);
-  border-color: var(--error);
+  background: var(--oxblood-wash);
+  border-color: var(--oxblood);
 }
 
 .btn--sm {
-  min-height: 36px;
-  padding-inline: 12px;
+  min-height: 32px;
+  padding-inline: 10px;
   font-size: var(--fs-sm);
 }
 
 .btn--sm svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .btn--block {
@@ -1500,14 +1944,15 @@ time,
   padding: 0;
   border: 0;
   background: none;
-  color: var(--info);
-  font-weight: 600;
+  color: var(--custody);
+  font-weight: var(--fw-medium);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .btn--link:hover:not(:disabled) {
   background: none;
-  color: #24479c;
+  color: var(--teal-strong);
 }
 
 /* Centred "view all" row action. */
@@ -1522,7 +1967,7 @@ time,
   color: var(--navy-800);
   font: inherit;
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease);
 }
@@ -1532,8 +1977,8 @@ time,
 }
 
 .link-more svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 [dir='rtl'] .link-more svg {
@@ -1546,15 +1991,15 @@ time,
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-height: 38px;
-  padding-inline: 12px;
+  min-height: 36px;
+  padding-inline: var(--sp-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--text-2);
   font: inherit;
   font-size: var(--fs-sm);
-  font-weight: 550;
+  font-weight: var(--fw-medium);
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease);
 }
@@ -1566,8 +2011,8 @@ time,
 }
 
 .control svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .control select {
@@ -1576,9 +2021,21 @@ time,
   border: 0;
   background: none;
   font: inherit;
-  font-weight: 550;
+  font-weight: var(--fw-medium);
   color: inherit;
   cursor: pointer;
+}
+
+/*
+ * The wrapper carries the focus treatment for this compound control, so the
+ * select inside must not draw a second one. The old rule removed the outline
+ * and put NOTHING back — the one genuine `outline: none` without a replacement
+ * in the stylesheet, on a control people tab through.
+ */
+.control:focus-within {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
+  border-color: var(--custody);
 }
 
 .control select:focus {
@@ -1598,31 +2055,41 @@ time,
 .search svg {
   position: absolute;
   inset-inline-start: 12px;
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   color: var(--text-muted);
   pointer-events: none;
 }
 
 .search input {
   width: 100%;
-  padding-inline-start: 38px;
+  padding-inline-start: 36px;
 }
 
 /* ---- Form controls ---- */
 
+/* True white is reserved for exactly this: a place somebody types. Everything
+   else in the product sits on the page's own ground, so a field is the only
+   white rectangle on screen and is therefore unmistakable. */
 input,
 select,
 textarea {
   font: inherit;
   font-size: var(--fs-base);
-  min-height: 42px;
-  padding: 9px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  transition: border-color var(--dur-sm) var(--ease), box-shadow var(--dur-sm) var(--ease);
+  min-height: 36px;
+  padding: 7px 10px;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-input);
+  color: var(--ink);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+/* Windows dark mode paints a native select's own background unless told
+   otherwise, which produces black-on-black in the dark theme. */
+select {
+  background-color: var(--surface-input);
+  color: var(--ink);
 }
 
 textarea {
@@ -1633,15 +2100,22 @@ textarea {
 input:hover:not(:disabled),
 select:hover:not(:disabled),
 textarea:hover:not(:disabled) {
-  border-color: var(--text-muted);
+  border-color: var(--ink-2);
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--info);
-  box-shadow: 0 0 0 3px rgba(49, 93, 197, 0.14);
+/*
+ * `:focus-visible`, not `:focus`, and the ONE focus treatment rather than a
+ * second one made of a border colour and a hardcoded blue box-shadow that was
+ * in no token. The old rule also fired on mouse click, which is how a form ends
+ * up with a ring around every field somebody has merely touched.
+ */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
+  border-color: var(--custody);
+  box-shadow: none;
 }
 
 input::placeholder,
@@ -1651,10 +2125,10 @@ textarea::placeholder {
 
 input[type='checkbox'] {
   min-height: 0;
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   padding: 0;
-  accent-color: var(--navy-700);
+  accent-color: var(--custody);
 }
 
 input[type='search'] {
@@ -1669,8 +2143,8 @@ input[type='search'] {
 
 .field-label {
   font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--text-2);
+  font-weight: var(--fw-regular);
+  color: var(--ink-2);
 }
 
 .field-hint {
@@ -1680,8 +2154,8 @@ input[type='search'] {
 
 .field-error {
   font-size: var(--fs-caption);
-  font-weight: 550;
-  color: var(--error);
+  font-weight: var(--fw-medium);
+  color: var(--oxblood);
 }
 
 .field input[aria-invalid='true'],
@@ -1714,64 +2188,77 @@ input[type='search'] {
   position: absolute;
   inset-inline-start: 13px;
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-muted);
   pointer-events: none;
 }
 
 .money-input input {
   width: 100%;
-  min-height: 52px;
-  padding-inline-start: 30px;
+  min-height: 48px;
+  padding-inline-start: 32px;
   font-size: var(--fs-xl);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================
-   Hero balance card
+   The balance — a figure, not a card
+   ============================================================
+   This was a dark navy panel with a gold gradient, a glowing text-shadow and a
+   cropped illustration of a vault door. It was the single most generic object in
+   the product: every fintech dashboard on earth has one, and none of them is
+   more legible for it.
+
+   A balance is one number and the sentence that qualifies it. It gets the
+   largest figure on the page, the page's own ground, and a rule under it. The
+   illustration is deleted rather than restyled — there was nothing to restyle it
+   into, because it was saying nothing.
    ============================================================ */
 
 .hero-balance {
   position: relative;
-  overflow: hidden;
-  padding: var(--sp-8);
-  border-radius: var(--r-lg);
-  background: linear-gradient(120deg, var(--navy-700) 0%, var(--navy-800) 45%, var(--navy-900) 100%);
-  color: var(--text-on-navy);
-  box-shadow: var(--shadow-hero);
-  min-height: 188px;
+  padding: 0 0 var(--sp-6);
+  border: 0;
+  border-block-end: var(--border-w) solid var(--line);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  box-shadow: none;
+  min-height: 0;
 }
 
 .hero-inner {
   position: relative;
   z-index: 2;
-  max-width: 62%;
+  max-width: none;
 }
 
 .hero-label {
   font-size: var(--fs-sm);
-  font-weight: 550;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(228, 233, 255, 0.62);
+  font-weight: var(--fw-medium);
+  color: var(--ink-2);
 }
 
 .hero-value {
-  margin-block-start: var(--sp-3);
+  display: block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  margin-block-start: var(--sp-2);
   font-size: var(--fs-4xl);
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  color: var(--gold-bright);
-  text-shadow: 0 2px 18px rgba(224, 180, 76, 0.22);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-shadow: none;
 }
 
 .hero-meta {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  margin-block-start: var(--sp-5);
+  gap: var(--sp-4);
+  margin-block-start: var(--sp-3);
   flex-wrap: wrap;
 }
 
@@ -1779,130 +2266,106 @@ input[type='search'] {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  height: 36px;
-  padding-inline: 14px;
-  border: 1px solid rgba(228, 233, 255, 0.2);
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-on-navy);
+  min-height: 28px;
+  padding-inline: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-2);
   font: inherit;
   font-size: var(--fs-sm);
-  font-weight: 550;
+  font-weight: var(--fw-medium);
+  cursor: pointer;
 }
 
 .hero-currency svg {
   width: 14px;
   height: 14px;
-  opacity: 0.7;
 }
 
 .hero-note {
   font-size: var(--fs-sm);
-  color: rgba(228, 233, 255, 0.55);
+  color: var(--ink-2);
 }
 
-/* The decorative vault door, cropped off the trailing edge. */
+/* The decorative vault door is gone. It was 34 % of the width of the wallet's
+   most important element, and it was a drawing of a safe on a page about money. */
 .hero-art {
-  position: absolute;
-  z-index: 1;
-  inset-block: -14%;
-  inset-inline-end: -70px;
-  width: 34%;
-  min-width: 300px;
-  pointer-events: none;
-  color: var(--gold);
-  opacity: 0.5;
-}
-
-[dir='rtl'] .hero-art {
-  transform: scaleX(-1);
-}
-
-.hero-art svg {
-  width: 100%;
-  height: 100%;
+  display: none;
 }
 
 /* ============================================================
-   Metric cards
+   Figures — a row of numbers, not a row of cards
+   ============================================================
+   Four white rounded cards, each with a tinted rounded-square icon tile above a
+   label above a number, is the shape every SaaS dashboard uses and the reason
+   they are indistinguishable from each other. The icon tile in particular
+   carries no information: nobody has ever needed a small green box to know that
+   "Total credited" is money.
+
+   What is left is what was actually being communicated: a label, a figure, and
+   the sentence that qualifies it — separated by vertical rules, on the ground.
    ============================================================ */
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--sp-5);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0;
+  border-block: var(--border-w) solid var(--line);
 }
 
 .metric-card {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-5) var(--sp-6);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
+  gap: var(--sp-1);
+  padding: var(--sp-4) var(--sp-5);
+  background: none;
+  border: 0;
+  border-inline-start: var(--border-w) solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
 }
 
+.metric-card:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+
+/* The icon tile is deleted, not restyled. */
 .metric-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-md);
-}
-
-.metric-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.metric-icon--green {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.metric-icon--amber {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.metric-icon--blue {
-  background: var(--info-bg);
-  color: var(--info);
-}
-
-.metric-icon--violet {
-  background: var(--violet-bg);
-  color: var(--violet);
+  display: none;
 }
 
 .metric-label {
   font-size: var(--fs-sm);
-  font-weight: 550;
-  color: var(--text-2);
+  font-weight: var(--fw-regular);
+  color: var(--ink-2);
 }
 
 .metric-value {
-  font-size: var(--fs-3xl);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-  color: var(--navy-800);
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .metric-foot {
   margin-block-start: auto;
-  padding-block-start: var(--sp-1);
+  padding-block-start: var(--sp-2);
   font-size: var(--fs-caption);
-  color: var(--text-muted);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
 }
 
 .metric-trend {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .metric-trend svg {
@@ -1911,7 +2374,7 @@ input[type='search'] {
 }
 
 .metric-trend--up {
-  color: var(--success);
+  color: var(--custody);
 }
 
 .metric-trend--down {
@@ -1942,23 +2405,39 @@ input[type='search'] {
 
 .flow-value {
   font-size: var(--fs-xl);
-  font-weight: 680;
+  font-weight: var(--fw-semibold);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================
-   Data tables
+   THE REGISTER
+   ============================================================
+   The one list component in this product, in three densities.
+
+   Bault's central claim is that it keeps a record: an append-only custody trail,
+   an append-only ledger, an append-only support thread. A register looks like a
+   record — square corners, ruled rows, a sunken header, dates in a fixed column,
+   figures aligned on the decimal — and it looks like one whether it is holding
+   twelve ledger lines or four items on a shelf.
+
+   What it must never look like is something you can edit in place. No hover
+   pencils, no inline chrome that appears on approach, no row that lifts. A row
+   highlights on hover only because it is CLICKABLE, and only where it is.
    ============================================================ */
 
 .dt-wrap {
   width: 100%;
   overflow-x: auto;
+  /* A wide register scrolls inside itself; the page never scrolls sideways. */
+  overscroll-behavior-x: contain;
 }
 
-.data-table {
+.data-table,
+.table {
   width: 100%;
   border-collapse: collapse;
+  border-radius: 0;
   font-size: var(--fs-base);
 }
 
@@ -1971,51 +2450,82 @@ input[type='search'] {
   white-space: nowrap;
 }
 
-.data-table thead th {
-  padding: var(--sp-3) var(--sp-6);
-  border-block-end: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: var(--fs-micro);
-  font-weight: 650;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+/*
+ * The header is a rule, not a shout.
+ *
+ * It was 11px uppercase with 0.07em tracking, which is the tracked-out eyebrow
+ * label the whole product was wearing on every heading. Here it is the one place
+ * small caps genuinely help — a column name is a label, not a sentence — so the
+ * treatment is kept and calmed: 12px, medium, sentence-cased, on the sunken
+ * ground with a rule under it.
+ */
+.data-table thead th,
+.table thead th {
+  padding: var(--sp-2) var(--sp-4);
+  border-block-end: var(--border-w) solid var(--line-strong);
+  background: var(--surface-sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
   text-align: start;
   white-space: nowrap;
 }
 
-.data-table tbody td {
-  height: 56px;
-  padding: var(--sp-3) var(--sp-6);
-  border-block-end: 1px solid var(--border);
+.data-table tbody td,
+.table tbody td {
+  height: auto;
+  min-height: var(--row-min-h);
+  padding: var(--pad-cell);
+  border-block-end: var(--border-w) solid var(--line);
   vertical-align: middle;
-  color: var(--text);
+  color: var(--ink-body);
+  /* A cell holds whatever the row holds — a carrier's name, an operator's note,
+     an escrow deal's description — so it resolves its own direction from its own
+     first strong character rather than from the page's. */
+  unicode-bidi: plaintext;
 }
 
-.data-table tbody tr:last-child td {
-  border-block-end: 0;
+.data-table tbody tr:last-child td,
+.table tbody tr:last-child td {
+  border-block-end: var(--border-w) solid var(--line);
 }
 
 .data-table tbody tr.is-clickable {
   cursor: pointer;
-  transition: background var(--dur-xs) var(--ease);
+  transition: background var(--dur-fast) var(--ease);
 }
 
-.data-table tbody tr.is-clickable:hover {
-  background: var(--surface-2);
+.data-table tbody tr.is-clickable:hover,
+.table tbody tr:hover {
+  background: var(--surface-sunken);
 }
 
 .data-table tbody tr.is-selected {
-  background: var(--info-bg);
+  background: var(--custody-wash);
 }
 
 .data-table tbody tr.is-clickable:focus-visible {
-  outline: 2px solid var(--info);
-  outline-offset: -2px;
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: calc(-1 * var(--focus-width));
 }
 
-.data-table .td-end {
+/*
+ * Numbers align on the decimal, which is the entire reason a money column
+ * exists. `text-align: end` plus tabular figures does it without a
+ * character-alignment property no browser ships yet.
+ */
+.data-table .td-end,
+.data-table td.num,
+.data-table th.num {
   text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table td.num {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .data-table .td-tight {
@@ -2023,8 +2533,49 @@ input[type='search'] {
   white-space: nowrap;
 }
 
+/*
+ * A row's leading edge carries its state, in the same 3px rule the vault tile
+ * and the item sheet use. Reserved on every row so nothing shifts when it lights.
+ */
+.data-table tbody tr > td:first-child,
+.table tbody tr > td:first-child {
+  border-inline-start: 3px solid transparent;
+}
+
+.data-table tbody tr.is-frozen > td:first-child {
+  border-inline-start-color: var(--frost-mark);
+}
+
+.data-table tbody tr.is-departed > td:first-child {
+  border-inline-start-color: var(--line-strong);
+}
+
+.data-table tbody tr.is-alert > td:first-child {
+  border-inline-start-color: var(--oxblood-mark);
+}
+
+.data-table tbody tr.is-attention > td:first-child {
+  border-inline-start-color: var(--amber-mark);
+}
+
+/*
+ * A register cell's primary value, and the line under it.
+ *
+ * Both hold text of unknown direction — a pricing rule's description, a
+ * carrier's name, an operator's note — so both resolve their own direction from
+ * their own first strong character. Without it, "180 days included, then 10% of
+ * the item intake fee every 90 days" renders in a Hebrew table as
+ * "days included, then 10% … 90 days 180", which is what the audit found on the
+ * pricing screen and the published price list.
+ */
 .dt-primary {
-  font-weight: 600;
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+  unicode-bidi: plaintext;
+}
+
+.dt-sub {
+  unicode-bidi: plaintext;
 }
 
 /* The secondary line under a table cell's primary value — a shipment code under
@@ -2036,26 +2587,36 @@ input[type='search'] {
   display: block;
   margin-block-start: 2px;
   font-size: var(--fs-caption);
-  color: var(--text-muted);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
 }
 
 .dt-cell {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+  min-width: 0;
 }
 
+/*
+ * The thumbnail in a register row.
+ *
+ * 4:5 is the shape of a card in a slab, and fixing it here means a row of
+ * thumbnails is a row of the same rectangle rather than a ragged edge — which is
+ * what makes a register of photographs readable as a column at all.
+ */
 .dt-thumb {
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  width: 36px;
+  aspect-ratio: 4 / 5;
+  height: auto;
+  border-radius: var(--radius);
+  background: var(--surface-stage);
+  border: var(--border-w) solid var(--line);
   object-fit: cover;
   display: grid;
   place-items: center;
-  color: var(--text-muted);
+  color: var(--ink-2);
   overflow: hidden;
 }
 
@@ -2066,95 +2627,125 @@ input[type='search'] {
 }
 
 .amt-pos {
-  color: var(--success);
-  font-weight: 650;
+  color: var(--custody);
+  font-weight: var(--fw-medium);
 }
 
 .amt-neg {
   color: var(--error);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
 }
 
-/* Transaction type glyph. */
+/*
+ * The transaction-type glyph is gone.
+ *
+ * Every ledger row carried a 24px tinted rounded square containing an arrow or a
+ * box, beside a label that already said "Cash in" or "Service charge". Seven
+ * rows, seven tiles, no information — and the credit/debit distinction the tile
+ * was tinting for is carried by the sign on the amount, which is where somebody
+ * reading a ledger is already looking.
+ */
 .type-icon {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  color: var(--text-2);
-  flex: 0 0 auto;
+  display: none;
 }
 
-.type-icon svg {
-  width: 17px;
-  height: 17px;
-}
+/* ============================================================
+   STATUS — a mark, not a pill
+   ============================================================
+   The product had two of these components (`.pill` and `.badge`), eleven tones
+   between them, and a green "Earning" on every row of a table where nothing was
+   ever anything else. A status that never varies is not a status, and a rounded
+   coloured lozenge on every row is texture rather than information.
 
-.type-icon--credit {
-  background: var(--success-bg);
-  color: var(--success);
-}
+   One component now. It reads as a small square-cornered mark with a 2px rule on
+   its leading edge in the semantic colour, on the ground rather than on a tint —
+   so a column of them is a column of rules the eye can run down, and the label
+   still states the status in words for anybody who cannot see the colour.
+   ============================================================ */
 
-.type-icon--debit {
-  background: var(--surface-3);
-  color: var(--text-2);
-}
-
-/* ---- Status pills ---- */
-
-.pill {
+.pill,
+.badge,
+.status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding-inline: 10px;
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  color: var(--text-2);
+  gap: var(--sp-2);
+  min-height: 22px;
+  padding-inline: var(--sp-2);
+  border: 0;
+  border-inline-start: 2px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 
+/* The dot the old pill drew before its label is gone: the leading rule is the
+   mark, and drawing both was saying the same thing twice. */
 .pill::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.85;
+  content: none;
 }
 
-.pill--success {
-  background: var(--success-bg);
-  color: var(--success);
+.pill--success,
+.badge--success,
+.badge--done,
+.badge--stored,
+.status-badge--success {
+  border-inline-start-color: var(--custody-mark);
+  color: var(--custody);
 }
 
-.pill--warning {
-  background: var(--warning-bg);
-  color: var(--warning);
+.pill--warning,
+.badge--pending,
+.status-badge--warning {
+  border-inline-start-color: var(--amber-mark);
+  color: var(--amber);
 }
 
-.pill--error {
-  background: var(--error-bg);
-  color: var(--error);
+.pill--error,
+.badge--denied,
+.badge--danger,
+.status-badge--error {
+  border-inline-start-color: var(--oxblood-mark);
+  color: var(--oxblood);
 }
 
-.pill--info {
-  background: var(--info-bg);
-  color: var(--info);
+.pill--info,
+.badge--info,
+.badge--accepted,
+.badge--listed {
+  border-inline-start-color: var(--frost-mark);
+  color: var(--frost);
 }
 
-.pill--gold {
-  background: rgba(224, 180, 76, 0.16);
-  color: var(--warning-strong);
+/** Money. The only place brass appears as text on a status. */
+.pill--gold,
+.badge--sold {
+  border-inline-start-color: var(--brass-mark);
+  color: var(--brass);
 }
 
-.pill--violet {
-  background: var(--violet-bg);
-  color: var(--violet);
+/** Frozen. Its own tone, because "held" is not "warning" and not "error". */
+.pill--frozen,
+.badge--hold {
+  border-inline-start-color: var(--frost-mark);
+  color: var(--frost);
+  font-weight: var(--fw-semibold);
+}
+
+/** Departed. Neutral by design: gone is not bad. */
+.pill--departed,
+.badge--departed {
+  border-inline-start-color: var(--line-strong);
+  color: var(--ink-2);
+}
+
+/** No tone at all — a classification, not a state. */
+.pill--violet,
+.pill--plain {
+  border-inline-start-color: var(--line-strong);
+  color: var(--ink-2);
 }
 
 .pill--plain::before {
@@ -2162,15 +2753,144 @@ input[type='search'] {
 }
 
 /* ============================================================
-   Detail drawer
+   THE SEAL
+   ============================================================
+   Bault's mark on something it has checked with its own hands: an inspected
+   escrow deal, a verified custody line, a condition report signed by an
+   operator.
+
+   Deliberately NOT a badge. A badge is a label somebody applied; a seal is a
+   claim the platform is making about work it did, so it is drawn as a rule and
+   a mark rather than as a chip, and it never appears on anything Bault has not
+   physically handled.
+   ============================================================ */
+
+.seal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-block: 2px;
+  border-block-end: 2px solid var(--custody-mark);
+  color: var(--custody);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.seal svg {
+  width: 14px;
+  height: 14px;
+  align-self: center;
+}
+
+.seal--brass {
+  border-block-end-color: var(--brass-mark);
+  color: var(--brass);
+}
+
+/* ============================================================
+   STATE TREATMENTS — active, frozen, departed
+   ============================================================
+   The three states every item in this product is in, drawn as structure rather
+   than as a colour swap. Applied to a register row, a tile, or the item sheet
+   itself; the modifier goes on the container and everything inside follows.
+
+     ACTIVE    full colour, full chrome, every action offered. No modifier —
+               this is what the component already is.
+     FROZEN    colour retained, a visible lock rail along the LEADING edge, and
+               actions muted WITH A REASON. A frozen card is not broken and it
+               is not gone; somebody else is holding the decision.
+     DEPARTED  the photograph desaturates, the chrome stays, the history stays
+               navigable. A departed item must never look deleted — the old
+               treatment painted the whole tile near-black, which read as
+               redaction.
+   ============================================================ */
+
+.is-frozen {
+  position: relative;
+  border-inline-start: 3px solid var(--frost-mark);
+}
+
+.is-frozen .photo-thumb-img,
+.is-frozen .card-art img {
+  filter: none;
+}
+
+/** The reason, stated where the actions would be. Never a bare disabled button. */
+.frozen-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+  color: var(--frost);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.frozen-reason svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-block-start: 1px;
+}
+
+.is-departed {
+  border-inline-start: 3px solid var(--line-strong);
+}
+
+.is-departed .photo-thumb-img,
+.is-departed .card-art img,
+.is-departed .stage-photo {
+  filter: grayscale(0.85);
+}
+
+/** Everything else in a departed row keeps its colour and its links. */
+.departed-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+/* Sized, like every other icon in this system. Unconstrained, the archive glyph
+   rendered at its intrinsic size — a 250px box drawing dominating the sheet of
+   a departed item, which is the one state that must not shout. */
+.departed-note svg,
+.frozen-reason svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-block-start: 2px;
+}
+
+/* ============================================================
+   The sheet — a record opened, not a panel slid in
+   ============================================================
+   Every record in this product opens in the same surface: an item, a shipment, a
+   parcel, a ticket, a wallet request. It is addressed by the URL (`?item=…`), so
+   the browser's Back button closes it, and it is the one thing in the product
+   allowed to cast a shadow, because it is genuinely floating over the register
+   it came from.
+
+   `--drawer-w` (440px) is the default: enough for a record that is a list of
+   facts. `--sheet-w` (960px) is for the ITEM, which is not — an item has a
+   photograph, an identity, a state, a set of services with prices and a custody
+   register, and 420px was asking it to be a column.
    ============================================================ */
 
 .drawer-backdrop {
   position: fixed;
   inset: 0;
   z-index: var(--z-drawer);
-  background: rgba(11, 31, 51, 0.28);
-  animation: fade-in var(--dur-md) var(--ease-out);
+  background: rgba(17, 19, 24, 0.32);
+  /* A scroll inside the sheet must not chain to the page behind it. */
+  overscroll-behavior: contain;
+  animation: fade-in var(--dur) var(--ease);
 }
 
 @keyframes fade-in {
@@ -2187,18 +2907,20 @@ input[type='search'] {
   display: flex;
   flex-direction: column;
   width: min(var(--drawer-w), 100vw);
-  background: var(--surface);
-  border-start-start-radius: var(--r-lg);
-  border-end-start-radius: var(--r-lg);
-  animation: drawer-in var(--dur-lg) var(--ease-out);
+  padding-inline-end: env(safe-area-inset-right);
+  background: var(--surface-page);
+  border-inline-start: var(--border-w) solid var(--line-strong);
+  border-radius: 0;
+  box-shadow: var(--shadow-overlay);
+  overscroll-behavior: contain;
+  animation: drawer-in var(--dur-slow) var(--ease);
 }
 
-[dir='ltr'] .drawer {
-  box-shadow: -12px 0 30px rgba(11, 31, 51, 0.12);
-}
-
-[dir='rtl'] .drawer {
-  box-shadow: 12px 0 30px rgba(11, 31, 51, 0.12);
+/* The item sheet. Same component, more room, and the room is used: at ≥900px it
+   puts the details and services on the start side and the custody register on
+   the end side, because those are two different kinds of reading. */
+.drawer--sheet {
+  width: min(var(--sheet-w), 100vw);
 }
 
 @keyframes drawer-in {
@@ -2216,26 +2938,34 @@ input[type='search'] {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
-  padding: var(--sp-5) var(--sp-6);
-  border-block-end: 1px solid var(--border);
+  padding: var(--pad-panel);
+  padding-block-end: var(--sp-4);
+  border-block-end: var(--border-w) solid var(--line-strong);
+  background: var(--surface-page);
 }
 
 .drawer-title {
   flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--fs-lg);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--ink);
+  unicode-bidi: plaintext;
 }
 
 .drawer-subtitle {
   margin-block-start: 3px;
   font-size: var(--fs-sm);
-  color: var(--text-muted);
+  color: var(--ink-2);
+  unicode-bidi: plaintext;
 }
 
 .drawer-body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: var(--sp-6);
+  overscroll-behavior: contain;
+  padding: var(--pad-panel);
 }
 
 .drawer-body--flush {
@@ -2245,16 +2975,53 @@ input[type='search'] {
 .drawer-foot {
   display: flex;
   gap: var(--sp-3);
-  padding: var(--sp-4) var(--sp-6);
-  border-block-start: 1px solid var(--border);
-  background: var(--surface);
+  padding: var(--sp-4) var(--pad-panel);
+  padding-block-end: max(var(--sp-4), env(safe-area-inset-bottom));
+  border-block-start: var(--border-w) solid var(--line-strong);
+  background: var(--surface-page);
 }
 
 .drawer-foot .btn {
   flex: 1 1 auto;
 }
 
-/* ---- Definition list inside a drawer ---- */
+/* ============================================================
+   THE PHOTOGRAPH STAGE
+   ============================================================
+   The one local dark moment in a light product, and the only place a dark
+   surface is allowed. A collector cannot hold this object; the least the screen
+   can do is light it like one — on a neutral sweep, uncropped, with nothing else
+   competing for attention inside the frame.
+   ============================================================ */
+
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-8) var(--sp-6);
+  background: var(--surface-stage);
+  border-radius: 0;
+}
+
+.stage-photo {
+  display: block;
+  max-height: 340px;
+  width: auto;
+  max-width: 100%;
+  /* `contain`: this is evidence, and cropping it would hide the corner somebody
+     is trying to see. */
+  object-fit: contain;
+}
+
+.stage-empty {
+  display: grid;
+  place-items: center;
+  min-height: 200px;
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Definition list inside a sheet ---- */
 
 .detail-list {
   display: flex;
@@ -2267,7 +3034,7 @@ input[type='search'] {
   align-items: baseline;
   gap: var(--sp-4);
   padding-block: var(--sp-3);
-  border-block-end: 1px solid var(--border);
+  border-block-end: var(--border-w) solid var(--line);
 }
 
 .detail-row:last-child {
@@ -2275,51 +3042,69 @@ input[type='search'] {
 }
 
 .detail-label {
-  flex: 0 0 40%;
+  flex: 0 0 38%;
   font-size: var(--fs-sm);
-  color: var(--text-muted);
+  color: var(--ink-2);
 }
 
 .detail-value {
   flex: 1 1 auto;
   min-width: 0;
   font-size: var(--fs-base);
-  font-weight: 550;
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+  unicode-bidi: plaintext;
   overflow-wrap: anywhere;
 }
 
 .detail-value-sub {
+  display: block;
   margin-block-start: 2px;
   font-size: var(--fs-caption);
-  font-weight: 400;
-  color: var(--text-muted);
+  font-weight: var(--fw-regular);
+  color: var(--ink-2);
 }
 
+/*
+ * An amount inside a sheet. It was a centred grey rounded box with an uppercase
+ * tracked-out caption above a 34px figure — a balance card, in miniature, for a
+ * single charge. Money names itself first: the figure leads, at the start edge,
+ * with what it is for beside it.
+ */
 .detail-amount {
   margin-block-start: var(--sp-5);
-  padding: var(--sp-5);
-  border-radius: var(--r-lg);
-  background: var(--surface-2);
-  text-align: center;
+  padding: var(--sp-4) 0 0;
+  border-block-start: var(--border-w) solid var(--line-strong);
+  border-radius: 0;
+  background: none;
+  text-align: start;
 }
 
 .detail-amount-label {
-  font-size: var(--fs-caption);
-  font-weight: 550;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  display: block;
+  order: 2;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
 }
 
 .detail-amount-value {
-  margin-block-start: 6px;
-  font-size: var(--fs-3xl);
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  display: block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  margin-block-start: 0;
+  margin-block-end: 2px;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 /* ============================================================
-   Modal (confirmations, lightbox, item history)
+   Dialog, lightbox, and the confirmation sheet
    ============================================================ */
 
 .modal-backdrop {
@@ -2330,8 +3115,9 @@ input[type='search'] {
   align-items: center;
   justify-content: center;
   padding: var(--sp-5);
-  background: rgba(11, 31, 51, 0.42);
-  animation: fade-in var(--dur-md) var(--ease-out);
+  background: rgba(17, 19, 24, 0.46);
+  overscroll-behavior: contain;
+  animation: fade-in var(--dur) var(--ease);
 }
 
 .modal {
@@ -2341,10 +3127,12 @@ input[type='search'] {
   width: min(92vw, 480px);
   max-height: 92vh;
   padding: var(--sp-6);
-  background: var(--surface);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-pop);
-  animation: pop-in var(--dur-md) var(--ease-out);
+  background: var(--surface-page);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-overlay);
+  overscroll-behavior: contain;
+  animation: pop-in var(--dur) var(--ease);
 }
 
 .modal--wide {
@@ -2354,18 +3142,20 @@ input[type='search'] {
 
 .modal-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--sp-3);
 }
 
 .modal-head h4 {
   flex: 1 1 auto;
   font-size: var(--fs-lg);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
 }
 
 .modal-close {
   flex: 0 0 auto;
+  align-self: flex-start;
 }
 
 .modal-photo {
@@ -2373,13 +3163,14 @@ input[type='search'] {
   min-height: 0;
   max-width: 100%;
   object-fit: contain;
-  border-radius: var(--r-md);
-  background: var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-stage);
 }
 
 .modal-empty {
   margin-block: var(--sp-8);
   text-align: center;
+  color: var(--ink-2);
 }
 
 .modal-serial {
@@ -2393,37 +3184,128 @@ input[type='search'] {
 }
 
 /* ============================================================
+   THE CONFIRMATION SHEET — for what cannot be undone
+   ============================================================
+   Deslab, donate, cull, retrieve, delist, withdraw an offer. Actions that end
+   with somebody else holding the object, or with the object no longer existing
+   in the form it had.
+
+   Three things make this different from a dialog, and all three are deliberate
+   friction rather than decoration:
+
+     1. THE PHOTOGRAPH IS PRESENT. You are about to do something to a specific
+        object; a dialog naming a serial number is not the same as looking at it.
+     2. THE CONSEQUENCE IS ONE PLAIN SENTENCE, in the reader's own language, in
+        the largest text in the sheet. Not a policy paragraph, not a checkbox.
+     3. IT OPENS SLOWLY. `--dur-slow`, and the confirm control does not become
+        available until the typed confirmation matches — so the fastest possible
+        path through this sheet is still slower than a click.
+
+   Full height, because it must own the screen while it is open.
+   ============================================================ */
+
+.confirm-sheet {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0;
+  width: min(96vw, 520px);
+  max-height: 100vh;
+  height: 100vh;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-page);
+  box-shadow: var(--shadow-overlay);
+  animation: sheet-in var(--dur-slow) var(--ease);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+
+.confirm-stage {
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6);
+  background: var(--surface-stage);
+}
+
+.confirm-stage img {
+  max-height: 34vh;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.confirm-title {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+/** The consequence. One sentence, and it is the largest text in the sheet. */
+.confirm-consequence {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-snug);
+  color: var(--ink);
+  border-inline-start: 3px solid var(--oxblood-mark);
+  padding-inline-start: var(--sp-4);
+}
+
+.confirm-serial {
+  color: var(--ink-2);
+}
+
+.confirm-foot {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  padding-block-end: max(var(--sp-4), env(safe-area-inset-bottom));
+  border-block-start: var(--border-w) solid var(--line-strong);
+}
+
+.confirm-foot .btn {
+  flex: 1 1 auto;
+}
+
+/* ============================================================
    Empty / error / loading states
    ============================================================ */
 
 .empty {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sp-2);
-  padding: var(--sp-10) var(--sp-6);
-  text-align: center;
+  padding: var(--sp-8) 0;
+  text-align: start;
+  border-block-start: var(--border-w) solid var(--line);
 }
 
+/*
+ * An empty state is typographic. It says what is not here and what to do about
+ * it, and it does not draw a 44px tinted rounded square with a generic box glyph
+ * in it first — the third rounded-square-with-a-glyph on a page nobody has any
+ * content on yet.
+ */
 .empty-icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-block-end: var(--sp-2);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-
-.empty-icon svg {
-  width: 21px;
-  height: 21px;
+  display: none;
 }
 
 .empty-title {
   font-size: var(--fs-md);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
 }
 
 .empty-text {
@@ -2441,7 +3323,7 @@ input[type='search'] {
   align-items: flex-start;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border: 1px solid rgba(201, 50, 43, 0.28);
+  border: var(--border-w) solid color-mix(in srgb, var(--oxblood) 32%, transparent);
   border-radius: var(--r-md);
   background: var(--error-bg);
   color: var(--error-strong);
@@ -2462,7 +3344,7 @@ input[type='search'] {
 }
 
 .errorbox-title {
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
 }
 
 .okbox {
@@ -2470,12 +3352,12 @@ input[type='search'] {
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid rgba(47, 140, 76, 0.28);
+  border: var(--border-w) solid color-mix(in srgb, var(--custody) 32%, transparent);
   border-radius: var(--r-md);
   background: var(--success-bg);
   color: var(--success-strong);
   font-size: var(--fs-sm);
-  font-weight: 550;
+  font-weight: var(--fw-medium);
 }
 
 .okbox svg {
@@ -2486,14 +3368,14 @@ input[type='search'] {
 
 /* Same banner, amber: informational rather than celebratory. */
 .okbox--warning {
-  border-color: rgba(168, 114, 15, 0.3);
+  border-color: color-mix(in srgb, var(--amber) 32%, transparent);
   background: var(--warning-bg);
   color: var(--warning);
 }
 
 .infobox {
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid rgba(49, 93, 197, 0.22);
+  border: var(--border-w) solid color-mix(in srgb, var(--frost) 32%, transparent);
   border-radius: var(--r-md);
   background: var(--info-bg);
   color: var(--link);
@@ -2539,25 +3421,100 @@ input[type='search'] {
 }
 
 /* ============================================================
-   Cards & grids (vault, marketplace, addresses)
+   The vault register — columns, and a header over them
+   ============================================================
+   The first pass made this a list of rows and stopped there, which is only half
+   a register. Every field after the photograph sat in ONE flexible column,
+   packed to the start edge, so the state began at whatever x the serial happened
+   to end at, the condition at whatever x the state ended at, and nothing lined
+   up between one row and the next — while a 400px void sat in the middle of
+   every row because that one column had all the width and none of the content.
+
+   Five real columns, the same on every row, with a header naming them:
+
+     photograph │ identity │ state │ where it is │ what it has cost
+
+   That is what lets somebody run their eye down "state" without reading four
+   other fields on the way, and it is the whole difference between a list and a
+   register.
    ============================================================ */
 
+/*
+ * `.card-grid` is a stacked list of rows. Nine surfaces use it — addresses, the
+ * storefront, the shipment composer's picker, the help panels — and most of them
+ * are a list of ONE kind of thing with two or three fields.
+ *
+ * The five-column register is a MODIFIER, not the default. It was the default
+ * for about ten minutes and it silently broke the other six: their rows have
+ * three children, so the fourth and fifth tracks collapsed and everything
+ * shifted. A register is a specific shape for a specific job, and a class that
+ * every list already carries is not the place to declare it.
+ */
 .card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(264px, 1fr));
-  gap: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   list-style: none;
 }
 
+/** The vault register: photograph, identity, state, where, cost. */
+.card-grid--register {
+  --register-cols: 56px minmax(12rem, 1fr) 13rem 13rem 12rem;
+}
+
+/* The header. `aria-hidden` because this is a list, not a table — a screen
+   reader gets each row's own labelled content, and a row of bare column names
+   read out before it would be noise. */
+.register-head {
+  display: grid;
+  grid-template-columns: var(--register-cols);
+  align-items: baseline;
+  column-gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-4);
+  padding-inline-start: calc(var(--sp-4) + 3px);
+  border-block-end: var(--border-w) solid var(--line-strong);
+  background: var(--surface-sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.register-head-end {
+  text-align: end;
+}
+
+/*
+ * A row. By default it is a simple stack — a heading, some lines, maybe some
+ * actions — which is what the address list, the storefront and the shipment
+ * picker need and all they have ever needed.
+ *
+ * It becomes a GRID only inside a register. Making the grid the default put an
+ * address card's label in a 56px photograph column and truncated its street to
+ * "1200…", which is what happens when a specific shape is declared on a generic
+ * class.
+ */
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--sp-2);
-  padding: var(--sp-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
+  padding: var(--sp-3) var(--sp-4);
+  background: none;
+  border: 0;
+  /* Reserved on every row, painted only when the row has a state to declare. */
+  border-inline-start: 3px solid transparent;
+  border-block-end: var(--border-w) solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.card-grid--register .card,
+.card-grid--listings .card {
+  display: grid;
+  grid-template-columns: var(--register-cols);
+  align-items: center;
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-1);
 }
 
 .card--interactive {
@@ -2565,57 +3522,117 @@ input[type='search'] {
   text-align: start;
   font: inherit;
   color: inherit;
-  transition: border-color var(--dur-sm) var(--ease), box-shadow var(--dur-sm) var(--ease),
-    transform var(--dur-sm) var(--ease);
+  transition: background var(--dur-fast) var(--ease);
 }
 
 .card--interactive:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-pop);
+  border-color: transparent;
+  border-block-end-color: var(--line);
+  background: var(--surface-sunken);
+  box-shadow: none;
+}
+
+/*
+ * The photograph. 4:5 — the shape of a slab — fixed for every row, so a column
+ * of them is a column and not a ragged edge. On a dark stage, because a card is
+ * an object and objects are lit.
+ */
+.card-art {
+  position: relative;
+  width: 56px;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-stage);
+}
+
+.card-id {
+  min-width: 0;
 }
 
 .card-title {
-  font-size: var(--fs-md);
-  font-weight: 650;
-  color: var(--navy-800);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  color: var(--ink);
+  unicode-bidi: plaintext;
 }
 
 .card-desc {
+  margin-block-start: 1px;
   font-size: var(--fs-sm);
-  color: var(--text-2);
+  color: var(--ink-2);
+  unicode-bidi: plaintext;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+.card-state,
+.card-where {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-body);
+}
+
+/* The qualifying line under a cell's value: a condition, a departure reason. */
+.card-sub {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Kept for the surfaces that still lay their meta out inline (storefront,
+   addresses), which are lists of one kind of thing rather than registers. */
 .card-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-2) var(--sp-4);
   font-size: var(--fs-caption);
-  color: var(--text-muted);
+  color: var(--ink-2);
 }
 
-.card .price {
-  margin-block: var(--sp-1);
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--navy-800);
-  font-variant-numeric: tabular-nums;
-}
+/*
+ * Below the width the five columns need, the register folds into two: the
+ * photograph, and everything else stacked beside it. Nothing is dropped — a
+ * phone gets the same fields in the same order, one under the other.
+ */
+@media (max-width: 1099px) {
+  .card-grid--register {
+    --register-cols: 56px minmax(0, 1fr);
+  }
 
-.card .actions {
-  display: flex;
-  gap: var(--sp-2);
-  margin-block-start: auto;
-  padding-block-start: var(--sp-2);
-}
+  .register-head {
+    display: none;
+  }
 
-.card .actions .btn {
-  flex: 1 1 auto;
+  .card-grid--register .card,
+  .card-grid--listings .card {
+    align-items: start;
+  }
+
+  .card-state,
+  .card-where {
+    grid-column: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+  }
+
+  .card-grid--register .watch {
+    grid-column: 2;
+    align-items: flex-start;
+  }
 }
 
 /* ---- Item photo thumbnails ---- */
@@ -2623,42 +3640,55 @@ input[type='search'] {
 .photo-thumb {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 4 / 5;
   padding: 0;
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface-stage);
   cursor: pointer;
 }
 
 .photo-thumb-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
-  transition: transform var(--dur-lg) var(--ease-out);
+  transition: transform var(--dur) var(--ease);
 }
 
 .photo-thumb:hover .photo-thumb-img {
-  transform: scale(1.03);
+  transform: none;
 }
 
+/*
+ * A card with no photograph on disk. It says so, in words, on the stage — a
+ * 1.6rem emoji at 40% opacity was a shrug where an answer belongs.
+ *
+ * The ink is the ON-DARK ink, because `.photo-thumb` is always on the
+ * photography stage — in a register row, in a sheet, in a table cell. Secondary
+ * ink measured 3.12:1 against it and axe found it on every marketplace surface
+ * that had an item with no catalogue photograph.
+ */
 .photo-thumb-empty {
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
-  font-size: 1.6rem;
-  opacity: 0.4;
+  padding: var(--sp-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  text-align: center;
+  color: var(--ink-on-dark-2);
+  opacity: 1;
 }
 
 .photo-btn {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -2679,9 +3709,13 @@ input[type='search'] {
 .barcode {
   display: inline-block;
   padding: var(--sp-1);
+  /* A barcode is read by a scanner, not by a person. Pure white behind pure
+     black is the quiet zone the symbology requires, and it does not follow the
+     theme: a Code 128 label on a dark surface does not scan.
+     design-lint-allow: scanner contrast */
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius);
   line-height: 0;
 }
 
@@ -2707,100 +3741,257 @@ input[type='search'] {
 }
 
 /* ============================================================
-   Auth screens
+   The anonymous surface — the only public face this product has
+   ============================================================
+   A landing page and a sign-in form on one screen. Two columns at ≥900px: the
+   photography stage and its custody line on the start side, the form on the end
+   side. Below that the stage becomes a band above the form, because on a phone
+   the form is why anybody opened this.
+
+   It was a 440px white card floating in the middle of a navy radial gradient,
+   with a gold `B` above it and a paragraph of demo credentials underneath.
    ============================================================ */
 
 .auth-shell {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: var(--sp-6);
-  background: radial-gradient(120% 100% at 50% 0%, var(--navy-700), var(--navy-900) 70%);
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 0;
+  padding: 0;
+  background: var(--surface-page);
 }
 
+@media (min-width: 900px) {
+  .auth-shell:not(.auth-shell--bare) {
+    grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+    /* `align-content: start` from the base rule would leave the stage the
+       height of its content and a band of page ground under it; the stage is a
+       full-height field. */
+    align-content: stretch;
+    align-items: stretch;
+    min-height: 100vh;
+  }
+}
+
+/* Opened from a link in an email: one sentence and a button, centred. */
+.auth-shell--bare {
+  place-content: center;
+  place-items: center;
+  padding: var(--sp-8) var(--sp-6);
+}
+
+/* ---- The stage ---- */
+
+.auth-stage {
+  display: grid;
+  gap: var(--sp-8);
+  align-content: center;
+  padding: var(--sp-16) var(--sp-8);
+  padding-inline-start: max(var(--sp-8), env(safe-area-inset-left));
+  background: var(--surface-stage);
+  color: var(--ink-on-dark);
+}
+
+@media (min-width: 900px) {
+  .auth-stage {
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--sp-12);
+  }
+}
+
+.auth-stage-photo .photo-thumb {
+  inline-size: min(240px, 45vw);
+  aspect-ratio: 4 / 5;
+  background: transparent;
+  border: 0;
+}
+
+.auth-stage-photo .photo-thumb-img {
+  object-fit: contain;
+}
+
+.auth-pitch {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+/*
+ * On a phone the stage is a band, not a screen.
+ *
+ * At marketing density the full-height stage filled the entire first viewport
+ * and pushed the sign-in form below the fold — on the surface whose whole job,
+ * for anybody who already has an account, is the form. The photograph and the
+ * headline share a row, the rest runs under them, and the form starts within one
+ * short scroll.
+ */
+@media (max-width: 899px) {
+  .auth-stage {
+    grid-template-columns: 132px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--sp-5);
+    padding: var(--sp-8) var(--sp-5);
+    padding-block-start: max(var(--sp-8), env(safe-area-inset-top));
+  }
+
+  .auth-stage-photo .photo-thumb {
+    inline-size: 132px;
+  }
+
+  .auth-pitch {
+    grid-column: 2;
+    gap: var(--sp-3);
+  }
+
+  .auth-lede,
+  .auth-custody,
+  .auth-caption {
+    grid-column: 1 / -1;
+  }
+
+  .auth-box {
+    padding-block: var(--sp-8);
+  }
+}
+
+/* The ONLY place the display face appears. Marketing sizes, marketing rhythm. */
+.auth-headline {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3.2vw, 48px);
+  font-weight: 500;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--ink-on-dark);
+  text-wrap: balance;
+  max-width: 20ch;
+}
+
+.auth-lede {
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  color: var(--ink-on-dark-2);
+  max-width: 54ch;
+}
+
+/* The custody line: the same three facts the item sheet opens with. */
+.auth-custody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-8);
+  margin: 0;
+  padding-block-start: var(--sp-4);
+  border-block-start: var(--border-w) solid var(--line-on-dark);
+}
+
+.auth-custody dt {
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-caption);
+}
+
+.auth-custody dd {
+  margin: 0;
+  margin-block-start: 2px;
+  color: var(--ink-on-dark);
+  font-size: var(--fs-base);
+}
+
+.auth-custody .serial {
+  color: var(--ink-on-dark);
+}
+
+/* On the dark stage the state mark needs the light end of the accent. */
+.auth-custody .pill--success {
+  border-inline-start-color: var(--custody-on-dark);
+  color: var(--custody-on-dark);
+}
+
+.auth-caption {
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: 60ch;
+}
+
+/* ---- The form ---- */
+
 .auth-box {
-  width: min(100%, 440px);
+  display: grid;
+  align-content: center;
+  gap: var(--sp-6);
+  width: 100%;
+  max-width: 460px;
+  margin-inline: auto;
+  padding: var(--sp-12) var(--sp-6);
+  padding-inline-end: max(var(--sp-6), env(safe-area-inset-right));
 }
 
 .auth-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--sp-3);
-  margin-block-end: var(--sp-6);
-  color: #fff;
+  margin-block-end: 0;
+  color: var(--ink);
 }
 
 .auth-brand .rail-mark {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   font-size: var(--fs-xl);
 }
 
 .auth-brand-word {
-  font-size: var(--fs-2xl);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.auth-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-  padding: var(--sp-8);
-  background: var(--surface);
-  border-radius: var(--r-lg);
-  box-shadow: 0 24px 60px rgba(8, 12, 36, 0.4);
-}
-
-.auth-card h2 {
+  font-family: var(--font-display);
   font-size: var(--fs-xl);
-  text-align: center;
-}
-
-.auth-switch {
-  text-align: center;
-  font-size: var(--fs-sm);
-  color: var(--text-2);
-}
-
-.auth-demo {
-  padding: var(--sp-3);
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  font-size: var(--fs-caption);
-  line-height: 1.55;
-  color: var(--text-2);
-  text-align: center;
-}
-
-/*
- * The brand row on the signed-out pages carries the language control.
- *
- * It used to be a text button in a footer that printed the name of the OTHER
- * language. It is the shell's globe switcher now, pushed to the trailing edge of
- * the brand row — top of the card, where somebody who cannot read the form looks
- * first.
- */
-.auth-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .auth-brand .pop-wrap {
   margin-inline-start: auto;
 }
 
-.auth-lang .btn {
-  color: rgba(255, 255, 255, 0.8);
-  border-color: rgba(255, 255, 255, 0.24);
-  background: transparent;
+/* The form is a form on the page, not a card floating over an illustration. */
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-group);
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.auth-lang .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+.auth-card h2 {
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  text-align: start;
+}
+
+.auth-switch {
+  text-align: start;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+/*
+ * The demo accounts.
+ *
+ * A real thing on a real screen: this build ships with seeded accounts and
+ * saying so plainly is more honest than hiding them behind a README. Set as a
+ * quiet note under a rule rather than a centred grey box.
+ */
+.auth-demo {
+  padding: var(--sp-3) 0 0;
+  border-block-start: var(--border-w) solid var(--line);
+  border-radius: 0;
+  background: none;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-normal);
+  color: var(--ink-2);
+  text-align: start;
 }
 
 /* Boot splash */
@@ -2820,6 +4011,538 @@ input[type='search'] {
   gap: var(--sp-3);
   width: min(560px, calc(100vw - 2 * var(--sp-4)));
   text-align: start;
+}
+
+/* ============================================================
+   The landing page
+   ------------------------------------------------------------
+   `areas/customer/marketing/LandingPage.tsx` — the first public surface this
+   product has had. It reuses the auth screen's stage wholesale (the same dark
+   photography ground, the same custody line, the same serial) and then does the
+   thing the auth screen could not: keeps going, at marketing density, through
+   what is promised, what it costs and how an item moves.
+
+   Nothing here is a card. Every section is a heading, a rule and spacing —
+   `--gap-section` at marketing density is 96px, and that space IS the grouping.
+   ============================================================ */
+
+.landing {
+  min-height: 100vh;
+  display: grid;
+  align-content: start;
+  background: var(--surface-page);
+  color: var(--ink-body);
+}
+
+/* ---- The bar ---- */
+
+.landing-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-block: var(--sp-4);
+  padding-inline: max(var(--sp-6), env(safe-area-inset-left)) max(var(--sp-6), env(safe-area-inset-right));
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.landing-word {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.landing-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
+}
+
+/* ---- The stage: the one dark surface, and the whole pitch ---- */
+
+.landing-stage {
+  display: grid;
+  gap: var(--sp-8);
+  align-content: center;
+  /* The card's entrance starts 24px outside its resting place. `clip` keeps that
+     offset from producing a horizontal scrollbar for a quarter of a second. */
+  overflow: clip;
+  padding-block: var(--sp-16);
+  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
+  background: var(--surface-stage);
+  color: var(--ink-on-dark);
+}
+
+@media (min-width: 900px) {
+  .landing-stage {
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--sp-12);
+    padding-block: var(--sp-24);
+  }
+}
+
+.landing-stage-photo .photo-thumb {
+  inline-size: min(280px, 56vw);
+  aspect-ratio: 4 / 5;
+  background: transparent;
+  border: 0;
+}
+
+/* This is evidence. Cropping it hides the corner somebody is trying to see. */
+.landing-stage-photo .photo-thumb-img {
+  object-fit: contain;
+}
+
+/*
+ * The card arrives.
+ *
+ * `DESIGN.md` says motion confirms and never entertains, and this is the one
+ * exception the system can justify: the landing page's whole argument is THIS
+ * OBJECT, and an object that slides into place is read as being put there.
+ * Everywhere else in the product motion acknowledges something the person did;
+ * here there is nothing to acknowledge yet, so the rule is met by keeping the
+ * animation to the single element the page is about. The headline, the custody
+ * line and the buttons do not move — a staggered cascade would be the product
+ * performing, which is what the rule exists to prevent.
+ *
+ * Inside the system's own limits: `--dur-slow` (250ms), the one easing curve,
+ * one purpose, runs once. `both` holds the end state so nothing flickers back.
+ *
+ * DIRECTION IS NOT HARD-CODED. A transform cannot be written in logical
+ * properties, so the offset is a variable and `:dir(rtl)` flips its sign — the
+ * card always enters from the OUTSIDE edge of the stage, which is the left in
+ * English and the right in Hebrew. This is not a layout branch; the grid is
+ * still doing the mirroring on its own.
+ *
+ * Reduced motion needs no rule here: the global `prefers-reduced-motion` block
+ * collapses every animation to 0.01ms, and `both` means the card is simply
+ * already in place.
+ */
+@keyframes landing-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--card-enter-from)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.landing-stage-photo {
+  --card-enter-from: -24px;
+  animation: landing-card-in var(--dur-slow) var(--ease) both;
+}
+
+.landing-stage-photo:dir(rtl) {
+  --card-enter-from: 24px;
+}
+
+.landing-pitch {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+/* The display face, at the one size on the site that earns it. */
+.landing-headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(36px, 4.4vw, 64px);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--ink-on-dark);
+  text-wrap: balance;
+  max-width: 18ch;
+}
+
+.landing-lede {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  color: var(--ink-on-dark-2);
+  max-width: 62ch;
+}
+
+/* The custody line: the same three facts the item sheet opens with. */
+.landing-custody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-8);
+  margin: 0;
+  padding-block-start: var(--sp-4);
+  border-block-start: var(--border-w) solid var(--line-on-dark);
+}
+
+.landing-custody dt {
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-caption);
+}
+
+.landing-custody dd {
+  margin: 0;
+  margin-block-start: 2px;
+  color: var(--ink-on-dark);
+  font-size: var(--fs-base);
+}
+
+.landing-custody .serial {
+  color: var(--ink-on-dark);
+}
+
+/* On the dark stage the state mark needs the light end of the accent. */
+.landing-custody .pill--success {
+  border-inline-start-color: var(--custody-on-dark);
+  color: var(--custody-on-dark);
+}
+
+.landing-caption {
+  margin: 0;
+  color: var(--ink-on-dark-3);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: 64ch;
+}
+
+.landing-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-block-start: var(--sp-2);
+}
+
+/*
+ * A secondary control ON THE STAGE takes the stage's ink, not the page's.
+ *
+ * `.btn--secondary` is drawn for the light ground: a hairline in `--line` over
+ * `--surface-page`. Dropped onto the photography stage it is a pale rectangle
+ * competing with the photograph for the brightest thing on screen. Same
+ * component, same geometry, same focus ring — only the two colours it borrows
+ * change, which is what the on-dark tokens exist for.
+ */
+.landing-stage .btn--secondary {
+  background: transparent;
+  border-color: var(--line-on-dark);
+  color: var(--ink-on-dark);
+}
+
+.landing-stage .btn--secondary:hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--ink-on-dark-3);
+}
+
+/* ---- Sections below the fold ---- */
+
+.landing-section,
+.landing-close {
+  display: grid;
+  gap: var(--sp-4);
+  align-content: start;
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-block: var(--gap-section);
+  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.landing-h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.landing-sub {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  color: var(--ink-2);
+  max-width: 68ch;
+}
+
+/*
+ * A claim is a rule and the text under it.
+ *
+ * Not a bordered tile, not a tinted box, not an icon above a heading — all
+ * three are named in DESIGN.md's anti-patterns, and all three were in this
+ * product. The 2px custody rule is the same mark a selected rail destination
+ * and an active register row take.
+ */
+.landing-claims {
+  display: grid;
+  gap: var(--sp-8);
+  padding-block-start: var(--sp-4);
+}
+
+@media (min-width: 720px) {
+  .landing-claims {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.landing-claims article {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-4);
+  border-block-start: 2px solid var(--custody);
+}
+
+.landing-claims h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--ink);
+}
+
+.landing-claims p {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--ink-body);
+}
+
+/* ---- The price register ---- */
+
+.landing-price-table {
+  margin-block-start: var(--sp-4);
+}
+
+.landing-price-what {
+  display: block;
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+}
+
+/* The storage terms, under the thing they are the terms of. */
+.landing-terms {
+  display: block;
+  margin-block-start: 2px;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
+}
+
+/* Storage has no single figure, so the cell says what it has instead of a sum. */
+.landing-included {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+.landing-footnote {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.landing-steps {
+  padding-block-start: var(--sp-4);
+}
+
+/* ---- The close ---- */
+
+.landing-close {
+  gap: var(--sp-5);
+  border-block-end: 0;
+}
+
+.landing-foot {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-block: var(--sp-8);
+  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
+  padding-block-end: max(var(--sp-8), env(safe-area-inset-bottom));
+  border-block-start: var(--border-w) solid var(--line);
+}
+
+/*
+ * On a phone, marketing density is too much air.
+ *
+ * `--gap-section` is 96px at this density, which is right when three claims sit
+ * side by side and is three screens of nothing when they are stacked. The
+ * padding drops; nothing else about the page changes.
+ */
+@media (max-width: 719px) {
+  .landing-bar {
+    padding-inline: var(--sp-5);
+  }
+
+  /*
+   * The bar stacks rather than squeezing.
+   *
+   * Brand, globe, Sign in and Open an account are four items of unshrinkable
+   * width — each is a word or an icon that cannot be made narrower — and on a
+   * 390px screen they fit only by leaving the two controls almost touching the
+   * brand. Giving the actions a row of their own costs one line of height and
+   * buys a tap target that is not adjacent to the thing beside it.
+   */
+  .landing-bar-actions {
+    flex-basis: 100%;
+    margin-inline-start: 0;
+    justify-content: start;
+  }
+
+  .landing-stage {
+    gap: var(--sp-6);
+    padding-block: var(--sp-12);
+    padding-inline: var(--sp-5);
+  }
+
+  .landing-section,
+  .landing-close,
+  .landing-foot {
+    padding-block: var(--sp-12);
+    padding-inline: var(--sp-5);
+  }
+}
+
+/* ============================================================
+   Membership
+   ------------------------------------------------------------
+   `areas/customer/membership/MembershipPage.tsx`. One comparison register and
+   a row of offers — deliberately NOT three pricing cards side by side with the
+   middle one scaled up and ribboned, which is the identical-rounded-cards
+   anti-pattern in the one place it is most tempting. Comparing a tier means
+   reading one row across three columns, and a row is what a table has.
+   ============================================================ */
+
+/* What is left this cycle: a definition list, not a grid of tiles. */
+.mem-allowances {
+  display: grid;
+  gap: var(--gap-group);
+  margin: 0;
+  padding-block-start: var(--sp-2);
+}
+
+@media (min-width: 720px) {
+  .mem-allowances {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+.mem-allowance dt {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.mem-allowance dd {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  margin-block-start: var(--sp-1);
+  color: var(--ink);
+}
+
+.mem-unlimited {
+  color: var(--custody);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- The comparison register ---- */
+
+/*
+ * A tier heading carries three things and they are three different sizes: the
+ * name, the figure, and who it is for. Stacked rather than run together with
+ * middle dots, which is the meta-string pattern the system retired.
+ */
+.mem-table thead th {
+  vertical-align: bottom;
+}
+
+.mem-tier-name {
+  display: block;
+  color: var(--ink);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.mem-tier-price {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--brass);
+  font-size: var(--fs-base);
+}
+
+.mem-tier-for {
+  display: block;
+  margin-block-start: var(--sp-1);
+  max-width: 22ch;
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+/*
+ * "Not in this tier" is an em dash in the secondary ink, never a zero.
+ *
+ * Zero reads as "included, and you have none left", which is a different fact
+ * and the one thing a comparison table must not blur.
+ */
+.mem-not-included {
+  color: var(--ink-2);
+}
+
+.mem-perks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--ink-body);
+}
+
+/* ---- The offers ---- */
+
+.mem-offers {
+  display: grid;
+  margin-block-start: var(--gap-group);
+  border-block-start: var(--border-w) solid var(--line-strong);
+}
+
+/* The confirmation sentence replaces the one-liner in place, so the price and
+   the control never move while somebody is reading what they are agreeing to. */
+.offer .offer-note {
+  transition: none;
+}
+
+.mem-uncovered {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--sp-3);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  color: var(--ink-body);
+}
+
+/* What a tier paid towards a parcel. Brass, because it is money — and it
+ * names itself, so a total below its own breakdown is never unexplained. */
+.mem-covered {
+  color: var(--brass);
+}
+
+.mem-uncovered li {
+  padding-inline-start: var(--sp-4);
+  border-inline-start: 2px solid var(--line-strong);
 }
 
 /* ============================================================
@@ -2906,104 +4629,12 @@ input[type='search'] {
 }
 
 /* Small inline badge (item lifecycle, event kind) — pill styling. */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding-inline: 10px;
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.badge--info,
-.badge--accepted,
-.badge--listed {
-  background: var(--info-bg);
-  color: var(--info);
-}
-
-.badge--success,
-.badge--done,
-.badge--stored {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.badge--pending {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.badge--denied,
-.badge--danger,
-.badge--hold {
-  background: var(--error-bg);
-  color: var(--error);
-}
-
-.badge--sold {
-  background: rgba(224, 180, 76, 0.16);
-  color: var(--warning-strong);
-}
-
-/* Legacy table styling, aligned with the new data table. */
-.table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-base);
-}
-
-.table th,
-.table td {
-  padding: var(--sp-3) var(--sp-5);
-  border: 0;
-  border-block-end: 1px solid var(--border);
-  text-align: start;
-  vertical-align: middle;
-}
-
-.table thead th {
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: var(--fs-micro);
-  font-weight: 650;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.table tbody tr:last-child td {
-  border-block-end: 0;
-}
-
-.table tbody tr:hover {
-  background: var(--surface-2);
-}
-
-.table td input,
-.table td select {
-  width: 100%;
-  min-width: 6rem;
-  min-height: 36px;
-  font-size: var(--fs-sm);
-}
-
-.table td input[type='checkbox'] {
-  width: 17px;
-  min-width: 0;
-}
+/*
+ * `.badge` and its nine modifiers were the SECOND status component. They are
+ * defined once, with `.pill`, in the STATUS section above; the duplicate block
+ * that stood here — nine tinted rounded lozenges, several of them unreachable —
+ * is deleted rather than re-pointed.
+ */
 
 /* ============================================================
    Responsive
@@ -3060,8 +4691,8 @@ input[type='search'] {
     align-items: center;
     gap: var(--sp-3);
     padding: var(--sp-3) var(--sp-4);
-    background: var(--navy-800);
-    color: #fff;
+    background: var(--ink);
+    color: var(--ink-on-dark);
   }
 
   .mobile-bar .rail-mark {
@@ -3072,7 +4703,7 @@ input[type='search'] {
 
   .mobile-bar-title {
     font-size: var(--fs-md);
-    font-weight: 650;
+    font-weight: var(--fw-semibold);
   }
 
   .rail {
@@ -3106,7 +4737,7 @@ input[type='search'] {
     position: fixed;
     inset: 0;
     z-index: calc(var(--z-rail) - 1);
-    background: rgba(11, 31, 51, 0.4);
+    background: var(--scrim);
   }
 
   .page-header {
@@ -3211,7 +4842,7 @@ input[type='search'] {
   .dt-wrap--stack .data-table td::before {
     content: attr(data-label);
     font-size: var(--fs-micro);
-    font-weight: 650;
+    font-weight: var(--fw-semibold);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-muted);
@@ -3240,48 +4871,56 @@ input[type='search'] {
 }
 
 /* ============================================================
-   Vault command bar — the centred search and the state controls
+   Vault command bar — a filter row, not a hero
+   ============================================================
+   The search field was a 720px pill, 58px tall, with a 999px radius, an 18px
+   placeholder and a drop shadow, centred over a list of four holdings. It was
+   the largest and loudest control in the product, and it was searching a page
+   that fits on one screen.
+
+   It is a filter row now: the field takes the space it needs at the start edge,
+   the three scopes sit beside it as segmented controls carrying live counts, and
+   the whole thing is one rule tall. The scope belongs in the URL and already is.
    ============================================================ */
 
 .vault-command {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
   gap: var(--sp-4);
-  margin-block-end: var(--sp-5);
+  margin-block-end: var(--gap-group);
 }
 
-/* The vault's primary control, sized to say so: 640px sits in the middle of the
-   520–720px band, and the 58px height keeps the Libertinus ascenders clear of
-   the field edges. */
 .vault-search {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 640px;
-  max-width: 720px;
-  min-width: 280px;
-  height: 58px;
-  padding-inline: var(--sp-4);
-  gap: var(--sp-3);
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-card);
-  transition: border-color var(--dur-sm) var(--ease), box-shadow var(--dur-sm) var(--ease);
+  flex: 1 1 320px;
+  max-width: 420px;
+  min-width: 220px;
+  height: 36px;
+  padding-inline: var(--sp-3);
+  gap: var(--sp-2);
+  background: var(--surface-input);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: none;
+  transition: border-color var(--dur-fast) var(--ease);
 }
 
 .vault-search:focus-within {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px var(--teal-surface);
+  border-color: var(--custody);
+  box-shadow: none;
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
 }
 
 .vault-search svg {
   flex: 0 0 auto;
-  width: 21px;
-  height: 21px;
-  color: var(--text-muted);
+  width: 16px;
+  height: 16px;
+  color: var(--ink-2);
 }
 
 .vault-search input {
@@ -3291,56 +4930,70 @@ input[type='search'] {
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: var(--fs-lg);
-  color: var(--text);
+  font-size: var(--fs-base);
+  color: var(--ink);
 }
 
+/* The wrapper carries the focus treatment for the whole compound control, so
+   the field inside it must not draw a second one. */
 .vault-search input:focus {
   outline: none;
 }
 
+/*
+ * The three scopes, as one segmented control.
+ *
+ * They were three separate 58px rounded buttons, one of which turned near-black
+ * with a gold count when selected. Segmenting them says what the old row did
+ * not: these are three views of one collection, and you are in exactly one.
+ */
 .state-controls {
   display: flex;
   align-items: stretch;
-  gap: var(--sp-2);
   flex: 0 0 auto;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-/* Large, icon-led, and never colour-only: the selected control also carries a
-   filled surface, a heavier label and aria-pressed. */
 .state-control {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  height: 58px;
-  padding-inline: var(--sp-4);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  color: var(--text-2);
+  height: 36px;
+  padding-inline: var(--sp-3);
+  border: 0;
+  border-inline-start: var(--border-w) solid var(--line-strong);
+  border-radius: 0;
+  background: var(--surface-input);
+  color: var(--ink-2);
   font: inherit;
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease),
-    border-color var(--dur-sm) var(--ease);
+  touch-action: manipulation;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.state-control:first-child {
+  border-inline-start: 0;
 }
 
 .state-control:hover {
-  border-color: var(--teal);
-  color: var(--text);
+  background: var(--surface-sunken);
+  color: var(--ink);
 }
 
 .state-control.is-on {
-  background: var(--graphite);
-  border-color: var(--graphite);
-  color: #fff;
-  font-weight: 700;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+  box-shadow: inset 0 -2px 0 var(--custody-mark);
 }
 
 .state-control:focus-visible {
-  outline: 2px solid var(--teal);
-  outline-offset: 2px;
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: calc(-1 * var(--focus-width));
 }
 
 .state-icon {
@@ -3349,68 +5002,78 @@ input[type='search'] {
 }
 
 .state-icon svg {
-  width: 21px;
-  height: 21px;
+  width: 16px;
+  height: 16px;
 }
 
 .state-count {
-  min-width: 24px;
-  padding-inline: 6px;
-  border-radius: var(--r-pill);
-  background: var(--surface-3);
-  color: var(--text-2);
+  min-width: 16px;
+  padding-inline: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-2);
   font-size: var(--fs-sm);
-  text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
 }
 
 .state-control.is-on .state-count {
-  background: var(--gold);
-  color: var(--navy-900);
+  background: none;
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+}
+
+/* The count of what is on screen, beside the control that chose it. */
+.vault-count {
+  align-self: center;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .vault-history-note {
-  padding: var(--sp-3) var(--sp-4) 0;
+  padding: var(--sp-3) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
 }
 
 /* ============================================================
-   Card tiles — the whole tile is the control
+   Register rows in their three states
    ============================================================ */
 
 .card--interactive {
   position: relative;
 }
 
-/* A transparent button stretched over the tile. The tile keeps its normal
-   layout (headings, badges, nested links stay real elements) while click and
-   keyboard focus land on one control rather than a nested-interactive mess. */
+/* A transparent button stretched over the row. The row keeps its normal layout
+   (headings, marks, nested links stay real elements) while click and keyboard
+   focus land on one control rather than a nested-interactive mess. */
 .card-hit {
   position: absolute;
   inset: 0;
   z-index: 1;
   width: 100%;
   border: 0;
-  border-radius: var(--r-lg);
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
 }
 
 .card-hit:focus-visible {
-  outline: 2px solid var(--teal);
-  outline-offset: 2px;
-}
-
-.card-art {
-  position: relative;
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: calc(-1 * var(--focus-width));
 }
 
 /* The card's REAL media — arrival photographs, a paid photo shoot, a video.
    A horizontal strip rather than a grid: these are versions of one card, and
    scanning along them is how you compare "before" with "after". It scrolls in
-   its own container so a card with nine photographs never widens the drawer. */
+   its own container so a card with nine photographs never widens the sheet. */
 .media-strip {
   display: flex;
   gap: var(--sp-3);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   padding-block: var(--sp-2);
   margin: 0;
   list-style: none;
@@ -3434,9 +5097,9 @@ input[type='search'] {
      evidence somebody paid for, and cropping it would hide the corner they were
      trying to see. */
   object-fit: contain;
-  background: var(--graphite);
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
+  background: var(--surface-stage);
+  border-radius: var(--radius);
+  border: 0;
 }
 
 /* A cull row that cannot be chosen still shows, with its reason beside it — a
@@ -3446,47 +5109,68 @@ input[type='search'] {
   cursor: not-allowed;
 }
 
-/* Historical cards read as records, not stock: graphite-dominant container,
-   desaturated artwork and lower contrast throughout. The artwork component and
-   its serial-number mapping are untouched — only this container filters it. */
+/*
+ * FROZEN — colour retained, a lock rail along the leading edge.
+ *
+ * The photograph is NOT desaturated: the card is fine, it is the decision that
+ * is held. Everything stays legible and the actions are muted with a reason
+ * beside them rather than silently disabled.
+ */
+.card--frozen {
+  border-inline-start-color: var(--frost-mark);
+}
+
+.card--frozen .card-title {
+  color: var(--ink);
+}
+
+/*
+ * DEPARTED — the photograph desaturates, and nothing else changes.
+ *
+ * The old treatment painted the whole tile near-black with white text inside an
+ * otherwise light product, which read as a redaction. A card that has left is
+ * not a card that was censored: its history is the most valuable thing about it
+ * and has to stay as navigable as it ever was.
+ */
 .card--historical {
-  background: var(--graphite);
-  border-color: var(--graphite-soft);
-  color: var(--surface-2);
+  background: none;
+  border-inline-start-color: var(--line-strong);
+  color: inherit;
 }
 
-.card--historical .card-title,
-.card--historical .card-desc,
-.card--historical .card-meta {
-  color: var(--surface-2);
+.card--historical .card-title {
+  color: var(--ink-body);
 }
 
 .card--historical .card-desc,
 .card--historical .card-meta {
-  opacity: 0.78;
+  color: var(--ink-2);
+  opacity: 1;
 }
 
 .card--historical .card-art img,
-.card-art--historical img {
-  filter: grayscale(0.85) contrast(0.9) brightness(0.92);
+.card-art--historical img,
+.card--historical .photo-thumb-img {
+  filter: grayscale(0.9);
 }
 
+/* The mark that says "this one has left", on the photograph rather than over it. */
 .card-archive-mark {
   position: absolute;
-  inset-block-start: var(--sp-2);
-  inset-inline-end: var(--sp-2);
+  inset-block-end: 0;
+  inset-inline: 0;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-pill);
-  background: rgba(11, 31, 51, 0.72);
-  color: var(--gold);
+  width: auto;
+  height: 22px;
+  border-radius: 0;
+  background: rgba(17, 19, 24, 0.72);
+  color: var(--ink-on-dark);
 }
 
 .card-archive-mark svg {
-  width: 17px;
-  height: 17px;
+  width: 14px;
+  height: 14px;
 }
 
 /* ============================================================
@@ -3578,24 +5262,34 @@ input[type='search'] {
   list-style: none;
 }
 
-.photo-thumb {
+/*
+ * The bench's upload thumbnail — a photograph an operator has just taken, not a
+ * catalogue photograph of a card.
+ *
+ * It was ALSO called `.photo-thumb`, and its fixed 72x72 block-size silently won
+ * the cascade over the catalogue thumbnail's 4:5 aspect ratio, which is why the
+ * item sheet's photography stage rendered a 260x72 letterbox with a 55px card
+ * floating in it. One class, two components, and the later one wins: renamed
+ * rather than fought with specificity.
+ */
+.upload-thumb {
   position: relative;
   inline-size: 72px;
   block-size: 72px;
-  border-radius: var(--r-sm);
+  border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: var(--border-w) solid var(--line);
   background: var(--surface-sunken);
 }
 
-.photo-thumb img {
+.upload-thumb img {
   inline-size: 100%;
   block-size: 100%;
   object-fit: cover;
   display: block;
 }
 
-.photo-thumb--pending .skel {
+.upload-thumb--pending .skel {
   display: block;
   inline-size: 100%;
   block-size: 100%;
@@ -3610,8 +5304,8 @@ input[type='search'] {
   block-size: 22px;
   padding: 0;
   border-radius: 50%;
-  background: rgb(0 0 0 / 0.6);
-  color: #fff;
+  background: var(--scrim);
+  color: var(--ink-on-dark);
   border: none;
 }
 
@@ -3665,9 +5359,9 @@ input[type='search'] {
   inline-size: 24px;
   block-size: 24px;
   border-radius: 50%;
-  background: var(--navy-800);
-  color: #fff;
-  font-size: var(--fs-micro);
+  background: var(--ink);
+  color: var(--ink-on-dark);
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3711,11 +5405,19 @@ input[type='search'] {
   min-inline-size: 7rem;
 }
 
+/*
+ * The LAST tracked-out uppercase eyebrow in the product.
+ *
+ * The audit named this pattern as the default chrome of every heading and every
+ * table header, and the token and register passes cleared it everywhere except
+ * here — the marketplace filter bar, where TYPE / CONDITION / PRICE FROM went on
+ * shouting at 11px. A filter caption is a label like any other.
+ */
 .field--compact .field-label {
-  font-size: var(--fs-micro);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
 }
 
 @media (max-width: 640px) {
@@ -3775,38 +5477,68 @@ input[type='search'] {
   color: var(--warning);
 }
 
+/* ============================================================
+   THE REGISTER — append-only, and it looks it
+   ============================================================
+   Custody events, ledger lines, wallet-request history, support messages. Four
+   places in this product where the record is the product, and all four render
+   here.
+
+   A dated vertical register: a continuous rule down the leading edge, the date
+   in a fixed column at the start, the entry beside it. No beads, no chat
+   bubbles, no hover chrome, no pencil — nothing that suggests any of it can be
+   changed, because none of it can.
+
+   The rule runs THROUGH the last row rather than stopping short of it. A trail
+   that tapers off says the record ended; it did not, it is just the most recent
+   thing that has happened so far.
+   ============================================================ */
+
 .timeline {
   list-style: none;
   margin-block-start: var(--sp-3);
+  border-inline-start: var(--border-w) solid var(--line-strong);
 }
 
-/* Wallet-request audit history: one entry per state change, ruled on the leading
-   edge so the sequence reads as a trail rather than as a list of sentences. */
 .timeline > li {
-  padding: var(--sp-3) 0 var(--sp-3) 0;
-  padding-inline-start: var(--sp-4);
-  border-inline-start: 2px solid var(--border);
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: var(--sp-3) 0;
+  padding-inline-start: var(--sp-4);
+  border-inline-start: 0;
+  border-block-end: var(--border-w) solid var(--line);
 }
 
 .timeline > li + li {
-  margin-block-start: -1px;
+  margin-block-start: 0;
 }
 
+/* The tick that marks each entry against the rule. Square, small, and the same
+   neutral as the rule itself — it is a ruling mark, not a status. */
 .timeline > li::before {
   content: '';
   position: absolute;
-  inset-block-start: calc(var(--sp-3) + 5px);
-  inset-inline-start: -5px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 0 0 2px var(--surface);
+  inset-block-start: calc(var(--sp-3) + 7px);
+  inset-inline-start: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 0;
+  background: var(--line-strong);
+  box-shadow: none;
 }
 
 .timeline > li:last-child {
-  border-inline-start-color: transparent;
+  border-block-end: 0;
+}
+
+@media (min-width: 640px) {
+  .timeline > li {
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    column-gap: var(--sp-4);
+    align-items: baseline;
+  }
 }
 
 /* ============================================================
@@ -3884,7 +5616,7 @@ input[type='search'] {
 .search--wide {
   flex: 1 1 100%;
   max-width: 720px;
-  min-height: 46px;
+  min-height: 44px;
   padding-inline: var(--sp-3);
   gap: var(--sp-2);
   background: var(--surface);
@@ -3905,8 +5637,9 @@ input[type='search'] {
 }
 
 .search--wide:focus-within {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px var(--teal-surface);
+  border-color: var(--custody);
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
 }
 
 .chip-row {
@@ -3934,9 +5667,9 @@ input[type='search'] {
 }
 
 .chip.is-on {
-  background: var(--graphite);
-  border-color: var(--graphite);
-  color: #fff;
+  background: var(--surface-sunken);
+  border-color: var(--ink-2);
+  color: var(--ink);
 }
 
 .chip:focus-visible {
@@ -4003,7 +5736,7 @@ input[type='search'] {
 
 .faq-q-text {
   flex: 1;
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .faq-a {
@@ -4143,7 +5876,7 @@ input[type='search'] {
 
   .vault-search {
     flex-basis: 100%;
-    height: 54px;
+    height: 44px;
   }
 
   .state-controls {
@@ -4151,16 +5884,25 @@ input[type='search'] {
     overflow-x: auto;
   }
 
-  /* The label would wrap the control past the viewport; the tooltip and the
-     aria-label still name it. */
-  .state-control .state-label {
+  /*
+   * The labels STAY on a phone.
+   *
+   * They were hidden here because they wrapped the control past the viewport —
+   * but what that left was three near-identical segments distinguished by a
+   * small glyph and a number, on the control that decides which of three
+   * collections you are looking at. The icon goes instead: it was never carrying
+   * the meaning, and dropping it fits "Active / On hold / History" in 358px with
+   * room to spare.
+   */
+  .state-control .state-icon {
     display: none;
   }
 
   .state-control {
-    flex: 1;
+    flex: 1 1 auto;
     justify-content: center;
-    padding-inline: var(--sp-3);
+    padding-inline: var(--sp-2);
+    font-size: var(--fs-sm);
   }
 }
 
@@ -4220,6 +5962,8 @@ input[type='search'] {
   }
 
   .legal-pre {
+    /* design-lint-allow: print. Ink on paper is black, whatever the reader had
+       their screen set to. */
     color: #000;
   }
 
@@ -4234,6 +5978,8 @@ input[type='search'] {
 
   .panel {
     box-shadow: none;
+    /* design-lint-allow: print. A hairline that survives a laser printer is not
+       the hairline that reads on a screen. */
     border-color: #999;
   }
 }
@@ -4258,11 +6004,15 @@ input[type='search'] {
   cursor: pointer;
 }
 
-/** Weight, not colour, carries a field caption. It is a name, not a note. */
+/**
+ * A caption is the question; the value is the answer. Setting both at 600 —
+ * which is what a 5-column warehouse form was doing — means nothing in the row
+ * is the answer. The caption steps back so the value can step forward.
+ */
 .field-label {
   font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-  color: var(--text-2);
+  font-weight: var(--fw-regular);
+  color: var(--ink-2);
   line-height: var(--lh-snug);
 }
 
@@ -4317,8 +6067,8 @@ textarea[aria-invalid='true'] {
 }
 
 .btn-spinner {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid currentColor;
   border-block-start-color: transparent;
@@ -4340,14 +6090,16 @@ textarea[aria-invalid='true'] {
  * reads on both themes and on the navy rail.
  */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--teal);
-  outline-offset: 2px;
-  border-radius: var(--r-xs);
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius);
 }
 
-.rail :where(a, button):focus-visible {
-  outline-color: var(--gold-bright);
-}
+/*
+ * The rail used to need its own ring colour, because it was a navy monolith and
+ * a green outline disappeared into it. It is the second surface now, so it takes
+ * the same ring as everything else — which is the point of having one.
+ */
 
 /* ---- Reading measure --------------------------------------------------- */
 
@@ -4399,27 +6151,17 @@ textarea[aria-invalid='true'] {
  * well as a hue, so the difference survives being printed, screenshotted in
  * greyscale, or seen by somebody who does not distinguish them.
  */
-.badge,
-.status-badge {
-  font-weight: var(--fw-semibold);
-  border: 1px solid transparent;
-  letter-spacing: var(--track-label);
-}
-
-.badge--error,
-.status-badge--error {
-  border-color: color-mix(in srgb, var(--error) 30%, transparent);
-}
-
-.badge--warning,
-.status-badge--warning {
-  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
-}
-
-.badge--success,
-.status-badge--success {
-  border-color: color-mix(in srgb, var(--success) 30%, transparent);
-}
+/*
+ * Shape as well as colour — but the shape is now the leading rule defined in the
+ * STATUS section, not a second border wrapped around a tinted lozenge. Roughly
+ * one in twelve men cannot separate the red and green these marks use, so the
+ * label states the status in words and the rule gives it a position; both
+ * survive greyscale.
+ *
+ * The four rules that stood here added a 1px translucent border to a component
+ * that no longer has a border, and letter-spacing to a component that is not
+ * set in caps. Removed rather than re-pointed.
+ */
 
 /* ---- Tables: scannable, and never wider than the page ------------------ */
 
@@ -4428,12 +6170,13 @@ textarea[aria-invalid='true'] {
   overscroll-behavior-x: contain;
 }
 
+/*
+ * The uppercase tracked-out column header lived here and quietly beat the
+ * register's own header rule further up the file. It was also the single most
+ * repeated instance of the eyebrow-label pattern in the product — every table,
+ * every screen. The register defines its header once; nothing overrides it.
+ */
 .data-table th {
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -4475,37 +6218,62 @@ textarea[aria-invalid='true'] {
 /* ---- Theme control ----------------------------------------------------- */
 
 .theme-toggle svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Shelf yield ------------------------------------------------------- */
 
-/**
- * The yield bar. A number in a cell is compared by reading; a bar is compared
- * by looking, which is the entire job of this screen — find the worst shelf.
- */
-.yield-bar {
+/* ============================================================
+   THE PROPORTION BAR
+   ============================================================
+   One bar, two jobs, and both are the same question: how much of this has been
+   used up?
+
+     · Shelf yield — how much of a shelf's occupancy has paid for itself.
+     · BREAK-EVEN WATCH — how much of an item's value has been eaten by the
+       storage it has accrued. This is the one figure in the vault a collector
+       cannot work out for themselves, and it is why the bar exists.
+
+   It goes amber BEFORE it says anything. A watch that only warns once the number
+   is bad is a report; a watch that changes colour while there is still time to
+   act on it is a watch.
+
+   Square, because it is a measurement and not a token, and always accompanied by
+   its figure — the bar is for comparing down a column, the number is for knowing.
+   ============================================================ */
+
+.yield-bar,
+.proportion {
   position: relative;
   display: block;
   width: 100%;
   min-width: 80px;
-  height: 6px;
-  border-radius: var(--r-pill);
-  background: var(--surface-3);
+  height: 4px;
+  border-radius: 0;
+  background: var(--surface-sunken-2);
   overflow: hidden;
 }
 
-.yield-bar > span {
+.yield-bar > span,
+.proportion > span {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  border-radius: var(--r-pill);
-  background: var(--teal);
+  border-radius: 0;
+  background: var(--custody-mark);
+  transition: inline-size var(--dur) var(--ease);
 }
 
+/** Approaching: storage has taken a third of the value. Still time to decide. */
+.proportion--watch > span {
+  background: var(--amber-mark);
+}
+
+/** Past it: storage has cost more than the item is worth. */
+.proportion--over > span,
 .yield-bar--dead > span {
-  background: var(--warning);
+  background: var(--oxblood-mark);
 }
 
 .yield-cell {
@@ -4544,20 +6312,21 @@ textarea[aria-invalid='true'] {
   }
 
   .dt-wrap--stack .data-table tr {
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: var(--sp-3);
-    margin-block-end: var(--sp-3);
-    background: var(--surface);
+    border: 0;
+    border-block-end: var(--border-w) solid var(--line);
+    border-radius: 0;
+    padding: var(--sp-3) 0;
+    margin-block-end: 0;
+    background: none;
   }
 
   .dt-wrap--stack .data-table td::before {
     content: attr(data-label);
     display: block;
-    font-size: var(--fs-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--text-muted);
+    font-size: var(--fs-caption);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-2);
     margin-block-end: 2px;
   }
 }
@@ -4590,10 +6359,788 @@ textarea[aria-invalid='true'] {
   align-items: end;
 }
 
+/**
+ * The way out of a dead end on the receiving bench.
+ *
+ * When the directed stow has nowhere to send the box, the refusal is followed
+ * by the shelf form itself rather than by directions to another tab. It is
+ * inset and bordered because it is a second job appearing inside the first one,
+ * and an operator should be able to see where the bench stops and the repair
+ * begins.
+ */
+.stow-rescue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.stow-rescue .field {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.stow-rescue .field-hint {
+  flex: 1 0 100%;
+}
+
 /** Prose inside a flush panel needs the padding the panel gave up. */
 .panel-note {
   padding: 0 var(--pad-panel) var(--gap-group);
   font-size: var(--fs-caption);
   color: var(--text-muted);
   max-width: var(--measure);
+}
+
+/* ============================================================
+   COMPONENTS THIS PRODUCT DID NOT HAVE
+   ============================================================
+   Everything above is an existing component brought onto the system. What
+   follows had no equivalent at all, and each one exists because the audit found
+   a job nothing was doing.
+   ============================================================ */
+
+/* ---- The identity line ------------------------------------------------
+   Photograph → serial → status, in that order, at the top of every item view.
+   It is the answer to "which object is this", and it is the same three things in
+   the same order on a register row, in a sheet header and on a confirmation. */
+
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-4);
+  padding-block: var(--sp-3);
+  border-block-end: var(--border-w) solid var(--line-strong);
+}
+
+.identity-serial {
+  font-size: var(--fs-lg);
+}
+
+.identity-class {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.identity-name {
+  flex: 1 0 100%;
+  order: 3;
+  color: var(--ink-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  unicode-bidi: plaintext;
+}
+
+/* ---- Break-Even Watch -------------------------------------------------- */
+
+/*
+ * Break-Even Watch, as the register's last column.
+ *
+ * End-aligned, because it is money and money aligns on the decimal with the
+ * money above it. The caption that used to sit to the RIGHT of the figure —
+ * "$5.00 ……… Spent so far", with the reader's eye crossing a gap to reach it —
+ * is the column header now, which is where a caption repeated on every row
+ * belongs.
+ */
+.watch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.watch-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  max-width: 100%;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The bar is 100% of the cell, not of the text beside it. */
+.watch .proportion {
+  inline-size: 100%;
+}
+
+.watch-amount {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-base);
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- The step register ------------------------------------------------
+   A custom request is three steps: ask (free) → an operator proposes a price and
+   a scope → you accept. Rendered horizontally, with the current step marked by
+   the same rule everything else in this system is marked by — so a person can
+   see whose turn it is without reading a status word.
+
+   Not a progress bar: the steps are named, the money is stated at the step it
+   appears, and a step that has not happened yet is not greyed into illegibility. */
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: var(--border-w) solid var(--line-strong);
+}
+
+.step {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  padding-inline-start: var(--sp-4);
+  border-block-start: 2px solid transparent;
+  margin-block-start: -1px;
+  border-inline-start: var(--border-w) solid var(--line);
+  color: var(--ink-2);
+}
+
+.step:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+
+.step-name {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.step-detail {
+  display: block;
+  margin-block-start: 2px;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+}
+
+.step.is-done {
+  color: var(--ink-body);
+  border-block-start-color: var(--custody-mark);
+}
+
+.step.is-current {
+  color: var(--ink);
+  border-block-start-color: var(--custody-mark);
+}
+
+.step.is-current .step-name {
+  font-weight: var(--fw-semibold);
+}
+
+/* A refusal is not a fourth step; it is the second one answered "no". */
+.step.is-declined {
+  border-block-start-color: var(--oxblood-mark);
+  color: var(--oxblood);
+}
+
+/* Inside a register cell the steps stack, because a table cell is not the place
+   for a three-column layout. */
+.data-table .steps {
+  border-block-start: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.data-table .step {
+  flex: 1 1 auto;
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
+  padding-inline-start: var(--sp-3);
+  border-block-start: 0;
+  border-inline-start: 2px solid var(--line);
+  margin-block-start: 0;
+}
+
+.data-table .step:first-child {
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--line);
+}
+
+.data-table .step.is-done,
+.data-table .step.is-current {
+  border-inline-start-color: var(--custody-mark);
+}
+
+.data-table .step.is-declined {
+  border-inline-start-color: var(--oxblood-mark);
+}
+
+/* ---- The price, stated before the button ------------------------------
+   No service action in this product may render without its price adjacent. The
+   figure leads and the action follows it, never the other way round. */
+
+.offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding-block: var(--sp-3);
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.offer-what {
+  min-width: 0;
+}
+
+.offer-name {
+  display: block;
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.offer-note {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  max-width: var(--measure);
+}
+
+.offer-price {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* ---- Touch and pointer hygiene ---------------------------------------- */
+
+:where(button, a, summary, [role='tab'], [role='button'], label) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, a, summary, [role='tab'], [role='button']) {
+  touch-action: manipulation;
+}
+
+/* ---- Images never cause layout shift ---------------------------------- */
+
+/**
+ * Every photograph in this product is a card, and a card is 4:5 in its slab.
+ * Declaring the ratio in CSS reserves the box before the bytes arrive, which is
+ * the same thing width/height attributes do and works for the several places
+ * where the intrinsic size genuinely is not known until the file loads.
+ */
+.photo-thumb-img,
+.dt-thumb img,
+.card-art img {
+  aspect-ratio: 4 / 5;
+}
+
+/* ---- Mobile bar: clear of the notch ------------------------------------ */
+
+.mobile-bar {
+  padding-block-start: max(var(--sp-2), env(safe-area-inset-top));
+  padding-inline: max(var(--sp-3), env(safe-area-inset-left))
+    max(var(--sp-3), env(safe-area-inset-right));
+}
+
+/* ---- Support threads are a register, not a chat -------------------------
+   The helpdesk was rendering as rounded chat bubbles alternating left and right.
+   Support messages are append-only — they are the record of what a company told
+   a customer about their money, their property, or why their account was locked
+   — and a bubble is the shape of a conversation that can be deleted. */
+
+.ask-turns,
+.ask-log {
+  border-inline-start: var(--border-w) solid var(--line-strong);
+}
+
+.ask-turn {
+  padding: var(--sp-3) 0 var(--sp-3) 0;
+  padding-inline-start: var(--sp-4);
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.ask-bubble,
+.ask-bubble--you,
+.ask-bubble--bot {
+  max-width: var(--measure);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-body);
+}
+
+.ask-who {
+  display: block;
+  margin-block-end: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- Chips: a filter, not a token ------------------------------------- */
+
+.chip {
+  border-radius: var(--radius);
+  border: var(--border-w) solid var(--line-strong);
+  background: var(--surface-input);
+  color: var(--ink-2);
+  font-weight: var(--fw-regular);
+}
+
+.chip.is-on {
+  background: var(--surface-sunken);
+  border-color: var(--ink-2);
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- Skeletons: shown late, kept briefly ------------------------------
+   A skeleton that appears for 80ms is a flicker, and one that vanishes the
+   instant data lands is a flash. Delayed in, held for a minimum once shown. */
+
+@keyframes skel-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+.skel,
+.skel-block,
+.skel-metric {
+  animation: skel-pulse 1.4s var(--ease) infinite, skel-appear 1ms linear 220ms both;
+}
+
+/* ---- Print: a label or a report, never a screenshot of the app --------- */
+
+@media print {
+  .rail,
+  .ph-actions,
+  .ctx-actions {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   THE ITEM SHEET — two kinds of reading, side by side
+   ============================================================
+   The start side is the card: what it is, what it costs to keep, what can be
+   done to it and for how much. The end side is the record: every custody event
+   in order, which is the answer to "prove you have had this the whole time".
+
+   They are different kinds of reading and they belong abreast, not stacked —
+   which is why the sheet is 960px rather than the 420px column the item used to
+   share with wallet requests and shipments. Below 900px they stack, register
+   last, because on a phone the card comes first.
+   ============================================================ */
+
+.sheet-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-section);
+  padding: var(--pad-panel);
+}
+
+@media (min-width: 900px) {
+  .sheet-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    gap: var(--sp-8);
+  }
+}
+
+.sheet-col {
+  min-width: 0;
+}
+
+.sheet-col--register {
+  padding-inline-start: 0;
+}
+
+@media (min-width: 900px) {
+  .sheet-col--register {
+    padding-inline-start: var(--sp-8);
+    border-inline-start: var(--border-w) solid var(--line);
+  }
+}
+
+/* The item sheet's head carries the identity line, so it wraps rather than
+   truncating: a serial is never abbreviated. */
+.drawer-head-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.drawer-head .identity {
+  padding-block: 0;
+  border-block-end: 0;
+}
+
+/*
+ * The photography stage, at the very top of the sheet and full-bleed inside it.
+ *
+ * The card is given a real size — 260px wide, 4:5, centred on the sweep — rather
+ * than the 72px thumbnail it had in the old drawer. This is the whole argument
+ * of the direction in one element: a collector cannot hold the object, so the
+ * screen lights it like one.
+ */
+.drawer .stage {
+  padding: var(--sp-8) var(--sp-6);
+}
+
+.drawer .stage .photo-thumb,
+.drawer .stage .photo-thumb-empty {
+  inline-size: 260px;
+  max-inline-size: 60vw;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.drawer .stage .photo-thumb-img {
+  object-fit: contain;
+}
+
+/* On the sheet's stage it is larger, because there is room for it to be. */
+.drawer .stage .photo-thumb-empty {
+  font-size: var(--fs-sm);
+}
+
+.stage--departed .photo-thumb-img {
+  filter: grayscale(0.9);
+}
+
+/* ---- One register entry ---- */
+
+.register-kind {
+  display: inline-block;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.register-entry {
+  margin-block-start: 2px;
+  color: var(--ink-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+/* A photograph that did not load says so, in the space it would have filled. */
+.media-missing {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 12.5rem;
+  padding: var(--sp-3);
+  border: var(--border-w) dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  text-align: center;
+}
+
+/* ============================================================
+   The marketplace listing row
+   ============================================================
+   The same register as the vault, with the columns the job needs:
+
+     photograph │ price + identity │ condition │ the two actions
+
+   The photograph is larger, because on a shelf of things for sale it IS the
+   pitch — it is the only thing a buyer can inspect. And the PRICE IS THE FIRST
+   TEXT LINE; it used to be the fourth thing in the tile, below a bold
+   `trading_card` and two lines of truncated catalogue string, in the mono face
+   at the same weight as a barcode.
+   ============================================================ */
+
+/*
+ * No `auto` in a register's column list.
+ *
+ * Every row is its own grid — they are `<li>` elements, not table rows — so an
+ * `auto` or a `min-content` track resolves against THAT row's content and lands
+ * at a different width on the header, which has none. The header's "State" sat
+ * 150px to the end side of the condition it was labelling. Every track is either
+ * fixed or `1fr`, and then all the rows agree.
+ */
+.card-grid--listings {
+  --register-cols: 88px minmax(14rem, 1fr) 11rem 13rem;
+}
+
+.card--listing .card-art {
+  width: 88px;
+}
+
+.card--listing .price {
+  display: block;
+  margin-block: 0 2px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: start;
+}
+
+.card--listing .actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-block-start: 0;
+  padding-block-start: 0;
+}
+
+/* The filter bar is a row of controls that wraps, with the search taking the
+   spare width and the count sitting at the end of it. */
+.filter-bar {
+  align-items: flex-end;
+}
+
+.filter-bar .search {
+  min-inline-size: 14rem;
+}
+
+@media (max-width: 1099px) {
+  .card-grid--listings {
+    --register-cols: 72px minmax(0, 1fr);
+  }
+
+  .card--listing .card-art {
+    width: 72px;
+  }
+
+  .card--listing .card-state,
+  .card--listing .actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+/* A row of actions, wrapping rather than stacking. Three buttons of three
+   different weights piled vertically in a 90px column is what a table does when
+   nobody decided how wide the action column should be. */
+.actions--row {
+  display: flex;
+  /* `nowrap`, deliberately: this sits in a `td-tight` cell, which is as narrow
+     as its content, so wrapping would put every button on its own line — which
+     is exactly what the offers table was doing. */
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+  margin-block-start: 0;
+  padding-block-start: 0;
+}
+
+/* A register cell holding a figure and its qualifier: the figure aligns on the
+   decimal, the qualifier sits under it at the same edge. */
+.data-table td.num .dt-sub {
+  text-align: end;
+}
+
+/* A label that resolves to no account. Quoted exactly as written — it is the
+   only clue to whose property the box is — and marked as unresolved rather than
+   greyed into looking like an empty cell. */
+.unresolved {
+  display: inline-block;
+  padding-inline-start: var(--sp-2);
+  border-inline-start: 2px solid var(--oxblood-mark);
+}
+
+.unresolved .dt-sub {
+  color: var(--oxblood);
+}
+
+/* ============================================================
+   THE CHART — one style, and these are its rules
+   ============================================================
+   Graphite bars. ONE accent, and it marks the thing to act on rather than
+   distinguishing a series. Tabular axis labels. A stated maximum, because a bar
+   chart whose scale is not stated is a decoration. No gradients, no rounded
+   caps, no shadows, no animation on load.
+
+   Every bar carries its own figure beside it: the bar is for comparing down a
+   column, the number is for knowing, and neither replaces the other.
+   ============================================================ */
+
+.chart {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding-block: var(--sp-2) var(--sp-4);
+}
+
+.chart-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chart-title {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.chart-sub {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  max-width: var(--measure);
+}
+
+/*
+ * The bars and their labels are two layers of one grid cell: the SVG stretches
+ * to the container while the text stays at the page's own size, which is the
+ * only way to have a chart that scales and labels that do not.
+ */
+.chart-svg,
+.chart-rows {
+  grid-column: 1;
+  grid-row: 2;
+  inline-size: 100%;
+}
+
+.chart-svg {
+  display: block;
+  /* The bars start after the label column and stop before the figures. */
+  padding-inline-start: calc(var(--chart-label, 132px) + var(--sp-2));
+  padding-inline-end: var(--chart-value, 96px);
+  box-sizing: border-box;
+}
+
+.chart-bar {
+  fill: var(--ink-2);
+}
+
+/** The one accent: the row somebody is meant to do something about. */
+.chart-bar--mark {
+  fill: var(--amber-mark);
+}
+
+.chart-rows {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: var(--chart-label, 132px) minmax(0, 1fr) var(--chart-value, 96px);
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-caption);
+}
+
+/*
+ * All three cells are placed EXPLICITLY, column and row.
+ *
+ * With only the value and the note placed, grid auto-placement put the label in
+ * (1,1), the value in (1,3) — and then, finding its cursor already past column
+ * 2, dropped the note into (2,2). Every occupancy count rendered one row below
+ * the zone it belonged to, which on a chart about which zone to act on is the
+ * one mistake that cannot be tolerated.
+ */
+.chart-label {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.chart-value {
+  grid-column: 3;
+  grid-row: 1;
+  text-align: end;
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+}
+
+.chart-note {
+  min-width: 0;
+  color: var(--ink-2);
+  font-weight: var(--fw-regular);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-axis {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block-start: var(--sp-2);
+  border-block-start: var(--border-w) solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.chart-axis-label {
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+/**
+ * The render-failure fallback.
+ *
+ * Centred and quiet on purpose: it is the one screen a person reaches by
+ * accident, and it should read as a message rather than as damage. It takes the
+ * page's own tokens so it is correct in both themes and in both directions.
+ */
+.error-boundary {
+  max-width: var(--measure);
+  margin: var(--sp-10) auto;
+  padding: var(--sp-6);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.error-boundary h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  color: var(--ink);
+}
+
+.error-boundary p {
+  margin: 0;
+  color: var(--ink-body);
+}
+
+/* Not mono: this is an error message, not a serial. Mono is for codes. */
+.error-boundary-detail {
+  font-size: var(--fs-caption);
+  color: var(--oxblood);
+  overflow-wrap: anywhere;
+}
+
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
 }

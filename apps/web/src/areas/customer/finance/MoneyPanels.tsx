@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
-import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconReceipt, IconWallet } from '../../../shared/ui/icons';
 
 interface BankInstructions {
@@ -136,19 +136,15 @@ export function TopUpPanel({
               says so with the account details rather than a dead button. */}
           {chosen?.instant ? (
             <>
-              <div className="field">
-                <span className="field-label">{t('money.amount')}</span>
-                <div className="money-input">
-                  <span aria-hidden="true">$</span>
-                  <input inputMode="decimal" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                </div>
-                <span className="field-hint">
-                  {t('money.limits', {
-                    min: formatUsd(catalogue.limits.minMinor),
-                    max: formatUsd(catalogue.limits.maxMinor),
-                  })}
-                </span>
-              </div>
+              <MoneyField
+                label={t('money.amount')}
+                value={amount}
+                onChange={setAmount}
+                hint={t('money.limits', {
+                  min: formatUsd(catalogue.limits.minMinor),
+                  max: formatUsd(catalogue.limits.maxMinor),
+                })}
+              />
               <div className="row">
                 <Button variant="gold" icon={<IconWallet />} disabled={busy || !withinLimits} onClick={() => void pay()}>
                   {t('money.payNow')}

@@ -115,8 +115,8 @@ function panel(titlePattern: RegExp, opts: { withTable?: boolean } = {}): HTMLEl
     .filter((h) => titlePattern.test(h.textContent ?? ''))
     .map((h) => h.closest('section.panel'))
     .filter((s): s is HTMLElement => s !== null);
-  // Two panels genuinely share the title "Bins & shelves" — the create form and
-  // the list — so a caller can ask for the one holding the table.
+  // Two panels genuinely share the title "Shelves" — the create form and the
+  // list — so a caller can ask for the one holding the table.
   const match = opts.withTable ? sections.find((s) => s.querySelector('table')) : sections[0];
   if (!match) throw new Error(`no panel titled ${titlePattern}`);
   return match;
@@ -198,7 +198,7 @@ describe('the directed stow', () => {
      * not one per unit.
      */
     const user = userEvent.setup();
-    post.mockResolvedValue([{ id: 'i1', barcode: 'BC-ABC-1234' }]);
+    post.mockResolvedValue([{ id: 'i1', barcode: 'SN-ABC-1234' }]);
     renderConsole();
     const bench = await waitFor(() => panel(/receive bench/i));
 
@@ -220,7 +220,7 @@ describe('the directed stow', () => {
 
   it('switches to a scanned shelf and sends that instead', async () => {
     const user = userEvent.setup();
-    post.mockResolvedValue([{ id: 'i2', barcode: 'BC-ABC-5678' }]);
+    post.mockResolvedValue([{ id: 'i2', barcode: 'SN-ABC-5678' }]);
     renderConsole();
     const bench = await waitFor(() => panel(/receive bench/i));
 
@@ -276,7 +276,7 @@ describe('the shelf list', () => {
       </I18nProvider>,
     );
 
-    const table = await waitFor(() => panel(/bins & shelves/i, { withTable: true }));
+    const table = await waitFor(() => panel(/^shelves$/i, { withTable: true }));
     expect(within(table).getAllByText('BIN-QJLTDJH4').length).toBeGreaterThan(0);
     expect(within(table).getByText('12')).toBeInTheDocument();
     // The utilisation bar and its denominator are gone; a "12 / 50" would mean
@@ -292,7 +292,7 @@ describe('the shelf list', () => {
         <WarehouseConsole />
       </I18nProvider>,
     );
-    const table = await waitFor(() => panel(/bins & shelves/i, { withTable: true }));
+    const table = await waitFor(() => panel(/^shelves$/i, { withTable: true }));
     expect(within(table).getAllByText(/oversized/i).length).toBeGreaterThan(0);
     expect(within(table).getAllByText(/standard/i).length).toBeGreaterThan(0);
   });

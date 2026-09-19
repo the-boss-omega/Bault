@@ -18,7 +18,7 @@ bug can violate them. Everything below explains how that is achieved.
 
 ## How this document is organized
 
-It is split into thirty-six parts, each covering a coherent slice of the code:
+It is split into forty-seven parts, each covering a coherent slice of the code:
 
 - **Part 1 — Repository, Monorepo & Shared Packages**: the root tooling, `@bault/config`,
   `@bault/adapters`, `@bault/contracts`, and infra.
@@ -159,8 +159,77 @@ It is split into thirty-six parts, each covering a coherent slice of the code:
   the intake bench books in a box now, so its labels print as one job in one dialog, one label per
   page, instead of one dialog per unit.
 
+- **Part 37 — A Shelf Put Up From the Bench**: the directed stow refusing with nowhere to send
+  the goods, and the shelf form moved to the refusal instead of another tab; plus what `bin.active`
+  actually is and, more usefully, the three places that read it and the one that does not.
+- **Part 38 — Writing Down How Intake Actually Works**: the whole intake path laid out in the order
+  the work happens rather than in the order the code enforces it — `docs/design/03-intake.md` — with
+  the taxonomy, the charges, the route map and the state maps gathered at the end.
+- **Part 39 — The Edges**: the production-readiness pass. The storage adapter that accepted
+  photographs and discarded them, the session lookup with no index, the password change that left
+  stolen sessions alive, the readiness probe that answered 200 while the database was down, and the
+  CI that tested none of what it claimed — fixed; plus an explicit list of what was left undone.
+
+- **Part 40 — A Carrier That Exists, and Words That Mean Things**: the last fake
+  adapter replaced with EasyPost (real carriers, real labels, a test mode that is
+  production-safe), and a copy pass that found the English had drifted from the
+  Hebrew rather than the other way round.
+
+- **Part 41 — Bault Sells Its Own Cards, and the Box a Parcel Goes In**: a store for
+  the business's own stock, where buying a copy mints the item — serial, barcode,
+  owner — in the same transaction as the money and the warehouse shelves it after;
+  and a box a collector can choose, stored on the shipment so the quoted price is
+  the charged price, with dimensional weight billed in one place instead of two.
+
+- **Part 42 — The Front Door**: the marketing page this product spent its whole
+  life without. `AuthShell` said THERE IS NO MARKETING SITE and it was true —
+  every route needed a session, so a stranger who typed the address in reached a
+  password field. The landing page reuses the sign-in screen's own stage (a real
+  item, photographed, with its serial), reads its five headline prices live from
+  the public pricing rules instead of typing a figure onto a page, shows none at
+  all when that request fails, and renders without waiting on — or failing with —
+  the session probe, because a public page should not go dark when the database
+  does.
+
+- **Part 43 — Showing It To Somebody Who Is Not Here**: `WEB_PUBLIC_HOST` opened
+  the dev server, which answers `GET /src/**/*.tsx` with the transpiled source — so
+  the one setting whose purpose is "let somebody else see this" pointed at the one
+  server that hands them the code. A `preview` block puts the same allow-list on the
+  built bundle, which has no `.tsx` and no sourcemaps in it.
+
+- **Part 44 — One Fee Instead of Thirty, and the Box Nobody Measured**: the
+  dimensional divisor corrected to the 167 the reference service publishes, and the
+  box a parcel goes in chosen automatically — nothing is ever measured, because the
+  dimensions are the BOX's and there are five of them; plus membership, where one
+  fixed monthly fee means the services in a tier are not billed again, every
+  allowance has a ceiling, and running out of one never charges anybody anything;
+  plus per-pound and per-ounce metering, and the two dimension limits ePacket
+  publishes that a large box breaks while it is still empty.
+
+- **Part 45 — The Build That Was Never a Build**: the repo-root `.env` says
+  `NODE_ENV=development`, and `vite.config.ts` reads it with an empty prefix to find
+  `API_PORT` — so Vite took it as an instruction and `vite build` had been producing a
+  DEVELOPMENT bundle, 1,562 kB with `jsxDEV` in it, which took every `import.meta.env.DEV`
+  branch and shipped the sign-in form pre-filled with a real account and the shared
+  password; plus the same password a second time in the i18n catalogue, where a guard on
+  the render could never have removed it.
+
+- **Part 46 — The One Animation**: the landing page's card slides into place, which
+  is the single exception to *motion confirms, never entertains* and is argued for
+  rather than assumed — one element, the system's own duration and easing, nothing
+  else on the hero moving, and `:dir(rtl)` flipping the offset so the card enters from
+  the outside edge of the stage in both scripts.
+
+- **Part 47 — Everything the Table Promised**: the membership inclusions wired at
+  the moment each fee is charged — shipment cover netted per rate and spent in the
+  settling transaction, waivers for commission, escrow, cash-out and pickup — plus a
+  downgrade that no longer cancels, a prorated upgrade and a renewal that can find its
+  own period; a dispatch that bought labels for `US 00000`; a sign-in log with the
+  real client address; a password on the tunnel; intake priced per class; and a
+  production nginx that never forwarded `/api`.
+
 **Precedence: later parts win.** Where Parts 1–8 disagree with a later changelog part, the
-changelog part is current; among Parts 9–36, the highest-numbered one is current. The
+changelog part is current; among Parts 9–47, the highest-numbered one is current. The
 file-by-file sections in Parts 1–8 have been corrected in place wherever the code they
 quoted no longer exists, so they should be accurate on their own terms too.
 
@@ -889,7 +958,7 @@ PAYMENT_PROVIDER=stripe
 PAYMENT_API_KEY=
 PAYMENT_WEBHOOK_SECRET=
 
-SHIPPING_PROVIDER=shipstation
+SHIPPING_PROVIDER=sandbox        # or `easypost` — see Part 40
 SHIPPING_API_KEY=
 
 EMAIL_PROVIDER=console
@@ -900,7 +969,8 @@ The external-provider block. Each provider has a *name* (which sandbox/real
 implementation to use) and secret key(s) left blank in the template. `PAYMENT_PROVIDER`
 defaults to `stripe` — the reference tokenizing provider — with an API key and a
 webhook-signing secret to be filled from sandbox credentials. `SHIPPING_PROVIDER`
-defaults to `shipstation`. `EMAIL_PROVIDER` defaults to `console`, which selects the
+defaults to `sandbox` (Part 40 made it an enum with a real `easypost` rail).
+`EMAIL_PROVIDER` defaults to `console`, which selects the
 `ConsoleEmailAdapter` that just logs — perfect for local dev where you do not want to
 send real email. The comments repeat "Sandbox keys only in dev," reinforcing that no
 production secret should ever sit in a checked-out `.env`. Leaving the keys blank is
@@ -1352,7 +1422,7 @@ storage adapter.
   PAYMENT_API_KEY: z.string().optional().default(''),
   PAYMENT_WEBHOOK_SECRET: z.string().optional().default(''),
 
-  SHIPPING_PROVIDER: z.string().default('shipstation'),
+  SHIPPING_PROVIDER: z.enum(['easypost', 'sandbox']).default('sandbox'), // Part 40
   SHIPPING_API_KEY: z.string().optional().default(''),
 
   EMAIL_PROVIDER: z.string().default('console'),
@@ -1362,7 +1432,7 @@ storage adapter.
 The external-provider block, and the design choice here is spelled out in the schema
 comment: "optional in dev (empty string allowed), required in prod is enforced by the
 individual adapters when they are actually used (T020+)." Each *provider name* has a
-sensible default (`stripe`, `shipstation`, `console`), and each *secret* is
+sensible default (`sandbox`, `console`), and each *secret* is
 `.optional().default('')` — meaning it may be absent and becomes an empty string. The
 combination `.optional().default('')` guarantees the field is always a `string` in the
 output type (never `undefined`), so downstream code can treat it uniformly, while
@@ -1687,12 +1757,13 @@ apart, and the contract-test suite can run the *same* tests against either.
 
 ```ts
 /**
- * Shipping adapter (T020) — ShipStation / Easyship behind one interface.
+ * Shipping adapter (T020) — a carrier API behind one interface. Part 40 put a
+ * real EasyPost implementation behind it; the sandbox stayed as the dev sink.
  * Provides carrier rates, label purchase, and tracking. Rush handling is a flag.
  */
 ```
 
-The shipping adapter abstracts a shipping aggregator (ShipStation or Easyship) behind
+The shipping adapter abstracts a shipping aggregator (EasyPost, since Part 40) behind
 one interface offering three capabilities: rate quotes, label purchase, and tracking.
 "Rush handling is a flag" foreshadows the `rush: boolean` field.
 
@@ -1814,7 +1885,7 @@ reproducible. `getTracking` always returns `in_transit` — a simple stable stat
 tests to assert against.
 
 `implements ShippingAdapter` again gives the compile-time guarantee that lets a real
-ShipStation/Easyship adapter drop in behind the same interface, verified by the same
+EasyPost adapter drops in behind the same interface, verified by the same
 contract tests.
 
 ---
@@ -3671,7 +3742,7 @@ The DI wiring for external-service adapters (T020), also `@Global()`. It declare
 
 This is the same ports-and-adapters pattern as the billing seam, applied to *all*
 outbound integrations. The header makes the swap story explicit: sandbox
-implementations are wired now, and real providers (Stripe, ShipStation, …) are swapped
+implementations were wired at first, and real providers (PayPal, EasyPost, S3) are swapped
 in *by changing only this factory, per env* — call sites depend on the token +
 interface, never on the concrete class. `ConsoleEmailAdapter`, for instance, is what
 lets `VerificationService` "send" verification and reset emails in development by
@@ -12096,7 +12167,7 @@ no one/I, for warehouse readability) using `randomInt` from `node:crypto`, and
 | Entity | Prefix | Where it is minted |
 | --- | --- | --- |
 | Owner (intake routing) | `OW-` | `generateIntakeId()`, at registration |
-| Item / barcode | `BC-` | `makeItemSerial()`, at intake |
+| Item serial / barcode | `SN-` | `makeItemSerial()`, at intake |
 | Lot | `LOT-` | `makeLotSerial()`, when `isLot` is set |
 | Bin / shelf | `BIN-` | `makeShelfBarcode(zone, index)` |
 | Shipment | `SHP-` | `newShipmentCode()`, on shipment create |
@@ -12110,6 +12181,35 @@ indexes; the generators only produce candidates.
 
 The knock-on effect worth knowing: **owner IDs are now random**, so nothing may
 hard-code one. The integration tests look one up via `GET /me/profile`.
+
+**The item prefix is now `SN-`.** For most of the project's life an item's serial
+was minted as `BC-<base36 time>-<4 digits>` — "BC" for barcode — while everything a
+person actually reads called it a serial number and wrote it `SN-`: the eight seeded
+Rayquaza cards (`SN-DR97-0001` and the rest), their photograph filenames under
+`assets/images`, the intake form's placeholder, the type specimen, and the `Serial`
+component's own documentation. The two shapes met in the seed, which gave every card
+an `SN-` serial and a `BC-` barcode — two different strings on one item, even though
+`makeItemBarcode(serial)` exists precisely so that the barcode *is* the serial. A card
+booked in at the bench and a card from the seed did not look like the same kind of
+thing, and a seeded card's label disagreed with its own record.
+
+`makeItemSerial()` now mints `SN-<base36 time>-<4 digits>`, taking its prefix from
+`ID_PREFIX.item` rather than repeating a literal, and the seed's barcodes, outbox
+payloads and notification text carry the same `SN-` string as the serial. The warehouse
+scan fields show `SN-…` as their placeholder, and the intake test now asserts both that
+the serial starts with `SN-` and that the barcode equals it. Lots keep `LOT-` and shelves
+keep `BIN-`: the prefix is how an operator tells at a glance whether a label covers one
+piece, many pieces, or a shelf, and folding all three into one prefix would throw that
+away.
+
+Two things deliberately did not change. No migration rewrites existing `BC-` serials. An
+item's serial is printed on a label stuck to the item and quoted verbatim in history that
+is never edited — notifications and outbox payloads among it — so renaming it would leave
+every printed label and every past message naming a serial that no longer exists. Nothing
+in the code parses the prefix, so an old `BC-` item and a new `SN-` item resolve through
+the same lookups side by side. And the later passages in this document that mention
+`BC-…` (Parts 14 and 24) are records of what the system minted at the time, and are left
+as written.
 
 ## Identity: an immutable username
 
@@ -17112,7 +17212,7 @@ This is the big one and it deserves more than a bullet.
 
 The audit's parity requirement for SMC-74/76 opens with *"a real carrier
 integration behind the existing ShippingAdapter port"*. That has **not** been
-done, and cannot be from here: it needs a ShipStation or Easyship account,
+done, and could not be from there: it needed a carrier account (EasyPost, in the end — Part 40),
 credentials, and a contract. Every figure this system quotes comes from
 `SandboxShippingAdapter`.
 
@@ -20995,6 +21095,12 @@ The lot checkbox is now offered **only while there is one unit**. A lot is one
 record standing for many things; it cannot describe a submission of four, so it
 is hidden rather than shown and then ignored.
 
+It also moved. It used to sit in the bottom action row between *Add another unit*
+and the gold submit, where it read as a choice about the whole run. It now sits
+inside the unit's own window, under that unit's fields, with the lot-size box and
+the too-small-to-stay-a-lot warning beside it — because while it is offered at
+all there is exactly one unit, and the lot is a fact about that unit.
+
 ## The same atomicity bug, caught the same way
 
 `intakeUnits` was written as a loop over `intakeItem`, and `intakeItem` opens its
@@ -21150,3 +21256,1511 @@ missing an export throws at import time. That surfaces as an *unhandled error*
 after the run rather than as a failed assertion — the projects all reported green
 and the run still exited non-zero — which is a genuinely confusing way to find
 out. The mock now mirrors every export, with a comment saying it has to keep pace.
+
+---
+
+# Part 37 — A Shelf Put Up From the Bench
+
+**Completed: 12 September 2026.**
+
+**663 tests green. 0 new lint errors.**
+
+---
+
+## How a bin is known to be active
+
+Worth stating plainly, because it is easy to assume there is more to it than
+there is. `bin.active` is a boolean column on the table, defaulting to true. It
+is not derived, not inferred from fullness, not expired by time and not touched
+by anything that stows into the bin. Exactly one thing writes it: `PATCH
+/custody/bins/:binId` with `{ active }`, which is the *Take out of service* /
+*Return to service* button on the Locations tab.
+
+It is a flag rather than a delete because a bin is never deleted — items
+reference their bin forever, and the transfer ledger references bins that items
+left years ago. An inactive bin keeps everything it holds, stops being handed
+out by the directed stow, and empties as its contents are picked.
+
+Three places read it, and they read it for three different reasons:
+
+- `listStowable` filters on it, so an out-of-service shelf is never suggested
+  and never appears in the pick-instead list.
+- The Locations table shows it as a badge — *Out of service* — ahead of the
+  *Empty* / *In stock* the count would otherwise produce, because whether a
+  shelf may be used at all outranks how much is on it.
+- `resolveBin` does NOT filter on it — it returns the flag and lets the caller
+  decide, because a scan of a retired shelf should say *that shelf is out of
+  service* rather than *no bin matches this*. Intake and the batch split then
+  refuse an explicitly named inactive bin outright: *Bin BIN-… is out of service
+  — stow this somewhere else*.
+
+Relocate is the one path that does not check it, and that is worth knowing
+rather than assuming otherwise: moving a card ONTO a retired shelf is allowed.
+
+## The dead end
+
+The directed stow refuses for exactly two reasons, and says which:
+
+    No oversized shelving is available here — create an oversized bin before stowing this
+    No active bin is available here — create one before stowing this
+
+Both of them used to end the run. The shelf form has been on the Locations tab
+since bins existed, and that is the wrong side of the building from where the
+refusal happens. An operator standing at an open box holding a sealed case read
+"create an oversized bin before stowing this" on the intake bench, and the only
+way to act on it was to leave the bench — losing the units already typed into
+it, the owner, the parcel link and every photograph attached to a row — create
+the shelf, come back, and start the box again.
+
+That is the same defect Part 34 fixed for quantity and Part 36 fixed for
+printing: the product described the work correctly and then made it impossible
+to do in one sitting.
+
+## The offer is made where the refusal is
+
+`stow-rescue` is a zone field and a button, rendered underneath the error and
+only when there is an error — while the ask is still in flight there is nothing
+to rescue, so a bench that is merely slow does not sprout a form.
+
+**It asks for the zone and nothing else.** The kind of shelving and the building
+are the two facts that just failed to match, so they are taken from the run
+itself — `oversized` from the classes of the units on the bench, `facilityCode`
+from the parcel being emptied — rather than offered up to be re-chosen wrongly.
+An operator who has just been told there is no oversized shelving *here* should
+not be able to answer by creating standard shelving somewhere else. The zone is
+the one thing only the person in the aisle knows, and the serial is minted by
+the API as it always was, because a shelf that can be named is a shelf whose
+identity encodes a zone it might be moved out of.
+
+The button says which kind it is about to create — *Create a shelf here* or
+*Create oversized shelving* — so the thing being made is named before it is
+made.
+
+**Afterwards it asks again rather than assuming.** The new shelf is empty, so it
+is the one that comes back; but it comes back from `GET /custody/bins/suggest`,
+the same place every other answer on this panel comes from. Nothing on the bench
+learns to construct a stow target locally, and the created bin is not quietly
+promoted into the field. When the suggestion appears, the rescue form goes away
+on its own.
+
+Nothing was added to the API. `POST /custody/bins` already minted a serial,
+defaulted the facility to the primary site and took an `oversized` flag; what
+was missing was a way to reach it from the place that needed it.
+
+## Two tests
+
+`receiving-bench.test.tsx` now drives the dead end from the outside: `suggest`
+refuses, the operator types a zone, presses the button, and the assertions check
+both halves — that the POST carried the kind and the building from the run, and
+that the shelf that then appears came back from `suggest`. A second test holds
+the negative: while there *is* somewhere to go, no rescue form is rendered at
+all.
+
+## One thing the run surfaced, unrelated
+
+A full `pnpm test` failed once on `shp-tracking-list.test.ts` — "the seed ships
+one of Golden's cards" — and passed on its own against a fresh seed immediately
+afterwards. It is not this change; it is an earlier suite in the same run moving
+that seeded shipment off `shipped` before this one reads it. Recorded here
+rather than fixed, because the fix is a seeded fixture of its own rather than a
+reordering, and the ordering is what the next run will break again.
+
+---
+
+# Part 38 — Writing Down How Intake Actually Works
+
+**Completed: 12 September 2026.**
+
+**No code changed. One document added: `docs/design/03-intake.md`.**
+
+---
+
+The intake path is the most heavily reasoned part of this system and the least
+written down. Everything about it is documented — in the place it is enforced.
+The lot threshold is explained in `item-classes.ts`, the empty-parcel guard in
+`parcel.service.ts`, the shelf assignment in `stow.service.ts`, the
+all-or-nothing check in `intakeUnits`. Each of those comments is right where
+somebody changing that rule will read it, which is the correct place for it and
+the wrong place to learn the process from: there is no order to them, and nobody
+arrives at a warehouse question by opening a service file.
+
+So this is the same knowledge laid out in the order the work happens —
+registration, arrival, forwarding, open-and-check, booking the contents, labels,
+close-out — with the reference material the prose keeps referring to gathered at
+the end: the twelve item classes with their oversized and lot flags, the four
+charges and when each falls, the route map, the parcel and item state maps, and
+the eight invariants.
+
+## What it is not
+
+It is not a specification. Nothing in it was decided while writing it, and no
+sentence describes intended behaviour. Every rule in it was read out of the code
+that enforces it, and where the code enforces nothing the document says so — a
+retired bin still accepts a relocate, a scanned bin resolves whether or not it is
+in service, and there is no capacity model anywhere.
+
+That last point is the reason the document opens where it does. The question it
+was written to answer — *how does it know where there is room?* — has an answer
+that surprises people, and the answer is that it does not know, on purpose.
+
+## Two things it fixed by being written
+
+Both are in this narrative rather than in the code, because both were errors of
+description rather than of behaviour:
+
+**"`resolveBin` does not filter on `active`"** is true and was stated in Part 37
+in a way that implied a scanned retired bin would therefore be accepted. It is
+not: `intake.service.ts` and `batch.service.ts` both refuse an explicitly named
+inactive bin outright, and the reason `resolveBin` returns the flag rather than
+filtering on it is so the refusal can say *that shelf is out of service* instead
+of *no bin matches this*. The Part 37 text above is corrected.
+
+**Relocate really does not check it**, which is the genuinely surprising one and
+now appears in both places. Moving a card onto a retired shelf is allowed, and
+nothing in the system objects.
+
+## Published as well as committed
+
+The same content is up as an artifact, set in Bault's own type and palette —
+Plex Sans and Plex Mono, Frank Ruhl Libre for display, the off-white ground and
+the five accents with one job each, hairlines instead of cards. A process
+description for a warehouse team is not fully delivered while it is a markdown
+file on one machine, and a page rendered in the product's own system is a
+smaller lie about the product than a page rendered in anything else.
+
+## And a script for the camera
+
+`docs/demo-intake.md`. The same flow as a four-minute shooting script: seven
+shots, the exact values to type, the line to say over each, and `pnpm db:reset`
+between takes.
+
+It runs on Golden's DHL parcel, which the seed leaves sitting at the NJ dock in
+`received` — signed for, not yet opened — so the demo starts at the first
+interesting gate rather than at a form. The beats that were worth writing down
+are the ones where the product refuses something: the unclaimed box that cannot
+be opened, the empty parcel that will not close, and the directed stow with
+nowhere to send the goods, which now offers the shelf form on the spot and is
+therefore a beat to leave in rather than an outtake.
+
+## The shooting script, in full
+
+`docs/demo-intake.md` was rewritten from a page of beats into production
+instructions: prerequisites, the two terminals and what "ready" looks like in
+each, browser geometry, the reset ritual between takes, seven shots with the
+exact text to type and the line to say over each, five optional beats, a
+troubleshooting table and a one-screen cheat sheet.
+
+Writing it exactly is what made it worth writing, and three things only surfaced
+because every label had to be quoted rather than paraphrased:
+
+**The app opens in Hebrew.** `DEFAULT_LOCALE` is `he`, and the document direction
+flips with it. A fresh incognito window — which is exactly what somebody sets up
+to record in — comes up right-to-left, and the switch is a globe button in the
+page header reading `HE`. That is now step B3, flagged as the single most likely
+way to lose a take.
+
+**The shelf in the suggestion cannot be scripted.** The seed lays out two shelves
+in zone A, two in B and two oversized in O, with minted serials; the directed
+stow hands out the emptiest and breaks ties on barcode, so the zone letter and
+the count differ from one seed to the next. The first draft had "Zone A · 0
+items" written into the shot as though it were a constant. It now tells the
+presenter to read what is on screen.
+
+**Parcel codes and bin serials are minted per seed**, so no `PKG-` or `BIN-`
+string in the document can be used to find a row. Every row is identified by
+owner, carrier and tracking number instead — those are seeded constants.
+
+The beats worth keeping are the ones where the product refuses something: the
+unclaimed box that will not open, the empty parcel that will not close, and the
+directed stow with nowhere to send the goods — which, since Part 37, answers with
+the shelf form rather than a dead end, and is therefore a beat to leave in rather
+than an outtake.
+
+---
+
+# Part 39 — The Edges
+
+**Completed: 12 September 2026.**
+
+**669 tests green (was 663). 0 lint errors (was 2). Design-lint clean.**
+
+---
+
+A production-readiness scan of the whole repository found 5 blockers, 11 serious
+gaps, 8 compliance items and 4 pieces of housekeeping. The shape of it was
+consistent enough to be worth stating: **the domain layer is strong and the edges
+are not built.** Append-only ledgers, transactional boundaries, a real state
+machine, pricing snapshots, an audit interceptor, throttling, argon2, httpOnly
+sessions, a working job runner — all there, all correct. What was missing was
+everything that connects the system to the outside world, and everything that
+keeps it alive once it is there.
+
+This part is the remediation pass.
+
+## The one that was losing data
+
+`SandboxStorageAdapter.putObject` returns the key and writes nothing. It was
+bound unconditionally, so every photograph an operator took at the intake bench
+and every picture of a damaged arrival was accepted, acknowledged and discarded —
+while `item_image` and `parcel_photo` rows recorded keys that would never
+resolve. The loss was invisible until somebody opened a damage claim and found
+the evidence gone.
+
+The detail that makes it worse: `STORAGE_ENDPOINT`, `STORAGE_REGION`,
+`STORAGE_BUCKET`, `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY` have always been
+REQUIRED by the env schema and were read by nothing at all. A correctly
+configured deployment, with a real bucket and real credentials, still threw every
+byte away. MinIO has been in the compose file since T006 and was never contacted.
+
+`S3StorageAdapter` is the missing half. It signs its own requests — AWS Signature
+Version 4, about 120 lines of canonical request and a chain of four HMACs, with
+`node:crypto` and nothing else. The SDK is roughly 15 MB of dependency to perform
+two operations, and the two operations are published, stable algorithms.
+Path-style addressing throughout, so it speaks to MinIO locally and to any S3 API
+in production.
+
+It is wired the way payment already was: chosen from validated config by
+`STORAGE_PROVIDER`, with `sandbox` refused in production by the env schema and
+again in the factory. No fallback — a provider name with no implementation fails
+the boot, because a fallback here is the same catastrophe wearing a friendlier
+name.
+
+Verified against the real thing rather than asserted: PUT 2 KB of binary into
+MinIO, presign a GET, fetch it, compare byte for byte. The contract suite does
+that on every run now, and states the sandbox's behaviour as a fact about the
+sandbox — so the day somebody "simplifies" the wiring back to it, a test says so.
+
+## The query that ran on every request
+
+`login_session.token_hash` had no index. `SessionService.verify` matches on it
+for every authenticated request, and with a seven-day TTL and no cleanup that
+table only grows — so the cost of being signed in grew with the number of people
+who had ever signed in. Eleven indexes went in: that one (partial, on
+`revoked_at IS NULL`), `item.owner_id`, the custody trail, the shelving ledger,
+item photographs, a partial index on the undispatched outbox the worker polls
+every sixty seconds, and the rest.
+
+## The password change that changed nothing else
+
+Changing a password wrote a new hash and touched nothing else. A session is an
+opaque cookie checked against its own table, so somebody holding a stolen one
+kept full access AFTER the owner noticed and changed their password — which is
+the single moment the owner believes they have locked the attacker out.
+
+`revokeAllFor` now ends every session on both paths. A CHANGE exempts the
+caller's own cookie, so changing a password from the profile page does not sign
+you out of the page you are standing on. A RESET exempts nothing: the person is
+holding a link from their inbox, not a session, and if the reason they are there
+is that somebody else has one, keeping any of them is the whole failure. The
+count comes back to the caller, because "signed out 3 other devices" and "signed
+out 0" are different facts. And `POST /auth/sessions/revoke-others` exists now,
+because "I think somebody is using my account" was previously actionable only by
+also picking a new password, and those are separate worries.
+
+## Three things that were confidently wrong
+
+**`/readyz` returned 200 when the database was down.** It caught the failure and
+answered `{ status: 'degraded', db: false }` with a success code. A load balancer
+reads the code, so a node with a dead database announced itself as healthy and
+kept taking traffic — the one thing a readiness probe exists to prevent.
+
+**`API_DOCS_PASSWORD` was required and enforced nothing.** The env schema refuses
+to boot in production with the explorer on and no password set. Nothing read the
+password. Setting it bought exactly the confidence that the route map was
+protected and none of the protection. It is basic auth now, compared in constant
+time.
+
+**`LOG_LEVEL` was read by nothing.** Logging was Nest's default plus twenty
+`console.log` calls behind eslint-disable comments: no levels, no timestamps an
+aggregator can parse, and no correlation at all. When a collector said "my card
+vanished" there was no way to find the request that did it. There is a structured
+logger now — JSON outside development, human-readable inside it — and an
+`AsyncLocalStorage` request id that a service five layers down inherits without
+knowing a request exists, returned on the response as `x-request-id`.
+
+## Nothing could be deployed
+
+There was no Dockerfile anywhere in the repository, which made every other
+production concern academic. Three now exist — api, worker, web — each
+multi-stage, each running as a non-root user, each built from the repo root
+because this is a pnpm workspace whose apps depend on two packages that must be
+compiled first. The API image carries the migrations, so a release can migrate
+the database it is about to serve rather than depending on somebody's laptop.
+
+The web image is nginx, and `apps/web/nginx.conf` is where the
+Content-Security-Policy finally lives. `main.ts` has always disabled CSP on the
+API with the note that "the CSP that matters belongs on whatever serves the front
+end" — and no such thing existed, so the product shipped with no CSP at all.
+
+## CI was decorative
+
+It ran three database-backed suites without ever migrating or seeding, and those
+suites drive a live HTTP server that nothing started. It never set
+`PAYMENT_PROVIDER`, which the schema requires with no default, so anything
+calling `loadEnv()` threw at config parse. And it ran four of the eight vitest
+projects — `core`, `ux`, `web` and `core-contract` never ran, which is 307 of 663
+tests including every component and UI test.
+
+It now migrates, seeds, builds, starts the API, waits for `/readyz`, and runs all
+eight. Writing it surfaced something the audit itself had got wrong: `core` is
+not a unit project despite living beside `core-contract`. It drives the live API
+exactly as `integration` does, which is why 107 tests failed the first time the
+reordered file was tried locally. The workflow puts it with the other e2e suites
+now.
+
+## Two lint errors, and a lesson in reading before deleting
+
+Both pre-existing errors were in `scripts/`. One was `Buffer` used without being
+imported — trivial. The other was an "irregular whitespace" error in
+`design-lint.mjs`, which I removed, which broke the file: the zero-width space
+was DELIBERATE, holding apart a comment terminator inside a block comment that
+documents the allow-comment syntax. Deleting it closed the comment early. The
+comment is rewritten now to describe the delimiters without containing them — no
+invisible characters, no parse error.
+
+And the project's own design linter then caught the new error-boundary CSS using
+mono on a non-code selector. It was right: mono is for serials, bins and
+barcodes, and an error message is prose.
+
+## What was NOT fixed, and why
+
+Stated plainly, because a remediation pass that implies completeness is worse
+than one that does not:
+
+**A real carrier.** `buyLabel` still returns a fake tracking number and a label
+PDF key that does not exist; `getTracking` still answers `in_transit` for
+everything. Writing an integration against an API I cannot call, with credentials
+that do not exist, would produce untested code that looks finished. The shipping
+feature should be gated off at the route level until there is a carrier account
+behind it — a payment taken for a service that cannot be delivered is the worst
+version of this.
+
+**Foreign keys.** Five in the whole migration set, all in escrow and shipment.
+`item.owner_id`, `item.bin_id`, `custody_event.item_id` and the rest are bare
+text columns, so the system's central promise is enforced by convention in
+application code rather than by the database. Fixing it is right, and it is
+thirty tables, an orphan audit and a lock on each — too large to land blind in a
+pass that also changed the storage layer.
+
+**Sentry, a shared rate-limit store, and idempotency beyond the marketplace.**
+The first needs a dependency, the second needs Redis or a Postgres-backed
+`ThrottlerStorage`, the third is a per-route design decision. The logger now
+provides what a reporter would need.
+
+**Everything in the compliance list** — KYC/AML, GDPR deletion and export,
+insurance and declared value, the real facility addresses, 2FA, terms of service,
+payout reconciliation. These are business, legal and vendor decisions. They can
+be implemented once somebody decides the policy; inventing a KYC flow or writing
+a liability clause is not a thing to do quietly in a refactor.
+
+## And one thing that is still just a backup
+
+`infra/ops/` was an empty directory and the only trace of a backup strategy was a
+comment setting `wal_level=replica` "to enable point-in-time recovery later
+(T132)". Later did not arrive. `infra/ops/backup.sh` is the base layer now: a
+consistent compressed dump, a restore, and — the part people skip — a `verify`
+that restores into a scratch database and checks structural invariants against
+the restored copy, because an untested backup is a rumour.
+
+It is a nightly logical backup, and its recovery point is "the last dump". The
+script says so in its own footer rather than implying more. Point-in-time
+recovery needs WAL archiving to somewhere off-host and a restore drill on a
+calendar, and neither exists yet.
+
+Writing the verify step caught a mistake of my own worth recording: the first
+draft checked that each wallet's stored balance matched the sum of its ledger.
+There is no `wallet` table. A balance is always DERIVED from `ledger_record` and
+never stored, so the two cannot disagree and the check was meaningless. What it
+checks now is what a bad restore could actually break — items with no owner,
+items shelved in a bin that no longer exists, custody events and ledger rows
+pointing at nothing.
+
+---
+
+# Part 40 — A Carrier That Exists, and Words That Mean Things
+
+**Completed: 12 September 2026.**
+
+**700 tests green. 0 lint errors.**
+
+---
+
+Two unrelated passes, both short.
+
+## The last fake adapter
+
+Part 39 fixed storage and left shipping, because shipping needed an account
+nobody had. It has one now: **EasyPost** — USPS, UPS, FedEx and DHL from one key,
+pay-per-label, and a genuine test mode (`EZTK…`) whose code paths are identical
+to live. That last property is the whole reason it was chosen: it is the
+shipping equivalent of `PAYPAL_ENVIRONMENT=sandbox`, so the integration can be
+exercised before any money moves.
+
+What it replaced: `SandboxShippingAdapter` invents its prices (the file says so),
+`buyLabel` returned `SBX<timestamp>` with a label key that resolved to nothing,
+and `getTracking` answered `in_transit` for every input forever. Bound
+unconditionally — so the product could charge a collector for a parcel that could
+not physically be posted, then show it as `shipped`. Meanwhile
+`SHIPPING_PROVIDER` had sat in the env schema since T020 defaulting to
+`"shipstation"`, read by nothing at all: naming a provider changed nothing.
+
+**The interface had to change, and the reason is worth keeping.** A real carrier
+does not sell you "FedEx 2Day at $18.50". You create a SHIPMENT, it returns RATES
+WITH IDS, and you buy one of those rates against that shipment. So `Rate` now
+carries `providerShipmentId` / `providerRateId`, and `buyLabel` purchases the
+exact quote the collector was shown. Without them it throws rather than
+re-rating — re-rating would charge a price nobody was shown, and would succeed
+while doing it.
+
+**The addresses were already there and were being thrown away.** `RateRequest`
+carried `{ country, postalCode }`, which is enough for the sandbox's crude
+country-band multiplier and useless to a carrier. `resolveDestination` had the
+full saved address in hand and discarded everything but those two fields. It
+carries the street and city now, and quoting also passes an ORIGIN resolved from
+the primary facility — with a guard that returns nothing when that facility still
+holds a placeholder street, so the adapter refuses with a sentence naming the
+problem instead of quoting against a fictional origin.
+
+No SDK: `@easypost/api` would be a dependency for three HTTP calls against a
+documented REST API. Thirteen contract tests drive it against a stubbed `fetch`,
+so they run in CI with no account, and they defend the four places this adapter
+could quietly mishandle money — Basic auth with the key as USERNAME and an empty
+password (a bearer token 401s, and it is the mistake everybody makes first),
+grams→ounces and dollar-strings→cents, the signature option set at RATE time so
+the quoted price is the charged price, and an unreadable tracking status mapping
+to `unknown` rather than `in_transit`.
+
+What is still not proven: nothing has run against the live API. The tests prove
+the adapter's behaviour, not that a given account's carriers are enabled.
+
+## The words
+
+A pass over the 1,681 English strings, and the finding was not the expected one:
+**the Hebrew was right and the English had drifted.**
+
+`intake.bulkDone` read *"Intook {count} items"* — not a word — where the Hebrew
+said "were received". A collector opening their own vault met `Bin: BIN-…`, which
+is an operator's word and an identifier prefix, not something a customer should
+ever see; the break-lot description said "its own serial, bin and intake charge"
+while the Hebrew said "location". Two panels were titled *"Bins & shelves"*,
+which names one thing twice — this product decided a bin IS a shelf.
+
+The rule applied throughout: **the thing is a shelf; its printed identifier is a
+`BIN-` serial.** That is how the codebase's own comments have always talked about
+it, and it stops the label and the prose contradicting each other.
+
+Fourteen strings changed across both locales. The rest were left alone, and that
+is the honest result of the audit rather than a shortcut: the copy is mostly
+strong, errors are specific and actionable, and rewriting 1,681 strings would
+have been churn that desynced the Hebrew and broke tests for no gain.
+
+## One thing this broke, caught by a script and not by a test
+
+Turning `SHIPPING_PROVIDER` into an enum made the running `.env` invalid — it
+still held `shipstation`, the old default that nothing read. Every process
+calling `loadEnv()` failed at config parse until it was set to `sandbox`.
+
+That is the env schema working exactly as designed. It is also the argument for
+running a throwaway script against the real config after any schema change: no
+test caught it, because no test loads the developer's `.env`.
+
+---
+
+# Part 41 — Bault Sells Its Own Cards, and the Box a Parcel Goes In
+
+Two unrelated passes again. The first is a new capability with one real design
+question in it; the second finishes a field that had been wired end to end for
+twenty-one parts and never filled in.
+
+## The store that had nowhere to point
+
+Every listing in the marketplace is `listing.item_id NOT NULL`. That is the
+right constraint for what the marketplace was: a collector selling a card that is
+already in the vault, with an owner, a serial, a barcode and a shelf, where a
+sale moves ownership of a record that exists.
+
+Bault's own stock has none of those. The business buys cards in, they sit in the
+store's own boxes, and nobody ever booked them in — so there was no way to sell
+them through the product, and nothing for a listing to point at. The platform
+custodian account (`platform@bault.dev`) could OWN cards, and did — buyouts,
+donations, consignment all hand items to it — but only cards that had come in
+through intake first.
+
+So a store listing is a new table, `house_listing`, and it describes a PRODUCT
+rather than an item: the class, the catalogue description, the condition, a
+catalogue photograph, a price and a count of copies left. Its code is `HSE-`.
+
+## When the card comes into existence
+
+That was the question, and there were two honest answers.
+
+**When the warehouse gets to it.** The buyer pays; an order sits in a queue; an
+operator finds the copy, books it in through something like intake, and only
+then does an item exist. This is how the physical world orders things, and it
+was rejected, because it makes the buyer's ownership wait on a person walking to
+a box. The thesis of this system is that the database is the authority on who
+owns what. A buyer who has paid and owns nothing on the record — whose card
+exists only as a row in a to-do list — is exactly the state that thesis rules out.
+
+**When it is paid for.** This is what `HouseStoreService.purchase` does. In one
+transaction, under a row lock on the product:
+
+1. the product must be active with stock above zero (the lock is what makes the
+   last copy sell once — a second buyer blocks, then reads zero);
+2. the buyer may not be the platform account, and must have the balance;
+3. a serial is minted (`makeItemSerial`) and the barcode taken from it, and
+   `CustodyService.createWithIntake` creates the item — buyer as sole owner, the
+   catalogue description and condition copied from the product, an `intake`
+   custody event — with lifecycle **`received`** and **no bin**;
+4. a `sale` transaction is written with the platform as seller, fee zero, and the
+   product's code and price frozen into `frozen_pricing`;
+5. the buyer is debited `purchase` and the platform credited `sale_credit`, both
+   referencing that transaction;
+6. stock goes down by one, and a `house_order` (`ORD-`) links product, buyer,
+   item and transaction with status `awaiting_stow`.
+
+`createWithIntake` hard-coded `stored`. It now takes `lifecycleState:
+'stored' | 'received'`, defaulting to the old value so no existing caller moved.
+`received` was already a legal state with one outgoing edge (`→ stored`) and was
+already counted as live stock by the vault — so the buyer sees the card at once,
+and cannot list or ship it until it is on a shelf, which is simply true.
+
+**No intake fee, at either step.** Intake is what Bault charges to take custody
+of somebody else's card. This card was Bault's; its price is the whole of what
+the buyer pays for it arriving in their vault. The integration test asserts the
+wallet moves by exactly the asking price.
+
+## The idempotency key that would have sold one copy per person
+
+The marketplace purchase route falls back to `purchase-${userId}-${listingId}`
+when the client sends no key. That is correct there — a listing is one item and
+can only be bought once, so a repeat is by definition a replay.
+
+Copied to the store, it would have been a bug with a friendly face: a collector's
+second copy of the same product would have been answered with the receipt for
+their first, `replayed: true`, and no second card. So the store generates a
+random key when none is sent, and the web sends one key per CONFIRMATION — a
+double-click on one dialog is a replay, opening the dialog again is a new
+purchase. There is a test for exactly this.
+
+Sending that header surfaced a small bug in `shared/api.ts`: `request` spread
+`...options` AFTER building `headers`, so any caller that passed a header lost
+`Content-Type: application/json`. Nothing had ever passed one. The spread is
+now first, and `api.post` takes an optional third `headers` argument.
+
+## The warehouse half
+
+The part that cannot be transactional is physical: take a copy out of stock,
+stick its label on, put it on a shelf. `GET /marketplace/house/orders/queue` lists
+`awaiting_stow` orders oldest first, with the minted serial and barcode, the
+buyer's username, and the product's photo. `POST .../orders/:id/stow` takes a
+scanned bin or `autoStow`, and optional photographs of THIS copy (the product
+only ever had a picture of the print), and in one transaction relocates the item
+onto the shelf, moves it `received → stored`, attaches the photos, marks the
+order `stowed`, and emits `item_received` — the same event intake emits, so the
+buyer is told in the words every other arrival uses.
+
+On screen it is a fourth panel on the receiving tab, under the intake bench —
+because it is receiving work, into the same shelves, by the same person. There is
+nothing to type: each row shows the barcode with its print button, and the panel
+header has **Print all** for the same reason the intake bench does.
+
+## Screens and seed
+
+- **Marketplace → Bault store**, a tab after Browse rather than rows mixed into
+  it, because what is bought is different in a way worth knowing before paying:
+  the confirmation says the copy is added to the vault now and shelved after.
+- **Management → Bault store**: create a product, edit stock inline, take it off
+  sale or put it back. The description hint asks for the catalogue shape, because
+  it becomes every sold copy's item record word for word.
+- **Seed**: three products, each a real print whose scan is already on disk, in
+  the exact catalogue words the vault uses for another copy of the same card —
+  Call of Legends Rayquaza SL10 ($35, three copies), Roaring Skies Rayquaza-EX
+  #104 ($49, two), Dragon Frontiers Rayquaza ex δ #97 ($165, one). All raw,
+  because that is what the scans show. No orders are seeded; buying one is the
+  demo.
+- One copy rule caught by `audit-screens`: the first draft said "Cards Bault
+  sells itself", and the store can sell any of the twelve item classes. It says
+  "items" now.
+
+Routes: `GET marketplace/house/listings` (public), `POST
+marketplace/house/listings/:id/purchase` (signed in), `GET
+marketplace/house/manage`, `POST` and `PATCH marketplace/house/listings` (admin),
+`GET marketplace/house/orders/queue` and `POST .../orders/:id/stow` (staff). The
+admin, staff and public routes were added to `tests3/integration/sec-authorization.test.ts`.
+Migration `0026_bault_sells_its_own_cards.sql`.
+
+## The box a parcel goes in
+
+Part 20 built dimensional weight and left it switched off: `ParcelProfile` had
+`dimensionsCm`, both adapters knew how to send it, and nothing ever filled it in.
+Its own words were "without real dimensions this is a no-op, which is honest — it
+becomes meaningful the moment an operator records a box size." Every quote priced
+the contents plus a flat 120 g, so a single card in a mailer and a shoebox of
+sleeved commons with the same weight were the same parcel to every carrier.
+
+A collector can now choose the box. `shp/boxes.ts` holds five — rigid mailer,
+small, medium, large, extra-large — each with outer dimensions, its own weight
+and the most it is rated to carry, published through `GET /shipping/services`.
+Choosing none keeps the old behaviour, priced on weight with the warehouse
+picking, because somebody who does not know or care should not be made to guess.
+
+Three decisions worth recording.
+
+**The box replaces the 120 g rather than adding to it.** `RateRequest` gained
+`packagingGrams`, defaulting to the exported `DEFAULT_PACKAGING_GRAMS = 120`; both
+adapters use it. The weight ceiling in `checkService` counts the box once one is
+known, because a carrier weighs the parcel, not its contents.
+
+**Dimensional weight is billed in ONE place.** The mapping found it would have
+been counted twice: the sandbox already bills dim weight from `dimensionsCm`, a
+real carrier behind EasyPost does the same, and `ShipmentService.dimAdjusted`
+would then have scaled the FedEx rates up again on top. The adapter owns it now.
+`dimAdjusted` and `billableWeightGrams` are deleted; `dimDivisor` stays on the
+catalogue as a published fact about each service.
+
+**The box is stored on the shipment.** Picking a service re-rates from the
+shipment row, not from the quote. A box the quote knew about and the row did not
+would be charged as no box at all, and the price a collector saw would not be the
+price they paid — the rule Part 20 and Part 40 were both built on. So
+`shipment.box_size` (migration `0025_the_box_a_parcel_goes_in.sql`) is written on
+create, re-checked on edit (`undefined` keeps it, `null` clears it, and adding a
+sealed box can outgrow the mailer), and on merge takes the bigger of the two —
+or goes back to null if even that cannot hold the combined contents. The
+fulfilment form shows the operator which box the customer paid for.
+
+The fit rules are the two Bault can state honestly without knowing any item's
+dimensions: a box refuses more weight than it is rated for, and the mailer and
+the small box refuse what physically cannot go in them (the mailer takes only
+cards, slabs and packs; neither takes an oversized class). They come back as
+`optionProblems` with a `rule` of `box_weight` or `box_contents`, so the web
+translates them instead of printing the server's English.
+
+Tests: two sandbox contract tests (a bigger box of the same weight costs more;
+the box's weight replaces the allowance), one EasyPost contract test (dimensions
+sent in inches, 60 g + 320 g sent as 13.4 oz), and four integration tests — the
+catalogue, a bigger box quoting more, a misfit refused at quote and at create,
+and the boxed price being the charged price with the operator seeing the box.
+
+One unrelated failure surfaced while running the shipping suites against a
+long-lived dev database rather than a fresh seed: `shp-tracking-list` expects
+Golden's seeded shipment to be `shipped`, and the worker's tracking refresh had
+moved it to `in_transit`. It passes from a clean `pnpm db:reset`.
+
+---
+
+# Part 42 — The Front Door
+
+`AuthShell` carried a comment in capital letters for twenty-nine parts:
+**THERE IS NO MARKETING SITE.** It was true. Every route in the product required
+a session; the only anonymous surfaces were sign-in, sign-up, forgot-password and
+the two links that arrive in an email. Somebody who had heard of Bault and typed
+the address in reached a password field.
+
+That is not a small omission for a service whose whole argument is that it will
+tell you things — where your card is, who has it, what it has cost. The one
+screen a stranger could see asked them for a password and told them nothing.
+
+## What was already right, and got reused
+
+The sign-in screen had been rebuilt once already, in Part 29's design pass, and
+it was rebuilt around the correct idea: the pitch is a real item, photographed,
+with its serial and its custody line beside it — not an illustration of a vault
+door and not a stock photograph of somebody smiling at a laptop. The Gold Star,
+lit on the dark photography stage, with `SN-DX107-0003` in the same `Serial`
+component the item sheet uses.
+
+So the landing page does not invent a visual language. It opens with that exact
+stage, and the two constants that define it —
+
+```ts
+export const LANDING_SERIAL = 'SN-DX107-0003';
+export const LANDING_TITLE = '2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star) …';
+```
+
+— were exported from `AuthPage.tsx` and imported rather than retyped. There is
+one definition of the card on the stage. A landing page that promises a different
+product than the one behind it is a lie told twice, and two copies of a serial in
+two files is how that lie starts.
+
+## The prices are fetched, and that is the whole point
+
+A marketing page is the one surface in a product where a price is normally typed
+in by hand. A designer writes "from $5" into a hero and after that it is nobody's
+job to keep it true.
+
+Principle VI makes the pricing rules the source of truth, and `GET /pricing/list`
+has been `@Public()` since Part 23 for exactly this reason — its own comment says
+it: *somebody deciding whether to use Bault has to be able to read what it costs
+before they have an account.* Nothing customer-facing had ever called it without
+a session. The landing page does, and renders five rules straight out of the
+response: intake, storage, outbound handling, the marketplace commission and the
+cash-out fee.
+
+Three details are where the work is.
+
+**The units.** A percentage rule stores basis points and a fixed rule stores
+cents. Running both through `formatUsd` turns 5% into "$5.00", which is precisely
+the error a price label exists to prevent, so `priceOf` branches on `model`.
+
+**Zero is printed.** The `shipping` handling rule is $0.00, and `servicePrices.ts`
+suppresses a zero because a service button with "$0.00" on it reads as broken.
+Here it is the opposite: Bault adds no handling markup on top of the carrier's
+rate, and that is a fact worth stating rather than an absence to hide behind an
+empty cell.
+
+**Storage has no single figure.** `value` on the storage rule is $1.00 and nobody
+is ever charged it — it is a fallback base for an item with no intake charge to
+take a proportion of. The real terms are in `parameters`, which the worker's
+sweep reads, so the row is phrased from those (*180 days included, then 10% of
+the intake fee every 90 days*) and omitted entirely when they are absent. There
+is a test asserting the $1.00 never reaches the screen.
+
+**And when the fetch fails, there is no figure at all.** Not a placeholder, not a
+cached number, not "from $5" — a sentence saying the list could not be loaded.
+A placeholder in a price column can be read as "free".
+
+The wording around the figures is translated and the figures are not, which is
+the same split `servicePrices.ts` makes: a rule's `description` comes out of the
+database in English, and printing it would put an English sentence in the middle
+of a Hebrew table. Each featured rule has a catalogue key for its label; the
+number comes from the server.
+
+## Routing: two kinds of anonymous visitor
+
+`App.tsx` answered every anonymous route with the sign-in form. That is right for
+one of the two people who arrive without a session and wrong for the other:
+
+- **A deep link** (`#/vault`, `#/wallet`) is somebody who had a session and no
+  longer does. They want back in, and answering "take me to my vault" with a shop
+  window is an obstacle. Unchanged — they get the form.
+- **The bare root** (`#/`, or no hash at all) is somebody arriving. They get
+  `LandingPage`. `#/welcome` addresses it by name so it can be linked back to.
+
+`AuthPage` grew an `initialMode`, because the landing page has two calls to
+action that mean different things: "Open an account" must arrive on the sign-up
+form. Landing on sign-in with a link underneath asks somebody to make the same
+choice twice. It is the STARTING mode only; the links between the three forms
+work as they always did.
+
+## The landing page does not wait for the session probe, and does not fail with it
+
+This is the part that was not on the list and should have been. The boot sequence
+asks `/me/profile` who is signed in, and until it answers the app shows a
+spinner; when the API is unreachable it shows a full-screen error with a retry.
+
+Both are correct for the application and both are wrong in front of a marketing
+page. It is public. It asks who is signed in for nothing, renders nothing that
+depends on the answer, and fetches its own figures from a route that requires no
+session. Behind the probe it bought a spinner in front of a page that was ready,
+and — when the database is down — a full-screen error where the front door should
+be. Somebody arriving at Bault for the first time while Postgres is restarting
+should still be able to read what Bault is. They find out the rest when they press
+Sign in, which is the control that actually needs a backend.
+
+So the landing route is answered for any boot state that is not `ready`, above
+the three boot branches and below `TOKEN_ROUTES`, which are more specific because
+they carry a token.
+
+## The page itself
+
+Marketing density — the generous end of the same scale the vault and the
+warehouse sit on — and not one component the product did not already have. Every
+section is a heading, a rule and spacing, because `--gap-section` is 96px at this
+density and that space **is** the grouping. No cards, no tiles, no icon above a
+heading, all three of which are named in `DESIGN.md`'s anti-patterns and all
+three of which were in this product before Part 29 took them out.
+
+The stage, then: three promises (the serial is the identity; the record cannot be
+rewritten; every charge names its rule), each a 2px custody rule over its text —
+the same mark an active rail destination takes. The price register. How an item
+moves, as the `.steps` component, in the order the work happens rather than the
+order the code enforces it. The three ways out, one of which is a parcel and two
+of which are a person. A close, and a line of footer.
+
+One borrowed treatment: `.btn--secondary` is drawn for the light ground, and on
+the photography stage it is a pale rectangle competing with the photograph for
+the brightest thing on screen. `.landing-stage .btn--secondary` repoints its two
+colours at the on-dark tokens. Same component, same geometry, same focus ring.
+
+## What the tests caught
+
+`tests/ux/landing.test.tsx` is six rendering cases, and the two that matter pin
+the money: the figures come from the response, and when the response does not
+arrive there are no figures.
+
+The suite that was already there caught something better. `audit-screens.test.tsx`
+holds Part 33's rule — *does not call twelve kinds of thing a card* — as a scan of
+the whole English catalogue against an allow-list. Two of the new strings said
+"cards" where they meant items, in a vault that holds comics, sealed boxes and
+memorabilia, and the build refused them. That test has now paid for itself twice.
+
+`design-lint` is clean: no physical properties, no off-scale lengths, no second
+radius or shadow, no raw colour. The page was measured at 390px and 1440px with
+`document.documentElement.scrollWidth` equal to the viewport in both — nothing on
+it scrolls sideways in either direction.
+
+Files: `apps/web/src/areas/customer/marketing/LandingPage.tsx` (new),
+`tests/ux/landing.test.tsx` (new), and edits to `App.tsx`, `auth/AuthPage.tsx`,
+`shared/i18n.tsx` (56 keys in both catalogues) and `index.css`.
+
+---
+
+# Part 43 — Showing It To Somebody Who Is Not Here
+
+One small change, and it is worth writing down because the setting it fixes was
+pointing at the wrong server in a way that looked right.
+
+`vite.config.ts` already had a tunnel affordance, added deliberately and
+documented at length: `WEB_PUBLIC_HOST` names the hosts the dev server will
+answer to, so that a Cloudflare or ngrok hostname gets the app instead of
+*"Blocked request. This host is not allowed."* The comment even names
+`demo.trycloudflare.com` as the example.
+
+It works. The problem is what it opens.
+
+## A dev server's job is to serve source
+
+Vite serves modules, and it serves them as files. `GET /src/areas/customer/
+marketing/LandingPage.tsx` against `pnpm dev` answers **200, with the transpiled
+file** — every identifier, every doc comment, the lot. `/@fs/` paths outside the
+project root are refused (403, `server.fs.allow` doing its job), so this is not a
+filesystem escape; it is simply the dev server doing what a dev server is for.
+
+Which means the one setting in this repository whose entire purpose is *"let
+somebody else see this"* pointed at the one server that hands them the source.
+Nobody had noticed, because on a LAN — which is what it was added for — that is
+nothing at all.
+
+## The built app, and the two things it does not inherit
+
+`vite preview` serves `dist/` and only `dist/`. There is no `.tsx` in there, no
+sourcemap is emitted, and the minifier strips the comments, so the same request
+answers with `index.html` through the SPA fallback. That is the server to put a
+tunnel in front of.
+
+It needed a `preview` block, because two of the three settings that matter are
+NOT inherited from `server`:
+
+- **`allowedHosts` is checked separately**, against `preview.allowedHosts`. So
+  before this change, `WEB_PUBLIC_HOST` let a tunnel through to the server that
+  leaks source and blocked it from the server that does not — exactly the wrong
+  way round, and silently.
+- **`host`** likewise, so the default stays loopback-only.
+
+`proxy` **is** inherited, which is the good news and was worth confirming rather
+than assuming: `/api` reaches the API on one origin under `preview` exactly as it
+does under `dev`, so the session cookie needs no special handling for the same
+reason it needs none there — no `Domain` attribute, `Path=/`, `sameSite: 'lax'`,
+scoped by the browser to the origin it actually requested.
+
+Verified by hand, on the built bundle: an allowed host answers 200, an unlisted
+one answers 403, and `/src/...tsx` answers with `index.html` rather than a
+component.
+
+## One trap left in place, on purpose
+
+`WEB_PUBLIC_HOST` is read as `fileEnv.WEB_PUBLIC_HOST ?? process.env.WEB_PUBLIC_HOST`,
+and the repo-root `.env` sets it. `??` only falls through on null or undefined, so
+an empty string in `.env` wins over the environment and an inline
+`WEB_PUBLIC_HOST=… pnpm preview` is ignored while a value is present in the file.
+That is the same precedence every other setting in this file uses — the `.env` is
+the source of truth and the inline form is the override for when it is absent —
+and changing it here alone would make this one key behave unlike its neighbours.
+Noted rather than fixed.
+
+---
+
+# Part 44 — One Fee Instead of Thirty, and the Box Nobody Measured
+
+Two passes. The first answers a question about the shipping code that turns out
+to have a better answer than the one that was in the product; the second is a
+capability the reference service does not have at all.
+
+## The divisor was the wrong number
+
+The reference service publishes its dimensional-weight formula and it is
+`(L x W x H) / 167`. Bault used **139** - the domestic retail figure FedEx and
+UPS apply to some US services, and the more expensive end of the two. Every
+boxed parcel was being over-quoted by about a fifth against the service Bault is
+modelled on.
+
+It is now one exported constant, `DIM_DIVISOR`, with `dimensionalGrams()` beside
+it, so the adapter that prices a parcel and the carrier catalogue that publishes
+the divisor cannot drift apart on the number that decides the price.
+
+## Nothing is measured, and nothing needs to be
+
+The question worth writing down, because it is the first one anybody asks of
+this code: *how can a quote bill dimensional weight when nobody measured
+anything at intake?*
+
+Nothing is measured. An item contributes only its WEIGHT - from a scale at the
+bench, or the typical figure for its class in `item-classes.ts`. The DIMENSIONS
+are the box's, and there are five boxes, and their outer sizes are constants in
+`boxes.ts`. So the chain is:
+
+    item class + weight  ->  the smallest box that fits  ->  its known LxWxH
+    ->  dimensional weight  ->  the carrier's price
+
+The reference service does the same thing and says so - *"We use custom-sized
+boxes to help keep dimensional weight (and cost) efficient."* The warehouse picks
+the box. A collector never had to learn what a dim divisor is.
+
+The difference is only WHEN. They pick at the packing bench and bill the postage
+afterwards; Bault quotes before anybody commits, so the box has to be predicted
+rather than observed. `chooseBox` is that prediction, and it is the packer's own
+rule: the smallest box that takes the weight and accepts every class in the
+parcel. Smallest is also cheapest for the collector, because every box bigger
+than necessary is volume they pay for and do not use.
+
+Part 41 added a box PICKER, which was right and is kept - somebody who wants a
+bigger box may have one. What it did not do was handle the default. An unchosen
+box meant `dimensionsCm` was undefined, which meant zero dimensional weight,
+which meant a light parcel in a large box was quoted as though volume were free.
+The quote was then the charge, so Bault absorbed the difference on every unboxed
+shipment. `boxFor` now falls back to `chooseBox` and reports `boxAutoSelected`,
+so the quote says which box it priced.
+
+## Membership: one fixed fee, and services that are not billed again
+
+Bault's economics were entirely per-event, which is honest and is what the
+reference service does - it is explicitly pay-as-you-send, with no membership at
+all. It also means a collector cannot answer *"what does Bault cost me a month"*
+without adding up a list, and that the answer is different every month.
+
+Three tiers, and they are **not a discount scheme**. A discount still charges
+every time and still leaves the bill a surprise. A member pays one fixed amount
+and the services in their tier are simply not billed again.
+
+    FOLIO     a collection you keep. Storage stops being a clock you watch.
+    REGISTRY  a collection that is working: listing, selling, shipping.
+    TRUST     a collection held the way a trustee holds property.
+
+Named for what a collection IS at each stage rather than for a metal, because
+`DESIGN.md` rejects the whole gold-accent register and Gold/Platinum/Diamond is
+that same picture in words.
+
+### The three rules the catalogue enforces
+
+1. **Everything included has a ceiling.** Every allowance is a hard number, so
+   Bault's maximum cost per member per cycle is computable before anybody signs
+   up. That is what makes a fixed fee safe to sell, and there is a test that
+   fails if an allowance is ever made unbounded on something that is not bounded
+   by a human doing it by hand.
+2. **There is no overage rate. Anywhere.** When an allowance runs out the action
+   does not get billed at some higher number - it goes back to its ordinary
+   published price and takes the same explicit confirmation any paid action
+   takes. A member cannot be charged for something they did not press a button
+   on.
+3. **Allowances do not roll over.** Which is what keeps (1) true: a rolling
+   balance makes the maximum unbounded again.
+
+### One insertion point
+
+`BillingService.charge` is the single seam every fixed-price billable action in
+the product passes through - intake, both parcel fees, the flat service fee and
+every `service_fee:*` variant. The entitlement check goes there and nowhere
+else, so one check covers all of them and no caller has to remember. A tier that
+starts covering a new action needs a line in `tiers.ts` and nothing else.
+
+Two details in it are load-bearing. The allowance is checked BEFORE the price is
+resolved, because an included action does not need a price and resolving one
+would make an unpriced-but-included action throw. And `consume` runs inside the
+caller's transaction, so the allowance is spent if and only if the thing it
+covered actually commits - an intake that fails has not silently eaten one.
+
+The counter is incremented with a SQL `jsonb_set` against the period row rather
+than read-modify-written in JavaScript. Two intakes committing concurrently
+would otherwise both read `used: 3`, both write `4`, and hand out a free one -
+the same lost update a stored wallet balance would have, avoided the same way.
+
+### Storage, which is the reason most people would join
+
+Storage is billed by a SQL sweep in the worker, not through the billing port, so
+it needed its own treatment. The sweep now excludes items a membership covers,
+reading the allowance out of the tier's own pricing rule - `parameters ->>
+'storedItems'` - because the worker is a separate process with no access to the
+API's modules. That is the same trick the storage sweep already uses to read
+`freeDays` and `periodDays`, and the seed generates those parameters FROM the
+catalogue, so there is still one definition.
+
+Which items are covered when a member has more than their allowance: the
+**oldest** first. Newest-first would mean booking one card in moved an older
+card out of cover and started billing storage on something that had been free
+for months - exactly the surprise a subscription is sold to stop.
+
+### Failing closed, and why the worst case is mild
+
+A membership grants nothing outside a paid-up cycle. If the renewal job does not
+run, the cycle lapses and the member is billed the ordinary published price for
+what they do - after approving each one, like anybody else. Never twice, never
+silently. The next run opens their cycle and the allowances come back.
+
+### The open question, settled
+
+The proposal ended on one: does the commission waiver cover consignment?
+
+**No, and for a structural reason.** `marketplace_fee` is 5% of a sale between
+two Bault accounts and the whole of it is Bault's, so waiving it costs a number
+this system can cap. A consignment commission is not that - the code says it
+plainly: *"the partner's commission is deducted by the partner before they remit
+and never touches this ledger, so these are only ever Bault's share."* Waiving
+Bault's 1% on an auction-house sale is a rounding error dressed as a benefit;
+absorbing the partner's cut is paying a third party out of a subscription, for an
+amount Bault does not control. Either breaks the property everything else rests
+on. Consignment is in `UNCOVERED`, with a test asserting that nothing in
+`UNCOVERED` also appears in a tier's allowances.
+
+### What is not wired
+
+Said plainly, because the columns exist on the screen: the shipment inclusions
+(insurance premium, postage credit, rush) and the marketplace commission waiver
+are **not** deducted yet. Both are charged outside the billing port -
+`ShipmentService.chargeFor` builds one combined charge, and the purchase flow
+charges the percentage directly - so each needs its own check. An upgrade also
+charges a full cycle rather than prorating the unused remainder.
+
+None of them can charge a member something they did not approve. They bill at
+the ordinary price today, which is the safe direction to be incomplete in.
+
+
+## The rest of the alignment: increments, and a limit a box breaks on its own
+
+The divisor was the obvious difference. Reading the reference service's FAQ
+properly turned up two more, and one of them was changing every quote.
+
+### Carriers do not sell fractions
+
+*"Postage amount is charged **per pound**"* for ePost, and **per ounce** for
+ePacket. This adapter was billing on the continuous weight — a 1.02 lb parcel
+priced at 1.02 lb — so almost every quote was under by up to one whole unit.
+
+`billableGrams(actual, dim, increment)` now does it in the order that matters:
+take the greater of actual and dimensional weight, and only THEN round up to the
+service's unit. Rounding first and comparing second would round the loser too,
+which costs nothing but is one more number that has to be right.
+
+`BillingIncrement` is `'ounce' | 'pound' | 'continuous'`, and it is published on
+the carrier catalogue rather than hidden in the adapter, because it is the reason
+a quote for 1.1 lb and one for 1.9 lb come back identical. A collector shaving
+grams off a parcel deserves to know it will not help. `continuous` is the flat
+overnight service, which meters nothing at all.
+
+The ePost and ePacket units are the reference service's own published figures.
+The FedEx and USPS ones are those carriers' published behaviour, and the comment
+says which is which, because a number whose source is not stated is a number
+somebody will change on a hunch.
+
+### The limit a box breaks before anything is in it
+
+ePacket publishes two dimension limits — **24 inches on the longest side, and 36
+inches for length plus width plus height** — and `CarrierService` had no way to
+express either. So the cheapest international service was being offered for
+parcels the counter would have handed straight back.
+
+A large Bault box is 45 x 35 x 25 cm. That is 41 inches added up. It breaks the
+rule EMPTY. The extra-large box is 57 inches and also 23.6 inches on its longest
+side, a quarter of an inch inside the other limit.
+
+`maxLongestSideCm` and `maxDimensionSumCm` on the service, a `dimensions` rule in
+`checkService`, and the refusal reads like every other one: *"ePacket
+International takes up to 36 in for length, width and height added together."*
+Checked only when a box is known — with no dimensions there is nothing to
+measure, and refusing on a number nobody supplied is worse than quoting
+optimistically. Which is itself another argument for `chooseBox` always
+producing one.
+
+### What is still different, deliberately
+
+**Over 20 lb, the reference service splits the shipment into several parcels.**
+Bault refuses, naming the limit. Splitting touches shipment creation, custody,
+per-parcel labels and per-parcel insurance; the refusal is honest and the
+collector can split it themselves. Not done, and not pretended.
+
+**Their intake fee is per class** — $1 an individual card, $5 a lot or an
+oversized card, $20 a sealed case — where Bault charges a flat $5. Bault's
+pricing rules already support per-class scoping (`pricingRule.itemClass`), so
+this is a seed change rather than a code change, and it is a pricing decision
+rather than a mechanical one.
+
+Files: `modules/mem/*` (new), migration `0027`, `jobs/membership-renewal.ts`
+(new), `areas/customer/membership/MembershipPage.tsx` (new),
+`shared/membership.ts` (new), `tests/web/membership-tiers.test.ts`,
+`tests/web/shipping-boxes.test.ts` and `tests/ux/membership.test.tsx` (new), plus
+edits to `billing.service.ts`, `storage-fee.ts`, `boxes.ts`,
+`parcel-profile.service.ts`, `shipment.service.ts`, `carriers.ts`,
+`adapters/shipping.ts`, `seed.ts`, `App.tsx`, `i18n.tsx` and `index.css`; plus
+the alignment pass above in `adapters/shipping.ts`, `shp/carriers.ts`,
+`tests/web/shipping-boxes.test.ts` and `tests/contract/shipping-adapter.test.ts`.
+
+---
+
+# Part 45 — The Build That Was Never a Build
+
+Three findings, all from the same afternoon: putting the app behind a public
+tunnel so somebody outside could look at it. None of them was the thing being
+looked for, which is the argument for doing it at all.
+
+## `vite build` was producing a development bundle
+
+Every one of them comes from this.
+
+`vite.config.ts` reads the repo-root `.env` with an EMPTY prefix, because that
+is the only way to see `API_PORT`, which has no `VITE_` on it:
+
+    const fileEnv = { ...loadEnv(mode, repoRoot, ''), ...loadEnv(mode, appDir, '') };
+
+`loadEnv` has a side effect nobody reading that line would guess. When a file it
+loads defines `NODE_ENV`, Vite records the value as `VITE_USER_NODE_ENV` and then
+decides `isProduction` from THAT rather than from the command it was given. The
+root `.env` says `NODE_ENV=development`, correctly, because that is what the
+NestJS API and the worker need.
+
+So `pnpm --filter @bault/web build` was building in development mode. For months.
+The evidence was sitting in `dist/` for anybody who looked: `jsxDEV` calls with
+`lineNumber` and `columnNumber` metadata, and a bundle of **1,562 kB** where a
+real production build is **894 kB**. Nobody looked, because the command said
+`build` and it exited zero.
+
+The fix is one line with a long comment: `delete process.env.VITE_USER_NODE_ENV`
+after the load. `NODE_ENV` in a `.env` is a message to the SERVER processes; the
+web build's mode comes from the build command.
+
+## Which shipped a working password, pre-typed into the login form
+
+A development build takes every `import.meta.env.DEV` branch, and `SignInPage`
+has two:
+
+    const [identifier, setIdentifier] = useState(import.meta.env.DEV ? 'red@bault.dev' : '');
+    const [password, setPassword]     = useState(import.meta.env.DEV ? '11111111' : '');
+
+Both are correct code. Both were live in what everyone believed was the
+production bundle. The deployed sign-in form arrived with a real account and the
+shared password already in the fields.
+
+## And a second copy of the same secret, which the guard could not reach
+
+Underneath the form:
+
+    {import.meta.env.DEV && <p className="auth-demo">{t('auth.demoUsers')}</p>}
+
+Also correct, and also not enough - and this one would have leaked even from a
+genuine production build. The guard removes the JSX. The SENTENCE lived in the
+i18n catalogue, which is one object literal that ships whole, so
+
+    Demo users (password ...): ... eldar@bault.dev (manager)
+
+was in the bundle regardless. Anybody could open devtools, search for
+"password", and find the shared one along with the address of the
+ADMINISTRATOR account.
+
+Part 28 found the on-screen half of this and fixed it by adding the `DEV` guard.
+The half it could not see was that guarding a render does nothing about where
+the string is stored.
+
+The string is now `DEMO_USERS` in `auth/demoUsers.ts` - a module-level constant,
+untranslated on purpose, referenced only inside a `DEV` branch. Vite replaces the
+flag with `false`, the branch becomes unreachable, and Rollup drops the module.
+
+## The test is on the artefact, because the guards were the bug
+
+`tests/web/no-credentials-in-bundle.test.ts` greps the built `dist/assets/*.js`
+for the seeded password, each seeded address, and the phrase "Demo users". It
+skips when there is no build to look at, so it never fails for the wrong reason,
+and CI builds the web app so it runs there.
+
+It is deliberately not clever. A regex for "looks like a secret" would match
+every hex colour in the stylesheet and be switched off inside a week. Two guards
+that read correctly are what caused this, so the check is on the output.
+
+## Two smaller things the same pass turned up
+
+**`assets/` is the web app's `publicDir`**, so everything in it is copied into
+`dist/` and served. It contained `EX1_sol.pdf` - a sixteen-page Tel Aviv
+University data-structures assignment, nothing to do with Bault, downloadable
+from any deployed URL. Moved to `_local/`, which is now in `.gitignore` with a
+comment saying why.
+
+**`pnpm db:reset` was not resetting the membership.** The seed's TRUNCATE list is
+written by hand, and Part 44's two new tables were not on it - so a reset left
+whoever had been experimenting still subscribed, and the seed stopped being the
+clean state it is supposed to define. `membership` and `membership_period` are on
+the list now.
+
+## What the tunnel is, when it is right
+
+`vite preview` on the built bundle, with `WEB_PUBLIC_HOST` naming the tunnel
+host, and `cloudflared tunnel --url http://localhost:4173`. Verified from
+outside: the app loads, the public price list and tier catalogue answer,
+`/src/**/*.tsx` returns `index.html` rather than a component, there are no
+sourcemaps, `/docs` is not proxied, and the sign-in form is empty.
+
+Never the dev server. `pnpm dev` answers `GET /src/areas/.../LandingPage.tsx`
+with the transpiled file, comments and all - which is Part 43, and is why the
+`preview` block exists.
+
+---
+
+# Part 46 — The One Animation
+
+`DESIGN.md` has a rule: **motion confirms, never entertains.** One purpose per
+animation, 150-250ms, and nothing that draws attention to itself. Part 29 was
+written largely to delete decorative motion - the rail selector's travel, the
+machined notch, the turned rivet.
+
+So an entrance animation on the landing page is, on its face, exactly the thing
+the rule forbids. It was asked for, and it is worth writing down why it is a
+legitimate exception rather than the first crack in the rule.
+
+## Why this one is allowed
+
+The rule exists because motion that confirms nothing is the product performing at
+somebody. Everywhere behind the sign-in that is true: there is always an action
+to acknowledge, so an animation that acknowledges nothing is noise.
+
+The landing page is the one surface where there is no action yet. Its entire
+argument is a single object - a real card, photographed, with its serial beside
+it - and an object that slides into place reads as being PUT there. That is the
+whole product in one gesture: something was taken into custody.
+
+So the exception is granted to exactly one element, and the discipline is in what
+does NOT move. The headline, the lede, the custody line and the buttons are
+static. A staggered cascade down the hero would be the product performing, which
+is the thing the rule is protecting against, and it would have been one line more
+to write.
+
+## Inside the system's own numbers
+
+`--dur-slow` (250ms), `--ease`, runs once, `both` so the end state holds and
+nothing flickers back. No new token, no sixth duration, nothing bespoke.
+
+Reduced motion needed no rule: the global `prefers-reduced-motion: reduce` block
+collapses every animation to 0.01ms, and because the fill mode is `both`, the
+card is simply already in place. Verified by emulating the media feature rather
+than by reading the stylesheet - the computed duration comes back as `1e-05s`.
+
+## The direction problem, and why `:dir()` is not a layout branch
+
+A transform cannot be written in logical properties. `translateX(-24px)` is left
+in both scripts, and the card sits on the LEFT of the stage in English and on the
+RIGHT in Hebrew - so a fixed offset would have it entering from the outside edge
+in one language and flying across its own headline in the other.
+
+`DESIGN.md` forbids `[dir='rtl']` LAYOUT branches, and this is not one: the grid
+still does all the mirroring by itself. The offset is a custom property and
+`:dir(rtl)` flips its sign, so the card always enters from the outside edge of
+the stage.
+
+    .landing-stage-photo      { --card-enter-from: -24px; }
+    .landing-stage-photo:dir(rtl) { --card-enter-from: 24px; }
+
+Confirmed in the browser in both locales: `-24px` under `dir=ltr`, `24px` under
+`dir=rtl`.
+
+## One defensive line
+
+`.landing-stage` gained `overflow: clip`. A transform does not affect layout but
+it can still produce scrollable overflow, and a card starting 24px outside its
+resting place would have given the page a horizontal scrollbar for a quarter of a
+second. Measured at 0 in both directions and at every width afterwards.
+
+
+# Part 47 — Everything the Table Promised
+
+Part 44 built a membership whose comparison table said more than the code did.
+The shipment inclusions and the commission waiver were printed on the screen and
+billed at the normal price; an upgrade charged a full cycle; a downgrade, it
+turned out, cancelled the membership. Part 44 said so in its own list of what was
+not wired. This part is the wiring, plus four things found on the way that had
+nothing to do with membership and were worse.
+
+## The label that could not have been bought
+
+`dispatch.service.ts` bought the label like this: destination `US`, postal code
+`00000`, the shipment's total weight repeated once per item, and no box. The
+sandbox adapter never looks at any of it, so every dispatch succeeded. Against
+EasyPost the same call would have been refused, or would have bought a label for
+the wrong address.
+
+The fix is that dispatch no longer builds the request at all. It asks
+`ShipmentService.labelRequest(shipment, measuredWeightGrams?)`, which rebuilds it
+from what the shipment already stored when it was quoted:
+
+    const { rate, request } = await this.shipments.labelRequest(s, form.packageWeightGrams);
+    const label = await this.shipping.buyLabel(rate, request);
+
+The destination is `destinationOf()` in `carriers.ts`: the full address snapshot
+taken at creation (migration `0028_a_label_that_can_be_bought`, column
+`destination_detail`), or — for a shipment created before the column existed —
+country, postal code and name, which is what those rows actually have. The weight
+is the billable weight of the chosen box, and the operator's scale reading wins
+when there is one. `provider_shipment_id` and `provider_rate_id` are stored on
+settle, so the label is bought against the rate the collector was shown and not a
+fresh one.
+
+## Knowing who signed in
+
+The question was "if a user can log in, how do we know?" and the honest answer
+was: we don't. A session row held a token hash and a user id. A failed password
+left nothing anywhere.
+
+Migration `0029_who_signed_in` adds:
+
+- `login_session.ip` and `user_agent` (clamped to 512 characters, because it is
+  caller-supplied text going into a table nobody prunes);
+- `login_attempt` — every attempt, with an outcome of `success`,
+  `bad_credentials`, `unverified` or `refused`, the identifier typed, the user if
+  one matched, IP and device. Append-only, added to both lists in
+  `0001_append_only.sql`.
+
+`AuthService.recordAttempt` is wrapped so that it can never break a sign-in: a
+logging failure is logged and swallowed. An audit trail that locks everybody out
+when its table is unhappy is worse than none.
+
+None of that is worth anything if the IP is wrong, and it was. Without
+`trust proxy`, every request through the tunnel came from `127.0.0.1`, so the
+rate limiter treated the planet as one client. `main.ts` now sets it from
+`TRUST_PROXY` (default `loopback`). Not `true`: `true` believes the LEFTMOST
+`X-Forwarded-For` entry, which is whatever the caller typed. The schema refuses
+`true` outright. Verified through the live tunnel: a real public address
+recorded, a forged `X-Forwarded-For: 1.2.3.4` ignored.
+
+The admin console has a **Sign-ins** tab (`SignInsSection.tsx`, backed by
+`GET /admin/logins`): the last 200 attempts, 24-hour totals, and any identifier
+with five or more failures in 24 hours on the `is-alert` rail. The collector gets
+403.
+
+## The tunnel, with a door
+
+`pnpm tunnel` (`scripts/tunnel.mjs`) does the whole sequence: checks the API is
+up, builds, starts `vite preview` with a password, opens the Cloudflare tunnel,
+and prints the link, the user and the password. The password is enforced by a
+small plugin in `vite.config.ts` — basic auth, compared with `timingSafeEqual`,
+and the `authorization` header stripped before the request is proxied to the API
+so the preview password never reaches it. `xfwd: true` on the proxy is what lets
+the API see the visitor's address at all.
+
+## Membership: the three bugs
+
+**A downgrade was a cancellation.** `subscribe()` to a cheaper tier ended the
+current membership and had nowhere to put the new one. Migration
+`0030_a_downgrade_is_not_a_cancellation` adds `membership.scheduled_tier`. A
+downgrade now keeps the current tier to the end of the paid cycle and records the
+next one; the renewal job reads `coalesce(scheduled_tier, tier)` and clears it.
+"Keep" on the membership page undoes a scheduled downgrade or a pending
+cancellation, and costs nothing, because nothing has changed hands.
+
+**An upgrade charged a full cycle.** It now credits the unused part of the
+current one, pro rata by the day, and the confirmation sentence states the credit
+before the button is pressed.
+
+**Renewal could not find its own period.** The job wrote `current_period_start`
+as `now()` — microseconds — and the service looked the period up by a JS `Date`,
+which has milliseconds. The row was there and never matched. The job now writes
+`date_trunc('milliseconds', now())`. The class of bug is worth remembering: any
+timestamp that crosses from Postgres into JavaScript and back as a lookup key has
+to be truncated on the way in.
+
+A fourth, smaller one: `consume()` fired its update without checking that it
+updated anything, so a race could report an allowance as spent when no row had
+been written. It is now a conditional update whose row count is checked, and
+"covered" is only answered when the count is one.
+
+## Shipment inclusions
+
+`MembershipService.shippingCover(userId)` answers what the member's tier can pay
+towards a shipment right now: an insured-value cap, a postage credit, rush, and
+add-ons (the Trust tier's GPS tracker). `priceServices()` takes that cover and
+nets it out per rate:
+
+- insurance is charged on `insured − min(insured, cap)` — the premium above the
+  cap, not all or nothing;
+- postage credit comes off the carrier cost, never below zero;
+- rush and covered add-ons come off whole.
+
+Each rate carries `membershipCover` and `coveredMinor`, and the composer prints a
+line saying what the membership paid, because a total lower than its own
+breakdown with nothing to explain it reads as a mistake.
+
+The cover is stored on the shipment (`membership_cover`) when it settles and is
+spent in the same transaction that charges it — so a shipment that fails to
+settle has not used the allowance, and one paid later spends the cover it was
+quoted, not whatever the tier holds by then.
+
+One consequence had to be caught by hand. "Choose for me" picks the lowest
+`total + days × a day of waiting`, and once a postage credit was netted in, the
+slower service could look cheaper purely because the credit ate more of it — so
+the recommendation spent the credit on a worse shipment. `pickBest` now scores on
+the price BEFORE the credit. The credit applies to whichever service is chosen;
+it should not choose it.
+
+## Waivers outside the billing port
+
+Commission, the escrow fee, the cash-out fee and show pickup are not charged
+through `BillingService.charge`, so the single entitlement check in Part 44
+never saw them. Each call site now calls `MembershipService.waive(tx, userId,
+action, feeMinor, valueMinor?)` at the moment it computes the fee, inside its
+own transaction, and charges what comes back. The rule from Part 44 holds: a
+waiver can only lower a fee that is already on the screen, and it cannot exceed
+its allowance. The escrow waiver also has a value cap
+(`escrowValueCapMinor`, $5,000 on Trust) so it cannot be used to move a
+collection's worth of money for nothing.
+
+The pickup had its own bug inside this: the balance check ran against the gross
+fee, outside the transaction, before the waiver. A member with a covered pickup
+and an empty wallet was refused. The check now runs after the waiver, inside.
+
+Verified live: a $160 commission became $110 (the waiver's share), a cash-out
+fee became $0, an escrow fee became $0, and a shipment's quote fell by exactly
+the insurance under the cap plus the credit.
+
+## Intake, priced per class
+
+The flat $5 intake fee was one number for a single card and a sealed case. The
+reference service charges by what arrived — $1 for a card, $5 for a lot or a
+box, $10 for a collection, $20 for a case — and because Bault's storage is 10%
+of the item's own intake charge, a flat $5 overcharged a single card's storage
+fivefold for as long as it sat on the shelf.
+
+The seed now carries a rule per class alongside the catch-all, which stays at $5
+to price `other` and any class added before it has a rule. Three mappings are by
+analogy and say so in the seed: a graded slab as a card, a sealed pack and a
+small collectible as "misc". A lot is one item holding many, so it bills as
+`intake_lot` ($5) — tried first, falling back to the class rule — and for a
+member it draws on the ordinary intake allowance through `ALLOWANCE_ALIASES` in
+`tiers.ts`. That map is explicit on purpose: a general "fall back to the parent
+action" would let one allowance quietly pay for another.
+
+The landing page had keyed prices by action, so with a dozen intake rules it
+would have shown whichever came last — potentially a sealed case's $20 as "the"
+intake price. It now takes the `trading_card` rule and labels it "Booking one
+card in".
+
+## A deployed site that could not sign in
+
+`apps/web/nginx.conf` sets a CSP of `connect-src 'self'` "on the assumption the
+API is served under the same origin behind this proxy" — and then never proxied
+it. Every `/api/v1` call in the built image fell through to `location /` and got
+`index.html`. The config is now a template (`/etc/nginx/templates/`, filled by the
+image's own entrypoint) with a `location /api/` forwarding to `${API_UPSTREAM}`,
+default `http://api:3000`. It SETS `X-Forwarded-For` to the address nginx saw
+rather than appending, so nothing a client sends survives the hop. The API behind
+it needs `TRUST_PROXY` naming that network; `.env.example` says so.
+
+## Housekeeping
+
+- `apps/api/svg2png.tmp.mjs` declares its Node globals; `pnpm lint` has 0 errors.
+- The admin console opens on Yield, not on whatever tab was first in the array.
+- `docs/production-readiness.md` has a 19 September status: B2 superseded (the
+  EasyPost adapter exists; exercising it needs a key), and N1–N6 for everything
+  found since.
+
+## Why the divisor is 167
+
+Asked directly, so answered here. The dimensional divisor is 167 because that is
+the number ShipMyCards publishes, and matching them was the brief. 139 is the
+FedEx/UPS retail divisor — about 20% more dimensional weight for the same box —
+and USPS uses 166. When a real carrier is wired it computes dimensional weight
+itself; the constant drives sandbox quotes and the catalogue a collector sees
+before a label is bought.

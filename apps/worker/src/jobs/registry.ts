@@ -12,6 +12,7 @@ export const JobName = {
   LEDGER_INVARIANT_CHECK: 'ledger.invariant-check', // T070
   IMAGE_SYNC: 'image.sync', // T133
   SHIPMENT_EXPIRY: 'shipment.expiry-sweep', // unpaid shipments release their items
+  MEMBERSHIP_RENEWAL: 'membership.renewal', // a cycle ends: renew and charge, or end it
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];

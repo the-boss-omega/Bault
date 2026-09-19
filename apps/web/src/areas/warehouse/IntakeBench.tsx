@@ -100,6 +100,10 @@ export function IntakeBench({
 
   const [suggestion, setSuggestion] = useState<StowSuggestion | null>(null);
   const [stowError, setStowError] = useState<string | null>(null);
+  // Only ever used on the dead end below: the zone label for a shelf created
+  // from here because there was none of the right kind to be sent to.
+  const [rescueZone, setRescueZone] = useState('');
+  const [rescuing, setRescuing] = useState(false);
   const [labels, setLabels] = useState<{ id: string; barcode: string; description?: string }[]>([]);
   const [openParcels, setOpenParcels] = useState<ParcelQueueRow[]>([]);
   const [emptyReason, setEmptyReason] = useState('');
@@ -119,10 +123,23 @@ export function IntakeBench({
     void loadParcels();
   }, [loadParcels]);
 
-  // Arriving from "Book contents": the box that was pressed is the box this is about.
+  /*
+   * Arriving from "Book contents": the box that was pressed is the box this is
+   * about — and the bench has to go and FETCH it.
+   *
+   * The list of open parcels was loaded once, on mount. A box only becomes open
+   * when an operator presses "Open and check" on the bench above, which happens
+   * after that mount — so pressing "Book contents" on the box they had just
+   * opened set an id that was not in the list, `parcel` resolved to null, the
+   * owner did not lock, and the dropdown showed nothing selected. The flow
+   * worked only if you reloaded the page between opening the box and emptying
+   * it, which is not a step anybody would think to take.
+   */
   useEffect(() => {
-    if (initialParcelId) setParcelId(initialParcelId);
-  }, [initialParcelId]);
+    if (!initialParcelId) return;
+    setParcelId(initialParcelId);
+    void loadParcels();
+  }, [initialParcelId, loadParcels]);
 
   const parcel = openParcels.find((p) => p.id === parcelId) ?? null;
 
@@ -166,6 +183,43 @@ export function IntakeBench({
   useEffect(() => {
     void askForBin();
   }, [askForBin]);
+
+  /**
+   * Put up a shelf from the bench, when the directed stow has nowhere to send
+   * this.
+   *
+   * `suggest` fails for exactly two reasons — no shelving of the right kind in
+   * this building, or none at all — and both of them used to end the run. The
+   * operator was standing at an open box holding a sealed case, reading "create
+   * an oversized bin before stowing this", with the form to do it on another
+   * tab: leave the bench, lose the units already typed into it, create the
+   * shelf, come back and start the box again.
+   *
+   * So the offer is made where the refusal is. The kind and the building are
+   * NOT asked for — they are the two facts that just failed to match, so they
+   * are taken from the run itself rather than left to be re-chosen wrongly. The
+   * zone is the one thing only the person in the aisle knows.
+   */
+  async function createBinHere() {
+    setRescuing(true);
+    try {
+      const created = await api.post<{ serialNumber: string; zone: string }>('/custody/bins', {
+        zone: rescueZone.trim(),
+        facilityCode: facilityCode || undefined,
+        oversized,
+      });
+      onLog(t('warehouse.log.binCreated', { serial: created.serialNumber, zone: created.zone }));
+      setRescueZone('');
+      // Ask again rather than assume: the new shelf is empty, so it is the one
+      // that comes back, but the answer still comes from the same place it
+      // always does.
+      await askForBin();
+    } catch (e) {
+      setStowError((e as Error).message);
+    } finally {
+      setRescuing(false);
+    }
+  }
 
   const normalizedOwner = normalizeUsername(ownerUsername);
   const ownerOk = isValidUsername(normalizedOwner);
@@ -297,7 +351,38 @@ export function IntakeBench({
                 </span>
               </>
             ) : (
-              <span className="field-error">{stowError ?? t('warehouse.intake.stowSearching')}</span>
+              <>
+                <span className="field-error">{stowError ?? t('warehouse.intake.stowSearching')}</span>
+                {/* Only once the ask has actually come back empty — while it is
+                    still in flight there is nothing to rescue. */}
+                {stowError && (
+                  <div className="stow-rescue">
+                    <label className="field">
+                      <span className="field-label">{t('warehouse.intake.stowNewZone')}</span>
+                      <input
+                        value={rescueZone}
+                        onChange={(e) => setRescueZone(e.target.value)}
+                        placeholder={t('warehouse.intake.stowNewZonePlaceholder')}
+                      />
+                    </label>
+                    <Button
+                      variant="secondary"
+                      icon={<IconPlus />}
+                      disabled={!rescueZone.trim() || rescuing}
+                      onClick={() => void createBinHere()}
+                    >
+                      {t(
+                        oversized
+                          ? 'warehouse.intake.stowNewOversized'
+                          : 'warehouse.intake.stowNewBin',
+                      )}
+                    </Button>
+                    <span className="field-hint">
+                      {t('warehouse.intake.stowNewHint', { facility: facilityCode || '—' })}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -378,6 +463,35 @@ export function IntakeBench({
               </Field>
             </div>
 
+            {/* A lot is ONE record standing for many things, so it can only describe
+                a submission of one. It sits inside that one unit's window, and is
+                hidden entirely once there is a second row, rather than being
+                offered and then ignored. */}
+            {lotAllowed && (
+              <div className="row">
+                <label className="check">
+                  <input type="checkbox" checked={isLot} onChange={(e) => setIsLot(e.target.checked)} />
+                  {t('intake.isLot')}
+                </label>
+                {isLot && (
+                  <label className="check">
+                    {t('intake.lotSize')}
+                    <input
+                      type="number"
+                      min={1}
+                      value={lotSize}
+                      onChange={(e) => setLotSize(Math.max(1, Number(e.target.value)))}
+                      dir="ltr"
+                      style={{ width: '6rem' }}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+            {lotWillSplit && (
+              <p className="field-hint">{t('intake.lotTooSmall', { min: lotMin ?? 0, count: lotSize })}</p>
+            )}
+
             <PhotoInput
               purpose="item_intake"
               value={unit.photos}
@@ -398,29 +512,6 @@ export function IntakeBench({
           {t('warehouse.intake.addUnit')}
         </Button>
 
-        {/* A lot is ONE record standing for many things, so it can only describe
-            a submission of one. Hidden entirely once there is a second row,
-            rather than being offered and then ignored. */}
-        {lotAllowed && (
-          <label className="check">
-            <input type="checkbox" checked={isLot} onChange={(e) => setIsLot(e.target.checked)} />
-            {t('intake.isLot')}
-          </label>
-        )}
-        {lotAllowed && isLot && (
-          <label className="check">
-            {t('intake.lotSize')}
-            <input
-              type="number"
-              min={1}
-              value={lotSize}
-              onChange={(e) => setLotSize(Math.max(1, Number(e.target.value)))}
-              dir="ltr"
-              style={{ width: '6rem' }}
-            />
-          </label>
-        )}
-
         <span className="spacer" />
         <Button variant="gold" icon={<IconPlus />} loading={busy} disabled={!ready} onClick={() => void submit()}>
           {filled.length > 1
@@ -428,10 +519,6 @@ export function IntakeBench({
             : t('warehouse.intake.submit')}
         </Button>
       </div>
-
-      {lotWillSplit && (
-        <p className="field-hint">{t('intake.lotTooSmall', { min: lotMin ?? 0, count: lotSize })}</p>
-      )}
 
       {/* The box being worked through, and the end of the work. The count is the
           reconciliation the workflow never had: an operator can see that nothing

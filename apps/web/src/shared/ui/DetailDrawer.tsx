@@ -70,22 +70,37 @@ function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
  *
  * `dirty` guards a drawer with unsaved input — an outside click is then ignored
  * so an in-progress top-up or withdrawal can't be lost by a stray click.
+ *
+ * `wide` opens it as a SHEET rather than a column. Most records here are a list
+ * of facts and 440px is right for them; an ITEM is not — it has a photograph, an
+ * identity, a set of services with prices and a custody register, and asking all
+ * of that to queue up in one narrow column is what made the item view the least
+ * legible screen in the product.
+ *
+ * `lead` replaces the title with something the caller composes: for an item that
+ * is the identity line — serial, then status — because a four-line catalogue
+ * string is a description, not a name.
  */
 export function DetailDrawer({
   title,
   subtitle,
+  lead,
   onClose,
   footer,
   dirty,
   flush,
+  wide,
   children,
 }: {
   title: string;
   subtitle?: ReactNode;
+  /** Rendered in place of the title. `title` is still the accessible name. */
+  lead?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
   dirty?: boolean;
   flush?: boolean;
+  wide?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
@@ -138,16 +153,20 @@ export function DetailDrawer({
       />
       <aside
         ref={panelRef}
-        className="drawer"
+        className={wide ? 'drawer drawer--sheet' : 'drawer'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
       >
         <header className="drawer-head">
-          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <div className="drawer-head-main">
+            {/* The accessible name is always the full title, whatever is drawn:
+                a screen-reader user asking "what is this dialog" needs the card,
+                not the serial alone. */}
             <h2 className="drawer-title" id={titleId}>
-              {title}
+              {lead ?? title}
+              {lead ? <span className="sr-only">{title}</span> : null}
             </h2>
             {subtitle && <p className="drawer-subtitle">{subtitle}</p>}
           </div>

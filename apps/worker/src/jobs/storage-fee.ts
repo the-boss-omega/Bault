@@ -134,6 +134,47 @@ export async function runStorageFees(pool: Pool): Promise<void> {
          SELECT $1::int  AS std_free,  $2::int AS std_period,  $3::int AS std_bps,  $4::bigint AS std_flat,
                 $5::int  AS ovr_free,  $6::int AS ovr_period,  $7::int AS ovr_bps,  $8::bigint AS ovr_flat
        ),
+       -- MEMBERSHIP. The included storage allowance, read out of the tier's own
+       -- pricing rule, because this process has no access to the API's modules.
+       -- Only a cycle that is actually paid up and running counts: a lapsed or
+       -- ended membership covers nothing, which is the safe direction.
+       member_cap AS (
+         SELECT m.user_id::text AS user_id,
+                COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
+           FROM membership m
+           JOIN LATERAL (
+             SELECT parameters
+               FROM pricing_rule
+              WHERE action_type = 'membership:' || m.tier
+                AND effective_from <= now()
+                AND (effective_to IS NULL OR effective_to > now())
+              ORDER BY effective_from DESC
+              LIMIT 1
+           ) pr ON TRUE
+          WHERE m.status IN ('active', 'cancelling')
+            AND now() >= m.current_period_start
+            AND now() <  m.current_period_end
+       ),
+       -- Which of a member's items the allowance actually covers: the OLDEST
+       -- first. Oldest rather than newest is the only ordering that is stable —
+       -- with newest-first, booking one card in would move an older card out of
+       -- cover and start billing storage on something that had been free for
+       -- months, which is exactly the surprise a subscription is sold to stop.
+       member_covered AS (
+         SELECT r.id
+           FROM (
+             SELECT i.id,
+                    row_number() OVER (
+                      PARTITION BY i.owner_id ORDER BY i.received_at ASC, i.id ASC
+                    ) AS rn,
+                    c.stored_items
+               FROM item i
+               JOIN member_cap c ON c.user_id = i.owner_id
+              WHERE i.lifecycle_state = 'stored'
+                AND i.received_at IS NOT NULL
+           ) r
+          WHERE r.rn <= r.stored_items
+       ),
        stored AS (
          SELECT i.id,
                 i.owner_id,
@@ -152,6 +193,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
            FROM item i
           WHERE i.lifecycle_state = 'stored'
             AND i.received_at IS NOT NULL
+            AND i.id NOT IN (SELECT id FROM member_covered)
        ),
        computed AS (
          SELECT s.id,

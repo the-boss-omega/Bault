@@ -91,10 +91,13 @@ function kindForStatus(status: number, code: string | undefined): ApiErrorKind {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
+    // `...options` first, so a caller's headers are MERGED into the JSON content
+    // type rather than replacing the whole object — spread last, passing any
+    // header silently dropped `Content-Type`.
     res = await fetch(BASE + path, {
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
       ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
     });
   } catch (cause) {
     // fetch only rejects for transport-level failures: DNS, refused connection,
@@ -119,8 +122,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  post: <T>(path: string, data?: unknown, headers?: Record<string, string>) =>
+    request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined, headers }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
   /**

@@ -3,6 +3,7 @@ import { ApiError, api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
+import { DEMO_USERS } from './demoUsers';
 
 /**
  * Sign-in page — credentials only. Registration lives on its own page
@@ -150,7 +151,7 @@ export function SignInPage({
       {/* The same rule, for the same reason, and this one is worse: it printed
           every seeded account AND the shared password on screen for anyone who
           opened the page. */}
-      {import.meta.env.DEV && <p className="auth-demo">{t('auth.demoUsers')}</p>}
+      {import.meta.env.DEV && <p className="auth-demo">{DEMO_USERS}</p>}
     </form>
   );
 }

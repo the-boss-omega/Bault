@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { I18nProvider } from './shared/i18n';
 import { ThemeProvider } from './shared/theme';
+import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import './index.css';
 
 /**
@@ -25,11 +26,22 @@ if (!rootElement) {
   throw new Error('Root element #root not found in index.html');
 }
 
+/**
+ * The boundary sits INSIDE the providers, not outside them.
+ *
+ * A render failure should still be shown in the viewer's theme and reading
+ * direction — a fallback that appears untinted and left-to-right in a Hebrew RTL
+ * session looks like a second, worse failure. Putting it here also means the
+ * providers themselves are the only thing left uncovered, and they do almost
+ * nothing that can throw.
+ */
 createRoot(rootElement).render(
   <StrictMode>
     <ThemeProvider>
       <I18nProvider>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </I18nProvider>
     </ThemeProvider>
   </StrictMode>,

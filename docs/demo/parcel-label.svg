@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="576" viewBox="0 0 384 576" font-family="Helvetica, Arial, sans-serif">
+  <rect width="384" height="576" fill="#ffffff"/>
+  <rect x="6" y="6" width="372" height="564" fill="none" stroke="#111318" stroke-width="2"/>
+
+  <!-- Carrier band -->
+  <rect x="6" y="6" width="372" height="56" fill="#111318"/>
+  <text x="20" y="44" fill="#ffffff" font-size="30" font-weight="bold" letter-spacing="1">FedEx</text>
+  <text x="364" y="30" fill="#ffffff" font-size="11" text-anchor="end" letter-spacing="1.5">GROUND</text>
+  <text x="364" y="48" fill="#ffffff" font-size="13" text-anchor="end" font-weight="bold">PKG 1 OF 1</text>
+
+  <line x1="6" y1="92" x2="378" y2="92" stroke="#111318" stroke-width="1"/>
+
+  <!-- FROM -->
+  <text x="20" y="82" font-size="9" fill="#62676f" letter-spacing="1.5">FROM</text>
+  <text x="20" y="112" font-size="12" fill="#111318" font-weight="bold">M. OKADA — PRIVATE SALE</text>
+  <text x="20" y="128" font-size="11" fill="#2a2d33">1140 W Addison St</text>
+  <text x="20" y="143" font-size="11" fill="#2a2d33">Chicago, IL 60613</text>
+
+  <line x1="6" y1="158" x2="378" y2="158" stroke="#111318" stroke-width="1"/>
+
+  <!-- TO -->
+  <text x="20" y="180" font-size="9" fill="#62676f" letter-spacing="1.5">SHIP TO</text>
+  <text x="20" y="206" font-size="18" fill="#111318" font-weight="bold">BAULT NEW JERSEY</text>
+  <text x="20" y="230" font-size="15" fill="#111318" font-weight="bold">ATTN: @red</text>
+  <text x="20" y="252" font-size="12" fill="#2a2d33">Newark, NJ 00000</text>
+  <text x="20" y="268" font-size="12" fill="#2a2d33">United States</text>
+
+  <line x1="6" y1="286" x2="378" y2="286" stroke="#111318" stroke-width="1"/>
+
+  <!-- Declared contents -->
+  <text x="20" y="308" font-size="9" fill="#62676f" letter-spacing="1.5">CONTENTS</text>
+  <text x="20" y="328" font-size="11" fill="#2a2d33">1x trading card, top-loader in bubble mailer</text>
+  <text x="20" y="344" font-size="11" fill="#2a2d33">Declared value: USD 1,200.00</text>
+  <text x="20" y="360" font-size="11" fill="#2a2d33">Weight: 0.06 kg</text>
+
+  <line x1="6" y1="378" x2="378" y2="378" stroke="#111318" stroke-width="1"/>
+
+  <!-- Tracking barcode -->
+  <text x="192" y="400" font-size="9" fill="#62676f" text-anchor="middle" letter-spacing="1.5">TRACKING</text>
+  <g transform="translate(5, 412)">
+<rect x="0" y="0" width="374" height="72" fill="#fff" /><g fill="#000"><rect x="20" y="0" width="4" height="72" /><rect x="26" y="0" width="2" height="72" /><rect x="32" y="0" width="2" height="72" /><rect x="42" y="0" width="6" height="72" /><rect x="50" y="0" width="4" height="72" /><rect x="56" y="0" width="6" height="72" /><rect x="64" y="0" width="6" height="72" /><rect x="72" y="0" width="2" height="72" /><rect x="78" y="0" width="4" height="72" /><rect x="86" y="0" width="6" height="72" /><rect x="96" y="0" width="2" height="72" /><rect x="100" y="0" width="4" height="72" /><rect x="108" y="0" width="4" height="72" /><rect x="116" y="0" width="2" height="72" /><rect x="122" y="0" width="6" height="72" /><rect x="130" y="0" width="2" height="72" /><rect x="136" y="0" width="6" height="72" /><rect x="146" y="0" width="4" height="72" /><rect x="152" y="0" width="4" height="72" /><rect x="160" y="0" width="6" height="72" /><rect x="170" y="0" width="2" height="72" /><rect x="174" y="0" width="4" height="72" /><rect x="182" y="0" width="6" height="72" /><rect x="190" y="0" width="2" height="72" /><rect x="196" y="0" width="4" height="72" /><rect x="202" y="0" width="6" height="72" /><rect x="212" y="0" width="2" height="72" /><rect x="218" y="0" width="2" height="72" /><rect x="224" y="0" width="6" height="72" /><rect x="232" y="0" width="4" height="72" /><rect x="240" y="0" width="2" height="72" /><rect x="246" y="0" width="6" height="72" /><rect x="254" y="0" width="4" height="72" /><rect x="262" y="0" width="4" height="72" /><rect x="270" y="0" width="2" height="72" /><rect x="274" y="0" width="6" height="72" /><rect x="284" y="0" width="6" height="72" /><rect x="292" y="0" width="4" height="72" /><rect x="298" y="0" width="6" height="72" /><rect x="306" y="0" width="4" height="72" /><rect x="312" y="0" width="4" height="72" /><rect x="318" y="0" width="8" height="72" /><rect x="328" y="0" width="4" height="72" /><rect x="338" y="0" width="6" height="72" /><rect x="346" y="0" width="2" height="72" /><rect x="350" y="0" width="4" height="72" /></g>
+  </g>
+  <text x="192" y="518" font-size="20" fill="#111318" text-anchor="middle" font-weight="bold" letter-spacing="3" font-family="'Courier New', monospace">789412650037</text>
+
+  <text x="192" y="548" font-size="9" fill="#62676f" text-anchor="middle" letter-spacing="1">DEMO LABEL — NOT A REAL SHIPMENT</text>
+</svg>

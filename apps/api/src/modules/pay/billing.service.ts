@@ -3,6 +3,8 @@ import type { Database } from '../../db/client';
 import type { BillableAction, BillingPort } from '../../shared/billing/billing.port';
 import { AppError } from '../../shared/errors/app-error';
 import { PricingService } from '../prc/pricing.service';
+import { MembershipService } from '../mem/membership.service';
+import { allowanceFor } from '../mem/tiers';
 import { LedgerService } from './ledger.service';
 import { charge } from './pay.schema';
 
@@ -23,9 +25,32 @@ export class BillingService implements BillingPort {
   constructor(
     private readonly pricing: PricingService,
     private readonly ledger: LedgerService,
+    private readonly memberships: MembershipService,
   ) {}
 
   async charge(tx: Database, action: BillableAction): Promise<void> {
+    /**
+     * INCLUDED IN A MEMBERSHIP? Then there is no charge, and nothing to record.
+     *
+     * This is the only place the entitlement is checked, and that is deliberate.
+     * Every fixed-price billable action in the product — intake, the flat and
+     * per-service fees, both parcel fees — arrives here, so one check covers all
+     * of them and no caller has to remember. A tier that starts covering a new
+     * action needs a line in `tiers.ts` and nothing else.
+     *
+     * `consume` runs inside this transaction, so the allowance is spent if and
+     * only if the action it covered actually commits. It fails closed: a
+     * non-member, a lapsed cycle, or an action no tier names all answer "not
+     * covered", and the code below charges the ordinary price.
+     *
+     * Note the ORDER — the allowance is checked BEFORE the price is resolved.
+     * An included action does not need a price, and resolving one would make an
+     * unpriced-but-included action throw.
+     */
+    const billedAs = action.feeActionType ?? action.actionType;
+    const entitlement = await this.memberships.consume(tx, action.userId, allowanceFor(billedAs));
+    if (entitlement.covered) return;
+
     /**
      * A caller may name a narrower rule than its action type. It is TRIED, not
      * required: an unconfigured variant falls back to the action's own rule

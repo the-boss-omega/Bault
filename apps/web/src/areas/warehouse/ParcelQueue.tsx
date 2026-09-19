@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n, type TranslateFn } from '../../shared/i18n';
 import { formatDate } from '../../shared/money';
+import { Code } from '../../shared/ui/Serial';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import {
   PARCEL_CONDITIONS,
@@ -110,20 +111,37 @@ export function ParcelQueue({
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td dir="ltr">
-                      <code>{row.code}</code>
-                      {row.trackingNumber && <span className="dt-sub">{row.trackingNumber}</span>}
+                  /*
+                    An UNCLAIMED parcel is somebody's unopened property that
+                    nobody can attribute, held rather than opened. It is the one
+                    row on this bench that needs a person, and it used to be an
+                    ordinary row distinguished by a small red dot in a pill.
+
+                    It takes the register's state rail — the same 3px leading
+                    rule a frozen item takes in the vault — so a bench with one
+                    of these on it says so from across the room.
+                  */
+                  <tr key={row.id} className={row.status === 'unclaimed' ? 'is-alert' : undefined}>
+                    <td>
+                      <Code value={row.code} />
+                      {row.trackingNumber && (
+                        <span className="dt-sub">
+                          <Code value={row.trackingNumber} />
+                        </span>
+                      )}
                     </td>
                     <td>
                       {row.ownerUsername ? (
-                        <code dir="ltr">{row.ownerUsername}</code>
+                        <Code value={`@${row.ownerUsername}`} />
                       ) : (
                         /* The label as written, even — especially — when it
                            resolves to nothing. It is the only clue to whose
-                           property this is. */
-                        <span className="muted" dir="ltr">
-                          {row.addressedTo || t('parcelQueue.noLabel')}
+                           property this is, so it is quoted rather than
+                           corrected, and marked as unresolved rather than muted
+                           into looking like an empty cell. */
+                        <span className="unresolved">
+                          <Code value={row.addressedTo || t('parcelQueue.noLabel')} />
+                          <span className="dt-sub">{t('parcelQueue.noAccount')}</span>
                         </span>
                       )}
                     </td>
@@ -133,7 +151,11 @@ export function ParcelQueue({
                         <span className="dt-sub">{t('parcelQueue.needsForwarding')}</span>
                       )}
                     </td>
-                    <td dir="ltr">{row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}</td>
+                    <td className="td-tight">
+                      <span className="date">
+                        {row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}
+                      </span>
+                    </td>
                     {/* What has actually come out of the box so far. Before this
                         the only way to find out was to leave the page. */}
                     <td className="td-end num">{row.itemCount.toLocaleString()}</td>

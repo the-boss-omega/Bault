@@ -5,22 +5,24 @@ import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { SHIPPING_ADAPTER } from '../../shared/adapters/adapters.module';
-import type { ShippingAdapter, Rate } from '@bault/adapters';
+import type { ShippingAdapter, Rate, RateRequest } from '@bault/adapters';
 import { PricingService } from '../prc/pricing.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { WalletService } from '../pay/wallet.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
+import { facility } from '../inv/facility.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
 import { ParcelProfileService } from './parcel-profile.service';
+import { SHIPPING_BOXES } from './boxes';
 import {
   CARRIER_SERVICES,
-  billableWeightGrams,
   checkService,
+  destinationOf,
   findService,
   type CarrierService,
   type ParcelProfile,
@@ -40,6 +42,12 @@ import {
   signatureForced,
 } from './shipping-options';
 import { formatMinor } from '../../shared/money';
+import { UNLIMITED } from '../mem/tiers';
+import {
+  MembershipService,
+  type AppliedShippingCover,
+  type ShippingCover,
+} from '../mem/membership.service';
 
 /** Who is asking. Staff may act on any shipment; a collector only on their own. */
 export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
@@ -64,6 +72,8 @@ export interface ShipmentOptionsInput {
   customerNotes?: string;
   serviceMode?: 'simple' | 'personalised';
   perItemCustomsValues?: Record<string, number>;
+  /** A key from `SHIPPING_BOXES`. Null or absent: priced on weight, the warehouse picks. */
+  boxSize?: string | null;
 }
 
 export interface CreateShipmentInput extends ShipmentOptionsInput {
@@ -88,7 +98,13 @@ export interface QuotedRate extends Rate {
   handlingMinor: number;
   insurancePremiumMinor: number;
   addOnsMinor: number;
-  /** Carrier + everything above. This is what the wallet is asked for. */
+  /**
+   * What the member's tier pays towards this rate, and the parts it pays for.
+   * Null for a non-member. The gross figures above are unchanged by it.
+   */
+  membershipCover: AppliedShippingCover | null;
+  coveredMinor: number;
+  /** Carrier + everything above, LESS the cover. This is what the wallet is asked for. */
   totalMinor: number;
   /** True when this is what "choose for me" would take. */
   recommended: boolean;
@@ -97,6 +113,17 @@ export interface QuotedRate extends Rate {
 export interface Quote {
   destination: { country: string; postalCode: string };
   totalWeightGrams: number;
+  /**
+   * The box this was priced in.
+   *
+   * Never null any more when anything fits: an unchosen box is now the one
+   * the warehouse would reach for, so the quote carries real dimensions
+   * rather than pricing on weight alone. Null only when nothing in the
+   * catalogue takes these contents.
+   */
+  boxSize: string | null;
+  /** True when Bault picked the box rather than the collector. */
+  boxAutoSelected: boolean;
   /** True when any item's weight came from its class rather than a scale. */
   weightEstimated: boolean;
   itemCount: number;
@@ -139,6 +166,7 @@ export class ShipmentService {
     private readonly wallet: WalletService,
     private readonly profiles: ParcelProfileService,
     private readonly outbox: OutboxService,
+    private readonly memberships: MembershipService,
   ) {}
 
   /**
@@ -196,6 +224,7 @@ export class ShipmentService {
     return {
       services: CARRIER_SERVICES,
       addOns: SHIPMENT_ADD_ONS,
+      boxes: SHIPPING_BOXES,
       maxInsuredValueMinor: MAX_INSURED_VALUE_MINOR,
       signatureRequiredAboveMinor: SIGNATURE_REQUIRED_ABOVE_MINOR,
       paymentWindowDays: PAYMENT_WINDOW_DAYS,
@@ -240,13 +269,17 @@ export class ShipmentService {
     const signatureRequired = Boolean(input.signatureRequired) || signatureForced(insuredValueMinor);
     const addOns = input.addOns ?? [];
 
-    const optionProblems = checkOptions({
-      insuredValueMinor,
-      signatureRequired,
-      customsValueMinor: declaredValueMinor,
-      destinationCountry: destination.country,
-      addOns,
-    });
+    const { box, problems: boxProblems, boxAutoSelected } = this.profiles.boxFor(input.boxSize, items, measurements);
+    const optionProblems = [
+      ...checkOptions({
+        insuredValueMinor,
+        signatureRequired,
+        customsValueMinor: declaredValueMinor,
+        destinationCountry: destination.country,
+        addOns,
+      }),
+      ...boxProblems,
+    ];
 
     const profile = this.profiles.toProfile({
       destination,
@@ -255,13 +288,21 @@ export class ShipmentService {
       declaredValueMinor,
       insuredValueMinor,
       signatureRequired,
+      box,
     });
 
-    const rates = await this.priceServices(profile, addOns, input.rush ?? false);
+    const rates = await this.priceServices(
+      profile,
+      addOns,
+      input.rush ?? false,
+      await this.memberships.shippingCover(userId),
+    );
 
     return {
       destination,
       totalWeightGrams: measurements.totalWeightGrams,
+      boxSize: box?.key ?? null,
+      boxAutoSelected,
       weightEstimated: measurements.anyEstimated,
       itemCount: items.length,
       insuredValueMinor,
@@ -285,6 +326,7 @@ export class ShipmentService {
     profile: ParcelProfile,
     addOnKeys: string[],
     rush: boolean,
+    cover: ShippingCover | null = null,
   ): Promise<QuotedRate[]> {
     const { amount: baseHandling } = await this.pricing.price('shipping');
     /**
@@ -300,11 +342,40 @@ export class ShipmentService {
     const rushMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
     const handling = { amount: baseHandling.amount + rushMinor };
     const premium = insurancePremiumMinor(profile.insuredValueMinor);
-    const addOnsMinor = await this.priceAddOns(addOnKeys);
+    const addOnPrices = await this.priceAddOns(addOnKeys);
+    const addOnsMinor = Object.values(addOnPrices).reduce((a, b) => a + b, 0);
+
+    /**
+     * What a member's tier pays, apart from postage (which depends on the rate).
+     *
+     * Insurance is covered up to the tier's cap and no further: a $3,000 parcel
+     * on a $1,000 cap has the premium on $1,000 paid and pays the difference —
+     * "insurance above your tier's cap" is on the published not-covered list.
+     * Rush is covered outright where the tier includes it. A tracker is covered
+     * while the tier has one left this cycle.
+     */
+    const rushCovered = cover?.rushIncluded ? rushMinor : 0;
+    const insuranceCovered =
+      cover && profile.insuredValueMinor > 0 && cover.insuredShipmentsLeft > 0
+        ? Math.min(premium, insurancePremiumMinor(Math.min(profile.insuredValueMinor, cover.insuredValueCapMinor)))
+        : 0;
+    const addOnsCovered: Record<string, number> = {};
+    for (const [action, minor] of Object.entries(addOnPrices)) {
+      const left = cover?.addOnsLeft[action];
+      if (left !== undefined && (left === UNLIMITED || left > 0)) addOnsCovered[action] = minor;
+    }
 
     const carrierRates = await this.shipping.getRates({
       destination: profile.destination,
+      // Where the parcel physically leaves from. A real carrier prices on the
+      // origin/destination pair, so quoting without it prices a different
+      // shipment than the one that gets bought.
+      origin: await this.originAddress(),
       items: [{ weightGrams: profile.weightGrams }],
+      // The box, when one was chosen. The carrier bills dimensional weight from
+      // these itself, so nothing here scales its price a second time.
+      dimensionsCm: profile.dimensionsCm,
+      packagingGrams: profile.packagingGrams,
       rush,
       signatureRequired: profile.signatureRequired,
     });
@@ -316,10 +387,23 @@ export class ShipmentService {
       );
       if (!rate) continue; // the adapter does not sell it to this destination
       const problems = checkService(service, profile);
-      const carrierCost =
-        service.flatCostMinor !== undefined
-          ? service.flatCostMinor
-          : this.dimAdjusted(service, profile, rate.costMinor);
+      const carrierCost = service.flatCostMinor !== undefined ? service.flatCostMinor : rate.costMinor;
+
+      // The postage credit meets the carrier's line, and never more than it.
+      const postageCovered = cover ? Math.min(cover.postageCreditLeftMinor, carrierCost) : 0;
+      const addOnsCoveredMinor = Object.values(addOnsCovered).reduce((a, b) => a + b, 0);
+      const coveredMinor = postageCovered + insuranceCovered + rushCovered + addOnsCoveredMinor;
+      const membershipCover: AppliedShippingCover | null =
+        cover && coveredMinor > 0
+          ? {
+              tier: cover.tier,
+              insuredShipment: insuranceCovered > 0,
+              insuranceMinor: insuranceCovered,
+              postageMinor: postageCovered,
+              rushMinor: rushCovered,
+              addOns: addOnsCovered,
+            }
+          : null;
 
       quoted.push({
         ...rate,
@@ -333,7 +417,9 @@ export class ShipmentService {
         handlingMinor: handling.amount,
         insurancePremiumMinor: premium,
         addOnsMinor,
-        totalMinor: carrierCost + handling.amount + premium + addOnsMinor,
+        membershipCover,
+        coveredMinor,
+        totalMinor: carrierCost + handling.amount + premium + addOnsMinor - coveredMinor,
         recommended: false,
       });
     }
@@ -345,30 +431,45 @@ export class ShipmentService {
   }
 
   /**
-   * Apply dimensional weight where the service prices on it.
+   * The address parcels ship FROM — the primary storage facility.
    *
-   * The adapter quotes on the weight it was given; a service with a published
-   * divisor bills the greater of that and the parcel's volume. Without real
-   * dimensions this is a no-op, which is honest — it becomes meaningful the
-   * moment an operator records a box size.
+   * Read from the facility table rather than configured separately, so it is the
+   * same address collectors are told to post to and there is one place to change
+   * it. A forwarding site stores nothing, so it can never be an origin.
+   *
+   * Left undefined when the facility still carries a placeholder street, which
+   * makes the real adapter refuse with a sentence naming the problem instead of
+   * quoting against a fictional origin.
    */
-  private dimAdjusted(service: CarrierService, profile: ParcelProfile, quoted: number): number {
-    const billable = billableWeightGrams(service, profile);
-    if (billable <= profile.weightGrams || profile.weightGrams === 0) return quoted;
-    return Math.round((quoted * billable) / profile.weightGrams);
+  private async originAddress() {
+    const [site] = await this.db
+      .select()
+      .from(facility)
+      .where(and(eq(facility.role, 'primary'), eq(facility.active, true)))
+      .limit(1);
+    if (!site || /placeholder|SET REAL ADDRESS/i.test(site.line1)) return undefined;
+    return {
+      name: site.name,
+      street1: site.line1,
+      city: site.city,
+      region: site.region,
+      postalCode: site.postalCode,
+      country: site.country.toUpperCase(),
+    };
   }
 
-  private async priceAddOns(keys: string[]): Promise<number> {
-    let total = 0;
+  /** Each add-on's price, keyed by its fee action — a tier covers them one by one. */
+  private async priceAddOns(keys: string[]): Promise<Record<string, number>> {
+    const prices: Record<string, number> = {};
     for (const key of keys) {
       const addOn = shipmentAddOn(key);
       if (!addOn) continue;
       // The catalogue price is the fallback; a pricing rule wins where one
       // exists, because Principle VI makes the rules the source of truth.
       const resolved = await this.pricing.tryPrice(addOnFeeAction(key));
-      total += resolved?.amount.amount ?? addOn.priceMinor;
+      prices[addOnFeeAction(key)] = resolved?.amount.amount ?? addOn.priceMinor;
     }
-    return total;
+    return prices;
   }
 
   /**
@@ -388,7 +489,16 @@ export class ShipmentService {
   private pickBest(rates: QuotedRate[]): QuotedRate | null {
     const eligible = rates.filter((r) => r.eligible);
     if (eligible.length === 0) return null;
-    const score = (r: QuotedRate) => r.totalMinor + r.transitDaysMax * DAY_OF_WAITING_MINOR;
+    /**
+     * Postage credit counts as money here, because it is money: a member's
+     * monthly credit spent on this parcel is credit the next one does not have.
+     * Scored on the net total alone, every covered service ties and the fastest
+     * wins — so "choose for me" quietly spent three times the credit it needed.
+     * Adding it back means a member is recommended what anybody would be, and
+     * simply pays less for it.
+     */
+    const score = (r: QuotedRate) =>
+      r.totalMinor + (r.membershipCover?.postageMinor ?? 0) + r.transitDaysMax * DAY_OF_WAITING_MINOR;
     return eligible.reduce((best, r) => (score(r) < score(best) ? r : best), eligible[0]!);
   }
 
@@ -424,6 +534,10 @@ export class ShipmentService {
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
     const measurements = this.profiles.measure(items);
+    const { box, problems: boxProblems } = this.profiles.boxFor(input.boxSize, items, measurements);
+    if (boxProblems.length > 0) {
+      throw AppError.validation(boxProblems[0]!.message, { problems: boxProblems });
+    }
     const customsLines = needsCustoms(destination.country)
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
       : null;
@@ -438,12 +552,17 @@ export class ShipmentService {
         recipientName: input.recipientName?.trim() || recipientName,
         destinationCountry: destination.country,
         destinationPostalCode: destination.postalCode,
+        // The street and city a carrier needs, frozen as quoted. See the column.
+        destinationDetail: { ...destination, name: input.recipientName?.trim() || destination.name },
         serviceMode: input.serviceMode === 'simple' ? 'simple' : 'personalised',
         rushFlag: input.rush ?? false,
         declaredValueMinor,
         insuredValueMinor,
         signatureRequired,
         addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+        // Stored, because picking a service re-rates from the shipment row: a
+        // box that lived only in the quote would be charged as no box at all.
+        boxSize: box?.key ?? null,
         customsLines,
         customerNotes: input.customerNotes?.trim() || null,
         status: 'requested',
@@ -516,6 +635,8 @@ export class ShipmentService {
       insurancePremiumMinor: s.insurancePremiumMinor,
       signatureRequired: s.signatureRequired,
       addOns: (s.addOns as { key: string }[]) ?? [],
+      // What the parcel goes out in, so whoever packs it uses the box it was priced in.
+      boxSize: s.boxSize,
       customerNotes: s.customerNotes,
       groupId: s.groupId,
       paymentDueAt: s.paymentDueAt,
@@ -558,14 +679,61 @@ export class ShipmentService {
       items,
       measurements,
       profile: this.profiles.toProfile({
-        destination: { country: s.destinationCountry, postalCode: s.destinationPostalCode },
+        destination: destinationOf(s),
         measurements,
         itemCount: items.length,
         declaredValueMinor: s.declaredValueMinor,
         insuredValueMinor: s.insuredValueMinor,
         signatureRequired: s.signatureRequired,
+        box: this.profiles.boxFor(s.boxSize, items, measurements).box,
       }),
     };
+  }
+
+  /**
+   * What dispatch buys: the rate that was charged, and the parcel it was for.
+   *
+   * Dispatch used to build this itself, and built it wrong in three ways at
+   * once: a hard-coded `US`/`00000` destination, the TOTAL parcel weight
+   * repeated once per item (a 3-item parcel weighing 500 g was declared as
+   * 1.5 kg), and no box. It also passed no rate id, and a real carrier sells a
+   * label only against the rate it quoted — so on EasyPost there was nothing to
+   * buy at all.
+   *
+   * Built from the same `profileOf` that priced the shipment, so the label and
+   * the charge describe the same parcel. The one deliberate difference is the
+   * weight: the operator has just put the parcel on a scale, and a measured
+   * figure beats every estimate this system made before it was packed.
+   */
+  async labelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams?: number) {
+    const { profile, measurements } = await this.profileOf(s);
+    const contentsGrams = measurements.totalWeightGrams;
+    const packagingGrams = profile.packagingGrams;
+    // The scale weighs the box too; take the box back out so it is not counted twice.
+    const measuredContents =
+      measuredWeightGrams && measuredWeightGrams > 0
+        ? Math.max(1, measuredWeightGrams - (packagingGrams ?? 0))
+        : contentsGrams;
+
+    const request: RateRequest = {
+      destination: destinationOf(s),
+      origin: await this.originAddress(),
+      items: [{ weightGrams: measuredContents }],
+      rush: s.rushFlag,
+      dimensionsCm: profile.dimensionsCm,
+      packagingGrams,
+      signatureRequired: s.signatureRequired,
+    };
+    const rate: Rate = {
+      carrier: s.carrier ?? '',
+      serviceLevel: s.serviceLevel ?? '',
+      costMinor: s.cost ?? 0,
+      currency: s.currency ?? DEFAULT_CURRENCY,
+      estimatedDays: 0,
+      providerShipmentId: s.providerShipmentId ?? undefined,
+      providerRateId: s.providerRateId ?? undefined,
+    };
+    return { rate, request };
   }
 
   /** Rates for a real shipment, with the same constraint annotations a quote has. */
@@ -573,7 +741,7 @@ export class ShipmentService {
     const s = await this.loadFor(shipmentId, actor);
     const { profile } = await this.profileOf(s);
     const addOnKeys = ((s.addOns as { key: string }[]) ?? []).map((a) => a.key);
-    return this.priceServices(profile, addOnKeys, s.rushFlag);
+    return this.priceServices(profile, addOnKeys, s.rushFlag, await this.memberships.shippingCover(s.userId));
   }
 
   /* ------------------------------------------------------------------
@@ -648,6 +816,11 @@ export class ShipmentService {
       carrier: rate.carrier,
       serviceLevel: rate.serviceLevel,
       serviceKey: service.key,
+      // What a real carrier will actually sell at dispatch: THIS rate, by id.
+      providerShipmentId: rate.providerShipmentId ?? null,
+      providerRateId: rate.providerRateId ?? null,
+      // Stored so a HELD shipment spends the same cover when it is paid later.
+      membershipCover: rate.membershipCover,
       cost: rate.totalMinor,
       insurancePremiumMinor: rate.insurancePremiumMinor,
       currency: rate.currency,
@@ -674,6 +847,7 @@ export class ShipmentService {
     }
 
     return this.db.transaction(async (tx) => {
+      if (rate.membershipCover) await this.memberships.spendShippingCover(tx, s.userId, rate.membershipCover);
       await this.chargeFor(tx, s, rate);
       await tx.update(shipment).set({ ...common, status: 'rates_selected', paymentDueAt: null }).where(eq(shipment.id, s.id));
       return {
@@ -696,6 +870,8 @@ export class ShipmentService {
    * an answer that survives a pricing change (Principle V).
    */
   private async chargeFor(tx: Database, s: typeof shipment.$inferSelect, rate: QuotedRate) {
+    // A parcel the tier paid for entirely is not a $0.00 line on the statement.
+    if (rate.totalMinor <= 0) return;
     const [c] = await tx
       .insert(charge)
       .values({
@@ -708,6 +884,8 @@ export class ShipmentService {
           addOns: rate.addOnsMinor,
           service: rate.serviceKey,
           insuredValueMinor: s.insuredValueMinor,
+          // What the member's tier paid, so the charge explains its own total.
+          membershipCover: rate.membershipCover ?? null,
         },
         amount: rate.totalMinor,
         currency: rate.currency,
@@ -758,7 +936,11 @@ export class ShipmentService {
     }
 
     const service = findService(s.carrier, s.serviceLevel);
+    const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
     return this.db.transaction(async (tx) => {
+      // The cover the member saw when the rate was chosen, spent now that the
+      // money is. If it has gone meanwhile this refuses instead of charging more.
+      if (storedCover) await this.memberships.spendShippingCover(tx, s.userId, storedCover);
       await this.chargeFor(tx, s, {
         carrier: s.carrier!,
         serviceLevel: s.serviceLevel!,
@@ -774,6 +956,8 @@ export class ShipmentService {
         handlingMinor: 0,
         insurancePremiumMinor: s.insurancePremiumMinor,
         addOnsMinor: 0,
+        membershipCover: storedCover,
+        coveredMinor: 0,
         totalMinor: s.cost!,
         recommended: false,
       });

@@ -11,6 +11,19 @@ import type { StatusTone } from './ui/primitives';
  */
 export type TicketStatus = 'open' | 'awaiting_customer' | 'resolved';
 
+/**
+ * The tone follows "whose turn is it", which is the only question the status
+ * answers — and under the previous palette it read backwards. `info` was a teal
+ * a shade off the success green, so an OPEN ticket (nobody has looked at this
+ * yet) wore what a reader takes for the "done" colour.
+ *
+ *   open               frost  — somebody else holds it; there is nothing to do
+ *   awaiting_customer  amber  — it is waiting on YOU
+ *   resolved           custody green — closed
+ *
+ * Frost is the same tone a frozen item takes, and for the same reason: a state
+ * where the next move belongs to somebody else.
+ */
 export const TICKET_TONE: Record<string, StatusTone> = {
   open: 'info',
   awaiting_customer: 'warning',

@@ -85,7 +85,10 @@ export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; 
         onClick={() => setOpen(true)}
       >
         {photo.exhausted ? (
-          <span className="photo-thumb-empty" aria-hidden="true">📷</span>
+          /* A stated absence, not a camera emoji. An emoji renders in whatever
+             the platform's colour font decides, which is the one thing on this
+             screen nobody chose. */
+          <span className="photo-thumb-empty">{t('photo.none')}</span>
         ) : (
           <img
             className="photo-thumb-img"

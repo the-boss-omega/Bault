@@ -4,11 +4,15 @@ import {
   PayPalPaymentAdapter,
   SandboxPaymentAdapter,
   SandboxShippingAdapter,
+  EasyPostShippingAdapter,
   ConsoleEmailAdapter,
   SmtpEmailAdapter,
   SandboxStorageAdapter,
+  S3StorageAdapter,
   type EmailAdapter,
   type PaymentAdapter,
+  type ShippingAdapter,
+  type StorageAdapter,
 } from '@bault/adapters';
 
 /**
@@ -100,13 +104,93 @@ function createPaymentAdapter(): PaymentAdapter {
   return new SandboxPaymentAdapter();
 }
 
+/**
+ * The shipping adapter, and the boot that must fail rather than sell a label it
+ * cannot print.
+ *
+ * `SandboxShippingAdapter` invents its prices — the file says so — and
+ * `buyLabel` returns `SBX<timestamp>` with a label key that resolves to nothing,
+ * while `getTracking` answers `in_transit` for every input forever. It was bound
+ * unconditionally, so the product could charge a collector for a shipment that
+ * could not physically happen and then show it as `shipped`.
+ *
+ * `SHIPPING_PROVIDER` has existed in the env schema since T020, defaulting to
+ * "shipstation", and was read by NOTHING. Naming a provider changed nothing.
+ *
+ * EasyPost is the real rail: USPS, UPS, FedEx and DHL from one account. An
+ * `EZTK…` key is its TEST mode — every code path identical to live, no money
+ * spent — which is the production-safe way to exercise this, exactly as
+ * `PAYPAL_ENVIRONMENT=sandbox` is for payment.
+ */
+function createShippingAdapter(): ShippingAdapter {
+  const env = loadEnv();
+
+  if (env.SHIPPING_PROVIDER === 'easypost') {
+    return new EasyPostShippingAdapter({
+      apiKey: env.EASYPOST_API_KEY,
+      baseUrl: env.EASYPOST_BASE_URL || undefined,
+    });
+  }
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error(
+      'SHIPPING_PROVIDER=sandbox invents rates and cannot buy a label, so a shipment charged for ' +
+        'here can never be posted. Use SHIPPING_PROVIDER=easypost.',
+    );
+  }
+  return new SandboxShippingAdapter();
+}
+
+/**
+ * The storage adapter, and the boot that must fail rather than eat photographs.
+ *
+ * `SandboxStorageAdapter.putObject` returns the key and writes nothing. That is
+ * fine for a checkout with no bucket and silently destructive anywhere real:
+ * every intake photograph and every arrival-condition photograph is accepted,
+ * acknowledged, and discarded, while the database records an `item_image` or
+ * `parcel_photo` row pointing at a key that resolves to nothing. Nobody finds
+ * out until a damage claim needs the evidence.
+ *
+ * It was bound unconditionally, and the five `STORAGE_*` variables the schema
+ * has always REQUIRED were read by nothing at all — so a correctly configured
+ * deployment, with a real bucket and real credentials, still threw every byte
+ * away.
+ *
+ * Same shape as payment now: the choice comes from validated config, `s3` is the
+ * real rail, and `sandbox` is refused in production by the env schema and again
+ * here. No fallback — a provider name with no implementation fails the boot
+ * rather than quietly degrading to the thing that loses data.
+ */
+function createStorageAdapter(): StorageAdapter {
+  const env = loadEnv();
+
+  if (env.STORAGE_PROVIDER === 's3') {
+    return new S3StorageAdapter({
+      endpoint: env.STORAGE_ENDPOINT,
+      region: env.STORAGE_REGION,
+      bucket: env.STORAGE_BUCKET,
+      accessKey: env.STORAGE_ACCESS_KEY,
+      secretKey: env.STORAGE_SECRET_KEY,
+    });
+  }
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error(
+      'STORAGE_PROVIDER=sandbox accepts photographs and discards them, while the database records ' +
+        'keys that will never resolve. Use STORAGE_PROVIDER=s3 with the STORAGE_* credentials ' +
+        'pointed at a real bucket.',
+    );
+  }
+  return new SandboxStorageAdapter();
+}
+
 @Global()
 @Module({
   providers: [
     { provide: PAYMENT_ADAPTER, useFactory: createPaymentAdapter },
-    { provide: SHIPPING_ADAPTER, useFactory: () => new SandboxShippingAdapter() },
+    { provide: SHIPPING_ADAPTER, useFactory: createShippingAdapter },
     { provide: EMAIL_ADAPTER, useFactory: createEmailAdapter },
-    { provide: STORAGE_ADAPTER, useFactory: () => new SandboxStorageAdapter() },
+    { provide: STORAGE_ADAPTER, useFactory: createStorageAdapter },
   ],
   exports: [PAYMENT_ADAPTER, SHIPPING_ADAPTER, EMAIL_ADAPTER, STORAGE_ADAPTER],
 })

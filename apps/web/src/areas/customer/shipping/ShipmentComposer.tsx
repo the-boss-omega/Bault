@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
-import { useI18n } from '../../../shared/i18n';
+import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import {
+  boxLabel,
+  formatBoxDimensions,
   formatWeight,
   ruleLabel,
   serviceLabel,
@@ -10,7 +12,7 @@ import {
   type QuotedRate,
   type ServiceCatalogue,
 } from '../../../shared/carriers';
-import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation, IconShipping } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
 import { countryName, useShippingCountries } from '../../../shared/countries';
@@ -72,6 +74,7 @@ export function ShipmentComposer({
   const [signature, setSignature] = useState(false);
   const [addOns, setAddOns] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  const [boxSize, setBoxSize] = useState('');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -120,8 +123,9 @@ export function ShipmentComposer({
       signatureRequired: effectiveSignature,
       addOns,
       customerNotes: notes.trim() || undefined,
+      boxSize: boxSize || null,
     }),
-    [selectedIds, addressId, rush, insuredMinor, declaredMinor, effectiveSignature, addOns, notes],
+    [selectedIds, addressId, rush, insuredMinor, declaredMinor, effectiveSignature, addOns, notes, boxSize],
   );
 
   /**
@@ -267,6 +271,21 @@ export function ShipmentComposer({
               </select>
             </Field>
 
+            {/* The box changes the price — a carrier bills on size as well as
+                weight — so it is asked here, before the quote, not at the packing
+                bench after the price was already given. */}
+            <Field label={t('ship.boxSize')} hint={t('ship.boxSizeHint')}>
+              <select value={boxSize} onChange={(e) => setBoxSize(e.target.value)}>
+                <option value="">{t('ship.box.none')}</option>
+                {(catalogue?.boxes ?? []).map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {boxLabel(t, b)} — {formatBoxDimensions(b)},{' '}
+                    {t('ship.boxUpTo', { weight: formatWeight(b.maxContentsGrams) })}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <label className="check">
               <input type="checkbox" checked={rush} onChange={(e) => setRush(e.target.checked)} />
               {t('shipping.rush')}
@@ -278,21 +297,19 @@ export function ShipmentComposer({
 
       <Panel title={t('ship.protection')} subtitle={t('ship.protectionSubtitle')}>
         <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-          <div className="field">
-            <span className="field-label">{t('ship.insuredValue')}</span>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input inputMode="decimal" dir="ltr" value={insured} onChange={(e) => setInsured(e.target.value)} />
-            </div>
-            <span className="field-hint">
-              {catalogue
+          <MoneyField
+            label={t('ship.insuredValue')}
+            value={insured}
+            onChange={setInsured}
+            hint={
+              catalogue
                 ? t('ship.insuredHint', {
                     max: formatUsd(catalogue.maxInsuredValueMinor),
                     threshold: formatUsd(catalogue.signatureRequiredAboveMinor),
                   })
-                : ''}
-            </span>
-          </div>
+                : undefined
+            }
+          />
 
           <label className="check">
             <input
@@ -306,14 +323,12 @@ export function ShipmentComposer({
           {signatureForced && <span className="field-hint">{t('ship.signatureForced')}</span>}
 
           {international && (
-            <div className="field">
-              <span className="field-label">{t('ship.customsValue')}</span>
-              <div className="money-input">
-                <span aria-hidden="true">$</span>
-                <input inputMode="decimal" dir="ltr" value={declared} onChange={(e) => setDeclared(e.target.value)} />
-              </div>
-              <span className="field-hint">{t('ship.customsHint')}</span>
-            </div>
+            <MoneyField
+              label={t('ship.customsValue')}
+              value={declared}
+              onChange={setDeclared}
+              hint={t('ship.customsHint')}
+            />
           )}
 
           {(catalogue?.addOns ?? []).map((a) => (
@@ -352,11 +367,22 @@ export function ShipmentComposer({
         ) : (
           <>
             {quote.weightEstimated && <p className="field-hint">{t('ship.weightEstimated')}</p>}
+            <p className="field-hint">
+              {quote.boxSize
+                ? t('ship.pricedInBox', { box: boxLabel(t, { key: quote.boxSize }) })
+                : t('ship.pricedOnWeight')}
+            </p>
 
             {quote.optionProblems.map((p) => (
               <p key={p.field} className="drawer-note drawer-note--hold">
                 <IconAlert />
-                <span>{p.message}</span>
+                <span>
+                  {p.rule === 'box_weight'
+                    ? t('ship.boxTooHeavy')
+                    : p.rule === 'box_contents'
+                      ? t('ship.boxWrongContents')
+                      : p.message}
+                </span>
               </p>
             ))}
 
@@ -380,6 +406,17 @@ export function ShipmentComposer({
                         insurance: formatUsd(r.insurancePremiumMinor),
                       })}
                     </p>
+                    {/* The tier's part, named. A total that is lower than the
+                        breakdown above it, with nothing to say why, reads as a
+                        mistake — so the membership says what it paid. */}
+                    {r.membershipCover && (r.coveredMinor ?? 0) > 0 && (
+                      <p className="hint mem-covered">
+                        {t('ship.coveredBy', {
+                          tier: t(`membership.tier.${r.membershipCover.tier}` as MessageKey),
+                          amount: formatUsd(r.coveredMinor ?? 0),
+                        })}
+                      </p>
+                    )}
                     {r.recommended && <StatusBadge tone="gold">{t('ship.recommended')}</StatusBadge>}
                     <div className="actions">
                       <Button

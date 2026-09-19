@@ -9,6 +9,7 @@ import type { ShippingAdapter } from '@bault/adapters';
 import { CustodyService } from '../cst/custody.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { shipment } from './shp.schema';
+import { ShipmentService } from './shipment.service';
 
 /**
  * Scan-verified dispatch (T106, Principles III & VI) — Opus-tier.
@@ -25,6 +26,7 @@ export class DispatchService {
     @Inject(SHIPPING_ADAPTER) private readonly shipping: ShippingAdapter,
     private readonly custody: CustodyService,
     private readonly outbox: OutboxService,
+    private readonly shipments: ShipmentService,
   ) {}
 
   async dispatch(
@@ -59,10 +61,17 @@ export class DispatchService {
         });
       }
 
-      const label = await this.shipping.buyLabel(
-        { carrier: s.carrier!, serviceLevel: s.serviceLevel!, costMinor: s.cost ?? 0, currency: s.currency ?? 'USD', estimatedDays: 0 },
-        { destination: { country: 'US', postalCode: '00000' }, items: [...expected].map(() => ({ weightGrams: form.packageWeightGrams })), rush: s.rushFlag },
-      );
+      /**
+       * Buy THE RATE THAT WAS CHARGED, for the parcel it was charged for.
+       *
+       * This used to be assembled here, wrongly: destination `US`/`00000`, the
+       * total weight repeated once per item, no box, and no rate id — so a real
+       * carrier had nothing it could sell. `labelRequest` builds it from the same
+       * profile that priced the shipment, with the weight the operator has just
+       * read off the scale.
+       */
+      const { rate, request } = await this.shipments.labelRequest(s, form.packageWeightGrams);
+      const label = await this.shipping.buyLabel(rate, request);
 
       for (const itemId of expected) {
         await this.custody.changeState(tx, itemId, 'shipped', operatorId, `dispatched via ${form.carrier}`);

@@ -64,6 +64,13 @@ export class CustodyService {
       actorId: string;
       /** 'intake' for a normal arrival, 'batch_split' when produced by splitting a batch. */
       eventType?: 'intake' | 'batch_split';
+      /**
+       * `stored` (the default) for something documented on the bench and put on a
+       * shelf in the same gesture. `received` for something that is on the record
+       * and not yet on a shelf — a card sold from the Bault store, owned from the
+       * moment it is paid for and shelved when an operator gets to it.
+       */
+      lifecycleState?: 'stored' | 'received';
     },
   ) {
     const [created] = await tx
@@ -84,7 +91,7 @@ export class CustodyService {
         weightGrams: input.weightGrams && input.weightGrams > 0 ? input.weightGrams : null,
         isLot: input.isLot ?? false,
         lotSize: input.lotSize ?? 1,
-        lifecycleState: 'stored', // received → stored on documentation
+        lifecycleState: input.lifecycleState ?? 'stored', // received → stored on documentation
         receivedAt: new Date(),
       })
       .returning();
@@ -95,7 +102,7 @@ export class CustodyService {
       eventType: input.eventType ?? 'intake',
       newOwnerId: input.ownerId,
       newBinId: input.binId,
-      newState: 'stored',
+      newState: input.lifecycleState ?? 'stored',
       actorId: input.actorId,
       reason: input.eventType ?? 'intake',
     });

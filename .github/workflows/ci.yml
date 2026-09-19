@@ -1,8 +1,17 @@
 name: CI
 
-# Runs on every push and pull request. Gates: lint, typecheck, and the four
-# mandated test suites. A real PostgreSQL service is provided because integration,
-# concurrency, and property suites exercise actual DB transactions and locks.
+# Runs on every push and pull request.
+#
+# WHAT WAS WRONG WITH THIS FILE. It ran the three database-backed suites without
+# ever migrating or seeding the database, and those suites drive a LIVE HTTP
+# server (`tests/integration/helpers/http.ts` talks to localhost:3000) which
+# nothing here started. It also never set PAYMENT_PROVIDER, which the env schema
+# requires with no default, so anything that called loadEnv() threw at config
+# parse. And it ran 4 of the 8 vitest projects — `core`, `ux`, `web` and
+# `core-contract` never ran, which is 307 of 663 tests including every component
+# and UI test.
+#
+# Whatever signal the badge was giving, it was not "the suite passed".
 on:
   push:
   pull_request:
@@ -31,25 +40,71 @@ jobs:
       DATABASE_URL: postgres://bault:bault@localhost:5432/bault
       DIRECT_DATABASE_URL: postgres://bault:bault@localhost:5432/bault
       SESSION_COOKIE_SECRET: ci-test-secret-value-1234567890
+      # Required by the schema with no default. Its absence meant every step
+      # that booted the app failed at config parse.
+      PAYMENT_PROVIDER: sandbox
+      NODE_ENV: test
+      STORAGE_PROVIDER: s3
       STORAGE_ENDPOINT: http://localhost:9000
       STORAGE_REGION: eu-central
       STORAGE_BUCKET: bault-images
       STORAGE_ACCESS_KEY: minioadmin
       STORAGE_SECRET_KEY: minioadmin
+      API_PORT: 3000
+      # The suites sign in hundreds of times a minute, all from one address.
+      # With the production defaults (30 sign-ins, 300 requests a minute) the
+      # limiter did its job and every test after the first few got a 429. These
+      # match the developer .env; no test depends on the limiter tripping.
+      AUTH_RATE_LIMIT_PER_MINUTE: 5000
+      RATE_LIMIT_PER_MINUTE: 20000
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
+      # The storage contract suite round-trips real bytes through a real bucket.
+      # Without this it skips — loudly, but it skips, and a skipped test defends
+      # nothing.
+      #
+      # A step, not a service container: `bitnami/minio` (which started itself
+      # and made the bucket from an env var) was withdrawn from Docker Hub, and
+      # the official image needs `server /data` as its command, which a service
+      # container cannot pass. It comes from MinIO's own registry (quay.io):
+      # `minio/minio` has been removed from Docker Hub too. Same image as
+      # infra/docker-compose.yml, and it ships `mc`, which makes the bucket.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin quay.io/minio/minio:latest server /data
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 1
+          done
+          curl -sf http://localhost:9000/minio/health/live || { docker logs minio; exit 1; }
+          docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+          docker exec minio mc mb --ignore-existing local/bault-images
+
+      # No `version:` here — the action reads `packageManager` (pnpm@9.15.0)
+      # from package.json, so there is one place to change it. Naming it in
+      # both made the action refuse to run.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
-      - uses: actions/setup-node@v4
+      # 24, not 20: jsdom 30 (the ux/web suites' DOM) needs ^22.22.2 or ^24.15,
+      # and on 20 every jsdom worker died on `markAsUncloneable is not a
+      # function` from its undici. 24 is also what development runs on.
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # The shared packages resolve through their `dist/` (package.json `main`
+      # and `types`), and `dist/` is not committed. This ran just before the
+      # integration suites, AFTER the typecheck that needs it — so on a clean
+      # runner the worker could not find `@bault/config` or `@bault/adapters`.
+      # It passed locally only because a developer's `dist/` already exists.
+      # pnpm builds them in dependency order.
+      - name: Build workspace packages
+        run: pnpm --filter "./packages/*" build
 
       - name: Lint
         run: pnpm lint
@@ -57,9 +112,52 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # Test suites run separately so a failure names the exact invariant that broke.
+      # ---- Suites that need nothing running -------------------------------
+      # First, because they are fast and a failure here should not wait behind a
+      # database boot. `core` is NOT among them despite the name — it drives the
+      # live API, so it runs with the other e2e suites further down.
+      - name: Web unit tests
+        run: pnpm test:web
+
+      - name: Component & UX tests
+        run: pnpm exec vitest run --project ux
+
+      - name: Core contract tests
+        run: pnpm test:core-contract
+
+      - name: Adapter contract tests (payment, shipping, storage)
+        run: pnpm test:contract
+
+      # ---- Everything below needs a migrated, seeded database and a live API --
+      - name: Migrate and seed
+        run: |
+          pnpm --filter @bault/api db:migrate
+          pnpm --filter @bault/api db:seed
+
+      # The e2e suites drive the real HTTP stack on purpose — guards, DB
+      # transactions and append-only triggers end to end. That only works if
+      # something is serving them.
+      - name: Start the API
+        run: |
+          pnpm --filter @bault/api build
+          node apps/api/dist/main.js &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/api/v1/readyz > /dev/null; then
+              echo "API ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become ready in 60s"; exit 1
+
       - name: Integration tests
         run: pnpm test:integration
+
+      # `core` (tests3/integration) drives the live API exactly as `integration`
+      # does — it is a second e2e suite, not a unit one, which is why it belongs
+      # here rather than with the fast steps above.
+      - name: Core tests
+        run: pnpm test:core
 
       - name: Concurrency tests (no double-sale / single owner)
         run: pnpm test:concurrency
@@ -67,5 +165,6 @@ jobs:
       - name: Property tests (balance == sum ledger)
         run: pnpm test:property
 
-      - name: Contract tests (payment & shipping adapters)
-        run: pnpm test:contract
+      - name: Stop the API
+        if: always()
+        run: kill "$(cat /tmp/api.pid)" || true

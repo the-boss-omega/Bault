@@ -11,6 +11,7 @@ import {
   StatusBadge,
 } from '../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation } from '../../shared/ui/icons';
+import { YieldChart } from './YieldChart';
 
 /**
  * Shelf Yield — what a shelf earns against the occupancy it consumes.
@@ -239,6 +240,33 @@ export function ShelfYieldPanel() {
       </Panel>
 
       <Panel title={t('yield.zones.title')} subtitle={t('yield.zones.subtitle')} flush>
+        {/*
+          The question this screen exists to answer — which part of the building
+          pays for itself — was being asked of three tables of numbers and a
+          progress bar in a cell whose scale was never stated. One chart, in the
+          product's only chart style: graphite bars, one accent on the zone
+          earning least per shelf-month, tabular labels, a stated maximum.
+
+          It sits ABOVE the table rather than replacing it. The chart answers
+          "which one", the table answers "by how much", and they are different
+          questions.
+        */}
+        {zones !== null && zones.length > 0 && (
+          <div className="panel-note">
+            <YieldChart
+              title={t('yield.chart.title')}
+              subtitle={t('yield.chart.subtitle')}
+              rows={zones.map((z) => ({
+                label: z.zone,
+                revenueMinor: z.revenueMinor,
+                perSlotMonthMinor: z.revenuePerSlotMonthMinor,
+                occupied: z.occupiedShelfCount,
+                shelves: z.shelfCount,
+              }))}
+            />
+          </div>
+        )}
+
         {zones === null ? (
           <SkeletonTable rows={3} columns={4} />
         ) : (

@@ -423,6 +423,9 @@ export class IntakeService {
         actionType: 'intake',
         itemId: createdItem.id,
         itemClass: input.typeClass,
+        // A lot is one item holding many; it has its own price (`intake_lot`),
+        // tried first and falling back to the class rule if none is in force.
+        ...(input.isLot === true ? { feeActionType: 'intake_lot' } : {}),
       });
       /**
        * The bench's own photographs of the card, stored against the item.
