@@ -70,13 +70,14 @@ jobs:
       API_PORT: 3000
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
+      # No `version:` here — the action reads `packageManager` (pnpm@9.15.0)
+      # from package.json, so there is one place to change it. Naming it in
+      # both made the action refuse to run.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: pnpm
