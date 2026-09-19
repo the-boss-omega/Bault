@@ -41,6 +41,9 @@ COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 # variables below (and ONLY defined variables, so nginx's own $uri and $host are
 # left alone) into /etc/nginx/conf.d/default.conf when the container starts.
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+# The security headers, included by the config above in every block that
+# sets its own headers (see the note there).
+COPY apps/web/nginx-security-headers.conf /etc/nginx/snippets/bault-security-headers.conf
 ENV API_UPSTREAM=http://api:3000
 
 EXPOSE 8080

@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
@@ -108,5 +108,27 @@ export const membershipPeriod = pgTable(
     byUser: index('membership_period_user_idx').on(t.userId, t.periodStart),
     /** One period row per membership per cycle — the upsert target. */
     periodUnique: unique('membership_period_unique').on(t.membershipId, t.periodStart),
+  }),
+);
+
+/**
+ * A storage period a membership covered (migration 0031).
+ *
+ * Written by the worker's storage sweep, one row per item per period, so a
+ * covered period counts as settled: when cover ends, only periods that start
+ * afterwards are billed. Append-only.
+ */
+export const storagePeriodCover = pgTable(
+  'storage_period_cover',
+  {
+    itemId: text('item_id').notNull(),
+    periodNo: integer('period_no').notNull(),
+    userId: text('user_id').notNull(),
+    tier: text('tier'),
+    coveredAt: timestamp('covered_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.itemId, t.periodNo] }),
+    byUser: index('storage_period_cover_user_idx').on(t.userId),
   }),
 );

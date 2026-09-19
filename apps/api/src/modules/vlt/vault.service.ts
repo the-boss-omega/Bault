@@ -7,6 +7,7 @@ import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { StorageAdapter } from '@bault/adapters';
 import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
 import { bin, custodyEvent, item, itemImage } from '../cst/cst.schema';
+import { storagePeriodCover } from '../mem/mem.schema';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
 import { serviceRequest } from '../dis/dis.schema';
@@ -386,6 +387,13 @@ export class VaultService {
       );
     const periodsBilled = billed.length;
     const totalChargedMinor = billed.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+    // Periods a membership paid for are settled too (migration 0031). Without
+    // them the drawer would show a covered item's next charge as overdue.
+    const [coveredRow] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(storagePeriodCover)
+      .where(eq(storagePeriodCover.itemId, itemId));
+    const periodsCovered = coveredRow?.n ?? 0;
 
     // The base the percentage applies to: the item's own intake charge.
     const [intake] = await this.db
@@ -405,6 +413,7 @@ export class VaultService {
       percentOfIntakeBps: params.percentOfIntakeBps,
       intakeMinor,
       periodsBilled,
+      periodsCovered,
       totalChargedMinor,
       periodChargeMinor: periodChargeMinor(intakeMinor, params),
       freeUntil: received ? freeUntil(received, params) : null,
@@ -412,7 +421,7 @@ export class VaultService {
       // next charge to name.
       nextChargeAt:
         received && it.lifecycleState === 'stored'
-          ? nextChargeAt(received, params, periodsBilled)
+          ? nextChargeAt(received, params, periodsBilled + periodsCovered)
           : null,
     };
   }

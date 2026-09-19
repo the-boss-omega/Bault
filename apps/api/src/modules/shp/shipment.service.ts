@@ -13,6 +13,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
 import { facility } from '../inv/facility.schema';
+import { item } from '../cst/cst.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
@@ -1016,9 +1017,34 @@ export class ShipmentService {
       .from(userAccount)
       .where(eq(userAccount.id, s.userId))
       .limit(1);
-    return this.toTrackingView(s, {
-      username: owner?.username ?? null,
-      accountName: fullName(owner?.firstName, owner?.lastName),
-    });
+    /**
+     * The items, by serial — what is printed on each card's label.
+     *
+     * Dispatch has the operator SCAN every card into the box and sends what was
+     * scanned; the API refuses unless that set equals the shipment's. The screen
+     * can only match a scanned label to an item if it knows each item's serial
+     * and barcode, and the view carried bare ids. (The screen used to send the
+     * shipment's own id list as "scanned", so the check compared the list with
+     * itself and always passed.)
+     */
+    const ids = (s.itemIds as string[]) ?? [];
+    const items = ids.length
+      ? await this.db
+          .select({
+            id: item.id,
+            serialNumber: item.serialNumber,
+            barcode: item.barcode,
+            description: item.description,
+          })
+          .from(item)
+          .where(inArray(item.id, ids))
+      : [];
+    return {
+      ...this.toTrackingView(s, {
+        username: owner?.username ?? null,
+        accountName: fullName(owner?.firstName, owner?.lastName),
+      }),
+      items,
+    };
   }
 }

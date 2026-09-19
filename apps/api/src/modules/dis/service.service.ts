@@ -174,6 +174,14 @@ export class ServiceRequestService {
     return row;
   }
 
+  /** `get`, but only for the requester or for staff; anyone else gets 404. */
+  async getFor(user: { id: string; role: string }, requestId: string) {
+    const row = await this.get(requestId);
+    const staff = user.role === 'warehouse_operator' || user.role === 'admin';
+    if (!staff && row.requesterId !== user.id) throw AppError.notFound('Service request not found');
+    return row;
+  }
+
   /** A customer's own requests (newest first) — the "my requests" list. */
   listMine(userId: string) {
     return this.db

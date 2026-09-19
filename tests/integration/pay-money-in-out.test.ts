@@ -147,24 +147,28 @@ describe('PAY money in and out', () => {
     expect((await admin.post(`/admin/wallet-requests/${id}/approve`, {})).status).toBe(201);
     expect((await admin.post(`/admin/wallet-requests/${id}/complete`, {})).status).toBe(201);
 
-    // The gross AND the fee both came off. Netting them into one row would hide
-    // the fee from a statement.
-    expect(await balanceOf(collector)).toBe(before - AMOUNT - quote.feeMinor);
+    // The wallet loses exactly what was asked for: the fee comes OUT of it, as
+    // quoted ("{fee} comes off {gross}, so {net} reaches you"). It used to lose
+    // the gross AND the fee while paying out only the net.
+    expect(await balanceOf(collector)).toBe(before - AMOUNT);
 
     const ledger = (await collector.get('/finance/ledger')).body as Array<{
       type: string;
       amount: number;
       direction: string;
     }>;
-    expect(ledger.some((r) => r.type === 'withdrawal' && r.amount === AMOUNT)).toBe(true);
+    // Two rows that add up to the request: the net that left, and the fee.
+    expect(ledger.some((r) => r.type === 'withdrawal' && r.amount === quote.netMinor)).toBe(true);
     expect(ledger.some((r) => r.type === 'fee' && r.amount === quote.feeMinor)).toBe(true);
+    expect(quote.netMinor + quote.feeMinor).toBe(AMOUNT);
   });
 
-  it('refuses a cash-out the balance cannot cover once the fee is counted', async () => {
+  it('cashes out the whole balance, taking the fee out of it rather than on top', async () => {
     const admin = await signIn(SEED.admin);
     const collector = await signIn(SEED.collector2);
 
-    // Ask for exactly the balance. The fee has nowhere to come from.
+    // Ask for exactly the balance. The fee comes out of it, so it completes and
+    // the balance ends at zero — not below it.
     const balance = await balanceOf(collector);
     const created = await collector.post('/finance/wallet-requests', {
       type: 'cash_out',
@@ -178,9 +182,8 @@ describe('PAY money in and out', () => {
     const id = created.body.id as string;
     await admin.post(`/admin/wallet-requests/${id}/approve`, {});
     const completed = await admin.post(`/admin/wallet-requests/${id}/complete`, {});
-    expect(completed.status).toBe(409);
-    // Nothing moved.
-    expect(await balanceOf(collector)).toBe(balance);
+    expect(completed.status).toBe(201);
+    expect(await balanceOf(collector)).toBe(0);
   });
 
   /* ---------------- chargebacks ---------------- */

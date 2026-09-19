@@ -89,9 +89,30 @@ export class BrowseService {
     );
   }
 
+  /**
+   * One listing, for anybody — so only what a buyer needs to see.
+   *
+   * This route is public, and it used to return the whole `listing` and `item`
+   * rows: the owner's user id (`ownerId`, `sellerId`), the shelf the card sits
+   * on (`binId`), the hold flag and the raw storage keys. A stranger could map
+   * who owns what and where it is kept — exactly what the vault exists to keep
+   * private. It now answers with the same fields as the browse list, plus the
+   * listing's status and its photographs by URL.
+   */
   async detail(listingId: string) {
     const [row] = await this.db
-      .select()
+      .select({
+        id: listing.id,
+        status: listing.status,
+        askingPrice: listing.askingPrice,
+        currency: listing.currency,
+        publishedAt: listing.publishedAt,
+        itemId: listing.itemId,
+        serialNumber: item.serialNumber,
+        typeClass: item.typeClass,
+        conditionGrade: item.conditionGrade,
+        description: item.description,
+      })
       .from(listing)
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
       .where(and(eq(listing.id, listingId)))
@@ -99,12 +120,16 @@ export class BrowseService {
     if (!row) throw AppError.notFound('Listing not found');
 
     const images = await this.db
-      .select()
+      .select({ objectKey: itemImage.objectKey, version: itemImage.version, type: itemImage.type })
       .from(itemImage)
-      .where(eq(itemImage.itemId, row.listing.itemId))
+      .where(eq(itemImage.itemId, row.itemId))
       .orderBy(sql`${itemImage.version} desc`);
     const signedImages = await Promise.all(
-      images.map(async (img) => ({ ...img, url: await this.storage.getSignedUrl(img.objectKey) })),
+      images.map(async (img) => ({
+        version: img.version,
+        type: img.type,
+        url: await this.storage.getSignedUrl(img.objectKey),
+      })),
     );
 
     return { ...row, imageUrl: signedImages[0]?.url ?? null, images: signedImages };

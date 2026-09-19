@@ -17,7 +17,8 @@ longer does has been removed; the decisions that still explain the code are kept
 
 ## Conventions
 
-- **References** are repo-relative `path:line` (or `path:start-end`) at commit `ab67079`. After
+- **References** are repo-relative `path:line` (or `path:start-end`) at commit `ab67079`, updated
+  for the fixes of 19 September 2026 (Appendix D.0). After
   the first full path in a section, a file may be cited by name alone (`billing.service.ts:50`).
   Line numbers drift as the code changes; the function or symbol named beside a reference is
   the stable part — find it with `grep -n`.
@@ -112,13 +113,13 @@ is owed. The code is built around a small set of rules, several enforced by the 
 that no application bug can break them:
 
 1. **An item is never deleted.** It changes state; its row stays forever — `trg_no_delete_item`
-   (`apps/api/src/db/sql/0001_append_only.sql:116-125`). [§3.4](#s3-4)
+   (`apps/api/src/db/sql/0001_append_only.sql:118-127`). [§3.4](#s3-4)
 2. **Every item has exactly one owner**, and every change of owner, shelf or state writes a
    custody event through the custody kernel. [§5](#s5)
-3. **History is append-only.** Ten history tables — the ledger, custody events, the audit log,
+3. **History is append-only.** Eleven history tables — the ledger, custody events, the audit log,
    shelf moves, wallet-request reviews, disposals, parcel events, the helpdesk thread, escrow
-   events and the sign-in log — reject `UPDATE` and `DELETE` for every role, by trigger
-   (`0001_append_only.sql:42`). Corrections are new rows. [§3.4](#s3-4)
+   events, the sign-in log and the storage periods memberships covered — reject `UPDATE` and `DELETE` for every role, by trigger
+   (`0001_append_only.sql:44`). Corrections are new rows. [§3.4](#s3-4)
 4. **A balance is never stored.** It is the sum of the user's ledger rows, recomputed each time
    (`apps/api/src/modules/pay/ledger.service.ts:57-67`). A nightly job checks the ledger's
    integrity. [§6.5](#s6-5)
@@ -210,7 +211,7 @@ the handler's transaction, the audit row, the error envelope — is traced in [�
 | Shipping | sandbox adapter (quotes, labels) | EasyPost adapter (not exercised live; tracking still uses the sandbox) | [§2](#s2), [§9](#s9) |
 | Photographs | MinIO | any S3 | [§2](#s2) |
 | Email | console sink | provider adapter (console refused in production) | [§2](#s2) |
-| Deployment | `pnpm dev`, the tunnel | Dockerfiles + nginx (image migration and security headers have defects) | [§13](#s13) |
+| Deployment | `pnpm dev`, the tunnel | Dockerfiles + nginx (Node 20 images; no `.dockerignore`) | [§13](#s13) |
 
 The standing production-readiness audit is `docs/production-readiness.md`; [§13](#s13) checks it
 against the code.
@@ -321,7 +322,7 @@ browser  POST /api/v1/marketplace/listings/:id/purchase   (cookie: session=…, 
   │
   ├─ edge: Vite proxy (dev) / nginx (image)
   │     dev strips the preview gate's Authorization + bault_preview cookie   apps/web/vite.config.ts:141-151
-  │     nginx SETS X-Forwarded-For=$remote_addr and X-Request-Id=$request_id apps/web/nginx.conf:92-100
+  │     nginx SETS X-Forwarded-For=$remote_addr and X-Request-Id=$request_id apps/web/nginx.conf:95-103
   ▼
 Express (main.ts, in registration order)
   1. requestContext   x-request-id in/out, AsyncLocalStorage              apps/api/src/main.ts:47
@@ -331,11 +332,11 @@ Express (main.ts, in registration order)
   5. CORS             only if CORS_ORIGINS is non-empty                   apps/api/src/main.ts:100-103
   6. global prefix    api/v1                                              apps/api/src/main.ts:116
 Nest
-  7. APP_GUARDs       ThrottlerGuard → SessionAuthGuard → RolesGuard      apps/api/src/app.module.ts:98-100   (§4)
+  7. APP_GUARDs       ThrottlerGuard → SessionAuthGuard → RolesGuard      apps/api/src/app.module.ts:106-108   (§4)
   8. ValidationPipe   whitelist + forbidNonWhitelisted                    apps/api/src/main.ts:130-137        (§3)
   9. controller → service → db.transaction(...)                                                          (§3)
        ownership / custody / ledger / audit rows + outbox_message, all or nothing
- 10. AuditInterceptor                                                     apps/api/src/app.module.ts:101      (§4)
+ 10. AuditInterceptor                                                     apps/api/src/app.module.ts:109      (§4)
  11. errors → AllExceptionsFilter → uniform problem body                  apps/api/src/main.ts:119            (§3)
   ▼
 response (+ x-request-id)            … later, the worker's outbox dispatch turns the committed event into mail
@@ -456,17 +457,17 @@ as a comment (`:11-17`).
 process a frozen, typed object. A missing or malformed value stops the process at start-up, with every
 problem listed, instead of surfacing later as a runtime surprise.
 
-**Loading.** `loadEnv()` (`packages/config/src/env.ts:424`) works in four steps:
-1. It returns the cached object if one exists (`:425`). The cache is per process, so a test that
+**Loading.** `loadEnv()` (`packages/config/src/env.ts:426`) works in four steps:
+1. It returns the cached object if one exists (`:427`). The cache is per process, so a test that
    wants different values cannot re-parse.
 2. `loadDotenvFromRoot()` (`:12`) walks up at most six directories from `process.cwd()` and loads the
    first `.env` it finds. This matters because the apps run from `apps/<name>` while `.env` lives at
    the repo root. dotenv never overwrites a variable that is already set, so real environment
    variables (CI, a container) win over the file.
-3. It runs `EnvSchema.safeParse(source)` (`:428`). On failure it throws a single
+3. It runs `EnvSchema.safeParse(source)` (`:430`). On failure it throws a single
    `Invalid environment configuration:` error that lists every issue as `  - KEY: message`
-   (`:430-433`).
-4. It freezes the result and caches it (`:436`).
+   (`:432-435`).
+4. It freezes the result and caches it (`:438`).
 
 Consumers: `apps/api/src/main.ts:26`, the API modules that read settings, `apps/worker/src/index.ts:28`
 and three worker jobs, `apps/api/drizzle.config.ts`, `apps/api/src/db/migrate.ts:19` and
@@ -477,15 +478,15 @@ build step appears everywhere.
 **Two parsing traps the schema handles, and one it does not.**
 - `booleanFromEnv()` (`:34-40`) exists because `z.coerce.boolean()` uses JavaScript truthiness, and
   the literal string `"false"` is truthy. It accepts only `true`, `1`, `yes` and `on`, ignoring case
-  and surrounding whitespace. `SMTP_SECURE` uses it (`:206`).
-- `SMTP_PASSWORD` has all whitespace stripped (`:215-219`). Google displays an app password as
+  and surrounding whitespace. `SMTP_SECURE` uses it (`:208`).
+- `SMTP_PASSWORD` has all whitespace stripped (`:217-221`). Google displays an app password as
   `abcd efgh ijkl mnop`, and Gmail rejects it in that form.
-- **`EXPOSE_API_DOCS` still uses `z.coerce.boolean()`** (`:145`). Verified with zod directly: `'false'`
-  parses to `true`, `'0'` parses to `true`, and only an empty or unset value is `false`. So an
-  operator who writes `EXPOSE_API_DOCS=false` to be explicit **turns the OpenAPI explorer on**. In
-  production that combination fails the boot unless `API_DOCS_PASSWORD` is set (`:405`), so the damage
-  there is a confusing boot error. In development it silently serves `/docs`. The fix is the
-  `booleanFromEnv(false)` helper that is already in the file.
+- **`EXPOSE_API_DOCS` is parsed strictly** (`:147`), with `booleanFromEnv(false)`. It used
+  `z.coerce.boolean()`, under which `'false'` and `'0'` parse to `true`, so an operator who wrote
+  `EXPOSE_API_DOCS=false` to be explicit turned the OpenAPI explorer **on** — silently in
+  development, and in production as a confusing "password required" boot error. *(Fixed 19
+  September 2026.)* `tests/web/env-booleans.test.ts` pins every spelling for both boolean flags and
+  fails if any schema field ever reads `"false"` as true again.
 
 **Every variable.**
 
@@ -507,9 +508,9 @@ build step appears everywhere.
 | `CORS_ORIGINS` | comma list, `''` | none | `main.ts:100` |
 | `RATE_LIMIT_PER_MINUTE` | int, 300 | none | throttler `default` bucket (`app.module.ts`) |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | int, 30 | none | throttler `auth` bucket, `auth.controller.ts:22` |
-| `EXPOSE_API_DOCS` | coerce.boolean, `false` (trap above) | none | `main.ts:147` |
+| `EXPOSE_API_DOCS` | `booleanFromEnv`, `false` | none | `main.ts:147` |
 | `API_DOCS_PASSWORD` | `''` | non-empty in production if docs are exposed | `main.ts:170` (constant-time Basic auth) |
-| `TRUST_PROXY` | string, `loopback`; the literal `true` is refused (`:159-162`) | none | `main.ts:68` |
+| `TRUST_PROXY` | string, `loopback`; the literal `true` is refused (`:161-164`) | none | `main.ts:68` |
 | `SHIPPING_PROVIDER` | `easypost`\|`sandbox`, `sandbox` | none | `adapters.module.ts:128` |
 | `EASYPOST_API_KEY` | `''` | non-empty when `easypost` | EasyPost adapter |
 | `EASYPOST_BASE_URL` | `''` | none (test harness only) | EasyPost adapter |
@@ -534,25 +535,25 @@ Variables that are read **outside** the schema, so an invalid value is not caugh
 `BACKUP_DIR` and `BACKUP_RETAIN_DAYS` (`infra/ops/backup.sh:27-28`), and `API_UPSTREAM` (nginx
 template, §13.6).
 
-**Conditional refinements.** `superRefine` (`:287-413`) turns "optional" into "required when" through
-a small `require(key, when)` helper (`:288-296`):
-- `SHIPPING_PROVIDER=easypost` → `EASYPOST_API_KEY` (`:301`).
-- `STORAGE_PROVIDER=s3` → all five `STORAGE_*` non-empty (`:305-315`).
-- `EMAIL_PROVIDER=smtp` → `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (`:317-321`).
-- `PAYMENT_PROVIDER=paypal` → client id, secret and **webhook id** (`:326-330`). A missing webhook id is
+**Conditional refinements.** `superRefine` (`:289-415`) turns "optional" into "required when" through
+a small `require(key, when)` helper (`:290-298`):
+- `SHIPPING_PROVIDER=easypost` → `EASYPOST_API_KEY` (`:303`).
+- `STORAGE_PROVIDER=s3` → all five `STORAGE_*` non-empty (`:307-317`).
+- `EMAIL_PROVIDER=smtp` → `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (`:319-323`).
+- `PAYMENT_PROVIDER=paypal` → client id, secret and **webhook id** (`:328-332`). A missing webhook id is
   treated as fatal, not as a degraded mode, because without it a webhook cannot be authenticated, "and
   an unauthenticated webhook that credits a ledger is an open mint".
 
-**Production refinements** (`NODE_ENV=production`, `:333-412`). Five configurations are refused
+**Production refinements** (`NODE_ENV=production`, `:335-414`). Five configurations are refused
 outright:
 
 | Refused | Why (from the code comment) |
 |---|---|
-| `STORAGE_PROVIDER=sandbox` (`:344`) | photos are accepted and discarded while `item_image` / `parcel_photo` rows point at nothing |
-| `SHIPPING_PROVIDER=sandbox` (`:363`) | invented rates, an `SBX…` tracking number, and a shipment that still becomes `shipped` |
-| `EMAIL_PROVIDER=console` (`:383`) | nobody can verify an address or reset a password, and reset tokens land in stdout |
-| `PAYMENT_PROVIDER=sandbox` (`:393`) | settles any token without contacting anybody |
-| `EXPOSE_API_DOCS` truthy with no `API_DOCS_PASSWORD` (`:405`) | a public route map |
+| `STORAGE_PROVIDER=sandbox` (`:346`) | photos are accepted and discarded while `item_image` / `parcel_photo` rows point at nothing |
+| `SHIPPING_PROVIDER=sandbox` (`:365`) | invented rates, an `SBX…` tracking number, and a shipment that still becomes `shipped` |
+| `EMAIL_PROVIDER=console` (`:385`) | nobody can verify an address or reset a password, and reset tokens land in stdout |
+| `PAYMENT_PROVIDER=sandbox` (`:395`) | settles any token without contacting anybody |
+| `EXPOSE_API_DOCS` truthy with no `API_DOCS_PASSWORD` (`:407`) | a public route map |
 
 Worked example. A production container is started with `PAYMENT_PROVIDER=paypal`,
 `PAYPAL_WEBHOOK_ID=` (empty) and `EMAIL_PROVIDER` unset. Boot fails **once**, listing both problems:
@@ -927,7 +928,7 @@ to notice.
 | `.prettierrc.json`, `.editorconfig`, `.gitignore` | formatting and ignore policy | `_local/` rationale at the end of `.gitignore` |
 | `vitest.workspace.ts` | 8 test projects and module aliases | `ADAPTERS_SRC` :14, `WEB_MODULES` :27, projects :56-149 |
 | `.env.example` | documented config shape | stale fragment :44-49; PAYMENTS :168-192; `AUTH_RATE_LIMIT` :209; `EXPOSE_API_DOCS` :214 |
-| `packages/config/src/env.ts` | env schema and loader | `loadDotenvFromRoot` :12, `booleanFromEnv` :34, `EnvSchema` :53, `EXPOSE_API_DOCS` :145, `TRUST_PROXY` :159, `superRefine` :287, production block :333-412, `loadEnv` :424 |
+| `packages/config/src/env.ts` | env schema and loader | `loadDotenvFromRoot` :12, `booleanFromEnv` :34, `EnvSchema` :53, `EXPOSE_API_DOCS` :147, `TRUST_PROXY` :161, `superRefine` :289, production block :335-412, `loadEnv` :426 |
 | `packages/config/src/index.ts` | public surface | `loadEnv`, `Env` |
 | `packages/config/package.json`, `tsconfig.json` | CJS build to `dist/` | deps `dotenv`, `zod` |
 | `packages/adapters/src/index.ts` | barrel | re-exports all six modules |
@@ -977,10 +978,10 @@ The map:
 
 **Boot, in order** (`apps/api/src/main.ts:25-202`):
 
-1. `loadEnv()` (`main.ts:26`) validates the whole environment with zod and throws before anything is created if a variable is missing or wrong. `loadEnv` caches its frozen result (`packages/config/src/env.ts:424-438`), so the many later calls (`app.module.ts`, every adapter factory, the logger, the guard) are free. The schema itself is §2.
+1. `loadEnv()` (`main.ts:26`) validates the whole environment with zod and throws before anything is created if a variable is missing or wrong. `loadEnv` caches its frozen result (`packages/config/src/env.ts:426-440`), so the many later calls (`app.module.ts`, every adapter factory, the logger, the guard) are free. The schema itself is §2.
 2. `NestFactory.create(AppModule, { logger: new StructuredLogger('api'), bufferLogs: false })` (`main.ts:37-40`) builds the DI graph with Bault's own logger (see §3.12).
 3. `app.use(requestContext)` (`main.ts:47`) runs first on every request, so every later log line (helmet, the pipe, the filter) carries the same id.
-4. `trust proxy` is set to `env.TRUST_PROXY` (`main.ts:68`), default `loopback`; the schema refuses the value `true` (`packages/config/src/env.ts:159-162`). Why it matters for rate limiting and session IPs is §4.
+4. `trust proxy` is set to `env.TRUST_PROXY` (`main.ts:68`), default `loopback`; the schema refuses the value `true` (`packages/config/src/env.ts:161-164`). Why it matters for rate limiting and session IPs is §4.
 5. `helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false })` (`main.ts:78`). CSP is off because this process serves JSON and the explorer, not the SPA.
 6. `json({ limit: '16mb' })` (`main.ts:90`). Set above the media service's image cap on purpose, so an oversized photograph is refused by the media service with a sentence naming the limit (§5), not by the body parser.
 7. CORS only if `CORS_ORIGINS` is non-empty, always with `credentials: true` (`main.ts:100-103`). Empty means same-origin only, which is what the Vite proxy gives locally.
@@ -990,9 +991,9 @@ The map:
 11. `useGlobalPipes(new ValidationPipe({ whitelist, transform, forbidNonWhitelisted, exceptionFactory: validationException }))` (`main.ts:130-137`). Unknown body fields are rejected (not silently stripped), bodies become DTO class instances, and failures are shaped by `validation-error.ts` (§3.7).
 12. The explorer. If `EXPOSE_API_DOCS` is false the process listens and returns (`main.ts:147-155`). Otherwise, when `API_DOCS_PASSWORD` is set, `/docs` sits behind HTTP Basic auth compared with `timingSafeEqual` (`main.ts:170-188`). Swagger is then mounted at `/docs` (not under `/api/v1`) with the session cookie declared as the auth scheme (`main.ts:190-197`), and the process listens on `API_PORT`.
 
-> **Defect, verified.** `EXPOSE_API_DOCS` is parsed with `z.coerce.boolean()` (`packages/config/src/env.ts:145`), which is JavaScript `Boolean(value)`. Every non-empty string is `true`, including `"false"`: `z.coerce.boolean().parse('false')` returns `true` (checked with node against the repo's zod). So `EXPOSE_API_DOCS=false` in an env file turns the explorer **on**. Only omitting the variable (or setting it to the empty string) keeps it off. In production the env schema then demands a password (`env.ts:405-409`), so the practical effect is a password-protected explorer that someone believed was switched off; outside production, the explorer is served with no password at all.
+> **Fixed 19 September 2026.** `EXPOSE_API_DOCS` was parsed with `z.coerce.boolean()`, which is JavaScript `Boolean(value)`: every non-empty string, including `"false"`, was `true`, so `EXPOSE_API_DOCS=false` turned the explorer **on**. It now uses the strict `booleanFromEnv(false)` (`packages/config/src/env.ts:147`), under which only `true`/`1`/`yes`/`on` enable it (§2.4).
 
-**The root module** (`apps/api/src/app.module.ts`). It imports `ThrottlerModule.forRootAsync` with two named throttlers, `default` (`RATE_LIMIT_PER_MINUTE`) and `auth` (`AUTH_RATE_LIMIT_PER_MINUTE`), both with a 60-second window (`app.module.ts:59-69`). Then come the infrastructure modules (`DbModule`, `SecModule`, `SharedModule`, `AdaptersModule`, `NotModule`, `ObservabilityModule`), the global kernels `PrcModule` and `PayModule`, and the feature modules `Acc, Cst, Inv, Vlt, Med, Mkt, Dis, Shp, Esc, Adm, Sup, Mem` (`app.module.ts:70-91`). It declares `AppController` (`app.module.ts:93`) and four global providers (`app.module.ts:98-101`):
+**The root module** (`apps/api/src/app.module.ts`). It imports `ThrottlerModule.forRootAsync` with two named throttlers, `default` (`RATE_LIMIT_PER_MINUTE`) and `auth` (`AUTH_RATE_LIMIT_PER_MINUTE`), both with a 60-second window (`app.module.ts:60-78`). Then come the infrastructure modules (`DbModule`, `SecModule`, `SharedModule`, `AdaptersModule`, `NotModule`, `ObservabilityModule`), the global kernels `PrcModule` and `PayModule`, and the feature modules `Acc, Cst, Inv, Vlt, Med, Mkt, Dis, Shp, Esc, Adm, Sup, Mem` (`app.module.ts:78-99`). It declares `AppController` (`app.module.ts:101`) and four global providers (`app.module.ts:106-109`):
 
 ```ts
 { provide: APP_GUARD, useClass: ThrottlerGuard },
@@ -1003,7 +1004,7 @@ The map:
 
 `APP_GUARD` is a multi-provider: registrations append, and guards run in registration order. Throttling runs first so an unauthenticated flood is refused before the session table is touched. Then authentication (`SessionAuthGuard`), then `@Roles`. The guards and the audit interceptor are §4.
 
-> **Rate limiting, verified from the library.** `@nestjs/throttler` 6.5 applies **every** named throttler to **every** route (`node_modules/@nestjs/throttler/dist/throttler.guard.js:67-94`). `@Throttle({ auth: … })` on the sign-in routes only overrides the `auth` bucket's numbers for those handlers. So the `auth` limit is a per-route, per-IP cap on the whole API, not only on credential routes: with the defaults (`default` 300, `auth` 30) every endpoint is effectively capped at 30 requests a minute per client. With `.env.example`'s `AUTH_RATE_LIMIT_PER_MINUTE=10` (`.env.example:209`) the cap is 10. The developer `.env` and CI raise both to 20000/5000 (`.env:87-88`, `.github/workflows/ci.yml:58-59`), which hides this. The throttling design is §4; the finding is recorded here because `app.module.ts` is where the buckets are declared.
+> **Rate limiting.** `@nestjs/throttler` 6.5 applies every named throttler to every route unless it is skipped (`node_modules/@nestjs/throttler/dist/throttler.guard.js:67-94`), so the small `auth` bucket used to cap the whole API at 30 requests a minute per client. Since 19 September 2026 the `auth` throttler has `skipIf: skipsAuthBucket` (`app.module.ts:72`) and only routes marked `@AuthBucket` count against it. The design is §4.11.
 
 **`AppController`** (`apps/api/src/app.controller.ts:14-18`) answers `GET /api/v1` with `{ service: 'bault-api', status: 'ok' }`. It is **not** `@Public`, so an anonymous caller gets `401 unauthenticated` from `SessionAuthGuard` (`apps/api/src/modules/acc/session-auth.guard.ts:63-64`). Its header comment still says real probes "are added in T022". They were: they are `/api/v1/healthz` and `/api/v1/readyz` (§3.12), and those are the ones to use.
 
@@ -1012,8 +1013,8 @@ The map:
 ```
 express middleware   requestContext (x-request-id, ALS)        main.ts:47
                      trust proxy / helmet / json(16mb) / CORS  main.ts:68-103
-Nest guards          ThrottlerGuard → SessionAuthGuard → RolesGuard   app.module.ts:98-100
-interceptor          AuditInterceptor (wraps the handler)      app.module.ts:101   (§4)
+Nest guards          ThrottlerGuard → SessionAuthGuard → RolesGuard   app.module.ts:106-108
+interceptor          AuditInterceptor (wraps the handler)      app.module.ts:109   (§4)
 pipe                 ValidationPipe → DTO instance or 400      main.ts:130-137
 controller           thin: reads @CurrentUser, @Param, @Body, headers
 service              opens db.transaction, threads tx          (§3.3)
@@ -1107,9 +1108,9 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-A `DO` block walks the history-table list and, for each table that exists, drops and recreates `trg_append_only_<table>` as `BEFORE UPDATE OR DELETE … FOR EACH ROW` (`0001_append_only.sql:24-56`). Triggers fire for every role, including the table owner and a superuser, which is why they, not the grants, are the real enforcement.
+A `DO` block walks the history-table list and, for each table that exists, drops and recreates `trg_append_only_<table>` as `BEFORE UPDATE OR DELETE … FOR EACH ROW` (`0001_append_only.sql:24-58`). Triggers fire for every role, including the table owner and a superuser, which is why they, not the grants, are the real enforcement.
 
-The list (`0001_append_only.sql:42`), with what each table is:
+The list (`0001_append_only.sql:44`), with what each table is:
 
 | Table | What it records | Added by migration | Owning section |
 | --- | --- | --- | --- |
@@ -1123,12 +1124,13 @@ The list (`0001_append_only.sql:42`), with what each table is:
 | `support_message` | the helpdesk thread | 0011 | §10 |
 | `escrow_event` | every escrow state change | 0016 | §7 |
 | `login_attempt` | every sign-in attempt and its outcome | 0029 | §4 |
+| `storage_period_cover` | every storage period a membership covered, so it is never billed later | 0031 | §5.13 |
 
-**Mechanism 2: the never-deleted item.** `item` changes over its life (owner, bin, lifecycle), so it cannot be append-only. It can never be deleted: `bault_reject_delete()` raises `never_deleted_violation` (`0001_append_only.sql:108-113`) and `trg_no_delete_item` is a `BEFORE DELETE … FOR EACH ROW` trigger on `item` (`0001_append_only.sql:116-125`). An item that leaves (sold, shipped, donated, discarded) changes state; its row stays.
+**Mechanism 2: the never-deleted item.** `item` changes over its life (owner, bin, lifecycle), so it cannot be append-only. It can never be deleted: `bault_reject_delete()` raises `never_deleted_violation` (`0001_append_only.sql:110-115`) and `trg_no_delete_item` is a `BEFORE DELETE … FOR EACH ROW` trigger on `item` (`0001_append_only.sql:118-127`). An item that leaves (sold, shipped, donated, discarded) changes state; its row stays.
 
-**Mechanism 3: grants (defence in depth).** A role `bault_app` is created if missing (`0001_append_only.sql:61-67`) and, for each history table, granted `SELECT, INSERT` with `UPDATE, DELETE` revoked (`0001_append_only.sql:69-97`). The header's intent is "run the API and worker as `bault_app`".
+**Mechanism 3: grants (defence in depth).** A role `bault_app` is created if missing (`0001_append_only.sql:63-69`) and, for each history table, granted `SELECT, INSERT` with `UPDATE, DELETE` revoked (`0001_append_only.sql:71-99`). The header's intent is "run the API and worker as `bault_app`".
 
-**What is actually in force (checked read-only against the dev database).** All ten `trg_append_only_*` triggers exist, plus `trg_no_delete_item` and `user_account_username_immutable`. `bault_app` exists with `rolcanlogin = false`, holds `INSERT` and `SELECT` on exactly the ten history tables and **nothing on any other table**. The application connects as `bault`, which is a superuser. So:
+**What is actually in force (checked read-only against the dev database).** All eleven `trg_append_only_*` triggers exist, plus `trg_no_delete_item` and `user_account_username_immutable`. `bault_app` exists with `rolcanlogin = false`, holds `INSERT` and `SELECT` on exactly the eleven history tables and **nothing on any other table**. The application connects as `bault`, which is a superuser. So:
 - `bault_app` cannot log in and could not run the application if it could (no privileges on `item`, `user_account` or anything else). Mechanism 3 is a statement of intent, not a layer that currently does anything. Nothing in the repo (grep) configures a connection as `bault_app`.
 - The triggers are the only enforcement, and they are enough for `UPDATE`/`DELETE` from any role.
 
@@ -1143,7 +1145,7 @@ The list (`0001_append_only.sql:42`), with what each table is:
 
 **Worked example: correcting history without rewriting it.** A card top-up of $500.00 is later reversed by the cardholder. The ledger keeps the original `credit_topup` credit of 50000 and gains a new `chargeback` debit of 50000 (ledger type added in 0017), plus a separate `chargeback_fee` charge. The balance, which is always computed as credits minus debits over all rows (`ledger.service.ts:57-67`), drops by 50000 without any earlier row changing. The flow is §6.
 
-**The `text → uuid` cast.** The last block of the file (`0001_append_only.sql:135-146`) creates `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT` if absent. Primary keys are `uuid`, but reference columns (`owner_id`, `user_id`, `item_id`, …) are `text`, and Postgres has no `uuid = text` operator. The implicit cast makes such joins type-check. Two consequences:
+**The `text → uuid` cast.** The last block of the file (`0001_append_only.sql:137-148`) creates `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT` if absent. Primary keys are `uuid`, but reference columns (`owner_id`, `user_id`, `item_id`, …) are `text`, and Postgres has no `uuid = text` operator. The implicit cast makes such joins type-check. Two consequences:
 - Comparing a uuid column with a text value that is not a valid uuid raises `22P02 invalid_text_representation`. That is why the filter maps `22P02` to a 400 (§3.7).
 - `CREATE CAST` on built-in types needs superuser. The migration therefore has to run as a superuser (it does in dev: `bault` is one). *(Inferred: a managed Postgres that denies superuser would reject this block.)*
 
@@ -1169,8 +1171,8 @@ The list (`0001_append_only.sql:42`), with what each table is:
 
 1. Opens a pool on `DIRECT_DATABASE_URL` (5432, bypassing PgBouncer) (`migrate.ts:20`).
 2. `migrate(db, { migrationsFolder: './src/db/migrations' })` (`migrate.ts:23`). The path is relative to the working directory, so the script must run from `apps/api`, which `pnpm --filter` does.
-3. Reads `sql/0001_append_only.sql` via `__dirname` and runs it as one multi-statement query (`migrate.ts:25-26`).
-4. Ends the pool (`migrate.ts:28`); any error skips that, prints `migration failed` and exits 1 (`migrate.ts:33-37`).
+3. Reads `sql/0001_append_only.sql` via `__dirname` and runs it as one multi-statement query (`migrate.ts:25-25`).
+4. Ends the pool (`migrate.ts:27`); any error skips that, prints `migration failed` and exits 1 (`migrate.ts:53-57`).
 
 **How Drizzle decides what to run** (drizzle-orm 0.38, `node_modules/drizzle-orm/pg-core/dialect.js:44-72`). It reads the **newest** row of `drizzle.__drizzle_migrations` and applies, inside **one transaction**, every journal entry whose `when` is greater than that row's `created_at`. Three rules follow:
 
@@ -1215,6 +1217,7 @@ Adding an append-only table therefore takes three edits: the migration that crea
 | 0028 | `a_label_that_can_be_bought` | `shipment.destination_detail` snapshot, `provider_shipment_id`, `provider_rate_id`; `shipment_group.destination_detail`. |
 | 0029 | `who_signed_in` | `login_session.ip`/`user_agent`; `login_attempt` (append-only) with outcome enum. |
 | 0030 | `a_downgrade_is_not_a_cancellation` | `membership.scheduled_tier`; `shipment.membership_cover`. |
+| 0031 | `membership_stops_the_storage_clock` | `storage_period_cover` (append-only): storage periods a membership covered, so they are never billed later (§5.13). |
 
 <a id="s3-6"></a>
 ### 3.6 The seed
@@ -1342,7 +1345,7 @@ It has exactly three users, all in MKT (grep):
 
 **Users** (grep): `donation` (`apps/api/src/modules/dis/donation.service.ts:41,46`), `deslab` and `remove_commons` (`apps/api/src/modules/dis/disposal-services.service.ts:69-74,161-172`), `listing_removal` (`apps/api/src/modules/mkt/listing.service.ts:62-67`), `transfer` (`apps/api/src/modules/mkt/trade.service.ts:69-74`), `withdrawal` (`apps/api/src/modules/pay/withdrawal.service.ts:59-63`). All use the default five-minute TTL.
 
-**Worked example: donating a card.** `POST /api/v1/services/donation { itemId }` (`apps/api/src/modules/dis/dis.controller.ts:426-428`): `DonationService.request` checks ownership, no hold, state `stored`, then `issue(owner, 'donation', { itemId })` → `{ confirmationToken: "9f3c…", expiresAt: now+300s }`. The UI shows the consequence. `POST /api/v1/services/donation/confirm { confirmationToken }` (`dis.controller.ts:430-432`): `consume(owner, 'donation', token)` returns `{ itemId }` and marks the token used; then one transaction transfers ownership to the platform custodian, changes state to `donated`, writes a `transfer` transaction row and an `item_donated` outbox event (`donation.service.ts:45-84`). A second confirm with the same token gets `410`; the same token presented as a `withdrawal` gets `400`, because `action` is part of the lookup.
+**Worked example: donating a card.** `POST /api/v1/services/donation { itemId }` (`apps/api/src/modules/dis/dis.controller.ts:434-436`): `DonationService.request` checks ownership, no hold, state `stored`, then `issue(owner, 'donation', { itemId })` → `{ confirmationToken: "9f3c…", expiresAt: now+300s }`. The UI shows the consequence. `POST /api/v1/services/donation/confirm { confirmationToken }` (`dis.controller.ts:438-440`): `consume(owner, 'donation', token)` returns `{ itemId }` and marks the token used; then one transaction transfers ownership to the platform custodian, changes state to `donated`, writes a `transfer` transaction row and an `item_donated` outbox event (`donation.service.ts:45-84`). A second confirm with the same token gets `410`; the same token presented as a `withdrawal` gets `400`, because `action` is part of the lookup.
 
 **Failure modes.**
 - **Burned before execution.** `consume` commits `consumed_at` on its own, before the caller's transaction opens. If execution then fails (the card was put on hold in between, and `transferOwnership`/`changeState` refuse), the token is spent and the user must start again. Step 2 has to re-validate everything step 1 checked, because state may have moved.
@@ -1401,7 +1404,7 @@ Collision arithmetic: an 8-character code has 32^8 ≈ 1.1 × 10^12 values; afte
 
 **Request ids** (`apps/api/src/shared/observability/logger.ts:37-55`). `requestContext` takes an inbound `x-request-id` (trimmed, capped at 200 characters) or mints a UUID, sets it on the response header, and runs the rest of the request inside `AsyncLocalStorage.run({ requestId }, next)`. `currentRequestId()` reads it anywhere below, with no parameter threading. It is used only by the logger (grep); the SPA does not read the header.
 
-**Structured logger** (`logger.ts:67-112`). `StructuredLogger` implements Nest's `LoggerService` and is Nest's logger from boot (`main.ts:38`). Levels `debug < info < warn < error` with threshold `LOG_LEVEL` (default `info`, `packages/config/src/env.ts:286`); `verbose` maps to debug. Each line carries `level`, ISO `time`, `message`, `requestId` when inside a request, `context`, then `detail` (trailing strings Nest passes) and `data` (objects). Output is JSON per line unless `NODE_ENV === 'development'`, where it is one human line with the first eight characters of the request id (`logger.ts:76`, `humanLine` at `:137-143`). `warn` and `error` go to stderr, the rest to stdout. No dependency: one `JSON.stringify` per line.
+**Structured logger** (`logger.ts:67-112`). `StructuredLogger` implements Nest's `LoggerService` and is Nest's logger from boot (`main.ts:38`). Levels `debug < info < warn < error` with threshold `LOG_LEVEL` (default `info`, `packages/config/src/env.ts:288`); `verbose` maps to debug. Each line carries `level`, ISO `time`, `message`, `requestId` when inside a request, `context`, then `detail` (trailing strings Nest passes) and `data` (objects). Output is JSON per line unless `NODE_ENV === 'development'`, where it is one human line with the first eight characters of the request id (`logger.ts:76`, `humanLine` at `:137-143`). `warn` and `error` go to stderr, the rest to stdout. No dependency: one `JSON.stringify` per line.
 
 Worked example: a request with `x-request-id: 7b1c…` whose handler throws an unknown error produces, in production, one stderr line shaped like `{"level":"error","time":"…","message":"Error: …\n    at …","requestId":"7b1c…","context":"api","detail":"Exceptions"}` (the filter's `Logger('Exceptions')` forwards its context string, which `meta` files under `detail`) and a 500 response carrying `x-request-id: 7b1c…`. A customer quoting that header leads straight to the line.
 
@@ -1409,7 +1412,7 @@ Worked example: a request with `x-request-id: 7b1c…` whose handler throws an u
 - `GET /api/v1/healthz` → `{ status: 'ok' }`, no dependencies (`:24-28`).
 - `GET /api/v1/readyz` → `select 1` on the pool; `{ status: 'ok', db: true }`, or `503` whose body is rewritten by the filter as described in §3.7 (`:40-49`).
 
-`ObservabilityModule` (`observability.module.ts:6-12`) only declares the controller. Its comment says Sentry "is initialized from SENTRY_DSN when present (wired in main.ts bootstrap)". It is not: `SENTRY_DSN` exists in the env schema (`packages/config/src/env.ts:285`) and nothing reads it (grep over `apps/` and `packages/`).
+`ObservabilityModule` (`observability.module.ts:6-12`) only declares the controller. Its comment says Sentry "is initialized from SENTRY_DSN when present (wired in main.ts bootstrap)". It is not: `SENTRY_DSN` exists in the env schema (`packages/config/src/env.ts:287`) and nothing reads it (grep over `apps/` and `packages/`).
 
 <a id="s3-13"></a>
 ### 3.13 Design tradeoffs
@@ -1479,8 +1482,8 @@ hangs off it:
 ```
 Express middleware   requestContext → helmet → json(16mb) → CORS          (main.ts:47-103)
   trust proxy        req.ip = first untrusted hop from the right           (main.ts:68)
-Guards (APP_GUARD, in registration order)                                  (app.module.ts:98-100)
-  1 ThrottlerGuard      two buckets per (controller, handler, req.ip)
+Guards (APP_GUARD, in registration order)                                  (app.module.ts:106-108)
+  1 ThrottlerGuard      `default` on every route; `auth` only on @AuthBucket routes (§4.11)
   2 SessionAuthGuard    cookie → login_session ⋈ user_account → req.user; status gate; @Public
   3 RolesGuard          @Roles(...) against req.user.role
 Pipe                 ValidationPipe (whitelist, transform, forbidNonWhitelisted) (main.ts:130-137)
@@ -1505,9 +1508,9 @@ declared in `apps/api/src/modules/acc/acc.schema.ts`.
 | `user_account` (`acc.schema.ts:34-74`) | `id` uuid PK; `email`; `username`; `password_hash` (argon2 PHC string); `status account_status` default `pending`; `role user_role` default `user`; `first_name`, `last_name`; `name_review_required`; `legacy_display_name`; `intake_id` (nullable); `auto_suspended_at` | Unique indexes on `email`, `username`, `intake_id` (`acc.schema.ts:70-72`). CHECK `user_account_username_normalized` (username = lower(btrim(username)), length 3-32) and BEFORE UPDATE trigger `user_account_username_immutable` (`apps/api/src/db/migrations/0004_identity_and_wallet_requests.sql:56-76`) |
 | `verification_token` (`acc.schema.ts:81-90`) | `user_id`, `type` (`email_verification` \| `password_reset`), `token_hash`, `expires_at`, `consumed_at` | Index `verification_token_hash_idx` on `token_hash` (`0024_the_queries_that_run_on_every_request.sql:67-68`) |
 | `login_session` (`acc.schema.ts:92-109`) | `user_id`, `token_hash`, `expires_at`, `revoked_at`, `ip`, `user_agent` | Partial index `login_session_token_active_idx` on `token_hash WHERE revoked_at IS NULL`, and `login_session_user_idx (user_id, expires_at)` (`0024…sql:23-29`) |
-| `login_attempt` (`acc.schema.ts:127-145`) | `identifier`, `user_id` (nullable), `outcome login_attempt_outcome`, `ip`, `user_agent`, `occurred_at` | Append-only: on both guard lists in `apps/api/src/db/sql/0001_append_only.sql:42,87`. Indexes on `occurred_at` and `(user_id, occurred_at)` (`0029_who_signed_in.sql:30-31`) |
+| `login_attempt` (`acc.schema.ts:127-145`) | `identifier`, `user_id` (nullable), `outcome login_attempt_outcome`, `ip`, `user_agent`, `occurred_at` | Append-only: on both guard lists in `apps/api/src/db/sql/0001_append_only.sql:44,87`. Indexes on `occurred_at` and `(user_id, occurred_at)` (`0029_who_signed_in.sql:30-31`) |
 | `shipping_address` (`address.schema.ts:8-19`) | `user_id`, `label`, `recipient`, `line1`, `city`, `country`, `postal_code`, `is_default` | No DB constraint on "one default per user". That is enforced in `ProfileService` (§4.13) |
-| `audit_record` (`sec/audit.schema.ts:9-18`) | `actor_id` (nullable), `action`, `target_entity`, `target_id`, `metadata` jsonb, `occurred_at` | Append-only (`0001_append_only.sql:42`) |
+| `audit_record` (`sec/audit.schema.ts:9-18`) | `actor_id` (nullable), `action`, `target_entity`, `target_id`, `metadata` jsonb, `occurred_at` | Append-only (`0001_append_only.sql:44`) |
 
 `user_id` columns are `text`, but `user_account.id` is `uuid`. Joins therefore cast, as in
 `sql\`${userAccount.id}::text = ${loginSession.userId}\`` (`session.service.ts:63`).
@@ -1543,7 +1546,7 @@ no such sweep exists.
 | Transition | Where | Guard |
 |---|---|---|
 | `pending → active` | `VerificationService.verifyEmail` (`verification.service.ts:79-88`) | a valid, unconsumed, unexpired `email_verification` token. **It does not check the current status** (see edge cases) |
-| `active → suspended` (automatic) | worker `sweepWalletSuspensions` (`apps/worker/src/jobs/wallet-suspension.ts:45-50`), daily at 03:15 (`apps/worker/src/index.ts:49`) | balance below `WALLET_SUSPEND_BELOW_MINOR` (default −2000, `packages/config/src/env.ts:240`). The `status = 'active'` predicate keeps it off pending/closed/manually-suspended accounts |
+| `active → suspended` (automatic) | worker `sweepWalletSuspensions` (`apps/worker/src/jobs/wallet-suspension.ts:45-50`), daily at 03:15 (`apps/worker/src/index.ts:49`) | balance below `WALLET_SUSPEND_BELOW_MINOR` (default −2000, `packages/config/src/env.ts:242`). The `status = 'active'` predicate keeps it off pending/closed/manually-suspended accounts |
 | `suspended → active` (automatic) | same job (`wallet-suspension.ts:57-72`) | `auto_suspended_at IS NOT NULL` and ledger balance ≥ threshold |
 | any → any | `AdmService.updateUser` (`apps/api/src/modules/adm/adm.service.ts:104-133`) via `PATCH /admin/users/:id` | `@Roles('admin')`. An admin cannot set their own status to anything but `active`, or their own role to anything but `admin` (`adm.service.ts:105-116`) |
 
@@ -1634,7 +1637,7 @@ legacy account mints its code with `prefixedId(ID_PREFIX.owner, 6)`
 <a id="s4-4"></a>
 ### 4.4 Registration and email verification
 
-**Flow: sign-up.** The route is `POST /api/v1/auth/register`, marked `@Public`, with `@Throttle(CREDENTIAL_ROUTE)`.
+**Flow: sign-up.** The route is `POST /api/v1/auth/register`, marked `@Public`, with `@AuthBucket(CREDENTIAL_ROUTE)`.
 
 1. `ThrottlerGuard` puts the request in the `auth` bucket (§4.11). `SessionAuthGuard` passes the
    request because it is `@Public`. If the caller carries the cookie of a
@@ -1693,7 +1696,7 @@ It always returns 202 `sent_if_pending`. It sends only if the account exists *an
 ### 4.5 Sign-in: credential check, session row, cookie, login_attempt
 
 **Flow.** The route is `POST /api/v1/auth/login` with body `{ identifier, password }`. It is `@Public`, with
-`@Throttle(CREDENTIAL_ROUTE)`.
+`@AuthBucket(CREDENTIAL_ROUTE)`.
 
 1. `LoginDto` (`acc.dto.ts:72-85`): `identifier` is trimmed, 3-254 characters, and may be an email
    or a username. `password` is any string.
@@ -1817,7 +1820,7 @@ also augments `Express.Request.user` (`:16-23`).
 
 **Worked trace: `PATCH /api/v1/admin/users/abc` by warehouse operator Hermon.**
 
-1. The throttler increments `AdmController-updateUser-default-<ip>` and `…-auth-<ip>`.
+1. The throttler increments `AdmController-updateUser-default-<ip>` (the route is not in the `auth` bucket).
 2. `SessionAuthGuard` resolves Hermon's cookie to `{ role: 'warehouse_operator', status: 'active' }`,
    permits it, and sets `req.user`.
 3. `RolesGuard` reads the class-level `['admin']` and throws 403 `forbidden` "Requires role: admin".
@@ -1923,7 +1926,7 @@ the guard answers 401 first, and the cookie is not cleared server-side.
 **Purpose.** Every successful state-changing request leaves an immutable row saying
 who did what to which resource. The table is append-only through the trigger mechanism in §3.
 
-**`AuditInterceptor`** (`sec/audit.interceptor.ts:19-50`) is global (`app.module.ts:101`):
+**`AuditInterceptor`** (`sec/audit.interceptor.ts:19-50`) is global (`app.module.ts:109`):
 
 - It skips anything that is not `POST`, `PUT`, `PATCH` or `DELETE` (`:13,21`). Reads are never audited.
 - `target_entity` is the first path segment after `/api/v1/` (`:24-25`).
@@ -1966,46 +1969,44 @@ admin sign-in log shows emails to admins only.
 <a id="s4-11"></a>
 ### 4.11 Rate limiting
 
-**Setup.** `ThrottlerModule.forRootAsync` (`app.module.ts:59-69`, `@nestjs/throttler` 6.5)
+**Setup.** `ThrottlerModule.forRootAsync` (`app.module.ts:60-78`, `@nestjs/throttler` 6.5)
 declares two named throttlers, both with a 60 s window:
 
-- `default`, with limit `RATE_LIMIT_PER_MINUTE` (default 300, `env.ts:130`);
-- `auth`, with limit `AUTH_RATE_LIMIT_PER_MINUTE` (default 30, `env.ts:142`).
+- `default`, with limit `RATE_LIMIT_PER_MINUTE` (default 300, `env.ts:130`) — every route;
+- `auth`, with limit `AUTH_RATE_LIMIT_PER_MINUTE` (default 30, `env.ts:142`) — **only** routes
+  marked `@AuthBucket`, through `skipIf: skipsAuthBucket` (`app.module.ts:72`).
 
-`ThrottlerGuard` is the **first** `APP_GUARD` (`app.module.ts:95-98`), so a flood is refused
+`ThrottlerGuard` is the **first** `APP_GUARD` (`app.module.ts:106`), so a flood is refused
 before any session lookup. There is no storage option, so counters live in the per-process
 in-memory `ThrottlerStorageService`. They reset on restart and are not shared between
-replicas. Per-route overrides are in `auth.controller.ts`:
+replicas. Routes opt into the small bucket in `auth.controller.ts`:
 
 | Route | Decorator | `auth` limit per minute |
 |---|---|---|
-| `register`, `login`, `password/reset`, `password/change` | `CREDENTIAL_ROUTE` (`auth.controller.ts:22`) | `AUTH_RATE_LIMIT_PER_MINUTE` |
-| `verify-email/resend`, `password/reset-request` | `MAIL_ROUTE` (`auth.controller.ts:34`) | **5, hard-coded** |
-| every other route in the API | none | `AUTH_RATE_LIMIT_PER_MINUTE` |
+| `register`, `login`, `password/reset`, `password/change` | `@AuthBucket(CREDENTIAL_ROUTE)` (`auth.controller.ts:22`) | `AUTH_RATE_LIMIT_PER_MINUTE` |
+| `verify-email/resend`, `password/reset-request` | `@AuthBucket(MAIL_ROUTE)` (`auth.controller.ts:34`) | **5, hard-coded** |
+| every other route in the API | none | not in the bucket — only `default` applies |
 
-**How the library actually applies this (verified in
-`@nestjs/throttler/dist/throttler.guard.js` `canActivate`/`generateKey`, and by running
-the guard in isolation).** *Every* named throttler applies to *every* route unless a
-`@SkipThrottle` exists, and Bault has none. A route without `@Throttle` falls back to that
-throttler's configured limit. Buckets are keyed by `sha256("<Controller>-<handler>-<throttler>-<req.ip>")`.
-It follows that:
+**Why a marker is needed (verified in `@nestjs/throttler/dist/throttler.guard.js`
+`canActivate`/`generateKey`).** v6 applies *every* named throttler to *every* route unless it
+is skipped; `@Throttle({ auth })` on a handler only changes that handler's numbers. Before
+19 September 2026 Bault relied on `@Throttle` alone, so the `auth` bucket capped **every**
+endpoint at `min(300, 30) = 30` requests a minute per IP and the `default` bucket could never
+bind: an operator scanning at the bench, a collector browsing, a load balancer probing
+`/healthz` were all refused after thirty calls. `AuthBucket(limit)`
+(`apps/api/src/modules/acc/auth-bucket.decorator.ts:21`) now sets a metadata marker alongside
+the `@Throttle` override, and `skipsAuthBucket` (`:26`) tells the `auth` throttler to skip any
+handler without it. Buckets are keyed by `sha256("<Controller>-<handler>-<throttler>-<req.ip>")`,
+so:
 
-1. **The `auth` bucket caps every endpoint**, not only credential routes. With default
-   config each handler allows `min(300, 30) = 30` requests per minute per IP. The generous
-   `default` bucket can never bind. The comment at `app.module.ts:52-57` expects an operator
-   scanning at a bench not to be throttled, and that is false. Worked example: a bench
-   PC calls the same custody handler once every 1.5 s. That is 40 calls a minute, so call 31 gets 429
-   `rate_limited` with `Retry-After-auth: 60`, and the handler stays blocked for 60 s (`blockDuration` defaults
-   to `ttl`). A harness running the guard with `{default:300, auth:30}` against one
-   undecorated handler was blocked after exactly 30 calls. The same applies to `/healthz` and
-   `/readyz` for a load balancer probing from one address, and to the payment webhook.
-2. `CREDENTIAL_ROUTE` sets exactly the configured `auth` value, so today it is
-   indistinguishable from no decorator. Only `MAIL_ROUTE` changes behaviour.
-3. Limits are **per handler**. A client throttled on `login` can still call
-   `register`.
-4. The local `.env` and CI set `AUTH_RATE_LIMIT_PER_MINUTE=5000` and `RATE_LIMIT_PER_MINUTE=20000`
-   (`.github/workflows/ci.yml:58-59`), which hides point 1 in every automated run.
-   `.env.example:209` still suggests 10.
+1. **Credential and mail routes are capped by `auth`; everything else only by `default`.**
+   Proven on a second API instance with `AUTH_RATE_LIMIT_PER_MINUTE=3`: ten `GET /pricing/list`
+   all answered 200; `POST /auth/login` answered 401, 401, 401, then 429. Pinned by
+   `tests/web/auth-bucket.test.ts`.
+2. Limits are **per handler**. A client throttled on `login` can still call `register`.
+3. The local `.env` and CI set `AUTH_RATE_LIMIT_PER_MINUTE=5000` and `RATE_LIMIT_PER_MINUTE=20000`
+   (`.github/workflows/ci.yml:58-59`) because the suites sign in hundreds of times a minute from
+   one address. `.env.example:209` still suggests 10.
 
 A throttled response is 429 with `{ code: 'rate_limited', message: 'Too many requests. Wait a
 moment and try again.' }` (`shared/errors/all-exceptions.filter.ts:40-42,114`). This is tested by
@@ -2019,7 +2020,7 @@ registered once, which bounds the abuse *(Inferred rationale)*.
 
 `main.ts:68` does `app.getHttpAdapter().getInstance().set('trust proxy', env.TRUST_PROXY)`.
 The value defaults to `'loopback'`, and the schema refuses the literal `'true'`
-(`env.ts:159-162`). Express 5 compiles a string value with `proxy-addr` after splitting on
+(`env.ts:161-164`). Express 5 compiles a string value with `proxy-addr` after splitting on
 commas (`express/lib/utils.js:207-213`). `req.ip` then comes from walking
 `X-Forwarded-For` from the right: trusted hops are skipped, and the first untrusted address is the
 client. A hop count cannot be expressed, because a number arrives from env as a string and is parsed as an address.
@@ -2030,7 +2031,7 @@ client. A hop count cannot be expressed, because a number arrives from env as a 
 | Deployment | What sits in front | Correct `TRUST_PROXY` |
 |---|---|---|
 | dev / `pnpm tunnel` | Vite dev server or `vite preview` on the same machine, with `xfwd: true` (`apps/web/vite.config.ts:130`) | `loopback` |
-| Docker | nginx in the web container, which **sets** `X-Forwarded-For $remote_addr` (`apps/web/nginx.conf:96`) | the nginx network, e.g. `uniquelocal` or a CIDR. With `loopback`, every request looks like it comes from the nginx container |
+| Docker | nginx in the web container, which **sets** `X-Forwarded-For $remote_addr` (`apps/web/nginx.conf:99`) | the nginx network, e.g. `uniquelocal` or a CIDR. With `loopback`, every request looks like it comes from the nginx container |
 
 **Worked example of spoofing (tunnel).** A visitor at 198.51.100.7 sends
 `X-Forwarded-For: 1.2.3.4`. After the Cloudflare edge and Vite's `xfwd`, the API sees the
@@ -2112,11 +2113,12 @@ UX test `tests/ux/sign-ins.test.tsx`). §10 owns the rest of ADM.
   its failure.
 - **Enumeration is closed only on the sign-in response body.** Registration says so
   outright, and sign-in and reset timing differ (§4.5).
-- **The throttling configuration does not do what its comments say** (§4.11). The effective
-  limit on every handler is the `auth` limit. Counters are in-memory per process.
+- **Rate-limit counters are in-memory per process** (§4.11), so they reset on restart and are
+  not shared between replicas. (Until 19 September 2026 the `auth` limit also capped every route;
+  fixed with `@AuthBucket`.)
 - **Dead or inert security code.** `PiiInterceptor`/`@Pii()` are never applied (§4.10).
   `generateIntakeId` is never called (§4.3). `SESSION_COOKIE_SECRET` is required and never
-  read (§4.5). `CREDENTIAL_ROUTE` equals the global `auth` limit (§4.11).
+  read (§4.5). `CREDENTIAL_ROUTE` is the configured `auth` limit (§4.11).
 - **Stale comments that contradict the code.** The `SessionAuthGuard` header says suspended
   or closed accounts are "barred from signing in" (`session-auth.guard.ts:16-18`). The worker's
   suspension header says "A suspended holder cannot sign in"
@@ -2142,6 +2144,7 @@ UX test `tests/ux/sign-ins.test.tsx`). §10 owns the rest of ADM.
 | `apps/api/src/modules/acc/allow-suspended.decorator.ts` | `@AllowSuspended()` metadata flag | `ALLOW_SUSPENDED_KEY` :25-26 |
 | `apps/api/src/modules/acc/public.decorator.ts` | `@Public()` metadata flag | `IS_PUBLIC_KEY` :8-9 |
 | `apps/api/src/modules/acc/auth.controller.ts` | `/auth/*` routes, per-route throttles, the cookie | `CREDENTIAL_ROUTE` :22, `MAIL_ROUTE` :34, `register` :68, `verifyEmail` :82, `resend` :90, `login` :99 (`req.user` :118), `logout` :123, `resetRequest` :131, `reset` :140, `change` :156, `revokeOtherSessions` :181, `setSessionCookie` :194 |
+| `apps/api/src/modules/acc/auth-bucket.decorator.ts` | Puts a route in the small `auth` rate-limit bucket | `AUTH_BUCKET` :19, `AuthBucket` :21, `skipsAuthBucket` :26 |
 | `apps/api/src/modules/acc/auth.service.ts` | Registration, credential check, status gate at sign-in, attempt log | `register` :33-93, `login` :100-164, `recordAttempt` :174-192, `isUniqueViolation` :196 |
 | `apps/api/src/modules/acc/session.service.ts` | Session lifecycle | `SESSION_TTL_MS` :9, `clampUserAgent` :22, `create` :36, `resolve` :53, `revoke` :71, `revokeAllFor` :96 |
 | `apps/api/src/modules/acc/session-auth.guard.ts` | Global authentication and account-status guard | `canActivate` :39-66, `readSessionCookie` :68 |
@@ -2159,7 +2162,7 @@ UX test `tests/ux/sign-ins.test.tsx`). §10 owns the rest of ADM.
 | `apps/api/src/modules/sec/audit.interceptor.ts` | Global audit of successful mutating requests | `MUTATING` :13, `intercept` :19-50 |
 | `apps/api/src/modules/sec/pii.ts` | `@Pii()` and `PiiInterceptor`. **Not applied anywhere** | `Pii` :22, `PiiInterceptor` :31, `redact` :39 |
 | `apps/api/src/modules/sec/sec.module.ts` | Global module exporting audit, RBAC and PII providers | :11-16 |
-| *Related, outside scope:* `apps/api/src/app.module.ts` | Throttler config and guard order | :59-69, :95-101 |
+| *Related, outside scope:* `apps/api/src/app.module.ts` | Throttler config and guard order | :60-78, :106-109 |
 | `apps/api/src/main.ts` | `trust proxy`, helmet, CORS, ValidationPipe | :68, :78, :100-103, :130-137 |
 | `packages/config/src/env.ts` | Security env vars | `SESSION_COOKIE_*` :62-63, `RATE_LIMIT_PER_MINUTE` :130, `AUTH_RATE_LIMIT_PER_MINUTE` :142, `TRUST_PROXY` :159-162 |
 | `apps/api/src/shared/tokens.ts` | Token generation and hashing | `generateToken` :9, `hashToken` :13 |
@@ -2352,7 +2355,7 @@ All tables are in `apps/api/src/modules/cst/cst.schema.ts`. Reference columns ar
   Each gets a `BEFORE UPDATE OR DELETE` trigger that raises `append_only_violation`,
   and the app role loses UPDATE and DELETE on them (§3).
 - `item` gets `trg_no_delete_item`, a `BEFORE DELETE` trigger that raises
-  `never_deleted_violation` (`0001_append_only.sql:106-123`). Items stay updatable.
+  `never_deleted_violation` (`0001_append_only.sql:108-125`). Items stay updatable.
 - `item_change_history`, `item_image`, `bin` and `batch` are **not** in the list.
   The correction trail is protected by convention only. `docs/design/03-intake.md`
   §11 says otherwise and is wrong.
@@ -2888,7 +2891,7 @@ become 3 items at $1.00 each, because 3 < `LOT_MIN_SIZE`. The covered items have
 - **Typed serials on lots.** `LOT-` is applied only to minted serials, so a lot
   booked with a typed serial carries no `LOT-` prefix. The UI hint says to type a
   serial only "for a single item that already has a catalogue photo"
-  (`apps/web/src/shared/i18n.tsx:3434-3435`).
+  (`apps/web/src/shared/i18n.tsx:3440-3441`).
 - **A named bin overrides the kind.** It is not checked against `oversized`, so an
   operator can stow a sealed case on card shelving by scanning a card shelf.
 - **Photo keys are trusted.** Any string is accepted as a key, including one that
@@ -3016,7 +3019,7 @@ base64 length at the byte limit × 4/3 + 128 (`med.controller.ts:13-19`).
 Reading: `signed(key)` returns a signed URL, or `null` on error (`:114-122`), and
 `signAll` drops unsignable rows (`:125-132`). Parcel photos use `signAll`. The
 vault's `itemCard` calls `storage.getSignedUrl` directly without that tolerance
-(`apps/api/src/modules/vlt/vault.service.ts:429-434`), so one unsignable key fails
+(`apps/api/src/modules/vlt/vault.service.ts:438-443`), so one unsignable key fails
 the whole card.
 
 **Edge cases.**
@@ -3044,7 +3047,7 @@ it costs. Everything is owner-scoped in the `WHERE` clause. VLT never writes.
 (`apps/api/src/modules/vlt/vlt.controller.ts:42-51`). An unknown scope falls back to
 `active` (`:10-12`).
 
-- `active` (`vault.service.ts:131-176`): `owner = me`, state in `LIVE = received, stored, listed` (`:74`), and `hold_flag = false`.
+- `active` (`vault.service.ts:132-177`): `owner = me`, state in `LIVE = received, stored, listed` (`:74`), and `hold_flag = false`.
 - `hold`: `owner = me` and (`hold_flag` or state `on-hold`) (`:136-138`).
 - Both join `bin` for barcode and zone, order newest first, and cap the limit at
   200 (default 50).
@@ -3112,7 +3115,7 @@ changes is why the "still mine, left storage" branch is empty in practice.
 | `storage` | 180 | 90 | 1000 (10 %) | 100 ($1.00) |
 | `storage_oversized` | 90 | 90 | 10000 (100 %) | 500 ($5.00) |
 
-**The sweep** (`apps/worker/src/jobs/storage-fee.ts:49-315`) is scheduled daily at
+**The sweep** (`apps/worker/src/jobs/storage-fee.ts:49-358`) is scheduled daily at
 `0 2 * * *` (`apps/worker/src/index.ts:44`). It is the only producer of storage
 charges. The whole run is one `BEGIN … COMMIT` on one pooled connection.
 
@@ -3122,34 +3125,36 @@ charges. The whole run is one `BEGIN … COMMIT` on one pooled connection.
 2. Parse the parameters with defaults (`:94-113`). This mirrors
    `storageParameters()` in the API (`storage-policy.ts:63-75`), including
    `periodDays ≥ 1`.
-3. One CTE query (`:133-230`):
-   - `member_cap` (`:141-157`): for each membership in `active|cancelling` whose
-     current period contains `now()`, `storedItems` from the tier's pricing-rule
+3. One shared set of CTEs (`apps/worker/src/jobs/storage-fee.ts:141-231`), optionally scoped to
+   given item ids (`options.itemIds`, `:56`, `:140`) — the scheduled run passes none:
+   - `member_cap` (`:150-167`): for each membership in `active|cancelling` whose
+     current period contains `now()`, its tier and `storedItems` from the tier's pricing-rule
      parameters (`membership:<tier>`). The seed generates those from `tiers.ts`:
      Folio 60, Registry 200, Trust 750.
-   - `member_covered` (`:163-177`): the member's `stored` items numbered **oldest
+   - `member_covered` (`:173-188`): the member's `stored` items numbered **oldest
      first** by `(received_at, id)`, keeping those with `rn ≤ storedItems`.
-   - `stored` (`:178-197`): `lifecycle_state = 'stored'`, `received_at` not null,
-     not covered. `intake_minor` is the latest `intake` charge for the item, else
-     the rule's flat `value`. `periods_billed` is `count(*)` of the item's
-     `storage|storage_oversized` charges.
-   - `computed` and `elapsed` (`:198-223`) pick the terms from `item.oversized`, then
+   - `stored` (`:189-212`): `lifecycle_state = 'stored'`, `received_at` not null, with
+     `covered_by` = the covering tier or null. `intake_minor` is the latest `intake` charge for the
+     item, else the rule's flat `value`. `periods_done` is the item's `storage|storage_oversized`
+     charges **plus** its rows in `storage_period_cover`.
+   - `computed` and `elapsed` (`:213-231`) pick the terms from `item.oversized`, then
      `periods_elapsed = GREATEST(0, FLOOR((now − (received_at + free_days)) / period) + 1)`
      for items past their free window.
-   - Output: rows where `periods_elapsed > periods_billed`, with
-     `periods_due = elapsed − billed` and `amount = GREATEST(1, ROUND(intake_minor × bps / 10000))`
-     (`:224-230`).
-4. For each row, insert **one charge per due period** (`status 'settled'`,
-   `payment_means 'wallet'`, a snapshot with `model: 'percentage_of_intake'`, and
-   `reference_id` = item id), each with a matching `ledger_record` debit of type
-   `service_charge` (`:248-289`). This writes the tables directly and does **not**
-   go through the billing port. Ledger semantics are §6.
-5. Insert a `storage_fee_run` row with the item ids, account ids and total
-   (`:291-302`), then commit.
+4. **Cover** (`:251-264`): for covered items, every period from `periods_done + 1` to
+   `periods_elapsed` is inserted into `storage_period_cover` with the tier that covered it
+   (migration `0031_membership_stops_the_storage_clock.sql`; append-only, §3.4). Nothing is billed.
+5. **Bill** (`:267-287`): for uncovered items with `periods_elapsed > periods_done`,
+   `periods_due = elapsed − done` and `amount = GREATEST(1, ROUND(intake_minor × bps / 10000))`.
+   One charge per due period (`status 'settled'`, `payment_means 'wallet'`, a snapshot with
+   `model: 'percentage_of_intake'`, `reference_id` = item id, `:314`), each with a matching
+   `ledger_record` debit of type `service_charge` (`:322`). This writes the tables directly and
+   does **not** go through the billing port. Ledger semantics are §6.
+6. Insert a `storage_fee_run` row with the item ids, account ids and total (`:335`), then commit.
 
-**Idempotence** is period accounting: the charges already written are the count of
-what has been billed. A second run the same day finds `elapsed = billed` and does
-nothing. A missed week is caught up on the next run, one row per period.
+**Idempotence** is period accounting: a period is settled once it is charged or covered. A
+second run the same day finds `elapsed = done` and does nothing. A missed week is caught up on the
+next run, one row per period — for a covered item, as cover rows; for an uncovered one, as
+charges.
 
 **Worked example: a $1 card vs a $20 case** (non-member, no membership cover):
 
@@ -3168,20 +3173,24 @@ A 40-card lot booked as one lot pays `intake_lot` $5.00, so 50¢ per period afte
 180 days. Broken into 40 cards, it is 40 × 10¢ = $4.00 per period. **Plus the lot
 row's own 50¢**, which keeps billing after the break (§5.9).
 
-**Membership stops the clock, but only while it runs.** A covered item is left out
-of `stored`, so nothing is billed while it is covered. The period count is not
-reset, though: `periods_elapsed` is always measured from `received_at`. The moment
-an item leaves cover, every elapsed period is billed in one sweep. Cover ends when
-the membership lapses or ends, or when newer stored items push past `storedItems`
-(oldest-first keeps that stable).
+**Membership stops the clock.** Each period that starts while an item is covered is recorded
+in `storage_period_cover` and counts as settled, so it is never billed — not while the
+membership runs, and not after it ends. When cover ends (the membership lapses or ends, or newer
+stored items push the item past `storedItems`; oldest-first keeps that stable), only periods that
+**start** afterwards are billed.
 
-Example: a Folio member's card received 608 days ago, covered throughout, with its
-intake covered by the allowance so there is no intake charge. The day the cycle
-lapses, `floor((608−180)/90)+1 = 5` periods at `ROUND(100 × 10 %) = 10¢` (base
-falls back to the `storage` rule `value`) are billed together: 50¢. The same for a
-sealed case whose intake was covered: base $5.00 (the `storage_oversized` fallback),
-`floor((608−90)/90)+1 = 6` periods → **$30.00 at once**. Had its intake been paid at
-$20.00, it would be **$120.00**.
+Example: a Folio member's card received 400 days ago, covered throughout. The sweep has recorded
+periods 1–3 (starting on days 180, 270 and 360) as covered. The membership ends: the next sweep
+bills nothing, because `periods_done = 3 = periods_elapsed`. On day 450 period 4 starts, and that
+one period is billed. *(Fixed 19 September 2026: covered periods used to leave no record, so the
+first sweep after cover ended billed every one of them at once — for a sealed case covered for
+608 days, six periods, $30.00 to $120.00 in one night. Pinned by
+`tests/integration/storage-membership.test.ts`, which drives the real job against the database
+and checks that the cover rows are append-only.)*
+
+The sweep only records cover while it runs: if the worker is down for the whole of a covered
+period and the membership ends before it runs again, that period is billed when it does
+*(Inferred edge; the daily schedule makes it unlikely)*.
 
 **Other rules the SQL implies.**
 
@@ -3199,7 +3208,7 @@ $20.00, it would be **$120.00**.
   `:163`, Trust's at `:192`).
 
 **What the collector sees.** `GET /vault/items/:id/storage` → `VaultService.storageFor`
-(`vault.service.ts:345-418`):
+(`vault.service.ts:346-427`):
 
 - Loads the item (current owner only) and the in-force rule for its kind.
 - Counts the **billed** storage charges and their sum. The past is read from the
@@ -3345,8 +3354,6 @@ custody events only (`:46-52`).
   all inherit this (§5.6, §5.15). Clearing `bin_id` on a terminal transition, or
   filtering counts by lifecycle, would fix all three *(Inferred remedy)*.
 - **Broken lots keep billing** (§5.9).
-- **Membership pauses storage but does not reset the clock.** A lapse bills the
-  whole covered span at once (§5.13).
 - **The vault hides shipped, at-grader and discarded items** (§5.12).
 - **Retention is a query with no caller** (§5.7).
 - **Storage terms cannot be corrected.** `oversized` cannot be corrected after
@@ -3382,7 +3389,7 @@ custody events only (`:46-52`).
 | `apps/api/src/modules/cst/report-pdf.ts` | Dependency-free PDF writer | `escapeText` :22, `ROWS_PER_PAGE` :34, `renderReportPdf` :72 |
 | `apps/api/src/modules/cst/cst.controller.ts` | `/custody` routes (staff) | relocate :62, hold :83/:90, history/timeline :99-110, report :119, report.pdf :130, bins :145-196 |
 | `apps/api/src/modules/cst/cst.module.ts` | Global CST wiring and exports | :12-21 |
-| `apps/api/src/modules/vlt/vault.service.ts` | Vault scopes, history, card, timeline gate, storage display | `TERMINAL` :66, `LIVE` :74, `timeline` :96, `hasHeld` :111, `listOwned` :131, `listHistory` :218, `counts` :325, `storageFor` :345, `itemCard` :420 |
+| `apps/api/src/modules/vlt/vault.service.ts` | Vault scopes, history, card, timeline gate, storage display | `TERMINAL` :67, `LIVE` :75, `timeline` :97, `hasHeld` :112, `listOwned` :132, `listHistory` :219, `counts` :326, `storageFor` :346, `itemCard` :429 |
 | `apps/api/src/modules/vlt/storage-policy.ts` | Storage parameters and display arithmetic | `STANDARD_STORAGE` :43, `OVERSIZED_STORAGE` :49, `storageParameters` :63, `freeUntil` :80, `nextChargeAt` :92, `periodChargeMinor` :102 |
 | `apps/api/src/modules/vlt/break-even.service.ts` | Break-Even Watch | `soldMedianByClass` :89, `forOwner` :126, `summaryFor` :235 |
 | `apps/api/src/modules/vlt/vlt.controller.ts` | `/vault` routes | `toScope` :10, break-even :31, items :42, counts :54, card :59, storage :71, timeline :77 |
@@ -3390,7 +3397,7 @@ custody events only (`:46-52`).
 | `apps/api/src/modules/med/media.service.ts` | Image upload and URL signing | `ALLOWED_TYPES` :32, `MAX_IMAGE_BYTES` :48, `upload` :68, `signed` :114, `signAll` :125 |
 | `apps/api/src/modules/med/med.controller.ts` | `POST /media/uploads` | `MAX_BASE64_LENGTH` :13, `UploadDto` :15, `upload` :35 |
 | `apps/api/src/modules/med/med.module.ts` | Global MED wiring | :12-18 |
-| `apps/worker/src/jobs/storage-fee.ts` | Daily storage sweep (only storage-charge producer) | rules :58-87, params :94-113, CTE :133-230 (`member_cap` :141, `member_covered` :163, `stored` :178, `elapsed` :210), per-period inserts :248-289, run record :291 |
+| `apps/worker/src/jobs/storage-fee.ts` | Daily storage sweep (only storage-charge producer) | rules :66-95, params :102-121, CTE :142-281 (`member_cap` :150, `member_covered` :173, `stored` :189, `elapsed` :220), per-period inserts :291-332, run record :334 |
 
 ---
 
@@ -3555,7 +3562,7 @@ It is meant for callers that have a legitimate fallback (`:69-76`):
 - Grading tiers, the escrow fee, membership fees, white-glove shipping, show pickup, rush and the
   shipping add-ons use `tryPrice` with a constant as the fallback (`grading.service.ts:77`,
   `escrow.service.ts:71`, `membership.service.ts:120`, `human-fulfilment.service.ts:75-76,273`,
-  `shipment.service.ts:342,469`).
+  `shipment.service.ts:343,469`).
 
 Note that `tryPrice` swallows **every** exception, not only "no rule". A database error inside it
 also becomes `null`, and then the fallback applies.
@@ -3571,8 +3578,8 @@ request (§4). `CreateRuleDto` (`prc.controller.ts:15-24`) validates `model` and
 **Other readers of `pricing_rule`.** Some code applies the same in-force test itself instead of
 calling `PricingService`:
 
-- the vault's storage panel (`apps/api/src/modules/vlt/vault.service.ts:366`)
-- the storage sweep (`apps/worker/src/jobs/storage-fee.ts:70,147`)
+- the vault's storage panel (`apps/api/src/modules/vlt/vault.service.ts:367`)
+- the storage sweep (`apps/worker/src/jobs/storage-fee.ts:78,147`)
 - membership renewal (`apps/worker/src/jobs/membership-renewal.ts:69`)
 
 Those belong to §5 and §10. They are listed here because a change to the resolution rule has to
@@ -3649,7 +3656,7 @@ works in four steps:
 
 `value` is still cents *or* basis points, and the client must read `model` to know which. The
 SPA's `PriceListPanel` renders a percentage as a percentage, and a test asserts that 500 bps
-reads as 5%, not $5.00 (`tests/integration/pay-money-in-out.test.ts:293-297`).
+reads as 5%, not $5.00 (`tests/integration/pay-money-in-out.test.ts:296-300`).
 
 **Edge case.** For `cash_out_fee` and `chargeback_fee` the price list shows a rule that the money
 code **does not read** (§6.8, §6.11). The list quotes whatever an admin last inserted. The charge
@@ -3815,7 +3822,7 @@ The index `ledger_record_user_occurred_idx (user_id, occurred_at)`
 (`0006_wallet_debt_policy.sql:31-32`) serves both the balance sum and the debt window query.
 
 **Append-only.** `ledger_record` is in the `history_tables` list of
-`apps/api/src/db/sql/0001_append_only.sql:42`, which gives it a `BEFORE UPDATE OR DELETE`
+`apps/api/src/db/sql/0001_append_only.sql:44`, which gives it a `BEFORE UPDATE OR DELETE`
 trigger that raises `append_only_violation` (mechanism in §3). A correction is a new compensating
 row. A chargeback, for example, is a new `chargeback` debit and never an edit of the
 `credit_topup` it reverses. `tests3/integration/fin-invariants.test.ts:173` checks this in
@@ -3916,7 +3923,7 @@ So the query replays the fold:
 
 **Interest accrual.** `accrueInterest` (`apps/worker/src/jobs/interest-accrual.ts:23-52`) runs
 daily at 03:00 (`index.ts:45`). Its parameters come from config
-(`packages/config/src/env.ts:239-242`):
+(`packages/config/src/env.ts:241-244`):
 
 - `WALLET_DEBT_GRACE_DAYS`, default 14
 - `WALLET_DEBT_INTEREST_BPS`, default 5 (0.05% per day)
@@ -3940,7 +3947,7 @@ in the INSERT or the query checks for an existing `interest` row that day).
 (`apps/worker/src/jobs/wallet-suspension.ts:34-80`) runs daily at 03:15, after interest, so a
 debt that crosses the line because of today's interest is acted on today (`index.ts:46-49`). The
 threshold is `WALLET_SUSPEND_BELOW_MINOR`, default −2000 (−$20.00), and it must be ≤ 0
-(`env.ts:240`).
+(`env.ts:242`).
 
 - **Suspend** (`:45-51`): `UPDATE user_account SET status='suspended', auto_suspended_at=now()
   WHERE id = ANY(...) AND status='active'`, for accounts with `balanceMinor < threshold`.
@@ -4029,7 +4036,7 @@ provider confirms (bank transfer, PayPal Friends & Family) and for every cash-ou
   - `reviewed_by/at`, `rejection_reason`, `completed_at`
 - `wallet_request_event` (`pay.schema.ts:154-165`; `0004…sql:142-155`): one row per transition
   (`actor_id`, `actor_role`, `from_status`, `to_status`, `reason`, `metadata`). It is in the
-  append-only list (`0001_append_only.sql:42`), so the review trail cannot be edited.
+  append-only list (`0001_append_only.sql:44`), so the review trail cannot be edited.
 
 **State machine.** It is defined once, as an adjacency list, in
 `apps/api/src/modules/pay/wallet-request.rules.ts:39-47`, and the SPA mirrors it in
@@ -4051,7 +4058,7 @@ rejected, completed, cancelled → (terminal)
 - `OPEN_WALLET_REQUEST_STATUSES` is `submitted, pending_review, approved, processing`
   (`:50-55`).
 - `canTransition` (`:61-63`) is the only legality test. Both `applyTransition`
-  (`wallet-request.service.ts:620`) and `complete` (`:361`) call it.
+  (`wallet-request.service.ts:626`) and `complete` (`:361`) call it.
 
 **Rules** (all pure, `wallet-request.rules.ts`):
 
@@ -4143,9 +4150,9 @@ place a wallet request moves money. One transaction:
    - `settled_ledger_id` already set (`:367`)
 3. **The fee** (cash-out only): `grossFee = cashOutFeeMinor(amount)` (`:382`), minus
    `memberships.waive(tx, userId, 'cash_out_fee', grossFee)` (`:385-389`), giving `feeMinor`.
-4. **The binding balance check** (cash-out only, `:391-404`): `balance >= amount + feeMinor`,
-   otherwise 409 `insufficient_balance` (`The balance no longer covers this cash-out and its
-   fee`).
+4. **The binding balance check** (cash-out only, `:391-407`): `balance >= amount` — the fee
+   comes out of the amount, not on top of it — otherwise 409 `insufficient_balance` (`The
+   balance no longer covers this cash-out`).
 5. **The payout** (cash-out only, `:418-449`):
    - `payment.createPayout({ amountMinor: amount − feeMinor, idempotencyKey:
      'wallet_request:<id>', destinationToken: destinationAccount })`
@@ -4171,10 +4178,10 @@ place a wallet request moves money. One transaction:
   it) and `:92` (exactly one ledger row per completed request).
 - **Completion happens at most once.** The row lock, the `completed` terminal state, the
   `settled_ledger_id` check and the partial unique index all guard it
-  (`tests/integration/pay-flow.test.ts:293`).
+  (`tests/integration/pay-flow.test.ts:294`).
 - **Four-eyes means requester ≠ reviewer**, whatever the role. `assertSeparationOfDuties`
   (`service:583-589`) returns 403 `You cannot review your own wallet request`. It is checked on
-  every reviewer transition and on complete (`tests/integration/pay-flow.test.ts:341`,
+  every reviewer transition and on complete (`tests/integration/pay-flow.test.ts:342`,
   `tests3/integration/fin-invariants.test.ts:205`). It does **not** require two different
   administrators: the same admin may approve and complete someone else's request.
 - **Every state change leaves three records in the same transaction**: a `wallet_request_event`
@@ -4275,30 +4282,25 @@ the charge. This departs from Principle VI.
    - lock the row
    - separation of duties passes
    - `grossFee = 700`; `waive` finds no membership, so `feeMinor = 700`
-   - balance 25 000 ≥ 20 000 + 700
+   - balance 25 000 ≥ 20 000
    - `createPayout(amountMinor = 20 000 − 700 = 19 300, key 'wallet_request:<id>')`
+     (`wallet-request.service.ts:424`)
    - INSERT `external_payment(payout, 19 300)`
-   - ledger `withdrawal` debit **20 000**
-   - `charge(service, 700)` plus ledger `fee` debit **700**
+   - ledger `withdrawal` debit **19 300** — what left for the bank (`:463-464`)
+   - `charge(service, 700)` plus ledger `fee` debit **700** (`:481-510`)
    - status `completed`
 
-   Noa's balance is now 25 000 − 20 700 = **4 300**.
+   Noa's balance is now 25 000 − 20 000 = **5 000**. She asked for $200.00, gave up exactly
+   $200.00, and received the $193.00 the quote promised; her statement shows a $193.00 withdrawal
+   and a $7.00 fee.
 
-**The fee is taken twice (a defect in the code as written).** The wallet is debited
-`amount + fee` (20 700), but the payout sends `amount − fee` (19 300)
-(`wallet-request.service.ts:422` and `:444` against `:458` and `:499`). Noa gives up $207.00 and
-receives $193.00, so Bault keeps $14.00, which is twice the $7.00 fee she was quoted.
-
-The quote's own promise is that `netMinor` "actually lands" (`money-terms.ts:65`). That holds
-only if the ledger debit is `amount` and the fee comes *out of* it. The integration test
-`tests/integration/pay-money-in-out.test.ts:127-161` asserts the balance falls by
-`AMOUNT + fee`, but it never checks the payout figure, so it does not catch this.
-
-A consistent fix picks one model. Either:
-
-- pay out `amount` and debit `amount + fee` (the fee is on top), or
-- pay out `amount − fee` and debit `amount`, as a withdrawal of `amount − fee` plus a fee of
-  `fee` (the fee is inside).
+**The fee is inside the amount, as quoted.** The screen says "{fee} comes off {gross}, so {net}
+reaches you" and `cashOutNetMinor` is `amount − fee` (`money-terms.ts:65`), so the wallet loses the
+gross and no more: a withdrawal row of `amount − fee` and a fee row of `fee`. *(Fixed 19 September
+2026: the code used to debit the full `amount` as the withdrawal **and** the fee on top — $207.00
+for a $193.00 payout — and required `amount + fee` in the wallet. The tests now assert the balance
+falls by exactly the amount and that the withdrawal row equals the quoted net:
+`tests/integration/pay-money-in-out.test.ts` and `tests/integration/pay-flow.test.ts`.)*
 
 With a Trust member's covered cash-out, `feeMinor = 0`: the payout is 20 000, the debit is 20 000,
 and the numbers agree.
@@ -4326,7 +4328,7 @@ arrive: that is a wallet request (§6.7) (`money-terms.ts:90-103`,
 
 - `available`: instant routes are always available. `bank_transfer` is available only if at least
   one `BANK_*` variable is set; `paypal_ff` only if `PAYPAL_FF_HANDLE` is set
-  (`packages/config/src/env.ts:257-264`). An unconfigured route is shown as unavailable with **no**
+  (`packages/config/src/env.ts:259-266`). An unconfigured route is shown as unavailable with **no**
   particulars, never a placeholder account.
 - `instructions`: the bank particulars or the PayPal handle.
 - `limits`: the cash-in limits.
@@ -4377,7 +4379,7 @@ two implementations by `PAYMENT_PROVIDER`, which has **no default** (`env.ts:101
 
 - **`SandboxPaymentAdapter`** (`payment.ts:361-388`) settles everything, echoes
   `settledAmountMinor`, and "verifies" any webhook. The factory throws if `NODE_ENV=production`
-  (`adapters.module.ts:96-103`), and the production env check also rejects it (`env.ts:393-401`).
+  (`adapters.module.ts:96-103`), and the production env check also rejects it (`env.ts:395-403`).
 - **`PayPalPaymentAdapter`** (`payment.ts:130-346`):
   - OAuth client-credentials, with the token cached until 60 s before it expires (`:161-185`).
   - Every call sends `PayPal-Request-Id` as the idempotency key (`:194-196`).
@@ -4488,7 +4490,7 @@ punishment. It is operator-only and manual, because the provider tells Bault out
 **Rules.**
 
 - **A top-up can be reversed at most once.** The row lock and the `reversed` status enforce it
-  (`tests/integration/pay-money-in-out.test.ts:188-219`).
+  (`tests/integration/pay-money-in-out.test.ts:191-222`).
 - **A reversal can drive the balance negative.** From there, §6.6 takes over: blocking, then
   interest after the grace period, then suspension below −$20.
 - **The fee has no membership waiver.** `chargeback_fee` is in `UNCOVERED` (`tiers.ts:225-233`).
@@ -4562,7 +4564,7 @@ Every route below needs a session unless marked Public. Admin means `@Roles('adm
   no ledger row. *(Inferred: no code handles a commit failure after a successful payout; the
   idempotency key `wallet_request:<id>` would make a retried Complete converge at the provider.)*
 - **Debt policy lives in configuration.** The grace period, rate and threshold are environment
-  variables because they are commercial policy (`interest-accrual.ts:20-21`, `env.ts:231-242`).
+  variables because they are commercial policy (`interest-accrual.ts:20-21`, `env.ts:233-244`).
   Interest compounds daily. It is written as ordinary, visible ledger rows, but nothing notifies
   the customer that accrual has begun.
 
@@ -4586,7 +4588,7 @@ Every route below needs a session unless marked Public. Admin means `@Roles('adm
 | `apps/api/src/modules/pay/withdrawal.service.ts` | Legacy confirmed withdrawal (unrouted); the retired-route 410 | `retiredConfirmEndpoint` `:48-52`; `request` `:54-60`; `confirm` `:62-116` |
 | `apps/api/src/modules/pay/chargeback.service.ts` | Operator-recorded reversal of a card top-up | `record` `:58-178`; `reversible` `:181-188`; `terms` (unused) `:46-48` |
 | `apps/api/src/modules/pay/wallet-request.rules.ts` | Pure lifecycle, limits and validation shared with the SPA | transitions `:39-47`; open statuses `:50-55`; `canTransition` `:61`; limits `:76-81`; `validateWalletRequestDraft` `:125-194`; `isDuplicateOf` `:211-221` |
-| `apps/api/src/modules/pay/wallet-request.service.ts` | Submit, review, complete; separation of duties; trail | `submit` `:90-187`; `listForReview` `:206-235`; `detail` `:246-273`; `loadFor` `:281-288`; `cancel` `:295`; `approve`/`reject` `:309-325`; `complete` `:342-573`; `assertSeparationOfDuties` `:583-589`; `applyTransition` `:596-678`; `openTotals` `:705-720` |
+| `apps/api/src/modules/pay/wallet-request.service.ts` | Submit, review, complete; separation of duties; trail | `submit` `:90-187`; `listForReview` `:206-235`; `detail` `:246-273`; `loadFor` `:281-288`; `cancel` `:295`; `approve`/`reject` `:309-325`; `complete` `:342-579`; `assertSeparationOfDuties` `:589-595`; `applyTransition` `:602-684`; `openTotals` `:711-726` |
 | `apps/api/src/modules/pay/wallet-request.controller.ts` | `/finance/wallet-requests*` (customer), `/admin/wallet-requests*` (admin) | `SubmitWalletRequestDto` `:23-34`; customer routes `:63-91`; review routes `:95-143` |
 | `apps/api/src/modules/pay/pay.controller.ts` | `/finance/*` wallet, checkout, quote, chargebacks, legacy shims; `/webhooks/payment` | checkout `:99-102`; quote `:116-120`; chargebacks `:124-138`; legacy `:160-208`; webhook `:210-232` |
 | `apps/api/src/modules/pay/pay.module.ts` | Global module; binds `BILLING_PORT` to `BillingService` | providers `:22-32`; `useExisting` `:31`; exports `:33` |
@@ -4645,7 +4647,7 @@ authenticated unless it is marked `@Public()`. `@Roles(...)` narrows it further 
 | Table | Key columns | Notes |
 | --- | --- | --- |
 | `listing` (`:11-20`) | `item_id`, `seller_id`, `asking_price`, `currency`, `status`, `published_at` | Status enum `listing_status = active \| sold \| removed` (`:9`). No DB constraint limits an item to one active listing. The item's `listed` lifecycle state enforces that instead (§7.2). |
-| `transaction` (`:24-37`) | `code` (TXN-), `type`, `item_ids` jsonb `string[]`, `buyer_id`, `seller_id`, `price` (null for a gift), `fee`, `frozen_pricing` jsonb, `executed_at` | Type enum `sale \| swap \| transfer \| consignment` (`:22`). The code calls it "irreversible", but **no append-only trigger protects it**: it is not in the `history_tables` list at `apps/api/src/db/sql/0001_append_only.sql:42`. It stays immutable only because no code ever runs `update(transaction)` (checked by grep). |
+| `transaction` (`:24-37`) | `code` (TXN-), `type`, `item_ids` jsonb `string[]`, `buyer_id`, `seller_id`, `price` (null for a gift), `fee`, `frozen_pricing` jsonb, `executed_at` | Type enum `sale \| swap \| transfer \| consignment` (`:22`). The code calls it "irreversible", but **no append-only trigger protects it**: it is not in the `history_tables` list at `apps/api/src/db/sql/0001_append_only.sql:44`. It stays immutable only because no code ever runs `update(transaction)` (checked by grep). |
 | `offer` (`:41-60`) | `listing_id`, `buyer_id`, `amount`, `status`, `parent_offer_id`, `proposed_by` | Status enum `pending \| accepted \| rejected \| countered` (`:39`). `proposed_by` was added in migration `0020_an_offer_knows_who_made_it.sql` with `CHECK (proposed_by IN ('buyer','seller'))` and the partial unique index `offer_one_open_per_buyer ON offer(listing_id, buyer_id) WHERE status = 'pending'`. |
 | `swap_proposal` (`:64-75`) | `proposer_id`, `responder_id`, `offered_item_ids`, `requested_item_ids`, `proposer_approved` (default true), `responder_approved` (default false), `status` | Status enum `pending \| accepted \| rejected \| executed` (`:62`). `accepted` is never written. A gift is a proposal whose `requested_item_ids` is empty. |
 
@@ -4674,7 +4676,7 @@ authenticated unless it is marked `@Public()`. `@Roles(...)` narrows it further 
   - Enums: `escrow_status` (`:38-55`), `escrow_settlement` (`buyer_vault | ship_to_buyer`, `:58-63`), `escrow_role` (`:66`).
 - `escrow_event` (`:178-192`) is the append-only trail (`deal_id`, `event_type`, `from_status`, `to_status`,
   `actor_id`, `on_behalf_of`, `notes`, `metadata`). It **is** registered with the append-only guard
-  (`sql/0001_append_only.sql:42`, see §3).
+  (`sql/0001_append_only.sql:44`, see §3).
 - Migration 0016 also added the ledger types `escrow_hold`, `escrow_release` and `escrow_refund`.
 
 **Consignment** uses the DIS `service_request` table (§8). Consignment's per-request data lives in
@@ -4686,7 +4688,7 @@ them: only the seed writes them (`apps/api/src/db/seed.ts:1196`).
 
 **The platform custodian.** Store takings, consigned items and bought-out items all belong to the
 account with email `platform@bault.dev`. That account is resolved by email in two places:
-`house-store.service.ts:372-380` and `service.service.ts:294-302`.
+`house-store.service.ts:372-380` and `service.service.ts:302-310`.
 
 <a id="s7-2"></a>
 ### 7.2 Listings: states, creation, removal, and what "frozen" means
@@ -4760,10 +4762,12 @@ A hold on a listed card leaves the listing `active`. The hold stops the sale; it
   - `minPrice` and `maxPrice` are inclusive (`:60-61`).
   - `sort` accepts `newest | price_asc | price_desc`. The controller maps any unknown value to `newest` (`mkt.controller.ts:63`).
   - Each row gets a signed URL for its newest image (`:87-89`, `newestImageUrl` `:114-122`), which costs one query per row.
-- `GET /marketplace/listings/:id` (`@Public`) → `detail` (`:92-111`) returns **any** listing, including sold or removed ones. It is
-  `select()` over `listing ⋈ item`, so the response carries the **whole item row**, including
-  `ownerId`, `binId` and the source batch/parcel ids, on a public endpoint. No PII interceptor
-  applies. This is the one place the read side is not thin.
+- `GET /marketplace/listings/:id` (`@Public`) → `detail` (`browse.service.ts:102-136`) returns
+  **any** listing, including sold or removed ones, projected to the browse list's public fields
+  plus `status`, `publishedAt` and the photographs by signed URL (with `version` and `type`, not the
+  storage key). *(Fixed 19 September 2026: it selected whole `listing ⋈ item` rows, so a public
+  route disclosed `ownerId`, `sellerId`, `binId`, the hold flag and source batch/parcel ids —
+  who owns what, and on which shelf. Pinned by `tests/integration/privacy.test.ts`.)*
 
 `MarketReadService` (`market-read.service.ts`) is "the half that was missing". It holds the queries
 a seller needs, each deliberately narrow:
@@ -5092,7 +5096,7 @@ admins can change it.
 
 **Flows.**
 
-- `GET /services/consignment/channels` (`dis.controller.ts:442-445`) returns the catalogue plus `listEvents()`
+- `GET /services/consignment/channels` (`dis.controller.ts:450-453`) returns the catalogue plus `listEvents()`
   (`consignment.service.ts:156-162`): shows that are active and whose deadline is in the future, soonest first.
 - `POST /services/consignment` with `{itemId, channel, askingMinor, eventId?}` → `ConsignmentService.request`
   (`consignment.service.ts:79-153`). Everything that can be refused is refused **before** the billable
@@ -5108,8 +5112,8 @@ admins can change it.
   5. `ServiceRequestService.create` (§8) runs `assertNotBlocked` and the one-open-request-per-item check, then **bills the flat
      `service` fee** through the billing port, then inserts the request as `requested`. `type_fields` snapshots `channel`, `askingMinor`,
      `eventId`, `eventName` and the payout window.
-- The operator accepts through the generic `POST /services/requests/:id/accept` (`dis.controller.ts:224-227`, §8), which moves it to `in_progress`.
-- `POST /services/consignment/:requestId/complete` (operator/admin, `dis.controller.ts:541-545`) with the
+- The operator accepts through the generic `POST /services/requests/:id/accept` (`dis.controller.ts:232-235`, §8), which moves it to `in_progress`.
+- `POST /services/consignment/:requestId/complete` (operator/admin, `dis.controller.ts:549-553`) with the
   fulfilment form `{saleAmountMinor, channel, externalReference, itemVerified: true, notes}` →
   `complete` (`consignment.service.ts:164-229`), inside `custody.run`:
   1. `requests.get` (unlocked), then `assertAccepted` (must be `in_progress`, else 409), and the type must be `consignment`.
@@ -5123,7 +5127,7 @@ admins can change it.
   6. `completeWithFulfillment` (§8) rejects an incomplete form (400 with `missing`) and marks the request `completed`.
 
 `ConsignmentService` also hosts `warehouseTransfer` (`:236-254`, operator route `POST /services/warehouse-transfer`,
-`dis.controller.ts:548-557`). It creates a billable request, calls `relocate` to the free-text bin marker
+`dis.controller.ts:556-565`). It creates a billable request, calls `relocate` to the free-text bin marker
 `EXT:<warehouse>/<bin>`, and completes the request in one transaction. It is unrelated to selling and is
 documented here only because it lives in this file.
 
@@ -5164,9 +5168,9 @@ request (stage awaiting_quote, status requested; billed $20 service)
 
 **Flows.**
 
-- `POST /services/buyout` (`dis.controller.ts:449-452`) → `request` (`buyout.service.ts:53-66`): lock the item. It must be owned by the caller,
+- `POST /services/buyout` (`dis.controller.ts:457-460`) → `request` (`buyout.service.ts:53-66`): lock the item. It must be owned by the caller,
   `stored` and unheld. Then `requests.create` (billed).
-- `POST /services/buyout/:requestId/quote` (operator/admin, `dis.controller.ts:516-524`) → `quote` (`:76-104`). The form requires
+- `POST /services/buyout/:requestId/quote` (operator/admin, `dis.controller.ts:524-532`) → `quote` (`:76-104`). The form requires
   `offerMinor > 0`, a non-empty `rationale` and `itemVerified === true`. The request must be `in_progress`. `setStatus`
   merges `{stage:'quoted', offerMinor, rationale, quotedBy, quotedAt}` and emits `buyout_quoted` to the
   owner. Because the status stays `in_progress`, **an operator can re-quote** and overwrite the figure until the
@@ -5424,7 +5428,7 @@ The same file also covers these cases:
 | `apps/api/src/modules/mkt/mkt.schema.ts` | `listing`, `transaction`, `offer`, `swap_proposal` and their enums | `listing :11`, `transaction :24`, `offer :41` (`proposedBy :57`), `swapProposal :64` |
 | `apps/api/src/modules/mkt/mkt.controller.ts` | `/marketplace` listings, reads, purchase. `BROWSE_SORTS` sits between imports, and the storefront docblock is misplaced above `tradable`. | `list :42`, `mine :74`, `myOffers :80`, `collector :89`, `tradable :102`, `storefront :111`, `create :117`, `detail :122`, `reprice :128`, `requestRemove :133`, `confirmRemove :138`, `purchase :143` (fallback key `:149`) |
 | `apps/api/src/modules/mkt/listing.service.ts` | Create, reprice, two-step removal | `create :28`, `reprice :47`, `requestRemove :57`, `confirmRemove :66` |
-| `apps/api/src/modules/mkt/browse.service.ts` | Public shelf with SQL filters/sort. Public detail returns the full item row. | `list :47`, `detail :92`, `newestImageUrl :114` |
+| `apps/api/src/modules/mkt/browse.service.ts` | Public shelf with SQL filters/sort. Public detail returns the full item row. | `list :47`, `detail :102`, `newestImageUrl :139` |
 | `apps/api/src/modules/mkt/market-read.service.ts` | The read side: my listings/offers/swaps, counterparty lookup, serial lookup, storefront | `counterparty :40`, `tradableItem :77`, `myListings :120`, `myOffers :174` (`yourTurn :214`), `mySwaps :226`, `storefront :300` |
 | `apps/api/src/modules/mkt/purchase.service.ts` | The atomic sale: locks, fee, waiver, ledger, custody, transaction, outbox, idempotency | `purchase :65`, replay `:72`, locks `:88`/`:97`, fee `:105`, `waive :117`, balance `:121`, ledger `:128-141`, custody `:145-146`, txn `:150`, outbox `:170`, save `:180` |
 | `apps/api/src/modules/mkt/offer.controller.ts` | `POST listings/:id/offers`, `POST offers/:id/respond` (accept/reject/counter) | `submit :23`, `respond :28` (default key `:35`) |
@@ -5507,7 +5511,7 @@ To read it, keep three ideas in mind:
 
 Routes without `@Roles` are open to any authenticated user. Operator routes are
 `@Roles('warehouse_operator', 'admin')`. The grading approval route is `@Roles('admin')`
-(`apps/api/src/modules/dis/dis.controller.ts:266`). RBAC and the audit interceptor, which records
+(`apps/api/src/modules/dis/dis.controller.ts:274`). RBAC and the audit interceptor, which records
 every successful POST, are described in §4.
 
 <a id="s8-2"></a>
@@ -5596,10 +5600,10 @@ requested (PENDING) --accept--> in_progress (ACCEPTED) --type-specific complete-
 | Transition | Where | Guard |
 |---|---|---|
 | (none) → `requested` | `create` (`service.service.ts:66-122`) | blocked balance, duplicate guard, billing |
-| `requested → in_progress` | `accept` → `transition` (`service.service.ts:208-225`) | row locked `FOR UPDATE`, status must equal `requested` |
-| `requested → cancelled` | `deny` → `transition` (`service.service.ts:213-215`) | same |
-| `in_progress → completed` | each type's `complete` → `completeWithFulfillment` (`service.service.ts:256-291`) | `assertAccepted` (`service.service.ts:228-232`) is an in-memory check on a row read *before* the lock |
-| any → any | `setStatus` (`service.service.ts:234-248`) | none. It locks the row and writes whatever it is told, merging `mergeFields` into `type_fields` |
+| `requested → in_progress` | `accept` → `transition` (`service.service.ts:216-233`) | row locked `FOR UPDATE`, status must equal `requested` |
+| `requested → cancelled` | `deny` → `transition` (`service.service.ts:221-223`) | same |
+| `in_progress → completed` | each type's `complete` → `completeWithFulfillment` (`service.service.ts:264-299`) | `assertAccepted` (`service.service.ts:236-240`) is an in-memory check on a row read *before* the lock |
+| any → any | `setStatus` (`service.service.ts:242-256`) | none. It locks the row and writes whatever it is told, merging `mergeFields` into `type_fields` |
 
 `transition` is a real compare-and-swap. It locks the row, compares the status, then updates it,
 so two operators clicking Accept get one 200 and one 409 ("Only a pending request can be
@@ -5619,19 +5623,19 @@ Several services bypass the machine on purpose:
   `submissionId`, all while the status stays `in_progress` (§8.9–8.10).
 
 **Queues and reads.**
-- `GET /services/mine` → `listMine` (`service.service.ts:178-184`): the caller's own requests,
+- `GET /services/mine` → `listMine` (`service.service.ts:186-192`): the caller's own requests,
   newest first.
-- `GET /services/queue` (operator/admin) → `listQueue` (`service.service.ts:187-205`):
+- `GET /services/queue` (operator/admin) → `listQueue` (`service.service.ts:195-213`):
   `requested` + `in_progress`, oldest first, left-joined to the requester's email and the item's
   description.
-- `GET /services/requests/:id` → `get` (`service.service.ts:171-175`). It has **no role gate and
-  no ownership check** (`dis.controller.ts:218-221`; `RolesGuard` lets any authenticated user
-  through a route without `@Roles`, `apps/api/src/modules/sec/roles.guard.ts:22`). Any signed-in
-  collector who knows a request's uuid can read its `type_fields` and `fulfillment`: declared
-  values, inspection findings, custom-request text, quotes. The uuid is unguessable in practice,
-  but this is still a missing check. See §8.17.
+- `GET /services/requests/:id` → `getFor` (`dis.controller.ts:226-229`,
+  `service.service.ts:178-183`): the requester or staff (`warehouse_operator`, `admin`) get the
+  row; anyone else gets **404**, as the helpdesk answers for somebody else's ticket, so the route
+  doesn't confirm the request exists. *(Fixed 19 September 2026: it had no role gate and no
+  ownership check, so any signed-in account could read any request — declared values, inspection
+  findings, quotes. Pinned by `tests/integration/privacy.test.ts`.)*
 - The vault drawer gets the item's open requests with the item itself
-  (`apps/api/src/modules/vlt/vault.service.ts:454-470`), so the UI can say "already requested"
+  (`apps/api/src/modules/vlt/vault.service.ts:463-479`), so the UI can say "already requested"
   instead of offering the button again.
 
 In the web console (`apps/web/src/areas/warehouse/ServiceQueue.tsx:138-165`) a `requested` row
@@ -5731,7 +5735,7 @@ keeps both its charge and its spent allowance. Nothing in DIS refunds (§8.17).
 ### 8.6 Closing a request: the fulfilment form
 
 `completeWithFulfillment(tx, requestId, operatorId, form, required, mergeFields)`
-(`service.service.ts:256-291`) is the shared way to close a request. The shipment dispatch form
+(`service.service.ts:264-299`) is the shared way to close a request. The shipment dispatch form
 (§9) follows the same pattern: a request is not done until every required field carries a real
 value. For each name in `required`, the value counts as missing if it is:
 
@@ -5741,7 +5745,7 @@ if (typeof value === 'string') return value.trim() === '';
 if (typeof value === 'number') return !Number.isFinite(value) || value <= 0;
 if (typeof value === 'boolean') return value === false; // e.g. "item verified"
 ```
-(`service.service.ts:264-271`). Any gap returns 400 `Fulfillment form is incomplete` with
+(`service.service.ts:272-279`). Any gap returns 400 `Fulfillment form is incomplete` with
 `{ missing: [...] }`. Otherwise the row is locked, and `status = 'completed'`, the merged
 `type_fields`, `fulfillment = form`, `fulfilled_by` and `fulfilled_at` are written in one UPDATE.
 
@@ -5804,7 +5808,7 @@ so that two reports on the same card can be compared.
 
 **Vocabulary.** The areas are `corners, edges, surface, centering, creases`
 (`INSPECTION_AREAS`, `grading-tiers.ts:149`, served by `GET /services/inspection/areas`,
-`dis.controller.ts:336-339`). The severities are `clean, minor, notable` (`media.service.ts:41`).
+`dis.controller.ts:344-347`). The severities are `clean, minor, notable` (`media.service.ts:41`).
 Both are closed lists.
 
 **Request** (`media.service.ts:136-151`). The item must be `stored` or `listed`. The requested
@@ -6097,7 +6101,7 @@ always outside the window.
 
 **Purpose.** Give one item away. It leaves the donor's vault, but the record is never deleted and
 always has exactly one owner, which after donation is the platform custodian account
-`platform@bault.dev` (`platformAccountId`, `service.service.ts:294-303`). If that account is not
+`platform@bault.dev` (`platformAccountId`, `service.service.ts:302-311`). If that account is not
 seeded, the donation fails with 400.
 
 - **Step 1** `request` (`donation.service.ts:36-42`), `POST /services/donation`. The caller must
@@ -6178,13 +6182,12 @@ Edge cases, verified by code reading. No integration test covers custom requests
 
 | Case | What happens | Where |
 |---|---|---|
-| Operator denies, or admin refuses approval | Status becomes `cancelled`. The charge and any spent membership allowance stay. No DIS code path refunds or credits. The UI calls deny "Decline". | `service.service.ts:213-225`, `grading.service.ts:146` |
+| Operator denies, or admin refuses approval | Status becomes `cancelled`. The charge and any spent membership allowance stay. No DIS code path refunds or credits. The UI calls deny "Decline". | `service.service.ts:221-233`, `grading.service.ts:146` |
 | Stale confirmation token (donation, cull, de-slab) | `confirm*` re-checks nothing about the item: not the owner, not `holdFlag`, not whether it is graded. Within the 300 s TTL, an item gifted to someone else through a trade (the state stays `stored`, `apps/api/src/modules/mkt/trade.service.ts:109`) could be donated or culled from the *new* owner, because `transferOwnership` does not compare owners (`custody.service.ts:147-158`). A hold placed after step 1 does not stop the confirm, because `changeState` does not read `holdFlag`. An illegal state change, such as `listed → donated`, does abort it. | `donation.service.ts:45-54`, `disposal-services.service.ts:73-87,171-196` |
 | Double-submitted completion | `assertAccepted` runs on an unlocked read. Two concurrent completes of the same request both run their side effects: two image versions, two history rows, or a double lot split. | §8.3 |
 | Wrong-type completion | Photography and grading completions accept any accepted request id. | §8.6 |
-| `GET /services/requests/:id` | Any authenticated user can read any request. | `dis.controller.ts:218-221` |
 | `service_request.charge_id` | Never written, and the charge carries `referenceId = itemId`. To tie a charge to a request you must match by item and time. | `billing.service.ts:76`, `dis.schema.ts:53` |
-| Platform account missing | Donation and "cull, donate" fail with 400 "Platform custodian account not seeded". | `service.service.ts:301` |
+| Platform account missing | Donation and "cull, donate" fail with 400 "Platform custodian account not seeded". | `service.service.ts:309` |
 | Seed rows the API cannot produce | The seed inserts a `donation` in status `requested` (`seed.ts:879`) and a legacy `third_party_grading` row whose `type_fields` are `{ gradingBody, targetGrade, submittedAt }`, with no tier or declared value (`seed.ts:817`). The donation, if accepted from the queue, has no completion route. The grading row appears in `readyFor('PSA')` because a missing `approvalState` defaults to `not_required`. | `seed.ts:817,879` |
 
 <a id="s8-18"></a>
@@ -6230,8 +6233,8 @@ All paths are under `apps/api/src/modules/dis/`.
 | File | Role | Key functions / lines |
 |---|---|---|
 | `dis.schema.ts` | `service_request` table and its two enums | type enum `:12-36`; status enum `:38-43`; table `:45-66`; `code` `:47`; `charge_id` `:53`; fulfilment columns `:61-63` |
-| `service.service.ts` | Request framework: create and bill, duplicate guard, queue, accept/deny, fulfilment closer, platform account | `ServiceType` `:14-26`; `SERVICE_LABEL` `:35-48`; `create` `:66-122`; `assertNotAlreadyOpen` `:142-169`; `get` `:171`; `listMine` `:178`; `listQueue` `:187`; `accept`/`deny`/`transition` `:208-225`; `assertAccepted` `:228`; `setStatus` `:234`; `completeWithFulfillment` `:256-291`; `platformAccountId` `:294` |
-| `dis.controller.ts` | `/services/*` routes and DTOs, including the consignment/buyout/transfer routes described in §7 | DTOs `:35-187`; mine/queue/get `:206-221`; accept/deny `:224-233`; photography `:236-244`; grading and submissions `:255-332`; inspection areas, video, inspection `:336-369`; deslab `:372-390`; cull `:394-407`; lot split `:410-423`; donation `:426-433`; consignment channels `:442` (§7); buyout `:449-452, 516-535` (§7); custom `:465-513`; consignment `:537-545` (§7); warehouse transfer `:548-557` (§7) |
+| `service.service.ts` | Request framework: create and bill, duplicate guard, queue, accept/deny, fulfilment closer, platform account | `ServiceType` `:14-26`; `SERVICE_LABEL` `:35-48`; `create` `:66-122`; `assertNotAlreadyOpen` `:142-169`; `get` `:171`; `listMine` `:186`; `listQueue` `:195`; `accept`/`deny`/`transition` `:216-233`; `assertAccepted` `:236`; `setStatus` `:242`; `completeWithFulfillment` `:264-299`; `platformAccountId` `:302` |
+| `dis.controller.ts` | `/services/*` routes and DTOs, including the consignment/buyout/transfer routes described in §7 | DTOs `:35-187`; mine/queue/get `:206-229`; accept/deny `:232-241`; photography `:244-252`; grading and submissions `:263-340`; inspection areas, video, inspection `:344-377`; deslab `:380-398`; cull `:402-415`; lot split `:418-431`; donation `:434-441`; consignment channels `:450` (§7); buyout `:457-460, 516-535` (§7); custom `:473-521`; consignment `:545-553` (§7); warehouse transfer `:556-565` (§7) |
 | `dis.module.ts` | Nest wiring: 10 DIS providers plus `IntakeService` | `:19-34` |
 | `photography.service.ts` | Professional photography request and completion (new `professional` media version) | `REQUIRED` `:19`; `request` `:41`; `complete` `:53-83` |
 | `media.service.ts` | Video review and condition inspection | `VIDEO_REQUIRED` `:20`; `SEVERITIES` `:41`; `assertOwnedAndPresent` `:68`; `requestVideo` `:81`; `completeVideo` `:97`; `requestInspection` `:136`; `completeInspection` `:160-193` |
@@ -6248,7 +6251,7 @@ enums, `grading_submission`, the submission index); `…/0023_ask_for_something_
 `apps/api/src/modules/cst/lifecycle.ts` (`at_grader`, `discarded`);
 `apps/api/src/modules/pay/billing.service.ts` (fee resolution and allowances);
 `apps/api/src/modules/mem/tiers.ts` (allowances); `apps/api/src/modules/inv/intake.service.ts:485`
-(`breakLot`); `apps/api/src/modules/vlt/vault.service.ts:454` (open requests on the drawer);
+(`breakLot`); `apps/api/src/modules/vlt/vault.service.ts:463` (open requests on the drawer);
 `apps/web/src/areas/warehouse/ServiceQueue.tsx` and `GradingSubmissions.tsx` (operator screens,
 §12); `tests/integration/dis-services.test.ts` and `tests/integration/dis-item-services.test.ts`
 (§14).
@@ -6327,8 +6330,8 @@ the global guard unless marked `@Public`, and staff-only where `@Roles` appears 
 | Method + path | Who | Handler → service |
 | --- | --- | --- |
 | `GET countries` | signed in | `apps/api/src/modules/shp/shp.controller.ts:177` → `shippingCountries()` |
-| `GET services` | signed in | `:182` → `ShipmentService.services` (`apps/api/src/modules/shp/shipment.service.ts:223`) |
-| `POST quote` | signed in | `:194` → `ShipmentService.quote` (`apps/api/src/modules/shp/shipment.service.ts:255`) |
+| `GET services` | signed in | `:182` → `ShipmentService.services` (`apps/api/src/modules/shp/shipment.service.ts:224`) |
+| `POST quote` | signed in | `:194` → `ShipmentService.quote` (`apps/api/src/modules/shp/shipment.service.ts:256`) |
 | `POST shipments` | signed in | `:199` → `ShipmentService.create` (`:509`) |
 | `GET shipments` | signed in (staff see all) | `:210` → `listFor` (`:580`) |
 | `GET/POST groups…` | signed in | `:217-251` → `GroupShipmentService` |
@@ -6337,7 +6340,7 @@ the global guard unless marked `@Public`, and staff-only where `@Roles` appears 
 | `POST white-glove/:id/accept` | owner | `:277-280` → `acceptQuote` |
 | `GET pickup/shows`, `POST pickup` | signed in | `:284-292` |
 | `GET direct/terms`, `GET direct/:parcelId/eligibility`, `POST direct/:parcelId` | signed in | `:296-313` → `DirectShipService` |
-| `GET shipments/:id/rates` | owner/staff | `:317` → `rates` (`apps/api/src/modules/shp/shipment.service.ts:740`) |
+| `GET shipments/:id/rates` | owner/staff | `:317` → `rates` (`apps/api/src/modules/shp/shipment.service.ts:741`) |
 | `POST shipments/:id/select-rate` | owner/staff | `:322` → `selectRate` (`:751`) |
 | `POST shipments/:id/choose-for-me` | owner/staff | `:328` → `selectRecommended` (`:780`) |
 | `POST shipments/:id/pay` | owner/staff | `:334` → `pay` (`:921`) |
@@ -6347,13 +6350,13 @@ the global guard unless marked `@Public`, and staff-only where `@Roles` appears 
 | `GET destinations/:country` | **public** | `:383-387` → `destinationGuidance` |
 | `POST shipments/:id/hand-over` | operator/admin | `:390-394` → `handOver` |
 | `POST shipments/:id/dispatch` | operator/admin | `:396-405` → `DispatchService.dispatch` |
-| `GET shipments/:id` | owner/staff | `:407` → `track` (`apps/api/src/modules/shp/shipment.service.ts:1008`) |
+| `GET shipments/:id` | owner/staff | `:407` → `track` (`apps/api/src/modules/shp/shipment.service.ts:1009`): the tracking view plus `items` (id, serial, barcode, description), so the dispatch screen can match a scanned label (§12) |
 
 Route order matters. `GET shipments` and the `groups` routes are declared before `shipments/:id`
 because Nest matches routes in declaration order (`apps/api/src/modules/shp/shp.controller.ts:204-215`).
 
 Ownership is enforced in the service, not the route. `ShipmentService.loadFor`
-(`apps/api/src/modules/shp/shipment.service.ts:667-672`) lets staff (`warehouse_operator`, `admin`) act on any shipment. It
+(`apps/api/src/modules/shp/shipment.service.ts:668-673`) lets staff (`warehouse_operator`, `admin`) act on any shipment. It
 lets a collector act only on their own, and returns **404, not 403**, for someone else's, because
 admitting that the id exists is itself a leak.
 
@@ -6440,10 +6443,10 @@ The enum (`apps/api/src/modules/shp/shp.schema.ts:9-33`) has eleven values. Only
 
 | From → to | Trigger | Guard (where enforced) |
 | --- | --- | --- |
-| — → `requested` | `create` (`apps/api/src/modules/shp/shipment.service.ts:568`), `requestHandDelivery` (`apps/api/src/modules/shp/human-fulfilment.service.ts:142`) | items shippable and free |
+| — → `requested` | `create` (`apps/api/src/modules/shp/shipment.service.ts:569`), `requestHandDelivery` (`apps/api/src/modules/shp/human-fulfilment.service.ts:142`) | items shippable and free |
 | — → `rates_selected` | `requestPickup` (`apps/api/src/modules/shp/human-fulfilment.service.ts:367`), `DirectShipService.request` (`apps/api/src/modules/shp/direct-ship.service.ts:192`) | paid on the spot |
-| `requested`/`rates_selected`/`awaiting_payment` → `rates_selected` or `awaiting_payment` | `selectRate`/`selectRecommended` → `settle` | status check `apps/api/src/modules/shp/shipment.service.ts:753`; not merged `:756`; balance `:831` |
-| `awaiting_payment` → `rates_selected` | `pay` | `apps/api/src/modules/shp/shipment.service.ts:923`, balance `:930` |
+| `requested`/`rates_selected`/`awaiting_payment` → `rates_selected` or `awaiting_payment` | `selectRate`/`selectRecommended` → `settle` | status check `apps/api/src/modules/shp/shipment.service.ts:754`; not merged `:756`; balance `:831` |
+| `awaiting_payment` → `rates_selected` | `pay` | `apps/api/src/modules/shp/shipment.service.ts:924`, balance `:930` |
 | `requested` → `rates_selected` (hand delivery) | `acceptQuote` | `apps/api/src/modules/shp/human-fulfilment.service.ts:208-219` |
 | `requested`/`awaiting_payment`/`rates_selected` → `cancelled` | `ShipmentEditService.cancel` | `apps/api/src/modules/shp/shipment-edit.service.ts:250-257` |
 | `requested` → `cancelled` (source of a merge) | `merge` | `apps/api/src/modules/shp/shipment-edit.service.ts:218-228` |
@@ -6455,7 +6458,7 @@ The enum (`apps/api/src/modules/shp/shp.schema.ts:9-33`) has eleven values. Only
 Three facts about this machine:
 
 1. **`picking`, `packed` and `labeled` are dead values.** No code writes them (grep over `apps/api`
-   and `apps/worker`). They appear only in `OPEN_STATUSES` (`apps/api/src/modules/shp/shipment.service.ts:178-185`). Dispatch
+   and `apps/worker`). They appear only in `OPEN_STATUSES` (`apps/api/src/modules/shp/shipment.service.ts:179-186`). Dispatch
    goes straight from `rates_selected` to `shipped`. The edit window's documented rule, "open while
    `requested`", is therefore the real rule. The cancel refusal message ("already being packed")
    fires only for `shipped` and later.
@@ -6466,8 +6469,8 @@ Three facts about this machine:
    [§9.20](#s9-20).
 3. **`cancelled` is the only state that releases items.** Items in an open shipment never leave
    `stored`. What an open shipment takes from them is eligibility for another shipment
-   (`assertItemsFree`, `apps/api/src/modules/shp/shipment.service.ts:198-220`). Leaving `OPEN_STATUSES` is the release
-   (comment at `apps/api/src/modules/shp/shipment.service.ts:1002-1004`).
+   (`assertItemsFree`, `apps/api/src/modules/shp/shipment.service.ts:199-221`). Leaving `OPEN_STATUSES` is the release
+   (comment at `apps/api/src/modules/shp/shipment.service.ts:1003-1005`).
 
 `delivered` and `exception` do not touch custody. Items became `shipped` (terminal, `apps/api/src/modules/cst/lifecycle.ts:29`)
 at dispatch.
@@ -6655,7 +6658,7 @@ like a carrier limitation (`apps/api/src/modules/shp/countries.ts:6-24`).
 - **Premium**: `insurancePremiumMinor(v) = v <= 0 ? 0 : max(ceil(v × 150 / 10,000), 200)`
   (`:44-48`). $600 gives 900 ($9.00). $100 gives max(150, 200) = 200 ($2.00).
 - **Forced signature**: `signatureForced(v) = v > 50,000` (`:51`). `quote`, `create` and `update`
-  OR it into the requested flag (`apps/api/src/modules/shp/shipment.service.ts:269`, `:524`,
+  OR it into the requested flag (`apps/api/src/modules/shp/shipment.service.ts:270`, `:524`,
   `apps/api/src/modules/shp/shipment-edit.service.ts:85-86`), so a quote shows the true price of the cover. The signature
   surcharge is priced by the carrier (sandbox `signatureMinor`; EasyPost `delivery_confirmation:
   'SIGNATURE'` at rate time, `packages/adapters/src/easypost.ts:186`).
@@ -6668,10 +6671,10 @@ like a carrier limitation (`apps/api/src/modules/shp/countries.ts:6-24`).
 - **Customs value** is needed exactly when `needsCustoms(country)`, i.e. `country !== 'US'`
   (`:117-119`). Everything ships from the US.
 - **Add-on price** comes from the pricing rule `shipping_addon:<key>` if one exists, otherwise from
-  the catalogue (`ShipmentService.priceAddOns`, `apps/api/src/modules/shp/shipment.service.ts:462-473`). The seed has
+  the catalogue (`ShipmentService.priceAddOns`, `apps/api/src/modules/shp/shipment.service.ts:463-474`). The seed has
   `shipping_addon:gps_tracker` = $30 (`apps/api/src/db/seed.ts:431`).
 - **Rush** is a **Bault handling charge**, not a carrier one. Its price is `tryPrice('shipping_rush')`
-  (seed $10, `apps/api/src/db/seed.ts:419`), added to handling (`apps/api/src/modules/shp/shipment.service.ts:342-343`). The adapter receives
+  (seed $10, `apps/api/src/db/seed.ts:419`), added to handling (`apps/api/src/modules/shp/shipment.service.ts:343-344`). The adapter receives
   `rush` and ignores it. The carrier's transit estimate is left alone.
 - **Handling** is `pricing.price('shipping')`, which is $0 in the seed (`apps/api/src/db/seed.ts:300`). `price()`
   (not `tryPrice`) is used, so deleting that rule makes every quote throw (§6 owns pricing
@@ -6685,7 +6688,7 @@ like a carrier limitation (`apps/api/src/modules/shp/countries.ts:6-24`).
 1. Global guards authenticate the session (§4). Class-validator checks `CreateShipmentDto`
    (`apps/api/src/modules/shp/shp.controller.ts:47-58`, options in `ShipmentOptionsDto` `:31-45`). `boxSize` must be one of
    `SHIPPING_BOX_KEYS` or null.
-2. `ShpController.quote` → `ShipmentService.quote(userId, dto)` (`apps/api/src/modules/shp/shipment.service.ts:255-315`).
+2. `ShpController.quote` → `ShipmentService.quote(userId, dto)` (`apps/api/src/modules/shp/shipment.service.ts:256-316`).
 3. `loadShippableItems` (`apps/api/src/modules/shp/parcel-profile.service.ts:55-71`): de-duplicates the ids and refuses an
    empty list. It requires every id to exist, be owned by the caller (403), not be on hold
    (`ITEM_ON_HOLD` 409) and be `stored` (409). Quote does **not** call `assertItemsFree`, so you can
@@ -6713,10 +6716,10 @@ like a carrier limitation (`apps/api/src/modules/shp/countries.ts:6-24`).
    records for any POST (§4).
 
 Ineligible services are **returned**, carrying their problems, not filtered out
-(`apps/api/src/modules/shp/shipment.service.ts:317-324`), so the UI can list them under "not available for this parcel" with
+(`apps/api/src/modules/shp/shipment.service.ts:318-325`), so the UI can list them under "not available for this parcel" with
 the reason.
 
-#### `pickBest` (`apps/api/src/modules/shp/shipment.service.ts:489-503`)
+#### `pickBest` (`apps/api/src/modules/shp/shipment.service.ts:490-504`)
 
 ```ts
 const score = (r: QuotedRate) =>
@@ -6756,7 +6759,7 @@ a non-member or a lapsed cycle. Otherwise it returns a `ShippingCover` (`:33-41`
 | Registry (`:146`) | 3 | $1,000 | $30 | yes (`rush_included`, `:163`) | — |
 | Trust (`:166`) | 6 | $2,500 | $100 | yes | 2 per cycle (`:179`) |
 
-How `priceServices` applies it (`apps/api/src/modules/shp/shipment.service.ts:348-366`, `:392-406`):
+How `priceServices` applies it (`apps/api/src/modules/shp/shipment.service.ts:349-367`, `:392-406`):
 
 - **Insurance**: when insured > 0 and an insured shipment is left, the tier pays
   `min(premium, premium(min(insured, cap)))`. So the member pays `premium(insured) −
@@ -6774,7 +6777,7 @@ The applied figures travel on each `QuotedRate` as `membershipCover: AppliedShip
 `handlingMinor`, `addOnsMinor`, `costMinor`) are left unchanged.
 
 **Stored, then spent at settle.** `settle` writes `membership_cover` on the shipment in both
-branches (`apps/api/src/modules/shp/shipment.service.ts:823`). The allowance is consumed only when money moves:
+branches (`apps/api/src/modules/shp/shipment.service.ts:824`). The allowance is consumed only when money moves:
 `spendShippingCover(tx, …)` runs inside the charge transaction, both in `settle` (`:850`) and in
 `pay` (`:943`). `spendShippingCover` (`apps/api/src/modules/mem/membership.service.ts:649-685`) re-checks the tier, the live
 cycle and the rush perk. It increments `insured_shipments_used` and `postage_used_minor` in **one
@@ -6784,7 +6787,7 @@ quote, it throws 409 "Your membership allowance has changed since this parcel wa
 transaction rolls back without charging. A held shipment therefore spends the cover it was quoted
 or fails; it never silently charges more.
 
-`chargeFor` returns early when `totalMinor <= 0` (`apps/api/src/modules/shp/shipment.service.ts:874`). A parcel the tier
+`chargeFor` returns early when `totalMinor <= 0` (`apps/api/src/modules/shp/shipment.service.ts:875`). A parcel the tier
 paid for entirely produces no charge row and no ledger row, but the cover is still spent.
 
 <a id="s9-9"></a>
@@ -6821,7 +6824,7 @@ three to one.
 **7. Sandbox price** = `round((base + perKg × billableKg) × distance)` + signature. US distance
 multiplier = 1 (`packages/adapters/src/shipping.ts:246-252`). Only domestic services are returned for a US destination
 (`:270`). ePacket, ePost and FedEx International are not in the adapter's answer, so
-`priceServices` skips them (`continue` at `apps/api/src/modules/shp/shipment.service.ts:388`) and they do not appear in the
+`priceServices` skips them (`continue` at `apps/api/src/modules/shp/shipment.service.ts:389`) and they do not appear in the
 quote at all.
 
 | Service | base | perKg | billable kg | carrier cost |
@@ -6882,7 +6885,7 @@ wallet it instead goes to `awaiting_payment` with `shortfallMinor = 293` and `pa
 <a id="s9-10"></a>
 ### 9.10 Creating, selecting, settling, paying later
 
-#### `create` (`apps/api/src/modules/shp/shipment.service.ts:509-574`)
+#### `create` (`apps/api/src/modules/shp/shipment.service.ts:510-575`)
 
 `wallet.assertNotBlocked` (a negative balance blocks new shipments; §6), then
 `loadShippableItems`, then `assertItemsFree` (`:198-220`: any id already in one of the caller's
@@ -6965,7 +6968,7 @@ service, "Not paid within the holding period" in the worker.
   is only `{country, postalCode}`. There is no street, so EasyPost's `address()` refuses it
   (`packages/adapters/src/easypost.ts:135-141`). The sandbox does not care.
 
-`create` freezes the destination into `destination_detail` (`apps/api/src/modules/shp/shipment.service.ts:556`). It is a
+`create` freezes the destination into `destination_detail` (`apps/api/src/modules/shp/shipment.service.ts:557`). It is a
 snapshot, not a reference, because the collector may edit the saved address later and "a parcel
 goes where it was quoted to go" (`apps/api/src/modules/shp/shp.schema.ts:56-64`).
 
@@ -6975,7 +6978,7 @@ created before migration 0028) it falls back to `{country, postalCode, name?}`, 
 will refuse with a sentence naming the missing street. That is intended, because a guessed street
 would be worse (`:52-60`).
 
-The **origin** is `originAddress()` (`apps/api/src/modules/shp/shipment.service.ts:444-459`): the first active `primary`
+The **origin** is `originAddress()` (`apps/api/src/modules/shp/shipment.service.ts:445-460`): the first active `primary`
 facility. It is `undefined` when that facility's `line1` matches `/placeholder|SET REAL ADDRESS/i`,
 so EasyPost refuses "needs an origin address" instead of rating from a fictional street. The
 forwarding site is never an origin.
@@ -6999,7 +7002,7 @@ forwarding site is never an origin.
    `matches = sizes equal && every expected id scanned`. Duplicate scans collapse in the Set, so a
    duplicate that hides a missing item fails the size check. A mismatch is a 409 "Verified items do
    not match the shipment" with `{expected, scanned}` in the details.
-6. `labelRequest(s, packageWeightGrams)` (`apps/api/src/modules/shp/shipment.service.ts:708-737`) rebuilds the parcel with
+6. `labelRequest(s, packageWeightGrams)` (`apps/api/src/modules/shp/shipment.service.ts:709-738`) rebuilds the parcel with
    `profileOf`. That re-runs `loadShippableItems`, so an item that went on hold, changed hands or left
    `stored` since the rate was chosen makes dispatch fail here. The weight sent is the **scale
    reading minus the box tare** (at least 1 g), or the estimated contents if there is no reading. The
@@ -7075,7 +7078,7 @@ cancelledFrom}`), then the status update (`cancelled`, `cancelledAt`, reason,
 In the sandbox no postage has been bought at `rates_selected`; the label is only bought at dispatch.
 The whole charge is kept and $25 is added on top. `GET /shipping/services` publishes
 `restockingFeeMinor` so the warning shown before the cancel button can state the figure
-(`apps/api/src/modules/shp/shipment.service.ts:231-239`). Cancel does not check `fulfilment_method` or `group_id`.
+(`apps/api/src/modules/shp/shipment.service.ts:232-240`). Cancel does not check `fulfilment_method` or `group_id`.
 
 <a id="s9-14"></a>
 ### 9.14 Shared parcels (`group-shipment.service.ts`)
@@ -7334,7 +7337,7 @@ Rates are sorted by cost. `buyLabel` fabricates `SBX…`. `getTracking` always r
 - Auth is HTTP Basic with the key as the username and an empty password (`:88-101`).
 
 **The catalogue-matching gap.** `priceServices` keeps an adapter rate only if `r.carrier ===
-service.carrier && r.serviceLevel === service.serviceLevel` exactly (`apps/api/src/modules/shp/shipment.service.ts:385-387`).
+service.carrier && r.serviceLevel === service.serviceLevel` exactly (`apps/api/src/modules/shp/shipment.service.ts:386-388`).
 `EasyPostShippingAdapter` passes EasyPost's `service` string through unchanged (`packages/adapters/src/easypost.ts:205`),
 and the EasyPost contract fixtures use `'GroundAdvantage'` and `'FEDEX_2_DAY'`
 (`tests/contract/easypost-adapter.test.ts:48`, `:57`). Those do not equal the catalogue's
@@ -7367,7 +7370,7 @@ API.
 
 | Case | What happens |
 | --- | --- |
-| `selectRate` on a shipment already `rates_selected` | Allowed (`apps/api/src/modules/shp/shipment.service.ts:753`). `settle` writes a **second** charge and ledger debit and spends cover again. The first charge is not refunded. A double-click on "select" charges twice. SHP uses no idempotency key (grep). |
+| `selectRate` on a shipment already `rates_selected` | Allowed (`apps/api/src/modules/shp/shipment.service.ts:754`). `settle` writes a **second** charge and ledger debit and spends cover again. The first charge is not refunded. A double-click on "select" charges twice. SHP uses no idempotency key (grep). |
 | Two concurrent `pay` calls, or `selectRate` on two shipments | The balance is read outside the transaction with no lock (`:813`, `:929`). Both can pass and push the wallet negative *(Inferred race)*. |
 | Item listed, sold, graded or held while on an open shipment | Other modules do not check `OPEN_STATUSES` (nothing outside SHP uses `ShipmentService`). The shipment then fails at `rates`/`dispatch` with "is listed, not stored" or `ITEM_ON_HOLD`. |
 | Wallet short at select | `awaiting_payment` for 7 days, returning `shortfallMinor`. Nothing is charged. |
@@ -7398,7 +7401,7 @@ API.
   why the cheap option is gone. The cost is a heavier response and a UI that must group eligible and
   ineligible rates.
 - **"Choose for me" as arithmetic.** $2.50 a day is arbitrary, but it can be stated and argued with
-  (`apps/api/src/modules/shp/shipment.service.ts:56-63`). Using the catalogue's `transitDaysMax` rather than the carrier's
+  (`apps/api/src/modules/shp/shipment.service.ts:57-64`). Using the catalogue's `transitDaysMax` rather than the carrier's
   estimate keeps the choice stable across quotes. Adding back the postage credit keeps membership
   from distorting the recommendation.
 - **Hold rather than go negative.** A negative balance blocks every other service (§6), so an
@@ -7440,7 +7443,7 @@ API.
 | `apps/api/src/modules/shp/parcel-profile.service.ts` | Items → parcel: validation, weights, box, destination, customs lines, profile | `loadShippableItems` :55-71, `measure` :74-87, `boxFor` :95-124, `resolveDestination` :134-172, `buildCustomsLines` :183-215, `toProfile` :218-241 |
 | `apps/api/src/modules/shp/shipment-edit.service.ts` | Edit, merge, cancel within the `requested` window | `loadEditable` :48-61, `update` :70-133, `merge` :146-232, `cancel` :246-319 (fee :260) |
 | `apps/api/src/modules/shp/shipment-group.schema.ts` | `shipment_group` table and status enum | enum :26-35, table :37-65 |
-| `apps/api/src/modules/shp/shipment.service.ts` | Quote, create, rate, select, settle, pay, list, track, label request | `DAY_OF_WAITING_MINOR` :63, `OPEN_STATUSES` :178-185, `assertItemsFree` :198-220, `services` :223, `quote` :255-315, `priceServices` :325-431, `originAddress` :444-459, `priceAddOns` :462, `pickBest` :489-503, `create` :509-574, `listFor` :580, `loadFor` :667, `profileOf` :675-691, `labelRequest` :708-737, `rates` :740, `selectRate` :751-771, `selectRecommended` :780-794, `settle` :806-862, `chargeFor` :872-911, `pay` :921-970, `expireUnpaid` :977-1006 (unused), `track` :1008 |
+| `apps/api/src/modules/shp/shipment.service.ts` | Quote, create, rate, select, settle, pay, list, track, label request | `DAY_OF_WAITING_MINOR` :64, `OPEN_STATUSES` :179-186, `assertItemsFree` :199-221, `services` :224, `quote` :256-316, `priceServices` :326-432, `originAddress` :445-460, `priceAddOns` :463, `pickBest` :490-504, `create` :510-575, `listFor` :581, `loadFor` :668, `profileOf` :676-692, `labelRequest` :709-738, `rates` :741, `selectRate` :752-772, `selectRecommended` :781-795, `settle` :807-863, `chargeFor` :873-912, `pay` :922-971, `expireUnpaid` :978-1007 (unused), `track` :1009 |
 | `apps/api/src/modules/shp/shipping-options.ts` | Insurance, signature, add-ons, restocking, payment window, customs defaults, option checks | constants :22-42, `insurancePremiumMinor` :44-48, `signatureForced` :51, `SHIPMENT_ADD_ONS` :68-77, `addOnFeeAction` :86, `RESTOCKING_FEE_MINOR` :102, `PAYMENT_WINDOW_DAYS` :105, `needsCustoms` :117, `DEFAULT_HS_CODE` :129, `checkOptions` :146-190 |
 | `apps/api/src/modules/shp/shp.controller.ts` | `/shipping/*` routes and DTOs | DTOs :31-146, countries :177, services :182, quote :194, create :199, list :210, groups :217-251, white glove :255-280, pickup :284-292, direct :296-313, rates/select/choose/pay :317-337, patch/merge/cancel :340-354, customs :357-372, destinations (public) :383-387, hand-over :390-394, dispatch :396-405, track :407 |
 | `apps/api/src/modules/shp/shp.module.ts` | Module wiring; exports only `ShipmentService` | :13-27 |
@@ -7578,7 +7581,7 @@ membership per cycle, unique on `(membership_id, period_start)` (`membership_per
 
 The schema calls the period table append-only, but that is a convention, not a guard: its counters
 are `UPDATE`d on every covered action, and it is **not** in the append-only trigger list
-(`apps/api/src/db/sql/0001_append_only.sql:42`). The durable record of what was charged is
+(`apps/api/src/db/sql/0001_append_only.sql:44`). The durable record of what was charged is
 `charge` + `ledger_record` (§6); the comment at `mem.schema.ts:88-96` states that choice (a counter
 map rather than a consumption log, because "how many left" is the only question asked of it).
 
@@ -7587,7 +7590,7 @@ etc.). The seed generates those rules from the catalogue (`apps/api/src/db/seed.
 `parameters` carrying `storedItems`, `insuredShipments`, `insuredValueCapMinor`,
 `postageCreditMinor` and `commissionWaivedOnMinor`. Only `storedItems` is actually read from
 there — by the worker's storage sweep, which has no access to `tiers.ts`
-(`apps/worker/src/jobs/storage-fee.ts:141-156`). Everything else the API reads from `tiers.ts`.
+(`apps/worker/src/jobs/storage-fee.ts:150-166`). Everything else the API reads from `tiers.ts`.
 
 <a id="s10-3"></a>
 ### 10.3 The membership state machine
@@ -7763,11 +7766,11 @@ round(2,500 × 30,000 / 50,000)) = 1,500`. The seller pays 1,000 ($10.00) and th
 - **`shippingCover(userId, tx?)`** (`membership.service.ts:616-636`) is read-only. It reports
   insured shipments left, the value cap, postage credit left, whether rush is included
   (`perks.includes('rush_included')`) and per-add-on counts for every `shipping_addon:*` action in
-  the tier. `ShipmentService` passes it into quoting (`apps/api/src/modules/shp/shipment.service.ts:298`,
+  the tier. `ShipmentService` passes it into quoting (`apps/api/src/modules/shp/shipment.service.ts:299`,
   `:744`), and the chosen rate's `AppliedShippingCover` is stored on the shipment
   (`shipment.membership_cover`, migration `0030`).
 - **`spendShippingCover(tx, userId, applied)`** (`membership.service.ts:649-685`) runs inside the
-  payment transaction (`shipment.service.ts:850`, `:943`). One conditional `UPDATE` increments
+  payment transaction (`shipment.service.ts:851`, `:943`). One conditional `UPDATE` increments
   `insured_shipments_used` and `postage_used` with `WHERE … used + x <= cap`; add-ons go through
   `consume`. If anything changed since the quote — tier differs, cycle lapsed, rush no longer
   included, allowance taken — it throws 409 `CONFLICT` ("Your membership allowance has changed
@@ -7832,7 +7835,7 @@ in force), `isCycleLive` is false from `current_period_end` onward. Then:
 - A parcel priced with cover but paid after the lapse is refused by `spendShippingCover` (409) and
   must be re-quoted.
 - The storage sweep stops excluding the member's items (it requires `now() <
-  current_period_end`, `storage-fee.ts:154-156`). See the storage consequence in §10.7.
+  current_period_end`, `storage-fee.ts:164-166`). See the storage consequence in §10.7.
 - Nothing about the items themselves changes (`mem.schema.ts:31`).
 
 When the job next runs it opens a single new cycle from *now*; lapsed time is neither billed nor
@@ -7843,25 +7846,22 @@ credited.
 
 **Edge cases and failure modes** (all verified by reading the code unless marked):
 
-- **Ending a membership bills storage for the covered time.** `cancel()`'s comment promises storage
+- **Ending a membership no longer bills storage for the covered time.** `cancel()` promises storage
   reverts to published terms "from the end of the cycle FORWARD, never retroactively"
-  (`membership.service.ts:440-446`). The storage sweep does not do that. It bills
-  `periods_elapsed − periods_billed`, where `periods_elapsed` is counted from
-  `received_at + free_days` and `periods_billed` counts existing storage charges
-  (`storage-fee.ts:186-230`). While an item was covered no storage charge was raised, so the first
-  sweep after cover ends bills every elapsed period at once. *Example:* a card received 400 days
-  ago with a $1.00 intake charge, covered all along. With 180 free days and 90-day periods,
-  `periods_elapsed = floor(220 / 90) + 1 = 3` and `periods_billed = 0`, so the next sweep after the
-  membership ends (or lapses) raises three charges of 10 cents. The same happens on any lapse, so it
-  also happens in the routine window described next.
+  (`membership.service.ts:440-446`), and since 19 September 2026 the sweep keeps that promise:
+  every period that starts while an item is covered is recorded in `storage_period_cover`, and
+  counts as settled (§5.13). Before, covered periods left no trace, so the first sweep after cover
+  ended billed all of them at once.
 - **Renewal vs the storage sweep.** Renewal runs at minute 40 every hour; the sweep runs at 02:00
   UTC. A cycle that ends between 01:40 and 02:00 UTC is still lapsed when the sweep runs, so that
   night's sweep treats the member's items as uncovered. The comment in
   `apps/worker/src/index.ts:56-59` states the goal ("open again before the sweep") but the hourly
-  cadence only guarantees it for cycles ending before 01:40.
+  cadence only guarantees it for cycles ending before 01:40. Since periods covered earlier are now
+  recorded (above), the cost is limited to a period that happens to start that night: it is billed
+  instead of covered.
 - **`storedItems` comes from the rule's `parameters`, not from `tiers.ts`.** The sweep reads
   `pricing_rule.parameters ->> 'storedItems'` for the membership rule in force, defaulting to 0
-  (`storage-fee.ts:141-156`). `POST /pricing/rules` creates a rule effective immediately and
+  (`storage-fee.ts:150-166`). `POST /pricing/rules` creates a rule effective immediately and
   accepts optional `parameters` (`apps/api/src/modules/prc/pricing.service.ts:45-66`). An admin who
   reprices a tier without copying `parameters.storedItems` therefore sets every member's storage
   cover to 0 from the next sweep, and triggers the catch-up billing above.
@@ -7876,7 +7876,7 @@ credited.
   debt that interest accrues on (§6).
 - **Joining with an empty wallet.** `assertNotBlocked` refuses only a negative balance. A collector
   with $0.00 who joins Trust goes to −$699.00. That is below the default suspension threshold of
-  −$20.00 (`WALLET_SUSPEND_BELOW_MINOR = -2000`, `packages/config/src/env.ts:240`), so the 03:15 UTC
+  −$20.00 (`WALLET_SUSPEND_BELOW_MINOR = -2000`, `packages/config/src/env.ts:242`), so the 03:15 UTC
   sweep suspends them that night.
 - **Concurrent renewal runs.** The `ON CONFLICT DO NOTHING` guard only works when both runs compute
   the same millisecond. The `UPDATE membership` at `membership-renewal.ts:98-107` has no
@@ -8121,7 +8121,7 @@ anything else (`apps/api/src/modules/sup/sup.schema.ts:4-19`).
   `resolved_by`.
 - `support_message` (`sup.schema.ts:116-124`): `ticket_id`, `author_id`, `author_role`
   (`customer`/`staff`), `body`. **Append-only**, enforced by the trigger list in
-  `apps/api/src/db/sql/0001_append_only.sql:42` (§3). There is no internal-note flag: every message
+  `apps/api/src/db/sql/0001_append_only.sql:44` (§3). There is no internal-note flag: every message
   is visible to both sides, so there is no filter to get wrong.
 
 **State machine — "whose turn is it"** (`sup.schema.ts:21-37`):
@@ -8257,7 +8257,7 @@ pricing, disputes, storage):
 | Wallet request review | `GET/POST /admin/wallet-requests[/:id][/review\|approve\|reject\|processing\|complete]` (`apps/api/src/modules/pay/wallet-request.controller.ts:95-140`) | §6 |
 | Chargebacks | `GET /finance/chargebacks/reversible`, `POST /finance/chargebacks/:paymentId` (`apps/api/src/modules/pay/pay.controller.ts:124-137`) | §6 |
 | House store admin | `GET /marketplace/house/manage`, `POST/PATCH /marketplace/house/listings` (admin); order queue and stow (operator or admin) (`apps/api/src/modules/mkt/house-store.controller.ts:66-91`) | §7 |
-| Grading walkthrough approval | `POST /grading/:requestId/approval` (`apps/api/src/modules/dis/dis.controller.ts:266`) | §8 |
+| Grading walkthrough approval | `POST /grading/:requestId/approval` (`apps/api/src/modules/dis/dis.controller.ts:274`) | §8 |
 
 **Edge cases.**
 
@@ -8561,7 +8561,7 @@ Everything else is independent. Outbox dispatch picks up outbox rows written by 
   is noted as not built (`apps/worker/Dockerfile:55-58`). A process that stays up but whose jobs keep
   failing is not detected.
 - **Missing configuration fails soft.** No `storage` rule → the storage sweep rolls back and warns
-  (`storage-fee.ts:77-83`). No membership rule → that membership is left lapsed with a warning
+  (`storage-fee.ts:85-91`). No membership rule → that membership is left lapsed with a warning
   (`membership-renewal.ts:78-85`). Interest at 0 bps → the job does nothing.
 - **A job that throws** is retried twice by pg-boss with no delay, then left failed. Nothing else
   surfaces it.
@@ -8610,7 +8610,7 @@ Everything else is independent. Outbox dispatch picks up outbox rows written by 
 | `apps/worker/src/jobs/outbox-dispatch.ts` | Outbox → notifications (every minute) | `dispatchOutbox` :99 — see §10.9 |
 | `apps/worker/src/jobs/notification-events.ts` | Email defaults and subjects mirrored from the API | `EMAIL_BY_DEFAULT` :19, `eventSubject` :119 — see §10.9 |
 | `apps/worker/src/jobs/notification-message.ts` | Sentence rendering | `notificationMessage` :46 — see §10.11 |
-| `apps/worker/src/jobs/storage-fee.ts` | Daily storage billing (02:00) | `runStorageFees` :49, membership cover CTEs :141-176, period accounting :186-230, run row :292 — see §5 |
+| `apps/worker/src/jobs/storage-fee.ts` | Daily storage billing (02:00) | `runStorageFees` :49, membership cover CTEs :150-187, period accounting :198-281, run row :335 — see §5 |
 | `apps/worker/src/jobs/interest-accrual.ts` | Daily interest on debt (03:00) | `accrueInterest` :23, insert :42 — see §6 |
 | `apps/worker/src/jobs/wallet-suspension.ts` | Debt suspension and reinstatement (03:15) | `sweepWalletSuspensions` :34, suspend :46, reinstate :65 — see §6 |
 | `apps/worker/src/jobs/debt.ts` | Shared negative-balance query (not a job) | `negativeAccounts` :39 — see §6 |
@@ -8675,7 +8675,7 @@ no special handling.
 
 The boundary is deliberately *inside* the providers (comment `main.tsx:29-37`) so a crash screen is
 still drawn in the viewer's theme and direction. The cost: the two providers themselves are
-unguarded — and `I18nProvider`'s first `localStorage.getItem` (`i18n.tsx:4687`) is not wrapped in
+unguarded — and `I18nProvider`'s first `localStorage.getItem` (`i18n.tsx:4693`) is not wrapped in
 `try`, unlike the theme's (`theme.tsx:35-44`). A browser that throws on storage access would crash
 before the boundary exists.
 
@@ -9069,11 +9069,11 @@ the badge.
 missing, and switching language flips the whole document's direction without a second layout.
 
 **The catalogue** (`i18n.tsx`, 4 722 lines) is two object literals: `he` (`i18n.tsx:29`) and `en`
-(`i18n.tsx:2332`), about 2 120 keys each. **Hebrew is the source of truth**:
+(`i18n.tsx:2335`), about 2 120 keys each. **Hebrew is the source of truth**:
 
 ```ts
-export type MessageKey = keyof typeof he;               // i18n.tsx:2330
-const en: Record<MessageKey, string> = { … };           // i18n.tsx:2332
+export type MessageKey = keyof typeof he;               // i18n.tsx:2333
+const en: Record<MessageKey, string> = { … };           // i18n.tsx:2335
 ```
 
 so a key added to `he` and missing from `en` (or vice versa, as an excess property) is a compile
@@ -9081,19 +9081,19 @@ error — `pnpm build` runs `tsc` first. `LOCALES = ['he', 'en']` puts Hebrew fi
 (`i18n.tsx:22`, asserted by `tests/web/i18n-catalogue.test.ts:22-25`).
 
 **Default locale is English.** `DEFAULT_LOCALE: Locale = 'en'` (`i18n.tsx:21`); a saved choice in
-`localStorage['bault.locale']` wins from then on (`initialLocale`, `i18n.tsx:4686-4689`). The file's
+`localStorage['bault.locale']` wins from then on (`initialLocale`, `i18n.tsx:4692-4695`). The file's
 header comment still says "Hebrew remains the default locale" (`i18n.tsx:6`) — stale; the constant,
 `index.html:8` and the catalogue test (`i18n-catalogue.test.ts:24`) all say English.
 
-**Translation** (`i18n.tsx:4670-4673`): `messages[locale][key] ?? messages[DEFAULT_LOCALE][key] ?? key`,
+**Translation** (`i18n.tsx:4676-4679`): `messages[locale][key] ?? messages[DEFAULT_LOCALE][key] ?? key`,
 then `{placeholder}` substitution; an unmatched placeholder is left verbatim rather than printing
-`undefined` (`format`, `i18n.tsx:4639-4644`). `hasMessage` (`i18n.tsx:4654`) lets callers that build a
+`undefined` (`format`, `i18n.tsx:4645-4650`). `hasMessage` (`i18n.tsx:4660`) lets callers that build a
 key at runtime (the breadcrumb, `timeline.<kind>`) omit an element instead of printing a raw key.
 Several screens still build keys with an `as MessageKey` cast and no `hasMessage` check
 (`shipmentStatusLabel` in `shipments.ts:83`, `vault.media.type.*`, `grp.status.*`), which prints the
 key if the server adds a status the catalogue lacks.
 
-**The provider** (`I18nProvider`, `i18n.tsx:4691-4711`) persists the locale and writes
+**The provider** (`I18nProvider`, `i18n.tsx:4697-4717`) persists the locale and writes
 `document.documentElement.lang` and `.dir` (`rtl` for `he`) in an effect, so native form controls and
 scrollbars flip too. `useI18n()` returns `{ locale, setLocale, toggleLocale, t }`; `useT()` just `t`.
 The switcher is the globe in the header (`LanguageSwitcher`, `PageHeader.tsx:328`), the same component
@@ -9122,7 +9122,7 @@ an LTR document.
   English in the database, so the landing page and the service buttons print a catalogue label beside
   a server number (`LandingPage.tsx:35-39`, `servicePrices.ts`).
 
-**Tests.** `tests/web/i18n-catalogue.test.ts` walks `MESSAGE_KEYS` (`i18n.tsx:4667`) in both locales:
+**Tests.** `tests/web/i18n-catalogue.test.ts` walks `MESSAGE_KEYS` (`i18n.tsx:4673`) in both locales:
 same placeholders in both, no Hebrew string left untranslated in English, "Bault" and never the
 predecessor brand, no pin/unpin or display-name strings left over from retired features.
 
@@ -9522,10 +9522,15 @@ did this session.
   §5 owns the intake and custody rules.
 - **Inventory** — relocate, hold/release, break a lot, record a disposal, and the stock report by
   shelf/owner/condition/class with a PDF link (`/api/v1/custody/report.pdf?cut=`).
-- **Shipments** — dispatch a shipment: tick every item, carrier, weight, notes →
-  `POST /shipping/shipments/:id/dispatch` (§9). The ticks gate the button only: the request always
-  sends `scannedItemIds: detail.itemIds` (`WarehouseConsole.tsx:998-999`), so the server's
-  "every item scanned" check is satisfied by construction.
+- **Shipments** — dispatch a shipment: **scan** every item's label into the box, then carrier,
+  weight, notes → `POST /shipping/shipments/:id/dispatch` (§9). The shipment view now carries each
+  item's `serialNumber` and `barcode` (`shipment.service.ts:1031-1047`), so `recordScan`
+  (`WarehouseConsole.tsx:1008`) matches a scanned serial, barcode or typed id to an item; a label
+  that belongs to no item in the shipment is shown as an error and blocks completion. The request
+  sends `scannedItemIds: scanned` (`:1027`) — what was scanned — and the API still refuses any set
+  that differs from the shipment's. *(Fixed 19 September 2026: behind tick-boxes, the screen sent
+  the shipment's own `detail.itemIds`, so the server's check compared the list with itself and
+  could never fail. Pinned by `tests/ux/dispatch-scan.test.tsx`.)*
 - **Locations** — shelves with printable barcodes, create (`POST /custody/bins`), retire/restore.
 - **Services** — `ServiceQueue.tsx` (accept/deny requests, then a type-specific completion or quote
   form; every form demands "item verified") and `GradingSubmissions.tsx` (open a batch per grading
@@ -9571,7 +9576,7 @@ makes.
 (`ShipmentComposer.tsx:99-114`):
 
 - `GET /api/v1/shipping/services` → `ShpController.services` (`apps/api/src/modules/shp/shp.controller.ts:182`)
-  → `ShipmentService.services` (`shipment.service.ts:223`): carrier services, add-ons, boxes,
+  → `ShipmentService.services` (`shipment.service.ts:224`): carrier services, add-ons, boxes,
   `maxInsuredValueMinor` (500 000 = $5 000), `signatureRequiredAboveMinor` (50 000 = $500),
   `paymentWindowDays` (7).
 - `GET /api/v1/me/addresses` (`apps/api/src/modules/acc/profile.controller.ts:67`); the default
@@ -9596,7 +9601,7 @@ POST /api/v1/shipping/quote
 ```
 
 → `ShpController.quote` (`shp.controller.ts:194-197`) → `ShipmentService.quote`
-(`shipment.service.ts:255`): loads the items (must be the caller's and shippable), resolves the saved
+(`shipment.service.ts:256`): loads the items (must be the caller's and shippable), resolves the saved
 address, measures, picks or validates the box, checks options, rates every carrier service. **Creates
 nothing, charges nothing, writes nothing.** The response is a `Quote` (`shared/carriers.ts:95`):
 destination, total weight (and whether estimated), `rates[]` each with `eligible`, `problems[]`,
@@ -9616,27 +9621,27 @@ the API's message through the page's `onError`.
 `commit` (`ShipmentComposer.tsx:168-200`):
 
 1. `POST /api/v1/shipping/shipments` with the same body → `ShpController.create`
-   (`shp.controller.ts:199-202`) → `ShipmentService.create` (`shipment.service.ts:509-570`):
+   (`shp.controller.ts:199-202`) → `ShipmentService.create` (`shipment.service.ts:510-571`):
    `wallet.assertNotBlocked` (a negative balance blocks new shipments, §6); load items;
    `assertItemsFree` (409 "That item is already on shipment SHP-…" if any item sits on a shipment in
-   `requested`…`labeled`, `shipment.service.ts:178-220`); resolve destination; re-check options and
+   `requested`…`labeled`, `shipment.service.ts:179-221`); resolve destination; re-check options and
    box; build customs lines for international parcels; **insert one `shipment` row with
    `status: 'requested'`** and a fresh code. No charge yet.
 2. Then either `POST /shipping/shipments/:id/select-rate {carrier, serviceLevel}`
-   (`shp.controller.ts:322-325` → `selectRate`, `shipment.service.ts:751`) or
+   (`shp.controller.ts:322-325` → `selectRate`, `shipment.service.ts:752`) or
    `POST /shipping/shipments/:id/choose-for-me` (`shp.controller.ts:328-331` → `selectRecommended`,
-   `shipment.service.ts:780`, which also records `serviceMode: 'simple'` — Bault chose). Both re-rate
-   **from the stored shipment row** (`rates`, `shipment.service.ts:740`) — the box and options were
+   `shipment.service.ts:781`, which also records `serviceMode: 'simple'` — Bault chose). Both re-rate
+   **from the stored shipment row** (`rates`, `shipment.service.ts:741`) — the box and options were
    persisted precisely so this re-rate matches the quote — refuse an ineligible service, and call
-   `settle` (`shipment.service.ts:806`).
+   `settle` (`shipment.service.ts:807`).
 
 `settle` freezes the price on the row (carrier, service, provider rate id, cost, premium, membership
-cover, ETA) and compares it with the wallet balance (`shipment.service.ts:831`):
+cover, ETA) and compares it with the wallet balance (`shipment.service.ts:832`):
 
 - **Balance covers it** → one transaction: spend the membership cover, insert a `charge`
   (`actionType: 'shipping'`, a snapshot of carrier cost/handling/insurance/add-ons/cover,
   `status: 'settled'`), record a **debit** `service_charge` in the ledger (`chargeFor`,
-  `shipment.service.ts:872-910`; §6 owns the ledger), set `status: 'rates_selected'`. A total of 0
+  `shipment.service.ts:873-911`; §6 owns the ledger), set `status: 'rates_selected'`. A total of 0
   (fully covered by the tier) writes no charge line.
 - **Balance short** → no charge, no ledger; `status: 'awaiting_payment'` with
   `paymentDueAt = now + 7 days`, and the response carries `shortfallMinor`. The items stay claimed; the
@@ -9666,7 +9671,7 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 - **Double click**: both buttons are `disabled={busy || blocked}` (`ShipmentComposer.tsx:426`, `:442`),
   and `busy` is set before the first await, so a second click during the round trip is ignored.
 - **The balance check in `settle` reads the balance before the transaction opens**
-  (`shipment.service.ts:813`, transaction opened at `:849`); §9 discusses whether two concurrent settlements can both pass it.
+  (`shipment.service.ts:814`, transaction opened at `:849`); §9 discusses whether two concurrent settlements can both pass it.
 
 <a id="s12-15"></a>
 ### 12.15 Rules, edge cases and failure modes
@@ -9770,7 +9775,7 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/shared/api.ts` | Fetch client, `ApiError` | `BASE` :12; `ApiError` :28; `apiErrorKey` :62; `kindForStatus` :80; `request` :91; `api` :123 |
 | `apps/web/src/shared/session.ts` | `/me/profile` probe | `inFlight` :47; `loadProfile` :49; `resetProfileRequest` :66 |
 | `apps/web/src/shared/routing.ts` | Hash router | `LAST_SECTION_KEY` :24; `LEGACY_ROUTES` :36; `LEGACY_TABS` :52; `legacyRedirect` :78; `parse` :88; `useRoute` :123; `navigate` :133; `useNavigation` :174; `setParams` :206 |
-| `apps/web/src/shared/i18n.tsx` | Catalogue, provider | `DEFAULT_LOCALE` :21; `LOCALES` :22; `he` :29; `MessageKey` :2330; `en` :2332; `hasMessage` :4654; `MESSAGE_KEYS` :4667; `t` :4670; `I18nProvider` :4691 |
+| `apps/web/src/shared/i18n.tsx` | Catalogue, provider | `DEFAULT_LOCALE` :21; `LOCALES` :22; `he` :29; `MessageKey` :2333; `en` :2335; `hasMessage` :4660; `MESSAGE_KEYS` :4673; `t` :4676; `I18nProvider` :4697 |
 | `apps/web/src/shared/theme.tsx` | Light/dark/system | `ThemeProvider` :52; `data-theme` stamping :65-74; `cycle` :77 |
 | `apps/web/src/shared/hooks.ts` | Media query, notification feed | `useMediaQuery` :5; `usePrefersReducedMotion` :22 (unused); `useNotificationFeed` :52 |
 | `apps/web/src/shared/useVaultItems.ts` | Stored-item picker source | `useVaultItems` :19 |
@@ -9843,7 +9848,7 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/areas/customer/help/legalContent.ts` | Legal documents | `PENDING_DOCUMENTS` :59; `LEGAL_DOCUMENTS` :65 |
 | `apps/web/src/areas/customer/notifications/NotificationsPage.tsx` | Feed and preferences | `TABS` :53; `NotificationsPage` :64 |
 | `apps/web/src/areas/customer/profile/ProfilePage.tsx` | Profile, addresses, password | `TABS` :65; `ProfilePage` :81 |
-| `apps/web/src/areas/warehouse/WarehouseConsole.tsx` | Staff console | `TABS` :103; `WarehouseConsole` :128; density :247; `FulfillmentPanel` :970; dispatch :998 |
+| `apps/web/src/areas/warehouse/WarehouseConsole.tsx` | Staff console | `TABS` :103; `WarehouseConsole` :128; density :247; `FulfillmentPanel` :979; dispatch :1026 |
 | `apps/web/src/areas/warehouse/ReceiveParcels.tsx` | Record an arrival | `ReceiveParcels` :27 |
 | `apps/web/src/areas/warehouse/ParcelQueue.tsx` | Parcel state moves | `ParcelQueue` :43; `ParcelActions` :187 |
 | `apps/web/src/areas/warehouse/IntakeBench.tsx` | Book contents into the vault | `IntakeBench` :78 |
@@ -9969,7 +9974,7 @@ drizzle's `meta/`. Later files have descriptive names such as
   `src/db/schema/index.ts` and writes into `src/db/migrations` using `DIRECT_DATABASE_URL`
   (`apps/api/drizzle.config.ts`).
 - `pnpm --filter @bault/api db:migrate` runs `tsx src/db/migrate.ts`
-  (`apps/api/src/db/migrate.ts:18-31`). It applies drizzle's migrations from
+  (`apps/api/src/db/migrate.ts:18-30`). It applies drizzle's migrations from
   `'./src/db/migrations'`, a path **relative to the working directory** (`:23`). It then executes
   `sql/0001_append_only.sql`, resolved **relative to the compiled file** through `__dirname` (`:25`),
   which reinstalls the append-only triggers and grants every time (§3). Both halves use the direct
@@ -10155,7 +10160,7 @@ in a throwaway container.
 |---|---|---|---|---|---|
 | API | `node:20-slim`, `NODE_ENV=production` | `bault` uid 10001 | 3000 | `HEALTHCHECK` → `/api/v1/healthz` every 30 s (`apps/api/Dockerfile:76-77`); the comment says orchestrators should probe `/readyz`, which returns 503 when the DB is down | `node dist/main.js` in exec form, so the process is PID 1 and gets SIGTERM for `enableShutdownHooks()` (`:79-82`) |
 | Worker | same | same | none | none. Liveness is "the process exits non-zero on a fatal error and the restart policy restarts it"; a heartbeat is "not yet built; noted rather than faked" (`apps/worker/Dockerfile:55-58`) | `node dist/index.js` |
-| Web | `nginx:1.27-alpine` | nginx default | 8080 | `wget --spider http://127.0.0.1:8080/` (`apps/web/Dockerfile:48-49`) | `nginx -g 'daemon off;'` |
+| Web | `nginx:1.27-alpine` | nginx default | 8080 | `wget --spider http://127.0.0.1:8080/` (`apps/web/Dockerfile:51-52`) | `nginx -g 'daemon off;'` |
 
 The web build also copies `assets/` because Vite's `publicDir` is the repo-root `assets/`
 (`apps/web/Dockerfile:30-32`). Card photographs end up under `/images/` and fonts under `/fonts/`.
@@ -10167,37 +10172,30 @@ Confirmed in the container: the rendered `default.conf` has
 
 **Defects found by reading and running.**
 
-1. **The security headers are missing on the HTML document and on the bundles.** Verified by running
-   `nginx:1.27-alpine` with this `nginx.conf` over the local `dist/`. The CSP, `X-Frame-Options`,
-   `nosniff`, `Referrer-Policy` and `Permissions-Policy` are declared at server level
-   (`apps/web/nginx.conf:35-40`). The `location /assets/`, `location /images/` and
-   `location = /index.html` blocks each have their own `add_header Cache-Control` (`:57-76`), and
-   nginx **does not inherit** server-level `add_header` into a location that declares any of its own.
-   Every SPA route is `try_files … /index.html` (`:103-105`), an internal redirect that lands in
-   `location = /index.html`. Measured results:
-
-   | Request | CSP / X-Frame-Options / nosniff |
-   |---|---|
-   | `/`, `/index.html`, `/some/route` | **absent**; only `Cache-Control: no-store, must-revalidate` |
-   | `/assets/index-*.js` | **absent**, and `Cache-Control` is sent twice (the `expires 1y` value plus `public, immutable`) |
-   | `/fonts/*.woff2`, `/api/*` | present |
-
-   The Content-Security-Policy therefore protects nothing, because CSP is enforced from the document
-   that loads the page. `frame-ancestors 'none'` and `X-Frame-Options: DENY` are also absent from that
-   document, so clickjacking protection is gone as well. The fix is to repeat the headers in each
-   location or move them into an `include` file.
-2. **The API image cannot finish its own migration.** The Dockerfile copies the migrations "so a
-   release can run them against the database it is about to serve" (`apps/api/Dockerfile:65-68`). It
-   copies them to `apps/api/src/db/{migrations,sql}`. The runtime image has no `tsx`, since it is a dev
-   dependency stripped by `--prod`, so the only runnable migrator is `node dist/db/migrate.js`. That
-   finds drizzle's migrations through the cwd-relative `./src/db/migrations`, which works from
-   `/app/apps/api`. It then reads `join(__dirname, 'sql', '0001_append_only.sql')` =
-   `dist/db/sql/0001_append_only.sql` (`apps/api/src/db/migrate.ts:25`), and **that file is never
-   there**. `nest build` does not copy `.sql` (no `assets` in `nest-cli.json`, and the local
-   `apps/api/dist/db/` has no `sql/`), and the Dockerfile copies it to `src/db/sql`. The schema would
-   migrate and the append-only guards would then fail with ENOENT, which means a deploy without the
-   triggers that make custody and ledger history immutable (§3). *(Verified from the file layout; the
-   image was not built.)*
+1. **The security headers on every response** *(fixed 19 September 2026)*. nginx does not merge
+   `add_header` across levels: a location that declares any `add_header` drops every server-level
+   one. The `/assets/`, `/images/` and `= /index.html` blocks each set `Cache-Control`, and every SPA
+   route is `try_files … /index.html` — an internal redirect into `location = /index.html` — so the
+   CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy` used to be missing
+   from the HTML document and the bundles, which is exactly where CSP and anti-framing have to be.
+   The headers now live in one file, `apps/web/nginx-security-headers.conf`, copied into the image
+   as `/etc/nginx/snippets/bault-security-headers.conf` (`apps/web/Dockerfile:46`) and included at
+   server level and inside each of those three locations (`apps/web/nginx.conf:41,60,70,78`).
+   Measured in an `nginx:1.27-alpine` container over the built `dist/`: `/`, `/index.html`, an SPA
+   route such as `/vault`, `/assets/index-*.js` and `/images/SN-DX107-0003.png` all carry the CSP,
+   `X-Frame-Options: DENY` and `nosniff`. (`/assets/*` still sends two `Cache-Control` lines — the
+   `expires 1y` value and `public, immutable` — which browsers combine harmlessly.)
+2. **The image's migrator finds the append-only SQL** *(fixed 19 September 2026)*. The runtime image
+   has no `tsx` (a dev dependency stripped by `--prod`), so the only migrator is
+   `node dist/db/migrate.js`. It finds drizzle's migrations through the cwd-relative
+   `./src/db/migrations`, which the Dockerfile copies (`apps/api/Dockerfile:65-68`), but it used to
+   read the guards from `join(__dirname, 'sql', …)` = `dist/db/sql/0001_append_only.sql`, which
+   `nest build` never produces — so a Docker deploy migrated the schema and then failed to install
+   the triggers that make custody and ledger history immutable (§3.4). `appendOnlySqlPath()` now
+   tries beside the script and then `src/db/sql/` under the working directory, and names both
+   paths in its error if neither exists (`apps/api/src/db/migrate.ts:43-50`). Verified by running
+   the compiled `node dist/db/migrate.js` from `apps/api` with no `dist/db/sql/`: it applies the
+   migrations and installs the guards.
 3. **The Node version disagrees with `engines`.** The images use `node:20-slim`, while `package.json`
    requires `^22.22.2 || >=24.15.0` and Node 20 is out of support (old DIVE1 Part 48 says so). In a
    `node:20-slim` container, pnpm 9.15.0 prints `WARN Unsupported engine` and **continues**, so the
@@ -10229,7 +10227,7 @@ Confirmed in the container: the rendered `default.conf` has
 **Deploy requirement that lives outside the images.** Behind this nginx the API **must** run with
 `TRUST_PROXY` naming the nginx network (`uniquelocal` or a CIDR). With the default `loopback`, every
 request looks like it comes from the nginx container, so the rate limiter sees one client and the
-sign-in log records one IP (`docs/production-readiness.md:51-53`, `packages/config/src/env.ts:148-162`).
+sign-in log records one IP (`docs/production-readiness.md:51-53`, `packages/config/src/env.ts:150-164`).
 No manifest in the repo wires the three images together: there is no production compose file, no
 Kubernetes manifest and no migration job.
 
@@ -10323,21 +10321,21 @@ schedules `dump` either. There is no cron, no job and no manifest.
 
 | ID | Claim | Evidence at HEAD |
 |---|---|---|
-| B1 | Real S3 adapter, sandbox refused in production | `packages/adapters/src/s3.ts`; `env.ts:344`; `adapters.module.ts:177` |
-| B2 (part) | A real carrier adapter; dispatch buys from the stored address | `packages/adapters/src/easypost.ts`; `env.ts:363`. See "Still open" for tracking |
+| B1 | Real S3 adapter, sandbox refused in production | `packages/adapters/src/s3.ts`; `env.ts:346`; `adapters.module.ts:177` |
+| B2 (part) | A real carrier adapter; dispatch buys from the stored address | `packages/adapters/src/easypost.ts`; `env.ts:365`. See "Still open" for tracking |
 | B3 (part) | Dockerfiles and nginx with a CSP and an `/api` proxy | the three Dockerfiles and `nginx.conf` exist, **with the defects in §13.6** |
 | B4 | CI migrates, seeds, starts the API and runs all 8 projects | `ci.yml:132-166`. MinIO is a *step*, not the "MinIO service" the readiness table says |
 | B5, S3 | Hot-path indexes | `0024_the_queries_that_run_on_every_request.sql`: `login_session_token_active_idx` (partial on `revoked_at IS NULL`), `item_owner_idx`, `custody_event_item_idx`, `bin_transfer_item_idx`, `item_image_item_idx`, `outbox_undispatched_idx`, `audit_record_actor_idx`, … |
 | S1 | Password change and reset revoke other sessions; `POST /auth/sessions/revoke-others` | `password.service.ts:60,100`; `auth.controller.ts:181`; `session.service.ts:96` |
 | S5 | Structured JSON logger with `LOG_LEVEL` and `x-request-id` | `shared/observability/logger.ts:49,67,73`; `main.ts:38,47` |
 | S6 | `/readyz` returns 503 when the DB is down | `health.controller.ts:41-46` |
-| S7 | `API_DOCS_PASSWORD` enforced with constant-time Basic auth | `main.ts:170-188`, but see the `EXPOSE_API_DOCS=false` trap in §2.4 |
+| S7 | `API_DOCS_PASSWORD` enforced with constant-time Basic auth | `main.ts:170-188`; `EXPOSE_API_DOCS` is parsed strictly since 19 September (§2.4) |
 | S9 | React `ErrorBoundary` | `apps/web/src/shared/ui/ErrorBoundary.tsx`, mounted in `main.tsx` |
 | S10 | Backup, verify and restore script | `infra/ops/backup.sh`, which is not PITR |
-| C6 | `EMAIL_PROVIDER=console` refused in production | `env.ts:383` |
+| C6 | `EMAIL_PROVIDER=console` refused in production | `env.ts:385` |
 | N1–N3 | Production bundle, no pre-filled credentials, private PDF out of `assets/` | `vite.config.ts:44`; `no-credentials-in-bundle.test.ts` (vacuous in CI); `_local/` in `.gitignore` |
-| N4 | nginx forwards `/api` | `nginx.conf:92-100` |
-| N5 | Sign-in log, IP and device per session, `TRUST_PROXY` | `main.ts:68`; `env.ts:159-162`; migration `0029_who_signed_in.sql` (§4) |
+| N4 | nginx forwards `/api` | `nginx.conf:95-103` |
+| N5 | Sign-in log, IP and device per session, `TRUST_PROXY` | `main.ts:68`; `env.ts:161-164`; migration `0029_who_signed_in.sql` (§4) |
 | N6 | Membership downgrade and renewal fixes | migration `0030_a_downgrade_is_not_a_cancellation.sql` (§10) |
 
 **Still open, confirmed in code:**
@@ -10347,7 +10345,7 @@ schedules `dump` either. There is no cron, no job and no manifest.
 | B2 (rest) | EasyPost has never run against the live API. **Tracking is not wired to it**: the worker hard-codes `SandboxShippingAdapter` (`apps/worker/src/jobs/tracking-refresh.ts:10`), so with EasyPost configured, shipped parcels stay `in_transit` forever. Labels are EasyPost's hosted URL and are not mirrored into the bucket (`easypost.ts:248-251`) |
 | S2 | Foreign keys: 6 `REFERENCES` clauses across 4 migrations (0013, 0014, 0016 ×3, 0026). `item.owner_id`, `custody_event.item_id` and the rest are still unconstrained |
 | S4 | Sentry: no `@sentry/*` dependency or import anywhere. `SENTRY_DSN` is read by nothing, and `observability.module.ts:6` still says it is initialized |
-| S8 | Rate limiting: `ThrottlerModule.forRootAsync` has no `storage` (`app.module.ts:59-69`), so it is in-memory and per process. Three replicas mean three times the budget |
+| S8 | Rate limiting: `ThrottlerModule.forRootAsync` has no `storage` (`app.module.ts:60-78`), so it is in-memory and per process. Three replicas mean three times the budget |
 | S11 | Idempotency keys only on the marketplace, house store, offers and a `pay.controller.ts` DTO field (`:32`), not across intake or shipment purchase (§3, §6) |
 | C1 | KYC/AML: no reference in `apps/api/src` |
 | C2 | GDPR export and deletion: none |
@@ -10360,9 +10358,9 @@ schedules `dump` either. There is no cron, no job and no manifest.
 | — | Node 20 runtime images (§13.6) |
 
 **New findings from this pass, not in the readiness document:**
-1. The CSP and anti-framing headers are **not sent** on the HTML document (§13.6 defect 1, measured).
-2. The API image's migrator fails on the append-only SQL path (§13.6 defect 2).
-3. `EXPOSE_API_DOCS=false` enables the docs (§2.4).
+1. *(Fixed 19 September.)* The CSP and anti-framing headers were not sent on the HTML document (§13.6 item 1).
+2. *(Fixed 19 September.)* The API image's migrator failed on the append-only SQL path (§13.6 item 2).
+3. *(Fixed 19 September.)* `EXPOSE_API_DOCS=false` enabled the docs (§2.4).
 4. `SESSION_COOKIE_SECRET` is required and unused, and `.env.example` claims rotating it signs
    everyone out (§2.4).
 5. The seed has no production guard and ships in the API image (§13.3).
@@ -10454,8 +10452,9 @@ Neither CI nor any package script runs it. It is run by hand. §12 owns the rule
 | `infra/ops/backup.sh` | dump / verify / restore | `cmd_dump` :48, `cmd_verify` :83, `cmd_restore` :154, PITR note :176-195 |
 | `apps/api/Dockerfile` | API image | build :17-47, runtime :50-82, migrations copy :65-68, healthcheck :76-77 |
 | `apps/worker/Dockerfile` | worker image | build :13-36, runtime :39-59 |
-| `apps/web/Dockerfile` | SPA build → nginx | build :12-35, `assets/` copy :30-32, runtime :37, template :40-44, healthcheck :48-49 |
-| `apps/web/nginx.conf` | static serving, security headers, `/api` proxy | CSP :35, headers :37-40, `/assets/` :57, `/images/` :66, `= /index.html` :74, `/api/` :92-100, SPA fallback :103-105 |
+| `apps/web/Dockerfile` | SPA build → nginx | build :12-35, `assets/` copy :30-32, runtime :37, template :40-47, healthcheck :51-52 |
+| `apps/web/nginx.conf` | static serving, `/api` proxy, includes the security headers | header include :41 (and :60, :70, :78), `/assets/` :57, `/images/` :67, `= /index.html` :76, `/api/` :95-103, SPA fallback :106-108 |
+| `apps/web/nginx-security-headers.conf` | CSP, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` — one file, included in every block | whole file |
 | `.github/workflows/ci.yml` | the one CI job | env :38-59, MinIO :74-83, package build :106-107, migrate/seed :132-135, API start :140-151, e2e :153-166 |
 | `docs/production-readiness.md` | audit and status ledger | 19 Sep status :33-53, 12 Sep status :57-94 |
 | `apps/api/src/db/migrate.ts` *(cross-ref, §3)* | migration runner | cwd-relative folder :23, `__dirname` SQL :25 |
@@ -10483,19 +10482,19 @@ comes from.
 
 | Project | Files | What it proves | Needs running | Cases | Time |
 |---|---|---|---|---|---|
-| `web` (`vitest.workspace.ts:112`) | `tests/web/*.test.ts` (17) | Pure units of the SPA and a few pure API/worker modules; repository-wide text rules (Rayquaza only, brand, vocabulary parity), the built bundle | Nothing (the bundle test uses `apps/web/dist` if present) | 195 | ~1 s |
-| `ux` (`vitest.workspace.ts:139-149`) | `tests/ux/*.test.tsx` (11) + `setup.ts` | Real React components rendered in jsdom, with `api` mocked | Nothing | 116 | ~8 s |
+| `web` (`vitest.workspace.ts:112`) | `tests/web/*.test.ts` (19) | Pure units of the SPA and a few pure API/worker modules; repository-wide text rules (Rayquaza only, brand, vocabulary parity), the built bundle | Nothing (the bundle test uses `apps/web/dist` if present) | 202 | ~1 s |
+| `ux` (`vitest.workspace.ts:139-149`) | `tests/ux/*.test.tsx` (12) + `setup.ts` | Real React components rendered in jsdom, with `api` mocked | Nothing | 118 | ~8 s |
 | `contract` (`vitest.workspace.ts:83-86`) | `tests/contract/*.test.ts` (4) | The payment, shipping, EasyPost and storage adapters honour their ports | Nothing, except MinIO for the S3 round trip (skips loudly without it) | 34 | <1 s |
 | `core-contract` (`vitest.workspace.ts:108-111`) | `tests3/contract/*.test.ts` (2) | The sandbox payment adapter is unsafe and fenced out of production; PayPal capture/payout/webhook semantics | Nothing | 19 | <1 s |
-| `integration` (`vitest.workspace.ts:57-80`) | `tests/integration/*.test.ts` (22) + `helpers/http.ts` | Module flows end to end: guards, transactions, append-only triggers, billing | API on `:3000`, migrated + freshly seeded DB | 189 `it` blocks (more at runtime from loops) | not measured here |
+| `integration` (`vitest.workspace.ts:57-80`) | `tests/integration/*.test.ts` (24) + `helpers/http.ts` | Module flows end to end: guards, transactions, append-only triggers, billing | API on `:3000`, migrated + freshly seeded DB | 193 | not measured here |
 | `core` (`vitest.workspace.ts:101-107`) | `tests3/integration/*.test.ts` (13) | The adversarial suites: authorization matrix, validation, money invariants, illegal transitions, the audit's guardrails | Same as `integration` | 195 `it` blocks | not measured here |
 | `concurrency` (`vitest.workspace.ts:81`) | `tests/concurrency/no-double-sale.test.ts` | Two simultaneous purchases of one listing: exactly one wins | Same as `integration` | 1 | not measured here |
 | `property` (`vitest.workspace.ts:82`) | `tests/property/wallet-ledger.test.ts` | Balance = Σ ledger after a mixed sequence of completed and undecided wallet requests | Same as `integration` | 2 | not measured here |
 
 The counts and times for the first four were produced by running them at HEAD
-(`npx vitest run --project web|ux|contract|core-contract`, all green: 195 + 116 + 34 + 19). The four
-live projects were not run for this section because they write to the shared dev database; the
-`it` counts are static counts of `it(` calls. The workspace comment records that the integration
+(`npx vitest run --project web|ux|contract|core-contract`, all green: 202 + 118 + 34 + 19). The four
+live projects were run with the full `pnpm test` after the 19 September fixes — integration 193,
+core 195, concurrency 1, property 2, all green — which reseeds the dev database at the end. The workspace comment records that the integration
 project alone is "57s of test time" (`vitest.workspace.ts:73-74`).
 
 **Two aliases make root-level tests resolve workspace code.** pnpm links a workspace package only
@@ -10705,7 +10704,7 @@ cards, and other collectibles crept back twice through fixtures and comments. Th
 
 1. A textual sweep of every `.ts/.tsx/.md/.css/.sql` file in the repository (skipping
    `node_modules`, `.git`, `dist`, `build`, `.claude`, `coverage`, `assets1`) for seventeen
-   forbidden names — Charizard, Pikachu, Mickey Mantle, Fleer Jordan, Amazing Fantasy and so on
+   forbidden names — other Pokémon, famous sports cards and comic keys (the list is `FORBIDDEN`, `:29-47`; it is not repeated here because this file is scanned too)
    (`rayquaza-only.test.ts:29-47`, sweep at `:77-86`). Exempt: the verbatim Ship My Cards FAQ copy
    and the test itself (`:50-55`). This includes `DIVE1.md`, so documentation is held to it too.
 2. Every `serialNumber: 'SN-…'` in `apps/api/src/db/seed.ts` has a photograph named after it in
@@ -10909,7 +10908,9 @@ Always pass `--project`: the root `vitest run` without it starts all eight proje
 | File | Role | Key functions / lines |
 |---|---|---|
 | `api-client.test.ts` | SPA `api` client: versioned prefix + cookie, 204, unreachable vs server error, the dev-proxy 503 envelope, no auto-retry | `apps/web/src/shared/api` |
+| `auth-bucket.test.ts` | The `auth` rate-limit bucket applies only to routes marked `@AuthBucket` | `skipsAuthBucket` |
 | `faq-legal.test.ts` | FAQ is complete, ordered, verbatim, badged per entry; legal text only what governs Bault; the Ask placeholder answers `#1DDD` | `FaqLegalPage`, `faqContent`, `legalContent` |
+| `env-booleans.test.ts` | Boolean env flags parse `false`/`0`/`no`/`off` as off; no truthiness coercion anywhere | `EnvSchema` |
 | `i18n-catalogue.test.ts` | Locale set, placeholder parity, untranslated strings, brand, retired keys | :22, :57-87, :89-155 |
 | `membership-actions.test.ts` | Join / upgrade credit / downgrade date / keep / lapsed cycle | `shared/membership` `tierAction` |
 | `membership-tiers.test.ts` | Tier catalogue is monotonic, every allowance bounded, coverage and "not covered" list | `apps/api/src/modules/mem/tiers` |
@@ -10936,6 +10937,7 @@ Always pass `--project`: the root `vitest run` without it starts all eight proje
 | `custody-grade.test.tsx` | Serial/Amount/Code/LtrRun/StatusBadge/Seal in LTR and RTL; three item states | :38-205 |
 | `customer-screens.test.tsx` | Account pill, published intake policy panel, vault list/empty/error | `PageHeader`, `IntakePolicyPanel`, `VaultPage` |
 | `design-system.test.tsx` | Field/label wiring, busy button, theme cycle, Shelf Yield panel ordering and "revenue, not profit" | :52-261 |
+| `dispatch-scan.test.tsx` | Dispatch sends only scanned items; a card not in the shipment blocks completion | `WarehouseConsole.tsx` `FulfillmentPanel` |
 | `landing.test.tsx` | Demo stage (no real serial or site), prices from rules, tiers from endpoint, links, one h1 | :84-207 |
 | `membership.test.tsx` | Tier table with prices, confirm before charge, never auto-charges, "not covered" list | `MembershipPage` |
 | `receiving-bench.test.tsx` | One bench, multi-unit booking in one call, photos by key, labels per run, shelf rescue form | `WarehouseConsole`, `PhotoInput` |
@@ -10981,9 +10983,11 @@ Always pass `--project`: the root `vitest run` without it starts all eight proje
 | `not-notifications.test.ts` | Feed messages are sentences, amounts in USD, default-on in-app with opt-out | 3 cases |
 | `pay-flow.test.ts` | Balance moves only on completion; limits; duplicates; audit trail; permissions; legacy endpoints | 21 cases |
 | `pay-money-in-out.test.ts` | Instant card top-up, idempotency key, cash-out fee quote = charge, reversal and handling fee, public price list | 13 cases |
+| `privacy.test.ts` | Service requests readable only by requester or staff (others 404); public listing detail carries no owner, seller or shelf ids | 2 cases |
 | `shp-outbound.test.ts` | Quotes move with weight/distance/box; service limits; customs; insurance and signature; edit/merge/cancel; hold on insufficient funds; shared parcels; direct overnight | 27 cases |
 | `shp-shipment.test.ts` | Multi-item shipment end to end with scan-verified dispatch and billing; mismatch and incomplete form refused | 3 cases |
 | `shp-tracking-list.test.ts` | Creation adds to the list, row fields, no intake id, ETA after rate, status reflected, dispatched kept; authorization | fix :115-123 |
+| `storage-membership.test.ts` | Drives the real storage job: covered periods are recorded, never billed after the membership ends; cover rows are append-only | 2 cases |
 
 **`core` project — `tests3/integration/`**
 
@@ -11086,6 +11090,7 @@ explanation.
 - `apps/api/src/db/migrations/0028_a_label_that_can_be_bought.sql` — [§9](#s9)
 - `apps/api/src/db/migrations/0029_who_signed_in.sql` — [§4](#s4), [§13](#s13)
 - `apps/api/src/db/migrations/0030_a_downgrade_is_not_a_cancellation.sql` — [§9](#s9), [§10](#s10), [§13](#s13)
+- `apps/api/src/db/migrations/0031_membership_stops_the_storage_clock.sql` — [§5](#s5)
 - `apps/api/src/db/schema/_helpers.ts` — [§3](#s3), [§6](#s6), [App. B](#appendix-b)
 - `apps/api/src/db/schema/index.ts` — [§3](#s3)
 - `apps/api/src/db/seed.ts` — [§2](#s2), [§3](#s3), [§4](#s4), [§5](#s5), [§6](#s6), [§7](#s7), [§8](#s8), [§9](#s9), [§10](#s10), [§13](#s13), [§14](#s14), [App. B](#appendix-b)
@@ -11096,6 +11101,7 @@ explanation.
 - `apps/api/src/modules/acc/acc.schema.ts` — [§4](#s4)
 - `apps/api/src/modules/acc/address.schema.ts` — [§4](#s4)
 - `apps/api/src/modules/acc/allow-suspended.decorator.ts` — [§4](#s4)
+- `apps/api/src/modules/acc/auth-bucket.decorator.ts` — [§4](#s4)
 - `apps/api/src/modules/acc/auth.controller.ts` — [§2](#s2), [§4](#s4), [§13](#s13), [§14](#s14), [App. B](#appendix-b)
 - `apps/api/src/modules/acc/auth.service.ts` — [§3](#s3), [§4](#s4), [§6](#s6), [§7](#s7), [§10](#s10), [App. B](#appendix-b)
 - `apps/api/src/modules/acc/intake-id.ts` — [§4](#s4)
@@ -11215,7 +11221,7 @@ explanation.
 - `apps/api/src/modules/sec/current-user.decorator.ts` — [§4](#s4)
 - `apps/api/src/modules/sec/pii.ts` — [§4](#s4)
 - `apps/api/src/modules/sec/roles.decorator.ts` — [§4](#s4)
-- `apps/api/src/modules/sec/roles.guard.ts` — [§4](#s4), [§8](#s8)
+- `apps/api/src/modules/sec/roles.guard.ts` — [§4](#s4)
 - `apps/api/src/modules/sec/sec.module.ts` — [§3](#s3), [§4](#s4)
 - `apps/api/src/modules/shp/boxes.ts` — [§9](#s9), [App. B](#appendix-b)
 - `apps/api/src/modules/shp/carriers.ts` — [§2](#s2), [§9](#s9), [App. B](#appendix-b)
@@ -11281,6 +11287,10 @@ explanation.
 
 - `apps/web/index.html` — [§12](#s12), [§13](#s13), [App. B](#appendix-b)
 
+**`apps/web/nginx-security-headers.conf`**
+
+- `apps/web/nginx-security-headers.conf` — [§13](#s13)
+
 **`apps/web/nginx.conf`**
 
 - `apps/web/nginx.conf` — [§2](#s2), [§4](#s4), [§12](#s12), [§13](#s13), [App. B](#appendix-b)
@@ -11345,7 +11355,7 @@ explanation.
 - `apps/web/src/areas/warehouse/ReceiveParcels.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/ServiceQueue.tsx` — [§8](#s8), [§12](#s12)
 - `apps/web/src/areas/warehouse/SupportQueue.tsx` — [§12](#s12)
-- `apps/web/src/areas/warehouse/WarehouseConsole.tsx` — [§12](#s12), [App. B](#appendix-b)
+- `apps/web/src/areas/warehouse/WarehouseConsole.tsx` — [§12](#s12), [§14](#s14), [App. B](#appendix-b)
 - `apps/web/src/fonts.css` — [§12](#s12), [§13](#s13)
 - `apps/web/src/index.css` — [§12](#s12), [§13](#s13), [App. B](#appendix-b)
 - `apps/web/src/main.tsx` — [§12](#s12), [§13](#s13)
@@ -11488,9 +11498,11 @@ explanation.
 - `tests/integration/not-notifications.test.ts` — [§14](#s14)
 - `tests/integration/pay-flow.test.ts` — [§6](#s6), [§14](#s14)
 - `tests/integration/pay-money-in-out.test.ts` — [§6](#s6), [§14](#s14)
+- `tests/integration/privacy.test.ts` — [§7](#s7), [§8](#s8), [§14](#s14)
 - `tests/integration/shp-outbound.test.ts` — [§9](#s9), [§14](#s14)
 - `tests/integration/shp-shipment.test.ts` — [§9](#s9), [§14](#s14)
 - `tests/integration/shp-tracking-list.test.ts` — [§9](#s9), [§14](#s14)
+- `tests/integration/storage-membership.test.ts` — [§5](#s5), [§14](#s14)
 - `tests/property/wallet-ledger.test.ts` — [§6](#s6), [§14](#s14)
 - `tests/ux/audit-screens.test.tsx` — [§14](#s14)
 - `tests/ux/auth.test.tsx` — [§14](#s14)
@@ -11498,6 +11510,7 @@ explanation.
 - `tests/ux/custody-grade.test.tsx` — [§14](#s14)
 - `tests/ux/customer-screens.test.tsx` — [§14](#s14)
 - `tests/ux/design-system.test.tsx` — [§12](#s12), [§14](#s14)
+- `tests/ux/dispatch-scan.test.tsx` — [§12](#s12), [§14](#s14)
 - `tests/ux/landing.test.tsx` — [§12](#s12), [§14](#s14)
 - `tests/ux/membership.test.tsx` — [§14](#s14)
 - `tests/ux/receiving-bench.test.tsx` — [§14](#s14)
@@ -11505,6 +11518,8 @@ explanation.
 - `tests/ux/sign-ins.test.tsx` — [§4](#s4), [§14](#s14)
 - `tests/ux/warehouse-bench.test.tsx` — [§14](#s14)
 - `tests/web/api-client.test.ts` — [§14](#s14)
+- `tests/web/auth-bucket.test.ts` — [§4](#s4), [§14](#s14)
+- `tests/web/env-booleans.test.ts` — [§2](#s2), [§14](#s14)
 - `tests/web/faq-legal.test.ts` — [§10](#s10), [§14](#s14)
 - `tests/web/i18n-catalogue.test.ts` — [§12](#s12), [§14](#s14)
 - `tests/web/membership-actions.test.ts` — [§14](#s14)
@@ -11567,12 +11582,12 @@ trigger rejects any change to a history table, for every role including the tabl
 (`apps/api/src/db/sql/0001_append_only.sql:16`). Mistakes are corrected by adding new rows that
 compensate. The list began with three tables and now has ten: ledger, custody, audit, bin
 transfers, wallet-request events, arrival disposals, parcel events, support messages, escrow
-events and login attempts (`0001_append_only.sql:42`). A restricted `bault_app` role without
+events and login attempts (`0001_append_only.sql:44`). A restricted `bault_app` role without
 UPDATE/DELETE is a second layer (`:92-93`), but nothing connects as that role today, so the
 triggers alone carry the guarantee (Parts 2, 3).
 
 **Items are never deleted, and each has exactly one owner.** A trigger blocks DELETE only, so
-owner, bin and state can still change (`0001_append_only.sql:121`). `item.owner_id` is a single
+owner, bin and state can still change (`0001_append_only.sql:123`). `item.owner_id` is a single
 NOT NULL column (`apps/api/src/modules/cst/cst.schema.ts:126`). When an item leaves a collector
 without going to another collector (donation, consignment), it goes to the seeded `platform`
 custodian account instead of being orphaned (`apps/api/src/db/seed.ts:191`, `:1268`) (Parts 2, 6).
@@ -11640,7 +11655,7 @@ below zero, and `assertNotBlocked` then refuses new services and shipments
 from the ledger: the *last* crossing from ≥0 to <0, found with `LAG`
 (`apps/worker/src/jobs/debt.ts:39`), because a stored balance is not allowed. Grace (14 days),
 interest (5 bps a day, at least 1 minor unit) and the −$20 suspension threshold are configuration
-(`packages/config/src/env.ts:239-242`, `apps/worker/src/jobs/interest-accrual.ts:40`). Interest is
+(`packages/config/src/env.ts:241-244`, `apps/worker/src/jobs/interest-accrual.ts:40`). Interest is
 new debit rows. `auto_suspended_at` means the sweep lifts only the suspensions it placed itself,
 never an admin's (`apps/worker/src/jobs/wallet-suspension.ts:47-49`) (Parts 5, 7, 13).
 
@@ -11649,11 +11664,11 @@ cash-out request writes nothing to the ledger, and neither does approving it. Th
 written when an approved request is completed. An admin may not decide their own request. Tests
 hold this, and `fundWallet` has to walk the same path (§14.5). The cash-out fee is quoted and
 charged by the same function (`apps/api/src/modules/pay/money-terms.ts:57`) and is recorded as its
-own ledger row (`apps/api/src/modules/pay/wallet-request.service.ts:468`). The payout provider is
-called *before* the debit, and a refusal aborts the whole thing (`wallet-request.service.ts:420`).
-*Caveat, verified at HEAD:* completion debits the full amount *and* the fee, while the payout sends
-amount − fee (`:422`, `:451-462`, `:468`). The collector is therefore charged the fee twice relative to
-the quote from `cashOutNetMinor` (`money-terms.ts:66`) (Parts 9, 23).
+own ledger row (`apps/api/src/modules/pay/wallet-request.service.ts:510`), inside the amount asked
+for: the withdrawal row is `amount − fee`, so the wallet loses exactly the gross and the bank
+receives `cashOutNetMinor` (`money-terms.ts:66`). The payout provider is called *before* the debit,
+and a refusal aborts the whole thing (`wallet-request.service.ts:424`). (Parts 9, 23; the double
+fee the first version took was fixed on 19 September 2026, §6.8.)
 
 **Settling a top-up is a property of the route.** Card and PayPal Goods & Services settle straight
 away at checkout. Friends & Family and bank transfers are refused there, with the alternative given
@@ -11764,7 +11779,7 @@ about a container (Part 32).
 
 **Services close through a filled form.** A single closer, `completeWithFulfillment`, treats a
 blank field, a number ≤0 or an unticked box as missing
-(`apps/api/src/modules/dis/service.service.ts:256`). One `service_request` table with a JSON
+(`apps/api/src/modules/dis/service.service.ts:264`). One `service_request` table with a JSON
 `type_fields` column serves every non-trade service, so a new type needs no migration (Parts 6, 9).
 
 <a id="sB-3"></a>
@@ -11800,7 +11815,7 @@ are agreed on arrival (`cst.schema.ts:160`) (Part 16).
 
 **The ledger, not the clock, is the guard against double billing.** Periods due = periods elapsed
 minus storage charges already raised, with one row per period
-(`apps/worker/src/jobs/storage-fee.ts:192`). Missed runs catch up. The old "once per day" guard
+(`apps/worker/src/jobs/storage-fee.ts:204`). Missed runs catch up. The old "once per day" guard
 silently under-billed. The sweep is the only producer: there is no manual trigger, and the API only
 *displays* the policy (`apps/api/src/modules/vlt/storage-policy.ts:31`). The API cannot import from
 the worker (Parts 9, 16).
@@ -11808,7 +11823,7 @@ the worker (Parts 9, 16).
 **Real object storage, signed by hand.** `S3StorageAdapter` signs SigV4 itself with `node:crypto`
 (`packages/adapters/src/s3.ts:78`), because the SDK is about 15 MB for two operations. The database
 keeps only keys, and reads go through signed URLs. The sandbox adapter, which kept no bytes, is
-refused in production with no fallback (`packages/config/src/env.ts:344`) (Parts 1, 39).
+refused in production with no fallback (`packages/config/src/env.ts:346`) (Parts 1, 39).
 
 <a id="sB-4"></a>
 ### B.4 Marketplace
@@ -11869,7 +11884,7 @@ the shipment's, or the answer is a 409 listing both. Label, state change and eve
 transaction (`apps/api/src/modules/shp/dispatch.service.ts:56`) (Part 6).
 
 **The label is bought against what was quoted.** Dispatch no longer builds a label request. It asks
-`labelRequest` (`apps/api/src/modules/shp/shipment.service.ts:708`), which rebuilds the request from
+`labelRequest` (`apps/api/src/modules/shp/shipment.service.ts:709`), which rebuilds the request from
 the stored destination snapshot (`destinationOf`, `apps/api/src/modules/shp/carriers.ts:61`), the
 box's billable weight and the operator's scale reading. The old request sent `US`/`00000` and a
 repeated weight, and only the sandbox accepted it (Part 47).
@@ -11887,7 +11902,7 @@ in the quote as `eligible: false`, so the user can fix everything at once (Part 
 **Quote before committing, and "choose for me" prices waiting.** `POST /shipping/quote` creates
 nothing. The recommendation scores total + transit days × a day of waiting. It adds back any
 postage credit, so a membership credit does not choose a worse service
-(`shipment.service.ts:489`). Rush is a Bault handling line, not carrier speed (Parts 20, 47).
+(`shipment.service.ts:490`). Rush is a Bault handling line, not carrier speed (Parts 20, 47).
 
 **Boxes are a catalogue stored on the shipment, and weight says whether it was measured.** There
 are five boxes. When none is chosen, the smallest that fits is predicted
@@ -11909,7 +11924,7 @@ codes (Parts 20, 25, 31).
 **A request can change until someone walks to a shelf.** Edits and merges are allowed only in
 `requested` (`apps/api/src/modules/shp/shipment-edit.service.ts:48`). An item cannot be on two open
 shipments. A shipment the wallet cannot cover is held as `awaiting_payment` at the frozen price
-instead of pushing the wallet into debt (`shipment.service.ts:832`). An hourly job expires unpaid
+instead of pushing the wallet into debt (`shipment.service.ts:833`). An hourly job expires unpaid
 holds (`apps/worker/src/jobs/shipment-expiry.ts:21`) (Part 20).
 
 **A group parcel carries no items, and fulfilment can be a person.** In a group parcel each member
@@ -11951,7 +11966,7 @@ never matched a JavaScript `Date` lookup (Part 47).
 
 **The storage sweep exempts covered items, oldest first.** The worker reads the tier's
 `storedItems` from its pricing rule. It is a separate process and cannot import the tier catalogue.
-Covering newest first would move an older item out of cover (`apps/worker/src/jobs/storage-fee.ts:143`)
+Covering newest first would move an older item out of cover (`apps/worker/src/jobs/storage-fee.ts:153`)
 (Part 44).
 
 <a id="sB-7"></a>
@@ -11959,7 +11974,7 @@ Covering newest first would move an older item out of cover (`apps/worker/src/jo
 
 **Private unless marked, and guards run in a fixed order.** The chain is ThrottlerGuard →
 SessionAuthGuard → RolesGuard, with AuditInterceptor around every route
-(`apps/api/src/app.module.ts:98-101`). A route someone forgot to annotate stays private. Role and
+(`apps/api/src/app.module.ts:106-109`). A route someone forgot to annotate stays private. Role and
 status are read fresh on every request, so a suspension takes effect on the next call
 (`apps/api/src/modules/acc/session.service.ts:63`) (Parts 2, 3, 27).
 
@@ -11971,8 +11986,8 @@ server row (`apps/api/src/modules/acc/auth.controller.ts:194`) (Part 3).
 **Nothing reveals whether an account or a record exists.** An unknown user and a wrong password get
 the same 401, and reset and resend stay silent on a miss
 (`apps/api/src/modules/acc/verification.service.ts:109`). Ownership is checked inside the query, so
-another user's item is a 404 (`apps/api/src/modules/vlt/vault.service.ts:420`). Shipments use
-`loadFor` the same way (`apps/api/src/modules/shp/shipment.service.ts:667`). A 403 would confirm the
+another user's item is a 404 (`apps/api/src/modules/vlt/vault.service.ts:429`). Shipments use
+`loadFor` the same way (`apps/api/src/modules/shp/shipment.service.ts:668`). A 403 would confirm the
 id exists (Parts 3, 12, 13).
 
 **One strict input contract and one error envelope.** A global `ValidationPipe` with whitelist and
@@ -11988,11 +12003,11 @@ origins. The API docs are opt-in and password-protected in production (`main.ts:
 two rate-limit buckets: the credential bucket comes from config, and the mail-sending bucket is
 hard-coded to five a minute (`auth.controller.ts:22`, `:34`), because no deployment should raise it.
 `trust proxy` comes from `TRUST_PROXY`, and the schema refuses `true` (`main.ts:68`,
-`packages/config/src/env.ts:162`), because `true` believes whatever `X-Forwarded-For` the caller
+`packages/config/src/env.ts:164`), because `true` believes whatever `X-Forwarded-For` the caller
 typed (Parts 27, 47).
 
 **Fakes cannot reach production.** `PAYMENT_PROVIDER` has no default. The sandbox payment, shipping
-and storage adapters are refused in production twice, by the schema (`env.ts:333`) and by the
+and storage adapters are refused in production twice, by the schema (`env.ts:335`) and by the
 factory (`apps/api/src/shared/adapters/adapters.module.ts:96`), with no fallback. The payment
 sandbox had settled a $5,000 top-up against a fake token (Parts 26, 27, 39, 40).
 
@@ -12062,7 +12077,7 @@ both addresses and produced `AggregateError`. An unreachable API becomes a typed
 starts the API, waits for `/healthz`, then starts Vite (`scripts/dev.mjs:130`) (Part 11).
 
 **The Hebrew catalogue is the key type, and English must be total.** `MessageKey = keyof typeof he`
-and `en: Record<MessageKey, string>` (`apps/web/src/shared/i18n.tsx:2330-2332`), so a missing
+and `en: Record<MessageKey, string>` (`apps/web/src/shared/i18n.tsx:2333-2335`), so a missing
 translation fails the build. English became the default locale in Part 48 (`i18n.tsx:21`,
 `apps/web/index.html:8`), and Hebrew remains complete. Direction is one attribute on `<html>`, and
 the stylesheet mirrors through logical properties (Parts 7, 10, 48).
@@ -12129,7 +12144,7 @@ required only for the provider selected (`:287`), so a fresh checkout boots with
 **Guard SQL runs after every migration.** drizzle-kit cannot express triggers, roles or casts, so
 the runner applies the generated migrations and then the idempotent guard file
 (`migrate.ts:23`). An implicit `text → uuid` cast makes joins between `text` reference columns and
-`uuid` keys work (`0001_append_only.sql:143`). It was a one-line fix instead of retyping every
+`uuid` keys work (`0001_append_only.sql:145`). It was a one-line fix instead of retyping every
 column, and it applies database-wide (Part 2).
 
 **The seed resets by TRUNCATE, and test accounts live apart.** Row triggers do not fire on
@@ -12148,7 +12163,7 @@ triggered it (Parts 1, 3, 13).
 
 **Deployable images and honest probes.** The images are multi-stage and run as a non-root user.
 nginx serves the SPA with the CSP and proxies `/api/`. It *sets* `X-Forwarded-For` rather than
-appending to it (`apps/web/nginx.conf:92-96`), so nothing a client sends survives the hop. Liveness
+appending to it (`apps/web/nginx.conf:95-99`), so nothing a client sends survives the hop. Liveness
 checks nothing. `/readyz` answers 503 when the database is down, because a load balancer reads the
 status code, not the body (`apps/api/src/shared/observability/health.controller.ts:41-46`).
 `backup.sh verify` restores into a scratch database and checks invariants
@@ -12188,6 +12203,7 @@ hypotheses to test, not facts.
 - [§5.2](#s5-2) — Inferred: no test compares the two files was found
 - [§5.7](#s5-7) — Inferred from the missing `FOR UPDATE`
 - [§5.9](#s5-9) — Inferred from the missing lock
+- [§5.13](#s5-13) — Inferred edge; the daily schedule makes it unlikely
 - [§5.13](#s5-13) — Inferred; pg-boss normally delivers each scheduled job to one worker
 - [§5.16](#s5-16) — Inferred remedy
 - [§6.2](#s6-2) — Inferred: text was chosen for extensibility; the schema comment lists only five original values, `prc.schema.ts:26`.
@@ -12240,14 +12256,31 @@ the code as it is. Each item links to the section that explains it with `path:li
 means read in the code (and, where marked, reproduced); **Inferred** means reasoned from the code
 but not reproduced (most are races, which need concurrent requests against a live database).
 
+<a id="sd-0"></a>
+### D.0 Fixed on 19 September 2026
+
+These were found while verifying this guide and have since been fixed; each owning section describes
+the corrected behaviour and names the test that pins it.
+
+| Was | Now | Where |
+|---|---|---|
+| A completed cash-out took its fee twice ($207 debited for a $193 payout). | The wallet loses exactly the amount asked for: a net withdrawal row plus the fee row. | [§6.8](#s6-8) |
+| `EXPOSE_API_DOCS=false` turned the API explorer on. | Parsed strictly (`booleanFromEnv`). | [§2.4](#s2-4) |
+| The `auth` rate limit (30/min) capped every route. | Only routes marked `@AuthBucket` are in it. | [§4.11](#s4-11) |
+| Any signed-in user could read any service request. | Requester or staff only; others get 404. | [§8](#s8) |
+| The public listing detail exposed owner, seller and shelf ids. | Public fields only. | [§7](#s7) |
+| Warehouse dispatch sent the shipment's own item list as "scanned". | It sends what was scanned; strays block completion. | [§12](#s12), [§9](#s9) |
+| A membership only deferred storage: all covered periods were billed when it ended. | Covered periods are recorded (`storage_period_cover`) and never billed. | [§5.13](#s5-13) |
+| nginx dropped the security headers on the document, SPA routes and bundles. | The headers are included in every block that sets its own. | [§13](#s13) |
+| The API image's migrator could not find the append-only SQL. | It looks beside the script and under `src/db/sql/`. | [§13](#s13) |
+
 <a id="sd-1"></a>
 ### D.1 Money
 
 | Defect | Status | Where |
 |---|---|---|
-| A completed cash-out takes its fee twice: a $200 request debits $200 plus a $7 fee row ($207) but pays out $193. The test asserts the $207 debit and never checks the payout. | Verified | [§6.8](#s6-8) |
 | Re-selecting a rate on a shipment already in `rates_selected` charges again and spends the membership cover again; shipping uses no idempotency key. | Verified | [§9](#s9) |
-| Storage is not paused by a membership, only deferred: periods count from `received_at`, so when cover ends every elapsed period is billed at once (e.g. $30 → $120 for one sealed case). A renewal falling between 01:40 and 02:00 UTC is still lapsed when the 02:00 storage sweep runs. | Verified | [§5](#s5), [§10](#s10) |
+| A renewal falling between 01:40 and 02:00 UTC is still lapsed when the 02:00 storage sweep runs, so a storage period that happens to start that night is billed instead of covered. | Verified | [§10](#s10) |
 | A broken lot keeps accruing storage (no `lot_broken` filter). | Verified | [§5](#s5) |
 | Membership covers oversized storage at every tier, including Folio, whose perks don't list it. | Verified | [§5](#s5) |
 | Admin inserting a membership price rule without `parameters.storedItems` silently sets every member's storage cover to 0. | Verified | [§10](#s10) |
@@ -12267,12 +12300,7 @@ but not reproduced (most are races, which need concurrent requests against a liv
 
 | Defect | Status | Where |
 |---|---|---|
-| `EXPOSE_API_DOCS=false` turns the API explorer **on** — `z.coerce.boolean()` reads the string "false" as true (reproduced with zod). | Verified | [§2](#s2), [§3](#s3) |
-| The `auth` throttler (30/min by default) applies to **every** route per IP, not just credential routes; the 300/min default bucket never binds (reproduced by running the guard in isolation). | Verified | [§4](#s4) |
-| `GET /services/requests/:id` has no role gate and no ownership check: any signed-in user can read any service request. | Verified | [§8](#s8) |
 | `GET /shipping/groups/:id` has no membership check. | Verified | [§9](#s9) |
-| The public `GET /marketplace/listings/:id` returns the whole item row, including `ownerId` and `binId`. | Verified | [§7](#s7) |
-| The production nginx config sends no CSP, `X-Frame-Options` or `nosniff` on `/`, the SPA routes or `/assets/*` — per-location `add_header` blocks stop inheritance (measured in an `nginx:1.27` container). | Verified | [§13](#s13) |
 | A suspended user's cookie is refused on `/auth/logout` and `/auth/login`: they cannot sign out, and nobody else can sign in on that browser until the cookie expires (up to 7 days). | Verified (code) | [§4](#s4) |
 | A leftover email-verification token re-activates a suspended account; `auto_suspended_at` survives admin edits, so the nightly sweep can re-suspend an account an admin reinstated or lift a later manual suspension. | Verified (code) | [§4](#s4), [§10](#s10) |
 | Single-use tokens (confirmation, verification) can be consumed twice under concurrency; `ConfirmationService.consume` burns the token outside the action's transaction. | Inferred | [§3.9](#s3-9), [§4](#s4) |
@@ -12287,13 +12315,11 @@ but not reproduced (most are races, which need concurrent requests against a liv
 
 | Defect | Status | Where |
 |---|---|---|
-| Warehouse dispatch sends the shipment's own item list as `scannedItemIds`, so the server's scan-set check always passes. | Verified | [§12](#s12), [§9](#s9) |
 | Swap approval doesn't re-check the items (a listed, sold, held or shipped card can be transferred); a swap can be rejected after it executed; a gift sends no notification. | Verified | [§7](#s7) |
 | A seller's counter-offer notifies the seller instead of the buyer; two identical concurrent offers produce a 500. | Verified | [§7](#s7) |
 | Escrow never checks the hold flag or who owns the card it receives. | Verified | [§7.10](#s7-10), [§5](#s5) |
 | Direct-ship shipments are stored with no items, so they can never be dispatched or handed over — they sit charged in `rates_selected`. Direct ship also makes an illegal parcel move (`received → processed`). | Verified | [§9.16](#s9-16), [§5](#s5) |
 | The tracking job hard-codes the sandbox adapter, so parcels never reach `delivered` or `exception`, even with EasyPost configured; EasyPost rates would mostly fail to match the catalogue by name. | Verified | [§9](#s9), [§2](#s2) |
-| The API Docker image's migrator looks for `dist/db/sql/0001_append_only.sql`, which is never copied — a Docker deploy would run without the append-only triggers. | Verified | [§13](#s13) |
 | Shelf counts never go down when an item leaves (it keeps its `bin_id`), skewing counts, auto-stow and the shelf report. | Verified | [§5](#s5) |
 | The admin item editor writes owner, shelf and state directly, skipping the lifecycle check and the `bin_transfer` row. | Verified | [§5](#s5) |
 | Items vanish from the collector's vault in every scope while shipped, discarded or at a grader. | Verified | [§5](#s5) |

@@ -215,9 +215,17 @@ export class DisController {
     return this.requests.listQueue();
   }
 
+  /**
+   * One request — to the collector who asked for it, or to staff.
+   *
+   * It had no role gate and no ownership check, so any signed-in account could
+   * read any request by id: whose card, what was asked, the operator's notes.
+   * Somebody else's request answers "not found", as the helpdesk does for
+   * somebody else's ticket, so the route doesn't confirm that it exists.
+   */
   @Get('requests/:id')
-  get(@Param('id') id: string) {
-    return this.requests.get(id);
+  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.requests.getFor(user, id);
   }
 
   // Operator approval workflow --------------------------------------------------

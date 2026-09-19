@@ -50,7 +50,7 @@ function booleanFromEnv(fallback: boolean) {
  * Secrets themselves are NEVER hard-coded: this only reads them from the
  * environment (Constitution Principle IX). `.env.example` documents the shape.
  */
-const EnvSchema = z.object({
+export const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(3000),
 
@@ -142,7 +142,9 @@ const EnvSchema = z.object({
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
 
   /** Serve the OpenAPI explorer. Off by default; see the production check below. */
-  EXPOSE_API_DOCS: z.coerce.boolean().default(false),
+  // Strict: `z.coerce.boolean()` read EXPOSE_API_DOCS=false as TRUE and served
+  // the explorer to anyone who had tried to turn it off.
+  EXPOSE_API_DOCS: booleanFromEnv(false),
   API_DOCS_PASSWORD: z.string().optional().default(''),
 
   /**

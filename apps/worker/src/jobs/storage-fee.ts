@@ -32,8 +32,8 @@ import type { Pool } from 'pg';
  * skipped day's fee was simply never charged.
  *
  * The guard is now period accounting. For each item the sweep works out how many
- * periods have elapsed and subtracts how many storage charges already exist
- * against it; it bills the difference. Running twice in one day bills nothing the
+ * periods have elapsed and subtracts how many are already settled — charged, or
+ * covered by a membership (`storage_period_cover`) — and bills the difference. Running twice in one day bills nothing the
  * second time, because the count already matches. Missing a week bills the
  * catch-up when it next runs. The ledger, not the clock, is the record of what
  * has been charged.
@@ -46,7 +46,15 @@ import type { Pool } from 'pg';
  * is specifically designed to avoid. The API's `storage-policy.ts` deliberately
  * does NOT duplicate this calculation — it reads what this sweep wrote.
  */
-export async function runStorageFees(pool: Pool): Promise<void> {
+export async function runStorageFees(
+  pool: Pool,
+  /**
+   * Limit the sweep to these items. The scheduled run passes nothing and sweeps
+   * everything; a scoped run is for re-running one item by hand, and for tests
+   * that must not bill the rest of a shared database.
+   */
+  options: { itemIds?: string[] } = {},
+): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -113,24 +121,25 @@ export async function runStorageFees(pool: Pool): Promise<void> {
     };
 
     /**
-     * One row per (item, period) that is due and not yet billed.
+     * The per-item state the two statements below share.
      *
      * `intake_minor` is the item's own intake charge — the base the percentage
      * applies to. An item with no intake charge (seeded or hand-created before
      * billing existed) falls back to the rule's flat `value`, so it is still
      * billed something rather than being stored free forever by accident.
      *
-     * `periods_billed` counts the storage charges already raised against the
-     * item. That count IS the idempotence guard.
+     * `periods_done` is the idempotence guard: the storage periods already
+     * charged PLUS the periods a membership already covered
+     * (`storage_period_cover`, migration 0031). Counting only charges was the
+     * bug — a covered period left no trace, so when cover ended the sweep saw it
+     * as unbilled and charged every one of them at once.
+     *
+     * `covered_by` names the tier covering the item right now, if any. For those the
+     * sweep RECORDS each newly started period as covered instead of billing it.
      */
-    const due = await client.query<{
-      item_id: string;
-      owner_id: string;
-      oversized: boolean;
-      periods_due: string;
-      amount: string;
-    }>(
-      `WITH policy AS (
+    const scope = options.itemIds && options.itemIds.length > 0 ? options.itemIds : null;
+    const shared = `
+       policy AS (
          SELECT $1::int  AS std_free,  $2::int AS std_period,  $3::int AS std_bps,  $4::bigint AS std_flat,
                 $5::int  AS ovr_free,  $6::int AS ovr_period,  $7::int AS ovr_bps,  $8::bigint AS ovr_flat
        ),
@@ -140,6 +149,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
        -- ended membership covers nothing, which is the safe direction.
        member_cap AS (
          SELECT m.user_id::text AS user_id,
+                m.tier,
                 COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
            FROM membership m
            JOIN LATERAL (
@@ -161,9 +171,10 @@ export async function runStorageFees(pool: Pool): Promise<void> {
        -- cover and start billing storage on something that had been free for
        -- months, which is exactly the surprise a subscription is sold to stop.
        member_covered AS (
-         SELECT r.id
+         SELECT r.id, r.tier
            FROM (
              SELECT i.id,
+                    c.tier,
                     row_number() OVER (
                       PARTITION BY i.owner_id ORDER BY i.received_at ASC, i.id ASC
                     ) AS rn,
@@ -180,6 +191,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 i.owner_id,
                 i.oversized,
                 i.received_at,
+                mc.tier AS covered_by,
                 COALESCE(
                   (SELECT c.amount FROM charge c
                     WHERE c.action_type = 'intake' AND c.reference_id = i.id::text
@@ -189,22 +201,20 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 ) AS intake_minor,
                 (SELECT count(*) FROM charge c
                   WHERE c.action_type IN ('storage', 'storage_oversized')
-                    AND c.reference_id = i.id::text) AS periods_billed
+                    AND c.reference_id = i.id::text)
+                + (SELECT count(*) FROM storage_period_cover sc
+                    WHERE sc.item_id = i.id::text) AS periods_done
            FROM item i
+           LEFT JOIN member_covered mc ON mc.id = i.id
           WHERE i.lifecycle_state = 'stored'
             AND i.received_at IS NOT NULL
-            AND i.id NOT IN (SELECT id FROM member_covered)
+            AND ($9::text[] IS NULL OR i.id::text = ANY($9::text[]))
        ),
        computed AS (
-         SELECT s.id,
-                s.owner_id,
-                s.oversized,
-                s.intake_minor,
-                s.periods_billed,
+         SELECT s.*,
                 CASE WHEN s.oversized THEN p.ovr_free ELSE p.std_free END   AS free_days,
                 CASE WHEN s.oversized THEN p.ovr_period ELSE p.std_period END AS period_days,
-                CASE WHEN s.oversized THEN p.ovr_bps ELSE p.std_bps END      AS bps,
-                s.received_at
+                CASE WHEN s.oversized THEN p.ovr_bps ELSE p.std_bps END      AS bps
            FROM stored s CROSS JOIN policy p
        ),
        elapsed AS (
@@ -220,24 +230,57 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 ) AS periods_elapsed
            FROM computed c
           WHERE now() >= c.received_at + make_interval(days => c.free_days)
-       )
+       )`;
+    const args = [
+      params.standard.freeDays,
+      params.standard.periodDays,
+      params.standard.bps,
+      params.standard.flat,
+      params.oversized.freeDays,
+      params.oversized.periodDays,
+      params.oversized.bps,
+      params.oversized.flat,
+      scope,
+    ];
+
+    /**
+     * 1. COVER. Every period that has started on an item a membership covers,
+     *    and that is not yet charged or covered, is recorded as covered — with
+     *    the tier that paid for it. Nothing is billed for it, now or later.
+     */
+    const covered = await client.query(
+      `WITH ${shared}
+       INSERT INTO storage_period_cover (item_id, user_id, tier, period_no)
+       SELECT e.id::text, e.owner_id, e.covered_by, gs.n
+         FROM elapsed e
+         CROSS JOIN LATERAL generate_series(e.periods_done + 1, e.periods_elapsed) AS gs(n)
+        WHERE e.covered_by IS NOT NULL
+          AND e.periods_elapsed > e.periods_done
+       ON CONFLICT DO NOTHING`,
+      args,
+    );
+
+    /**
+     * 2. BILL. One row per uncovered item with periods due: those started and
+     *    neither charged nor covered.
+     */
+    const due = await client.query<{
+      item_id: string;
+      owner_id: string;
+      oversized: boolean;
+      periods_due: string;
+      amount: string;
+    }>(
+      `WITH ${shared}
        SELECT id AS item_id,
               owner_id,
               oversized,
-              (periods_elapsed - periods_billed)::text AS periods_due,
+              (periods_elapsed - periods_done)::text AS periods_due,
               GREATEST(1, ROUND(intake_minor * bps / 10000.0))::bigint::text AS amount
          FROM elapsed
-        WHERE periods_elapsed > periods_billed`,
-      [
-        params.standard.freeDays,
-        params.standard.periodDays,
-        params.standard.bps,
-        params.standard.flat,
-        params.oversized.freeDays,
-        params.oversized.periodDays,
-        params.oversized.bps,
-        params.oversized.flat,
-      ],
+        WHERE covered_by IS NULL
+          AND periods_elapsed > periods_done`,
+      args,
     );
 
     let chargedCount = 0;
@@ -304,7 +347,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
     await client.query('COMMIT');
     // eslint-disable-next-line no-console
     console.log(
-      `[job:storage-fee] billed ${chargedCount} period(s) across ${itemIds.length} item(s) / ${accountIds.size} account(s), total ${totalAmount}`,
+      `[job:storage-fee] billed ${chargedCount} period(s) across ${itemIds.length} item(s) / ${accountIds.size} account(s), total ${totalAmount}; ${covered.rowCount ?? 0} period(s) covered by memberships`,
     );
   } catch (err) {
     await client.query('ROLLBACK').catch(() => undefined);

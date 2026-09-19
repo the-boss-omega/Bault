@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { skipsAuthBucket } from './modules/acc/auth-bucket.decorator';
 import { loadEnv } from '@bault/config';
 import { AppController } from './app.controller';
 
@@ -62,7 +63,14 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
         return {
           throttlers: [
             { name: 'default', ttl: 60_000, limit: env.RATE_LIMIT_PER_MINUTE },
-            { name: 'auth', ttl: 60_000, limit: env.AUTH_RATE_LIMIT_PER_MINUTE },
+            // Only the routes marked @AuthBucket — see auth-bucket.decorator.ts
+            // for why this can't be left to @Throttle alone.
+            {
+              name: 'auth',
+              ttl: 60_000,
+              limit: env.AUTH_RATE_LIMIT_PER_MINUTE,
+              skipIf: skipsAuthBucket,
+            },
           ],
         };
       },

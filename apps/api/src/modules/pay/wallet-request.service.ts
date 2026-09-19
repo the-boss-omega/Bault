@@ -390,14 +390,18 @@ export class WalletRequestService {
 
       if (request.type === 'cash_out') {
         const balance = await this.ledger.balanceOf(request.userId, tx);
-        // The FEE has to fit too. Completing a cash-out that clears the balance
-        // and then charging a fee against it would overdraw an account by an
-        // amount the collector was told about and never agreed to fund.
-        const needed = request.amount + feeMinor;
+        /**
+         * The fee comes OUT of the amount asked for — the quote says "{fee}
+         * comes off {gross}, so {net} reaches you" (`cashOutNetMinor`). So the
+         * wallet must hold the gross, and loses exactly the gross: never the
+         * gross plus the fee. (It used to require and take both, while paying
+         * out only the net — the collector paid the fee twice.)
+         */
+        const needed = request.amount;
         if (balance.amount < needed) {
           throw AppError.conflict(
             ErrorCode.INSUFFICIENT_BALANCE,
-            'The balance no longer covers this cash-out and its fee; it cannot be completed.',
+            'The balance no longer covers this cash-out; it cannot be completed.',
             { availableMinor: balance.amount, requestedMinor: request.amount, feeMinor },
           );
         }
@@ -449,13 +453,15 @@ export class WalletRequestService {
       }
 
       // The money movement itself: one append-only ledger row, recorded the same
-      // way every other movement in the platform is (Principle IV).
+      // way every other movement in the platform is (Principle IV). For a
+      // cash-out it is what actually left for the bank — the net. The fee is
+      // the second row below; together they are exactly the amount asked for.
       const [ledgerRow] = await tx
         .insert(ledgerRecord)
         .values({
           userId: request.userId,
           type: request.type === 'cash_in' ? 'credit_topup' : 'withdrawal',
-          amount: request.amount,
+          amount: request.type === 'cash_out' ? request.amount - feeMinor : request.amount,
           direction: request.type === 'cash_in' ? 'credit' : 'debit',
           currency: request.currency ?? DEFAULT_CURRENCY,
           referenceType: 'wallet_request',
@@ -467,10 +473,10 @@ export class WalletRequestService {
       /**
        * The fee, as its own charge and its own ledger row.
        *
-       * Deliberately NOT netted off the withdrawal row. A collector asking for
-       * $200 and receiving $193 should be able to see both numbers on their
-       * statement; a single $200 debit next to a $193 arrival is the shape of a
-       * question to support.
+       * Kept as its own row rather than folded into the withdrawal. A collector
+       * asking for $200 and receiving $193 sees a $193 withdrawal and a $7 fee
+       * on their statement — both numbers, adding up to the $200 they asked
+       * for, and matching the $193 that reaches their bank.
        */
       if (feeMinor > 0) {
         const [c] = await tx

@@ -69,6 +69,11 @@ describe('SHP outbound shipping', () => {
 
     const track = (await collector.get(`/shipping/shipments/${shipment.id}`)).body;
     expect(['shipped', 'in_transit', 'delivered']).toContain(track.status);
+    // Each item comes with its serial, so the dispatch screen can match a
+    // scanned label to it instead of sending the shipment's own list back.
+    const items = track.items as { id: string; serialNumber: string }[];
+    expect(items.map((i) => i.id).sort()).toEqual([itemA.id, itemB.id].sort());
+    for (const i of items) expect(i.serialNumber).toMatch(/^SN-/);
   });
 
   it('rejects dispatch when the scanned set does not match', async () => {

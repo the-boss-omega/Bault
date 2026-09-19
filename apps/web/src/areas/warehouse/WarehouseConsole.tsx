@@ -958,20 +958,33 @@ interface ShipmentDetail {
   status: string;
   carrier: string | null;
   itemIds: string[];
+  /** Each item's serial and label barcode, so a scan can be matched to it. */
+  items?: { id: string; serialNumber: string; barcode: string; description: string }[];
   destinationAddress: string;
   boxSize: string | null;
 }
 
 /**
  * Structured shipment fulfillment (Requirement 5.3). The operator loads the
- * shipment, verifies EVERY item, and fills the required carrier / weight / notes
- * fields before the request can be closed.
+ * shipment, SCANS every item into the box, and fills the required carrier /
+ * weight / notes fields before the request can be closed.
+ *
+ * What is sent as `scannedItemIds` is what was scanned — never the shipment's
+ * own list. It used to be the shipment's own list (`detail.itemIds`), behind
+ * tick-boxes, so the API's "the scanned set must equal the shipment" check
+ * compared the list with itself and could not fail: a wrong card in the box
+ * shipped. Now a label that isn't in this shipment is shown and blocks
+ * completion here, and the API refuses the set if anything still disagrees.
  */
 function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t } = useI18n();
   const [shipmentId, setShipmentId] = useState('');
   const [detail, setDetail] = useState<ShipmentDetail | null>(null);
-  const [verified, setVerified] = useState<Record<string, boolean>>({});
+  /** Item ids scanned into the box. */
+  const [scanned, setScanned] = useState<string[]>([]);
+  /** Labels scanned that belong to no item in this shipment. */
+  const [strays, setStrays] = useState<string[]>([]);
+  const [scanInput, setScanInput] = useState('');
   const [carrier, setCarrier] = useState('DHL');
   const [weight, setWeight] = useState('500');
   const [notes, setNotes] = useState('');
@@ -981,7 +994,9 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
     try {
       const s = await api.get<ShipmentDetail>(`/shipping/shipments/${shipmentId}`);
       setDetail(s);
-      setVerified({});
+      setScanned([]);
+      setStrays([]);
+      setScanInput('');
       setError(null);
       if (s.carrier) setCarrier(s.carrier);
     } catch (e) {
@@ -989,14 +1004,27 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
     }
   }
 
-  const allVerified = detail ? detail.itemIds.every((id) => verified[id]) : false;
-  const complete = allVerified && carrier !== '' && weight !== '' && notes.trim() !== '';
+  /** A scanned label is an item's serial, its barcode, or (typed) its id. */
+  function recordScan(raw: string) {
+    const label = raw.trim();
+    if (!detail || label === '') return;
+    const match = (detail.items ?? []).find(
+      (i) => i.serialNumber === label || i.barcode === label || i.id === label,
+    );
+    if (match) setScanned((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
+    else setStrays((prev) => (prev.includes(label) ? prev : [...prev, label]));
+    setScanInput('');
+  }
+
+  const allScanned = detail ? detail.itemIds.every((id) => scanned.includes(id)) : false;
+  const complete =
+    allScanned && strays.length === 0 && carrier !== '' && weight !== '' && notes.trim() !== '';
 
   async function completeShipment() {
     if (!detail || !complete) return;
     try {
       const res = await api.post<{ trackingNumber: string }>(`/shipping/shipments/${detail.id}/dispatch`, {
-        scannedItemIds: detail.itemIds,
+        scannedItemIds: scanned,
         carrier,
         packageWeightGrams: Number(weight),
         fulfillmentNotes: notes,
@@ -1044,23 +1072,59 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
               : t('warehouse.dispatch.anyBox')}
           </p>
 
-          <div className="field">
-            <span className="field-label">{t('warehouse.itemsVerified')}</span>
-            <ul className="check-list">
-              {detail.itemIds.map((id) => (
+          <label className="field">
+            <span className="field-label">{t('warehouse.dispatch.scanLabel')}</span>
+            <input
+              value={scanInput}
+              onChange={(e) => setScanInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  recordScan(scanInput);
+                }
+              }}
+              dir="ltr"
+              autoComplete="off"
+            />
+            <span className="field-hint">
+              {t('warehouse.dispatch.scannedCount', { done: scanned.length, total: detail.itemIds.length })}
+            </span>
+          </label>
+
+          <ul className="check-list">
+            {detail.itemIds.map((id) => {
+              const info = (detail.items ?? []).find((i) => i.id === id);
+              const done = scanned.includes(id);
+              return (
                 <li key={id}>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={!!verified[id]}
-                      onChange={() => setVerified((p) => ({ ...p, [id]: !p[id] }))}
-                    />
-                    <code dir="ltr">{id}</code>
-                  </label>
+                  <span className="check">
+                    <input type="checkbox" checked={done} readOnly tabIndex={-1} aria-label={info?.serialNumber ?? id} />
+                    <code dir="ltr">{info?.serialNumber ?? id}</code>
+                    {info?.description && <span className="field-hint">{info.description}</span>}
+                  </span>
                 </li>
-              ))}
-            </ul>
-          </div>
+              );
+            })}
+          </ul>
+
+          {strays.map((label) => (
+            <p key={label} className="field-error" role="alert">
+              {t('warehouse.dispatch.notInShipment', { serial: label })}
+            </p>
+          ))}
+          {(scanned.length > 0 || strays.length > 0) && (
+            <div className="row">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setScanned([]);
+                  setStrays([]);
+                }}
+              >
+                {t('warehouse.dispatch.clearScans')}
+              </Button>
+            </div>
+          )}
 
           <div className="form-grid">
             <label className="field">

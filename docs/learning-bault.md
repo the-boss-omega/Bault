@@ -85,13 +85,13 @@ no webhook id: list every validation error `loadEnv` would raise, and the line t
 
 **Recall.**
 1. Why are there two database URLs?
-2. What does `EXPOSE_API_DOCS=false` actually do?
+2. What does `EXPOSE_API_DOCS=false` do, and what did it do before 19 September?
 3. Where does `.env` come from when a process runs from `apps/api`?
 4. Which settings does the schema refuse in production?
 5. What reads `SESSION_COOKIE_SECRET`?
 
-**Checkpoint.** Explain to yourself why `EXPOSE_API_DOCS=false` is a defect, and write the one-line
-fix you would propose (don't apply it).
+**Checkpoint.** Explain why `EXPOSE_API_DOCS` is parsed with `booleanFromEnv` and not
+`z.coerce.boolean()` — what the latter did with the string "false" — and find the test that pins it.
 
 ### S3 · Boot and the request pipeline · 60 min
 
@@ -134,7 +134,7 @@ impossible to rewrite — and what does not.
 4. Can the `bault_app` role log in?
 5. Why is there an implicit `text → uuid` cast?
 
-**Checkpoint.** Name the ten append-only tables from memory, then check against §3.4.
+**Checkpoint.** Name the eleven append-only tables from memory, then check against §3.4.
 
 ### S5 · Migrations and the seed · 45 min
 
@@ -234,8 +234,8 @@ or neither — and justify it in two sentences.
 4. What is the throttler's bucket key, and which bucket caps every route?
 5. Why is `TRUST_PROXY=true` refused?
 
-**Checkpoint.** Compute the effective per-route request limit per IP with the default config, then
-with the developer `.env`.
+**Checkpoint.** With the default config, what limits apply per IP to `POST /auth/login` and to
+`GET /pricing/list`? How does the `auth` throttler know to skip the second?
 
 **Phase 1 mastery check.** Without notes, explain to an imaginary new engineer: what happens between
 a browser click and a database write; which history can never change and why; and what a suspended
@@ -374,7 +374,8 @@ user can still do. Then check each claim against §3 and §4.
 4. Where does a shipped item appear in the vault?
 5. What keeps the storage sweep from billing twice?
 
-**Checkpoint.** Explain the "membership only defers storage" defect in your own words and name the line that causes it.
+**Checkpoint.** Explain how `storage_period_cover` keeps a period a membership covered from being
+billed after the membership ends, and find the two statements in the sweep that write and read it.
 
 ### S17 · Listings, browsing and the atomic sale · 75 min
 
@@ -469,7 +470,8 @@ user can still do. Then check each claim against §3 and §4.
 4. Why do parcels never reach `delivered`?
 5. What locks the payment-expiry sweep?
 
-**Checkpoint.** Explain why the warehouse dispatch screen defeats the scan-set check ([D.3](../DIVE1.md#sd-3)).
+**Checkpoint.** Explain how the dispatch screen builds `scannedItemIds` from barcode scans, and what
+happens — on the screen and at the API — when a card that isn't in the shipment is scanned.
 
 **Phase 2 mastery check.** Trace one card's whole life in writing: arrives in a parcel, is booked in,
 is stored past its included period, is sold, and is shipped to the buyer — every service call, every
@@ -674,9 +676,9 @@ row, every fee, with `file:line`. Check it against §5, §6, §7 and §9.
 ### S35 · Provider money: cash-out, top-ups, chargebacks · 60 min
 
 **Read.** [§6.8](../DIVE1.md#s6-8)–[§6.11](../DIVE1.md#s6-11) · [§6.13](../DIVE1.md#s6-13) · [§2.5](../DIVE1.md#s2-5) · **Open.** `money-terms.ts` · `checkout.service.ts` · `chargeback.service.ts` · `packages/adapters/src/payment.ts`
-**Trace.** A $200 cash-out end to end — and find where the fee is taken twice.
+**Trace.** A $200 cash-out end to end — and show that the wallet loses exactly $200: a $193 withdrawal row and a $7 fee row.
 **Recall.** 1. The fee on $100.01? 2. What happens when the settled amount doesn't match the request? 3. What gives single-credit idempotency for a top-up? 4. Which ledger type does a chargeback write? 5. What does the webhook do today?
-**Checkpoint.** Write the corrected ledger rows for a $200 cash-out as the quote promises it.
+**Checkpoint.** Explain what the code did before 19 September (it took the fee twice) and which test assertion now prevents it.
 
 ### S36 · Shipping changes, shared parcels and other routes out · 75 min
 
@@ -703,7 +705,7 @@ row, every fee, with `file:line`. Check it against §5, §6, §7 and §9.
 
 **Read.** [§13.4](../DIVE1.md#s13-4)–[§13.12](../DIVE1.md#s13-12) · **Open.** `scripts/tunnel.mjs` · the three Dockerfiles · `apps/web/nginx.conf` · `.github/workflows/ci.yml` · `infra/ops/backup.sh` · `docs/production-readiness.md`
 **Trace.** `curl -I` the web image's `/` and a font file (reason it through the nginx config), and explain why the headers differ.
-**Recall.** 1. Why tunnel `vite preview` and not the dev server? 2. What does the tunnel wait for before opening? 3. Why is MinIO a CI step and not a service? 4. What must `TRUST_PROXY` be behind the nginx container? 5. Why would the API image's migrator fail?
+**Recall.** 1. Why tunnel `vite preview` and not the dev server? 2. What does the tunnel wait for before opening? 3. Why is MinIO a CI step and not a service? 4. What must `TRUST_PROXY` be behind the nginx container? 5. Why did the API image's migrator fail, and how does it find the SQL now?
 **Checkpoint.** Rank the top three production blockers from §13.9 and Appendix D, with one sentence each.
 
 ### S40 · Testing · 60 min
@@ -736,9 +738,9 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S1.** 1. `user` (collector areas), `warehouse_operator` (warehouse console), `admin` (admin console). 2. Any four of: items never deleted; one owner; append-only history; balance = sum of ledger; prices frozen onto charges; one chokepoint for fixed-price actions; successful state changes audited. 3. `shipped`, `donated`, `consigned`, `discarded`. 4. Delaware levies no sales tax, so it is a forwarding site; New Jersey stores goods. 5. The API and the web app; not the worker (`pnpm dev:worker`).
 
-**S2.** 1. PgBouncer's transaction pooling can't carry pg-boss LISTEN/NOTIFY or DDL, so jobs and migrations use a direct URL. 2. It *enables* the docs — `z.coerce.boolean` reads "false" as true. 3. `loadDotenvFromRoot` walks up to six directories to the root `.env`. 4. Sandbox storage, shipping or payment; console email; docs exposed without a password. 5. Nothing.
+**S2.** 1. PgBouncer's transaction pooling can't carry pg-boss LISTEN/NOTIFY or DDL, so jobs and migrations use a direct URL. 2. Nothing — it is off. It is parsed strictly by `booleanFromEnv`; it used to *enable* the docs, because `z.coerce.boolean` reads "false" as true. 3. `loadDotenvFromRoot` walks up to six directories to the root `.env`. 4. Sandbox storage, shipping or payment; console email; docs exposed without a password. 5. Nothing.
 
-**S3.** 1. Throttler, then session, then roles. 2. Cross-module services come from `@Global` kernels. 3. `pay.module.ts:31`, with `useExisting`. 4. It isn't `@Public`. 5. `EXPOSE_API_DOCS` being any non-empty string (plus Basic auth when a password is set).
+**S3.** 1. Throttler, then session, then roles. 2. Cross-module services come from `@Global` kernels. 3. `pay.module.ts:31`, with `useExisting`. 4. It isn't `@Public`. 5. `EXPOSE_API_DOCS` set to `true`, `1`, `yes` or `on` (plus Basic auth when a password is set).
 
 **S4.** 1. READ COMMITTED, plus `SELECT … FOR UPDATE` on contested rows. 2. `TRUNCATE`. 3. A 500 `internal` (the trigger raises `23514`). 4. No — it has NOLOGIN, and the app connects as the superuser `bault`. 5. Reference columns are `text` while keys are `uuid`, so joins need the cast.
 
@@ -750,7 +752,7 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S8.** 1. A unique index, a CHECK constraint, and the `user_account_username_immutable` trigger. 2. 7 days, absolute, never extended. 3. Only its SHA-256. 4. `email_unverified`. 5. So the audit row names the person signing in.
 
-**S9.** 1. No — it overrides it. 2. None. 3. A reset keeps none; a change keeps the caller's own. 4. Controller, handler, throttler name and `req.ip`; the `auth` bucket (30/min by default) caps every route. 5. It believes a forged `X-Forwarded-For`.
+**S9.** 1. No — it overrides it. 2. None. 3. A reset keeps none; a change keeps the caller's own. 4. Controller, handler, throttler name and `req.ip`; the `auth` bucket (30/min by default) applies only to routes marked `@AuthBucket` — before 19 September it capped every route. 5. It believes a forged `X-Forwarded-For`.
 
 **S10.** 1. The `trg_no_delete_item` trigger. 2. Yes — a no-op. 3. `dispatch`. 4. No. 5. In each caller, plus `relocate`.
 
@@ -764,7 +766,7 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S15.** 1. The last one. 2. 1 cent. 3. No — the test is strictly below −$20. 4. When the balance is ≥ −$20 and the account carries the auto-suspension marker. 5. Amounts ≤ 0, and settled charges with no ledger row.
 
-**S16.** 1. Day 180. 2. The storage rule's flat `value`. 3. No. 4. Nowhere. 5. It counts the storage charges already written against the periods elapsed.
+**S16.** 1. Day 180. 2. The storage rule's flat `value`. 3. No. 4. Nowhere. 5. It counts the periods already settled — storage charges plus membership-covered periods — against the periods elapsed.
 
 **S17.** 1. The item's `listed` state, taken under an item row lock. 2. No — only the hold flag freezes. 3. `FOR UPDATE` on the listing (then the item). 4. So the statement shows gross − fee = net. 5. Concurrent debits against the buyer's unlocked wallet.
 
@@ -810,7 +812,7 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S38.** 1. An approved order id can't be invented, so the server captures what the provider approved. 2. The idempotency key. 3. Basic auth with the key as the username and an empty password. 4. `SandboxShippingAdapter`. 5. Twice — by the schema and by the factory.
 
-**S39.** 1. The dev server serves source files. 2. A 401 from the preview (the password gate is up). 3. The official image needs `server /data` as its command, which a service container can't pass. 4. `uniquelocal` or the proxy's CIDR — never `true`. 5. It looks for `dist/db/sql/0001_append_only.sql`, which is never copied into the image.
+**S39.** 1. The dev server serves source files. 2. A 401 from the preview (the password gate is up). 3. The official image needs `server /data` as its command, which a service container can't pass. 4. `uniquelocal` or the proxy's CIDR — never `true`. 5. It doesn't any more: it looked only for `dist/db/sql/0001_append_only.sql`, which is never in the image, and now also tries `src/db/sql/` under the working directory.
 
 **S40.** 1. A failed run leaves more residue, not less. 2. `integration`, `core`, `concurrency`, `property`. 3. Separation of duties — an admin can't complete their own request. 4. CI never builds the web app, so there is no `dist/` to check. 5. No per-test isolation: suites share the seeded database.
 

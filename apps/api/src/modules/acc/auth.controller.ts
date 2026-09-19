@@ -3,7 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { parse as parseCookie } from 'cookie';
 import type { Request, Response } from 'express';
 import { loadEnv } from '@bault/config';
-import { Throttle } from '@nestjs/throttler';
+import { AuthBucket } from './auth-bucket.decorator';
 import { Public } from './public.decorator';
 
 /**
@@ -19,7 +19,7 @@ import { Public } from './public.decorator';
  * while barely inconveniencing a script that can rotate addresses is the worst
  * of both.
  */
-const CREDENTIAL_ROUTE = { auth: { limit: loadEnv().AUTH_RATE_LIMIT_PER_MINUTE, ttl: 60_000 } };
+const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
 
 /**
  * The routes that send mail to an address the CALLER chose.
@@ -31,7 +31,7 @@ const CREDENTIAL_ROUTE = { auth: { limit: loadEnv().AUTH_RATE_LIMIT_PER_MINUTE, 
  * higher number is the right answer, and the one place a low limit would hurt —
  * a shared office IP signing in — is the sign-in route, not this one.
  */
-const MAIL_ROUTE = { auth: { limit: 5, ttl: 60_000 } };
+const MAIL_ROUTE = 5;
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { AuthService } from './auth.service';
@@ -66,7 +66,7 @@ export class AuthController {
    * allocated); nothing downstream ever asks a person to quote one.
    */
   @Public()
-  @Throttle(CREDENTIAL_ROUTE)
+  @AuthBucket(CREDENTIAL_ROUTE)
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     const { username, firstName, lastName } = await this.auth.register(
@@ -88,7 +88,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle(MAIL_ROUTE)
+  @AuthBucket(MAIL_ROUTE)
   @Post('verify-email/resend')
   @HttpCode(202)
   async resend(@Body() dto: EmailDto) {
@@ -97,7 +97,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle(CREDENTIAL_ROUTE)
+  @AuthBucket(CREDENTIAL_ROUTE)
   @Post('login')
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -129,7 +129,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle(MAIL_ROUTE)
+  @AuthBucket(MAIL_ROUTE)
   @Post('password/reset-request')
   @HttpCode(202)
   async resetRequest(@Body() dto: EmailDto) {
@@ -138,7 +138,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle(CREDENTIAL_ROUTE)
+  @AuthBucket(CREDENTIAL_ROUTE)
   @Post('password/reset')
   @HttpCode(200)
   async reset(@Body() dto: ResetPasswordDto) {
@@ -153,7 +153,7 @@ export class AuthController {
    * just changed their password because they were worried deserves the first one
    * stated rather than implied.
    */
-  @Throttle(CREDENTIAL_ROUTE)
+  @AuthBucket(CREDENTIAL_ROUTE)
   @Post('password/change')
   @HttpCode(200)
   async change(
