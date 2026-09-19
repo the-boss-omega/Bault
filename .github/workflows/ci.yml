@@ -51,6 +51,12 @@ jobs:
       STORAGE_ACCESS_KEY: minioadmin
       STORAGE_SECRET_KEY: minioadmin
       API_PORT: 3000
+      # The suites sign in hundreds of times a minute, all from one address.
+      # With the production defaults (30 sign-ins, 300 requests a minute) the
+      # limiter did its job and every test after the first few got a 429. These
+      # match the developer .env; no test depends on the limiter tripping.
+      AUTH_RATE_LIMIT_PER_MINUTE: 5000
+      RATE_LIMIT_PER_MINUTE: 20000
 
     steps:
       - uses: actions/checkout@v5
