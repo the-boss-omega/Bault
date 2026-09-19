@@ -81,9 +81,12 @@ jobs:
       # both made the action refuse to run.
       - uses: pnpm/action-setup@v4
 
+      # 24, not 20: jsdom 30 (the ux/web suites' DOM) needs ^22.22.2 or ^24.15,
+      # and on 20 every jsdom worker died on `markAsUncloneable is not a
+      # function` from its undici. 24 is also what development runs on.
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
