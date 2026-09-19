@@ -30,6 +30,30 @@ one query that runs on every authenticated request has no index.
 
 ---
 
+## Status — 19 September 2026
+
+A second pass. The 12 September table below is still true except where this one
+says otherwise.
+
+### Changed since 12 September
+
+| | | Verified by |
+|---|---|---|
+| **B2** | **No longer "entirely simulated".** `packages/adapters/src/easypost.ts` is a real carrier adapter behind `SHIPPING_PROVIDER=easypost`; the sandbox stays the default. Dispatch now buys the label from the shipment's **stored street address, box and billable weight** — it used to send `US`/`00000` and the total weight once per item, which the sandbox never noticed and a real carrier would have refused or mispriced | Label bought end to end against the stored shipment (sandbox); EasyPost itself not exercised — no key on this machine |
+| **N1** | `vite build` produced **development** bundles (root `.env`'s `NODE_ENV=development` leaked into Vite) | Fixed in `vite.config.ts`; 1,562 kB → 894 kB, no `jsxDEV` |
+| **N2** | The deployed sign-in form came **pre-filled with a working account and password**, and the admin credentials sat in the i18n catalogue | Moved to `auth/demoUsers.ts`, tree-shaken; `tests/web/no-credentials-in-bundle.test.ts` checks the built output |
+| **N3** | `assets/` is the web publish folder and held a private PDF | Moved to `_local/` (gitignored) |
+| **N4** | **`nginx.conf` never forwarded `/api`.** The SPA calls `/api/v1` on its own origin, so in the built image every API call got `index.html` back — a deployed site that could not sign anybody in | `location /api/` added, upstream from `API_UPSTREAM` (default `http://api:3000`) via the image's template step |
+| **N5** | Nobody could tell who had signed in. No record of failed attempts, sessions stored no IP or device, and without `trust proxy` every visitor through a proxy was one address to the rate limiter | `login_attempt` table (success / bad password / unverified / refused), IP + device on each session, `TRUST_PROXY` (default `loopback`, `true` refused), admin **Sign-ins** tab flagging ≥5 failures in 24 h. Forged `X-Forwarded-For` verified ignored |
+| **N6** | Membership: a downgrade cancelled the membership; renewal missed its own period row (JS ms vs Postgres µs); an allowance could be reported spent with no row written | Scheduled downgrades, `date_trunc('milliseconds', …)`, conditional + checked `consume` |
+| — | Lint | `pnpm lint`: 0 errors (the two in `apps/api/svg2png.tmp.mjs` were undeclared Node globals) |
+
+**Deploy note:** behind the web image's nginx the API must be started with
+`TRUST_PROXY` naming that proxy (e.g. `uniquelocal`), or the sign-in log and the
+rate limiter see the nginx container as the only client.
+
+---
+
 ## Status — 12 September 2026
 
 A remediation pass has been run. This section is the current state; the findings
@@ -61,7 +85,7 @@ Design-lint: clean. Full workspace typecheck: clean.
 
 | | | Why not |
 |---|---|---|
-| **B2** | Real carrier integration | Needs a carrier account and credentials. Writing an untestable integration against an API I cannot call would be worse than the honest sandbox. **Gate the shipping feature off until this exists.** |
+| **B2** | Real carrier integration | *(Superseded 19 September — see above. What remains: exercising EasyPost with a real key, and tracking against it.)* |
 | **S2** | Foreign keys | ~30 tables. Needs an orphan audit first, and each FK is a lock on a table in use. Correct to do, too large and too risky to land blind in this pass. |
 | **S4** | Sentry | Requires installing `@sentry/node`. The logger now gives structured output with request ids, which is the prerequisite; the reporter itself is one dependency away. |
 | **S8** | Shared rate-limit store | Needs Redis or a Postgres-backed `ThrottlerStorage`. Still per-process, so limits divide by replica count. |

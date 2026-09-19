@@ -35,6 +35,26 @@
 /** An allowance with no ceiling. Stored as a number so it survives JSON. */
 export const UNLIMITED = -1;
 
+/**
+ * Fee actions that draw on ANOTHER action's allowance.
+ *
+ * A lot is billed under its own rule (`intake_lot`) so it can be priced like
+ * the reference service prices one, but to a member it is still one thing being
+ * booked in — so it uses one of their intakes rather than needing an allowance
+ * of its own. Listed explicitly rather than inferred from a prefix: a general
+ * "fall back to the parent action" rule would let a tier's flat-service
+ * allowance quietly pay for inspections once the inspection allowance ran out,
+ * which is more than the table promises.
+ */
+export const ALLOWANCE_ALIASES: Readonly<Record<string, string>> = {
+  intake_lot: 'intake',
+};
+
+/** The allowance a billed action draws on. */
+export function allowanceFor(billedAs: string): string {
+  return ALLOWANCE_ALIASES[billedAs] ?? billedAs;
+}
+
 export type TierKey = 'folio' | 'registry' | 'trust';
 
 /** Every tier key, cheapest first. Ordering is the upgrade path. */
@@ -78,6 +98,12 @@ export interface MembershipTier {
   /** Sale value per cycle on which the marketplace commission is waived. */
   commissionWaivedOnMinor: number;
 
+  /**
+   * The largest deal value an escrow waiver covers in full. Above it the fee on
+   * the excess is paid as usual. 0 where the tier waives no escrow fee at all.
+   */
+  escrowValueCapMinor: number;
+
   /** Perks with no unit price, listed because they are real. */
   perks: readonly string[];
 }
@@ -113,6 +139,7 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
     insuredValueCapMinor: 50_000, // $500
     postageCreditMinor: 1_000, // $10
     commissionWaivedOnMinor: 0,
+    escrowValueCapMinor: 0,
     perks: ['storage_clock_stops', 'handling_included'],
   },
   {
@@ -132,6 +159,7 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
     insuredValueCapMinor: 100_000, // $1,000
     postageCreditMinor: 3_000, // $30
     commissionWaivedOnMinor: 100_000, // $1,000 of sale value
+    escrowValueCapMinor: 0,
     perks: ['storage_clock_stops', 'handling_included', 'oversized_storage', 'rush_included', 'priority_queue'],
   },
   {
@@ -146,20 +174,27 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
       'service_fee:deslab': UNLIMITED,
       'service_fee:condition_inspection': 8,
       'service_fee:video_review': 8,
+      // A tracker in the parcel. Counted like any per-cycle action, and spent
+      // when the parcel is paid for (`MembershipService.spendShippingCover`).
+      'shipping_addon:gps_tracker': 2,
+      // Fees that are not billed through `BillingService`, waived where each is
+      // actually charged — see `MembershipService.waive`.
+      escrow_fee: 1,
+      cash_out_fee: 2,
+      show_pickup: 2,
     },
     storedItems: 750,
     insuredShipments: 6,
     insuredValueCapMinor: 250_000, // $2,500
     postageCreditMinor: 10_000, // $100
     commissionWaivedOnMinor: 300_000, // $3,000 of sale value
+    escrowValueCapMinor: 500_000, // one deal up to $5,000
     perks: [
       'storage_clock_stops',
       'handling_included',
       'oversized_storage',
       'rush_included',
       'priority_queue',
-      'show_pickup',
-      'gps_tracker',
       'named_contact',
     ],
   },

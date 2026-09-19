@@ -197,6 +197,27 @@
       "when": 1785074300000,
       "tag": "0027_one_fee_instead_of_thirty",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785074400000,
+      "tag": "0028_a_label_that_can_be_bought",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1785074500000,
+      "tag": "0029_who_signed_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1785074600000,
+      "tag": "0030_a_downgrade_is_not_a_cancellation",
+      "breakpoints": true
     }
   ]
 }

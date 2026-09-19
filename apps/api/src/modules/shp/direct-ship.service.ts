@@ -174,6 +174,7 @@ export class DirectShipService {
           recipientName: input.recipientName?.trim() || recipientName,
           destinationCountry: destination.country,
           destinationPostalCode: destination.postalCode,
+          destinationDetail: destination,
           carrier: service.carrier,
           serviceLevel: service.serviceLevel,
           serviceKey: service.key,

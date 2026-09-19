@@ -81,7 +81,7 @@ async function main(): Promise<void> {
   // 1. RESET — wipe all app data (see header). TRUNCATE bypasses row triggers.
   // -------------------------------------------------------------------------
   await pool.query(`TRUNCATE TABLE
-    user_account, verification_token, login_session,
+    user_account, verification_token, login_session, login_attempt,
     item, bin, item_image, custody_event, item_change_history, bin_transfer, batch,
     listing, "transaction", offer, swap_proposal, house_listing, house_order,
     ledger_record, external_payment, charge, withdrawal,
@@ -93,7 +93,8 @@ async function main(): Promise<void> {
     facility, parcel, parcel_event, arrival_disposal,
     support_ticket, support_message,
     consignment_event, grading_submission, shipment_group,
-    escrow_deal, escrow_event
+    escrow_deal, escrow_event,
+    membership, membership_period
     RESTART IDENTITY`);
 
   /**
@@ -207,6 +208,57 @@ async function main(): Promise<void> {
       model: 'fixed' as const,
       value: 500, // $5.00
       description: 'Intake handling fee per received item',
+      billingTrigger: 'per_event' as const,
+    },
+    /**
+     * Intake priced PER CLASS, as the reference service prices it.
+     *
+     * Its published fee list charges by what arrived, not a flat rate: $1 for
+     * a single card, $5 for a lot, an oversized card, a box, a comic, $10 for a
+     * large collection, $20 for a sealed case or a helmet. A flat $5 charged a
+     * single card five times what the service Bault is modelled on charges —
+     * and because storage is a percentage of the intake fee, overcharged its
+     * storage by the same factor for as long as it sat on the shelf.
+     *
+     * The catch-all rule above stays: it prices `other` and anything added to
+     * the taxonomy before it has a rule of its own, at the middle of the range
+     * rather than free. A graded slab is priced as a card because the reference
+     * list has no separate line for one; a sealed pack and a small collectible
+     * as its "misc items" line. Those three are mappings by analogy, stated here
+     * so nobody mistakes them for published figures.
+     */
+    ...(
+      [
+        ['trading_card', 100, 'A single card'],
+        ['graded_slab', 100, 'A graded card, priced as a single card'],
+        ['oversized_card', 500, 'An oversized card'],
+        ['sealed_pack', 500, 'A sealed pack'],
+        ['sealed_box', 500, 'A sealed box'],
+        ['sealed_case', 2000, 'A sealed case'],
+        ['collection_box', 1000, 'A collection box'],
+        ['comic_raw', 500, 'A comic book'],
+        ['comic_graded', 500, 'A graded comic'],
+        ['memorabilia', 2000, 'Memorabilia'],
+        ['small_collectible', 500, 'A small collectible'],
+      ] as const
+    ).map(([itemClass, value, what]) => ({
+      actionType: 'intake',
+      itemClass,
+      model: 'fixed' as const,
+      value,
+      description: `Intake: ${what}`,
+      billingTrigger: 'per_event' as const,
+    })),
+    {
+      /**
+       * A lot is booked as one item, of the class of what is in it — so on the
+       * class rule alone a fifty-card lot would cost what one card does. The
+       * reference list prices a card lot at $5, and so does this.
+       */
+      actionType: 'intake_lot',
+      model: 'fixed' as const,
+      value: 500, // $5.00
+      description: 'Intake: a lot, booked as one item',
       billingTrigger: 'per_event' as const,
     },
     {

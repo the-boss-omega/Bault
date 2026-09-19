@@ -146,6 +146,22 @@ const EnvSchema = z.object({
   API_DOCS_PASSWORD: z.string().optional().default(''),
 
   /**
+   * Which hops in front of the API may speak for the client's address.
+   *
+   * Passed straight to Express's `trust proxy`. `loopback` is right for the
+   * development tunnel, where the proxy runs on this machine. Behind the web
+   * image's nginx in another container it is WRONG: every request would come
+   * from the nginx container's address, so the rate limiter would see one
+   * client and the sign-in log would record one IP for everybody. Set it to
+   * the proxy's subnet there (`uniquelocal`, or an explicit CIDR) — never to
+   * `true`, which believes whatever `X-Forwarded-For` a caller types.
+   */
+  TRUST_PROXY: z
+    .string()
+    .default('loopback')
+    .refine((v) => v !== 'true', { message: 'TRUST_PROXY=true trusts a forged X-Forwarded-For; name the proxy instead' }),
+
+  /**
    * Which shipping adapter is wired in `AdaptersModule`.
    *
    *   `easypost` — real carriers (USPS, UPS, FedEx, DHL), real rates, real

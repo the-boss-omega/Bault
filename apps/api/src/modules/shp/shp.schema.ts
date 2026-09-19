@@ -53,6 +53,16 @@ export const shipment = pgTable('shipment', {
    */
   destinationCountry: text('destination_country').notNull().default('US'),
   destinationPostalCode: text('destination_postal_code').notNull().default(''),
+  /**
+   * The whole address, as a carrier needs it, frozen at the moment of the quote.
+   *
+   * Only the formatted line and the country/postcode pair used to be stored, so
+   * re-rating a shipment that already existed asked the carrier for a price to a
+   * postcode with no street — which EasyPost refuses. It is a SNAPSHOT rather
+   * than a reference to `shipping_address`: the collector may edit that address
+   * later, and a parcel goes where it was quoted to go.
+   */
+  destinationDetail: jsonb('destination_detail'),
   carrier: text('carrier'),
   serviceLevel: text('service_level'),
   /** The catalogue key of the chosen service, which carries its constraints. */
@@ -146,6 +156,23 @@ export const shipment = pgTable('shipment', {
    * Null: priced on weight alone, and the warehouse picks the box.
    */
   boxSize: text('box_size'),
+  /**
+   * The carrier's own handles for the rate that was charged.
+   *
+   * A real carrier does not sell "FedEx 2Day at $18.50"; it sells THE RATE IT
+   * QUOTED, by id, against the shipment it quoted it for. These were returned by
+   * the adapter and dropped on the floor, so dispatch had nothing it could buy.
+   * Null on the sandbox, which has nothing to refer to.
+   */
+  /**
+   * What the member's tier paid towards this parcel, as quoted and agreed:
+   * `{ tier, insuredShipment, insuranceMinor, postageMinor, rushMinor, addOns }`.
+   * Spent from the allowance when the parcel is paid for — which, for a held
+   * shipment, is later than when it was quoted.
+   */
+  membershipCover: jsonb('membership_cover'),
+  providerShipmentId: text('provider_shipment_id'),
+  providerRateId: text('provider_rate_id'),
   cost: amountMinor('cost'),
   currency: currency(),
   status: shipmentStatus('status').notNull().default('requested'),

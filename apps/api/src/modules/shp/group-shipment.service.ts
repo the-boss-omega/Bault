@@ -72,6 +72,7 @@ export class GroupShipmentService {
           recipientName: s.recipientName ?? '',
           destinationCountry: s.destinationCountry,
           destinationPostalCode: s.destinationPostalCode,
+          destinationDetail: s.destinationDetail,
           notes: notes?.trim() || null,
           status: 'forming',
         })

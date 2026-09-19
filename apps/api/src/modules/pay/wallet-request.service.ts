@@ -23,6 +23,7 @@ import {
   type WalletRequestStatus,
   type WalletRequestType,
 } from './wallet-request.rules';
+import { MembershipService } from '../mem/membership.service';
 
 export type RequestActor = Pick<AuthUser, 'id' | 'role'>;
 
@@ -61,6 +62,7 @@ export class WalletRequestService {
     private readonly outbox: OutboxService,
     private readonly audit: AuditService,
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
+    private readonly memberships: MembershipService,
   ) {}
 
   private static isReviewer(actor: RequestActor): boolean {
@@ -377,7 +379,14 @@ export class WalletRequestService {
        * it — but quoted to the collector at submission from the same function,
        * so the two agree unless somebody deliberately moved the schedule.
        */
-      const feeMinor = request.type === 'cash_out' ? cashOutFeeMinor(request.amount) : 0;
+      const grossFeeMinor = request.type === 'cash_out' ? cashOutFeeMinor(request.amount) : 0;
+      // A membership may waive it. Only ever less than the fee quoted at
+      // submission, never more — see `MembershipService.waive`.
+      const waiver =
+        grossFeeMinor > 0
+          ? await this.memberships.waive(tx as Database, request.userId, 'cash_out_fee', grossFeeMinor)
+          : { waivedMinor: 0, tier: null };
+      const feeMinor = grossFeeMinor - waiver.waivedMinor;
 
       if (request.type === 'cash_out') {
         const balance = await this.ledger.balanceOf(request.userId, tx);

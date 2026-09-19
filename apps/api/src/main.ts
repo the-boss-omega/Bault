@@ -47,6 +47,27 @@ async function bootstrap(): Promise<void> {
   app.use(requestContext);
 
   /**
+   * Trust the proxy in front of this process — and ONLY that proxy.
+   *
+   * In every setup this API has, something on the same machine sits in front
+   * of it: the Vite dev server, `vite preview`, or nginx in the web container.
+   * Without this, every request looked like it came from 127.0.0.1. Behind the
+   * tunnel that meant the rate limiter treated every visitor on earth as one
+   * client, and a session could not record where it was opened from.
+   *
+   * `loopback` rather than `true`: Express then reads `X-Forwarded-For` from the
+   * right, skipping only loopback hops, and stops at the first address it does
+   * not trust. A visitor who sends their own `X-Forwarded-For: 1.2.3.4` gets it
+   * ignored, because the hop to the right of it is their real address and that
+   * is where Express stops. `true` would believe the leftmost entry — whatever
+   * the caller typed.
+   *
+   * Deployed behind the web image's nginx the proxy is another container, not
+   * loopback, so the value is `TRUST_PROXY` (default `loopback`).
+   */
+  app.getHttpAdapter().getInstance().set('trust proxy', env.TRUST_PROXY);
+
+  /**
    * Security headers.
    *
    * There were none. `contentSecurityPolicy` is off because this process serves

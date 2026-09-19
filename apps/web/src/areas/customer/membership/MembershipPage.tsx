@@ -7,7 +7,9 @@ import {
   COMPARISON_ROWS,
   UNLIMITED,
   allowanceCell,
+  tierAction,
   usedFraction,
+  type TierAction,
   type ComparisonRow,
   type MembershipTier,
   type MyMembership,
@@ -71,14 +73,27 @@ export function MembershipPage() {
     setError(null);
     setNotice(null);
     try {
-      const res = await api.post<{ tier: string; status: string; chargedMinor: number }>(
-        '/membership/subscribe',
-        { tier: tier.key },
-      );
+      const res = await api.post<{
+        tier: string;
+        status: string;
+        chargedMinor: number;
+        scheduledTier?: string;
+        effectiveFrom?: string;
+      }>('/membership/subscribe', { tier: tier.key });
+      /**
+       * Three outcomes, three sentences. A downgrade and "keep my tier" both
+       * charge nothing, and the old notice told the second one that a move "takes
+       * effect at the end of the cycle" — about a move nobody had asked for.
+       */
       setNotice(
-        res.chargedMinor > 0
-          ? t('membership.joined', { tier: t(tierNameKey(res.tier)), amount: formatUsd(res.chargedMinor) })
-          : t('membership.scheduled', { tier: t(tierNameKey(tier.key)) }),
+        res.scheduledTier
+          ? t('membership.scheduled', {
+              tier: t(tierNameKey(res.scheduledTier)),
+              date: formatDate(res.effectiveFrom ?? '', locale),
+            })
+          : res.chargedMinor > 0
+            ? t('membership.joined', { tier: t(tierNameKey(res.tier)), amount: formatUsd(res.chargedMinor) })
+            : t('membership.kept', { tier: t(tierNameKey(res.tier)) }),
       );
       setConfirming(null);
       await load();
@@ -104,6 +119,36 @@ export function MembershipPage() {
     }
   }
 
+  const tierOrder = catalogue?.tiers.map((x) => x.key) ?? [];
+
+  /**
+   * What the member is agreeing to, in the sentence that sits beside the
+   * confirm button. Four cases, because the same button can mean a charge, a
+   * smaller charge, no charge today, or no charge at all.
+   */
+  function confirmSentence(action: TierAction, tier: MembershipTier): string {
+    const days = catalogue?.cycleDays ?? 30;
+    switch (action.kind) {
+      case 'join':
+        return t('membership.confirm', { amount: formatUsd(action.chargeMinor), days });
+      case 'upgrade':
+        return t('membership.confirmUpgrade', {
+          amount: formatUsd(action.chargeMinor),
+          price: formatUsd(tier.priceMinor),
+          credit: formatUsd(action.creditMinor),
+          days,
+        });
+      case 'downgrade':
+        return t('membership.confirmDowngrade', {
+          tier: t(tierNameKey(tier.key)),
+          date: formatDate(action.effectiveFrom, locale),
+          price: formatUsd(tier.priceMinor),
+        });
+      case 'keep':
+        return t('membership.confirmKeep', { tier: t(tierNameKey(tier.key)) });
+    }
+  }
+
   if (loading) return <SkeletonBlock />;
 
   return (
@@ -118,7 +163,12 @@ export function MembershipPage() {
           subtitle={
             mine.status === 'cancelling'
               ? t('membership.current.ending', { date: formatDate(mine.currentPeriodEnd, locale) })
-              : t('membership.current.renews', { date: formatDate(mine.currentPeriodEnd, locale) })
+              : mine.scheduledTier
+                ? t('membership.current.switching', {
+                    tier: t(tierNameKey(mine.scheduledTier)),
+                    date: formatDate(mine.currentPeriodEnd, locale),
+                  })
+                : t('membership.current.renews', { date: formatDate(mine.currentPeriodEnd, locale) })
           }
         >
           <dl className="mem-allowances">
@@ -239,18 +289,16 @@ export function MembershipPage() {
         */}
         <div className="mem-offers">
           {catalogue?.tiers.map((tier) => {
-            const isCurrent = mine?.tier === tier.key && mine.status === 'active';
+            const action = tierAction(mine, tier, tierOrder);
+            // The tier you are on, with nothing pending, is not a button at all.
+            const isCurrent =
+              action.kind === 'keep' && mine?.status === 'active' && !mine.scheduledTier;
             return (
               <div className="offer" key={tier.key}>
                 <div className="offer-what">
                   <span className="offer-name">{t(tierNameKey(tier.key))}</span>
                   <span className="offer-note">
-                    {confirming === tier.key
-                      ? t('membership.confirm', {
-                          amount: formatUsd(tier.priceMinor),
-                          days: catalogue.cycleDays,
-                        })
-                      : t(tierForKey(tier.key))}
+                    {confirming === tier.key ? confirmSentence(action, tier) : t(tierForKey(tier.key))}
                   </span>
                 </div>
 
@@ -275,7 +323,11 @@ export function MembershipPage() {
                     </>
                   ) : (
                     <Button variant="gold" onClick={() => setConfirming(tier.key)}>
-                      {mine ? t('membership.switchTo') : t('membership.join')}
+                      {action.kind === 'join'
+                        ? t('membership.join')
+                        : action.kind === 'keep'
+                          ? t('membership.keep')
+                          : t('membership.switchTo')}
                     </Button>
                   )}
                 </div>
@@ -312,7 +364,7 @@ function tierForKey(key: string): MessageKey {
   return `membership.tierFor.${key}` as MessageKey;
 }
 function rowLabelKey(row: string): MessageKey {
-  return `membership.row.${row.replace('service_fee:', '')}` as MessageKey;
+  return `membership.row.${row.replace('service_fee:', '').replace('shipping_addon:', '')}` as MessageKey;
 }
 function perkKey(perk: string): MessageKey {
   return `membership.perk.${perk}` as MessageKey;

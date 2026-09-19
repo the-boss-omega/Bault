@@ -12,6 +12,7 @@
     "dev:api": "pnpm --filter @bault/api dev",
     "dev:worker": "pnpm --filter @bault/worker dev",
     "dev:web": "pnpm --filter @bault/web dev",
+    "tunnel": "node scripts/tunnel.mjs",
     "build": "pnpm -r build",
     "lint": "eslint .",
     "format": "prettier --write .",

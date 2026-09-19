@@ -75,6 +75,19 @@ export interface QuotedRate {
   handlingMinor: number;
   insurancePremiumMinor: number;
   addOnsMinor: number;
+  /**
+   * What the member's tier paid towards this rate. `totalMinor` is already net
+   * of it; this is here so the card can SAY so rather than show a smaller number
+   * with no explanation.
+   */
+  membershipCover?: {
+    tier: string;
+    insuranceMinor: number;
+    postageMinor: number;
+    rushMinor: number;
+    addOns: Record<string, number>;
+  } | null;
+  coveredMinor?: number;
   totalMinor: number;
   recommended: boolean;
 }

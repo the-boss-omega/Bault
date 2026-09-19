@@ -55,6 +55,7 @@ export function groupFor(actionType: string): PriceGroup {
   if (actionType.startsWith('parcel_')) return 'intake';
   switch (actionType) {
     case 'intake':
+    case 'intake_lot':
       return 'intake';
     case 'shipping':
     case 'shipping_rush':

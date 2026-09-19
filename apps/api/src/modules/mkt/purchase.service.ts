@@ -13,6 +13,7 @@ import { PricingService } from '../prc/pricing.service';
 import { LedgerService } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { listing, transaction } from './mkt.schema';
+import { MembershipService } from '../mem/membership.service';
 
 export interface PurchaseResult {
   transactionId: string;
@@ -55,6 +56,7 @@ export class PurchaseService {
     private readonly ledger: LedgerService,
     private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
+    private readonly memberships: MembershipService,
   ) {}
 
   /**
@@ -106,6 +108,15 @@ export class PurchaseService {
         tx,
       );
 
+      /**
+       * The seller's membership may waive the commission on this sale, in part
+       * or whole. Spent here, inside the sale's own transaction, so the waiver
+       * and the sale commit or fail together. It can only lower the fee the
+       * price list states — see `MembershipService.waive`.
+       */
+      const waiver = await this.memberships.waive(tx as Database, l.sellerId, 'marketplace_fee', fee.amount, price);
+      const feeMinor = fee.amount - waiver.waivedMinor;
+
       // Buyer must have the funds (a sale is not a "defined service" that can go negative).
       const buyerBalance = await this.ledger.balanceOf(buyerId, tx);
       if (buyerBalance.amount < price) {
@@ -122,9 +133,9 @@ export class PurchaseService {
         { userId: l.sellerId, type: 'sale_credit', amount: price, direction: 'credit', currency, referenceType: 'listing', referenceId: listingId },
         tx,
       );
-      if (fee.amount > 0) {
+      if (feeMinor > 0) {
         await this.ledger.record(
-          { userId: l.sellerId, type: 'fee', amount: fee.amount, direction: 'debit', currency, referenceType: 'listing', referenceId: listingId },
+          { userId: l.sellerId, type: 'fee', amount: feeMinor, direction: 'debit', currency, referenceType: 'listing', referenceId: listingId },
           tx,
         );
       }
@@ -145,8 +156,12 @@ export class PurchaseService {
           buyerId,
           sellerId: l.sellerId,
           price,
-          fee: fee.amount,
-          frozenPricing: snapshot,
+          fee: feeMinor,
+          // The waiver rides with the frozen price, so the sale explains its own fee.
+          frozenPricing:
+            waiver.waivedMinor > 0
+              ? { ...snapshot, grossFeeMinor: fee.amount, membershipWaiver: waiver }
+              : snapshot,
           currency,
         })
         .returning({ id: transaction.id });
@@ -159,7 +174,7 @@ export class PurchaseService {
         payload: { itemId: l.itemId, buyerId, sellerId: l.sellerId, price },
       });
 
-      return { transactionId: txn.id, itemId: l.itemId, price, fee: fee.amount };
+      return { transactionId: txn.id, itemId: l.itemId, price, fee: feeMinor };
     });
 
     await this.idempotency.save(idempotencyKey, endpoint, buyerId, 201, result);

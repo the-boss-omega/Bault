@@ -56,6 +56,8 @@ const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
 
 interface PriceEntry {
   actionType: string;
+  /** Null on a catch-all rule; set on a class-specific one. */
+  itemClass?: string | null;
   model: 'fixed' | 'percentage';
   /** Cents for a fixed rule, basis points for a percentage one. */
   value: number;
@@ -97,9 +99,22 @@ export function LandingPage() {
       .get<PriceList>('/pricing/list')
       .then((list) => {
         if (!live) return;
+        /**
+         * One entry per action — and for intake, the CARD rule specifically.
+         *
+         * Intake is priced per class now, so the list carries a dozen `intake`
+         * rules. Keyed by action alone, whichever came last would have been shown
+         * as "the" intake price: a sealed case's $20 on the front page of a
+         * service most people use for single cards. The single-card rule is the
+         * honest headline; the full list is one click away in Help.
+         */
         const byAction = new Map<string, PriceEntry>();
         for (const group of list.groups ?? []) {
-          for (const entry of group.entries ?? []) byAction.set(entry.actionType, entry);
+          for (const entry of group.entries ?? []) {
+            if (entry.itemClass && !(entry.actionType === 'intake' && entry.itemClass === 'trading_card')) continue;
+            if (entry.actionType === 'intake' && byAction.get('intake')?.itemClass === 'trading_card') continue;
+            byAction.set(entry.actionType, entry);
+          }
         }
         setPrices(byAction);
       })

@@ -45,7 +45,9 @@ export async function renewMemberships(pool: Pool): Promise<void> {
     ended = closed.rowCount ?? 0;
 
     const due = await client.query<{ id: string; user_id: string; tier: string }>(
-      `SELECT id, user_id, tier
+      // The tier the NEXT cycle is on: a scheduled downgrade takes effect here.
+      // Without this a downgrade was silently a cancellation (migration 0030).
+      `SELECT id, user_id, coalesce(scheduled_tier, tier) AS tier
          FROM membership
         WHERE status = 'active'
           AND current_period_end <= now()`,
@@ -86,13 +88,22 @@ export async function renewMemberships(pool: Pool): Promise<void> {
         const snapshot = JSON.stringify({ pricingRuleId: priced.id, actionType: `membership:${m.tier}`, renewal: true });
 
         const period = await client.query<{ period_start: string; period_end: string }>(
+          // MILLISECONDS, not now()'s microseconds. The period row is found by
+          // exact equality on this timestamp, and the value goes through a
+          // JavaScript Date on its way into that row — which keeps milliseconds.
+          // With raw now() the two never matched: after a renewal the member had
+          // no current period, allowances stopped counting, and a covered parcel
+          // could not be paid for at all. The API writes both from one Date, so
+          // this is the one place the precisions could disagree.
           `UPDATE membership
-              SET current_period_start = now(),
-                  current_period_end   = now() + interval '30 days',
+              SET tier = $2,
+                  scheduled_tier = NULL,
+                  current_period_start = date_trunc('milliseconds', now()),
+                  current_period_end   = date_trunc('milliseconds', now()) + interval '30 days',
                   updated_at = now()
             WHERE id = $1
         RETURNING current_period_start AS period_start, current_period_end AS period_end`,
-          [m.id],
+          [m.id, m.tier],
         );
         const p = period.rows[0]!;
 

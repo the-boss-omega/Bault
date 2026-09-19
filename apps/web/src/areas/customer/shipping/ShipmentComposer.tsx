@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
-import { useI18n } from '../../../shared/i18n';
+import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import {
   boxLabel,
@@ -406,6 +406,17 @@ export function ShipmentComposer({
                         insurance: formatUsd(r.insurancePremiumMinor),
                       })}
                     </p>
+                    {/* The tier's part, named. A total that is lower than the
+                        breakdown above it, with nothing to say why, reads as a
+                        mistake — so the membership says what it paid. */}
+                    {r.membershipCover && (r.coveredMinor ?? 0) > 0 && (
+                      <p className="hint mem-covered">
+                        {t('ship.coveredBy', {
+                          tier: t(`membership.tier.${r.membershipCover.tier}` as MessageKey),
+                          amount: formatUsd(r.coveredMinor ?? 0),
+                        })}
+                      </p>
+                    )}
                     {r.recommended && <StatusBadge tone="gold">{t('ship.recommended')}</StatusBadge>}
                     <div className="actions">
                       <Button

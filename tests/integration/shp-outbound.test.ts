@@ -133,8 +133,12 @@ describe('SHP outbound shipping', () => {
     const mailer = await quote('rigid_mailer');
     const large = await quote('large');
 
-    expect(unchosen.boxSize).toBeNull();
+    // Nobody chose: the packer's rule chooses — the smallest box the contents
+    // fit — and the quote says it was chosen for them, as the reference does.
+    expect(unchosen.boxSize).toBe('rigid_mailer');
+    expect(unchosen.boxAutoSelected).toBe(true);
     expect(mailer.boxSize).toBe('rigid_mailer');
+    expect(mailer.boxAutoSelected).toBe(false);
     expect(mailer.optionProblems).toEqual([]);
     expect(ground(large)).toBeGreaterThan(ground(mailer));
   });

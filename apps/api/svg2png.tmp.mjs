@@ -1,3 +1,4 @@
+/* global process, console */
 import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 const [,, svgPath, outPath, scale] = process.argv;

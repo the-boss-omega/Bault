@@ -4,6 +4,7 @@ import type { BillableAction, BillingPort } from '../../shared/billing/billing.p
 import { AppError } from '../../shared/errors/app-error';
 import { PricingService } from '../prc/pricing.service';
 import { MembershipService } from '../mem/membership.service';
+import { allowanceFor } from '../mem/tiers';
 import { LedgerService } from './ledger.service';
 import { charge } from './pay.schema';
 
@@ -47,7 +48,7 @@ export class BillingService implements BillingPort {
      * unpriced-but-included action throw.
      */
     const billedAs = action.feeActionType ?? action.actionType;
-    const entitlement = await this.memberships.consume(tx, action.userId, billedAs);
+    const entitlement = await this.memberships.consume(tx, action.userId, allowanceFor(billedAs));
     if (entitlement.covered) return;
 
     /**

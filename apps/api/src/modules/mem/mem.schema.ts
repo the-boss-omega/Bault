@@ -44,6 +44,13 @@ export const membership = pgTable(
     /** The cycle the allowances are counted against right now. */
     currentPeriodStart: timestamp('current_period_start', { withTimezone: true }).notNull().defaultNow(),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
+    /**
+     * A cheaper tier the member has asked for, taking effect at renewal.
+     *
+     * A downgrade never takes an allowance away mid-cycle — it has been paid for.
+     * It waits here, and the renewal opens the next cycle on this tier instead.
+     */
+    scheduledTier: text('scheduled_tier'),
     /** Set when the member asks to stop; the cycle still runs to its end. */
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),

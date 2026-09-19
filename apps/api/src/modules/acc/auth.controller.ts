@@ -100,8 +100,22 @@ export class AuthController {
   @Throttle(CREDENTIAL_ROUTE)
   @Post('login')
   @HttpCode(200)
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const { user, rawToken, expiresAt } = await this.auth.login(dto.identifier, dto.password);
+  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { user, rawToken, expiresAt } = await this.auth.login(dto.identifier, dto.password, {
+      // The real client: `main.ts` trusts the loopback proxy and nothing else,
+      // so behind the tunnel this is the visitor, not 127.0.0.1.
+      ip: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+    /**
+     * Name the actor for the audit row.
+     *
+     * The audit interceptor records `req.user` once the handler returns, and
+     * sign-in is the one request that has no user until it finishes — so every
+     * sign-in was audited as `POST /api/v1/auth/login` by nobody. Setting it here
+     * is what the interceptor reads a moment later.
+     */
+    req.user = user;
     this.setSessionCookie(res, rawToken, expiresAt);
     return { id: user.id, role: user.role };
   }

@@ -66,6 +66,46 @@ export const CM3_PER_IN3 = 16.387;
 /** Grams in a pound. */
 export const GRAMS_PER_LB = 453.592;
 
+/** Grams in an ounce. */
+export const GRAMS_PER_OZ = 28.3495;
+
+/**
+ * How a service meters weight.
+ *
+ * Carriers do not sell fractions. A parcel is weighed, the figure is rounded UP
+ * to the next whole unit, and that is what is billed — so 1.02 lb and 1.98 lb
+ * cost the same, and 2.01 lb costs a band more. Quoting on the continuous weight
+ * instead, which is what this adapter used to do, under-quotes almost every
+ * parcel by up to one whole unit.
+ *
+ * The reference service publishes the unit per service in its FAQ: *"Postage
+ * amount is charged per pound"* for ePost, and *per ounce* for ePacket. The
+ * FedEx and USPS figures are the carriers' own published behaviour.
+ *
+ * `continuous` exists for the flat-rate service, which meters nothing at all.
+ */
+export type BillingIncrement = 'ounce' | 'pound' | 'continuous';
+
+/**
+ * The weight a carrier will actually bill.
+ *
+ * Two steps, in this order, and the order matters: take the greater of what the
+ * parcel WEIGHS and what its VOLUME is worth, and only then round up to the
+ * service's unit. Rounding first and comparing second would round the loser as
+ * well, which costs nothing but is one more number that has to be right.
+ */
+export function billableGrams(
+  actualGrams: number,
+  dimGrams: number,
+  increment: BillingIncrement,
+): number {
+  const greater = Math.max(actualGrams, dimGrams);
+  if (increment === 'continuous') return greater;
+  const unit = increment === 'pound' ? GRAMS_PER_LB : GRAMS_PER_OZ;
+  // At least one whole unit: nobody ships a zero-ounce parcel.
+  return Math.max(1, Math.ceil(greater / unit)) * unit;
+}
+
 /**
  * What a box's outer dimensions weigh, as far as a carrier is concerned.
  *
@@ -168,6 +208,8 @@ interface SandboxService {
   flatMinor?: number;
   /** Cost of collecting a signature, where the service offers it. */
   signatureMinor?: number;
+  /** The unit this service meters weight in. See {@link BillingIncrement}. */
+  increment: BillingIncrement;
 }
 
 /**
@@ -182,13 +224,13 @@ interface SandboxService {
  * prices stub did not.
  */
 const SANDBOX_SERVICES: readonly SandboxService[] = [
-  { carrier: 'USPS', serviceLevel: 'Ground Advantage', international: false, baseMinor: 550, perKgMinor: 420, estimatedDays: 4, signatureMinor: 340 },
-  { carrier: 'USPS', serviceLevel: 'Priority Mail', international: false, baseMinor: 980, perKgMinor: 690, estimatedDays: 2, signatureMinor: 340 },
-  { carrier: 'FedEx', serviceLevel: '2Day', international: false, baseMinor: 1_850, perKgMinor: 890, estimatedDays: 2, signatureMinor: 590 },
-  { carrier: 'FedEx', serviceLevel: 'Direct Overnight', international: false, baseMinor: 0, perKgMinor: 0, estimatedDays: 1, flatMinor: 10_000, signatureMinor: 0 },
-  { carrier: 'ePacket', serviceLevel: 'International', international: true, baseMinor: 1_150, perKgMinor: 1_400, estimatedDays: 16 },
-  { carrier: 'ePost', serviceLevel: 'International', international: true, baseMinor: 1_950, perKgMinor: 2_100, estimatedDays: 11, signatureMinor: 620 },
-  { carrier: 'FedEx', serviceLevel: 'International Priority', international: true, baseMinor: 4_200, perKgMinor: 3_400, estimatedDays: 3, signatureMinor: 590 },
+  { carrier: 'USPS', serviceLevel: 'Ground Advantage', international: false, baseMinor: 550, perKgMinor: 420, estimatedDays: 4, signatureMinor: 340, increment: 'ounce' },
+  { carrier: 'USPS', serviceLevel: 'Priority Mail', international: false, baseMinor: 980, perKgMinor: 690, estimatedDays: 2, signatureMinor: 340, increment: 'pound' },
+  { carrier: 'FedEx', serviceLevel: '2Day', international: false, baseMinor: 1_850, perKgMinor: 890, estimatedDays: 2, signatureMinor: 590, increment: 'pound' },
+  { carrier: 'FedEx', serviceLevel: 'Direct Overnight', international: false, baseMinor: 0, perKgMinor: 0, estimatedDays: 1, flatMinor: 10_000, signatureMinor: 0, increment: 'continuous' },
+  { carrier: 'ePacket', serviceLevel: 'International', international: true, baseMinor: 1_150, perKgMinor: 1_400, estimatedDays: 16, increment: 'ounce' },
+  { carrier: 'ePost', serviceLevel: 'International', international: true, baseMinor: 1_950, perKgMinor: 2_100, estimatedDays: 11, signatureMinor: 620, increment: 'pound' },
+  { carrier: 'FedEx', serviceLevel: 'International Priority', international: true, baseMinor: 4_200, perKgMinor: 3_400, estimatedDays: 3, signatureMinor: 590, increment: 'pound' },
 ];
 
 /** The origin. Everything Bault ships leaves the United States. */
@@ -221,7 +263,6 @@ export class SandboxShippingAdapter implements ShippingAdapter {
     // A carrier bills the greater of what the parcel weighs and what its volume
     // is worth. One shared function, so the divisor lives in exactly one place.
     const dimGrams = dimensionalGrams(req.dimensionsCm);
-    const billableKg = Math.max(packagedGrams, dimGrams) / 1000;
 
     const wanted = req.services;
     const multiplier = distanceMultiplier(req.destination.country);
@@ -229,6 +270,9 @@ export class SandboxShippingAdapter implements ShippingAdapter {
     return SANDBOX_SERVICES.filter((s) => s.international === international)
       .filter((s) => !wanted || wanted.some((w) => w.carrier === s.carrier && w.serviceLevel === s.serviceLevel))
       .map((s) => {
+        // Rounded UP to this service's unit. Carriers do not sell fractions:
+        // 1.02 lb and 1.98 lb are the same parcel to a per-pound service.
+        const billableKg = billableGrams(packagedGrams, dimGrams, s.increment) / 1000;
         const signature = req.signatureRequired ? (s.signatureMinor ?? 0) : 0;
         const cost =
           s.flatMinor !== undefined

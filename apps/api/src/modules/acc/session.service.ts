@@ -8,6 +8,22 @@ import type { AuthUser } from '../sec/auth-context';
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+/** Where a request came from, as far as the API can honestly tell. */
+export interface ClientOrigin {
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+/**
+ * A user agent is whatever the client says it is, and it can say a lot. Stored
+ * for a person to read ("Chrome on Windows"), so it is capped rather than
+ * trusted to be short.
+ */
+export function clampUserAgent(ua: string | null | undefined): string | null {
+  if (!ua) return null;
+  return ua.length > 300 ? ua.slice(0, 300) : ua;
+}
+
 /**
  * Session lifecycle (T031). Sessions are opaque tokens; only their hash is stored
  * (Principle IX). `create` mints a session for a user; `resolve` turns a raw
@@ -17,12 +33,19 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export class SessionService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async create(userId: string): Promise<{ rawToken: string; expiresAt: Date }> {
+  async create(
+    userId: string,
+    origin: ClientOrigin = {},
+  ): Promise<{ rawToken: string; expiresAt: Date }> {
     const rawToken = generateToken();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    await this.db
-      .insert(loginSession)
-      .values({ userId, tokenHash: hashToken(rawToken), expiresAt });
+    await this.db.insert(loginSession).values({
+      userId,
+      tokenHash: hashToken(rawToken),
+      expiresAt,
+      ip: origin.ip ?? null,
+      userAgent: clampUserAgent(origin.userAgent),
+    });
     return { rawToken, expiresAt };
   }
 

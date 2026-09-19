@@ -25,6 +25,38 @@ import {
 const CYCLE_DAYS = 30;
 const CYCLE_MS = CYCLE_DAYS * 86_400_000;
 
+/**
+ * What a member's tier can pay towards ONE parcel, right now.
+ *
+ * Read-only: a quote shows it, and nothing is spent until the parcel is paid for.
+ */
+export interface ShippingCover {
+  tier: string;
+  insuredShipmentsLeft: number;
+  insuredValueCapMinor: number;
+  postageCreditLeftMinor: number;
+  rushIncluded: boolean;
+  /** Per add-on fee action (`shipping_addon:gps_tracker`), how many are left. */
+  addOnsLeft: Record<string, number>;
+}
+
+/**
+ * What a tier actually paid towards a particular rate, as quoted and agreed.
+ *
+ * Stored on the shipment and spent at payment. Every figure is minor units the
+ * MEMBER does not pay; the gross amounts stay on the rate, because the premium
+ * is still a real premium and the postage is still real postage — Bault pays
+ * them either way.
+ */
+export interface AppliedShippingCover {
+  tier: string;
+  insuredShipment: boolean;
+  insuranceMinor: number;
+  postageMinor: number;
+  rushMinor: number;
+  addOns: Record<string, number>;
+}
+
 export interface Entitlement {
   /** True when the tier covers this action and the allowance is not spent. */
   covered: boolean;
@@ -131,6 +163,9 @@ export class MembershipService {
     return {
       tier: tier.key,
       status: state.membership.status,
+      scheduledTier: state.membership.scheduledTier,
+      /** What this cycle cost — the SPA needs it to show an upgrade's credit up front. */
+      currentFeeMinor: state.period?.feeMinor ?? 0,
       cycleLive: live,
       currentPeriodStart: state.membership.currentPeriodStart,
       currentPeriodEnd: state.membership.currentPeriodEnd,
@@ -182,8 +217,9 @@ export class MembershipService {
    *
    * MOVING TIERS is an upgrade or a downgrade and they are not symmetrical:
    *
-   *   - **Upgrade** takes effect at once and opens a new cycle, charged in full.
-   *     The member asked for more and is paying for more from today.
+   *   - **Upgrade** takes effect at once and opens a new cycle, with the unused
+   *     remainder of the old one credited against the first charge. The member
+   *     asked for more and is paying for more from today — not twice for today.
    *   - **Downgrade** is scheduled, not immediate. It takes effect at the end of
    *     the cycle they have already paid for, because taking away an allowance
    *     somebody has bought — and may have already planned around — is the one
@@ -203,31 +239,105 @@ export class MembershipService {
         .for('update')
         .limit(1);
 
-      if (existing && existing.status !== 'ended') {
-        if (existing.tier === tierKey && existing.status === 'active') {
-          throw new AppError(ErrorCode.CONFLICT, `Already on ${tier.key}`, 409);
-        }
-        if (tierRank(tierKey) < tierRank(existing.tier)) {
-          // A downgrade is a scheduled change, not a charge. Nothing moves today.
+      const now = new Date();
+      const live = existing && existing.status !== 'ended' ? existing : null;
+
+      if (live && live.tier === tierKey) {
+        /**
+         * The same tier again. Three different requests, and none of them is a
+         * purchase.
+         *
+         * This used to fall through to the paid path whenever the membership was
+         * `cancelling` — so somebody who cancelled on the 2nd and changed their
+         * mind on the 3rd was charged a whole new cycle for the one they had
+         * already paid for. Now resuming a cancellation, or dropping a scheduled
+         * downgrade, simply keeps what is paid for. Only asking for the tier you
+         * are already on, with nothing pending, is refused.
+         */
+        if (live.status === 'cancelling' || live.scheduledTier) {
           await tx
             .update(membership)
-            .set({ status: 'cancelling', cancelledAt: new Date(), updatedAt: new Date() })
-            .where(eq(membership.id, existing.id));
+            .set({ status: 'active', cancelledAt: null, scheduledTier: null, updatedAt: now })
+            .where(eq(membership.id, live.id));
           return {
-            tier: existing.tier,
-            status: 'cancelling' as const,
-            effectiveFrom: existing.currentPeriodEnd,
-            scheduledTier: tierKey,
+            tier: tierKey,
+            status: 'active' as const,
+            effectiveFrom: now,
+            currentPeriodEnd: live.currentPeriodEnd,
             chargedMinor: 0,
           };
         }
+        throw new AppError(ErrorCode.CONFLICT, `Already on ${tier.key}`, 409);
       }
 
-      const fee = await this.feeFor(tier, tx as Database);
-      const now = new Date();
-      const periodEnd = new Date(now.getTime() + CYCLE_MS);
+      if (live && tierRank(tierKey) < tierRank(live.tier)) {
+        /**
+         * A downgrade is SCHEDULED, and it stays a membership.
+         *
+         * It used to set `cancelling` and hand the target tier back to the caller
+         * without storing it anywhere — so at the end of the cycle the renewal
+         * saw `cancelling` and ENDED the membership. Somebody who asked to pay
+         * less next month was not a member next month. The target now lives on
+         * the row, the status stays `active`, and renewal opens the next cycle
+         * on the cheaper tier. Nothing already paid for is taken away today.
+         */
+        await tx
+          .update(membership)
+          .set({ scheduledTier: tierKey, status: 'active', cancelledAt: null, updatedAt: now })
+          .where(eq(membership.id, live.id));
+        return {
+          tier: live.tier,
+          status: 'active' as const,
+          effectiveFrom: live.currentPeriodEnd,
+          scheduledTier: tierKey,
+          chargedMinor: 0,
+        };
+      }
 
-      const id = existing
+      const listed = await this.feeFor(tier, tx as Database);
+
+      /**
+       * An upgrade credits what is left of the cycle already paid for.
+       *
+       * It used to charge the new tier in full and throw the rest of the old one
+       * away, so upgrading on day 29 of 30 cost the same as upgrading on day 1 —
+       * the member paid twice for the overlap. The unused fraction of what was
+       * actually charged for the current cycle comes off the first charge on the
+       * new one. The snapshot records the list price, the credit and the tier it
+       * came from, so the net figure can be explained later.
+       */
+      let prorationCreditMinor = 0;
+      if (live && this.isCycleLive(live, now)) {
+        const [current] = await tx
+          .select({ feeMinor: membershipPeriod.feeMinor })
+          .from(membershipPeriod)
+          .where(
+            and(
+              eq(membershipPeriod.membershipId, live.id),
+              eq(membershipPeriod.periodStart, live.currentPeriodStart),
+            ),
+          )
+          .limit(1);
+        const cycleMs = live.currentPeriodEnd.getTime() - live.currentPeriodStart.getTime();
+        const leftMs = live.currentPeriodEnd.getTime() - now.getTime();
+        if (current && cycleMs > 0 && leftMs > 0) {
+          prorationCreditMinor = Math.floor((current.feeMinor * leftMs) / cycleMs);
+        }
+      }
+      const fee = {
+        amountMinor: Math.max(0, listed.amountMinor - prorationCreditMinor),
+        currency: listed.currency,
+        snapshot: {
+          ...listed.snapshot,
+          listPriceMinor: listed.amountMinor,
+          prorationCreditMinor,
+          previousTier: live?.tier ?? null,
+        },
+      };
+
+      const periodEnd = new Date(now.getTime() + CYCLE_MS);
+      const row = live ?? existing;
+      const id = row
         ? (await tx
             .update(membership)
             .set({
@@ -235,11 +345,12 @@ export class MembershipService {
               status: 'active',
               currentPeriodStart: now,
               currentPeriodEnd: periodEnd,
+              scheduledTier: null,
               cancelledAt: null,
               endedAt: null,
               updatedAt: now,
             })
-            .where(eq(membership.id, existing.id))
+            .where(eq(membership.id, row.id))
             .returning({ id: membership.id }))[0]!.id
         : (await tx
             .insert(membership)
@@ -260,6 +371,7 @@ export class MembershipService {
         effectiveFrom: now,
         currentPeriodEnd: periodEnd,
         chargedMinor: fee.amountMinor,
+        prorationCreditMinor,
       };
     });
   }
@@ -339,7 +451,8 @@ export class MembershipService {
 
     await this.db
       .update(membership)
-      .set({ status: 'cancelling', cancelledAt: new Date(), updatedAt: new Date() })
+      // A pending downgrade is moot once the member has asked to stop altogether.
+      .set({ status: 'cancelling', cancelledAt: new Date(), scheduledTier: null, updatedAt: new Date() })
       .where(eq(membership.id, m.id));
     return { status: 'cancelling' as const, endsAt: m.currentPeriodEnd };
   }
@@ -375,7 +488,18 @@ export class MembershipService {
       return { covered: false, remainingAfter: 0, tier: tier.key };
     }
 
-    await tx
+    /**
+     * Conditional, and CHECKED.
+     *
+     * The WHERE clause re-tests the allowance, so two actions committing at the
+     * same moment cannot both take the last one. And the row count is checked:
+     * this UPDATE used to be fire-and-forget, so when the period row could not
+     * be found (a renewal that wrote its start at a different precision did
+     * exactly that) nothing was recorded and the answer was still "covered" —
+     * an allowance that never ran out. No row updated now means not covered.
+     */
+    const allowed = tier.perCycle[action];
+    const updated = await tx
       .update(membershipPeriod)
       .set({
         consumed: sql`jsonb_set(
@@ -389,11 +513,175 @@ export class MembershipService {
         and(
           eq(membershipPeriod.membershipId, state.membership.id),
           eq(membershipPeriod.periodStart, state.membership.currentPeriodStart),
+          allowed === UNLIMITED
+            ? sql`true`
+            : sql`coalesce((${membershipPeriod.consumed} ->> ${action})::int, 0) < ${allowed}`,
         ),
-      );
+      )
+      .returning({ id: membershipPeriod.id });
+    if (updated.length === 0) return { covered: false, remainingAfter: 0, tier: tier.key };
 
     const left = remaining(tier, action, used + 1);
     return { covered: true, remainingAfter: left === UNLIMITED ? UNLIMITED : left, tier: tier.key };
+  }
+
+  /* ------------------------------------------------------------------
+     Fees charged outside the billing port
+     ------------------------------------------------------------------ */
+
+  /**
+   * How much of a fee this member's tier waives, spent in the same transaction
+   * as the charge it reduces.
+   *
+   * Four fees never pass through `BillingService` — the marketplace commission
+   * (a percentage, charged in the purchase), the escrow fee (frozen on the deal,
+   * charged at settlement), the cash-out fee (charged at completion) and the
+   * show-pickup fee (charged at booking). Each call site asks here at the moment
+   * it charges.
+   *
+   * THE RULE: a waiver can only LOWER a fee the member was already shown, never
+   * raise one. Every one of these was quoted at its ordinary price before the
+   * member committed, so applying the waiver at the charge is safe in one
+   * direction only — and if the allowance was taken by something else in the
+   * meantime, the answer is simply the ordinary fee they already agreed to.
+   *
+   *   marketplace_fee  value-based: waived on the first N of sale value a cycle,
+   *                    proportionally when a sale straddles the limit.
+   *   escrow_fee       one deal a cycle, in full up to the tier's value cap; the
+   *                    fee on any excess is paid (`feeAt` computes it).
+   *   cash_out_fee     counted.
+   *   show_pickup      counted.
+   */
+  async waive(
+    tx: Database,
+    userId: string,
+    action: 'marketplace_fee' | 'escrow_fee' | 'cash_out_fee' | 'show_pickup',
+    feeMinor: number,
+    valueMinor = 0,
+    feeAt?: (valueMinor: number) => number,
+  ): Promise<{ waivedMinor: number; tier: string | null; waivedOnMinor?: number }> {
+    const none = { waivedMinor: 0, tier: null };
+    if (feeMinor <= 0) return none;
+    const state = await this.current(userId, tx);
+    if (!state || !this.isCycleLive(state.membership)) return none;
+    const tier = membershipTier(state.membership.tier);
+    if (!tier) return none;
+
+    if (action === 'marketplace_fee') {
+      const cap = tier.commissionWaivedOnMinor;
+      if (cap <= 0 || valueMinor <= 0) return none;
+      const used = state.period?.commissionWaivedOnMinor ?? 0;
+      const waivedOn = Math.min(Math.max(0, cap - used), valueMinor);
+      if (waivedOn <= 0) return none;
+      const updated = await tx
+        .update(membershipPeriod)
+        .set({
+          commissionWaivedOnMinor: sql`${membershipPeriod.commissionWaivedOnMinor} + ${waivedOn}`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(membershipPeriod.membershipId, state.membership.id),
+            eq(membershipPeriod.periodStart, state.membership.currentPeriodStart),
+            sql`${membershipPeriod.commissionWaivedOnMinor} + ${waivedOn} <= ${cap}`,
+          ),
+        )
+        .returning({ id: membershipPeriod.id });
+      if (updated.length === 0) return none;
+      return {
+        waivedMinor: Math.min(feeMinor, Math.round((feeMinor * waivedOn) / valueMinor)),
+        tier: tier.key,
+        waivedOnMinor: waivedOn,
+      };
+    }
+
+    const entitlement = await this.consume(tx, userId, action);
+    if (!entitlement.covered) return none;
+    if (action === 'escrow_fee' && tier.escrowValueCapMinor > 0 && valueMinor > tier.escrowValueCapMinor && feeAt) {
+      return { waivedMinor: Math.min(feeMinor, feeAt(tier.escrowValueCapMinor)), tier: tier.key };
+    }
+    return { waivedMinor: feeMinor, tier: tier.key };
+  }
+
+  /* ------------------------------------------------------------------
+     Shipping: insurance, postage, rush, trackers
+     ------------------------------------------------------------------ */
+
+  /**
+   * What this member's tier can pay towards a parcel, if anything.
+   *
+   * Null for a non-member and for a lapsed cycle — failing closed, like
+   * everything else here: no cover means the ordinary price, shown first.
+   */
+  async shippingCover(userId: string, tx?: Database): Promise<ShippingCover | null> {
+    const state = await this.current(userId, tx);
+    if (!state || !this.isCycleLive(state.membership)) return null;
+    const tier = membershipTier(state.membership.tier);
+    if (!tier) return null;
+
+    const p = state.period;
+    const consumed = (p?.consumed as Record<string, number>) ?? {};
+    const addOnsLeft: Record<string, number> = {};
+    for (const action of Object.keys(tier.perCycle)) {
+      if (action.startsWith('shipping_addon:')) addOnsLeft[action] = remaining(tier, action, consumed[action] ?? 0);
+    }
+    return {
+      tier: tier.key,
+      insuredShipmentsLeft: Math.max(0, tier.insuredShipments - (p?.insuredShipmentsUsed ?? 0)),
+      insuredValueCapMinor: tier.insuredValueCapMinor,
+      postageCreditLeftMinor: Math.max(0, tier.postageCreditMinor - (p?.postageUsedMinor ?? 0)),
+      rushIncluded: tier.perks.includes('rush_included'),
+      addOnsLeft,
+    };
+  }
+
+  /**
+   * Spend the cover a parcel was priced with, inside the payment's transaction.
+   *
+   * The counters are incremented in ONE conditional UPDATE whose WHERE clause
+   * re-checks the allowance — so two parcels paid at the same moment cannot
+   * both take the last insured shipment. If the allowance has changed since the
+   * member was shown the price (another parcel took it, the tier changed, the
+   * cycle rolled over), this REFUSES rather than charging the difference. The
+   * member agreed to a figure; a larger one needs a new agreement, which is a
+   * fresh quote.
+   */
+  async spendShippingCover(tx: Database, userId: string, applied: AppliedShippingCover): Promise<void> {
+    const stale = () =>
+      new AppError(
+        ErrorCode.CONFLICT,
+        'Your membership allowance has changed since this parcel was priced. Choose the rate again to see the current price.',
+        409,
+      );
+    const state = await this.current(userId, tx);
+    const tier = state ? membershipTier(state.membership.tier) : undefined;
+    if (!state || !tier || !this.isCycleLive(state.membership) || tier.key !== applied.tier) throw stale();
+    if (applied.rushMinor > 0 && !tier.perks.includes('rush_included')) throw stale();
+
+    const insured = applied.insuredShipment ? 1 : 0;
+    if (insured > 0 || applied.postageMinor > 0) {
+      const updated = await tx
+        .update(membershipPeriod)
+        .set({
+          insuredShipmentsUsed: sql`${membershipPeriod.insuredShipmentsUsed} + ${insured}`,
+          postageUsedMinor: sql`${membershipPeriod.postageUsedMinor} + ${applied.postageMinor}`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(membershipPeriod.membershipId, state.membership.id),
+            eq(membershipPeriod.periodStart, state.membership.currentPeriodStart),
+            sql`${membershipPeriod.insuredShipmentsUsed} + ${insured} <= ${tier.insuredShipments}`,
+            sql`${membershipPeriod.postageUsedMinor} + ${applied.postageMinor} <= ${tier.postageCreditMinor}`,
+          ),
+        )
+        .returning({ id: membershipPeriod.id });
+      if (updated.length === 0) throw stale();
+    }
+    for (const action of Object.keys(applied.addOns)) {
+      const e = await this.consume(tx, userId, action);
+      if (!e.covered) throw stale();
+    }
   }
 
   /* ------------------------------------------------------------------
@@ -417,7 +705,8 @@ export class MembershipService {
     let ended = 0;
 
     for (const m of due) {
-      const tier = membershipTier(m.tier);
+      // A scheduled downgrade takes effect HERE, at the start of the next cycle.
+      const tier = membershipTier(m.scheduledTier ?? m.tier);
       if (!tier) continue;
 
       if (m.status === 'cancelling') {
@@ -435,7 +724,7 @@ export class MembershipService {
         const fee = await this.feeFor(tier, tx as Database);
         await tx
           .update(membership)
-          .set({ currentPeriodStart: start, currentPeriodEnd: end, updatedAt: now })
+          .set({ tier: tier.key, scheduledTier: null, currentPeriodStart: start, currentPeriodEnd: end, updatedAt: now })
           .where(eq(membership.id, m.id));
         await this.openPeriod(tx as Database, { id: m.id, userId: m.userId }, tier, start, end, fee);
       });

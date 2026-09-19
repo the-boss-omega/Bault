@@ -18,7 +18,7 @@ bug can violate them. Everything below explains how that is achieved.
 
 ## How this document is organized
 
-It is split into forty-four parts, each covering a coherent slice of the code:
+It is split into forty-seven parts, each covering a coherent slice of the code:
 
 - **Part 1 — Repository, Monorepo & Shared Packages**: the root tooling, `@bault/config`,
   `@bault/adapters`, `@bault/contracts`, and infra.
@@ -202,10 +202,34 @@ It is split into forty-four parts, each covering a coherent slice of the code:
   box a parcel goes in chosen automatically — nothing is ever measured, because the
   dimensions are the BOX's and there are five of them; plus membership, where one
   fixed monthly fee means the services in a tier are not billed again, every
-  allowance has a ceiling, and running out of one never charges anybody anything.
+  allowance has a ceiling, and running out of one never charges anybody anything;
+  plus per-pound and per-ounce metering, and the two dimension limits ePacket
+  publishes that a large box breaks while it is still empty.
+
+- **Part 45 — The Build That Was Never a Build**: the repo-root `.env` says
+  `NODE_ENV=development`, and `vite.config.ts` reads it with an empty prefix to find
+  `API_PORT` — so Vite took it as an instruction and `vite build` had been producing a
+  DEVELOPMENT bundle, 1,562 kB with `jsxDEV` in it, which took every `import.meta.env.DEV`
+  branch and shipped the sign-in form pre-filled with a real account and the shared
+  password; plus the same password a second time in the i18n catalogue, where a guard on
+  the render could never have removed it.
+
+- **Part 46 — The One Animation**: the landing page's card slides into place, which
+  is the single exception to *motion confirms, never entertains* and is argued for
+  rather than assumed — one element, the system's own duration and easing, nothing
+  else on the hero moving, and `:dir(rtl)` flipping the offset so the card enters from
+  the outside edge of the stage in both scripts.
+
+- **Part 47 — Everything the Table Promised**: the membership inclusions wired at
+  the moment each fee is charged — shipment cover netted per rate and spent in the
+  settling transaction, waivers for commission, escrow, cash-out and pickup — plus a
+  downgrade that no longer cancels, a prorated upgrade and a renewal that can find its
+  own period; a dispatch that bought labels for `US 00000`; a sign-in log with the
+  real client address; a password on the tunnel; intake priced per class; and a
+  production nginx that never forwarded `/api`.
 
 **Precedence: later parts win.** Where Parts 1–8 disagree with a later changelog part, the
-changelog part is current; among Parts 9–44, the highest-numbered one is current. The
+changelog part is current; among Parts 9–47, the highest-numbered one is current. The
 file-by-file sections in Parts 1–8 have been corrected in place wherever the code they
 quoted no longer exists, so they should be accurate on their own terms too.
 
@@ -22300,10 +22324,443 @@ charges a full cycle rather than prorating the unused remainder.
 None of them can charge a member something they did not approve. They bill at
 the ordinary price today, which is the safe direction to be incomplete in.
 
+
+## The rest of the alignment: increments, and a limit a box breaks on its own
+
+The divisor was the obvious difference. Reading the reference service's FAQ
+properly turned up two more, and one of them was changing every quote.
+
+### Carriers do not sell fractions
+
+*"Postage amount is charged **per pound**"* for ePost, and **per ounce** for
+ePacket. This adapter was billing on the continuous weight — a 1.02 lb parcel
+priced at 1.02 lb — so almost every quote was under by up to one whole unit.
+
+`billableGrams(actual, dim, increment)` now does it in the order that matters:
+take the greater of actual and dimensional weight, and only THEN round up to the
+service's unit. Rounding first and comparing second would round the loser too,
+which costs nothing but is one more number that has to be right.
+
+`BillingIncrement` is `'ounce' | 'pound' | 'continuous'`, and it is published on
+the carrier catalogue rather than hidden in the adapter, because it is the reason
+a quote for 1.1 lb and one for 1.9 lb come back identical. A collector shaving
+grams off a parcel deserves to know it will not help. `continuous` is the flat
+overnight service, which meters nothing at all.
+
+The ePost and ePacket units are the reference service's own published figures.
+The FedEx and USPS ones are those carriers' published behaviour, and the comment
+says which is which, because a number whose source is not stated is a number
+somebody will change on a hunch.
+
+### The limit a box breaks before anything is in it
+
+ePacket publishes two dimension limits — **24 inches on the longest side, and 36
+inches for length plus width plus height** — and `CarrierService` had no way to
+express either. So the cheapest international service was being offered for
+parcels the counter would have handed straight back.
+
+A large Bault box is 45 x 35 x 25 cm. That is 41 inches added up. It breaks the
+rule EMPTY. The extra-large box is 57 inches and also 23.6 inches on its longest
+side, a quarter of an inch inside the other limit.
+
+`maxLongestSideCm` and `maxDimensionSumCm` on the service, a `dimensions` rule in
+`checkService`, and the refusal reads like every other one: *"ePacket
+International takes up to 36 in for length, width and height added together."*
+Checked only when a box is known — with no dimensions there is nothing to
+measure, and refusing on a number nobody supplied is worse than quoting
+optimistically. Which is itself another argument for `chooseBox` always
+producing one.
+
+### What is still different, deliberately
+
+**Over 20 lb, the reference service splits the shipment into several parcels.**
+Bault refuses, naming the limit. Splitting touches shipment creation, custody,
+per-parcel labels and per-parcel insurance; the refusal is honest and the
+collector can split it themselves. Not done, and not pretended.
+
+**Their intake fee is per class** — $1 an individual card, $5 a lot or an
+oversized card, $20 a sealed case — where Bault charges a flat $5. Bault's
+pricing rules already support per-class scoping (`pricingRule.itemClass`), so
+this is a seed change rather than a code change, and it is a pricing decision
+rather than a mechanical one.
+
 Files: `modules/mem/*` (new), migration `0027`, `jobs/membership-renewal.ts`
 (new), `areas/customer/membership/MembershipPage.tsx` (new),
 `shared/membership.ts` (new), `tests/web/membership-tiers.test.ts`,
 `tests/web/shipping-boxes.test.ts` and `tests/ux/membership.test.tsx` (new), plus
 edits to `billing.service.ts`, `storage-fee.ts`, `boxes.ts`,
 `parcel-profile.service.ts`, `shipment.service.ts`, `carriers.ts`,
-`adapters/shipping.ts`, `seed.ts`, `App.tsx`, `i18n.tsx` and `index.css`.
+`adapters/shipping.ts`, `seed.ts`, `App.tsx`, `i18n.tsx` and `index.css`; plus
+the alignment pass above in `adapters/shipping.ts`, `shp/carriers.ts`,
+`tests/web/shipping-boxes.test.ts` and `tests/contract/shipping-adapter.test.ts`.
+
+---
+
+# Part 45 — The Build That Was Never a Build
+
+Three findings, all from the same afternoon: putting the app behind a public
+tunnel so somebody outside could look at it. None of them was the thing being
+looked for, which is the argument for doing it at all.
+
+## `vite build` was producing a development bundle
+
+Every one of them comes from this.
+
+`vite.config.ts` reads the repo-root `.env` with an EMPTY prefix, because that
+is the only way to see `API_PORT`, which has no `VITE_` on it:
+
+    const fileEnv = { ...loadEnv(mode, repoRoot, ''), ...loadEnv(mode, appDir, '') };
+
+`loadEnv` has a side effect nobody reading that line would guess. When a file it
+loads defines `NODE_ENV`, Vite records the value as `VITE_USER_NODE_ENV` and then
+decides `isProduction` from THAT rather than from the command it was given. The
+root `.env` says `NODE_ENV=development`, correctly, because that is what the
+NestJS API and the worker need.
+
+So `pnpm --filter @bault/web build` was building in development mode. For months.
+The evidence was sitting in `dist/` for anybody who looked: `jsxDEV` calls with
+`lineNumber` and `columnNumber` metadata, and a bundle of **1,562 kB** where a
+real production build is **894 kB**. Nobody looked, because the command said
+`build` and it exited zero.
+
+The fix is one line with a long comment: `delete process.env.VITE_USER_NODE_ENV`
+after the load. `NODE_ENV` in a `.env` is a message to the SERVER processes; the
+web build's mode comes from the build command.
+
+## Which shipped a working password, pre-typed into the login form
+
+A development build takes every `import.meta.env.DEV` branch, and `SignInPage`
+has two:
+
+    const [identifier, setIdentifier] = useState(import.meta.env.DEV ? 'red@bault.dev' : '');
+    const [password, setPassword]     = useState(import.meta.env.DEV ? '11111111' : '');
+
+Both are correct code. Both were live in what everyone believed was the
+production bundle. The deployed sign-in form arrived with a real account and the
+shared password already in the fields.
+
+## And a second copy of the same secret, which the guard could not reach
+
+Underneath the form:
+
+    {import.meta.env.DEV && <p className="auth-demo">{t('auth.demoUsers')}</p>}
+
+Also correct, and also not enough - and this one would have leaked even from a
+genuine production build. The guard removes the JSX. The SENTENCE lived in the
+i18n catalogue, which is one object literal that ships whole, so
+
+    Demo users (password ...): ... eldar@bault.dev (manager)
+
+was in the bundle regardless. Anybody could open devtools, search for
+"password", and find the shared one along with the address of the
+ADMINISTRATOR account.
+
+Part 28 found the on-screen half of this and fixed it by adding the `DEV` guard.
+The half it could not see was that guarding a render does nothing about where
+the string is stored.
+
+The string is now `DEMO_USERS` in `auth/demoUsers.ts` - a module-level constant,
+untranslated on purpose, referenced only inside a `DEV` branch. Vite replaces the
+flag with `false`, the branch becomes unreachable, and Rollup drops the module.
+
+## The test is on the artefact, because the guards were the bug
+
+`tests/web/no-credentials-in-bundle.test.ts` greps the built `dist/assets/*.js`
+for the seeded password, each seeded address, and the phrase "Demo users". It
+skips when there is no build to look at, so it never fails for the wrong reason,
+and CI builds the web app so it runs there.
+
+It is deliberately not clever. A regex for "looks like a secret" would match
+every hex colour in the stylesheet and be switched off inside a week. Two guards
+that read correctly are what caused this, so the check is on the output.
+
+## Two smaller things the same pass turned up
+
+**`assets/` is the web app's `publicDir`**, so everything in it is copied into
+`dist/` and served. It contained `EX1_sol.pdf` - a sixteen-page Tel Aviv
+University data-structures assignment, nothing to do with Bault, downloadable
+from any deployed URL. Moved to `_local/`, which is now in `.gitignore` with a
+comment saying why.
+
+**`pnpm db:reset` was not resetting the membership.** The seed's TRUNCATE list is
+written by hand, and Part 44's two new tables were not on it - so a reset left
+whoever had been experimenting still subscribed, and the seed stopped being the
+clean state it is supposed to define. `membership` and `membership_period` are on
+the list now.
+
+## What the tunnel is, when it is right
+
+`vite preview` on the built bundle, with `WEB_PUBLIC_HOST` naming the tunnel
+host, and `cloudflared tunnel --url http://localhost:4173`. Verified from
+outside: the app loads, the public price list and tier catalogue answer,
+`/src/**/*.tsx` returns `index.html` rather than a component, there are no
+sourcemaps, `/docs` is not proxied, and the sign-in form is empty.
+
+Never the dev server. `pnpm dev` answers `GET /src/areas/.../LandingPage.tsx`
+with the transpiled file, comments and all - which is Part 43, and is why the
+`preview` block exists.
+
+---
+
+# Part 46 — The One Animation
+
+`DESIGN.md` has a rule: **motion confirms, never entertains.** One purpose per
+animation, 150-250ms, and nothing that draws attention to itself. Part 29 was
+written largely to delete decorative motion - the rail selector's travel, the
+machined notch, the turned rivet.
+
+So an entrance animation on the landing page is, on its face, exactly the thing
+the rule forbids. It was asked for, and it is worth writing down why it is a
+legitimate exception rather than the first crack in the rule.
+
+## Why this one is allowed
+
+The rule exists because motion that confirms nothing is the product performing at
+somebody. Everywhere behind the sign-in that is true: there is always an action
+to acknowledge, so an animation that acknowledges nothing is noise.
+
+The landing page is the one surface where there is no action yet. Its entire
+argument is a single object - a real card, photographed, with its serial beside
+it - and an object that slides into place reads as being PUT there. That is the
+whole product in one gesture: something was taken into custody.
+
+So the exception is granted to exactly one element, and the discipline is in what
+does NOT move. The headline, the lede, the custody line and the buttons are
+static. A staggered cascade down the hero would be the product performing, which
+is the thing the rule is protecting against, and it would have been one line more
+to write.
+
+## Inside the system's own numbers
+
+`--dur-slow` (250ms), `--ease`, runs once, `both` so the end state holds and
+nothing flickers back. No new token, no sixth duration, nothing bespoke.
+
+Reduced motion needed no rule: the global `prefers-reduced-motion: reduce` block
+collapses every animation to 0.01ms, and because the fill mode is `both`, the
+card is simply already in place. Verified by emulating the media feature rather
+than by reading the stylesheet - the computed duration comes back as `1e-05s`.
+
+## The direction problem, and why `:dir()` is not a layout branch
+
+A transform cannot be written in logical properties. `translateX(-24px)` is left
+in both scripts, and the card sits on the LEFT of the stage in English and on the
+RIGHT in Hebrew - so a fixed offset would have it entering from the outside edge
+in one language and flying across its own headline in the other.
+
+`DESIGN.md` forbids `[dir='rtl']` LAYOUT branches, and this is not one: the grid
+still does all the mirroring by itself. The offset is a custom property and
+`:dir(rtl)` flips its sign, so the card always enters from the outside edge of
+the stage.
+
+    .landing-stage-photo      { --card-enter-from: -24px; }
+    .landing-stage-photo:dir(rtl) { --card-enter-from: 24px; }
+
+Confirmed in the browser in both locales: `-24px` under `dir=ltr`, `24px` under
+`dir=rtl`.
+
+## One defensive line
+
+`.landing-stage` gained `overflow: clip`. A transform does not affect layout but
+it can still produce scrollable overflow, and a card starting 24px outside its
+resting place would have given the page a horizontal scrollbar for a quarter of a
+second. Measured at 0 in both directions and at every width afterwards.
+
+
+# Part 47 — Everything the Table Promised
+
+Part 44 built a membership whose comparison table said more than the code did.
+The shipment inclusions and the commission waiver were printed on the screen and
+billed at the normal price; an upgrade charged a full cycle; a downgrade, it
+turned out, cancelled the membership. Part 44 said so in its own list of what was
+not wired. This part is the wiring, plus four things found on the way that had
+nothing to do with membership and were worse.
+
+## The label that could not have been bought
+
+`dispatch.service.ts` bought the label like this: destination `US`, postal code
+`00000`, the shipment's total weight repeated once per item, and no box. The
+sandbox adapter never looks at any of it, so every dispatch succeeded. Against
+EasyPost the same call would have been refused, or would have bought a label for
+the wrong address.
+
+The fix is that dispatch no longer builds the request at all. It asks
+`ShipmentService.labelRequest(shipment, measuredWeightGrams?)`, which rebuilds it
+from what the shipment already stored when it was quoted:
+
+    const { rate, request } = await this.shipments.labelRequest(s, form.packageWeightGrams);
+    const label = await this.shipping.buyLabel(rate, request);
+
+The destination is `destinationOf()` in `carriers.ts`: the full address snapshot
+taken at creation (migration `0028_a_label_that_can_be_bought`, column
+`destination_detail`), or — for a shipment created before the column existed —
+country, postal code and name, which is what those rows actually have. The weight
+is the billable weight of the chosen box, and the operator's scale reading wins
+when there is one. `provider_shipment_id` and `provider_rate_id` are stored on
+settle, so the label is bought against the rate the collector was shown and not a
+fresh one.
+
+## Knowing who signed in
+
+The question was "if a user can log in, how do we know?" and the honest answer
+was: we don't. A session row held a token hash and a user id. A failed password
+left nothing anywhere.
+
+Migration `0029_who_signed_in` adds:
+
+- `login_session.ip` and `user_agent` (clamped to 512 characters, because it is
+  caller-supplied text going into a table nobody prunes);
+- `login_attempt` — every attempt, with an outcome of `success`,
+  `bad_credentials`, `unverified` or `refused`, the identifier typed, the user if
+  one matched, IP and device. Append-only, added to both lists in
+  `0001_append_only.sql`.
+
+`AuthService.recordAttempt` is wrapped so that it can never break a sign-in: a
+logging failure is logged and swallowed. An audit trail that locks everybody out
+when its table is unhappy is worse than none.
+
+None of that is worth anything if the IP is wrong, and it was. Without
+`trust proxy`, every request through the tunnel came from `127.0.0.1`, so the
+rate limiter treated the planet as one client. `main.ts` now sets it from
+`TRUST_PROXY` (default `loopback`). Not `true`: `true` believes the LEFTMOST
+`X-Forwarded-For` entry, which is whatever the caller typed. The schema refuses
+`true` outright. Verified through the live tunnel: a real public address
+recorded, a forged `X-Forwarded-For: 1.2.3.4` ignored.
+
+The admin console has a **Sign-ins** tab (`SignInsSection.tsx`, backed by
+`GET /admin/logins`): the last 200 attempts, 24-hour totals, and any identifier
+with five or more failures in 24 hours on the `is-alert` rail. The collector gets
+403.
+
+## The tunnel, with a door
+
+`pnpm tunnel` (`scripts/tunnel.mjs`) does the whole sequence: checks the API is
+up, builds, starts `vite preview` with a password, opens the Cloudflare tunnel,
+and prints the link, the user and the password. The password is enforced by a
+small plugin in `vite.config.ts` — basic auth, compared with `timingSafeEqual`,
+and the `authorization` header stripped before the request is proxied to the API
+so the preview password never reaches it. `xfwd: true` on the proxy is what lets
+the API see the visitor's address at all.
+
+## Membership: the three bugs
+
+**A downgrade was a cancellation.** `subscribe()` to a cheaper tier ended the
+current membership and had nowhere to put the new one. Migration
+`0030_a_downgrade_is_not_a_cancellation` adds `membership.scheduled_tier`. A
+downgrade now keeps the current tier to the end of the paid cycle and records the
+next one; the renewal job reads `coalesce(scheduled_tier, tier)` and clears it.
+"Keep" on the membership page undoes a scheduled downgrade or a pending
+cancellation, and costs nothing, because nothing has changed hands.
+
+**An upgrade charged a full cycle.** It now credits the unused part of the
+current one, pro rata by the day, and the confirmation sentence states the credit
+before the button is pressed.
+
+**Renewal could not find its own period.** The job wrote `current_period_start`
+as `now()` — microseconds — and the service looked the period up by a JS `Date`,
+which has milliseconds. The row was there and never matched. The job now writes
+`date_trunc('milliseconds', now())`. The class of bug is worth remembering: any
+timestamp that crosses from Postgres into JavaScript and back as a lookup key has
+to be truncated on the way in.
+
+A fourth, smaller one: `consume()` fired its update without checking that it
+updated anything, so a race could report an allowance as spent when no row had
+been written. It is now a conditional update whose row count is checked, and
+"covered" is only answered when the count is one.
+
+## Shipment inclusions
+
+`MembershipService.shippingCover(userId)` answers what the member's tier can pay
+towards a shipment right now: an insured-value cap, a postage credit, rush, and
+add-ons (the Trust tier's GPS tracker). `priceServices()` takes that cover and
+nets it out per rate:
+
+- insurance is charged on `insured − min(insured, cap)` — the premium above the
+  cap, not all or nothing;
+- postage credit comes off the carrier cost, never below zero;
+- rush and covered add-ons come off whole.
+
+Each rate carries `membershipCover` and `coveredMinor`, and the composer prints a
+line saying what the membership paid, because a total lower than its own
+breakdown with nothing to explain it reads as a mistake.
+
+The cover is stored on the shipment (`membership_cover`) when it settles and is
+spent in the same transaction that charges it — so a shipment that fails to
+settle has not used the allowance, and one paid later spends the cover it was
+quoted, not whatever the tier holds by then.
+
+One consequence had to be caught by hand. "Choose for me" picks the lowest
+`total + days × a day of waiting`, and once a postage credit was netted in, the
+slower service could look cheaper purely because the credit ate more of it — so
+the recommendation spent the credit on a worse shipment. `pickBest` now scores on
+the price BEFORE the credit. The credit applies to whichever service is chosen;
+it should not choose it.
+
+## Waivers outside the billing port
+
+Commission, the escrow fee, the cash-out fee and show pickup are not charged
+through `BillingService.charge`, so the single entitlement check in Part 44
+never saw them. Each call site now calls `MembershipService.waive(tx, userId,
+action, feeMinor, valueMinor?)` at the moment it computes the fee, inside its
+own transaction, and charges what comes back. The rule from Part 44 holds: a
+waiver can only lower a fee that is already on the screen, and it cannot exceed
+its allowance. The escrow waiver also has a value cap
+(`escrowValueCapMinor`, $5,000 on Trust) so it cannot be used to move a
+collection's worth of money for nothing.
+
+The pickup had its own bug inside this: the balance check ran against the gross
+fee, outside the transaction, before the waiver. A member with a covered pickup
+and an empty wallet was refused. The check now runs after the waiver, inside.
+
+Verified live: a $160 commission became $110 (the waiver's share), a cash-out
+fee became $0, an escrow fee became $0, and a shipment's quote fell by exactly
+the insurance under the cap plus the credit.
+
+## Intake, priced per class
+
+The flat $5 intake fee was one number for a single card and a sealed case. The
+reference service charges by what arrived — $1 for a card, $5 for a lot or a
+box, $10 for a collection, $20 for a case — and because Bault's storage is 10%
+of the item's own intake charge, a flat $5 overcharged a single card's storage
+fivefold for as long as it sat on the shelf.
+
+The seed now carries a rule per class alongside the catch-all, which stays at $5
+to price `other` and any class added before it has a rule. Three mappings are by
+analogy and say so in the seed: a graded slab as a card, a sealed pack and a
+small collectible as "misc". A lot is one item holding many, so it bills as
+`intake_lot` ($5) — tried first, falling back to the class rule — and for a
+member it draws on the ordinary intake allowance through `ALLOWANCE_ALIASES` in
+`tiers.ts`. That map is explicit on purpose: a general "fall back to the parent
+action" would let one allowance quietly pay for another.
+
+The landing page had keyed prices by action, so with a dozen intake rules it
+would have shown whichever came last — potentially a sealed case's $20 as "the"
+intake price. It now takes the `trading_card` rule and labels it "Booking one
+card in".
+
+## A deployed site that could not sign in
+
+`apps/web/nginx.conf` sets a CSP of `connect-src 'self'` "on the assumption the
+API is served under the same origin behind this proxy" — and then never proxied
+it. Every `/api/v1` call in the built image fell through to `location /` and got
+`index.html`. The config is now a template (`/etc/nginx/templates/`, filled by the
+image's own entrypoint) with a `location /api/` forwarding to `${API_UPSTREAM}`,
+default `http://api:3000`. It SETS `X-Forwarded-For` to the address nginx saw
+rather than appending, so nothing a client sends survives the hop. The API behind
+it needs `TRUST_PROXY` naming that network; `.env.example` says so.
+
+## Housekeeping
+
+- `apps/api/svg2png.tmp.mjs` declares its Node globals; `pnpm lint` has 0 errors.
+- The admin console opens on Yield, not on whatever tab was first in the array.
+- `docs/production-readiness.md` has a 19 September status: B2 superseded (the
+  EasyPost adapter exists; exercising it needs a key), and N1–N6 for everything
+  found since.
+
+## Why the divisor is 167
+
+Asked directly, so answered here. The dimensional divisor is 167 because that is
+the number ShipMyCards publishes, and matching them was the brief. 139 is the
+FedEx/UPS retail divisor — about 20% more dimensional weight for the same box —
+and USPS uses 166. When a real carrier is wired it computes dimensional weight
+itself; the constant drives sandbox quotes and the catalogue a collector sees
+before a label is bought.

@@ -27,7 +27,7 @@
  * value while the SPA fetches the actual list from `GET /shipping/services`.
  */
 
-import { DIM_DIVISOR } from '@bault/adapters';
+import { DIM_DIVISOR, type BillingIncrement } from '@bault/adapters';
 
 /** Where the parcel is going. Country is ISO 3166-1 alpha-2. */
 /**
@@ -47,6 +47,32 @@ export interface Destination {
   street1?: string;
   city?: string;
   region?: string;
+}
+
+/**
+ * Where a stored shipment is going, as a carrier needs it.
+ *
+ * The snapshot when there is one; otherwise the country/postcode pair, which is
+ * all a shipment created before the snapshot existed ever recorded. A carrier
+ * that needs a street will refuse the fallback with a sentence naming what is
+ * missing, which is the right failure — quoting against a guessed street would
+ * be worse.
+ */
+export function destinationOf(s: {
+  destinationDetail: unknown;
+  destinationCountry: string;
+  destinationPostalCode: string;
+  recipientName?: string | null;
+}): Destination {
+  const detail = s.destinationDetail as Partial<Destination> | null;
+  if (detail && typeof detail.country === 'string' && typeof detail.postalCode === 'string') {
+    return { ...detail, country: detail.country, postalCode: detail.postalCode } as Destination;
+  }
+  return {
+    country: s.destinationCountry,
+    postalCode: s.destinationPostalCode,
+    ...(s.recipientName ? { name: s.recipientName } : {}),
+  };
 }
 
 export interface CarrierService {
@@ -76,6 +102,26 @@ export interface CarrierService {
    * prices on actual weight only.
    */
   dimDivisor?: number;
+  /**
+   * The unit this service meters weight in.
+   *
+   * Published rather than kept inside the adapter, because it is the reason a
+   * quote for 1.1 lb and one for 1.9 lb come back identical, and a collector
+   * shaving grams off a parcel deserves to know it will not help.
+   */
+  billingIncrement: BillingIncrement;
+  /** Longest single side the service accepts, in cm. 0 = no limit. */
+  maxLongestSideCm: number;
+  /**
+   * The most the three sides may add up to, in cm. 0 = no limit.
+   *
+   * ePacket is the one with a real figure here: 24 inches on the longest side
+   * and 36 inches for length + width + height. A large or extra-large Bault box
+   * exceeds the second one before anything is put in it, which is a refusal the
+   * catalogue could not previously express — so the cheapest international
+   * service was being offered for parcels it would have rejected at the counter.
+   */
+  maxDimensionSumCm: number;
   /**
    * A flat price that ignores weight and distance entirely. Only the
    * direct-overnight service has one — see {@link DIRECT_OVERNIGHT_KEY}.
@@ -121,6 +167,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 3,
     transitDaysMax: 6,
+    billingIncrement: 'ounce',
+    maxLongestSideCm: 0,
+    maxDimensionSumCm: 0,
   },
   {
     key: 'usps_priority',
@@ -134,6 +183,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 1,
     transitDaysMax: 3,
+    billingIncrement: 'pound',
+    maxLongestSideCm: 0,
+    maxDimensionSumCm: 0,
   },
   {
     key: 'fedex_2day',
@@ -147,6 +199,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 2,
     transitDaysMax: 2,
+    billingIncrement: 'pound',
+    maxLongestSideCm: 0,
+    maxDimensionSumCm: 0,
     dimDivisor: DIM_DIVISOR,
   },
   {
@@ -161,6 +216,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: false,
     transitDaysMin: 10,
     transitDaysMax: 24,
+    billingIncrement: 'ounce',
+    maxLongestSideCm: 60.96, // 24 in
+    maxDimensionSumCm: 91.44, // 36 in, L+W+H
   },
   {
     key: 'epost',
@@ -174,6 +232,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 7,
     transitDaysMax: 16,
+    billingIncrement: 'pound',
+    maxLongestSideCm: 0,
+    maxDimensionSumCm: 0,
   },
   {
     key: 'fedex_intl_priority',
@@ -187,6 +248,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 2,
     transitDaysMax: 5,
+    billingIncrement: 'pound',
+    maxLongestSideCm: 0,
+    maxDimensionSumCm: 0,
     dimDivisor: DIM_DIVISOR,
   },
   {
@@ -211,6 +275,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     signatureAvailable: true,
     transitDaysMin: 1,
     transitDaysMax: 1,
+    billingIncrement: 'continuous',
+    maxLongestSideCm: 0,
+    maxDimensionSumCm: 0,
     flatCostMinor: 10_000, // $100 flat
     maxItems: 5,
     requiresOriginFacility: DIRECT_OVERNIGHT_FACILITY,
@@ -259,7 +326,8 @@ export interface ServiceProblem {
     | 'insurance'
     | 'signature'
     | 'item_count'
-    | 'origin_facility';
+    | 'origin_facility'
+    | 'dimensions';
   message: string;
   /**
    * The limit that was exceeded, already formatted ("$500.00", "4.0 lb", "5").
@@ -274,6 +342,11 @@ export interface ServiceProblem {
 
 function usd(minor: number): string {
   return `$${(minor / 100).toFixed(2)}`;
+}
+
+/** Centimetres as inches, because every carrier limit is published in them. */
+function inches(cm: number): string {
+  return `${Math.round(cm / 2.54)} in`;
 }
 
 function lb(grams: number): string {
@@ -341,6 +414,38 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
       rule: 'signature',
       message: `${service.carrier} ${service.serviceLevel} cannot collect a signature.`,
     });
+  }
+  /**
+   * The box is too big for this service, whatever is in it.
+   *
+   * ePacket is the one that carries real figures — 24 inches on the longest
+   * side, 36 inches for the three sides added together — and a large Bault box
+   * breaks the second one empty. The catalogue could not express this before, so
+   * the cheapest international service was offered for parcels a counter would
+   * have handed straight back.
+   *
+   * Only checked when a box is known. With no dimensions there is nothing to
+   * measure, and refusing on a number nobody supplied would be worse than
+   * quoting optimistically — which is itself an argument for `chooseBox` always
+   * producing one.
+   */
+  if (parcel.dimensionsCm) {
+    const { length, width, height } = parcel.dimensionsCm;
+    const longest = Math.max(length, width, height);
+    if (service.maxLongestSideCm > 0 && longest > service.maxLongestSideCm) {
+      problems.push({
+        rule: 'dimensions',
+        message: `${service.carrier} ${service.serviceLevel} takes nothing longer than ${inches(service.maxLongestSideCm)}.`,
+        limit: inches(service.maxLongestSideCm),
+      });
+    }
+    if (service.maxDimensionSumCm > 0 && length + width + height > service.maxDimensionSumCm) {
+      problems.push({
+        rule: 'dimensions',
+        message: `${service.carrier} ${service.serviceLevel} takes up to ${inches(service.maxDimensionSumCm)} for length, width and height added together.`,
+        limit: inches(service.maxDimensionSumCm),
+      });
+    }
   }
   if (service.maxItems !== undefined && parcel.itemCount > service.maxItems) {
     problems.push({

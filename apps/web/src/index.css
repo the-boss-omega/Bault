@@ -4068,6 +4068,9 @@ input[type='search'] {
   display: grid;
   gap: var(--sp-8);
   align-content: center;
+  /* The card's entrance starts 24px outside its resting place. `clip` keeps that
+     offset from producing a horizontal scrollbar for a quarter of a second. */
+  overflow: clip;
   padding-block: var(--sp-16);
   padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
   background: var(--surface-stage);
@@ -4093,6 +4096,51 @@ input[type='search'] {
 /* This is evidence. Cropping it hides the corner somebody is trying to see. */
 .landing-stage-photo .photo-thumb-img {
   object-fit: contain;
+}
+
+/*
+ * The card arrives.
+ *
+ * `DESIGN.md` says motion confirms and never entertains, and this is the one
+ * exception the system can justify: the landing page's whole argument is THIS
+ * OBJECT, and an object that slides into place is read as being put there.
+ * Everywhere else in the product motion acknowledges something the person did;
+ * here there is nothing to acknowledge yet, so the rule is met by keeping the
+ * animation to the single element the page is about. The headline, the custody
+ * line and the buttons do not move — a staggered cascade would be the product
+ * performing, which is what the rule exists to prevent.
+ *
+ * Inside the system's own limits: `--dur-slow` (250ms), the one easing curve,
+ * one purpose, runs once. `both` holds the end state so nothing flickers back.
+ *
+ * DIRECTION IS NOT HARD-CODED. A transform cannot be written in logical
+ * properties, so the offset is a variable and `:dir(rtl)` flips its sign — the
+ * card always enters from the OUTSIDE edge of the stage, which is the left in
+ * English and the right in Hebrew. This is not a layout branch; the grid is
+ * still doing the mirroring on its own.
+ *
+ * Reduced motion needs no rule here: the global `prefers-reduced-motion` block
+ * collapses every animation to 0.01ms, and `both` means the card is simply
+ * already in place.
+ */
+@keyframes landing-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--card-enter-from)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.landing-stage-photo {
+  --card-enter-from: -24px;
+  animation: landing-card-in var(--dur-slow) var(--ease) both;
+}
+
+.landing-stage-photo:dir(rtl) {
+  --card-enter-from: 24px;
 }
 
 .landing-pitch {
@@ -4484,6 +4532,12 @@ input[type='search'] {
   font-size: var(--fs-base);
   line-height: var(--lh-normal);
   color: var(--ink-body);
+}
+
+/* What a tier paid towards a parcel. Brass, because it is money — and it
+ * names itself, so a total below its own breakdown is never unexplained. */
+.mem-covered {
+  color: var(--brass);
 }
 
 .mem-uncovered li {

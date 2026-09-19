@@ -22,6 +22,7 @@ import {
   escrowFeeMinor,
 } from './escrow-terms';
 import { formatMinor } from '../../shared/money';
+import { MembershipService } from '../mem/membership.service';
 
 type Deal = typeof escrowDeal.$inferSelect;
 
@@ -62,6 +63,7 @@ export class EscrowService {
     private readonly ledger: LedgerService,
     private readonly pricing: PricingService,
     private readonly outbox: OutboxService,
+    private readonly memberships: MembershipService,
   ) {}
 
   /** The published terms, so somebody can read the price before committing. */
@@ -558,8 +560,19 @@ export class EscrowService {
       }
 
       // The fee falls on whoever raised the deal — they chose the service, and
-      // they are the side that is certainly a Bault account.
-      if (deal.feeMinor > 0) {
+      // they are the side that is certainly a Bault account. Their membership
+      // may waive it; the fee frozen on the deal is what they agreed to, and a
+      // waiver can only take from it (`MembershipService.waive`).
+      const waiver = await this.memberships.waive(
+        tx as Database,
+        deal.raisedBy,
+        'escrow_fee',
+        deal.feeMinor,
+        deal.valueMinor,
+        escrowFeeMinor,
+      );
+      const feeDue = deal.feeMinor - waiver.waivedMinor;
+      if (feeDue > 0) {
         const [c] = await tx
           .insert(charge)
           .values({
@@ -569,8 +582,9 @@ export class EscrowService {
               escrowFeeBps: ESCROW_FEE_BPS,
               valueMinor: deal.valueMinor,
               minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
+              ...(waiver.waivedMinor > 0 ? { grossFeeMinor: deal.feeMinor, membershipWaiver: waiver } : {}),
             },
-            amount: deal.feeMinor,
+            amount: feeDue,
             currency: deal.currency,
             paymentMeans: 'wallet',
             status: 'settled',
@@ -582,7 +596,7 @@ export class EscrowService {
           {
             userId: deal.raisedBy,
             type: 'fee',
-            amount: deal.feeMinor,
+            amount: feeDue,
             direction: 'debit',
             currency: deal.currency,
             referenceType: 'charge',
@@ -608,7 +622,7 @@ export class EscrowService {
         fromStatus: 'awaiting_release',
         toStatus: 'settled',
         actorId,
-        metadata: { valueMinor: deal.valueMinor, feeMinor: deal.feeMinor, settlement: deal.settlement },
+        metadata: { valueMinor: deal.valueMinor, feeMinor: feeDue, waivedMinor: waiver.waivedMinor, settlement: deal.settlement },
       });
 
       const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
@@ -620,7 +634,7 @@ export class EscrowService {
           payload: { recipientIds: recipients, dealCode: deal.code, amountMinor: deal.valueMinor },
         });
       }
-      return { status: 'settled' as const, paidMinor: deal.valueMinor, feeMinor: deal.feeMinor };
+      return { status: 'settled' as const, paidMinor: deal.valueMinor, feeMinor: feeDue };
     });
   }
 

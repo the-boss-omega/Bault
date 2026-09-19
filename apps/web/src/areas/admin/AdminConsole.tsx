@@ -23,6 +23,7 @@ import {
 import { IconBox, IconGavel, IconPlus, IconReceipt, IconUsers } from '../../shared/ui/icons';
 import { WalletRequestsSection } from './WalletRequestsSection';
 import { HouseStoreSection } from './HouseStoreSection';
+import { SignInsSection } from './SignInsSection';
 
 /**
  * `GET /admin/users`.
@@ -77,12 +78,13 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
  * do — find a user, settle a dispute, change a price. Shelf Yield is the one
  * that tells them what to do, so it is what the section opens on.
  */
-const TABS = ['yield', 'users', 'requests', 'items', 'house', 'pricing', 'disputes', 'storage'] as const;
+const TABS = ['yield', 'users', 'signins', 'requests', 'items', 'house', 'pricing', 'disputes', 'storage'] as const;
 type SectionKey = (typeof TABS)[number];
 
 const TAB_LABEL: Record<SectionKey, MessageKey> = {
   yield: 'admin.section.yield',
   users: 'admin.section.users',
+  signins: 'admin.section.signins',
   requests: 'admin.section.requests',
   items: 'admin.section.items',
   house: 'admin.section.house',
@@ -109,9 +111,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Opens on Shelf Yield, as the comment on `TABS` has always said it does. The
+  // code said `users`, so the section an administrator was meant to land on was
+  // one click away instead of in front of them.
   const section: SectionKey = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as SectionKey)
-    : 'users';
+    : 'yield';
 
   const load = useCallback(async () => {
     try {
@@ -256,6 +261,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       {section === 'disputes' && (
         <TabPanel tab="disputes">
           <DisputesSection onMsg={setMessage} onError={setError} />
+        </TabPanel>
+      )}
+
+      {section === 'signins' && (
+        <TabPanel tab="signins">
+          <SignInsSection onError={setError} />
         </TabPanel>
       )}
 

@@ -37,7 +37,11 @@ RUN pnpm --filter @bault/web build
 FROM nginx:1.27-alpine AS runtime
 
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# A template, not a finished file: the image's entrypoint substitutes the
+# variables below (and ONLY defined variables, so nginx's own $uri and $host are
+# left alone) into /etc/nginx/conf.d/default.conf when the container starts.
+COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+ENV API_UPSTREAM=http://api:3000
 
 EXPOSE 8080
 

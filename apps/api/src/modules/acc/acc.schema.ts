@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 /**
@@ -95,5 +95,51 @@ export const loginSession = pgTable('login_session', {
   tokenHash: text('token_hash').notNull(), // hash of the httpOnly session cookie value
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }), // set on sign-out
+  /**
+   * Where the session was opened from, and on what.
+   *
+   * Without these a session row said WHO and WHEN and nothing else, so "was that
+   * me?" had no answer. The IP is the real client address — the API trusts the
+   * loopback proxy in front of it and nothing else (see `main.ts`), so behind the
+   * tunnel it is the visitor, not 127.0.0.1.
+   */
+  ip: text('ip'),
+  userAgent: text('user_agent'),
   createdAt: createdAt(),
 });
+
+/**
+ * Every sign-in attempt, successful or not.
+ *
+ * A failed sign-in used to leave no trace at all — the audit interceptor only
+ * records requests that SUCCEED — so somebody working through passwords against
+ * an account was invisible, and the only record of a successful one was an audit
+ * row with the user left empty. This is the one place both outcomes land, with
+ * the address and the device, in the order they happened.
+ *
+ * Append-only (it is on the guard list in `0001_append_only.sql`): a log of who
+ * tried to get in that could be edited afterwards is not a log.
+ *
+ * `identifier` is what was TYPED, normalised, so a burst of attempts against an
+ * address that does not exist is visible too. The password is never stored, in
+ * any form.
+ */
+export const loginAttemptOutcome = pgEnum('login_attempt_outcome', ['success', 'bad_credentials', 'unverified', 'refused']);
+
+export const loginAttempt = pgTable(
+  'login_attempt',
+  {
+    id: pkId(),
+    identifier: text('identifier').notNull(),
+    /** The account it resolved to, when it resolved to one. */
+    userId: text('user_id'),
+    outcome: loginAttemptOutcome('outcome').notNull(),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byTime: index('login_attempt_time_idx').on(t.occurredAt),
+    byUser: index('login_attempt_user_idx').on(t.userId, t.occurredAt),
+  }),
+);

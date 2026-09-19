@@ -24,6 +24,11 @@ describe('contract: ShippingAdapter', () => {
     items: [{ weightGrams: 500 }],
     rush: false,
   };
+  const international = {
+    destination: { country: 'DE', postalCode: '10115' },
+    items: [{ weightGrams: 500 }],
+    rush: false,
+  };
 
   it('returns carrier rates with cost + service level', async () => {
     const rates = await adapter.getRates(domestic);
@@ -71,6 +76,28 @@ describe('contract: ShippingAdapter', () => {
       packagingGrams: 60,
     });
     expect(box[0]!.costMinor).toBeGreaterThan(mailer[0]!.costMinor);
+  });
+
+  it('bills in whole units, because carriers do not sell fractions', async () => {
+    // The reference service publishes the unit per service: "Postage amount is
+    // charged per pound" for ePost, per ounce for ePacket. Two parcels inside
+    // the same pound are the same parcel to a per-pound service, and quoting on
+    // the continuous weight under-quotes almost every one of them.
+    const lighter = await adapter.getRates({ ...international, items: [{ weightGrams: 900 }], packagingGrams: 60 });
+    const heavier = await adapter.getRates({ ...international, items: [{ weightGrams: 910 }], packagingGrams: 60 });
+    const ePost = (rates: Awaited<ReturnType<typeof adapter.getRates>>) =>
+      rates.find((r) => r.carrier === 'ePost')!.costMinor;
+
+    // 960 g and 970 g both land inside the same pound band.
+    expect(ePost(lighter)).toBe(ePost(heavier));
+
+    // And crossing the boundary costs a whole band more, not a few cents.
+    const overBoundary = await adapter.getRates({
+      ...international,
+      items: [{ weightGrams: 1_400 }],
+      packagingGrams: 60,
+    });
+    expect(ePost(overBoundary)).toBeGreaterThan(ePost(heavier));
   });
 
   it('weighs the box it was told about instead of the flat allowance', async () => {
