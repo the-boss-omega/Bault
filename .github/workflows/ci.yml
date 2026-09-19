@@ -88,6 +88,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The shared packages resolve through their `dist/` (package.json `main`
+      # and `types`), and `dist/` is not committed. This ran just before the
+      # integration suites, AFTER the typecheck that needs it — so on a clean
+      # runner the worker could not find `@bault/config` or `@bault/adapters`.
+      # It passed locally only because a developer's `dist/` already exists.
+      # pnpm builds them in dependency order.
+      - name: Build workspace packages
+        run: pnpm --filter "./packages/*" build
+
       - name: Lint
         run: pnpm lint
 
@@ -111,11 +120,6 @@ jobs:
         run: pnpm test:contract
 
       # ---- Everything below needs a migrated, seeded database and a live API --
-      - name: Build workspace packages
-        run: |
-          pnpm --filter @bault/config build
-          pnpm --filter @bault/adapters build
-
       - name: Migrate and seed
         run: |
           pnpm --filter @bault/api db:migrate
