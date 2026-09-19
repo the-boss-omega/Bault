@@ -35,23 +35,6 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
-      # The storage contract suite round-trips real bytes through a real bucket.
-      # Without this it skips — loudly, but it skips, and a skipped test defends
-      # nothing.
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: bault-images
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-
     env:
       # CI talks straight to Postgres (no PgBouncer needed for tests).
       DATABASE_URL: postgres://bault:bault@localhost:5432/bault
@@ -71,6 +54,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      # The storage contract suite round-trips real bytes through a real bucket.
+      # Without this it skips — loudly, but it skips, and a skipped test defends
+      # nothing.
+      #
+      # A step, not a service container: `bitnami/minio` (which started itself
+      # and made the bucket from an env var) was withdrawn from Docker Hub, and
+      # the official image needs `server /data` as its command, which a service
+      # container cannot pass. Same image as infra/docker-compose.yml, and it
+      # ships `mc`, which makes the bucket.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin             minio/minio:latest server /data
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 1
+          done
+          curl -sf http://localhost:9000/minio/health/live || { docker logs minio; exit 1; }
+          docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+          docker exec minio mc mb --ignore-existing local/bault-images
 
       # No `version:` here — the action reads `packageManager` (pnpm@9.15.0)
       # from package.json, so there is one place to change it. Naming it in
