@@ -3701,6 +3701,9 @@ input[type='search'] {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
+  /* A <button> without this keeps `buttontext` — black, and invisible on the
+     dark theme's surface. */
+  color: inherit;
   font-size: var(--fs-md);
   line-height: 1;
   cursor: pointer;
@@ -6205,6 +6208,9 @@ input[type='search'] {
   border: 0;
   background: transparent;
   font: inherit;
+  /* Without this a <button> keeps the browser's own `buttontext`, which is black
+     — fine on the light theme and unreadable on the dark one. */
+  color: inherit;
   text-align: start;
   cursor: pointer;
 }
@@ -7235,8 +7241,10 @@ textarea[aria-invalid='true'] {
 }
 
 .mobile-bar .avatar {
+  /* The bar is dark in BOTH themes, so the initials take the bar's own colour.
+     `--ink` inverts with the theme, which in dark mode made light-on-light. */
   background: var(--ink-on-dark);
-  color: var(--ink);
+  color: var(--bar-dark);
 }
 
 /* ---- Membership on a phone: one tier at a time ---- */
