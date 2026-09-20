@@ -789,7 +789,11 @@ function HoldPanel({
       );
       onLog(line);
       ok(line);
-      setScanItem('');
+      // A hold KEEPS the label in the field: Release sits right beside Place
+      // hold, and clearing it made the obvious next press impossible without
+      // scanning the same card again. A release is the end of that card's turn
+      // at the bench, so it clears.
+      if (!hold) setScanItem('');
       await onDone();
     } catch (e) {
       const line = t('warehouse.log.holdError', { message: (e as Error).message });
