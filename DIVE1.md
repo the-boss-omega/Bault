@@ -9794,14 +9794,28 @@ storage against the item's estimated value, from `GET /vault/break-even`, amber 
 past 1. Opening an item (`?item=<id>`) shows the `ItemDrawer` sheet (`:1026`): photograph on the stage,
 details, storage terms (`GET /vault/items/:id/storage`), media, the custody timeline
 (`GET /vault/items/:id/timeline`), a printable barcode, and the **card actions** (`CARD_ACTIONS`,
-`:236`): **List for sale**, **Ship this item**, photography, grading, video, inspection, lot split,
-consignment, buyout, custom request, deslab and donation — filtered by lifecycle state, lot/graded
+`:236`): **List for sale**, **Manage the listing**, **Ship this item**, photography, grading, video,
+inspection, lot split, consignment, buyout, custom request, deslab and donation — filtered by
+lifecycle state, lot/graded
 rules, hidden entirely for frozen or departed items, disabled with the request code while one of the
 same type is open, withheld from a card whose `commitment` says it is already promised to a shipment,
 swap, deal or open request (§5.12) with a line saying what it is promised to, and each shown with its
-price from `useServicePrices` before its button. The first two are new on 20 September: the drawer
+price from `useServicePrices` before its button. The first three are new: the drawer
 described a card and offered eight paid services but no way to sell or ship it, which are the two
-things most people open it to do. **Every priced action is confirmed with its fee** before it is
+things most people open it to do.
+
+**What a LISTED card offers, and why it is less.** Nine of the twelve actions are `stored`-only, and
+for eight of them that is the API's rule rather than the screen's: grading, consignment, buyout,
+donation, de-slab and a lot split all answer `409 Item must be stored`, while selling and shipping
+would each undo the sale the card is already in. What is left is the work that happens to a card
+where it sits — photography, video, condition inspection — plus a custom request, and, since
+20 September, **Manage the listing**, which goes to the listings screen where the price is changed
+or the card taken down. Two of those were wrong until then: photography was `stored`-only in this
+list although `PhotographyService.request` asks only that the card is yours
+(`apps/api/src/modules/dis/photography.service.ts:22-28`) — and better photographs are most wanted on
+a card somebody is trying to sell — and a listed card with any open commitment lost even the route to
+its own listing, because the commitment filter keeps only `inPlace` actions. A `navigational` action
+changes nothing about the card, so it is exempt (`:1219`). **Every priced action is confirmed with its fee** before it is
 raised — photography, video, buyout and lot split used to fire on one tap, so two taps could turn
 $5.00 of costs into $50.00. Each form opens directly under the button that asked for it and is
 scrolled into view; they used to render below all eight buttons, which on a phone looked like a tap
@@ -11694,8 +11708,8 @@ explanation.
 - `apps/api/src/modules/dis/grading-tiers.ts` — [§8](#s8), [§12](#s12)
 - `apps/api/src/modules/dis/grading.service.ts` — [§5](#s5), [§6](#s6), [§8](#s8)
 - `apps/api/src/modules/dis/lot-split.service.ts` — [§8](#s8)
-- `apps/api/src/modules/dis/media.service.ts` — [§3](#s3), [§6](#s6), [§7](#s7), [§8](#s8), [§10](#s10), [App. B](#appendix-b)
-- `apps/api/src/modules/dis/photography.service.ts` — [§8](#s8)
+- `apps/api/src/modules/dis/media.service.ts` — [§3](#s3), [§6](#s6), [§7](#s7), [§8](#s8), [§10](#s10), [§12](#s12), [App. B](#appendix-b)
+- `apps/api/src/modules/dis/photography.service.ts` — [§8](#s8), [§12](#s12)
 - `apps/api/src/modules/dis/service.service.ts` — [§3](#s3), [§6](#s6), [§7](#s7), [§8](#s8), [App. B](#appendix-b)
 - `apps/api/src/modules/esc/esc.controller.ts` — [§7](#s7)
 - `apps/api/src/modules/esc/esc.module.ts` — [§7](#s7)

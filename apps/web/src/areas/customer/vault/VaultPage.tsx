@@ -244,6 +244,12 @@ interface CardAction {
   /** Allowed while an in-place service (a photo shoot, a video) is open on the card. */
   inPlace?: boolean;
   /**
+   * Changes nothing about the card — it only opens another screen that is about
+   * it. A commitment is a reason to withhold what would move or promise the
+   * card, not a reason to hide the way to the listing it is already on.
+   */
+  navigational?: boolean;
+  /**
    * The `service_request.type` this action creates, so an already-open request
    * of the same kind can be recognised and the action shown as done rather than
    * offered a second time.
@@ -281,6 +287,22 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: async () => undefined,
   },
   {
+    /**
+     * A card that is already listed: the drawer said so and then offered no way
+     * to do anything about it. Repricing and delisting live on the listings
+     * screen, which is where this goes.
+     */
+    key: 'manage-listing',
+    navigational: true,
+    label: 'vault.action.manageListing',
+    description: 'vault.action.manageListing.desc',
+    icon: <IconTag />,
+    ok: 'vault.action.manageListing',
+    states: ['listed'],
+    goTo: () => navigate({ section: 'marketplace', tab: 'listings' }),
+    run: async () => undefined,
+  },
+  {
     key: 'ship',
     label: 'vault.action.ship',
     description: 'vault.action.ship.desc',
@@ -293,12 +315,17 @@ const CARD_ACTIONS: readonly CardAction[] = [
   {
     key: 'photography',
     inPlace: true,
+    // Allowed while listed, like the other services that photograph or examine
+    // the card where it sits (`video`, `inspection`). The API asks only that the
+    // card is yours (`photography.service.ts:/async request/`); this list was the
+    // only thing refusing it, and better photographs are most wanted on a card
+    // somebody is trying to sell.
     serviceType: 'professional_photography',
     label: 'services.photography',
     description: 'services.photography.desc',
     icon: <IconServices />,
     ok: 'services.photographyRequested',
-    states: ['stored'],
+    states: ['stored', 'listed'],
     run: (item) => api.post('/services/photography', { itemId: item.id }),
   },
   {
@@ -1196,7 +1223,7 @@ function ItemDrawer({
     : CARD_ACTIONS.filter(
         (a) =>
           a.states.includes(item.lifecycleState) &&
-          (commitment === null || a.inPlace === true) &&
+          (commitment === null || a.inPlace === true || a.navigational === true) &&
           // Offering "split this lot" on a single card, or "crack the slab" on a
           // raw one, would be offering a request the API refuses.
           (!a.lotOnly || (item.isLot && !item.lotBroken)) &&

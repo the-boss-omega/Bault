@@ -2720,6 +2720,8 @@ const he = {
   'prices.note': 'הכלל שבתוקף ברגע החיוב נשמר יחד עם החיוב, כך ששינוי מחיר מאוחר יותר לעולם לא משנה את מה שכבר חויבתם.',
   'landing.price.parcelProcessing': 'קבלה ופתיחה של חבילה',
   'wallet.request.documentView': 'פתיחת הקובץ',
+  'vault.action.manageListing': 'ניהול המודעה',
+  'vault.action.manageListing.desc': 'פתיחת המודעות שלך, לשינוי מחיר או הסרה.',
 } as const;
 
 export type MessageKey = keyof typeof he;
@@ -5414,6 +5416,8 @@ const en: Record<MessageKey, string> = {
   'prices.note': 'The rule in force at the moment of a charge is recorded with that charge, so a later price change never alters what you were already billed.',
   'landing.price.parcelProcessing': 'Receiving and opening a parcel',
   'wallet.request.documentView': 'Open the document',
+  'vault.action.manageListing': 'Manage the listing',
+  'vault.action.manageListing.desc': 'Opens your listings, to change the price or take it down.',
 };
 
 const messages: Record<Locale, Record<MessageKey, string>> = { he, en };
