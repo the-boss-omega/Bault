@@ -9029,12 +9029,22 @@ and `127.0.0.1`, and a refused connection then surfaces as an `AggregateError` n
   filtered out of `Cookie` (`vite.config.ts:141-151`) — the API never sees the tunnel password or the
   gate token in its logs.
 - A dead backend no longer produces Vite's opaque HTML 500. `proxy.on('error')`
-  (`vite.config.ts:156-177`) logs a loud hint ("is it running? Try `pnpm dev:api`") and answers
+  (`vite.config.ts:159`) logs a loud hint ("is it running? Try `pnpm dev:api`") and answers
   **503 with a real Bault error envelope**:
 
   ```json
   { "error": { "code": "api_unreachable", "message": "The Bault API is unavailable at http://127.0.0.1:3000.", "details": { "target": "…", "codes": ["ECONNREFUSED"] } } }
   ```
+
+- **A reset mid-response does not take the server down.** `proxy.on('error')` covers a request that
+  fails before the reply starts; it does not cover one already in flight, where the error arrives on
+  the target's response stream — and an `error` event with no listener ends the process. Nothing
+  noticed while every API reply was small JSON that finished in a tick. Then `/media/object` began
+  streaming photographs (§2.8), and the first viewer to scroll away mid-image reset the connection
+  and killed the preview server, taking the public tunnel with it. Both halves are now listened to
+  and hang up quietly (`vite.config.ts:172`), and an `ECONNRESET`/`EPIPE` in the error handler
+  is treated as a viewer who has gone rather than something to report. Verified by aborting twelve
+  image downloads mid-stream: the server kept serving.
 
   `collectErrorCodes` (`vite.config.ts:219-231`) unwraps Node's dual-stack `AggregateError`.
   The client maps `api_unreachable` to `kind: 'unreachable'` (§12.6), so the boot screen says "Bault

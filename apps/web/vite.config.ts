@@ -153,9 +153,36 @@ export default defineConfig(({ mode }) => {
             // 500 + HTML body, which the SPA cannot tell apart from a real
             // server error. Turn it into a typed 503 the client can act on —
             // and keep logging it loudly to the terminal (it is not hidden).
+            /**
+             * A reset mid-response must not take the server down with it.
+             *
+             * `proxy.on('error')` below covers a request that fails before the
+             * reply starts. It does not cover a reply already in flight: the
+             * error is emitted on the TARGET's response stream, and an
+             * `error` event with no listener is an uncaught exception, which
+             * ends the process. Nothing noticed while every API reply was a
+             * small JSON body that completed in one tick — then `/media/object`
+             * began STREAMING photographs, and a viewer who scrolled away
+             * mid-image (or a tab that closed) reset the connection and killed
+             * the preview server, taking the tunnel with it.
+             *
+             * So: listen on both halves and hang up quietly. A viewer who has
+             * gone is not an error anybody needs to see.
+             */
+            proxy.on('proxyRes', (proxyRes, _req, res) => {
+              proxyRes.on('error', () => (res as ServerResponse).destroy());
+              res.on('close', () => proxyRes.destroy());
+            });
+
             proxy.on('error', (err, req, res) => {
               const codes = collectErrorCodes(err);
               const refused = codes.includes('ECONNREFUSED');
+              // The viewer closed the tab or scrolled away mid-download. There is
+              // nobody left to answer and nothing to report.
+              if (codes.includes('ECONNRESET') || codes.includes('EPIPE')) {
+                (res as ServerResponse)?.destroy?.();
+                return;
+              }
               // eslint-disable-next-line no-console
               console.error(
                 refused
