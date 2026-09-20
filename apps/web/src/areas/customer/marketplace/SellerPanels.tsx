@@ -19,6 +19,8 @@ import { Button, EmptyState, Panel, SkeletonTable, StatusBadge } from '../../../
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconMarketplace, IconTag } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
+import { displayName } from '../../../shared/timeline';
+import { itemClassLabel } from '../../../shared/itemClasses';
 
 /* ============================================================
    My listings — reprice and delist
@@ -46,6 +48,14 @@ export function MyListingsPanel({
   const [price, setPrice] = useState('');
   const [removing, setRemoving] = useState<MyListing | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * Closed listings — removed or sold — are kept (they are a record) but folded
+   * away: a delisted card stayed in this table for good, above the ones that
+   * are actually for sale.
+   */
+  const [showClosed, setShowClosed] = useState(false);
+  const closedCount = (rows ?? []).filter((r) => r.status !== 'active').length;
+  const shown = (rows ?? []).filter((r) => showClosed || r.status === 'active');
 
   const load = useCallback(async () => {
     try {
@@ -134,10 +144,10 @@ export function MyListingsPanel({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {shown.map((row) => (
                   <tr key={row.id}>
                     <td data-label={t('market.mine.col.item')} className="dt-primary">
-                      {row.description || row.typeClass}
+                      {displayName(row.description) || itemClassLabel(t, row.typeClass)}
                       <span className="dt-sub" dir="ltr">
                         {row.serialNumber}
                       </span>
@@ -151,7 +161,7 @@ export function MyListingsPanel({
                             value={price}
                             autoFocus
                             onChange={(e) => setPrice(e.target.value)}
-                            style={{ width: '6rem' }}
+                            style={{ inlineSize: '9rem' }}
                           />
                         </div>
                       ) : (
@@ -218,6 +228,15 @@ export function MyListingsPanel({
                 ))}
               </tbody>
             </table>
+            {closedCount > 0 && (
+              <div className="row" style={{ padding: 'var(--sp-3) 0' }}>
+                <Button size="sm" variant="ghost" onClick={() => setShowClosed((v) => !v)}>
+                  {showClosed
+                    ? t('market.mine.hideClosed')
+                    : t('market.mine.showClosed', { count: closedCount })}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Panel>
@@ -225,7 +244,13 @@ export function MyListingsPanel({
       {removing && (
         <ConfirmationModal
           title={t('market.mine.delistTitle')}
-          body={<p>{t('market.mine.delistBody', { item: removing.description || removing.typeClass })}</p>}
+          body={
+            <p>
+              {t('market.mine.delistBody', {
+                item: displayName(removing.description) || itemClassLabel(t, removing.typeClass),
+              })}
+            </p>
+          }
           confirmLabel={t('market.mine.delist')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
@@ -351,13 +376,24 @@ export function OffersPanel({
                       </span>
                       <span>
                         <Serial value={row.serialNumber} />
-                        <span className="dt-sub ltr-run">{row.description || row.typeClass}</span>
+                        <span className="dt-sub">{displayName(row.description) || itemClassLabel(t, row.typeClass)}</span>
                       </span>
                     </span>
                   </td>
                   <td data-label={t('market.offers.col.side')}>
+                    {/* The side of the listing is not the same as who named the
+                        price on the table. A seller's own counter read "You
+                        received", which is the one thing it was not. */}
                     <StatusBadge tone={row.direction === 'incoming' ? 'gold' : 'info'} plain>
-                      {t(row.direction === 'incoming' ? 'market.offers.incoming' : 'market.offers.outgoing')}
+                      {t(
+                        row.status === 'pending' && row.direction === 'incoming' && !row.yourTurn
+                          ? 'market.offers.youCountered'
+                          : row.status === 'pending' && row.direction === 'outgoing' && row.yourTurn
+                            ? 'market.offers.theyCountered'
+                            : row.direction === 'incoming'
+                              ? 'market.offers.incoming'
+                              : 'market.offers.outgoing',
+                      )}
                     </StatusBadge>
                     {row.direction === 'incoming' && row.buyerUsername && (
                       <span className="dt-sub">
@@ -456,7 +492,7 @@ function OfferActions({
                 value={amount}
                 autoFocus
                 onChange={(e) => onAmount(e.target.value)}
-                style={{ width: '6rem' }}
+                style={{ inlineSize: '9rem' }}
               />
             </div>
           </label>
@@ -573,7 +609,15 @@ export function SwapsPanel({
     try {
       await api.post(`/marketplace/swaps/${swap.id}/${action}`);
       await load();
-      await onChanged(t(action === 'approve' ? 'market.swaps.approved' : 'market.swaps.rejected'));
+      await onChanged(
+        t(
+          action === 'approve'
+            ? 'market.swaps.approved'
+            : swap.direction === 'outgoing'
+              ? 'market.swaps.withdrawn'
+              : 'market.swaps.rejected',
+        ),
+      );
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -582,7 +626,13 @@ export function SwapsPanel({
   }
 
   const names = (items: MySwap['offeredItems']) =>
-    items.map((i) => i.description || i.typeClass || i.id).join(', ') || '—';
+    items
+      .map((i) =>
+        [i.serialNumber, displayName(i.description) || (i.typeClass ? itemClassLabel(t, i.typeClass) : i.id)]
+          .filter(Boolean)
+          .join(' — '),
+      )
+      .join(', ') || '—';
 
   return (
     <Panel title={t('market.swaps.title')} subtitle={t('market.swaps.subtitle')} flush>
@@ -642,7 +692,15 @@ export function SwapsPanel({
                           </Button>
                         </div>
                       ) : row.status === 'pending' ? (
-                        <span className="hint">{t('market.swaps.awaitingThem')}</span>
+                        <div className="actions">
+                          <span className="hint">{t('market.swaps.awaitingThem')}</span>
+                          {/* Your own proposal can be taken back while it waits. */}
+                          {!incoming && (
+                            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act(row, 'reject')}>
+                              {t('market.swaps.withdraw')}
+                            </Button>
+                          )}
+                        </div>
                       ) : null}
                     </td>
                   </tr>

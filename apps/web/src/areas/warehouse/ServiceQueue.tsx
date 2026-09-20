@@ -4,7 +4,8 @@ import { useT } from '../../shared/i18n';
 import type { MessageKey, TranslateFn } from '../../shared/i18n';
 import { serviceStatusLabel, serviceTypeLabel } from '../../shared/serviceLabels';
 import { areaLabel, severityLabel, INSPECTION_SEVERITIES } from '../../shared/grading';
-import { dollarsToCents } from '../../shared/money';
+import { dollarsToCents, formatUsd } from '../../shared/money';
+import { PhotoInput, type PhotoRef } from '../../shared/ui/PhotoInput';
 import {
   Button,
   EmptyState,
@@ -32,6 +33,7 @@ interface QueueItem {
   status: string;
   itemId: string | null;
   requesterEmail: string | null;
+  requesterUsername?: string | null;
   itemDescription: string | null;
   typeFields: Record<string, unknown> | null;
 }
@@ -43,7 +45,14 @@ interface QueueItem {
  * customer-request → warehouse-form pattern the shipment flow uses. A request
  * cannot be closed until every required field is filled and the item is verified.
  */
-export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | void }) {
+export function ServiceQueue({
+  onChanged,
+  isAdmin = false,
+}: {
+  onChanged?: () => Promise<void> | void;
+  /** Admins also decide grading approvals from the queue. */
+  isAdmin?: boolean;
+}) {
   const t = useT();
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -88,7 +97,7 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
       ) : queue.length === 0 ? (
         <EmptyState title={t('queue.empty')} text={t('queue.emptyText')} icon={<IconServices />} />
       ) : (
-        <div className="dt-wrap">
+        <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
             <thead>
               <tr>
@@ -103,19 +112,23 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
             <tbody>
               {queue.map((q) => (
                 <tr key={q.id}>
-                  <td dir="ltr">
+                  <td data-label={t('queue.col.request')} dir="ltr">
                     <code>{q.code ?? q.id.slice(0, 8)}</code>
                   </td>
-                  <td className="dt-primary">{serviceTypeLabel(t, q.type)}</td>
-                  <td dir="ltr">{q.requesterEmail ?? '—'}</td>
-                  <td>{q.itemDescription ?? '—'}</td>
-                  <td>
+                  <td data-label={t('queue.col.service')} className="dt-primary">
+                    {serviceTypeLabel(t, q.type)}
+                  </td>
+                  <td data-label={t('queue.col.customer')} dir="ltr">
+                    {q.requesterUsername ? `@${q.requesterUsername}` : (q.requesterEmail ?? '—')}
+                  </td>
+                  <td data-label={t('queue.col.item')}>{q.itemDescription ?? '—'}</td>
+                  <td data-label={t('queue.col.status')}>
                     <StatusBadge tone={STATUS_TONE[q.status] ?? 'neutral'}>
                       {serviceStatusLabel(t, q.status)}
                     </StatusBadge>
                   </td>
-                  <td>
-                    <QueueActions q={q} onAct={act} />
+                  <td className="td-actions">
+                    <QueueActions q={q} onAct={act} isAdmin={isAdmin} />
                   </td>
                 </tr>
               ))}
@@ -130,31 +143,64 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
 function QueueActions({
   q,
   onAct,
+  isAdmin,
 }: {
   q: QueueItem;
   onAct: (fn: () => Promise<unknown>, ok: string) => void;
+  isAdmin: boolean;
 }) {
   const t = useT();
+  const fields = (q.typeFields ?? {}) as Record<string, unknown>;
+
+  // Donation, remove-commons and warehouse-transfer rows are completed by the
+  // collector's own confirmation, not by anything done at this bench. They used
+  // to offer Approve, which led to "This request type closes automatically" and
+  // a row that sat in the queue for good.
+  if (!HAS_OPERATOR_STEP.has(q.type)) {
+    return (
+      <div className="stack stack--tight">
+        <span className="hint">{t('queue.noStep')}</span>
+        {q.status === 'requested' && (
+          <ConfirmedDecline
+            label={t('queue.action.dismiss')}
+            prompt={t('queue.dismissPrompt')}
+            onConfirm={() => onAct(() => api.post(`/services/requests/${q.id}/deny`), t('queue.msg.dismissed'))}
+          />
+        )}
+      </div>
+    );
+  }
 
   if (q.status === 'requested') {
     return (
-      <div className="actions">
-        <Button
-          size="sm"
-          variant="gold"
-          icon={<IconCheck />}
-          onClick={() => onAct(() => api.post(`/services/requests/${q.id}/accept`), t('queue.msg.approved'))}
-        >
-          {t('queue.action.approve')}
-        </Button>
-        <Button
-          size="sm"
-          variant="danger"
-          icon={<IconClose />}
-          onClick={() => onAct(() => api.post(`/services/requests/${q.id}/deny`), t('queue.msg.declined'))}
-        >
-          {t('queue.action.decline')}
-        </Button>
+      <div className="stack stack--tight">
+        {q.type === 'custom' && <CustomAsk fields={fields} />}
+        <div className="actions">
+          <Button
+            size="sm"
+            variant="gold"
+            icon={<IconCheck />}
+            onClick={() => onAct(() => api.post(`/services/requests/${q.id}/accept`), t('queue.msg.approved'))}
+          >
+            {t('queue.action.approve')}
+          </Button>
+          {/* A custom request is refused WITH a reason, which the collector is
+              told; the bare deny is for requests whose refusal needs none. */}
+          {q.type === 'custom' ? (
+            <ReasonAction
+              label={t('queue.action.decline')}
+              onSubmit={(reason) =>
+                onAct(() => api.post(`/services/custom/${q.id}/decline`, { reason }), t('queue.msg.declined'))
+              }
+            />
+          ) : (
+            <ConfirmedDecline
+              label={t('queue.action.decline')}
+              prompt={t('queue.declinePrompt')}
+              onConfirm={() => onAct(() => api.post(`/services/requests/${q.id}/deny`), t('queue.msg.declined'))}
+            />
+          )}
+        </div>
       </div>
     );
   }
@@ -162,9 +208,306 @@ function QueueActions({
   // A condition inspection is one row PER AREA, so it cannot be a flat field
   // list like its neighbours and gets its own form.
   if (q.type === 'condition_inspection') return <InspectionFulfillment q={q} onAct={onAct} t={t} />;
+  if (q.type === 'custom') return <CustomStage q={q} fields={fields} onAct={onAct} />;
+  if (q.type === 'professional_photography') return <PhotographyFulfillment q={q} onAct={onAct} />;
+
+  if (q.type === 'third_party_grading') {
+    // A card past the walkthrough threshold waits for a manager. Only an admin
+    // can decide; an operator sees why the row can't move yet.
+    if (fields.approvalRequired === true && fields.approvalState === 'pending') {
+      return isAdmin ? (
+        <GradingApproval q={q} onAct={onAct} />
+      ) : (
+        <StatusBadge tone="warning">{t('queue.grading.awaitingApproval')}</StatusBadge>
+      );
+    }
+    return (
+      <div className="stack stack--tight">
+        <span className="hint">
+          {typeof fields.submissionCode === 'string'
+            ? t('queue.grading.inSubmission', { code: fields.submissionCode })
+            : t('queue.grading.notInSubmission')}
+        </span>
+        <FulfillmentForm q={q} onAct={onAct} t={t} />
+      </div>
+    );
+  }
+
+  if (q.type === 'buyout' && fields.stage === 'quoted') {
+    return (
+      <div className="stack stack--tight">
+        <StatusBadge tone="info">
+          {t('queue.quoted.waiting', { amount: formatUsd(Number(fields.offerMinor ?? 0)) })}
+        </StatusBadge>
+        <details>
+          <summary className="link-more">{t('queue.quoted.revise')}</summary>
+          <FulfillmentForm q={q} onAct={onAct} t={t} />
+        </details>
+      </div>
+    );
+  }
 
   // status === 'in_progress' → close with the type-specific fulfillment form.
   return <FulfillmentForm q={q} onAct={onAct} t={t} />;
+}
+
+/**
+ * A decline that asks once before it acts. A paid request was cancelled by a
+ * single tap with nothing in between — and a denial does not refund.
+ */
+function ConfirmedDecline({ label, prompt, onConfirm }: { label: string; prompt: string; onConfirm: () => void }) {
+  const t = useT();
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <Button size="sm" variant="danger" icon={<IconClose />} onClick={() => setAsking(true)}>
+        {label}
+      </Button>
+    );
+  }
+  return (
+    <div className="stack stack--tight">
+      <span className="field-error">{prompt}</span>
+      <div className="actions">
+        <Button size="sm" variant="danger" onClick={onConfirm}>
+          {label}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>
+          {t('ui.cancel')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** What the collector asked for, above whatever is done about it. */
+function CustomAsk({ fields }: { fields: Record<string, unknown> }) {
+  return (
+    <div className="ask-notice">
+      <IconAsk />
+      <span>
+        <strong>{String(fields.summary ?? '')}</strong>
+        <br />
+        {String(fields.detail ?? '')}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A custom request, by stage. Awaiting a quote: price it, or decline with a
+ * reason. Quoted: wait for the collector (the quote can still be revised).
+ * Accepted, which means paid for: record what was done. The quote form is never
+ * shown once the collector has paid, because a second quote would be a second
+ * charge.
+ */
+function CustomStage({
+  q,
+  fields,
+  onAct,
+}: {
+  q: QueueItem;
+  fields: Record<string, unknown>;
+  onAct: (fn: () => Promise<unknown>, ok: string) => void;
+}) {
+  const t = useT();
+  const [notes, setNotes] = useState('');
+  const stage = typeof fields.stage === 'string' ? fields.stage : 'awaiting_quote';
+
+  const decline = (
+    <ReasonAction
+      label={t('queue.action.decline')}
+      onSubmit={(reason) =>
+        onAct(() => api.post(`/services/custom/${q.id}/decline`, { reason }), t('queue.msg.declined'))
+      }
+    />
+  );
+
+  if (stage === 'accepted') {
+    return (
+      <div className="fulfill-form">
+        <CustomAsk fields={fields} />
+        <StatusBadge tone="success">
+          {t('queue.custom.paid', { amount: formatUsd(Number(fields.priceMinor ?? 0)) })}
+        </StatusBadge>
+        <span className="hint">{String(fields.scope ?? '')}</span>
+        <label className="field">
+          <span className="field-label">{t('queue.custom.doneNotes')}</span>
+          <input value={notes} maxLength={1000} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+        <div className="actions">
+          <Button
+            size="sm"
+            variant="gold"
+            disabled={notes.trim().length < 5}
+            onClick={() =>
+              onAct(
+                () => api.post(`/services/custom/${q.id}/complete`, { notes: notes.trim() }),
+                t('queue.msg.customDone'),
+              )
+            }
+          >
+            {t('queue.custom.markDone')}
+          </Button>
+          {notes.trim().length < 5 && <span className="field-hint">{t('queue.custom.doneHint')}</span>}
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === 'quoted') {
+    return (
+      <div className="stack stack--tight">
+        <StatusBadge tone="info">
+          {t('queue.quoted.waiting', { amount: formatUsd(Number(fields.priceMinor ?? 0)) })}
+        </StatusBadge>
+        <details>
+          <summary className="link-more">{t('queue.quoted.revise')}</summary>
+          <FulfillmentForm q={q} onAct={onAct} t={t} />
+        </details>
+        <div className="actions">{decline}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack stack--tight">
+      <FulfillmentForm q={q} onAct={onAct} t={t} />
+      <div className="actions">{decline}</div>
+    </div>
+  );
+}
+
+/** A refusal that has to say why: the reason is sent to the collector. */
+function ReasonAction({ label, onSubmit }: { label: string; onSubmit: (reason: string) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  if (!open) {
+    return (
+      <Button size="sm" variant="danger" icon={<IconClose />} onClick={() => setOpen(true)}>
+        {label}
+      </Button>
+    );
+  }
+  return (
+    <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+      <label className="field" style={{ flex: '1 1 200px' }}>
+        <span className="field-label">{t('queue.reason')}</span>
+        <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} />
+      </label>
+      <Button
+        size="sm"
+        variant="danger"
+        disabled={reason.trim().length < 5}
+        style={{ alignSelf: 'end' }}
+        onClick={() => onSubmit(reason.trim())}
+      >
+        {label}
+      </Button>
+      <Button size="sm" variant="ghost" style={{ alignSelf: 'end' }} onClick={() => setOpen(false)}>
+        {t('ui.cancel')}
+      </Button>
+    </div>
+  );
+}
+
+/** A manager's decision on a high-value grading request, with the reason on record. */
+function GradingApproval({
+  q,
+  onAct,
+}: {
+  q: QueueItem;
+  onAct: (fn: () => Promise<unknown>, ok: string) => void;
+}) {
+  const t = useT();
+  const [reason, setReason] = useState('');
+  const send = (approve: boolean) =>
+    onAct(
+      () => api.post(`/services/grading/${q.id}/approval`, { approve, reason: reason.trim() }),
+      t(approve ? 'queue.grading.approved' : 'queue.grading.refused'),
+    );
+  return (
+    <div className="fulfill-form">
+      <StatusBadge tone="warning">{t('queue.grading.awaitingApproval')}</StatusBadge>
+      <label className="field">
+        <span className="field-label">{t('queue.reason')}</span>
+        <input value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} />
+      </label>
+      <div className="actions">
+        <Button size="sm" variant="gold" icon={<IconCheck />} disabled={!reason.trim()} onClick={() => send(true)}>
+          {t('queue.grading.approve')}
+        </Button>
+        <Button size="sm" variant="danger" icon={<IconClose />} disabled={!reason.trim()} onClick={() => send(false)}>
+          {t('queue.grading.refuse')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The shoot, uploaded. The collector receives what is attached here, so the
+ * photograph is a real upload rather than a storage key typed into a box — a
+ * typed key was never checked and could point at nothing.
+ */
+function PhotographyFulfillment({
+  q,
+  onAct,
+}: {
+  q: QueueItem;
+  onAct: (fn: () => Promise<unknown>, ok: string) => void;
+}) {
+  const t = useT();
+  const [photos, setPhotos] = useState<PhotoRef[]>([]);
+  const [lighting, setLighting] = useState('');
+  const [verified, setVerified] = useState(false);
+  const [notes, setNotes] = useState('');
+  const first = photos[0];
+  const complete = first !== undefined && lighting.trim() !== '' && verified && notes.trim() !== '';
+  return (
+    <div className="fulfill-form">
+      <PhotoInput purpose="service_media" value={photos} onChange={setPhotos} label={t('queue.fulfill.photos')} max={12} />
+      <div className="field-row">
+        <label className="field">
+          <span className="field-label">{t('queue.fulfill.lighting')}</span>
+          <input value={lighting} style={{ width: '10rem' }} onChange={(e) => setLighting(e.target.value)} />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
+          {t('queue.fulfill.itemVerified')}
+        </label>
+        <label className="field">
+          <span className="field-label">{t('queue.fulfill.notes')}</span>
+          <input value={notes} style={{ width: '12rem' }} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+      </div>
+      <div className="actions">
+        <Button
+          size="sm"
+          variant="gold"
+          disabled={!complete}
+          onClick={() =>
+            first &&
+            onAct(
+              () =>
+                api.post(`/services/photography/${q.id}/complete`, {
+                  objectKey: first.objectKey,
+                  shotCount: photos.length,
+                  lighting,
+                  itemVerified: verified,
+                  notes,
+                }),
+              t('queue.msg.photographyDone'),
+            )
+          }
+        >
+          {t('queue.fulfill.submit')}
+        </Button>
+        {!complete && <span className="field-hint">{t('queue.fulfill.required')}</span>}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -300,17 +643,6 @@ interface FieldSpec {
  * fulfillment form. The API rejects an incomplete submission independently.
  */
 const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; fields: FieldSpec[] }> = {
-  professional_photography: {
-    endpoint: (id) => `/services/photography/${id}/complete`,
-    ok: 'queue.msg.photographyDone',
-    fields: [
-      { name: 'objectKey', label: 'queue.fulfill.objectKey', kind: 'text', initial: '', width: '14rem' },
-      { name: 'shotCount', label: 'queue.fulfill.shotCount', kind: 'number', initial: 6, width: '5rem' },
-      { name: 'lighting', label: 'queue.fulfill.lighting', kind: 'text', initial: '', width: '10rem' },
-      { name: 'itemVerified', label: 'queue.fulfill.itemVerified', kind: 'checkbox', initial: false },
-      { name: 'notes', label: 'queue.fulfill.notes', kind: 'text', initial: '', width: '12rem' },
-    ],
-  },
   third_party_grading: {
     endpoint: (id) => `/services/grading/${id}/complete`,
     ok: 'queue.msg.gradingDone',
@@ -366,7 +698,7 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     endpoint: (id) => `/services/video/${id}/complete`,
     ok: 'queue.msg.videoDone',
     fields: [
-      { name: 'objectKey', label: 'queue.fulfill.objectKey', kind: 'text', initial: '', width: '14rem' },
+      { name: 'objectKey', label: 'queue.fulfill.videoLink', kind: 'text', initial: '', width: '14rem' },
       {
         name: 'durationSeconds',
         label: 'queue.fulfill.duration',
@@ -416,7 +748,6 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     ok: 'queue.msg.saleDone',
     fields: [
       { name: 'saleAmountMinor', label: 'queue.fulfill.saleAmount', kind: 'money', initial: '1000.00', width: '8rem' },
-      { name: 'channel', label: 'queue.fulfill.channel', kind: 'text', initial: 'eBay', width: '8rem' },
       {
         name: 'externalReference',
         label: 'queue.fulfill.externalReference',
@@ -429,6 +760,14 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     ],
   },
 };
+
+/** Request types with work to do at this bench. The rest close themselves. */
+const HAS_OPERATOR_STEP = new Set([
+  ...Object.keys(FORMS),
+  'condition_inspection',
+  'custom',
+  'professional_photography',
+]);
 
 function FulfillmentForm({
   q,
@@ -443,6 +782,9 @@ function FulfillmentForm({
   const [values, setValues] = useState<Record<string, string | number | boolean>>(() =>
     Object.fromEntries((spec?.fields ?? []).map((f) => [f.name, f.initial])),
   );
+  // A consignment is sold down the channel the collector chose, and the fee is
+  // charged on that channel, so it is read from the request, never retyped.
+  const channel = q.type === 'consignment' ? String(q.typeFields?.channel ?? '') : null;
 
   if (!spec) return <span className="hint">{t('queue.fulfill.noForm')}</span>;
 
@@ -459,6 +801,7 @@ function FulfillmentForm({
   /** Dollars → minor units for every `money` field, everything else verbatim. */
   function payload(): Record<string, string | number | boolean> {
     const out: Record<string, string | number | boolean> = { ...values };
+    if (channel !== null) out.channel = channel;
     for (const f of spec!.fields) {
       if (f.kind !== 'money') continue;
       out[f.name] = dollarsToCents(String(values[f.name] ?? '')) ?? 0;
@@ -474,17 +817,9 @@ function FulfillmentForm({
         thing — and the operator is being asked to price something they cannot
         see without opening another screen.
       */}
-      {q.type === 'custom' && (
-        <div className="ask-notice">
-          <IconAsk />
-          <span>
-            <strong>{String((q.typeFields as { summary?: string } | null)?.summary ?? '')}</strong>
-            <br />
-            {String((q.typeFields as { detail?: string } | null)?.detail ?? '')}
-          </span>
-        </div>
-      )}
+      {q.type === 'custom' && <CustomAsk fields={(q.typeFields ?? {}) as Record<string, unknown>} />}
       <span className="hint">{t('queue.fulfill.legend')}</span>
+      {channel !== null && <span className="hint">{t('queue.fulfill.channelIs', { channel })}</span>}
       <div className="field-row">
         {spec.fields.map((f) =>
           f.kind === 'checkbox' ? (

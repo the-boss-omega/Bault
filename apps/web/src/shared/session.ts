@@ -66,3 +66,6 @@ export function loadProfile(): Promise<SessionProfile> {
 export function resetProfileRequest(): void {
   inFlight = null;
 }
+
+/** Fired on `window` when the signed-in person's own profile changed, so the shell re-reads it. */
+export const PROFILE_CHANGED = 'bault:profile-changed';

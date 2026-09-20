@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
-import { formatDate } from '../../../shared/money';
+import { formatDate, formatUsd } from '../../../shared/money';
+import { displayName } from '../../../shared/timeline';
+import { itemClassLabel } from '../../../shared/itemClasses';
 import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconAlert, IconArchive } from '../../../shared/ui/icons';
@@ -14,7 +16,16 @@ interface CullItem {
   lifecycleState: string;
   holdFlag?: boolean;
   receivedAt?: string | null;
+  commitment?: { kind: string; code: string | null } | null;
 }
+
+/**
+ * A card worth at least this much is not a "common", whatever the cull window
+ * says. It is still allowed — it is the collector's card — but it is flagged,
+ * because a $50 card thrown away with forty $1 ones is a mistake nobody
+ * notices until it is gone.
+ */
+const WORTH_FLAGGING_MINOR = 2_000;
 
 /**
  * The bulk cull — cards worth less than the storage they are about to accrue.
@@ -35,9 +46,12 @@ export function RemoveCommonsPanel({
   windowDays,
   onDone,
   onError,
+  values,
 }: {
   items: CullItem[];
   windowDays: number;
+  /** The Break-Even Watch's value estimate per card, where it has an honest one. */
+  values?: ReadonlyMap<string, number | null>;
   onDone: (message: string) => void;
   onError: (m: string) => void;
 }) {
@@ -54,11 +68,19 @@ export function RemoveCommonsPanel({
     () =>
       items.map((it) => {
         const arrived = it.receivedAt ? new Date(it.receivedAt).getTime() : 0;
+        // The reason in the card's own terms: a listed card is "listed", not
+        // "not stored", which reads as though Bault had misplaced it.
         const reason = it.holdFlag
           ? t('cull.blocked.hold')
-          : it.lifecycleState !== 'stored'
-            ? t('cull.blocked.state')
-            : !it.receivedAt || arrived < cutoff
+          : it.lifecycleState === 'listed'
+            ? t('cull.blocked.listed')
+            : it.lifecycleState === 'at_grader'
+              ? t('vault.state.atGrader')
+              : it.lifecycleState !== 'stored'
+                ? t('cull.blocked.state')
+                : it.commitment
+                  ? t('cull.blocked.committed')
+                  : !it.receivedAt || arrived < cutoff
               ? t('cull.blocked.window', { days: windowDays })
               : null;
         return { it, reason };
@@ -109,7 +131,7 @@ export function RemoveCommonsPanel({
                     onChange={() => toggle(it.id)}
                   />
                   <span>
-                    {it.description || it.typeClass}
+                    {displayName(it.description) || itemClassLabel(t, it.typeClass)}
                     <span className="hint" dir="ltr">
                       {' '}
                       {it.serialNumber}
@@ -120,6 +142,11 @@ export function RemoveCommonsPanel({
                 {reason && (
                   <StatusBadge tone="neutral" plain>
                     {reason}
+                  </StatusBadge>
+                )}
+                {!reason && (values?.get(it.id) ?? 0) >= WORTH_FLAGGING_MINOR && (
+                  <StatusBadge tone="warning">
+                    {t('cull.worth', { amount: formatUsd(values?.get(it.id) ?? 0) })}
                   </StatusBadge>
                 )}
               </li>
@@ -157,7 +184,7 @@ export function RemoveCommonsPanel({
               disabled={busy || chosen.length === 0}
               onClick={() => setConfirming(true)}
             >
-              {t('cull.submit', { count: chosen.length })}
+              {chosen.length === 0 ? t('cull.submitNone') : t('cull.submit', { count: chosen.length })}
             </Button>
             {eligible.length === 0 && <span className="field-hint">{t('cull.noneEligible')}</span>}
           </div>

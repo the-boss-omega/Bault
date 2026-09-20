@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { S3StorageAdapter, SandboxStorageAdapter } from '@bault/adapters';
+import { ProxiedStorageAdapter, S3StorageAdapter, SandboxStorageAdapter } from '@bault/adapters';
 
 /**
  * The storage adapter contract.
@@ -138,24 +138,43 @@ describe('the storage contract', () => {
 describe('the sandbox adapter', () => {
   /**
    * Stated as a fact about the sandbox rather than a complaint: it is a
-   * perfectly good development sink AND it cannot satisfy the contract above.
-   * Both halves matter — the second is why the env schema and `AdaptersModule`
-   * refuse it in production.
+   * development sink that keeps recent objects IN MEMORY, for the life of the
+   * process, so the screens that show photographs can be exercised — and it is
+   * not storage, which is why the env schema and `AdaptersModule` refuse it in
+   * production. It has no URL of its own; the API serves it through
+   * `/api/v1/media/object` (see `ProxiedStorageAdapter`).
    */
-  it('accepts bytes and keeps none of them', async () => {
+  it('keeps bytes only in memory and hands out no fetchable URL', async () => {
     const sandbox = new SandboxStorageAdapter();
+    const body = Buffer.from('a photograph of somebody else’s property');
     const result = await sandbox.putObject({
       key: 'intake/2026/09/whatever.png',
-      body: Buffer.from('a photograph of somebody else’s property'),
+      body,
       contentType: 'image/png',
     });
-
-    // It answers as though it stored the object…
     expect(result.key).toBe('intake/2026/09/whatever.png');
 
-    // …and the URL it hands back is a fixed local string, not a signed one, so
-    // nothing it returns can be fetched by anybody.
+    const back = await sandbox.getObject('intake/2026/09/whatever.png');
+    expect(back?.body.equals(body)).toBe(true);
+    // A fresh process (a new adapter) has nothing: this is not storage.
+    expect(await new SandboxStorageAdapter().getObject('intake/2026/09/whatever.png')).toBeNull();
+
     const url = await sandbox.getSignedUrl('intake/2026/09/whatever.png');
     expect(url).not.toContain('X-Amz-Signature');
+    expect(url).not.toMatch(/^https?:/);
+  });
+});
+
+describe('the proxied adapter', () => {
+  it('signs a same-origin API path instead of a store URL', async () => {
+    const proxied = new ProxiedStorageAdapter(new SandboxStorageAdapter(), {
+      basePath: '/api/v1/media/object',
+      sign: (key, exp) => `sig-${key}-${exp}`,
+    });
+    await proxied.putObject({ key: 'parcels/a.png', body: Buffer.from('x'), contentType: 'image/png' });
+    const url = await proxied.getSignedUrl('parcels/a.png', 60);
+    expect(url.startsWith('/api/v1/media/object?key=parcels%2Fa.png&exp=')).toBe(true);
+    expect(url).toContain('&sig=sig-parcels');
+    expect((await proxied.getObject('parcels/a.png'))?.contentType).toBe('image/png');
   });
 });

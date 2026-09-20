@@ -1,5 +1,5 @@
 import { createHash, createHmac } from 'node:crypto';
-import type { PutObjectRequest, StorageAdapter } from './storage';
+import type { PutObjectRequest, StorageAdapter, StoredObject } from './storage';
 
 /**
  * A REAL S3-compatible storage adapter — the thing the product has been missing.
@@ -217,5 +217,18 @@ export class S3StorageAdapter implements StorageAdapter {
       .digest('hex');
 
     return `${url.origin}${url.pathname}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+  }
+
+  /** Read the bytes back through a short presigned GET — for the API's own media route. */
+  async getObject(key: string): Promise<StoredObject | null> {
+    const response = await fetch(await this.getSignedUrl(key, 60));
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`Storage read failed (${response.status} ${response.statusText}) for key "${key}"`);
+    }
+    return {
+      body: Buffer.from(await response.arrayBuffer()),
+      contentType: response.headers.get('content-type') ?? 'application/octet-stream',
+    };
   }
 }

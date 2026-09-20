@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { errorText } from '../../../shared/errors';
 import { navigate } from '../../../shared/routing';
 import { PASSWORD_MIN } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
@@ -43,7 +44,7 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       await api.post('/auth/password/reset', { token, newPassword: password });
       setDone(true);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorText(t, err));
     } finally {
       setBusy(false);
     }

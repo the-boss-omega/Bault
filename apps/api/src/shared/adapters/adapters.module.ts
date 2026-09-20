@@ -9,11 +9,13 @@ import {
   SmtpEmailAdapter,
   SandboxStorageAdapter,
   S3StorageAdapter,
+  ProxiedStorageAdapter,
   type EmailAdapter,
   type PaymentAdapter,
   type ShippingAdapter,
   type StorageAdapter,
 } from '@bault/adapters';
+import { MEDIA_OBJECT_PATH, signMediaKey } from '../../modules/med/media-url';
 
 /**
  * DI tokens + providers for external adapters (T020). Global so any module can
@@ -163,15 +165,22 @@ function createShippingAdapter(): ShippingAdapter {
  */
 function createStorageAdapter(): StorageAdapter {
   const env = loadEnv();
+  const viaApi = (inner: StorageAdapter) =>
+    new ProxiedStorageAdapter(inner, { basePath: MEDIA_OBJECT_PATH, sign: signMediaKey });
 
   if (env.STORAGE_PROVIDER === 's3') {
-    return new S3StorageAdapter({
+    const s3 = new S3StorageAdapter({
       endpoint: env.STORAGE_ENDPOINT,
       region: env.STORAGE_REGION,
       bucket: env.STORAGE_BUCKET,
       accessKey: env.STORAGE_ACCESS_KEY,
       secretKey: env.STORAGE_SECRET_KEY,
     });
+    // A presigned URL is only any use if the browser can reach the store. One on
+    // a loopback address (MinIO in development) cannot be reached from anywhere
+    // but this machine — not from a phone on a tunnel — so its images are served
+    // through the API instead. A real endpoint keeps direct presigned URLs.
+    return isLoopbackEndpoint(env.STORAGE_ENDPOINT) ? viaApi(s3) : s3;
   }
 
   if (env.NODE_ENV === 'production') {
@@ -181,7 +190,17 @@ function createStorageAdapter(): StorageAdapter {
         'pointed at a real bucket.',
     );
   }
-  return new SandboxStorageAdapter();
+  // The sandbox has no URL of its own at all; the API is the only way to read it.
+  return viaApi(new SandboxStorageAdapter());
+}
+
+function isLoopbackEndpoint(endpoint: string): boolean {
+  try {
+    const host = new URL(endpoint).hostname;
+    return host === 'localhost' || host === '::1' || host === '[::1]' || host.startsWith('127.');
+  } catch {
+    return false;
+  }
 }
 
 @Global()

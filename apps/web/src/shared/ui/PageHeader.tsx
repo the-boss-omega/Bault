@@ -12,7 +12,6 @@ import {
   IconMoon,
   IconSun,
   IconSettings,
-  IconShield,
   IconSignOut,
   IconUser,
 } from './icons';
@@ -50,7 +49,9 @@ export function PageHeader({
             <span key={`${crumb.label}-${index}`} style={{ display: 'inline-flex', gap: 6 }}>
               {index > 0 && (
                 <span className="breadcrumb-sep" aria-hidden="true">
-                  ›
+                  {/* The trail runs the way the page does: a right chevron in
+                      English, a left one in Hebrew. */}
+                  {document.documentElement.dir === 'rtl' ? '‹' : '›'}
                 </span>
               )}
               {crumb.onClick ? (
@@ -213,7 +214,7 @@ export function NotificationBell({
       >
         <IconBell />
         {unseen > 0 && (
-          <span className="bell-badge" aria-hidden="true">
+          <span className="bell-badge" aria-hidden="true" dir="ltr">
             {unseen > 9 ? '9+' : unseen}
           </span>
         )}
@@ -466,11 +467,6 @@ export function UserMenu({
             <IconSettings />
             {t('menu.accountSettings')}
           </button>
-          <div className="menu-item" role="presentation" style={{ cursor: 'default' }}>
-            <IconShield />
-            {t('menu.role')}
-            <span className="menu-item-note">{roleLabel}</span>
-          </div>
           <div className="menu-sep" />
           <button
             type="button"

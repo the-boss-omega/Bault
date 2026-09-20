@@ -47,11 +47,16 @@ const ALLOWED_TYPES: Record<string, string> = {
  */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
-export type UploadPurpose = 'item_intake' | 'parcel';
+export type UploadPurpose = 'item_intake' | 'parcel' | 'service_media' | 'wallet_document';
 
 const PURPOSE_PREFIX: Record<UploadPurpose, string> = {
   item_intake: 'intake',
   parcel: 'parcels',
+  // What a paid service produced — the photography shoot handed to the collector.
+  service_media: 'services',
+  // What a collector attaches to a cash-in or cash-out request: a transfer
+  // receipt, a statement line. Reviewed by an administrator, never public.
+  wallet_document: 'wallet-documents',
 };
 
 @Injectable()

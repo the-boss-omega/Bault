@@ -62,7 +62,9 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         : `You received a new offer on your listing for ${what}.`;
     }
     case 'offer_countered': {
-      const what = str(p, 'itemDescription') ?? `listing ${ref(p, 'listingCode', 'listingId')}`;
+      // Never a truncated id: "listing 6876eae6" names nothing a person can find.
+      const code = str(p, 'listingCode') ?? str(p, 'barcode');
+      const what = str(p, 'itemDescription') ?? (code ? `listing ${code}` : 'a listing');
       return amount != null
         ? `Your offer on ${what} was countered at ${usd(amount)}.`
         : `Your offer on ${what} was countered.`;

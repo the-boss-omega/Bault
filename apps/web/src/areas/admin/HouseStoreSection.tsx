@@ -136,7 +136,7 @@ export function HouseStoreSection({
         ) : rows.length === 0 ? (
           <EmptyState title={t('house.admin.empty')} icon={<IconTag />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -151,16 +151,18 @@ export function HouseStoreSection({
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
-                    <td>
+                    <td data-label={t('house.admin.col.code')}>
                       <Serial value={row.code} />
                     </td>
-                    <td>
+                    <td data-label={t('warehouse.intake.description')}>
                       {row.photoRef && <CardPhotoButton serialNumber={row.photoRef} title={row.description} />}{' '}
                       {row.description}
                       <span className="card-sub"> · {itemClassLabel(t, row.typeClass)}</span>
                     </td>
-                    <td dir="ltr">{formatUsd(row.askingPrice)}</td>
-                    <td>
+                    <td data-label={t('house.admin.price')} dir="ltr">
+                      {formatUsd(row.askingPrice)}
+                    </td>
+                    <td data-label={t('house.admin.stock')}>
                       <input
                         type="number"
                         min={0}
@@ -174,7 +176,7 @@ export function HouseStoreSection({
                         }}
                       />
                     </td>
-                    <td>
+                    <td data-label={t('admin.col.status')}>
                       {row.status === 'removed' ? (
                         <StatusBadge>{t('house.admin.removed')}</StatusBadge>
                       ) : row.stock === 0 ? (

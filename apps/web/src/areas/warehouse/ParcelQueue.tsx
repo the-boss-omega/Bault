@@ -94,7 +94,7 @@ export function ParcelQueue({
         ) : rows.length === 0 ? (
           <EmptyState title={t('parcelQueue.empty')} text={t('parcelQueue.emptyText')} icon={<IconInbox />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -122,7 +122,7 @@ export function ParcelQueue({
                     of these on it says so from across the room.
                   */
                   <tr key={row.id} className={row.status === 'unclaimed' ? 'is-alert' : undefined}>
-                    <td>
+                    <td data-label={t('parcelQueue.col.parcel')}>
                       <Code value={row.code} />
                       {row.trackingNumber && (
                         <span className="dt-sub">
@@ -130,7 +130,7 @@ export function ParcelQueue({
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td data-label={t('parcelQueue.col.owner')}>
                       {row.ownerUsername ? (
                         <Code value={`@${row.ownerUsername}`} />
                       ) : (
@@ -145,21 +145,23 @@ export function ParcelQueue({
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td data-label={t('parcelQueue.col.where')}>
                       {row.facilityName ?? '—'}
                       {row.facilityRole === 'forwarding' && !row.forwardedAt && (
                         <span className="dt-sub">{t('parcelQueue.needsForwarding')}</span>
                       )}
                     </td>
-                    <td className="td-tight">
+                    <td className="td-tight" data-label={t('parcelQueue.col.received')}>
                       <span className="date">
                         {row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}
                       </span>
                     </td>
                     {/* What has actually come out of the box so far. Before this
                         the only way to find out was to leave the page. */}
-                    <td className="td-end num">{row.itemCount.toLocaleString()}</td>
-                    <td>
+                    <td className="td-end num" data-label={t('parcelQueue.col.units')}>
+                      {row.itemCount.toLocaleString()}
+                    </td>
+                    <td data-label={t('parcelQueue.col.status')}>
                       <StatusBadge tone={PARCEL_TONE[row.status] ?? 'neutral'}>
                         {parcelStatusLabel(t, row.status)}
                       </StatusBadge>
@@ -167,7 +169,7 @@ export function ParcelQueue({
                         <span className="dt-sub">{t('parcelQueue.international')}</span>
                       )}
                     </td>
-                    <td>
+                    <td className="td-actions">
                       <ParcelActions row={row} onAct={act} onBookContents={onBookContents} t={t} />
                     </td>
                   </tr>
@@ -208,10 +210,50 @@ function ParcelActions({
    */
   const [conditionPhotos, setConditionPhotos] = useState<PhotoRef[]>([]);
   const [claimUsername, setClaimUsername] = useState('');
+  const [disposing, setDisposing] = useState(false);
+  const [disposeReason, setDisposeReason] = useState('');
 
   // A forwarding site holds nothing, so anything sitting there needs the second
   // leg before it can be opened at all.
   const needsForwarding = row.facilityRole === 'forwarding' && !row.forwardedAt;
+
+  if (row.status === 'unclaimed' && disposing) {
+    /*
+     * Disposing of somebody's unopened parcel is the last resort after nobody
+     * could be found for it. It asks for the reason in writing — that sentence
+     * is sent to the owner if one is ever identified, and is the only record of
+     * why their property is gone — and it is a second press, never the first.
+     */
+    const ok = disposeReason.trim().length >= 5;
+    return (
+      <div className="fulfill-form">
+        <p className="field-error" role="alert">
+          {t('parcelQueue.dispose.warning')}
+        </p>
+        <Field label={t('parcelQueue.dispose.reason')}>
+          <input value={disposeReason} maxLength={1000} onChange={(e) => setDisposeReason(e.target.value)} />
+        </Field>
+        <div className="actions">
+          <Button
+            size="sm"
+            variant="danger"
+            disabled={!ok}
+            onClick={() =>
+              void onAct(
+                () => api.post(`/parcels/${row.id}/dispose`, { reason: disposeReason.trim() }),
+                t('parcelQueue.dispose.done', { code: row.code }),
+              ).then(() => setDisposing(false))
+            }
+          >
+            {t('parcelQueue.dispose.confirm')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDisposing(false)}>
+            {t('ui.cancel')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (row.status === 'unclaimed') {
     if (!claiming) {
@@ -219,6 +261,9 @@ function ParcelActions({
         <div className="actions">
           <Button size="sm" variant="gold" onClick={() => setClaiming(true)}>
             {t('parcelQueue.action.attribute')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDisposing(true)}>
+            {t('parcelQueue.dispose.action')}
           </Button>
           {needsForwarding && (
             <Button

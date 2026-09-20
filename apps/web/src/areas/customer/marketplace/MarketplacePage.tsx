@@ -6,6 +6,7 @@ import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Amount, Serial } from '../../../shared/ui/Serial';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
+import { displayName } from '../../../shared/timeline';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -24,20 +25,10 @@ import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
+import { ListingActions, type Listing } from './ListingActions';
 import { HouseStorePanel } from './HouseStorePanel';
 import { loadProfile } from '../../../shared/session';
 
-interface Listing {
-  id: string;
-  askingPrice: number;
-  currency: string;
-  itemId: string;
-  serialNumber: string;
-  typeClass: string;
-  conditionGrade: string | null;
-  description: string;
-  imageUrl?: string;
-}
 
 const TABS = ['browse', 'house', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
@@ -54,8 +45,21 @@ export function MarketplacePage() {
   const { goTab, setParams } = useNavigation(route);
 
   const [listings, setListings] = useState<Listing[] | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatusRaw] = useState<string | null>(null);
+  const [error, setErrorRaw] = useState<string | null>(null);
+  // A banner answers the LAST thing done: a success clears an older error and
+  // an error clears an older success. They used to stack — "Proposal sent"
+  // beside the error from a lookup two minutes earlier.
+  const setStatus = useCallback((m: string | null) => {
+    setErrorRaw(null);
+    setStatusRaw(m);
+  }, []);
+  const setError = useCallback((m: string | null) => {
+    setStatusRaw(null);
+    setErrorRaw(m);
+  }, []);
+  /** Bumped when a trade is proposed, so the proposals list below reloads. */
+  const [swapsVersion, setSwapsVersion] = useState(0);
   /**
    * Narrowing the shelf — and the narrowed shelf is a PLACE.
    *
@@ -87,6 +91,26 @@ export function MarketplacePage() {
   const [buying, setBuying] = useState<Listing | null>(null);
   const [offering, setOffering] = useState<Listing | null>(null);
   const { items, reload: reloadItems } = useVaultItems(true);
+  /**
+   * The reader's own active listings, by id.
+   *
+   * Browse offered Buy and Make offer on your own card: confirming the purchase
+   * answered 403 only after the confirmation, and the offer form was addressed to
+   * yourself. The public listing rows carry no seller (on purpose), so the
+   * reader's own list is what tells them apart.
+   */
+  const [mine, setMine] = useState<ReadonlySet<string>>(() => new Set());
+  const loadMine = useCallback(async () => {
+    try {
+      const rows = await api.get<{ id: string; status?: string }[]>('/marketplace/listings/mine');
+      setMine(new Set(rows.map((r) => r.id)));
+    } catch {
+      /* signed out or offline: nothing is marked as the reader's own */
+    }
+  }, []);
+  useEffect(() => {
+    void loadMine();
+  }, [loadMine]);
   /** The reader's own username, so the storefront tab can open on their shop. */
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
   /**
@@ -158,6 +182,7 @@ export function MarketplacePage() {
       );
       setStatus(result?.replayed ? t('market.alreadyBought') : t('market.status.purchased'));
       setError(null);
+      setParams({ listing: null });
       await loadListings(query);
       await reloadItems();
     } catch (e) {
@@ -168,6 +193,12 @@ export function MarketplacePage() {
   }
 
   const tabs = TABS.map((key) => ({ key, label: t(`market.tab.${key}` as MessageKey) }));
+
+  // A banner belongs to the tab it was raised on.
+  useEffect(() => {
+    setStatusRaw(null);
+    setErrorRaw(null);
+  }, [tab]);
 
   return (
     <>
@@ -329,7 +360,7 @@ export function MarketplacePage() {
                         <Serial value={listing.serialNumber} />
                       </h3>
                       <p className="card-desc" title={listing.description || undefined}>
-                        {listing.description || '—'}
+                        {displayName(listing.description) || '—'}
                       </p>
                     </div>
 
@@ -338,17 +369,15 @@ export function MarketplacePage() {
                       <span className="card-sub">{itemClassLabel(t, listing.typeClass)}</span>
                     </div>
 
-                    <div className="actions">
-                      {/* Buying is irreversible and settles from the wallet;
-                          making an offer opens a negotiation. They were the same
-                          size and the same weight. */}
-                      <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
-                        {t('market.buy')}
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setOffering(listing)}>
-                        {t('market.makeOffer')}
-                      </Button>
-                    </div>
+                    <ListingActions
+                      listing={listing}
+                      mine={mine.has(listing.id)}
+                      t={t}
+                      onBuy={setBuying}
+                      onOffer={setOffering}
+                      onManage={() => goTab('listings')}
+                      onDetails={() => setParams({ listing: listing.id })}
+                    />
                   </li>
                 ))}
               </ul>
@@ -374,9 +403,11 @@ export function MarketplacePage() {
           <SellPanel
             items={items}
             t={t}
+            preselect={route.params.item}
             onListed={async () => {
               setStatus(t('market.status.listed'));
-              await loadListings(q);
+              await loadListings(query);
+              await loadMine();
               await reloadItems();
               goTab('browse');
             }}
@@ -391,7 +422,7 @@ export function MarketplacePage() {
           body={
             <p>
               {t('market.buy.confirmBody', {
-                item: buying.description || buying.typeClass,
+                item: displayName(buying.description) || itemClassLabel(t, buying.typeClass),
                 amount: formatUsd(buying.askingPrice),
               })}
             </p>
@@ -424,8 +455,16 @@ export function MarketplacePage() {
 
       {tab === 'trade' && (
         <TabPanel tab="trade">
-          <ProposeTradePanel onProposed={async (m) => setStatus(m)} onError={setError} />
+          <ProposeTradePanel
+            onProposed={async (m) => {
+              setStatus(m);
+              setSwapsVersion((v) => v + 1);
+              await reloadItems();
+            }}
+            onError={setError}
+          />
           <SwapsPanel
+            key={swapsVersion}
             onChanged={async (m) => {
               setStatus(m);
               await reloadItems();
@@ -443,8 +482,29 @@ export function MarketplacePage() {
 
       {tab === 'store' && (
         <TabPanel tab="store">
-          <StorefrontPanel myUsername={myUsername} onError={setError} />
+          <StorefrontPanel
+            myUsername={myUsername}
+            seller={route.params.seller}
+            onSeller={(who) => setParams({ seller: who })}
+            mine={mine}
+            onBuy={setBuying}
+            onOffer={setOffering}
+            onManage={() => goTab('listings')}
+            onError={setError}
+          />
         </TabPanel>
+      )}
+
+      {route.params.listing && !offering && !buying && (
+        <ListingDrawer
+          id={route.params.listing}
+          mine={mine.has(route.params.listing)}
+          t={t}
+          onClose={() => setParams({ listing: null })}
+          onBuy={setBuying}
+          onOffer={setOffering}
+          onManage={() => goTab('listings')}
+        />
       )}
 
       {offering && (
@@ -469,21 +529,29 @@ export function MarketplacePage() {
 function SellPanel({
   items,
   t,
+  preselect,
   onListed,
   onError,
 }: {
-  items: readonly { id: string; typeClass: string; description: string }[];
+  items: readonly { id: string; typeClass: string; description: string; serialNumber?: string }[];
   t: TranslateFn;
+  /** `?item=` — the card the vault drawer's "List for sale" was pressed on. */
+  preselect?: string;
   onListed: () => Promise<void>;
   onError: (message: string) => void;
 }) {
   const [itemId, setItemId] = useState('');
-  const [price, setPrice] = useState('500.00');
+  // Empty, not a figure: $500.00 was pre-filled for every card, a price nobody
+  // chose that one tap would have published.
+  const [price, setPrice] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!itemId && items[0]) setItemId(items[0].id);
-  }, [items, itemId]);
+    if (itemId) return;
+    const wanted = preselect && items.find((i) => i.id === preselect);
+    if (wanted) setItemId(wanted.id);
+    else if (items[0]) setItemId(items[0].id);
+  }, [items, itemId, preselect]);
 
   const cents = dollarsToCents(price);
 
@@ -512,7 +580,9 @@ function SellPanel({
               <option value="">{t('market.selectItemOption')}</option>
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.typeClass} — {item.description}
+                  {[item.serialNumber, displayName(item.description) || itemClassLabel(t, item.typeClass)]
+                    .filter(Boolean)
+                    .join(' — ')}
                 </option>
               ))}
             </select>
@@ -584,7 +654,7 @@ function OfferDrawer({
   return (
     <DetailDrawer
       title={t('market.offer.title')}
-      subtitle={listing.description || listing.typeClass}
+      subtitle={displayName(listing.description) || itemClassLabel(t, listing.typeClass)}
       onClose={onClose}
       dirty
       footer={
@@ -626,6 +696,106 @@ function OfferDrawer({
       </div>
 
       {error && <div className="stack-top" ><ErrorState message={error} /></div>}
+    </DetailDrawer>
+  );
+}
+
+/**
+ * One listing, by link: `#/marketplace/browse?listing=<id>`.
+ *
+ * A listing had no page of its own, so there was nothing to send somebody —
+ * "it's on the marketplace somewhere" is not a link.
+ */
+function ListingDrawer({
+  id,
+  mine,
+  t,
+  onClose,
+  onBuy,
+  onOffer,
+  onManage,
+}: {
+  id: string;
+  mine: boolean;
+  t: TranslateFn;
+  onClose: () => void;
+  onBuy: (l: Listing) => void;
+  onOffer: (l: Listing) => void;
+  onManage: () => void;
+}) {
+  const [listing, setListing] = useState<Listing | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setListing(null);
+    void api
+      .get<Listing>(`/marketplace/listings/${encodeURIComponent(id)}`)
+      .then((l) => {
+        setListing(l);
+        setError(null);
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [id]);
+
+  const link = `${window.location.origin}${window.location.pathname}#/marketplace/browse?listing=${id}`;
+  const name = listing ? displayName(listing.description) || itemClassLabel(t, listing.typeClass) : '';
+
+  return (
+    <DetailDrawer
+      title={name || t('market.details')}
+      subtitle={listing ? <Serial value={listing.serialNumber} /> : undefined}
+      onClose={onClose}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          {t('ui.close')}
+        </Button>
+      }
+    >
+      {error && <ErrorState message={error} />}
+      {listing && (
+        <div className="stack stack--tight">
+          <div className="stage">
+            <CardPhotoThumb serialNumber={listing.serialNumber} title={name} />
+          </div>
+          <p className="price">
+            <Amount>{formatUsd(listing.askingPrice)}</Amount>
+          </p>
+          <dl className="detail-list">
+            <div className="detail-row">
+              <dt className="detail-label">{t('vault.class')}</dt>
+              <dd className="detail-value">{itemClassLabel(t, listing.typeClass)}</dd>
+            </div>
+            <div className="detail-row">
+              <dt className="detail-label">{t('vault.item.condition')}</dt>
+              <dd className="detail-value">{listing.conditionGrade ?? '—'}</dd>
+            </div>
+          </dl>
+          {listing.status && listing.status !== 'active' ? (
+            <p className="field-hint">{t('market.notForSale')}</p>
+          ) : (
+            <ListingActions
+              listing={listing}
+              mine={mine}
+              t={t}
+              onBuy={onBuy}
+              onOffer={onOffer}
+              onManage={onManage}
+            />
+          )}
+          <div className="row">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard?.writeText(link).then(() => setCopied(true));
+              }}
+            >
+              {copied ? t('market.linkCopied') : t('market.copyLink')}
+            </Button>
+          </div>
+        </div>
+      )}
     </DetailDrawer>
   );
 }

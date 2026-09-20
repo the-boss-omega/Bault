@@ -39,6 +39,9 @@ export interface EscrowDeal {
   sellerReleaseAttestedBy: string | null;
   closeReason: string | null;
   createdAt: string;
+  /** Both parties by username, where they have an account. */
+  raiserUsername?: string | null;
+  counterpartyUsername?: string | null;
 }
 
 export interface EscrowEvent {
@@ -84,6 +87,36 @@ const ESCROW_STATUS_KEY: Record<string, MessageKey> = {
 export function escrowStatusLabel(t: TranslateFn, status: string): string {
   const key = ESCROW_STATUS_KEY[status];
   return key ? t(key) : status;
+}
+
+const ESCROW_EVENT_KEY: Record<string, MessageKey> = {
+  raised: 'esc.event.raised',
+  agreed: 'esc.event.agreed',
+  funded: 'esc.event.funded',
+  item_received: 'esc.event.item_received',
+  inspected: 'esc.event.inspected',
+  released_by_buyer: 'esc.event.released_by_buyer',
+  released_by_seller: 'esc.event.released_by_seller',
+  settled: 'esc.event.settled',
+  returned: 'esc.event.returned',
+  cancelled: 'esc.event.cancelled',
+};
+
+/** A trail entry in words — it rendered the raw event name, underscores removed. */
+export function escrowEventLabel(t: TranslateFn, eventType: string): string {
+  const key = ESCROW_EVENT_KEY[eventType];
+  return key ? t(key) : eventType.replace(/_/g, ' ');
+}
+
+/** Which side each party is on, by username, from the viewer's point of view. */
+export function dealParties(deal: EscrowDeal): { buyer: string | null; seller: string | null } {
+  const raiser = deal.raiserUsername ? `@${deal.raiserUsername}` : null;
+  const other = deal.counterpartyUsername
+    ? `@${deal.counterpartyUsername}`
+    : deal.counterpartyName
+      ? deal.counterpartyName
+      : null;
+  return deal.raiserRole === 'buyer' ? { buyer: raiser, seller: other } : { buyer: other, seller: raiser };
 }
 
 /**

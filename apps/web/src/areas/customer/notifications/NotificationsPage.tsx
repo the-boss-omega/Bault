@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { formatDateTime } from '../../../shared/money';
-import { useNavigation, useRoute } from '../../../shared/routing';
-import { EVENT_TYPES, channelLabel, eventLabel, renderContent } from '../../../shared/notifications';
+import { navigate, useNavigation, useRoute } from '../../../shared/routing';
+import { EVENT_TYPES, channelLabel, eventLabel, eventRoute, renderContent } from '../../../shared/notifications';
 import type { AppNotification, useNotificationFeed } from '../../../shared/hooks';
 import {
   Button,
@@ -157,7 +157,18 @@ export function NotificationsPage({
                           <StatusBadge tone="info">{eventLabel(t, n.eventType)}</StatusBadge>
                         </td>
                         <td data-label={t('notifications.col.content')}>
-                          {renderContent(n.content, eventLabel(t, n.eventType))}
+                          {(() => {
+                            // The row leads to where the thing it reports can be seen.
+                            const to = eventRoute(n.eventType);
+                            const text = renderContent(n.content, eventLabel(t, n.eventType));
+                            return to ? (
+                              <button type="button" className="link-more" onClick={() => navigate(to)}>
+                                {text}
+                              </button>
+                            ) : (
+                              text
+                            );
+                          })()}
                         </td>
                         <td data-label={t('notifications.col.date')}>
                           <span dir="ltr">{formatDateTime(n.createdAt, locale)}</span>

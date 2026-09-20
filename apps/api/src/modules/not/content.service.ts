@@ -121,7 +121,7 @@ export class ContentService {
       region: f.region,
       country: f.country,
       /** Guidance only — Bault is not the seller and remits nobody's tax. */
-      salesTaxBps: f.salesTaxBps,
+      salesTaxPpm: f.salesTaxPpm,
       forwardingDays: f.forwardingDays,
     }));
   }

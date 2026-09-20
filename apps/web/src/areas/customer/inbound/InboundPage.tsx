@@ -181,8 +181,8 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
   const forwarding = addresses.find((a) => a.role === 'forwarding');
   const taxSaved =
     primary && forwarding
-      ? estimatedTaxMinor(EXAMPLE_PURCHASE_MINOR, primary.salesTaxBps) -
-        estimatedTaxMinor(EXAMPLE_PURCHASE_MINOR, forwarding.salesTaxBps)
+      ? estimatedTaxMinor(EXAMPLE_PURCHASE_MINOR, primary.salesTaxPpm) -
+        estimatedTaxMinor(EXAMPLE_PURCHASE_MINOR, forwarding.salesTaxPpm)
       : 0;
 
   return (
@@ -213,10 +213,10 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
 
               <dl className="detail-list">
                 <DetailRow label={t('inbound.address.salesTax')}>
-                  {address.salesTaxBps === 0 ? (
+                  {address.salesTaxPpm === 0 ? (
                     <StatusBadge tone="success">{t('inbound.address.noSalesTax')}</StatusBadge>
                   ) : (
-                    <span dir="ltr">{taxRateLabel(address.salesTaxBps)}</span>
+                    <span dir="ltr">{taxRateLabel(address.salesTaxPpm)}</span>
                   )}
                 </DetailRow>
                 {address.role === 'forwarding' && address.forwardingDays != null && (
@@ -247,7 +247,7 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
             <p>
               {t('inbound.guidance.body', {
                 primary: primary.name,
-                primaryRate: taxRateLabel(primary.salesTaxBps),
+                primaryRate: taxRateLabel(primary.salesTaxPpm),
                 forwarding: forwarding.name,
                 days: forwarding.forwardingDays ?? 0,
               })}
@@ -438,7 +438,7 @@ function RegisterParcelForm({
       const created = await api.post<{ code: string }>('/me/parcels', {
         facilityCode,
         carrier: carrier.trim() || undefined,
-        trackingNumber: trackingNumber.trim() || undefined,
+        trackingNumber: trackingNumber.trim(),
         declaredContents: declaredContents.trim() || undefined,
         internationalOrigin,
       });
@@ -494,7 +494,12 @@ function RegisterParcelForm({
         )}
 
         <div className="row">
-          <Button variant="gold" icon={<IconPlus />} disabled={busy || !facilityCode} onClick={() => void submit()}>
+          <Button
+            variant="gold"
+            icon={<IconPlus />}
+            disabled={busy || !facilityCode || trackingNumber.trim() === ''}
+            onClick={() => void submit()}
+          >
             {t('inbound.register.submit')}
           </Button>
         </div>
@@ -601,7 +606,231 @@ function ParcelDrawer({
           </DetailRow>
         )}
       </dl>
+
+      {parcel.status !== 'expected' && <ParcelPhotos parcelId={parcel.id} />}
+      {parcel.status === 'received' && !parcel.forwardedAt && (
+        <DirectShip parcel={parcel} onShipped={onChanged} onClose={onClose} onError={onError} />
+      )}
     </DetailDrawer>
+  );
+}
+
+/** `GET /parcels/:id/photos` — each photograph with a readable URL. */
+interface ParcelPhoto {
+  id: string;
+  kind: 'arrival' | 'condition';
+  caption: string | null;
+  url: string;
+  createdAt: string;
+}
+
+/**
+ * The photographs taken of this box at the bench.
+ *
+ * They were taken — on arrival, and again when it was opened and checked — and
+ * shown to nobody but the operator. A collector whose parcel arrived crushed is
+ * the person those pictures exist for.
+ */
+function ParcelPhotos({ parcelId }: { parcelId: string }) {
+  const { t } = useI18n();
+  const [photos, setPhotos] = useState<ParcelPhoto[] | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .get<ParcelPhoto[]>(`/parcels/${parcelId}/photos`)
+      .then((rows) => live && setPhotos(rows))
+      .catch(() => live && setPhotos([]));
+    return () => {
+      live = false;
+    };
+  }, [parcelId]);
+
+  if (photos === null || photos.length === 0) return null;
+  return (
+    <div className="stack stack--tight stack-top">
+      <h3 className="drawer-heading">{t('inbound.parcel.photos')}</h3>
+      <ul className="media-strip">
+        {photos.map((p) => (
+          <li key={p.id}>
+            <a href={p.url} target="_blank" rel="noopener noreferrer">
+              <img src={p.url} alt={p.caption ?? t(p.kind === 'arrival' ? 'inbound.parcel.photoArrival' : 'inbound.parcel.photoCondition')} loading="lazy" />
+            </a>
+            <span className="hint">
+              {t(p.kind === 'arrival' ? 'inbound.parcel.photoArrival' : 'inbound.parcel.photoCondition')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+interface DirectEligibility {
+  eligible: boolean;
+  reasons: string[];
+  available: boolean;
+  facilityCode: string;
+  flatCostMinor: number;
+  maxItems: number;
+  transitDays: number;
+  maxInsuredValueMinor: number;
+}
+
+interface SavedAddress {
+  id: string;
+  label: string;
+  recipient: string;
+  line1: string;
+  city: string;
+  country: string;
+  postalCode: string;
+  isDefault: boolean;
+}
+
+/**
+ * Direct from Delaware: send this parcel on overnight without it entering the vault.
+ *
+ * Offered only on a parcel that is sitting, unopened, at the tax-free site —
+ * which is exactly when it is useful: somebody who bought a card to have it by
+ * Saturday is spared the truck to New Jersey, the intake and the outbound
+ * queue. The price is flat and stated before anything is taken.
+ */
+function DirectShip({
+  parcel,
+  onShipped,
+  onClose,
+  onError,
+}: {
+  parcel: ParcelSummary;
+  onShipped: (message: string) => Promise<void>;
+  onClose: () => void;
+  onError: (m: string) => void;
+}) {
+  const { t } = useI18n();
+  const [terms, setTerms] = useState<DirectEligibility | null>(null);
+  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [addressId, setAddressId] = useState('');
+  const [cards, setCards] = useState('1');
+  const [insured, setInsured] = useState('');
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const [e, list] = await Promise.all([
+          api.get<DirectEligibility>(`/shipping/direct/${parcel.id}/eligibility`),
+          api.get<SavedAddress[]>('/me/addresses'),
+        ]);
+        if (!live) return;
+        setTerms(e);
+        const domestic = list.filter((a) => a.country.toUpperCase() === 'US');
+        setAddresses(domestic);
+        const preferred = domestic.find((a) => a.isDefault) ?? domestic[0];
+        if (preferred) setAddressId(preferred.id);
+      } catch {
+        /* the offer is additive; the parcel drawer works without it */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [parcel.id]);
+
+  // Not at the tax-free site at all: say nothing rather than list reasons.
+  if (!terms || !terms.available || (!terms.eligible && parcel.facilityCode !== terms.facilityCode)) return null;
+
+  const count = Number(cards);
+  const insuredMinor = insured.trim() === '' ? 0 : Math.round(Number(insured) * 100);
+  const valid =
+    terms.eligible &&
+    addressId !== '' &&
+    Number.isInteger(count) &&
+    count >= 1 &&
+    count <= terms.maxItems &&
+    Number.isFinite(insuredMinor) &&
+    insuredMinor >= 0;
+
+  async function ship() {
+    setBusy(true);
+    try {
+      const res = await api.post<{ shipmentCode: string; costMinor: number }>(`/shipping/direct/${parcel.id}`, {
+        addressId,
+        cardCount: count,
+        insuredValueMinor: insuredMinor || undefined,
+      });
+      await onShipped(t('inbound.direct.done', { code: res.shipmentCode, amount: formatUsd(res.costMinor) }));
+      onClose();
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="stack stack--tight stack-top">
+      <h3 className="drawer-heading">{t('inbound.direct.title')}</h3>
+      <p className="field-hint">
+        {t('inbound.direct.pitch', {
+          amount: formatUsd(terms.flatCostMinor),
+          max: terms.maxItems,
+          facility: terms.facilityCode,
+        })}
+      </p>
+      {!terms.eligible ? (
+        <ul className="check-list list-unbounded">
+          {terms.reasons.map((r) => (
+            <li key={r}>
+              <span className="hint">{r}</span>
+            </li>
+          ))}
+        </ul>
+      ) : !open ? (
+        <div className="row">
+          <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+            {t('inbound.direct.start')}
+          </Button>
+        </div>
+      ) : addresses.length === 0 ? (
+        <p className="field-hint">{t('inbound.direct.noAddress')}</p>
+      ) : (
+        <>
+          <Field label={t('shipping.addressPlaceholder')}>
+            <select value={addressId} onChange={(e) => setAddressId(e.target.value)}>
+              {addresses.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} — {a.recipient}, {a.line1}, {a.city} {a.postalCode}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t('inbound.direct.cards')} hint={t('inbound.direct.cardsHint', { max: terms.maxItems })}>
+            <input
+              type="number"
+              min={1}
+              max={terms.maxItems}
+              value={cards}
+              dir="ltr"
+              onChange={(e) => setCards(e.target.value)}
+            />
+          </Field>
+          <Field label={t('ship.insuredValue')} hint={t('inbound.direct.insuredHint')}>
+            <input inputMode="decimal" value={insured} dir="ltr" onChange={(e) => setInsured(e.target.value)} />
+          </Field>
+          <div className="row">
+            <Button variant="gold" size="sm" loading={busy} disabled={!valid} onClick={() => void ship()}>
+              {t('inbound.direct.submit', { amount: formatUsd(terms.flatCostMinor) })}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              {t('ui.cancel')}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -656,7 +885,9 @@ function ProcessingTab({ onError }: { onError: (m: string) => void }) {
           value={
             workflow?.oldestWaitingHours == null
               ? '—'
-              : t('inbound.workflow.hours', { hours: workflow.oldestWaitingHours })
+              : workflow.oldestWaitingHours >= 48
+                ? t('inbound.workflow.days', { count: Math.floor(workflow.oldestWaitingHours / 24) })
+                : t('inbound.workflow.hours', { hours: workflow.oldestWaitingHours })
           }
           icon={<IconAlert />}
           tone="violet"

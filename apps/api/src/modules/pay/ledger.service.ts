@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
-import { ledgerRecord } from './pay.schema';
+import { charge, ledgerRecord } from './pay.schema';
 import { money, type Money } from '../../shared/money';
 
 /** Single settlement currency for the MVP (spec Assumption). */
@@ -66,10 +66,30 @@ export class LedgerService {
     return money(Number(row?.bal ?? '0'), DEFAULT_CURRENCY);
   }
 
+  /**
+   * The statement, with what each fee was FOR.
+   *
+   * A fee row references a `charge`, and the charge knows its action type —
+   * intake, storage, a grading fee. Without it every service charge on the
+   * statement read "Platform charge", which is true of all of them and useful
+   * about none.
+   */
   list(userId: string) {
     return this.db
-      .select()
+      .select({
+        id: ledgerRecord.id,
+        userId: ledgerRecord.userId,
+        type: ledgerRecord.type,
+        amount: ledgerRecord.amount,
+        direction: ledgerRecord.direction,
+        currency: ledgerRecord.currency,
+        referenceType: ledgerRecord.referenceType,
+        referenceId: ledgerRecord.referenceId,
+        occurredAt: ledgerRecord.occurredAt,
+        chargeAction: charge.actionType,
+      })
       .from(ledgerRecord)
+      .leftJoin(charge, eq(charge.id, ledgerRecord.referenceId))
       .where(eq(ledgerRecord.userId, userId))
       .orderBy(sql`${ledgerRecord.occurredAt} desc`);
   }

@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { useMediaQuery } from '../../shared/hooks';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import type { InboundAddress } from '../../shared/parcels';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
-import { Button, Field, Panel } from '../../shared/ui/primitives';
+import { Button, ErrorState, Field, Panel, SuccessNote } from '../../shared/ui/primitives';
 import { IconPlus } from '../../shared/ui/icons';
 
 /**
@@ -41,19 +41,29 @@ export function ReceiveParcels({
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [busy, setBusy] = useState(false);
+  /**
+   * The facility list failing used to be swallowed: the select stayed empty and
+   * Receive stayed disabled with nothing on screen to say why.
+   */
+  const [facilityError, setFacilityError] = useState<string | null>(null);
+  /** The result of the last receive, shown next to the button that did it. */
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadFacilities = useCallback(async () => {
+    try {
+      const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
+      setFacilities(list);
+      setFacilityError(null);
+      const preferred = list.find((f) => f.role === 'primary') ?? list[0];
+      if (preferred) setFacilityCode((current) => current || preferred.code);
+    } catch (e) {
+      setFacilityError((e as Error).message);
+    }
+  }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
-        setFacilities(list);
-        const preferred = list.find((f) => f.role === 'primary') ?? list[0];
-        if (preferred) setFacilityCode(preferred.code);
-      } catch {
-        /* the panel still works if the list fails; the field is a free choice */
-      }
-    })();
-  }, []);
+    void loadFacilities();
+  }, [loadFacilities]);
 
   // The label is typed as written and may resolve to nothing; what it must not
   // be is malformed, because then it names nobody and nothing can be looked up.
@@ -63,10 +73,15 @@ export function ReceiveParcels({
 
   async function receive() {
     setBusy(true);
+    const done = t('parcelQueue.received');
+    // The console reports a failure itself and does not rethrow, so the form is
+    // cleared only when the receive actually went through.
+    let received = false;
     try {
       await onReceived(
-        () =>
-          api.post('/parcels/receive/batch', {
+        async () => {
+          try {
+            await api.post('/parcels/receive/batch', {
             parcels: [
               {
                 facilityCode,
@@ -78,9 +93,17 @@ export function ReceiveParcels({
                 photoKeys: photoKeys(photos),
               },
             ],
-          }),
-        t('parcelQueue.received'),
+            });
+            received = true;
+            setNote({ ok: true, text: done });
+          } catch (e) {
+            setNote({ ok: false, text: (e as Error).message });
+            throw e;
+          }
+        },
+        done,
       );
+      if (!received) return;
       setAddressedTo('');
       setTrackingNumber('');
       setNotes('');
@@ -94,6 +117,9 @@ export function ReceiveParcels({
   return (
     <Panel title={t('parcelQueue.receive.title')} subtitle={t('parcelQueue.receive.subtitle')}>
       <div className="stack stack--tight">
+        {facilityError && (
+          <ErrorState message={facilityError} onRetry={() => void loadFacilities()} retryLabel={t('ui.retry')} />
+        )}
         <div className="form-grid">
           <Field label={t('parcelQueue.receive.facility')} hint={t('parcelQueue.receive.facilityHint')}>
             <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
@@ -178,6 +204,7 @@ export function ReceiveParcels({
             {t('parcelQueue.receive.submit')}
           </Button>
         </div>
+        {note && (note.ok ? <SuccessNote>{note.text}</SuccessNote> : <ErrorState message={note.text} />)}
       </div>
     </Panel>
   );

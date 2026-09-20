@@ -126,6 +126,12 @@ export class CustomRequestService {
       const req = await this.requests.get(requestId);
       this.requests.assertAccepted(req);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
+      // A quote can be revised until the collector agrees to it — never after:
+      // they have paid the old figure, and a new one would be charged again.
+      const stage = ((req.typeFields as Record<string, unknown>) ?? {}).stage;
+      if (stage !== undefined && stage !== 'awaiting_quote' && stage !== 'quoted') {
+        throw new AppError(ErrorCode.CONFLICT, 'This request is past quoting.', 409);
+      }
 
       const updated = await this.requests.setStatus(tx, requestId, 'in_progress', {
         stage: 'quoted',

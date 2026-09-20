@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
-import { useI18n, type MessageKey } from '../../../shared/i18n';
+import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { itemClassLabel } from '../../../shared/itemClasses';
 import { formatUsd } from '../../../shared/money';
 import { EmptyState, ErrorState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconReceipt } from '../../../shared/ui/icons';
@@ -23,19 +24,54 @@ interface PriceList {
 }
 
 /**
- * What everything costs, before it is charged.
+ * What each rule is FOR, in the reader's language.
  *
- * `GET /pricing/rules` existed and returned every rule ever created, in the
- * shape the admin console edits, and nothing customer-facing called it — so a
- * collector could not find out what anything cost until it had been charged to
- * them. For a platform whose entire economics are per-item fees, that was a
- * straightforward omission.
- *
- * The grouping is the substance of the fix. A flat list of thirty action types
- * reads as a database dump because it is one; somebody wants to know what it
- * costs to send a card home, and `shipping`, `shipping_rush` and
- * `shipping_addon:gps_tracker` are three answers to that single question.
+ * The rule's own `description` comes out of the database in English, so a Hebrew
+ * reader met a table of English sentences — and the class-specific intake rules
+ * read "for trading_card". Each action type has a label here; a rule whose
+ * action nothing names falls back to its description, which is the only honest
+ * fallback (an unlabelled price is worse than an English one).
  */
+const WHAT: Record<string, MessageKey> = {
+  intake: 'prices.what.intake',
+  intake_lot: 'prices.what.intakeLot',
+  parcel_processing: 'prices.what.parcelProcessing',
+  parcel_forwarding: 'prices.what.parcelForwarding',
+  storage: 'prices.what.storage',
+  storage_oversized: 'prices.what.storageOversized',
+  service: 'prices.what.service',
+  'service_fee:deslab': 'prices.what.deslab',
+  'service_fee:condition_inspection': 'prices.what.inspection',
+  'service_fee:video_review': 'prices.what.videoReview',
+  'grading_fee:psa_value': 'prices.what.gradingPsaValue',
+  'grading_fee:psa_regular': 'prices.what.gradingPsaRegular',
+  'grading_fee:psa_express': 'prices.what.gradingPsaExpress',
+  'grading_fee:psa_walkthrough': 'prices.what.gradingPsaWalkthrough',
+  'grading_fee:bgs_standard': 'prices.what.gradingBgsStandard',
+  shipping: 'prices.what.shipping',
+  shipping_rush: 'prices.what.shippingRush',
+  'shipping_addon:gps_tracker': 'prices.what.gpsTracker',
+  show_pickup: 'prices.what.showPickup',
+  'white_glove:domestic': 'prices.what.whiteGloveDomestic',
+  'white_glove:international': 'prices.what.whiteGloveInternational',
+  marketplace_fee: 'prices.what.marketplaceFee',
+  'consignment_fee:card_show': 'prices.what.consignmentShow',
+  'consignment_fee:auction_house': 'prices.what.consignmentAuction',
+  'consignment_fee:ebay_partner': 'prices.what.consignmentEbay',
+  escrow_fee: 'prices.what.escrowFee',
+  cash_out_fee: 'prices.what.cashOutFee',
+  chargeback_fee: 'prices.what.chargebackFee',
+  'membership:folio': 'prices.what.membershipFolio',
+  'membership:registry': 'prices.what.membershipRegistry',
+  'membership:trust': 'prices.what.membershipTrust',
+};
+
+/** A finite number out of a rule's `parameters`, or null when it is not one. */
+function param(entry: PriceEntry, key: string): number | null {
+  const raw = entry.parameters?.[key];
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+}
+
 export function PriceListPanel() {
   const { t } = useI18n();
   const [list, setList] = useState<PriceList | null>(null);
@@ -51,17 +87,58 @@ export function PriceListPanel() {
     })();
   }, []);
 
+  function whatOf(entry: PriceEntry): string {
+    // Intake is priced per class, so the class IS the row's subject.
+    if (entry.actionType === 'intake' && entry.itemClass) {
+      return t('prices.what.intakeClass', { itemClass: itemClassLabel(t, entry.itemClass) });
+    }
+    const key = WHAT[entry.actionType];
+    return key ? t(key) : entry.description;
+  }
+
   /**
-   * A rule's price, in the units it is actually stated in.
+   * The price, in the units the rule is actually charged in.
    *
-   * A percentage rule stores basis points and a fixed one stores cents.
-   * Rendering both with `formatUsd` would turn 5% into "$5.00", which is the
-   * kind of error a price list exists to prevent.
+   * Three rules do not state their own figure, and printing `value` for them
+   * quoted a number nobody is ever charged:
+   *
+   *   storage / storage_oversized  The real terms are in `parameters` — the
+   *                                included window, the period and the
+   *                                proportion of the item's own intake fee.
+   *                                `value` is only a fallback base, and it was
+   *                                being shown as "$1.00 daily".
+   *   cash_out_fee                 Charged from the band schedule in
+   *                                `money-terms.ts`, not from this rule.
+   *   escrow_fee                   1% of the deal, with a floor the rule has no
+   *                                field for.
    */
   function priceOf(entry: PriceEntry): string {
-    return entry.model === 'percentage'
-      ? `${(entry.value / 100).toFixed(2)}%`
-      : formatUsd(entry.value);
+    if (entry.actionType === 'storage' || entry.actionType === 'storage_oversized') {
+      const free = param(entry, 'freeDays');
+      const period = param(entry, 'periodDays');
+      const bps = param(entry, 'percentOfIntakeBps');
+      if (free !== null && period !== null && bps !== null) {
+        return t('prices.storageTerms', {
+          days: free,
+          percent: (bps / 100).toFixed(bps % 100 === 0 ? 0 : 2),
+          period,
+        });
+      }
+    }
+    if (entry.actionType === 'cash_out_fee') return t('prices.cashOutSchedule');
+    if (entry.actionType === 'escrow_fee') return t('prices.escrowSchedule');
+    if (entry.model === 'percentage') return `${(entry.value / 100).toFixed(2)}%`;
+    // A zero rule is included in something else, and says so rather than
+    // printing $0.00 next to the things that do cost money.
+    return entry.value === 0 ? t('prices.included') : formatUsd(entry.value);
+  }
+
+  /** When it is charged. Storage bills per period, not on the sweep's schedule. */
+  function whenOf(entry: PriceEntry, t: TranslateFn): string {
+    if (entry.actionType === 'storage' || entry.actionType === 'storage_oversized') {
+      return t('prices.trigger.perPeriod');
+    }
+    return t(`prices.trigger.${entry.billingTrigger}` as MessageKey);
   }
 
   return (
@@ -74,11 +151,11 @@ export function PriceListPanel() {
           <EmptyState title={t('prices.none')} text={t('prices.noneText')} icon={<IconReceipt />} />
         ) : (
           <>
-            <p className="field-hint">{list.note}</p>
+            <p className="field-hint">{t('prices.note')}</p>
             {list.groups.map((g) => (
-              <div key={g.group} style={{ marginBlockStart: 'var(--sp-5)' }}>
+              <div key={g.group} className="stack-top">
                 <h3 className="drawer-heading">{t(`prices.group.${g.group}` as MessageKey)}</h3>
-                <div className="dt-wrap">
+                <div className="dt-wrap dt-wrap--stack">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -90,20 +167,15 @@ export function PriceListPanel() {
                     <tbody>
                       {g.entries.map((e) => (
                         <tr key={`${e.actionType}:${e.itemClass ?? ''}`}>
-                          <td className="dt-primary">
-                            {e.description}
-                            {e.itemClass && (
-                              <span className="dt-sub">
-                                {t('prices.forClass', { itemClass: e.itemClass })}
-                              </span>
-                            )}
+                          <td data-label={t('prices.col.what')} className="dt-primary">
+                            {whatOf(e)}
                           </td>
-                          <td dir="ltr">
+                          <td data-label={t('prices.col.price')}>
                             <strong>{priceOf(e)}</strong>
                           </td>
-                          <td>
+                          <td data-label={t('prices.col.when')}>
                             <StatusBadge tone="neutral" plain>
-                              {t(`prices.trigger.${e.billingTrigger}` as MessageKey)}
+                              {whenOf(e, t)}
                             </StatusBadge>
                           </td>
                         </tr>

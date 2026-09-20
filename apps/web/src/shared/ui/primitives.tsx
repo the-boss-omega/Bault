@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useId } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
@@ -504,9 +504,33 @@ export function ContextTabs({
     if (target) onSelect(target.key);
   }
 
+  // On a phone the strip scrolls sideways: keep the active tab in view, and drop
+  // the "more this way" fade once the strip is scrolled to its end.
+  const stripRef = useRef<HTMLDivElement>(null);
+  function markEnd() {
+    const el = stripRef.current;
+    if (!el) return;
+    el.classList.toggle('is-end', Math.abs(el.scrollLeft) + el.clientWidth >= el.scrollWidth - 2);
+  }
+  useEffect(() => {
+    const el = stripRef.current;
+    const tab = el?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (el && tab && el.scrollWidth > el.clientWidth) {
+      tab.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+    markEnd();
+  }, [active, tabs.length]);
+
   return (
     <div className="ctx-bar">
-      <div className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      <div
+        ref={stripRef}
+        className="ctx-tabs"
+        role="tablist"
+        aria-label={label}
+        onKeyDown={onKeyDown}
+        onScroll={markEnd}
+      >
         {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (

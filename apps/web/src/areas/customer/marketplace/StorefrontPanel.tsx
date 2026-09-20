@@ -6,17 +6,10 @@ import { Amount, Serial } from '../../../shared/ui/Serial';
 import { formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
-import { Button, EmptyState, Panel, SuccessNote } from '../../../shared/ui/primitives';
+import { displayName } from '../../../shared/timeline';
+import { Button, EmptyState, Panel } from '../../../shared/ui/primitives';
 import { IconSearch } from '../../../shared/ui/icons';
-
-interface StorefrontListing {
-  id: string;
-  askingPrice: number;
-  serialNumber: string;
-  typeClass: string;
-  description: string;
-  conditionGrade: string | null;
-}
+import { ListingActions, type Listing } from './ListingActions';
 
 /**
  * A collector's public storefront — everything one seller currently has for sale.
@@ -26,20 +19,37 @@ interface StorefrontListing {
  * ACTIVE listings appear, because a sold or delisted card is not for sale and
  * advertising it would send people to a button that cannot work.
  *
- * The seller's own link is shown here rather than buried, since the whole point
- * of the feature is having something to send somebody.
+ * The shop being viewed is in the URL (`?seller=`), so the link a seller copies
+ * opens THEIR shop — it used to open the reader's own whatever the link said —
+ * and every card in it can be bought or offered on, which a storefront with no
+ * buy button could not.
  */
 export function StorefrontPanel({
   myUsername,
+  seller,
+  onSeller,
+  mine,
+  onBuy,
+  onOffer,
+  onManage,
   onError,
 }: {
   myUsername?: string;
+  /** `?seller=` from the route. Absent: the reader's own shop. */
+  seller?: string;
+  onSeller: (username: string) => void;
+  mine: ReadonlySet<string>;
+  onBuy: (l: Listing) => void;
+  onOffer: (l: Listing) => void;
+  onManage: () => void;
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
-  const [username, setUsername] = useState(myUsername ?? '');
+  const target = seller ?? myUsername;
+  const [username, setUsername] = useState(target ?? '');
   const [viewing, setViewing] = useState<string | null>(null);
-  const [listings, setListings] = useState<StorefrontListing[] | null>(null);
+  const [listings, setListings] = useState<Listing[] | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const normalized = normalizeUsername(username);
   const ok = isValidUsername(normalized);
@@ -47,8 +57,8 @@ export function StorefrontPanel({
   const open = useCallback(
     async (who: string) => {
       try {
-        const data = await api.get<{ username: string; listings: StorefrontListing[] }>(
-          `/marketplace/sellers/${who}`,
+        const data = await api.get<{ username: string; listings: Listing[] }>(
+          `/marketplace/sellers/${encodeURIComponent(who)}`,
         );
         setViewing(data.username);
         setListings(data.listings);
@@ -60,56 +70,69 @@ export function StorefrontPanel({
     [onError],
   );
 
-  // Land on the reader's own storefront: the first question somebody has about
-  // this page is "what does mine look like".
   useEffect(() => {
-    if (myUsername) void open(myUsername);
-  }, [myUsername, open]);
+    if (!target) return;
+    setUsername(target);
+    void open(target);
+  }, [target, open]);
+
+  const myLink = myUsername
+    ? `${window.location.origin}${window.location.pathname}#/marketplace/store?seller=${myUsername}`
+    : null;
 
   return (
     <>
       <Panel title={t('market.store.title')} subtitle={t('market.store.subtitle')}>
-        <div className="row" style={{ alignItems: 'end', maxWidth: 560 }}>
+        <form
+          className="row"
+          style={{ alignItems: 'end', maxWidth: 560 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ok) onSeller(normalized);
+          }}
+        >
           <label className="field" style={{ flex: '1 1 220px' }}>
             <span className="field-label">{t('market.propose.username')}</span>
             <input value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" />
           </label>
-          <Button
-            variant="secondary"
-            icon={<IconSearch />}
-            disabled={!ok}
-            onClick={() => void open(normalized)}
-          >
+          <Button type="submit" variant="secondary" icon={<IconSearch />} disabled={!ok}>
             {t('market.store.view')}
           </Button>
-        </div>
+        </form>
 
-        {myUsername && (
-          <SuccessNote>
-            {t('market.store.yourLink', { link: `#/marketplace/store?seller=${myUsername}` })}
-          </SuccessNote>
+        {myLink && (
+          <div className="stack stack--tight stack-top">
+            <span className="field-label">{t('market.store.yourLinkLabel')}</span>
+            <div className="row" style={{ gap: 'var(--sp-2)' }}>
+              <code className="code-inline" dir="ltr" style={{ overflowWrap: 'anywhere' }}>
+                {myLink}
+              </code>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(myLink).then(() => setCopied(true));
+                }}
+              >
+                {copied ? t('market.linkCopied') : t('market.copyLink')}
+              </Button>
+            </div>
+          </div>
         )}
       </Panel>
 
       {viewing && (
         <Panel
           title={t('market.store.of', { username: viewing })}
-          subtitle={
-            listings === null ? undefined : t('market.listingsCount', { count: listings.length })
-          }
+          subtitle={listings === null ? undefined : t('market.listingsCount', { count: listings.length })}
         >
           {listings === null ? null : listings.length === 0 ? (
-            <EmptyState
-              title={t('market.store.empty')}
-              text={t('market.store.emptyText')}
-            />
+            <EmptyState title={t('market.store.empty')} text={t('market.store.emptyText')} />
           ) : (
             /*
-              A public storefront is the vault's register, read-only: the same
-              columns, the same components, the same order — photograph, price,
-              serial, name. It was the last surface still titling an item with
-              its `type_class`, and the only listing surface not using the
-              register at all.
+              A public storefront is the vault's register: the same columns, the
+              same components, the same order — photograph, price, serial, name —
+              and the same Buy and Make offer as the shelf.
             */
             <ul className="card-grid card-grid--listings">
               {listings.map((l) => (
@@ -124,12 +147,20 @@ export function StorefrontPanel({
                     <h3 className="card-title">
                       <Serial value={l.serialNumber} />
                     </h3>
-                    <p className="card-desc">{l.description || '—'}</p>
+                    <p className="card-desc">{displayName(l.description) || '—'}</p>
                   </div>
                   <div className="card-state">
+                    <span>{t('vault.condition', { grade: l.conditionGrade ?? '—' })}</span>
                     <span className="card-sub">{itemClassLabel(t, l.typeClass)}</span>
                   </div>
-                  <div />
+                  <ListingActions
+                    listing={l}
+                    mine={mine.has(l.id)}
+                    t={t}
+                    onBuy={onBuy}
+                    onOffer={onOffer}
+                    onManage={onManage}
+                  />
                 </li>
               ))}
             </ul>

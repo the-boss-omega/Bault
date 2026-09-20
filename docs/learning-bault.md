@@ -2,8 +2,8 @@
 
 A paced route through [DIVE1](../DIVE1.md) to the understanding of someone who built Bault:
 explain any behaviour, trace any request, debug a failure, extend a subsystem safely, and judge
-the design. It is built on the verified edition of DIVE1 (19 September 2026, commit `ab67079`);
-every link below goes to a DIVE1 subsection.
+the design. It is built on the verified edition of DIVE1 (19 September 2026, commit `ab67079`,
+with the 20 September round of fixes folded in); every link below goes to a DIVE1 subsection.
 
 ## How it works
 
@@ -654,7 +654,7 @@ row, every fee, with `file:line`. Check it against §5, §6, §7 and §9.
 
 ### S32 · Media, inspection, items that leave, custom requests · 75 min
 
-**Read.** [§8.7](../DIVE1.md#s8-7) · [§8.8](../DIVE1.md#s8-8) · [§8.12](../DIVE1.md#s8-12)–[§8.17](../DIVE1.md#s8-17) · **Open.** `media.service.ts` · `disposal-services.service.ts` · `donation.service.ts` · `lot-split.service.ts` · `custom-request.service.ts`
+**Read.** [§8.7](../DIVE1.md#s8-7) · [§8.8](../DIVE1.md#s8-8) · [§8.12](../DIVE1.md#s8-12)–[§8.18](../DIVE1.md#s8-18) · **Open.** `media.service.ts` · `disposal-services.service.ts` · `donation.service.ts` · `lot-split.service.ts` · `custom-request.service.ts`
 **Trace.** A donation confirm — every row it writes.
 **Recall.** 1. Which table holds videos? 2. Which items does de-slab refuse, and what does it do to the grade? 3. What is the cull's window and cost? 4. Who owns a donated item? 5. When is a custom request billed, and why not through the billing port?
 **Checkpoint.** Show how two concurrent accept-quote calls could debit twice.
@@ -738,7 +738,7 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S1.** 1. `user` (collector areas), `warehouse_operator` (warehouse console), `admin` (admin console). 2. Any four of: items never deleted; one owner; append-only history; balance = sum of ledger; prices frozen onto charges; one chokepoint for fixed-price actions; successful state changes audited. 3. `shipped`, `donated`, `consigned`, `discarded`. 4. Delaware levies no sales tax, so it is a forwarding site; New Jersey stores goods. 5. The API and the web app; not the worker (`pnpm dev:worker`).
 
-**S2.** 1. PgBouncer's transaction pooling can't carry pg-boss LISTEN/NOTIFY or DDL, so jobs and migrations use a direct URL. 2. Nothing — it is off. It is parsed strictly by `booleanFromEnv`; it used to *enable* the docs, because `z.coerce.boolean` reads "false" as true. 3. `loadDotenvFromRoot` walks up to six directories to the root `.env`. 4. Sandbox storage, shipping or payment; console email; docs exposed without a password. 5. Nothing.
+**S2.** 1. PgBouncer's transaction pooling can't carry pg-boss LISTEN/NOTIFY or DDL, so jobs and migrations use a direct URL. 2. Nothing — it is off. It is parsed strictly by `booleanFromEnv`; it used to *enable* the docs, because `z.coerce.boolean` reads "false" as true. 3. `loadDotenvFromRoot` walks up to six directories to the root `.env`. 4. Sandbox storage, shipping or payment; console email; docs exposed without a password. 5. The HMAC on media URLs (`med/media-url.ts`) — and nothing else; it does not sign the session cookie, whatever `.env.example` says.
 
 **S3.** 1. Throttler, then session, then roles. 2. Cross-module services come from `@Global` kernels. 3. `pay.module.ts:31`, with `useExisting`. 4. It isn't `@Public`. 5. `EXPOSE_API_DOCS` set to `true`, `1`, `yes` or `on` (plus Basic auth when a password is set).
 
@@ -756,7 +756,7 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S10.** 1. The `trg_no_delete_item` trigger. 2. Yes — a no-op. 3. `dispatch`. 4. No. 5. In each caller, plus `relocate`.
 
-**S11.** 1. At `process`, once. 2. A 409 unless the operator gives a reason. 3. No. 4. The shelf with the fewest items, ties broken by barcode. 5. Hidden in production only.
+**S11.** 1. At `process`, once. 2. A 409 unless the operator gives a reason. 3. No. 4. The shelf with the fewest items, ties broken by barcode. 5. Hidden in production only — and since 20 September the seed ships real demo addresses, so the filter only fires for a site nobody has configured.
 
 **S12.** 1. Five separate items at $1 each. 2. The item class's own intake rule. 3. No. 4. Only through the validate-first pass. 5. It keeps being billed for storage.
 
@@ -784,7 +784,7 @@ non-member; (3) name which invariants the code keeps, which it only intends, and
 
 **S24.** 1. Through `scheduled_tier`, applied at renewal via `coalesce`. 2. Nothing. 3. The period row is looked up by exact equality through a JS `Date` (milliseconds), while Postgres stores microseconds. 4. The window has passed and it isn't renewed yet — everything bills at the ordinary price. 5. The membership is left lapsed.
 
-**S25.** 1. `parcel_damaged` and `arrival_not_accepted`. 2. In-app on, email off. 3. Active accounts only. 4. At-least-once. 5. As static modules in the SPA.
+**S25.** 1. `parcel_damaged` and `arrival_not_accepted`. 2. In-app on, email off. 3. Active accounts only. 4. At-least-once. 5. As static modules in the SPA (`faqContent.ts`, Bault's own, in both languages since 20 September).
 
 **S26.** 1. UTC. 2. A singleton key per 60 seconds. 3. 2 retries, 0 delay, 15-minute expiry. 4. So it sees the day's interest. 5. Interest accrual always; outbox dispatch and renewal if runs overlap.
 

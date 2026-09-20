@@ -45,8 +45,11 @@ export interface Destination {
   postalCode: string;
   name?: string;
   street1?: string;
+  street2?: string;
   city?: string;
   region?: string;
+  /** So a courier can reach the recipient; some carriers require it internationally. */
+  phone?: string;
 }
 
 /**

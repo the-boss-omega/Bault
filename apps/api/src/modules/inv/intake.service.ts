@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -295,7 +295,30 @@ export class IntakeService {
         throw AppError.validation(`Unit ${index + 1} of ${units.length}: ${reason}`);
       }
     }
-    return created;
+    return this.withShelves(created as { binId?: string | null }[]);
+  }
+
+  /**
+   * Each unit with the shelf it was actually put on.
+   *
+   * A mixed run is stowed unit by unit — a card to ordinary shelving, a sealed
+   * case to oversized — so one "stow to" line on the bench could not be right
+   * for all of them. The shelf travels back with each unit and is printed on its
+   * label, which is what the operator carries to the aisle.
+   */
+  private async withShelves<T extends { binId?: string | null }>(rows: T[]) {
+    const ids = [...new Set(rows.map((r) => r.binId).filter((id): id is string => Boolean(id)))];
+    const shelves = ids.length
+      ? await this.db
+          .select({ id: bin.id, serialNumber: bin.serialNumber, zone: bin.zone })
+          .from(bin)
+          .where(inArray(bin.id, ids))
+      : [];
+    const byId = new Map(shelves.map((b) => [b.id, b]));
+    return rows.map((r) => {
+      const shelf = r.binId ? byId.get(r.binId) : undefined;
+      return { ...r, binSerial: shelf?.serialNumber ?? null, binZone: shelf?.zone ?? null };
+    });
   }
 
   /**
@@ -527,6 +550,6 @@ export class IntakeService {
     }
     // Mark the lot broken (it stays in the ledger as the origin of the children).
     await this.db.update(item).set({ lotBroken: true, updatedAt: new Date() }).where(eq(item.id, lotItemId));
-    return { lotItemId, producedCount: produced.length, items: produced };
+    return { lotItemId, producedCount: produced.length, items: await this.withShelves(produced) };
   }
 }

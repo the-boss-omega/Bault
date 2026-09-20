@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import { AllowSuspended } from './allow-suspended.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -22,9 +22,12 @@ class CreateAddressDto {
   @IsString() label!: string;
   @IsString() recipient!: string;
   @IsString() line1!: string;
+  @IsOptional() @IsString() @MaxLength(120) line2?: string | null;
   @IsString() city!: string;
+  @IsOptional() @IsString() @MaxLength(60) region?: string | null;
   @IsShippableCountry() country!: string;
   @IsString() postalCode!: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string | null;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
@@ -33,9 +36,12 @@ class UpdateAddressDto {
   @IsOptional() @IsString() label?: string;
   @IsOptional() @IsString() recipient?: string;
   @IsOptional() @IsString() line1?: string;
+  @IsOptional() @IsString() @MaxLength(120) line2?: string | null;
   @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() @MaxLength(60) region?: string | null;
   @IsOptional() @IsShippableCountry() country?: string;
   @IsOptional() @IsString() postalCode?: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string | null;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 

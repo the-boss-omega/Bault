@@ -98,7 +98,7 @@ export class SupController {
     return this.support.assign(id, { id: user.id, role: user.role });
   }
 
-  @Roles('warehouse_operator', 'admin')
+  /** The owner may close their own ticket; the service enforces which is which. */
   @Post('tickets/:id/resolve')
   resolve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.support.resolve(id, { id: user.id, role: user.role });

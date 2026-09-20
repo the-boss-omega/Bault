@@ -697,5 +697,25 @@ describe('SHP outbound shipping', () => {
     const shipment = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
     expect(shipment.itemIds).toHaveLength(0);
     expect(shipment.serviceKey).toBe('direct_overnight');
+
+    // It can actually leave. With no items there was nothing to scan, so it sat
+    // charged in `rates_selected`; the bench now verifies the parcel's own label.
+    expect(shipment.sourceParcelId).toBe(parcelId);
+    expect(shipment.items).toEqual([expect.objectContaining({ id: parcelId })]);
+    const wrong = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedItemIds: ['not-this-parcel'],
+      carrier: 'FedEx',
+      packageWeightGrams: 120,
+      fulfillmentNotes: 'Overnight envelope',
+    });
+    expect(wrong.status).toBe(409);
+    const dispatched = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedItemIds: [parcelId],
+      carrier: 'FedEx',
+      packageWeightGrams: 120,
+      fulfillmentNotes: 'Overnight envelope',
+    });
+    expect(dispatched.status).toBe(201);
+    expect(dispatched.body.status).toBe('shipped');
   });
 });

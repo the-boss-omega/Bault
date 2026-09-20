@@ -26,6 +26,16 @@ interface Submission {
   createdAt: string;
 }
 
+/** A grading request in the service queue — what a batch's contents are read from. */
+interface QueuedGrading {
+  id: string;
+  code: string | null;
+  type: string;
+  status: string;
+  itemDescription: string | null;
+  typeFields: Record<string, unknown> | null;
+}
+
 interface ReadyRequest {
   id: string;
   code: string | null;
@@ -52,14 +62,33 @@ export function GradingSubmissions() {
   const t = useT();
   const { locale } = useI18n();
   const [submissions, setSubmissions] = useState<Submission[] | null>(null);
-  const [body, setBody] = useState('PSA');
+  /**
+   * The graders Bault sends to, from the tier catalogue. The grader used to be a
+   * free-text box, so "psa" and "PSA " opened two separate batches for one
+   * company, and a request could never be added to the second.
+   */
+  const [graders, setGraders] = useState<string[]>([]);
+  const [body, setBody] = useState('');
+  /** Grading requests in the queue, grouped by the batch they are in. */
+  const [members, setMembers] = useState<Map<string, QueuedGrading[]>>(new Map());
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setSubmissions(await api.get<Submission[]>('/services/grading/submissions'));
+      const [subs, queue] = await Promise.all([
+        api.get<Submission[]>('/services/grading/submissions'),
+        api.get<QueuedGrading[]>('/services/queue'),
+      ]);
+      setSubmissions(subs);
+      const grouped = new Map<string, QueuedGrading[]>();
+      for (const q of queue) {
+        const id = q.type === 'third_party_grading' ? q.typeFields?.submissionId : undefined;
+        if (typeof id !== 'string') continue;
+        grouped.set(id, [...(grouped.get(id) ?? []), q]);
+      }
+      setMembers(grouped);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -70,6 +99,19 @@ export function GradingSubmissions() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { tiers } = await api.get<{ tiers: { gradingBody: string }[] }>('/services/grading/tiers');
+        const bodies = [...new Set(tiers.map((tier) => tier.gradingBody))];
+        setGraders(bodies);
+        setBody((current) => current || bodies[0] || '');
+      } catch {
+        /* the open-batch control stays disabled with no grader to choose */
+      }
+    })();
+  }, []);
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try {
@@ -89,7 +131,13 @@ export function GradingSubmissions() {
       <div className="field-row">
         <label className="field">
           <span className="field-label">{t('grade.subs.body')}</span>
-          <input value={body} dir="ltr" style={{ width: '7rem' }} onChange={(e) => setBody(e.target.value)} />
+          <select value={body} onChange={(e) => setBody(e.target.value)} dir="ltr">
+            {graders.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
         </label>
         <Button
           size="sm"
@@ -112,25 +160,45 @@ export function GradingSubmissions() {
       ) : submissions.length === 0 ? (
         <EmptyState title={t('grade.subs.empty')} text={t('grade.subs.emptyText')} icon={<IconBox />} />
       ) : (
-        <div className="dt-wrap">
+        <div className="dt-wrap dt-wrap--stack">
           <table className="data-table">
             <thead>
               <tr>
                 <th scope="col">{t('grade.subs.col.code')}</th>
                 <th scope="col">{t('grade.subs.col.body')}</th>
+                <th scope="col">{t('grade.subs.col.contents')}</th>
                 <th scope="col">{t('grade.subs.col.status')}</th>
                 <th scope="col">{t('grade.subs.col.tracking')}</th>
                 <th scope="col">{t('grade.subs.col.actions')}</th>
               </tr>
             </thead>
             <tbody>
-              {submissions.map((s) => (
+              {submissions.map((s) => {
+                const inside = members.get(s.id) ?? [];
+                return (
                 <tr key={s.id}>
-                  <td dir="ltr">
+                  <td data-label={t('grade.subs.col.code')} dir="ltr">
                     <code>{s.code}</code>
                   </td>
-                  <td dir="ltr">{s.gradingBody}</td>
-                  <td>
+                  <td data-label={t('grade.subs.col.body')} dir="ltr">
+                    {s.gradingBody}
+                  </td>
+                  <td data-label={t('grade.subs.col.contents')}>
+                    {/* What is in the box. After "Add" a card left the waiting
+                        list and appeared nowhere, so nobody could say what a
+                        batch held before shipping it. */}
+                    {inside.length === 0 ? (
+                      <span className="hint">{t('grade.subs.nothingIn')}</span>
+                    ) : (
+                      <>
+                        {t('grade.subs.cards', { count: inside.length })}
+                        <span className="dt-sub">
+                          {inside.map((q) => q.itemDescription ?? q.code ?? '').join(' · ')}
+                        </span>
+                      </>
+                    )}
+                  </td>
+                  <td data-label={t('grade.subs.col.status')}>
                     <StatusBadge tone={SUBMISSION_TONE[s.status] ?? 'neutral'}>
                       {submissionStatusLabel(t, s.status)}
                     </StatusBadge>
@@ -141,11 +209,15 @@ export function GradingSubmissions() {
                       </span>
                     )}
                   </td>
-                  <td dir="ltr">{s.trackingNumber ?? '—'}</td>
-                  <td>
+                  <td data-label={t('grade.subs.col.tracking')} dir="ltr">
+                    {s.trackingNumber ?? '—'}
+                  </td>
+                  <td className="td-actions">
+                    {/* Two different things were both called "Close": hiding
+                        this panel, and marking a shipped batch returned. */}
                     {s.status === 'open' && (
                       <Button size="sm" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
-                        {openId === s.id ? t('ui.close') : t('grade.subs.manage')}
+                        {openId === s.id ? t('grade.subs.hide') : t('grade.subs.manage')}
                       </Button>
                     )}
                     {s.status === 'shipped' && (
@@ -158,12 +230,13 @@ export function GradingSubmissions() {
                           )
                         }
                       >
-                        {t('grade.subs.close')}
+                        {t('grade.subs.markReturned')}
                       </Button>
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -210,6 +283,7 @@ function OpenSubmission({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [added, setAdded] = useState(0);
 
   const body = submission?.gradingBody;
 
@@ -238,6 +312,7 @@ function OpenSubmission({
       await api.post(`/services/grading/submissions/${submission!.id}/add`, { requestId });
       await loadReady();
       onChanged();
+      setAdded((n) => n + 1);
     } catch (e) {
       onError((e as Error).message);
     }
@@ -261,6 +336,7 @@ function OpenSubmission({
   return (
     <div className="stack stack--tight stack-top">
       <h3 className="drawer-heading">{t('grade.subs.waiting', { body: submission.gradingBody })}</h3>
+      {added > 0 && <SuccessNote>{t('grade.subs.addedNote', { count: added })}</SuccessNote>}
 
       {ready === null ? (
         <SkeletonTable rows={2} columns={3} />

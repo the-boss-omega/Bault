@@ -51,7 +51,11 @@ export class DispatchService {
       }
 
       // Scan/verify: EVERY item in the shipment must be verified (set equality).
-      const expected = new Set(s.itemIds as string[]);
+      // A direct-ship shipment has no items — its box is an unopened parcel — so
+      // the one thing to verify is that parcel, by its id (the bench resolves its
+      // PKG- label to it; see `ShipmentService.track`).
+      const direct = s.sourceParcelId !== null && (s.itemIds as string[]).length === 0;
+      const expected = new Set(direct ? [s.sourceParcelId!] : (s.itemIds as string[]));
       const scanned = new Set(form.scannedItemIds);
       const matches = expected.size === scanned.size && [...expected].every((id) => scanned.has(id));
       if (!matches) {
@@ -73,8 +77,11 @@ export class DispatchService {
       const { rate, request } = await this.shipments.labelRequest(s, form.packageWeightGrams);
       const label = await this.shipping.buyLabel(rate, request);
 
-      for (const itemId of expected) {
-        await this.custody.changeState(tx, itemId, 'shipped', operatorId, `dispatched via ${form.carrier}`);
+      // Items leave custody; a direct parcel never entered it.
+      if (!direct) {
+        for (const itemId of expected) {
+          await this.custody.changeState(tx, itemId, 'shipped', operatorId, `dispatched via ${form.carrier}`);
+        }
       }
 
       await tx

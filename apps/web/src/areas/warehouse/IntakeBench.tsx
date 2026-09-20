@@ -8,6 +8,7 @@ import { BarcodeLabel, BarcodePrintAllButton } from '../../shared/Barcode';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 import { Button, Field, IconButton } from '../../shared/ui/primitives';
 import { IconBox, IconClose, IconPlus } from '../../shared/ui/icons';
+import { NoteLine, useNote } from './feedback';
 
 /** Where the directed stow wants the next unit to go. */
 export interface StowSuggestion {
@@ -48,6 +49,12 @@ interface UnitDraft {
 }
 
 let seq = 0;
+/** What a label says under the bars: the card, and the shelf it goes to. */
+function labelCaption(l: { barcode: string; description?: string; binSerial?: string | null }): string {
+  const what = l.description?.trim() || l.barcode;
+  return l.binSerial ? `${what} → ${l.binSerial}` : what;
+}
+
 const blankUnit = (): UnitDraft => ({
   key: `unit-${(seq += 1)}`,
   typeClass: ITEM_CLASSES[0]?.key ?? 'trading_card',
@@ -104,10 +111,15 @@ export function IntakeBench({
   // from here because there was none of the right kind to be sent to.
   const [rescueZone, setRescueZone] = useState('');
   const [rescuing, setRescuing] = useState(false);
-  const [labels, setLabels] = useState<{ id: string; barcode: string; description?: string }[]>([]);
+  const [labels, setLabels] = useState<
+    { id: string; barcode: string; description?: string; binSerial?: string | null }[]
+  >([]);
   const [openParcels, setOpenParcels] = useState<ParcelQueueRow[]>([]);
   const [emptyReason, setEmptyReason] = useState('');
   const [busy, setBusy] = useState(false);
+  // Said beside the Book-in button: an intake error reported only to the log
+  // appeared at the foot of the page, thousands of pixels from the operator.
+  const { note, ok, fail } = useNote();
   const [closing, setClosing] = useState(false);
 
   const loadParcels = useCallback(async () => {
@@ -160,6 +172,12 @@ export function IntakeBench({
   // suggestion serves the submission, and the wrong kind of shelf for one unit
   // is worse than a larger shelf for the rest.
   const oversized = units.some((u) => itemClassOption(u.typeClass)?.oversized ?? false);
+  /**
+   * A run with both kinds in it is stowed unit by unit — a card to ordinary
+   * shelving, a sealed case to oversized — so no single "stow to" is true for
+   * all of it. The bench says so, and each label carries its own shelf.
+   */
+  const mixed = oversized && units.some((u) => !(itemClassOption(u.typeClass)?.oversized ?? false));
 
   /**
    * Ask where this goes. Re-asked whenever the answer could change — the classes
@@ -253,13 +271,17 @@ export function IntakeBench({
         lotSize: single && isLot && lotAllowed ? lotSize : undefined,
       }));
 
-      const created = await api.post<{ id: string; barcode: string }[]>('/intake/items/batch', {
-        units: payload,
-      });
+      const created = await api.post<{ id: string; barcode: string; binSerial?: string | null }[]>(
+        '/intake/items/batch',
+        {
+          units: payload,
+        },
+      );
       setLabels(
         created.map((made, index) => ({ ...made, description: filled[index]?.description })),
       );
       onLog(t('intake.bulkDone', { count: created.length }));
+      ok(t('intake.bulkDone', { count: created.length }));
       setUnits([blankUnit()]);
       setIsLot(false);
       // The shelf just used is one unit fuller and the box that many emptier;
@@ -267,7 +289,9 @@ export function IntakeBench({
       await Promise.all([askForBin(), loadParcels()]);
       await onDone();
     } catch (e) {
-      onLog(t('warehouse.log.intakeError', { message: (e as Error).message }));
+      const line = t('warehouse.log.intakeError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     } finally {
       setBusy(false);
     }
@@ -285,13 +309,16 @@ export function IntakeBench({
         emptyReason: emptyReason.trim() || undefined,
       });
       onLog(t('warehouse.intake.parcelClosed', { code: parcel.code }));
+      ok(t('warehouse.intake.parcelClosed', { code: parcel.code }));
       setParcelId('');
       setEmptyReason('');
       onParcelClosed();
       await loadParcels();
       await onDone();
     } catch (e) {
-      onLog(t('warehouse.log.intakeError', { message: (e as Error).message }));
+      const line = t('warehouse.log.intakeError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     } finally {
       setClosing(false);
     }
@@ -340,7 +367,9 @@ export function IntakeBench({
         {stowMode === 'auto' ? (
           <div className="field">
             <span className="field-label">{t('warehouse.intake.stowTarget')}</span>
-            {suggestion ? (
+            {mixed ? (
+              <span className="field-hint">{t('warehouse.intake.stowMixed')}</span>
+            ) : suggestion ? (
               <>
                 <strong dir="ltr">{suggestion.serialNumber}</strong>
                 <span className="field-hint">
@@ -519,6 +548,7 @@ export function IntakeBench({
             : t('warehouse.intake.submit')}
         </Button>
       </div>
+      <NoteLine note={note} />
 
       {/* The box being worked through, and the end of the work. The count is the
           reconciliation the workflow never had: an operator can see that nothing
@@ -568,15 +598,13 @@ export function IntakeBench({
               <p className="hint">{t('warehouse.intake.labelsHint')}</p>
             </div>
             <span className="spacer" />
-            <BarcodePrintAllButton
-              labels={labels.map((l) => ({ value: l.barcode, caption: l.description || l.barcode }))}
-            />
+            <BarcodePrintAllButton labels={labels.map((l) => ({ value: l.barcode, caption: labelCaption(l) }))} />
           </div>
 
           <ul className="card-grid">
             {labels.map((l) => (
               <li key={l.id} className="card">
-                <BarcodeLabel value={l.barcode} caption={l.description || l.barcode} />
+                <BarcodeLabel value={l.barcode} caption={labelCaption(l)} />
               </li>
             ))}
           </ul>

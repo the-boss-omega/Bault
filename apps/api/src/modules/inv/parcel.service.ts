@@ -30,6 +30,8 @@ export type ParcelStatus =
  * product decision and belongs somewhere a person can read it in one go.
  *
  *   expected ──▶ received ──▶ opened ──▶ processed
+ *                    │                        ▲
+ *                    ├────────────────────────┘  (shipped direct, unopened)
  *                    │
  *                    ├──▶ unclaimed ──▶ disposed
  *                    └──▶ disposed          ▲
@@ -41,7 +43,9 @@ export type ParcelStatus =
  */
 const TRANSITIONS: Record<ParcelStatus, readonly ParcelStatus[]> = {
   expected: ['received', 'disposed'],
-  received: ['opened', 'unclaimed', 'disposed'],
+  // `processed` straight from `received` is Direct from Delaware: the parcel
+  // leaves as it arrived, never opened and never booked in.
+  received: ['opened', 'unclaimed', 'disposed', 'processed'],
   opened: ['processed', 'disposed'],
   processed: [],
   unclaimed: ['received', 'disposed'],

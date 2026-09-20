@@ -23,6 +23,8 @@ import {
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
+import { errorText } from '../../../shared/errors';
+import { PROFILE_CHANGED } from '../../../shared/session';
 
 /**
  * `GET /me/profile`.
@@ -50,9 +52,13 @@ interface Address {
   label: string;
   recipient: string;
   line1: string;
+  line2: string | null;
   city: string;
+  /** State or province; a US label is routed by it. */
+  region: string | null;
   country: string;
   postalCode: string;
+  phone: string | null;
   isDefault: boolean;
 }
 
@@ -136,6 +142,8 @@ export function ProfilePage() {
       setFirstName(p.firstName ?? '');
       setLastName(p.lastName ?? '');
       setStatus(t('profile.status.nameSaved'));
+      // The account menu shows the name too; tell the shell to re-read it.
+      window.dispatchEvent(new Event(PROFILE_CHANGED));
       setError(null);
     } catch (e) {
       setError(describe(e));
@@ -313,6 +321,7 @@ export function ProfilePage() {
       {tab === 'security' && (
         <TabPanel tab="security">
           <PasswordPanel onStatus={setStatus} onError={setError} />
+          <SessionsPanel onStatus={setStatus} onError={setError} />
         </TabPanel>
       )}
 
@@ -345,10 +354,9 @@ export function ProfilePage() {
  * real owner out of their own account. `POST /auth/password/change` verifies it
  * with argon2 before writing anything.
  *
- * Sessions are deliberately NOT revoked on success. `SessionService` resolves a
- * session against its own row, not against the password hash, so existing
- * sessions survive — including this one, which is why the page stays usable
- * afterwards instead of bouncing the user to sign-in.
+ * A change ends every OTHER session — a password changed because it leaked
+ * should not leave the thief signed in — and keeps this one, so the page stays
+ * usable. The API says how many it ended, and the confirmation repeats it.
  */
 function PasswordPanel({
   onStatus,
@@ -373,13 +381,17 @@ function PasswordPanel({
   async function save() {
     setBusy(true);
     try {
-      await api.post('/auth/password/change', { currentPassword: current, newPassword: next });
+      const res = await api.post<{ otherSessionsEnded?: number }>('/auth/password/change', {
+        currentPassword: current,
+        newPassword: next,
+      });
       setCurrent('');
       setNext('');
       setConfirm('');
-      onStatus(t('profile.password.changed'));
+      const ended = res?.otherSessionsEnded ?? 0;
+      onStatus(ended > 0 ? t('profile.password.changedEnded', { count: ended }) : t('profile.password.changed'));
     } catch (e) {
-      onError((e as Error).message);
+      onError(errorText(t, e));
     } finally {
       setBusy(false);
     }
@@ -448,6 +460,63 @@ function PasswordPanel({
 }
 
 /**
+ * Sign out everywhere else.
+ *
+ * A phone left at a show, a shared computer: the session there is still good
+ * for days. This ends every session except the one pressing the button, and
+ * says how many that was.
+ */
+function SessionsPanel({
+  onStatus,
+  onError,
+}: {
+  onStatus: (message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const { t } = useI18n();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function revoke() {
+    setBusy(true);
+    try {
+      const res = await api.post<{ otherSessionsEnded: number }>('/auth/sessions/revoke-others');
+      onStatus(
+        res.otherSessionsEnded > 0
+          ? t('profile.sessions.ended', { count: res.otherSessionsEnded })
+          : t('profile.sessions.none'),
+      );
+      setConfirming(false);
+    } catch (e) {
+      onError(errorText(t, e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel title={t('profile.sessions.heading')} subtitle={t('profile.sessions.subtitle')}>
+      <div className="row">
+        {confirming ? (
+          <>
+            <Button variant="danger" loading={busy} onClick={() => void revoke()}>
+              {t('profile.sessions.confirm')}
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>
+              {t('ui.cancel')}
+            </Button>
+          </>
+        ) : (
+          <Button variant="secondary" onClick={() => setConfirming(true)}>
+            {t('profile.sessions.revoke')}
+          </Button>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/**
  * One saved address: read-only card that flips into an inline edit form
  * (Requirement 4.2 — addresses are added, edited and removed from this page).
  */
@@ -468,7 +537,13 @@ function AddressCard({
   const [draft, setDraft] = useState(address);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.country !== 'US' || Boolean(draft.region?.trim()));
 
   async function save() {
     try {
@@ -476,15 +551,18 @@ function AddressCard({
         label: draft.label,
         recipient: draft.recipient,
         line1: draft.line1,
+        line2: draft.line2 ?? '',
         city: draft.city,
+        region: draft.region ?? '',
         country: draft.country,
         postalCode: draft.postalCode,
+        phone: draft.phone ?? '',
         isDefault: draft.isDefault,
       });
       setEditing(false);
       await onSaved();
     } catch (e) {
-      onError((e as Error).message);
+      onError(errorText(t, e));
     }
   }
 
@@ -501,8 +579,9 @@ function AddressCard({
         {/* The country is stored as a code; a card reading "San Francisco, US"
             has swapped one unreadable value for another. */}
         <p className="card-desc">
-          {address.line1}, {address.city}, {countryName(address.country, countries)}{' '}
-          {address.postalCode}
+          {[address.line1, address.line2, address.city, address.region].filter(Boolean).join(', ')},{' '}
+          {countryName(address.country, countries)} {address.postalCode}
+          {address.phone && <span className="dt-sub" dir="ltr">{address.phone}</span>}
         </p>
         <div className="actions">
           <Button
@@ -579,6 +658,14 @@ function AddressFields({
           autoComplete="address-line1"
         />
       </Field>
+      <Field label={t('profile.addressForm.line2')} htmlFor={`${id}-line2`}>
+        <input
+          id={`${id}-line2`}
+          value={draft.line2 ?? ''}
+          onChange={(e) => set({ line2: e.target.value })}
+          autoComplete="address-line2"
+        />
+      </Field>
       <Field label={t('profile.addressForm.city')} htmlFor={`${id}-city`}>
         <input
           id={`${id}-city`}
@@ -615,12 +702,34 @@ function AddressFields({
           ))}
         </select>
       </Field>
+      <Field
+        label={t('profile.addressForm.region')}
+        hint={draft.country === 'US' ? t('profile.addressForm.regionHintUs') : undefined}
+        htmlFor={`${id}-region`}
+      >
+        <input
+          id={`${id}-region`}
+          value={draft.region ?? ''}
+          onChange={(e) => set({ region: e.target.value })}
+          autoComplete="address-level1"
+        />
+      </Field>
       <Field label={t('profile.addressForm.postalCode')} htmlFor={`${id}-postal`}>
         <input
           id={`${id}-postal`}
           value={draft.postalCode}
           onChange={(e) => set({ postalCode: e.target.value })}
           autoComplete="postal-code"
+          dir="ltr"
+        />
+      </Field>
+      <Field label={t('profile.addressForm.phone')} hint={t('profile.addressForm.phoneHint')} htmlFor={`${id}-phone`}>
+        <input
+          id={`${id}-phone`}
+          type="tel"
+          value={draft.phone ?? ''}
+          onChange={(e) => set({ phone: e.target.value })}
+          autoComplete="tel"
           dir="ltr"
         />
       </Field>
@@ -648,17 +757,26 @@ function AddressForm({
     label: '',
     recipient: '',
     line1: '',
+    line2: null,
     city: '',
+    region: null,
     // No default. A pre-filled country is a country nobody checked, and the one
     // that used to be here was a display name that no carrier rule recognised.
     country: '',
     postalCode: '',
+    phone: null,
     isDefault: false,
   };
   const [draft, setDraft] = useState<AddressDraft>(empty);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.country !== 'US' || Boolean(draft.region?.trim()));
 
   async function add() {
     try {
@@ -666,7 +784,7 @@ function AddressForm({
       setDraft(empty);
       await onAdded();
     } catch (e) {
-      onError((e as Error).message);
+      onError(errorText(t, e));
     }
   }
 

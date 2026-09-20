@@ -31,6 +31,20 @@ export interface StowTarget {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * The states in which an item is physically on a shelf in the building.
+ *
+ * An item keeps its `bin_id` after it leaves — shipped, donated, consigned,
+ * discarded, or away at a grader — so counting every row with a bin counted
+ * cards that were hundreds of miles away. A sold card stays shelved (the buyer
+ * now owns it), so `sold` is on the list.
+ */
+export const ON_SHELF_STATES = ['received', 'stored', 'listed', 'on-hold', 'sold'] as const;
+
+/** SQL predicate: the item is on a shelf right now. */
+export const onShelf = () =>
+  sql`${item.lifecycleState} in ${sql.raw(`(${ON_SHELF_STATES.map((s) => `'${s}'`).join(', ')})`)}`;
+
+/**
  * Where a thing goes, and how the operator says which thing and which shelf.
  *
  * Two jobs, both of them about the gap between a warehouse and a form.
@@ -123,7 +137,7 @@ export class StowService {
     const counts = this.db
       .select({ binId: item.binId, n: sql<number>`count(*)::int`.as('n') })
       .from(item)
-      .where(sql`${item.binId} is not null`)
+      .where(sql`${item.binId} is not null and ${onShelf()}`)
       .groupBy(item.binId)
       .as('counts');
 

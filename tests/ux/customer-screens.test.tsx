@@ -22,6 +22,8 @@ vi.mock('../../apps/web/src/shared/api', () => ({
     del: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
+  // `errorText` asks the module which failure this was.
+  apiErrorKey: () => null,
 }));
 
 vi.mock('../../apps/web/src/shared/Barcode', () => ({

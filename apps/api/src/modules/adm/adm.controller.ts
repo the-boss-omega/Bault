@@ -7,15 +7,19 @@ import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ShelfYieldService } from './shelf-yield.service';
 import { AdmService } from './adm.service';
+import { itemLifecycle } from '../cst/cst.schema';
 
 class UpdateUserDto {
   @IsOptional() @IsIn(['user', 'warehouse_operator', 'admin']) role?: 'user' | 'warehouse_operator' | 'admin';
   @IsOptional() @IsIn(['pending', 'active', 'suspended', 'closed']) status?: 'pending' | 'active' | 'suspended' | 'closed';
   // Two name parts, never a free-text display name (see shared/names).
   @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) firstName?: string;
-  @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) lastName?: string;
+  // Null (or blank) clears it; a last name is optional.
+  @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) lastName?: string | null;
   // `username` is deliberately absent — immutable once set (Requirement 4.1).
 }
+
+type ItemLifecycleState = (typeof itemLifecycle.enumValues)[number];
 
 class UpdateItemDto {
   @IsOptional() @IsString() typeClass?: string;
@@ -23,8 +27,11 @@ class UpdateItemDto {
   @IsOptional() @IsString() conditionGrade?: string;
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() binId?: string;
-  @IsOptional() @IsIn(['received', 'stored', 'listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned'])
-  lifecycleState?: 'received' | 'stored' | 'listed' | 'on-hold' | 'sold' | 'shipped' | 'donated' | 'consigned';
+  // Every state the enum has. `at_grader` and `discarded` were missing, so any
+  // edit to an item in either state failed validation before it was read.
+  @IsOptional()
+  @IsIn(['received', 'stored', 'listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned', 'at_grader', 'discarded'])
+  lifecycleState?: ItemLifecycleState;
   @IsOptional() @IsBoolean() holdFlag?: boolean;
 }
 

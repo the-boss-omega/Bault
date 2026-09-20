@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsIn,
   IsOptional,
+  IsNotEmpty,
   IsString,
   MaxLength,
   MinLength,
@@ -22,7 +23,13 @@ import { ParcelService } from './parcel.service';
 class RegisterParcelDto {
   @IsString() facilityCode!: string;
   @IsOptional() @IsString() @MaxLength(60) carrier?: string;
-  @IsOptional() @IsString() @MaxLength(120) trackingNumber?: string;
+  /**
+   * Required. Registering exists so the bench can match an arriving box to its
+   * owner, and the tracking number is the only thing it matches on — a
+   * registration without one was an empty parcel record that could never be
+   * matched to anything.
+   */
+  @IsString() @IsNotEmpty() @MaxLength(120) trackingNumber!: string;
   @IsOptional() @IsString() @MaxLength(500) declaredContents?: string;
   @IsOptional() @IsBoolean() internationalOrigin?: boolean;
   @IsOptional() @IsString() expectedAt?: string;

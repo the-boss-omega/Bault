@@ -35,9 +35,12 @@ export interface AddressInput {
   label: string;
   recipient: string;
   line1: string;
+  line2?: string | null;
   city: string;
+  region?: string | null;
   country: string;
   postalCode: string;
+  phone?: string | null;
   isDefault?: boolean;
 }
 
@@ -50,6 +53,12 @@ export type AddressPatch = Partial<AddressInput>;
  * PII exposure is what the PII interceptor guards for non-admins (Principle IX).
  * Address access is strictly own-only: every query filters by the caller's id.
  */
+/** An optional field left blank is absent, not an empty string on the label. */
+function blankToNull(value: string | null | undefined): string | null {
+  const v = value?.trim();
+  return v ? v : null;
+}
+
 @Injectable()
 export class ProfileService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -121,7 +130,10 @@ export class ProfileService {
           label: dto.label,
           recipient: dto.recipient,
           line1: dto.line1,
+          line2: blankToNull(dto.line2),
           city: dto.city,
+          region: blankToNull(dto.region),
+          phone: blankToNull(dto.phone),
           // Stored as the code the carrier rules read, whatever shape it arrived
           // in — the validator has already established it resolves to one.
           country: toCountryCode(dto.country) ?? dto.country,
@@ -151,6 +163,9 @@ export class ProfileService {
       for (const f of ['label', 'recipient', 'line1', 'city', 'country', 'postalCode'] as const) {
         if (patch[f] === undefined) continue;
         set[f] = f === 'country' ? (toCountryCode(patch[f]!) ?? patch[f]) : patch[f];
+      }
+      for (const f of ['line2', 'region', 'phone'] as const) {
+        if (patch[f] !== undefined) set[f] = blankToNull(patch[f]);
       }
       if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
       if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');

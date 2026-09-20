@@ -141,6 +141,12 @@ export const shipment = pgTable('shipment', {
 
   /* ---- being changed, merged, cancelled or left unpaid ---- */
 
+  /**
+   * The unopened parcel a direct-ship shipment IS. Such a shipment has no items
+   * — its contents never entered the vault — so the packing bench verifies it by
+   * scanning this parcel's label, and the label is bought from its facility.
+   */
+  sourceParcelId: text('source_parcel_id'),
   /** Set when this request was absorbed into another by a merge. */
   mergedIntoShipmentId: text('merged_into_shipment_id'),
   /** The shared parcel this belongs to, if any. */

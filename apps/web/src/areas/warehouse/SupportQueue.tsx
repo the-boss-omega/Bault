@@ -3,6 +3,7 @@ import { api } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { formatDateTime } from '../../shared/money';
 import { useNavigation, useRoute } from '../../shared/routing';
+import { loadProfile } from '../../shared/session';
 import {
   TICKET_TONE,
   ticketCategoryLabel,
@@ -38,6 +39,14 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
 
   const [rows, setRows] = useState<SupportQueueRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Who is looking, so a taken ticket can say whether it is theirs. */
+  const [meId, setMeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadProfile()
+      .then((p) => setMeId(p.id))
+      .catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -72,7 +81,7 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
         ) : rows.length === 0 ? (
           <EmptyState title={t('supportQueue.empty')} text={t('supportQueue.emptyText')} icon={<IconAsk />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -87,14 +96,14 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
-                    <td className="dt-primary">
+                    <td className="dt-primary" data-label={t('support.col.subject')}>
                       {row.subject}
                       <span className="dt-sub" dir="ltr">
                         {row.code}
                       </span>
                     </td>
-                    <td>
-                      <code dir="ltr">{row.customerUsername ?? '—'}</code>
+                    <td data-label={t('supportQueue.col.customer')}>
+                      <code dir="ltr">{row.customerUsername ? `@${row.customerUsername}` : '—'}</code>
                       {/* A locked-out customer asking about being locked out is
                           the ticket most likely to be urgent and least likely to
                           be obvious from the subject line. */}
@@ -106,14 +115,23 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
                         </span>
                       )}
                     </td>
-                    <td>{ticketCategoryLabel(t, row.category)}</td>
-                    <td>
+                    <td data-label={t('support.col.category')}>{ticketCategoryLabel(t, row.category)}</td>
+                    <td data-label={t('support.col.status')}>
                       <StatusBadge tone={TICKET_TONE[row.status] ?? 'neutral'}>
                         {ticketStatusLabel(t, row.status, true)}
                       </StatusBadge>
+                      {/* Taken, and by whom: "Take" used to leave no trace, so
+                          two operators could both answer the same customer. */}
+                      {row.assignedTo && (
+                        <span className="dt-sub">
+                          {row.assignedTo === meId ? t('supportQueue.takenByYou') : t('supportQueue.takenByColleague')}
+                        </span>
+                      )}
                     </td>
-                    <td dir="ltr">{formatDateTime(row.lastMessageAt, locale)}</td>
-                    <td className="td-tight">
+                    <td data-label={t('supportQueue.col.waiting')} dir="ltr">
+                      {formatDateTime(row.lastMessageAt, locale)}
+                    </td>
+                    <td className="td-tight td-actions">
                       <div className="actions">
                         <Button size="sm" variant="gold" onClick={() => openRecord('ticket', row.id)}>
                           {t('support.open')}

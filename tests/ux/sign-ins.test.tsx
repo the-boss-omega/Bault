@@ -14,6 +14,8 @@ const get = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: { get: (...a: unknown[]) => get(...a), post: vi.fn(), patch: vi.fn(), del: vi.fn() },
   ApiError: class ApiError extends Error {},
+  // `errorText` asks the module which failure this was.
+  apiErrorKey: () => null,
 }));
 
 const { SignInsSection } = await import('../../apps/web/src/areas/admin/SignInsSection');

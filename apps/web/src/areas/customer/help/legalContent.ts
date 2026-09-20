@@ -7,13 +7,12 @@
  * reads as binding while having been authored by nobody.
  *
  * Bault has not yet published its own Terms of Service, Privacy Policy or
- * Cookie Policy. Those appear in `PENDING_DOCUMENTS` so the viewer can name
- * them and say plainly that they are not published — never with body text.
+ * Cookie Policy. The Legal tab says so in one sentence and points to support;
+ * it no longer lists them as rows of "Not published", which read as a set of
+ * documents that were somehow missing rather than as one fact.
  *
- * Two authoritative documents ship today:
- *
- *   1. ACCOUNT USE & BALANCE POLICY — authored by Bault. It is here rather than
- *      in `PENDING_DOCUMENTS` because every clause in it states a rule the code
+ *   1. ACCOUNT USE & BALANCE POLICY — authored by Bault, and the one customer
+ *      document in `LEGAL_DOCUMENTS`. Every clause in it states a rule the code
  *      actually enforces, and the enforcement points are named in the text so a
  *      reader can check the claim: username immutability is a database trigger,
  *      the debt thresholds are the values the daily sweep reads from
@@ -24,7 +23,9 @@
  *   2. SIL OPEN FONT LICENSE 1.1, which governs the bundled Libertinus Math
  *      font and whose reproduction is a condition of using it. Copied verbatim
  *      from the licence file distributed with the font (also served at
- *      /fonts/OFL.txt).
+ *      /fonts/OFL.txt). It is an open-source notice, not an agreement with the
+ *      customer, so it lives in `OPEN_SOURCE_NOTICES` and the page shows it
+ *      under that heading instead of as a legal document beside the policy.
  *
  * Body text is English in both, and is not translated. Rendering a legal text in
  * a language its author did not write it in creates a second version that can
@@ -51,16 +52,6 @@ export interface LegalDocument {
   downloadPath: string | null;
   sections: LegalSection[];
 }
-
-/**
- * Documents Bault has not authored yet. Named so users are not left guessing
- * whether terms exist, and deliberately carrying no body text.
- */
-export const PENDING_DOCUMENTS: readonly string[] = [
-  'legal.pending.terms',
-  'legal.pending.privacy',
-  'legal.pending.cookies',
-];
 
 export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   {
@@ -132,6 +123,10 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       }
     ]
   },
+];
+
+/** Licences for software bundled with Bault — shown as notices, not as terms. */
+export const OPEN_SOURCE_NOTICES: readonly LegalDocument[] = [
   {
     "id": "ofl-1-1",
     "title": "SIL Open Font License, Version 1.1",

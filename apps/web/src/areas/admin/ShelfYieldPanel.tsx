@@ -135,6 +135,7 @@ export function ShelfYieldPanel() {
 
   const occupied = (data?.shelves ?? []).filter((s) => s.itemCount > 0);
   const bestShelf = Math.max(0, ...occupied.map((s) => s.revenuePerSlotMonthMinor ?? 0));
+  const bestZone = Math.max(0, ...(zones ?? []).map((z) => z.revenuePerSlotMonthMinor ?? 0));
   const bestCustomer = Math.max(0, ...(customers ?? []).map((c) => c.revenuePerSlotMonthMinor ?? 0));
 
   return (
@@ -254,7 +255,13 @@ export function ShelfYieldPanel() {
         {zones !== null && zones.length > 0 && (
           <div className="panel-note">
             <YieldChart
-              title={t('yield.chart.title')}
+              // The title names what is plotted: the ratio once occupancy has
+              // accrued, plain revenue until then (see YieldChart).
+              title={
+                zones.some((z) => z.revenuePerSlotMonthMinor !== null)
+                  ? t('yield.chart.title')
+                  : t('yield.chart.titleRevenue')
+              }
               subtitle={t('yield.chart.subtitle')}
               rows={zones.map((z) => ({
                 label: z.zone,
@@ -303,7 +310,8 @@ export function ShelfYieldPanel() {
                       {formatUsd(z.revenueMinor)}
                     </td>
                     <td data-label={t('yield.col.perSlotMonth')}>
-                      <YieldCell value={z.revenuePerSlotMonthMinor} best={bestShelf} />
+                      {/* Zones are scaled against the best ZONE, not the best shelf. */}
+                      <YieldCell value={z.revenuePerSlotMonthMinor} best={bestZone} />
                     </td>
                   </tr>
                 ))}

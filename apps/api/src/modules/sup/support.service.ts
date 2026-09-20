@@ -227,10 +227,18 @@ export class SupportService {
     });
   }
 
-  /** Staff mark a ticket done. A later customer reply reopens it. */
+  /**
+   * Mark a ticket done. A later customer reply reopens it.
+   *
+   * Staff close a ticket they have answered; the person who RAISED it can close
+   * their own, which is the ordinary case of "never mind, I worked it out" —
+   * they could only leave it open and wait for somebody else to close it.
+   */
   async resolve(ticketId: string, actor: TicketActor) {
-    if (!this.staff(actor)) throw AppError.forbidden('Only staff can resolve a ticket');
     const ticket = await this.loadFor(ticketId, actor);
+    if (!this.staff(actor) && ticket.userId !== actor.id) {
+      throw AppError.forbidden('Only staff or the person who raised it can resolve a ticket');
+    }
     if (ticket.status === 'resolved') {
       throw new AppError(ErrorCode.CONFLICT, 'Ticket is already resolved', 409);
     }

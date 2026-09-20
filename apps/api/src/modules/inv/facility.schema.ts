@@ -17,8 +17,9 @@ import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
  *                and takes days — and is worth it when the destination state
  *                charges no sales tax and the origin state does.
  *
- * `sales_tax_bps` is what makes the second address worth using at all, and it is
- * stored per facility rather than hard-coded so a rate change is a data change.
+ * `sales_tax_ppm` (parts per million: 6.625% is 66250) is what makes the second
+ * address worth using at all, and it is stored per facility rather than
+ * hard-coded so a rate change is a data change.
  * It is recorded for GUIDANCE only: Bault is not the seller and does not collect
  * or remit anybody's sales tax. It exists so the app can tell a collector what a
  * purchase would cost them at each address instead of leaving them to work it out.
@@ -48,7 +49,7 @@ export const facility = pgTable(
      * Zero means the address is in a state that levies none — which is the
      * entire reason a forwarding facility earns its forwarding cost.
      */
-    salesTaxBps: integer('sales_tax_bps').notNull().default(0),
+    salesTaxPpm: integer('sales_tax_ppm').notNull().default(0),
 
     /** Where a forwarding facility sends what it receives. Null for `primary`. */
     forwardsToFacilityId: text('forwards_to_facility_id'),

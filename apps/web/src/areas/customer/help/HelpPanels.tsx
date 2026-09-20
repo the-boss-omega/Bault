@@ -11,14 +11,13 @@ import {
   StatusBadge,
 } from '../../../shared/ui/primitives';
 import {
-  IconAlert,
   IconAsk,
   IconCalendar,
   IconChevronRight,
   IconLocation,
   IconSearch,
 } from '../../../shared/ui/icons';
-import { GUIDES, GUIDE_CATEGORIES, guide, matchesGuideSearch, type Guide } from './guideContent';
+import { GUIDES, GUIDE_CATEGORIES, guide, matchesGuideSearch, type Guide, type GuideLocale } from './guideContent';
 
 /* ============================================================
    Guides — the written half of "video tutorials for each workflow"
@@ -27,14 +26,15 @@ import { GUIDES, GUIDE_CATEGORIES, guide, matchesGuideSearch, type Guide } from 
 /**
  * Step-by-step walkthroughs of every workflow, with real routes.
  *
- * The reference service publishes YouTube tutorials. Bault has none, and this
- * screen says so where a player would be rather than pretending otherwise — a
- * fabricated video link that 404s is worse than an empty state that is honest.
- * What it does have is the part a video would be a recording OF: the ordered
- * steps, each naming the screen it happens on, with a link that goes there.
+ * Written rather than filmed: the ordered steps, each naming the screen it
+ * happens on, with a link that goes there — which is the part a recording would
+ * be a recording OF, and the part that can be kept correct. Both languages are
+ * in the content, so a Hebrew reader is not handed a page of English at the
+ * moment they are asking how something works.
  */
 export function GuidesPanel() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const lang = locale as GuideLocale;
   const route = useRoute();
   const { openRecord, closeRecord } = useNavigation(route);
   const [query, setQuery] = useState('');
@@ -51,7 +51,7 @@ export function GuidesPanel() {
     [category, query],
   );
 
-  if (open) return <GuideDetail g={open} onBack={() => closeRecord('g')} />;
+  if (open) return <GuideDetail g={open} locale={lang} onBack={() => closeRecord('g')} />;
 
   return (
     <Panel title={t('guide.title')} subtitle={t('guide.subtitle')}>
@@ -89,10 +89,10 @@ export function GuidesPanel() {
           {shown.map((g) => (
             <li key={g.id} className="card card--interactive">
               <button type="button" className="card-hit" onClick={() => openRecord('g', g.id)}>
-                <span className="sr-only">{g.title}</span>
+                <span className="sr-only">{g.title[lang]}</span>
               </button>
-              <h3 className="card-title">{g.title}</h3>
-              <p className="card-desc">{g.summary}</p>
+              <h3 className="card-title">{g.title[lang]}</h3>
+              <p className="card-desc">{g.summary[lang]}</p>
               <div className="card-meta">
                 <StatusBadge tone="info" plain>
                   {t(`guide.cat.${g.category}` as MessageKey)}
@@ -108,21 +108,20 @@ export function GuidesPanel() {
   );
 }
 
-function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
+function GuideDetail({ g, locale, onBack }: { g: Guide; locale: GuideLocale; onBack: () => void }) {
   const { t } = useI18n();
   const related = (g.related ?? []).map((id) => guide(id)).filter((x): x is Guide => Boolean(x));
 
   return (
-    <Panel title={g.title} subtitle={g.summary} tools={<Button size="sm" variant="ghost" onClick={onBack}>{t('guide.back')}</Button>}>
-      {/* The absence of a recording is a fact about Bault, so it is stated
-          rather than hidden by omitting the section. */}
-      {g.video === null && (
-        <p className="drawer-note drawer-note--archive">
-          <IconAlert />
-          <span>{t('guide.noVideo')}</span>
-        </p>
-      )}
-
+    <Panel
+      title={g.title[locale]}
+      subtitle={g.summary[locale]}
+      tools={
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          {t('guide.back')}
+        </Button>
+      }
+    >
       <ol className="timeline stack-top">
         {g.steps.map((step, index) => (
           <li key={index} className="detail-row" style={{ display: 'block' }}>
@@ -130,14 +129,16 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
               <StatusBadge tone="neutral" plain>
                 {index + 1}
               </StatusBadge>
+              {/* The screen itself, by name. It used to print the raw hash route. */}
               {step.route && (
-                <a className="hint" href={step.route} dir="ltr">
-                  {step.route}
+                <a className="link-more" href={step.route}>
+                  {t('guide.openScreen')}
+                  <IconChevronRight />
                 </a>
               )}
             </div>
-            <p style={{ marginBlockStart: 4 }}>{step.text}</p>
-            {step.note && <p className="hint">{step.note}</p>}
+            <p style={{ marginBlockStart: 4 }}>{step.text[locale]}</p>
+            {step.note && <p className="hint">{step.note[locale]}</p>}
           </li>
         ))}
       </ol>
@@ -148,7 +149,7 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
           <ul className="check-list list-unbounded">
             {related.map((r) => (
               <li key={r.id}>
-                <span>{r.title}</span>
+                <span>{r.title[locale]}</span>
                 <a className="hint" href={`#/faq/guides?g=${r.id}`}>
                   {t('guide.open')} <IconChevronRight />
                 </a>
@@ -285,18 +286,19 @@ interface Location {
   city: string;
   region: string;
   country: string;
-  salesTaxBps: number;
+  salesTaxPpm: number;
   forwardingDays: number | null;
 }
 
 /**
  * How to reach a person.
  *
- * Every published channel comes from configuration, and an unconfigured one
- * says so instead of showing a plausible placeholder somebody might dial. The
- * helpdesk is listed first and unconditionally, because it is the route that
- * works regardless of whether anybody has filled a variable in — and it is the
- * one that arrives attached to your account, your items and your codes.
+ * Every published channel comes from configuration, and an unconfigured one is
+ * left out rather than shown as a row reading "Not published" — three of those
+ * under a heading called Contact read as a company with no way to reach it. The
+ * helpdesk is first and unconditional: it works regardless of whether anybody
+ * has filled a variable in, and it arrives attached to your account, your items
+ * and your codes.
  */
 export function ContactPanel() {
   const { t } = useI18n();
@@ -327,44 +329,51 @@ export function ContactPanel() {
         <div className="stack stack--tight" style={{ maxWidth: 620 }}>
           <div>
             <StatusBadge tone="gold">{t('contact.best')}</StatusBadge>
-            <p style={{ marginBlockStart: 'var(--sp-2)' }}>{t('contact.helpdeskBody')}</p>
-            <Button variant="gold" size="sm" onClick={() => { window.location.hash = '#/support/tickets'; }}>
+            <p className="measure" style={{ marginBlockStart: 'var(--sp-2)' }}>
+              {t('contact.helpdeskBody')}
+            </p>
+            <Button
+              variant="gold"
+              size="sm"
+              onClick={() => {
+                window.location.hash = '#/support/new';
+              }}
+            >
               {t('contact.openHelpdesk')}
             </Button>
           </div>
 
-          <dl className="detail-list stack-top">
-            <div className="detail-row">
-              <dt className="detail-label">{t('contact.email')}</dt>
-              <dd className="detail-value">
-                {contact?.email ? (
-                  <a href={`mailto:${contact.email}`} dir="ltr">
-                    {contact.email}
-                  </a>
-                ) : (
-                  <span className="hint">{t('contact.notPublished')}</span>
-                )}
-              </dd>
-            </div>
-            <div className="detail-row">
-              <dt className="detail-label">{t('contact.phone')}</dt>
-              <dd className="detail-value">
-                {contact?.phone ? (
-                  <a href={`tel:${contact.phone.replace(/\s+/g, '')}`} dir="ltr">
-                    {contact.phone}
-                  </a>
-                ) : (
-                  <span className="hint">{t('contact.notPublished')}</span>
-                )}
-              </dd>
-            </div>
-            <div className="detail-row">
-              <dt className="detail-label">{t('contact.hours')}</dt>
-              <dd className="detail-value">
-                {contact?.hours ?? <span className="hint">{t('contact.notPublished')}</span>}
-              </dd>
-            </div>
-          </dl>
+          {/* Only the channels that are actually published. */}
+          {(contact?.email || contact?.phone || contact?.hours) && (
+            <dl className="detail-list stack-top">
+              {contact?.email && (
+                <div className="detail-row">
+                  <dt className="detail-label">{t('contact.email')}</dt>
+                  <dd className="detail-value">
+                    <a href={`mailto:${contact.email}`} dir="ltr">
+                      {contact.email}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {contact?.phone && (
+                <div className="detail-row">
+                  <dt className="detail-label">{t('contact.phone')}</dt>
+                  <dd className="detail-value">
+                    <a href={`tel:${contact.phone.replace(/\s+/g, '')}`} dir="ltr">
+                      {contact.phone}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {contact?.hours && (
+                <div className="detail-row">
+                  <dt className="detail-label">{t('contact.hours')}</dt>
+                  <dd className="detail-value">{contact.hours}</dd>
+                </div>
+              )}
+            </dl>
+          )}
 
           {(contact?.team.length ?? 0) > 0 && (
             <>
@@ -402,7 +411,7 @@ export function ContactPanel() {
                   <StatusBadge tone={l.role === 'primary' ? 'gold' : 'info'} plain>
                     {t(`contact.role.${l.role}` as MessageKey)}
                   </StatusBadge>
-                  {l.salesTaxBps === 0 && <StatusBadge tone="success" plain>{t('contact.taxFree')}</StatusBadge>}
+                  {l.salesTaxPpm === 0 && <StatusBadge tone="success" plain>{t('contact.taxFree')}</StatusBadge>}
                 </span>
               </li>
             ))}

@@ -106,6 +106,8 @@ export interface WalletRequestEvent {
 
 export interface WalletRequestDetail extends WalletRequest {
   history: WalletRequestEvent[];
+  /** A readable, expiring URL for the supporting document, when there is one. */
+  documentUrl?: string | null;
 }
 
 export function statusLabel(t: TranslateFn, status: string): string {

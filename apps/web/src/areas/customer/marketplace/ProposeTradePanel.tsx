@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { useVaultItems } from '../../../shared/useVaultItems';
+import { displayName } from '../../../shared/timeline';
+import { itemClassLabel } from '../../../shared/itemClasses';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox, IconSearch } from '../../../shared/ui/icons';
@@ -42,7 +44,7 @@ export function ProposeTradePanel({
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
-  const { items } = useVaultItems(true);
+  const { items, reload } = useVaultItems(true);
 
   const [username, setUsername] = useState('');
   const [counterparty, setCounterparty] = useState<Collector | null>(null);
@@ -128,6 +130,8 @@ export function ProposeTradePanel({
       }
       setOffered({});
       setWanted([]);
+      // The cards just offered are spoken for now; they leave the picker.
+      await reload();
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -193,7 +197,8 @@ export function ProposeTradePanel({
                     }
                   />
                   <span>
-                    {item.typeClass} — {item.description}
+                    {item.serialNumber && <code dir="ltr">{item.serialNumber}</code>}{' '}
+                    {displayName(item.description) || itemClassLabel(t, item.typeClass)}
                   </span>
                 </label>
               </li>
@@ -220,8 +225,8 @@ export function ProposeTradePanel({
                 {wanted.map((w) => (
                   <li key={w.id}>
                     <span>
-                      {w.typeClass} — {w.description}{' '}
-                      <code dir="ltr">{w.serialNumber}</code>
+                      <code dir="ltr">{w.serialNumber}</code>{' '}
+                      {displayName(w.description) || itemClassLabel(t, w.typeClass)}
                     </span>
                     <Button
                       size="sm"

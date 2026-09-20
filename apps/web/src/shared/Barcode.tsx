@@ -201,7 +201,13 @@ export function BarcodePrintButton({
   );
 }
 
-/** The common pairing: the scannable symbol plus its print button. */
+/**
+ * The common pairing: the scannable symbol plus its print button.
+ *
+ * The caption is shown on screen as well as printed. It used to go only to the
+ * printer, so a bench of freshly minted labels was a row of identical-looking
+ * barcodes with nothing saying which card each one belonged to.
+ */
 export function BarcodeLabel({
   value,
   caption,
@@ -214,6 +220,7 @@ export function BarcodeLabel({
   return (
     <div className="barcode-label">
       <Barcode value={value} options={options} />
+      {caption && caption !== value && <span className="barcode-caption">{caption}</span>}
       <BarcodePrintButton value={value} caption={caption} />
     </div>
   );

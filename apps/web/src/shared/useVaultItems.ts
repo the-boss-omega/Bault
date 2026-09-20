@@ -8,13 +8,20 @@ export interface VaultItem {
   conditionGrade: string | null;
   lifecycleState: string;
   barcode: string;
+  serialNumber?: string;
+  holdFlag?: boolean;
+  /** Already promised to a shipment, a trade, a deal or a service. */
+  commitment?: { kind: string; code: string | null } | null;
 }
 
 /**
  * Loads the signed-in customer's vault items so the UI can offer a PICKER instead
  * of a free-text id field. Passing a real item UUID (not a typed barcode/name) is
  * what prevents the "invalid input syntax for type uuid" 500s on services/shipping.
- * `storedOnly` filters to items that are eligible for services/shipping/listing.
+ * `storedOnly` filters to items that are eligible for services/shipping/listing:
+ * stored, not on hold, and not already promised to something else. A card on an
+ * open shipment used to be offered again for sale, for a trade and for another
+ * shipment, and only the last step failed.
  */
 export function useVaultItems(storedOnly = false) {
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -23,7 +30,11 @@ export function useVaultItems(storedOnly = false) {
   const reload = useCallback(async () => {
     try {
       const all = await api.get<VaultItem[]>('/vault/items');
-      setItems(storedOnly ? all.filter((i) => i.lifecycleState === 'stored') : all);
+      setItems(
+        storedOnly
+          ? all.filter((i) => i.lifecycleState === 'stored' && !i.holdFlag && !i.commitment)
+          : all,
+      );
       setError(null);
     } catch (e) {
       setError((e as Error).message);

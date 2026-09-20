@@ -113,3 +113,24 @@ export function renderContent(content: unknown, label: string): string {
     });
   return parts.length > 0 ? `${label} — ${parts.join(', ')}` : label;
 }
+
+/**
+ * Where a notification leads: the screen on which the thing it reports can be
+ * seen or acted on. Matched by the event's family, so a new event in a known
+ * family already goes somewhere sensible; an unknown one leads nowhere.
+ */
+export function eventRoute(eventType: string): { section: string; tab?: string } | null {
+  const rules: [RegExp, { section: string; tab?: string }][] = [
+    [/^(offer_|item_sold|swap_|listing_)/, { section: 'marketplace', tab: 'offers' }],
+    [/^escrow_/, { section: 'marketplace', tab: 'escrow' }],
+    [/^(parcel_|arrival_not_accepted)/, { section: 'inbound', tab: 'parcels' }],
+    [/^(shipment_|direct_ship|handed_over|white_glove|show_pickup|group_shipment)/, { section: 'shipping-services', tab: 'tracking' }],
+    [/^(custom_request|buyout_|service_|grading_|inspection_|video_|photography_|consignment_)/, { section: 'shipping-services', tab: 'requests' }],
+    [/^support_/, { section: 'support', tab: 'tickets' }],
+    [/^(wallet_|topup_|payment_)/, { section: 'wallet', tab: 'requests' }],
+    [/^membership_/, { section: 'membership' }],
+    [/^(item_|hold_|commons_|storage_)/, { section: 'vault', tab: 'active' }],
+  ];
+  for (const [pattern, route] of rules) if (pattern.test(eventType)) return route;
+  return null;
+}

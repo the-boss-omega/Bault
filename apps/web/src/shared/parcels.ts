@@ -110,7 +110,7 @@ export interface InboundAddress {
   postalCode: string;
   country: string;
   phone: string | null;
-  salesTaxBps: number;
+  salesTaxPpm: number;
   forwardingDays: number | null;
 }
 
@@ -139,16 +139,16 @@ export function addressLines(address: InboundAddress): string[] {
   ];
 }
 
-/** Basis points → a display percentage, e.g. 6625 → "6.625%". */
-export function taxRateLabel(bps: number): string {
-  if (bps === 0) return '0%';
-  return `${(bps / 100).toFixed(3).replace(/\.?0+$/, '')}%`;
+/** Parts per million → a display percentage, e.g. 66250 → "6.625%". */
+export function taxRateLabel(ppm: number): string {
+  if (ppm === 0) return '0%';
+  return `${(ppm / 10_000).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
 /**
  * What a purchase of `amountMinor` would cost in destination sales tax at this
  * address. Guidance only — Bault is not the seller and remits nobody's tax.
  */
-export function estimatedTaxMinor(amountMinor: number, bps: number): number {
-  return Math.round((amountMinor * bps) / 10_000);
+export function estimatedTaxMinor(amountMinor: number, ppm: number): number {
+  return Math.round((amountMinor * ppm) / 1_000_000);
 }

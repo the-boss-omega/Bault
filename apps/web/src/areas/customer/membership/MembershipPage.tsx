@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { formatUsd, formatDate } from '../../../shared/money';
+import { useMediaQuery } from '../../../shared/hooks';
 import { Button, ErrorState, Panel, SkeletonBlock, SuccessNote } from '../../../shared/ui/primitives';
 import {
   COMPARISON_ROWS,
@@ -46,6 +47,14 @@ export function MembershipPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  /** Cancelling is confirmed first: it ends the cover that stops the storage clock. */
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  // A phone can't fit four tier columns: it compares one tier at a time, chosen
+  // above the table, starting on the collector's own tier.
+  const narrow = useMediaQuery('(max-width: 767px)');
+  const [phoneTier, setPhoneTier] = useState<string | null>(null);
+  const shownTier = phoneTier ?? mine?.tier ?? catalogue?.tiers[0]?.key ?? null;
+  const tableTiers = (catalogue?.tiers ?? []).filter((tier) => !narrow || tier.key === shownTier);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,6 +119,7 @@ export function MembershipPage() {
     setNotice(null);
     try {
       const res = await api.post<{ endsAt: string }>('/membership/cancel', {});
+      setConfirmCancel(false);
       setNotice(t('membership.cancelled', { date: formatDate(res.endsAt, locale) }));
       await load();
     } catch (e) {
@@ -219,9 +229,21 @@ export function MembershipPage() {
 
           {mine.status === 'active' && (
             <div className="actions">
-              <Button variant="ghost" loading={busy === 'cancel'} onClick={() => void cancel()}>
-                {t('membership.cancel')}
-              </Button>
+              {confirmCancel ? (
+                <>
+                  <span className="hint">{t('membership.cancelConfirm')}</span>
+                  <Button variant="danger" loading={busy === 'cancel'} onClick={() => void cancel()}>
+                    {t('membership.cancelYes')}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setConfirmCancel(false)}>
+                    {t('membership.cancelKeep')}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" onClick={() => setConfirmCancel(true)}>
+                  {t('membership.cancel')}
+                </Button>
+              )}
             </div>
           )}
         </Panel>
@@ -229,13 +251,28 @@ export function MembershipPage() {
 
       {/* ---- The tiers, as one table ---- */}
       <Panel title={t('membership.tiers.title')} subtitle={t('membership.tiers.subtitle')}>
+        {catalogue && narrow && (
+          <div className="state-controls mem-tier-switch" role="group" aria-label={t('membership.tiers.title')}>
+            {catalogue.tiers.map((tier) => (
+              <button
+                key={tier.key}
+                type="button"
+                className={`state-control${shownTier === tier.key ? ' is-on' : ''}`}
+                aria-pressed={shownTier === tier.key}
+                onClick={() => setPhoneTier(tier.key)}
+              >
+                <span className="state-label">{t(tierNameKey(tier.key))}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {catalogue && (
           <div className="dt-wrap">
             <table className="data-table mem-table">
               <thead>
                 <tr>
                   <th scope="col">{t('membership.col.included')}</th>
-                  {catalogue.tiers.map((tier) => (
+                  {tableTiers.map((tier) => (
                     <th scope="col" key={tier.key} className="num">
                       <span className="mem-tier-name">{t(tierNameKey(tier.key))}</span>
                       <span className="mem-tier-price amount">
@@ -250,7 +287,7 @@ export function MembershipPage() {
                 {COMPARISON_ROWS.map((row) => (
                   <tr key={row}>
                     <th scope="row">{t(rowLabelKey(row))}</th>
-                    {catalogue.tiers.map((tier) => {
+                    {tableTiers.map((tier) => {
                       const cell = allowanceCell(tier, row);
                       return (
                         <td key={tier.key} className="num">
@@ -268,7 +305,7 @@ export function MembershipPage() {
                 ))}
                 <tr>
                   <th scope="row">{t('membership.row.perks')}</th>
-                  {catalogue.tiers.map((tier) => (
+                  {tableTiers.map((tier) => (
                     <td key={tier.key}>
                       <ul className="mem-perks">
                         {tier.perks.map((p) => (
@@ -315,7 +352,10 @@ export function MembershipPage() {
                   ) : confirming === tier.key ? (
                     <>
                       <Button variant="gold" loading={busy === tier.key} onClick={() => void subscribe(tier)}>
-                        {t('membership.confirmYes')}
+                        {/* "Confirm and charge" only when something is charged today. */}
+                        {(action.kind === 'join' || action.kind === 'upgrade') && action.chargeMinor > 0
+                          ? t('membership.confirmYes')
+                          : t('membership.confirmNoCharge')}
                       </Button>
                       <Button variant="ghost" onClick={() => setConfirming(null)}>
                         {t('ui.cancel')}

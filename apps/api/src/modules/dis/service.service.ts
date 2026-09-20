@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -10,6 +10,10 @@ import { WalletService } from '../pay/wallet.service';
 import { serviceRequest } from './dis.schema';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
+import { shipment } from '../shp/shp.schema';
+
+/** Shipment statuses that still have a claim on their items (mirrors `ShipmentService.OPEN_STATUSES`). */
+const OPEN_SHIPMENT = ['requested', 'awaiting_payment', 'rates_selected', 'picking', 'packed', 'labeled'] as const;
 
 type ServiceType =
   | 'batch_split'
@@ -98,6 +102,7 @@ export class ServiceRequestService {
     if (!input.allowDuplicate) {
       await this.assertNotAlreadyOpen(tx, input.type, input.requesterId, input.itemId);
     }
+    await this.assertNotShipping(tx, input.itemId);
     if (!input.free) {
       await this.billing.charge(tx, {
         userId: input.requesterId,
@@ -139,6 +144,34 @@ export class ServiceRequestService {
    * Batch-scoped requests (`itemId` absent) are not covered: those are keyed on
    * a parcel, and a parcel legitimately carries several.
    */
+  /**
+   * No paid work on a card that is packed to leave.
+   *
+   * A card on an open shipment took a $20 photo shoot and a $25 grading request,
+   * then shipped with both still open — the operator was never going to see it
+   * again. The refusal names the shipment, so the collector can cancel it first
+   * if the service is what they really want.
+   */
+  private async assertNotShipping(tx: Database, itemId: string | undefined): Promise<void> {
+    if (!itemId) return;
+    const [open] = await tx
+      .select({ code: shipment.code })
+      .from(shipment)
+      .where(
+        and(
+          inArray(shipment.status, [...OPEN_SHIPMENT]),
+          sql`${shipment.itemIds} @> ${JSON.stringify([itemId])}::jsonb`,
+        ),
+      )
+      .limit(1);
+    if (!open) return;
+    throw new AppError(
+      ErrorCode.CONFLICT,
+      `This card is on shipment ${open.code ?? ''} — cancel the shipment before asking for work on it.`,
+      409,
+    );
+  }
+
   private async assertNotAlreadyOpen(
     tx: Database,
     type: ServiceType,
@@ -183,10 +216,19 @@ export class ServiceRequestService {
   }
 
   /** A customer's own requests (newest first) — the "my requests" list. */
+  /**
+   * A collector's own requests, each with the card it is about — the list used
+   * to say "Photography · Approved" and never which card.
+   */
   listMine(userId: string) {
     return this.db
-      .select()
+      .select({
+        ...getTableColumns(serviceRequest),
+        itemSerial: item.serialNumber,
+        itemDescription: item.description,
+      })
       .from(serviceRequest)
+      .leftJoin(item, eq(item.id, serviceRequest.itemId))
       .where(eq(serviceRequest.requesterId, userId))
       .orderBy(sql`${serviceRequest.createdAt} desc`);
   }
@@ -203,6 +245,7 @@ export class ServiceRequestService {
         typeFields: serviceRequest.typeFields,
         createdAt: serviceRequest.createdAt,
         requesterEmail: userAccount.email,
+        requesterUsername: userAccount.username,
         itemDescription: item.description,
       })
       .from(serviceRequest)

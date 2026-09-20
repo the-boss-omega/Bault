@@ -83,30 +83,40 @@ export class CstController {
   @Roles('warehouse_operator', 'admin')
   @Post('items/:itemId/hold')
   async placeHold(@Param('itemId') itemId: string, @CurrentUser() user: AuthUser) {
-    const changed = await this.relocate.placeHold(itemId, user.id);
+    // The bench scans the label, so take a barcode or serial as well as the id.
+    const target = await this.stow.resolveItem(itemId);
+    const changed = await this.relocate.placeHold(target.id, user.id);
     return { status: changed ? 'hold_placed' : 'already_on_hold', changed };
   }
 
   @Roles('warehouse_operator', 'admin')
   @Delete('items/:itemId/hold')
   async releaseHold(@Param('itemId') itemId: string, @CurrentUser() user: AuthUser) {
-    const changed = await this.relocate.releaseHold(itemId, user.id);
+    const target = await this.stow.resolveItem(itemId);
+    const changed = await this.relocate.releaseHold(target.id, user.id);
     return { status: changed ? 'hold_released' : 'was_not_on_hold', changed };
+  }
+
+  /** One item, by any label the bench can scan. Staff-only, like the history below. */
+  @Roles('warehouse_operator', 'admin')
+  @Get('items/:itemId')
+  lookup(@Param('itemId') itemId: string) {
+    return this.inventory.lookup(itemId);
   }
 
   // Staff-only: these read ANY item, so a customer must use the owner-scoped
   // `/vault/items/:id/timeline` instead (which asserts ownership first).
   @Roles('warehouse_operator', 'admin')
   @Get('items/:itemId/history')
-  history(@Param('itemId') itemId: string) {
-    return this.inventory.history(itemId);
+  async history(@Param('itemId') itemId: string) {
+    return this.inventory.history((await this.stow.resolveItem(itemId)).id);
   }
 
   /** Complete, viewable per-item history timeline (Requirement 13.2). */
   @Roles('warehouse_operator', 'admin')
   @Get('items/:itemId/timeline')
-  timeline(@Param('itemId') itemId: string) {
-    return this.inventory.itemTimeline(itemId);
+  async timeline(@Param('itemId') itemId: string) {
+    return this.inventory.itemTimeline((await this.stow.resolveItem(itemId)).id);
   }
 
   @Roles('warehouse_operator', 'admin')

@@ -316,7 +316,27 @@ export class GradingService {
     return this.custody.run(async (tx) => {
       const req = await this.requests.get(requestId);
       this.requests.assertAccepted(req);
+      if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
       if (!req.itemId) throw AppError.validation('Request has no item');
+      const fields = (req.typeFields as Record<string, unknown>) ?? {};
+      // A card a manager has not cleared can't come back graded: it was never
+      // allowed to go.
+      if (fields.approvalRequired === true && fields.approvalState !== 'approved') {
+        throw new AppError(ErrorCode.CONFLICT, 'This request is still awaiting approval', 409);
+      }
+      // Nor can a card in a batch that hasn't shipped: closing it now would leave
+      // it in the batch, and shipping the batch would then send it to the grader
+      // with its request already closed — stuck `at_grader` for good.
+      if (typeof fields.submissionId === 'string') {
+        const [sub] = await tx
+          .select({ status: gradingSubmission.status })
+          .from(gradingSubmission)
+          .where(eq(gradingSubmission.id, fields.submissionId))
+          .limit(1);
+        if (sub?.status === 'open') {
+          throw new AppError(ErrorCode.CONFLICT, 'This card is in a submission that has not shipped yet', 409);
+        }
+      }
       const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
       if (!it) throw AppError.notFound('Item not found');
 

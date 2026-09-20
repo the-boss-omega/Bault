@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { hasMessage, useI18n, type MessageKey } from './shared/i18n';
 import { ApiError, api, apiErrorKey } from './shared/api';
-import { loadProfile, resetProfileRequest } from './shared/session';
+import { PROFILE_CHANGED, loadProfile, resetProfileRequest } from './shared/session';
 import {
   navigate,
   lastVisitedSection,
@@ -9,7 +9,7 @@ import {
   legacyRedirect,
   useRoute,
 } from './shared/routing';
-import { useMediaQuery, useNotificationFeed } from './shared/hooks';
+import { useAwaitingReply, useMediaQuery, useNotificationFeed } from './shared/hooks';
 import { eventLabel, renderContent } from './shared/notifications';
 import { NavigationRail, type NavDestination } from './shared/ui/NavigationRail';
 import {
@@ -152,6 +152,8 @@ const TAB_PREFIX: Record<string, string> = {
   faq: 'faq.tab.',
   warehouse: 'warehouse.tab.',
   admin: 'admin.section.',
+  profile: 'profile.tab.',
+  notifications: 'notifications.tab.',
 };
 
 /**
@@ -241,6 +243,16 @@ export default function App() {
     }
   }, [loadSession]);
 
+  // A rename on the profile page changes the name in the account menu.
+  useEffect(() => {
+    const reread = () => {
+      resetProfileRequest();
+      void loadSession().catch(() => undefined);
+    };
+    window.addEventListener(PROFILE_CHANGED, reread);
+    return () => window.removeEventListener(PROFILE_CHANGED, reread);
+  }, [loadSession]);
+
   useEffect(() => {
     void probeSession();
   }, [probeSession]);
@@ -323,6 +335,9 @@ export default function App() {
     return (
       <AuthPage
         initialMode={AUTH_ROUTES[route.section] ?? 'signIn'}
+        onModeChange={(mode) =>
+          navigate({ section: mode === 'signUp' ? 'signup' : mode === 'forgot' ? 'forgot' : 'signin' })
+        }
         onSignedIn={(u) => {
           setBoot({ status: 'ready', user: u });
           navigate(
@@ -366,6 +381,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [railOpen, setRailOpen] = useState(false);
   const notifications = useNotificationFeed();
+  const awaitingReply = useAwaitingReply();
 
   const isStaff = user.role === 'warehouse_operator' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
@@ -430,7 +446,15 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
     label: t(s.labelKey),
     icon: s.icon,
     secondary: s.secondary,
-    count: s.key === 'notifications' ? notifications.unseen : undefined,
+    count:
+      s.key === 'notifications'
+        ? notifications.unseen
+        : // A ticket the helpdesk has answered is waiting on the collector, and
+          // nothing said so anywhere: the count sits on Support the way the
+          // unseen count sits on Notifications.
+          s.key === 'support'
+          ? awaitingReply
+          : undefined,
   }));
 
   const spec = SECTIONS.find((s) => s.key === section);
@@ -463,6 +487,38 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   // redirect lands. Placed after every hook so the hook order stays stable.
   if (legacySection) return null;
 
+
+  // Shell settings, together and SEGMENTED: theme, language and the bell are the
+  // same kind of control — they act on the frame rather than on the content — so
+  // they are one object with hairlines between them. The user menu sits beside.
+  const shellControls = (
+    <>
+      <span className="ph-controls">
+        <ThemeToggle />
+        <LanguageSwitcher />
+        <NotificationBell
+          items={notifications.items}
+          unseen={notifications.unseen}
+          onOpen={() => {
+            void notifications.reload();
+            notifications.markSeen();
+          }}
+          onViewAll={() => goto('notifications')}
+          renderTitle={(n) => eventLabel(t, n.eventType)}
+          renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+        />
+      </span>
+      <UserMenu
+        initials={initialsFrom(user.firstName, user.lastName, user.email)}
+        name={fullName(user.firstName, user.lastName) || user.email || t('menu.account')}
+        roleLabel={roleLabel}
+        onProfile={() => goto('profile')}
+        onSettings={() => navigate({ section: 'profile', tab: 'security' })}
+        onSignOut={signOut}
+      />
+    </>
+  );
+
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
@@ -487,7 +543,10 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             <span className="rail-mark" aria-hidden="true">
               B
             </span>
-            <span className="mobile-bar-title">{pageTitle}</span>
+            {/* On a phone the shell's controls live in the top bar, once, instead
+                of in a block under every page title. The page's h1 names the
+                page, so the bar doesn't repeat it. */}
+            <span className="mobile-bar-controls">{shellControls}</span>
           </div>
         )}
 
@@ -496,41 +555,16 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             title={pageTitle}
             crumbs={crumbs}
             actions={
-              <>
-                <AccountPill
-                  username={user.username}
-                  roleLabel={roleLabel}
-                  suspended={suspended}
-                />
-                {/* Shell settings, together and SEGMENTED: theme, language and
-                    the bell are the same kind of control — they act on the frame
-                    rather than on the content — so they are one object with
-                    hairlines between them, not three separately-bordered boxes
-                    strung along the end of the header. */}
-                <span className="ph-controls">
-                  <ThemeToggle />
-                  <LanguageSwitcher />
-                  <NotificationBell
-                    items={notifications.items}
-                    unseen={notifications.unseen}
-                    onOpen={() => {
-                      void notifications.reload();
-                      notifications.markSeen();
-                    }}
-                    onViewAll={() => goto('notifications')}
-                    renderTitle={(n) => eventLabel(t, n.eventType)}
-                    renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+              isMobile ? null : (
+                <>
+                  <AccountPill
+                    username={user.username}
+                    roleLabel={roleLabel}
+                    suspended={suspended}
                   />
-                </span>
-                <UserMenu
-                  initials={initialsFrom(user.firstName, user.lastName, user.email)}
-                  name={fullName(user.firstName, user.lastName) || user.email || t('menu.account')}
-                  roleLabel={roleLabel}
-                  onProfile={() => goto('profile')}
-                  onSettings={() => goto('profile')}
-                  onSignOut={signOut}
-                />
-              </>
+                  {shellControls}
+                </>
+              )
             }
           />
 
@@ -551,7 +585,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
               <NotificationsPage feed={notifications} onSeen={notifications.markSeen} />
             )}
             {section === 'profile' && <ProfilePage />}
-            {section === 'warehouse' && isStaff && <WarehouseConsole />}
+            {section === 'warehouse' && isStaff && <WarehouseConsole isAdmin={isAdmin} />}
             {section === 'admin' && isAdmin && <AdminConsole currentUserId={user.id} />}
           </main>
         </div>

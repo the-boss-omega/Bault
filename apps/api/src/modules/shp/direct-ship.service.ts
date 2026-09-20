@@ -168,8 +168,10 @@ export class DirectShipService {
           code: newShipmentCode(),
           userId,
           // Deliberately empty: nothing was ever booked into the vault, so there
-          // is no item to name. The parcel is the contents.
+          // is no item to name. The parcel is the contents, and is named instead:
+          // the bench verifies the box by scanning ITS label.
           itemIds: [],
+          sourceParcelId: parcelId,
           destinationAddress: formatted,
           recipientName: input.recipientName?.trim() || recipientName,
           destinationCountry: destination.country,
@@ -230,7 +232,9 @@ export class DirectShipService {
       );
 
       // The parcel is answered for. It is not forwarded, not opened and never
-      // becomes items — the trail says so, permanently.
+      // becomes items — the trail says so, permanently. `received → processed`
+      // is legal for exactly this case (see the transition table in
+      // `parcel.service.ts`); it was an unlisted jump before.
       await tx
         .update(parcel)
         .set({ status: 'processed', processedAt: now, updatedAt: now })

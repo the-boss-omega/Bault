@@ -146,6 +146,12 @@
    */
   --ink-2: #62676f;    /* 5.16:1 on the page, 4.74:1 on the sunken surface */
   --ink-on-dark: #f3f4f2;
+  --mask-solid: #000;
+  --mask-clear: transparent;
+  --mobile-bar-h: 56px;
+  /* The phone top bar and the brand mark stay dark in BOTH themes: `--ink`
+     flips to near-white in dark mode and took the bar's white icons with it. */
+  --bar-dark: #111318;
   --ink-on-accent: #ffffff;
 
   /* ============================================================
@@ -436,6 +442,7 @@
     --ink-body: #dcdee0;
     --ink-2: #9aa0a8;
     --ink-on-dark: #f0f1ee;
+    --bar-dark: #0b0c0f;
     --ink-on-accent: #0b0d10;
 
     --custody: #4fbfa2;
@@ -493,6 +500,7 @@
   --ink-body: #dcdee0;
   --ink-2: #9aa0a8;
   --ink-on-dark: #f0f1ee;
+  --bar-dark: #0b0c0f;
   --ink-on-accent: #0b0d10;
 
   --custody: #4fbfa2;
@@ -5225,6 +5233,12 @@ input[type='search'] {
     display: none;
   }
 
+  /* The icon column is sized off the rail width, which is 0 on a phone — so the
+     icons collapsed onto the first letter of every label in the drawer. */
+  .rail-icon {
+    width: 48px;
+  }
+
   .rail-scrim {
     position: fixed;
     inset: 0;
@@ -5259,11 +5273,6 @@ input[type='search'] {
 
   .hero-value {
     font-size: var(--fs-4xl);
-  }
-
-  .panel-head,
-  .panel-body {
-    padding: var(--sp-4);
   }
 
   .data-table thead th,
@@ -7147,6 +7156,144 @@ textarea[aria-invalid='true'] {
     max(var(--sp-3), env(safe-area-inset-right));
 }
 
+/* ---- Phone top bar: the shell's controls, once --------------------------
+   On a phone the theme, language, bell and account controls sit at the end of
+   the dark top bar instead of in a block under every page title. Their popovers
+   drop from the bar and span the screen, since a 360px panel anchored to a 40px
+   button would hang off a 390px phone. */
+
+.mobile-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
+}
+
+.mobile-bar .ph-controls {
+  overflow: visible;
+  border-color: var(--line-on-dark);
+  background: transparent;
+}
+
+.mobile-bar .ph-controls > * {
+  border-inline-start-color: var(--line-on-dark);
+}
+
+.mobile-bar .ph-controls .icon-btn {
+  color: var(--ink-on-dark);
+}
+
+.mobile-bar .pop-wrap {
+  position: static;
+}
+
+.mobile-bar .pop,
+.mobile-bar .pop--wide {
+  position: fixed;
+  inset-block-start: calc(var(--mobile-bar-h, 56px) + env(safe-area-inset-top));
+  inset-inline: var(--sp-3);
+  width: auto;
+  min-width: 0;
+  max-height: calc(100dvh - var(--mobile-bar-h, 56px) - var(--sp-6));
+  overflow-y: auto;
+  color: var(--ink);
+}
+
+/* ---- Panel tools on a phone: wrap under the title, never off the edge ---- */
+
+@media (max-width: 767px) {
+  .panel-tools {
+    flex-wrap: wrap;
+    width: 100%;
+    margin-inline-start: 0;
+  }
+
+  .panel-tools > .control,
+  .panel-tools > .search,
+  .panel-tools > .field {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .panel-tools .control input,
+  .panel-tools .control select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* The account button on the dark top bar: the avatar alone, no light capsule. */
+.mobile-bar .user-trigger {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.mobile-bar .user-trigger > svg {
+  display: none;
+}
+
+.mobile-bar .avatar {
+  background: var(--ink-on-dark);
+  color: var(--ink);
+}
+
+/* ---- Membership on a phone: one tier at a time ---- */
+
+.mem-tier-switch {
+  margin-block-end: var(--sp-3);
+}
+
+@media (max-width: 767px) {
+  .mem-table th[scope='row'] {
+    text-align: start;
+    white-space: normal;
+  }
+}
+
+/* ---- Tab strips on a phone: scroll, and say so -------------------------
+   A strip wider than the screen scrolls sideways; the fade at the far edge is
+   the hint that there is more, and the active tab is scrolled into view. */
+
+@media (max-width: 767px) {
+  .ctx-bar {
+    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+
+  .ctx-tabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-mask-image: linear-gradient(to right, var(--mask-solid) calc(100% - 28px), var(--mask-clear));
+    mask-image: linear-gradient(to right, var(--mask-solid) calc(100% - 28px), var(--mask-clear));
+  }
+
+  [dir='rtl'] .ctx-tabs {
+    -webkit-mask-image: linear-gradient(to left, var(--mask-solid) calc(100% - 28px), var(--mask-clear));
+    mask-image: linear-gradient(to left, var(--mask-solid) calc(100% - 28px), var(--mask-clear));
+  }
+
+  .ctx-tabs.is-end {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .ctx-tab {
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .ctx-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+}
+
 /* ---- Support threads are a register, not a chat -------------------------
    The helpdesk was rendering as rounded chat bubbles alternating left and right.
    Support messages are append-only — they are the record of what a company told
@@ -7635,4 +7782,469 @@ textarea[aria-invalid='true'] {
   flex-wrap: wrap;
   gap: var(--sp-3);
   margin-top: var(--sp-2);
+}
+
+/* ---- Small utilities for registers -------------------------------------- */
+
+/* A code is one token: it never breaks mid-serial inside a row. */
+.nowrap,
+.data-table code,
+.check-list code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* A long description, two lines at most in a list; the drawer has the rest. */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* A date or text input inside a `.control` capsule: the capsule is the border. */
+.control input {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+}
+
+.control-label {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+/* ---- Metric strip on a phone: a stack of rows, not indented columns -------
+   One column on a phone: the vertical rules between cards became a left border
+   and an indent on every card but the first. Rows are separated by a rule above
+   instead. The figure keeps its LTR run but sits at the start of the card, so
+   in Hebrew it lines up under its label rather than at the far edge. */
+
+.metric-value {
+  align-self: flex-start;
+}
+
+@media (max-width: 767px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card,
+  .metric-card:first-child {
+    padding-inline: 0;
+    border-inline-start: 0;
+    border-block-start: var(--border-w) solid var(--line);
+  }
+
+  .metric-card:first-child {
+    border-block-start: 0;
+  }
+}
+
+/* ---- The phone bar's badges: legible on dark, clear of their glyphs -------
+   The unread count sat over the bell and the locale code over the globe: on a
+   40px button the desktop offsets land on the icon. Both move to the corners and
+   the code takes the bar's own ink, since the desktop grey vanished on black. */
+
+.mobile-bar .bell-badge {
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding-inline: 3px;
+  font-size: var(--fs-micro);
+  line-height: 14px;
+  box-shadow: none;
+}
+
+.mobile-bar .lang-code {
+  inset-block-end: 2px;
+  inset-inline-end: 2px;
+  color: var(--ink-on-dark-2);
+}
+
+.mobile-bar .icon-btn:has(.lang-code) svg {
+  transform: translate(-3px, -3px);
+}
+
+[dir='rtl'] .mobile-bar .icon-btn:has(.lang-code) svg {
+  transform: translate(3px, -3px);
+}
+
+/* The dark bar and the brand mark, on the colour that stays dark in both themes. */
+.mobile-bar,
+.rail-mark {
+  background: var(--bar-dark);
+  color: var(--ink-on-dark);
+}
+
+/* The phone drawer's close button, in the brand row's far corner. */
+.rail-close {
+  position: absolute;
+  inset-block-start: var(--sp-3);
+  inset-inline-end: var(--sp-3);
+  width: 40px;
+  height: 40px;
+}
+
+/* The brand on the sign-in screens links home, and looks like the brand. */
+.auth-brand-home {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+/* On a phone the form comes first: the pitch pushed it below the fold, so the
+   one thing the page is for needed a scroll to find. */
+@media (max-width: 899px) {
+  .auth-stage {
+    order: 2;
+  }
+}
+
+/* An offer on a phone: the figure and its buttons wrap under the tier name
+   instead of widening the row off the screen when a confirm opens. */
+@media (max-width: 767px) {
+  .offer {
+    flex-wrap: wrap;
+  }
+
+  .offer-what {
+    flex: 1 1 100%;
+  }
+
+  .offer-price {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 767px) {
+  .offer-price {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+/* ---- Shipping & Services: descriptions and the request stepper ---------- */
+
+/* A card that explains a destination says all of it: the one-line clamp cut the
+   Shipping & Services overview off mid-sentence. */
+.card-desc--full {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+/* The request's stepper and its answer buttons. This cell was `td-tight`, which
+   is `white-space: nowrap`, so the step text ran off the table on a desktop and
+   off the screen on a phone. It takes the room it needs and wraps. */
+.data-table td.td-steps {
+  min-width: 16rem;
+  white-space: normal;
+}
+
+.data-table td.td-steps .actions--row {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-block-start: var(--sp-2);
+}
+
+@media (max-width: 767px) {
+  .data-table td.td-steps {
+    min-width: 0;
+  }
+}
+
+/* ---- Warehouse registers on a phone ------------------------------------
+   One stacked shape below 768px, not two. The 767px block laid a row out as
+   label-left / value-right pairs and the 640px block as label-above blocks, so
+   a register changed shape twice as the screen narrowed, and a right-aligned
+   count sat opposite left-aligned text. Label above value, all start-aligned,
+   and the actions cell — which has no label — takes the full width with its
+   buttons big enough for a thumb. */
+
+@media (max-width: 767px) {
+  .dt-wrap--stack .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .dt-wrap--stack .data-table thead {
+    display: none;
+  }
+
+  .dt-wrap--stack .data-table td::before {
+    display: block;
+    margin-block-end: 2px;
+  }
+
+  .dt-wrap--stack .data-table td.td-end {
+    text-align: start;
+  }
+
+  .dt-wrap--stack .data-table td.td-actions::before {
+    display: none;
+  }
+
+  .dt-wrap--stack .data-table td.td-actions .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+
+  .dt-wrap--stack .data-table td.td-actions .btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+
+  /* "Add inventory" keeps its own size rather than a full-width bar on every tab. */
+  .ctx-actions .ctx-add {
+    flex: 0 0 auto;
+  }
+}
+
+/* A shelf barcode inside a table cell keeps its width; squeezed by the cell it
+   rendered at 0×0 on a phone, which read as an empty checkbox. */
+.data-table .barcode {
+  flex: none;
+  min-width: 140px;
+}
+
+/* The line under an on-screen label that says which card it is. */
+.barcode-caption {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* A panel's inline result sits under the full row of a form grid. */
+.form-grid-full {
+  grid-column: 1 / -1;
+}
+
+/* ---- Touch: warehouse density keeps its rows, not its tiny targets ------
+   The dense rhythm is for a mouse at a desk. On a touch screen every control
+   the bench is worked with — small buttons, selects, check boxes — is at least
+   44px to tap, which the 32px small buttons and 16px check boxes were not. */
+
+@media (pointer: coarse) {
+  [data-density='warehouse'] .btn,
+  [data-density='warehouse'] .control,
+  [data-density='warehouse'] select,
+  [data-density='warehouse'] .field input {
+    min-height: 44px;
+  }
+
+  [data-density='warehouse'] input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* A field that is locked — the owner field once a parcel names the owner —
+   looks locked, rather than like an input that silently ignores typing. */
+.field input:disabled,
+.field select:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-2);
+  cursor: not-allowed;
+}
+
+/* ---- Vault drawer: a form opens under the button that asked for it -------- */
+
+.drawer-actions .drawer-form {
+  margin-block: var(--sp-3) var(--sp-2);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: var(--border-w) solid var(--line-strong);
+}
+
+/* "No photograph" in a 56px register thumbnail wrapped to "No photogra". It is
+   a stated absence, so it gets the space to be read. */
+.card-art .photo-thumb-empty {
+  padding: 2px;
+  font-size: var(--fs-micro);
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+/* ---- A finger is not a mouse pointer -----------------------------------
+   Every control a phone has to hit is at least 44px on its short side. The
+   product's small buttons are 32px, its checkboxes 16px and its breadcrumb
+   links 20px, which is fine under a cursor and a guess under a thumb. Scoped to
+   a coarse pointer, so the desktop density is untouched. */
+
+@media (pointer: coarse) {
+  .btn,
+  .btn--sm,
+  .icon-btn,
+  .state-control,
+  .chip,
+  .ctx-tab,
+  .control,
+  .link-more,
+  .breadcrumb button {
+    min-height: 44px;
+  }
+
+  .breadcrumb {
+    gap: var(--sp-2);
+  }
+
+  /* A tick box you can actually hit, with its label as part of the target. */
+  .check {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .check input[type='checkbox'],
+  .check input[type='radio'],
+  input[type='checkbox'],
+  input[type='radio'] {
+    inline-size: 20px;
+    block-size: 20px;
+  }
+
+  /* One height for every text control, so a form stops looking assembled. */
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  textarea {
+    min-height: 88px;
+  }
+}
+
+/* ---- The gap under the breadcrumb on a phone ---------------------------
+   `.ph-actions` is empty on a phone now that the shell's controls live in the
+   top bar, and an empty flex child still took its gap: a 45px band between the
+   breadcrumb and the tab strip on every page. */
+
+@media (max-width: 767px) {
+  .page-header:has(.ph-actions:empty) {
+    gap: 0;
+  }
+
+  .ph-actions:empty {
+    display: none;
+  }
+}
+
+/* The tier table reads left to right: a row's label is text, not a figure, so it
+   sits at the start of its row rather than centred under a numeric column. */
+.mem-table th[scope='row'] {
+  text-align: start;
+  font-weight: var(--fw-regular);
+  color: var(--ink-2);
+}
+
+.mem-table thead th:first-child {
+  text-align: start;
+}
+
+/* A column that earns its place on a desktop row and not on a stacked one. The
+   record the row opens still carries it. */
+@media (max-width: 767px) {
+  .dt-wrap--stack .data-table .dt-phone-hide {
+    display: none;
+  }
+}
+
+/* ---- Help: Ask answers, policy rules, and the price table on a phone ------
+   Ask returns Bault's own answers rather than a placeholder, so a turn is a
+   short list of links with an excerpt under each. */
+
+.ask-answers {
+  display: grid;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-2);
+  list-style: none;
+}
+
+.ask-answers li {
+  display: grid;
+  gap: 2px;
+}
+
+.ask-answer-title {
+  font-weight: var(--fw-medium);
+}
+
+.policy-rule-heading {
+  margin-block-end: 4px;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+/* The landing price table: the figure column takes what it needs and the label
+   wraps, instead of the price being pushed off a 390px screen. */
+.landing-price-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.landing-price-table tbody th {
+  width: auto;
+  white-space: normal;
+}
+
+.landing-price-table td.num {
+  width: 38%;
+  white-space: normal;
+}
+
+/* A schedule rather than a single figure ("6% up to $100; $5.00 plus 1% above")
+   reads as a sentence, so it wraps at the end of the row instead of one long line. */
+.landing-included {
+  display: block;
+  line-height: var(--lh-snug);
+}
+
+/* Stacked, every step of "How it works" looks the same: the rule between
+   columns is a rule between columns, not an indent on three of four. */
+@media (max-width: 719px) {
+  .landing .landing-steps .step {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+}
+
+/* Reduced motion: nothing is delayed, either.
+   The global block collapses durations but left `animation-delay` alone, so a
+   reader who asked for less motion waited up to 720ms for the pitch to appear —
+   the delays are what staggered it, and they are not motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* ---- A grid item is never wider than its column -------------------------
+   A grid child's automatic minimum is its CONTENT, and a `<select>` is as wide
+   as its longest option — so one long option ("Consignment fee · Bault
+   commission on an auction-house sale") stretched the whole pricing form to
+   546px inside a 358px column and pushed the page sideways on a phone. */
+
+.form-grid > *,
+.row > .field,
+.stack > .form-grid > * {
+  min-width: 0;
+}
+
+select,
+input,
+textarea {
+  max-width: 100%;
 }

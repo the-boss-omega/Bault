@@ -11,6 +11,9 @@ import { storagePeriodCover } from '../mem/mem.schema';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
 import { serviceRequest } from '../dis/dis.schema';
+import { shipment } from '../shp/shp.schema';
+import { swapProposal } from '../mkt/mkt.schema';
+import { escrowDeal } from '../esc/escrow.schema';
 import {
   OVERSIZED_STORAGE,
   STANDARD_STORAGE,
@@ -23,7 +26,8 @@ import {
 /**
  * Which slice of the customer's vault to return.
  *
- *  - `active`  — held, unencumbered stock: received / stored / listed, no hold.
+ *  - `active`  — held, unencumbered stock: received / stored / listed / at a
+ *                grader, no hold.
  *  - `hold`    — anything frozen: the `on-hold` state or the `holdFlag`, which are
  *                set independently (a listed item can be put on hold without its
  *                lifecycle state changing).
@@ -64,15 +68,39 @@ export interface VaultFilter {
 }
 
 // Terminal states: the card is still owned by the customer but has left storage.
-const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold'> = [
+const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'> = [
   'shipped',
   'donated',
   'consigned',
   'sold',
+  'discarded',
 ];
 
-// States that count as live, on-shelf stock.
-const LIVE: Array<'received' | 'stored' | 'listed'> = ['received', 'stored', 'listed'];
+/**
+ * States that count as the collector's live holdings.
+ *
+ * `at_grader` is here although the card is not on a Bault shelf: it is still
+ * theirs, it is coming back, and a card that vanished from every tab the day
+ * it went to PSA read as a card Bault had lost.
+ */
+const LIVE: Array<'received' | 'stored' | 'listed' | 'at_grader'> = ['received', 'stored', 'listed', 'at_grader'];
+
+/** Shipment statuses that still have a claim on their items (mirrors `ShipmentService.OPEN_STATUSES`). */
+const OPEN_SHIPMENT = ['requested', 'awaiting_payment', 'rates_selected', 'picking', 'packed', 'labeled'] as const;
+
+/**
+ * Something a card is already promised to.
+ *
+ * `kind` says what, `code` names it (a shipment, a service request, a deal) so
+ * the screen can say "On shipment SHP-…" rather than just refusing. A swap has
+ * no code of its own.
+ */
+export interface Commitment {
+  kind: 'shipment' | 'swap' | 'service' | 'escrow';
+  code: string | null;
+  /** For a service: which one, so a photo shoot and a donation read differently. */
+  serviceType?: string;
+}
 
 /**
  * Customer vault (T051, Principle: personal vault view).
@@ -147,7 +175,7 @@ export class VaultService {
 
     // The bin is joined in so every item shows WHERE it is stored (Requirement
     // 10.3) as a readable shelf barcode/zone rather than an opaque bin UUID.
-    return this.db
+    const rows = await this.db
       .select({
         id: item.id,
         serialNumber: item.serialNumber,
@@ -168,12 +196,89 @@ export class VaultService {
         oversized: item.oversized,
         receivedAt: item.receivedAt,
         createdAt: item.createdAt,
+        /**
+         * The catalogue photograph for a card bought from the house store.
+         *
+         * Catalogue photos are keyed by serial, and a store copy gets a fresh
+         * serial at purchase — so it arrived in the vault with no picture though
+         * the store had shown one. The listing's own photo reference stands in.
+         */
+        photoRef: sql<string | null>`(select hl.photo_ref from house_order ho join house_listing hl on hl.id = ho.house_listing_id where ho.item_id = ${item.id}::text limit 1)`,
       })
       .from(item)
       .leftJoin(bin, eq(bin.id, item.binId))
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
       .limit(Math.min(filter.limit ?? 50, 200));
+
+    const promised = await this.commitments(userId, rows.map((r) => r.id));
+    return rows.map((r) => ({ ...r, commitment: promised.get(r.id) ?? null }));
+  }
+
+  /**
+   * What each of these cards is already promised to.
+   *
+   * Every picker in the product asked only "is it stored?", so a card already on
+   * a shipment was still offered for another shipment, for sale, for a trade and
+   * for paid services — and only the last step failed, or worse, succeeded. One
+   * query per kind, over just the cards on screen.
+   */
+  async commitments(userId: string, itemIds: string[]): Promise<Map<string, Commitment>> {
+    const out = new Map<string, Commitment>();
+    if (itemIds.length === 0) return out;
+    const wanted = new Set(itemIds);
+    const claim = (id: string, c: Commitment) => {
+      if (wanted.has(id) && !out.has(id)) out.set(id, c);
+    };
+
+    const ships = await this.db
+      .select({ code: shipment.code, itemIds: shipment.itemIds })
+      .from(shipment)
+      .where(and(eq(shipment.userId, userId), inArray(shipment.status, [...OPEN_SHIPMENT])));
+    for (const s of ships) for (const id of (s.itemIds as string[]) ?? []) claim(id, { kind: 'shipment', code: s.code });
+
+    const deals = await this.db
+      .select({ code: escrowDeal.code, itemId: escrowDeal.itemId })
+      .from(escrowDeal)
+      .where(
+        and(
+          inArray(escrowDeal.itemId, itemIds),
+          sql`${escrowDeal.status} in ('funded', 'inspecting', 'awaiting_release')`,
+        ),
+      );
+    for (const d of deals) if (d.itemId) claim(d.itemId, { kind: 'escrow', code: d.code });
+
+    const swaps = await this.db
+      .select({
+        proposerId: swapProposal.proposerId,
+        offered: swapProposal.offeredItemIds,
+        requested: swapProposal.requestedItemIds,
+      })
+      .from(swapProposal)
+      .where(
+        and(
+          eq(swapProposal.status, 'pending'),
+          or(eq(swapProposal.proposerId, userId), eq(swapProposal.responderId, userId)),
+        ),
+      );
+    for (const sw of swaps) {
+      const mine = sw.proposerId === userId ? sw.offered : sw.requested;
+      for (const id of (mine as string[]) ?? []) claim(id, { kind: 'swap', code: null });
+    }
+
+    const services = await this.db
+      .select({ code: serviceRequest.code, itemId: serviceRequest.itemId, type: serviceRequest.type })
+      .from(serviceRequest)
+      .where(
+        and(
+          inArray(serviceRequest.itemId, itemIds),
+          inArray(serviceRequest.status, ['requested', 'in_progress']),
+        ),
+      );
+    for (const r of services) {
+      if (r.itemId) claim(r.itemId, { kind: 'service', code: r.code, serviceType: r.type });
+    }
+    return out;
   }
 
   /**
@@ -221,6 +326,7 @@ export class VaultService {
 
     // The departure event per item: the most recent custody event that either
     // moved the card away from this customer or moved it to a terminal state.
+    const ownedIds = this.db.select({ id: item.id }).from(item).where(eq(item.ownerId, userId));
     const departure = this.db
       .select({
         itemId: custodyEvent.itemId,
@@ -232,6 +338,10 @@ export class VaultService {
           or(
             eq(custodyEvent.prevOwnerId, userId),
             and(eq(custodyEvent.newOwnerId, userId), inArray(custodyEvent.newState, TERMINAL)),
+            // A dispatch or a cull writes a `state_change` with no owner on it at
+            // all, so the two tests above never matched a shipped card and it
+            // vanished from every tab. The card's own current owner stands in.
+            and(inArray(custodyEvent.newState, TERMINAL), sql`${custodyEvent.itemId} in (${ownedIds})`),
           ),
           inArray(custodyEvent.eventType, ['ownership_transfer', 'state_change', 'dispatch']),
         ),
@@ -290,13 +400,13 @@ export class VaultService {
         binBarcode: null,
         binZone: null,
         historical: true as const,
-        departureReason: withReason ? await this.departureReason(row.id, userId) : null,
+        departureReason: withReason ? await this.departureReason(row.id, userId, row.stillOwned) : null,
       })),
     );
   }
 
   /** Human-readable reason the card left the customer's hands, from the log. */
-  private async departureReason(itemId: string, userId: string): Promise<string | null> {
+  private async departureReason(itemId: string, userId: string, stillOwned: boolean): Promise<string | null> {
     const [event] = await this.db
       .select({
         eventType: custodyEvent.eventType,
@@ -307,10 +417,9 @@ export class VaultService {
       .where(
         and(
           eq(custodyEvent.itemId, itemId),
-          or(
-            eq(custodyEvent.prevOwnerId, userId),
-            and(eq(custodyEvent.newOwnerId, userId), inArray(custodyEvent.newState, TERMINAL)),
-          ),
+          // A card they still own left by a state change (which names no owner);
+          // one they sold left by the transfer that named them.
+          stillOwned ? inArray(custodyEvent.newState, TERMINAL) : eq(custodyEvent.prevOwnerId, userId),
         ),
       )
       .orderBy(sql`${custodyEvent.occurredAt} desc`)
@@ -427,11 +536,11 @@ export class VaultService {
   }
 
   async itemCard(userId: string, itemId: string) {
-    const [it] = await this.db
-      .select()
-      .from(item)
-      .where(and(eq(item.id, itemId), eq(item.ownerId, userId)))
-      .limit(1);
+    // A card in the collector's History is one they held and no longer do; it
+    // must still open (it answered 404, so the History list led nowhere). The
+    // custody log is the proof they held it — see `hasHeld`.
+    if (!(await this.hasHeld(userId, itemId))) throw AppError.notFound('Item not found in your vault');
+    const [it] = await this.db.select().from(item).where(eq(item.id, itemId)).limit(1);
     if (!it) throw AppError.notFound('Item not found in your vault');
 
     const images = await this.db.select().from(itemImage).where(eq(itemImage.itemId, itemId));
@@ -477,6 +586,9 @@ export class VaultService {
       )
       .orderBy(sql`${serviceRequest.createdAt} desc`);
 
-    return { item: it, images: signedImages, history, openRequests };
+    // Who holds it now, and where, belongs to whoever holds it now.
+    const card = it.ownerId === userId ? it : { ...it, ownerId: null, binId: null };
+    const [commitment] = it.ownerId === userId ? [...(await this.commitments(userId, [itemId])).values()] : [];
+    return { item: card, images: signedImages, history, openRequests, commitment: commitment ?? null };
   }
 }

@@ -30,7 +30,7 @@ export interface InboundAddress {
   country: string;
   phone: string | null;
   /** Destination sales-tax rate in basis points; 0 means the state levies none. */
-  salesTaxBps: number;
+  salesTaxPpm: number;
   /** For a forwarding address: how long the onward leg usually takes. */
   forwardingDays: number | null;
 }
@@ -110,7 +110,7 @@ export class FacilityService {
       postalCode: f.postalCode,
       country: f.country,
       phone: f.phone,
-      salesTaxBps: f.salesTaxBps,
+      salesTaxPpm: f.salesTaxPpm,
       forwardingDays: f.forwardingDays,
     }));
   }

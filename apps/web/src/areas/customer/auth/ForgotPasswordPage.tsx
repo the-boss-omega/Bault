@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { errorText } from '../../../shared/errors';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 
 /**
@@ -33,7 +34,7 @@ export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void 
     } catch (err) {
       // Only a transport or validation failure reaches here; an unknown address
       // is a success as far as this endpoint is concerned.
-      setError((err as Error).message);
+      setError(errorText(t, err));
     } finally {
       setBusy(false);
     }

@@ -42,7 +42,7 @@ export function PhotoInput({
   max = 6,
   disabled,
 }: {
-  purpose: 'item_intake' | 'parcel';
+  purpose: 'item_intake' | 'parcel' | 'service_media' | 'wallet_document';
   value: readonly PhotoRef[];
   onChange: (next: PhotoRef[]) => void;
   label: string;

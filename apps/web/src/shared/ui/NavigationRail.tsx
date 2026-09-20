@@ -1,4 +1,5 @@
-import { useReducer, type ReactNode } from 'react';
+import { useEffect, useReducer, type ReactNode } from 'react';
+import { IconClose } from './icons';
 import { useT } from '../i18n';
 import {
   INITIAL_NAV_RAIL_STATE,
@@ -73,6 +74,16 @@ export function NavigationRail({
   const primary = destinations.filter((d) => !d.secondary);
   const secondary = destinations.filter((d) => d.secondary);
 
+  // The phone drawer closes on Escape, like every other overlay in the product.
+  useEffect(() => {
+    if (!mobile || !mobileOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onRequestClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobile, mobileOpen, onRequestClose]);
+
   /** One navigation: tell the shell, collapse the rail, close the mobile drawer. */
   function go(key: string) {
     onNavigate(key);
@@ -130,6 +141,12 @@ export function NavigationRail({
             Bault
           </span>
         </a>
+        {/* A drawer needs a visible way out; tapping the scrim is not one anybody sees. */}
+        {mobile && mobileOpen && (
+          <button type="button" className="rail-close icon-btn icon-btn--bare" aria-label={t('ui.close')} onClick={onRequestClose}>
+            <IconClose />
+          </button>
+        )}
 
         <RailGroup destinations={primary} active={active} onNavigate={go} />
 

@@ -564,11 +564,11 @@ async function main(): Promise<void> {
   //     no sales tax, so a purchase delivered there is not taxed by the
   //     destination state, at the cost of a second leg to New Jersey.
   //
-  //     `salesTaxBps` is the DESTINATION state's rate, recorded for guidance
+  //     `salesTaxPpm` is the DESTINATION state's rate, recorded for guidance
   //     only. Bault is not the seller and neither collects nor remits anybody's
   //     sales tax; the figure exists so the app can show a collector what a
   //     purchase would cost at each address instead of making them work it out.
-  //     NJ is 6.625% (6625 bps) at the time of writing; DE is 0.
+  //     NJ is 6.625% (66250 ppm) at the time of writing; DE is 0.
   // -------------------------------------------------------------------------
   const njFacility = one(
     await db
@@ -577,12 +577,20 @@ async function main(): Promise<void> {
         code: 'NJ',
         name: 'Bault New Jersey',
         role: 'primary',
-        line1: 'SET REAL ADDRESS — placeholder',
+        // Demo addresses, in the real industrial districts these sites would be
+        // in, with reserved 555-01xx telephone numbers. They replace
+        // "SET REAL ADDRESS — placeholder" at 00000, which a collector was
+        // being asked to paste into a seller's checkout. A deployment sets its
+        // own; `FacilityService` still hides a facility whose line 1 says
+        // placeholder, so an unconfigured site is never offered in production.
+        line1: '200 Frontage Road, Building C',
+        line2: 'Dock 12',
         city: 'Newark',
         region: 'NJ',
-        postalCode: '00000',
+        postalCode: '07114',
+        phone: '+1 973 555 0140',
         country: 'US',
-        salesTaxBps: 6625,
+        salesTaxPpm: 66_250,
         active: true,
       })
       .returning({ id: facility.id }),
@@ -592,12 +600,13 @@ async function main(): Promise<void> {
     code: 'DE',
     name: 'Bault Delaware',
     role: 'forwarding',
-    line1: 'SET REAL ADDRESS — placeholder',
+    line1: '120 Lea Boulevard, Unit 4',
     city: 'Wilmington',
     region: 'DE',
-    postalCode: '00000',
+    postalCode: '19802',
+    phone: '+1 302 555 0117',
     country: 'US',
-    salesTaxBps: 0,
+    salesTaxPpm: 0,
     forwardsToFacilityId: njFacility,
     forwardingDays: 4,
     active: true,
@@ -642,7 +651,13 @@ async function main(): Promise<void> {
   // -------------------------------------------------------------------------
   // Money constants (USD cents) and small helpers.
   // -------------------------------------------------------------------------
-  const INTAKE = 500; // $5.00
+  /**
+   * What booking one card in actually costs, by the rule above: the
+   * `trading_card` intake rule is $1.00. This was $5.00 — the generic
+   * per-item rule — so every seeded card's statement disagreed with the price
+   * list it was charged under.
+   */
+  const INTAKE = 100; // $1.00, the trading-card intake rule
   const SERVICE = 2000; // $20.00
   const SHIP = 3500; // $35.00
   const MEGA_SALE = 26_000; // $260.00 — M Rayquaza-EX sale price
@@ -663,7 +678,7 @@ async function main(): Promise<void> {
         .values({
           userId,
           actionType,
-          pricingRuleSnapshot: { seed: true, actionType, currency: CUR },
+          pricingRuleSnapshot: { seed: true, actionType, amountMinor: amount, currency: CUR },
           amount,
           currency: CUR,
           paymentMeans: 'wallet',
@@ -698,7 +713,17 @@ async function main(): Promise<void> {
     sourceBatchId?: string;
     isLot?: boolean;
     lotSize?: number;
-  }) => one(await db.insert(item).values({ ...v, receivedAt: new Date() }).returning({ id: item.id })).id;
+  }) => one(await db.insert(item).values({ ...v, receivedAt: SEEDED_ARRIVAL }).returning({ id: item.id })).id;
+
+  /**
+   * When the seeded cards arrived: sixty days ago, not the instant the seed ran.
+   *
+   * Shelf Yield measures revenue per shelf-day and the storage sweep counts from
+   * arrival, so a vault that arrived "just now" showed "No time yet" on every
+   * shelf and made Worst-first an arbitrary order. Sixty days is inside every
+   * included storage window, so it creates no storage charge on its own.
+   */
+  const SEEDED_ARRIVAL = new Date(Date.now() - 60 * 86_400_000);
 
   const custody = (v: {
     itemId: string;
@@ -715,7 +740,7 @@ async function main(): Promise<void> {
 
   /** Dedicated bin/shelf transfer ledger row: source AND destination (Req 10.4). */
   const transfer = (itemId: string, fromBinId: string | null, toBinId: string, actorId: string, reason: string) =>
-    db.insert(binTransfer).values({ itemId, fromBinId, toBinId, actorId, reason });
+    db.insert(binTransfer).values({ itemId, fromBinId, toBinId, actorId, reason, occurredAt: SEEDED_ARRIVAL });
 
   const img = (itemId: string, type: 'intake' | 'professional', version: number, objectKey: string) =>
     db.insert(itemImage).values({ itemId, type, version, objectKey });

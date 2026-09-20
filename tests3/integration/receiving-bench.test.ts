@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, SEED_USERNAME, signIn } from '../../tests/integration/helpers/http';
+import { BASE, SEED, SEED_USERNAME, signIn } from '../../tests/integration/helpers/http';
 
 /**
  * The receiving bench: one workflow, a stack of boxes at a time, with photographs.
@@ -238,7 +238,27 @@ describe('photographs on an item', () => {
     expect(card.images).toHaveLength(1);
     expect(card.images[0]!.type).toBe('intake');
     expect(card.images[0]!.objectKey).toBe(key);
-    expect(card.images[0]!.url).toContain(key);
+
+    /**
+     * The URL is the API's own, not the object store's.
+     *
+     * A presigned MinIO URL on `localhost:9000` is unreachable from anything but
+     * this machine — a phone on a tunnel got a broken image on every photograph
+     * in the product. The picture is served from the API's origin instead, with
+     * a signature and an expiry standing in for the presigned one. So the
+     * assertion is the one that matters: the bytes come back.
+     */
+    const url = card.images[0]!.url;
+    expect(url.startsWith('/api/v1/media/object?key=')).toBe(true);
+    expect(url).toContain(encodeURIComponent(key));
+    const fetched = await fetch(BASE.replace(/\/api\/v1$/, '') + url);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers.get('content-type')).toBe('image/png');
+    expect((await fetched.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    // Without the signature it is not served at all.
+    const unsigned = await fetch(`${BASE}/media/object?key=${encodeURIComponent(key)}&exp=9999999999&sig=nope`);
+    expect(unsigned.status).toBe(404);
   });
 
   it('gives every copy of a bulk intake the same photographs', async () => {

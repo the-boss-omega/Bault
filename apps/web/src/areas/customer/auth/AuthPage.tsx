@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { DemoSlab, DEMO_SERIAL } from '../marketing/DemoSlab';
 import { Serial } from '../../../shared/ui/Serial';
@@ -102,10 +102,13 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
 
       <div className="auth-box">
         <div className="auth-brand">
-          <span className="rail-mark" aria-hidden="true">
-            B
-          </span>
-          <span className="auth-brand-word">Bault</span>
+          {/* The brand is the way back to the front page, as on every site. */}
+          <a className="auth-brand-home" href="#/" aria-label={t('auth.backHome')}>
+            <span className="rail-mark" aria-hidden="true">
+              B
+            </span>
+            <span className="auth-brand-word">Bault</span>
+          </a>
 
           {/*
             THE SAME LANGUAGE CONTROL THE REST OF THE PRODUCT USES.
@@ -146,15 +149,27 @@ export type AuthMode = 'signIn' | 'signUp' | 'forgot';
  * the same choice twice. It is the STARTING mode only — the links between the
  * three forms still work as they always did, so a visitor who guessed wrong is
  * one click from the right one and never a page load.
+ *
+ * The mode FOLLOWS the URL, and switching forms writes it: it was read from the
+ * hash once, so going from #/signup to #/signin while mounted kept the wrong
+ * form, and Back and refresh landed somewhere other than where the visitor was.
  */
 export function AuthPage({
   onSignedIn,
   initialMode = 'signIn',
+  onModeChange,
 }: {
   onSignedIn: (user: SessionUser) => void;
   initialMode?: AuthMode;
+  /** Called when a link switches forms, so the shell can put it in the URL. */
+  onModeChange?: (mode: AuthMode) => void;
 }) {
-  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [mode, setModeState] = useState<AuthMode>(initialMode);
+  useEffect(() => setModeState(initialMode), [initialMode]);
+  const setMode = (next: AuthMode) => {
+    setModeState(next);
+    onModeChange?.(next);
+  };
 
   return (
     <AuthShell>

@@ -151,9 +151,15 @@ export class ParcelProfileService {
           postalCode: a.postalCode,
           name: a.recipient,
           street1: a.line1,
+          ...(a.line2 ? { street2: a.line2 } : {}),
           city: a.city,
+          // A US label is rated and routed by state; the rest where a country has one.
+          ...(a.region ? { region: a.region } : {}),
+          ...(a.phone ? { phone: a.phone } : {}),
         },
-        formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${a.postalCode}, ${a.country}`,
+        formatted: [a.recipient, a.line1, a.line2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country]
+          .filter((part) => part && part.trim() !== '')
+          .join(', '),
         recipientName: a.recipient,
       };
     }

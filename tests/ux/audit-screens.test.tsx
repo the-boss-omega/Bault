@@ -163,7 +163,8 @@ describe('signing in with an address that was never confirmed', () => {
     renderIn(<SignInPage onSignedIn={() => {}} onGoToSignUp={() => {}} onGoToForgotPassword={() => {}} />);
 
     await user.click(screen.getByRole('button', { name: /sign in/i }));
-    await screen.findByText(/invalid credentials/i);
+    // The API answers in English; the screen says it in the reader's language.
+    await screen.findByText(/not right/i);
     expect(screen.queryByRole('button', { name: /new confirmation link/i })).toBeNull();
   });
 });
@@ -451,8 +452,7 @@ describe('the words the product uses', () => {
     const en = MESSAGES.en as Record<string, string>;
 
     // Strings that genuinely mean a card keep the word: the payment sense, the
-    // two item classes that ARE cards, the name of a real kind of event, and the
-    // Ship My Cards copy, which is quoted verbatim and must not be edited.
+    // two item classes that ARE cards, and the name of a real kind of event.
     const allowed = new Set([
       'money.route.card',
       'money.routeDesc.card',
@@ -460,13 +460,17 @@ describe('the words the product uses', () => {
       'itemClass.trading_card',
       'itemClass.oversized_card',
       'consign.channel.card_show',
-      'faq.subtitle',
-      'faq.sourceNote',
-      'faq.quotedNotice',
       // The landing page quotes the trading-card intake rule by name, not intake in general.
       'landing.price.intake',
       // The demo on the landing stage IS a card.
       'landing.demoAlt',
+      // The PAYMENT sense again: a chargeback and the card-payment history are
+      // about the card somebody paid with, not about anything in a vault.
+      'admin.chargebacks.title',
+      'admin.chargebacks.empty',
+      'payments.title',
+      'payments.empty',
+      'payments.emptyText',
     ]);
 
     const strays = Object.entries(en)

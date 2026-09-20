@@ -86,3 +86,29 @@ export function useNotificationFeed() {
 
   return { items, error, loading, reload, unseen, markSeen };
 }
+
+/**
+ * How many of my tickets are waiting for ME.
+ *
+ * `awaiting_customer` means the helpdesk has answered and asked something back.
+ * The route existed and nothing called it, so a question put to a collector sat
+ * in a thread they had no reason to open again.
+ */
+export function useAwaitingReply(): number {
+  const [awaiting, setAwaiting] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .get<{ awaiting: number }>('/support/awaiting')
+      .then((res) => {
+        if (live) setAwaiting(res.awaiting ?? 0);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return awaiting;
+}

@@ -8,6 +8,7 @@ import { AuditService } from '../sec/audit.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { charge, externalPayment } from './pay.schema';
+import { userAccount } from '../acc/acc.schema';
 import { CHARGEBACK_FEE_MINOR } from './money-terms';
 
 /**
@@ -179,9 +180,21 @@ export class ChargebackService {
 
   /** Settled top-ups an operator could reverse, newest first. */
   reversible() {
+    // With whose payment it was: the admin screen lists these, and a user id
+    // names nobody.
     return this.db
-      .select()
+      .select({
+        id: externalPayment.id,
+        userId: externalPayment.userId,
+        username: userAccount.username,
+        provider: externalPayment.provider,
+        providerRef: externalPayment.providerRef,
+        amount: externalPayment.amount,
+        currency: externalPayment.currency,
+        createdAt: externalPayment.createdAt,
+      })
       .from(externalPayment)
+      .leftJoin(userAccount, eq(userAccount.id, externalPayment.userId))
       .where(and(eq(externalPayment.purpose, 'topup'), eq(externalPayment.status, 'succeeded')))
       .orderBy(desc(externalPayment.createdAt))
       .limit(100);

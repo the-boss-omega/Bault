@@ -8,6 +8,7 @@ import { prefixedId } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { userAccount } from '../acc/acc.schema';
 import { OutboxService } from '../not/outbox/outbox.service';
+import { MediaService } from '../med/media.service';
 import { AuditService } from '../sec/audit.service';
 import type { AuthUser } from '../sec/auth-context';
 import { PAYMENT_ADAPTER } from '../../shared/adapters/adapters.module';
@@ -63,6 +64,7 @@ export class WalletRequestService {
     private readonly audit: AuditService,
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
     private readonly memberships: MembershipService,
+    private readonly media: MediaService,
   ) {}
 
   private static isReviewer(actor: RequestActor): boolean {
@@ -268,6 +270,9 @@ export class WalletRequestService {
       username: owner?.username ?? null,
       email: owner?.email ?? null,
       customerName: fullName(owner?.firstName, owner?.lastName),
+      // The supporting document, as something a reviewer can open. The key on
+      // its own named a file nobody could see.
+      documentUrl: request.documentKey ? await this.media.signed(request.documentKey) : null,
       history,
     };
   }

@@ -145,6 +145,12 @@ export class TradeService {
     const [s] = await this.db.select().from(swapProposal).where(eq(swapProposal.id, swapId)).limit(1);
     if (!s) throw AppError.notFound('Proposal not found');
     if (actorId !== s.proposerId && actorId !== s.responderId) throw AppError.forbidden('Not a participant');
+    // Only an open proposal can be turned down or withdrawn. An executed swap
+    // could be "rejected" afterwards, which rewrote its status over a transfer
+    // that had already happened.
+    if (s.status !== 'pending') {
+      throw new AppError(ErrorCode.CONFLICT, 'That proposal is no longer open.', 409);
+    }
     await this.db.update(swapProposal).set({ status: 'rejected', updatedAt: new Date() }).where(eq(swapProposal.id, swapId));
     return { status: 'rejected' };
   }

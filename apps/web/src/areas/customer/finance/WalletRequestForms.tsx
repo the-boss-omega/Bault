@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { CashOutQuotePanel } from './MoneyPanels';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
@@ -15,6 +15,7 @@ import {
 } from '../../../shared/walletRequests';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import { IconArrowDown, IconUpload } from '../../../shared/ui/icons';
+import { PhotoInput, type PhotoRef } from '../../../shared/ui/PhotoInput';
 
 /**
  * The cash-in / cash-out request form.
@@ -49,10 +50,48 @@ export function WalletRequestForm({
   const { t } = useI18n();
   const [amount, setAmount] = useState('');
   const [fundingSource, setFundingSource] = useState<string>('bank_transfer');
+  /**
+   * The manual sources that are actually set up. A card is paid through the
+   * panel above, never requested here; bank transfer and PayPal are offered only
+   * when their account details are published — the panel above said "Bank
+   * transfer — not available" while this form defaulted to it.
+   */
+  const [available, setAvailable] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (type !== 'cash_in') return;
+    void api
+      .get<{ routes: { key: string; available: boolean }[] }>('/finance/funding-routes')
+      .then((catalogue) => {
+        const on = new Set(catalogue.routes.filter((r) => r.available).map((r) => r.key));
+        setAvailable(
+          new Set(
+            FUNDING_SOURCES.filter((source) =>
+              source === 'bank_transfer'
+                ? on.has('bank_transfer')
+                : source === 'paypal'
+                  ? on.has('paypal_ff')
+                  : source !== 'card',
+            ),
+          ),
+        );
+      })
+      .catch(() => setAvailable(null));
+  }, [type]);
+  const sources = useMemo(
+    () => FUNDING_SOURCES.filter((source) => (available ? available.has(source) : source !== 'card')),
+    [available],
+  );
+  useEffect(() => {
+    if (sources.length > 0 && !sources.includes(fundingSource as (typeof sources)[number])) {
+      setFundingSource(sources[0]!);
+    }
+  }, [sources, fundingSource]);
   const [destinationAccount, setDestinationAccount] = useState('');
   const [beneficiaryName, setBeneficiaryName] = useState('');
   const [reference, setReference] = useState('');
-  const [documentKey, setDocumentKey] = useState('');
+  /** A supporting document — a transfer receipt, a statement line — uploaded, not typed. */
+  const [documents, setDocuments] = useState<PhotoRef[]>([]);
+  const documentKey = documents[0]?.objectKey ?? '';
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +147,7 @@ export function WalletRequestForm({
       setDone(t('wallet.request.submitted', { code: created.code }));
       setAmount('');
       setReference('');
-      setDocumentKey('');
+      setDocuments([]);
       setNotes('');
       setSubmitted(false);
       await onSubmitted();
@@ -152,7 +191,7 @@ export function WalletRequestForm({
             ? t(amountProblem.messageKey, amountProblem.vars)
             : type === 'cash_out'
               ? t('wallet.request.availableNote', { amount: formatUsd(availableMinor) })
-              : `$${(limits.minMinor / 100).toFixed(2)} – $${(limits.maxMinor / 100).toFixed(2)}`}
+              : `${formatUsd(limits.minMinor)} – ${formatUsd(limits.maxMinor)}`}
         </p>
       </div>
 
@@ -167,7 +206,7 @@ export function WalletRequestForm({
           error={showProblem('fundingSource') ? t('wallet.request.error.fundingRequired') : undefined}
         >
           <select value={fundingSource} onChange={(e) => setFundingSource(e.target.value)}>
-            {FUNDING_SOURCES.map((source) => (
+            {sources.map((source) => (
               <option key={source} value={source}>
                 {t(`wallet.request.funding.${source}` as MessageKey)}
               </option>
@@ -183,7 +222,7 @@ export function WalletRequestForm({
           >
             <input
               dir="ltr"
-              placeholder="IL00 0000 0000 0000"
+              autoComplete="off"
               value={destinationAccount}
               aria-invalid={Boolean(showProblem('destinationAccount'))}
               onChange={(e) => setDestinationAccount(e.target.value)}
@@ -213,9 +252,14 @@ export function WalletRequestForm({
         />
       </Field>
 
-      <Field label={t('wallet.request.document')} hint={t('wallet.request.documentHint')}>
-        <input dir="ltr" value={documentKey} onChange={(e) => setDocumentKey(e.target.value)} />
-      </Field>
+      <PhotoInput
+        purpose="wallet_document"
+        value={documents}
+        onChange={setDocuments}
+        label={t('wallet.request.document')}
+        hint={t('wallet.request.documentHint')}
+        max={1}
+      />
 
       <Field
         label={t('wallet.request.notes')}

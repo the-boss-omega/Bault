@@ -36,6 +36,11 @@ import { formatMinor } from '../../shared/money';
  *  - A pending payment credits NOTHING. `succeeded` is the only status that
  *    moves a balance; anything else is recorded and left for the webhook.
  */
+/** True when a checkout can settle without a provider token the SPA cannot yet obtain. */
+function instantPayable(env: ReturnType<typeof loadEnv>): boolean {
+  return env.PAYMENT_PROVIDER === 'sandbox';
+}
+
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -70,7 +75,11 @@ export class CheckoutService {
     return {
       limits: WALLET_REQUEST_LIMITS.cash_in,
       routes: FUNDING_ROUTES.map((route) => {
-        if (route.instant) return { ...route, available: true, instructions: null };
+        // An instant route needs a payment the browser can complete. Under PayPal
+        // that is an order the SPA approves and sends back as a token, and no
+        // route creates one yet — so the card route is offered only where the
+        // provider settles without one, rather than shown and answered with a 500.
+        if (route.instant) return { ...route, available: instantPayable(env), instructions: null };
         if (route.key === 'bank_transfer') {
           return { ...route, available: bankPublished, instructions: bankPublished ? bank : null };
         }
@@ -104,6 +113,12 @@ export class CheckoutService {
     if (!isInstantRoute(input.route)) {
       throw AppError.validation(
         `${route.label} is not settled by a provider, so it cannot be taken here. Raise a cash-in request instead and we will reconcile it against the statement.`,
+      );
+    }
+
+    if (!instantPayable(loadEnv()) && !input.paymentMethodToken?.trim()) {
+      throw AppError.validation(
+        'Card payments are not available yet. Raise a cash-in request by bank transfer or PayPal instead.',
       );
     }
 

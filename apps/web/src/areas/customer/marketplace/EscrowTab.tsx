@@ -4,6 +4,7 @@ import { useI18n } from '../../../shared/i18n';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import {
   ESCROW_TONE,
+  escrowEventLabel,
   escrowStatusLabel,
   nextStep,
   type EscrowDeal,
@@ -218,7 +219,7 @@ export function EscrowTab({ meId }: { meId: string | null }) {
         ) : deals.length === 0 ? (
           <EmptyState title={t('esc.none')} text={t('esc.noneText')} icon={<IconShield />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -236,17 +237,21 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                     (d.raiserRole === 'seller' && d.counterpartyUserId === meId);
                   return (
                     <tr key={d.id} className="is-clickable" tabIndex={0} onClick={() => setOpenId(d.id)}>
-                      <td dir="ltr" className="dt-primary">
-                        <code>{d.code}</code>
+                      <td data-label={t('esc.col.deal')} className="dt-primary">
+                        <code dir="ltr">{d.code}</code>
                       </td>
-                      <td>{d.description}</td>
-                      <td dir="ltr">{formatUsd(d.valueMinor)}</td>
-                      <td>
+                      <td data-label={t('esc.col.what')}>{d.description}</td>
+                      <td data-label={t('esc.col.value')} dir="ltr">
+                        {formatUsd(d.valueMinor)}
+                      </td>
+                      <td data-label={t('esc.col.status')}>
                         <StatusBadge tone={ESCROW_TONE[d.status] ?? 'neutral'}>
                           {escrowStatusLabel(t, d.status)}
                         </StatusBadge>
                       </td>
-                      <td className="hint">{nextStep(t, d, viewerIsBuyer)}</td>
+                      <td data-label={t('esc.col.next')} className="hint">
+                        {nextStep(t, d, viewerIsBuyer)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -353,9 +358,16 @@ function DealDrawer({
         <div className="detail-row">
           <dt className="detail-label">{t('esc.otherSide')}</dt>
           <dd className="detail-value">
-            {deal.counterpartyUserId
-              ? t('esc.otherAccount')
-              : `${deal.counterpartyName ?? '—'} (${deal.counterpartyEmail ?? ''})`}
+            {(() => {
+              // Whoever the reader is NOT. A deal with an account named it only
+              // as "A Bault account", which told nobody anything.
+              const iRaised = deal.raisedBy === meId;
+              if (!iRaised) return deal.raiserUsername ? `@${deal.raiserUsername}` : t('esc.otherAccount');
+              if (deal.counterpartyUserId) {
+                return deal.counterpartyUsername ? `@${deal.counterpartyUsername}` : t('esc.otherAccount');
+              }
+              return `${deal.counterpartyName ?? '—'} (${deal.counterpartyEmail ?? ''})`;
+            })()}
           </dd>
         </div>
         {deal.fundedAt && (
@@ -434,6 +446,27 @@ function DealDrawer({
         </div>
       )}
 
+      {/* Calling it off before any money moved. The API always allowed it;
+          nothing on screen did. */}
+      {['proposed', 'agreed'].includes(deal.status) && (iAmBuyer || iAmSeller) && (
+        <div className="stack stack--tight stack-top">
+          <label className="field">
+            <span className="field-label">{t('esc.cancelReason')}</span>
+            <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          <div className="row">
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy || reason.trim() === ''}
+              onClick={() => void act(() => api.post(`/escrow/${dealId}/cancel`, { reason }), t('esc.cancelled'))}
+            >
+              {t('esc.cancelAction')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {['funded', 'inspecting', 'awaiting_release'].includes(deal.status) && (iAmBuyer || iAmSeller) && (
         <div className="stack stack--tight stack-top">
           <label className="field">
@@ -462,14 +495,14 @@ function DealDrawer({
           <li key={e.id} className="detail-row" style={{ display: 'block' }}>
             <div className="row" style={{ gap: 'var(--sp-2)' }}>
               <StatusBadge tone="info" plain>
-                {e.eventType.replace(/_/g, ' ')}
+                {escrowEventLabel(t, e.eventType)}
               </StatusBadge>
               <span className="hint" dir="ltr">
                 {formatDate(e.occurredAt, locale)}
               </span>
               {e.onBehalfOf && <StatusBadge tone="neutral" plain>{t('esc.onBehalf')}</StatusBadge>}
             </div>
-            {e.notes && <p style={{ marginBlockStart: 4, fontSize: 13.5 }}>{e.notes}</p>}
+            {e.notes && <p className="card-desc">{e.notes}</p>}
           </li>
         ))}
       </ul>

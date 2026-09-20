@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { formatDateTime } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import { EmptyState, MetricCard, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
+import { Button, EmptyState, MetricCard, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
 import { IconAlert, IconShield, IconUser } from '../../shared/ui/icons';
 import {
   describeDevice,
@@ -43,9 +43,13 @@ const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
  * account shows up as clearly as one against an address that does. The password
  * is not in this log, in any form.
  */
+const PAGE = 50;
+
 export function SignInsSection({ onError }: { onError: (m: string) => void }) {
   const { t, locale } = useI18n();
   const [log, setLog] = useState<SignInLog | null>(null);
+  /** Fifty at a time: the full log was one 23,000px page on a phone. */
+  const [shown, setShown] = useState(PAGE);
 
   const load = useCallback(async () => {
     try {
@@ -143,7 +147,7 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                 </tr>
               </thead>
               <tbody>
-                {log.attempts.map((a) => (
+                {log.attempts.slice(0, shown).map((a) => (
                   <tr key={a.id} className={a.outcome === 'success' ? undefined : 'is-attention'}>
                     <td data-label={t('admin.signIns.col.when')}>
                       <span dir="ltr">{formatDateTime(a.occurredAt, locale)}</span>
@@ -173,6 +177,13 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                 ))}
               </tbody>
             </table>
+            {log.attempts.length > shown && (
+              <div className="row" style={{ padding: 'var(--sp-4)', justifyContent: 'center' }}>
+                <Button variant="secondary" onClick={() => setShown((n) => n + PAGE)}>
+                  {t('admin.signIns.showMore', { count: Math.min(PAGE, log.attempts.length - shown) })}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Panel>

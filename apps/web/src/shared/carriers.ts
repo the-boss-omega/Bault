@@ -50,6 +50,8 @@ export interface ServiceCatalogue {
   maxInsuredValueMinor: number;
   signatureRequiredAboveMinor: number;
   paymentWindowDays: number;
+  /** What cancelling costs once a service has been paid for. */
+  restockingFeeMinor?: number;
 }
 
 /** Why a service cannot carry this parcel. */
@@ -170,6 +172,11 @@ const RULE_KEY: Record<string, MessageKey> = {
 export function ruleLabel(t: TranslateFn, problem: RateProblem): string {
   const key = RULE_KEY[problem.rule];
   return key ? t(key, { limit: problem.limit ?? '' }) : problem.message;
+}
+
+/** "2 days", "2–4 days" — never "2–2 days". */
+export function transitLabel(t: TranslateFn, min: number, max: number): string {
+  return min === max ? t('ship.transitExact', { count: min }) : t('ship.transit', { min, max });
 }
 
 /** Grams → a readable weight. Kept here so the list and the drawer agree. */

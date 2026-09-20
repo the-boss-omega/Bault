@@ -61,7 +61,14 @@ export function TopUpPanel({
   useEffect(() => {
     void (async () => {
       try {
-        setCatalogue(await api.get<RouteCatalogue>('/finance/funding-routes'));
+        const list = await api.get<RouteCatalogue>('/finance/funding-routes');
+        setCatalogue(list);
+        // Start on a route that can actually be used.
+        setRoute((current) =>
+          list.routes.some((r) => r.key === current && r.available)
+            ? current
+            : (list.routes.find((r) => r.available)?.key ?? current),
+        );
       } catch (e) {
         onError((e as Error).message);
       }

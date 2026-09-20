@@ -16,6 +16,7 @@ import {
 } from '../../../shared/walletRequests';
 import { WalletRequestForm } from './WalletRequestForms';
 import { TopUpPanel } from './MoneyPanels';
+import { CardPaymentsPanel } from './CardPaymentsPanel';
 import {
   Button,
   ContextTabs,
@@ -37,7 +38,6 @@ import {
   IconArrowUp,
   IconCalendar,
   IconChart,
-  IconChevronDown,
   IconDownload,
   IconFilter,
   IconMarketplace,
@@ -49,6 +49,7 @@ import {
   IconWallet,
   VaultDoorArt,
 } from '../../../shared/ui/icons';
+import { actionLabel } from '../../../shared/pricingActions';
 
 interface Money {
   amount: number;
@@ -63,6 +64,8 @@ interface LedgerRow {
   currency: string;
   referenceType: string | null;
   referenceId: string | null;
+  /** For a fee, what it was charged for (`intake`, `grading_fee:psa_regular`, …). */
+  chargeAction: string | null;
   occurredAt: string;
 }
 
@@ -199,10 +202,9 @@ export function WalletPage() {
               {formatUsd(balance.amount)}
             </p>
             <div className="hero-meta">
-              <span className="hero-currency">
-                <IconChevronDown />
-                {t('wallet.currencyName')}
-              </span>
+              {/* A chevron here read as a currency chooser. Every amount on the
+                  platform is USD, so the line states it rather than offering it. */}
+              <span className="hero-currency">{t('wallet.currencyName')}</span>
               <span className="hero-note">{t('wallet.derivedNote')}</span>
             </div>
           </div>
@@ -284,6 +286,10 @@ export function WalletPage() {
               }}
             />
           </Panel>
+
+          {/* What has already been paid by card, with the provider's reference —
+              the answer to "did that payment land?". */}
+          <CardPaymentsPanel />
         </TabPanel>
       )}
 
@@ -432,6 +438,7 @@ function OverviewTab({
       >
         <TransactionTable
           rows={recent}
+          ledger={ledger ?? []}
           loading={ledger === null}
           locale={locale}
           t={t}
@@ -521,6 +528,7 @@ function TransactionsTab({
     >
       <TransactionTable
         rows={filtered}
+        ledger={ledger ?? []}
         loading={ledger === null}
         locale={locale}
         t={t}
@@ -549,6 +557,7 @@ function TransactionsTab({
 /** The shared transaction table: same markup on the overview and the full list. */
 function TransactionTable({
   rows,
+  ledger,
   loading,
   locale,
   t,
@@ -559,6 +568,8 @@ function TransactionTable({
   emptyAction,
 }: {
   rows: readonly LedgerRow[];
+  /** The WHOLE ledger. The running balance is walked over this, never over `rows`. */
+  ledger: readonly LedgerRow[];
   loading: boolean;
   locale: string;
   t: TranslateFn;
@@ -569,22 +580,23 @@ function TransactionTable({
   emptyAction?: ReactNode;
 }) {
   /**
-   * The balance after each row, in the order the rows are displayed.
+   * The balance after each entry, by entry id.
    *
-   * `rows` is newest-first, so the walk runs backwards from the oldest entry:
-   * every credit adds, every debit subtracts, and the value recorded against a
-   * row is the balance the wallet stood at once that entry had landed.
+   * Walked over the WHOLE ledger (newest-first, so backwards from the oldest):
+   * every credit adds, every debit subtracts. It used to walk only the rows on
+   * screen — the six on the overview, or a filtered subset — so a $9.6k wallet
+   * showed running balances like -$63.45.
    */
   const balanceAfter = useMemo(() => {
-    const out = new Array<number>(rows.length);
+    const out = new Map<string, number>();
     let running = 0;
-    for (let i = rows.length - 1; i >= 0; i -= 1) {
-      const row = rows[i]!;
+    for (let i = ledger.length - 1; i >= 0; i -= 1) {
+      const row = ledger[i]!;
       running += row.direction === 'credit' ? row.amount : -row.amount;
-      out[i] = running;
+      out.set(row.id, running);
     }
     return out;
-  }, [rows]);
+  }, [ledger]);
 
   if (loading) return <SkeletonTable rows={5} columns={5} />;
   if (rows.length === 0) {
@@ -599,7 +611,11 @@ function TransactionTable({
           <tr>
             <th scope="col">{t('wallet.col.date')}</th>
             <th scope="col">{t('wallet.col.type')}</th>
-            <th scope="col">{t('wallet.col.description')}</th>
+            {/* On a phone the row is date, what it was, and the two figures;
+                the reference is in the record the row opens. */}
+            <th scope="col" className="dt-phone-hide">
+              {t('wallet.col.description')}
+            </th>
             <th scope="col" className="td-end">
               {t('wallet.col.amount')}
             </th>
@@ -609,7 +625,7 @@ function TransactionTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => {
+          {rows.map((row) => {
             const credit = row.direction === 'credit';
             return (
               <tr
@@ -635,10 +651,10 @@ function TransactionTable({
                 <td data-label={t('wallet.col.type')}>
                   <span className="dt-primary">{typeLabel(t, row.type)}</span>
                 </td>
-                <td data-label={t('wallet.col.description')}>
+                <td data-label={t('wallet.col.description')} className="dt-phone-hide">
                   {row.referenceType ? (
                     <>
-                      <span>{refLabel(t, row.referenceType)}</span>
+                      <span>{row.chargeAction ? actionLabel(t, row.chargeAction) : refLabel(t, row.referenceType)}</span>
                       {row.referenceId && (
                         <span className="dt-sub">
                           <Code value={row.referenceId.slice(0, 8)} />
@@ -671,7 +687,7 @@ function TransactionTable({
                   a limit, this column has to come from the server.
                 */}
                 <td data-label={t('wallet.col.balance')} className="td-end num">
-                  <Amount>{formatUsd(balanceAfter[index] ?? 0)}</Amount>
+                  <Amount>{formatUsd(balanceAfter.get(row.id) ?? 0)}</Amount>
                 </td>
               </tr>
             );
@@ -744,14 +760,31 @@ function TransactionDrawer({
         <DetailRow label={t('wallet.col.date')}>
           <span dir="ltr">{formatDateTime(row.occurredAt, locale)}</span>
         </DetailRow>
+        {/* Short form: the whole uuid is a wall of hex, and the first block is
+            what a support conversation actually quotes. The full value is on the
+            element for a copy. */}
         <DetailRow label={t('wallet.tx.recordId')}>
-          <code dir="ltr">{row.id}</code>
+          <code dir="ltr" title={row.id}>
+            {row.id.slice(0, 8)}
+          </code>
         </DetailRow>
         <DetailRow
           label={t('wallet.tx.reference')}
-          sub={row.referenceType ? refLabel(t, row.referenceType) : undefined}
+          sub={
+            row.chargeAction
+              ? actionLabel(t, row.chargeAction)
+              : row.referenceType
+                ? refLabel(t, row.referenceType)
+                : undefined
+          }
         >
-          {row.referenceId ? <code dir="ltr">{row.referenceId}</code> : t('wallet.tx.noReference')}
+          {row.referenceId ? (
+            <code dir="ltr" title={row.referenceId}>
+              {row.referenceId.slice(0, 8)}
+            </code>
+          ) : (
+            t('wallet.tx.noReference')
+          )}
         </DetailRow>
         <DetailRow label={t('wallet.tx.direction')}>
           <StatusBadge tone={credit ? 'success' : 'info'}>
@@ -1058,7 +1091,7 @@ function RequestDrawer({
             </p>
           }
           confirmLabel={t('wallet.requests.cancel')}
-          cancelLabel={t('ui.cancel')}
+          cancelLabel={t('wallet.requests.keep')}
           tone="danger"
           busy={busy}
           onConfirm={() => void cancel()}

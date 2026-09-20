@@ -60,6 +60,8 @@ export function SharedParcelsTab({
   const { t } = useI18n();
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [shipments, setShipments] = useState<ShipmentSummary[]>([]);
+  /** Every shipment of mine, so a group row knows which member is me. */
+  const [mineIds, setMineIds] = useState<Set<string>>(new Set());
   const [openShipmentId, setOpenShipmentId] = useState('');
   const [joinShipmentId, setJoinShipmentId] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -76,6 +78,7 @@ export function SharedParcelsTab({
       // Only an unrated request can open or join a group — once a service is
       // chosen the parcel has been paid for and is on its way to a bench.
       setShipments(all.filter((s) => s.status === 'requested' && !s.groupId));
+      setMineIds(new Set(all.map((s) => s.id)));
     } catch (e) {
       onError((e as Error).message);
       setGroups([]);
@@ -229,6 +232,23 @@ export function SharedParcelsTab({
                         <StatusBadge tone="neutral" plain>
                           {shipmentStatusLabel(t, m.status)}
                         </StatusBadge>
+                        {/* Your own request can leave a group that is still forming.
+                            The payer cannot — cancelling the group is theirs. */}
+                        {g.status === 'forming' && !m.isPayer && mineIds.has(m.shipmentId) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() =>
+                              void act(
+                                () => api.post('/shipping/groups/leave', { shipmentId: m.shipmentId }),
+                                t('grp.left', { code: g.code }),
+                              )
+                            }
+                          >
+                            {t('grp.leave')}
+                          </Button>
+                        )}
                       </span>
                     </li>
                   ))}

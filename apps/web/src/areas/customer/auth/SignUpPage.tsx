@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { errorText } from '../../../shared/errors';
 import {
   NAME_PART_MAX,
   PASSWORD_MIN,
@@ -95,7 +96,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       );
       setRegistered(t('auth.registerSuccess', { username: created.username }));
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorText(t, err));
     } finally {
       setBusy(false);
     }
@@ -116,7 +117,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       await api.post('/auth/verify-email/resend', { email: email.trim() });
       setResent(true);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorText(t, err));
     } finally {
       setResending(false);
     }

@@ -43,11 +43,18 @@ import { DemoSlab, DEMO_SERIAL } from './DemoSlab';
  * already have. A section is a heading and a rule, not a floating card.
  */
 
-/** The rules worth putting on a front page, in the order somebody meets them. */
+/**
+ * The rules worth putting on a front page, in the order somebody meets them.
+ *
+ * `shipping` used to be here and is not a price: it is the handling surcharge on
+ * top of the carrier's rate, and it is $0.00 — so the front page listed
+ * "Shipping: $0.00" beside four real figures. What somebody actually pays on the
+ * way in is the per-parcel receiving fee, which is now the row.
+ */
 const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
+  { actionType: 'parcel_processing', labelKey: 'landing.price.parcelProcessing' },
   { actionType: 'intake', labelKey: 'landing.price.intake' },
   { actionType: 'storage', labelKey: 'landing.price.storage' },
-  { actionType: 'shipping', labelKey: 'landing.price.shipping' },
   { actionType: 'marketplace_fee', labelKey: 'landing.price.marketplace' },
   { actionType: 'cash_out_fee', labelKey: 'landing.price.cashOut' },
 ];
@@ -88,8 +95,7 @@ const DIFFERENCES = ['record', 'prices', 'membership'] as const;
  *
  * A percentage rule stores basis points and a fixed one stores cents, so running
  * both through `formatUsd` turns 5% into "$5.00" — the exact error a price label
- * exists to prevent. Zero is formatted rather than suppressed: the handling rule
- * really is $0.00, and that is a fact worth printing, not an absence to hide.
+ * exists to prevent.
  */
 function priceOf(entry: PriceEntry): string {
   return entry.model === 'percentage'
@@ -130,6 +136,17 @@ function useReveal(root: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = root.current;
     if (!el || typeof IntersectionObserver === 'undefined' || !motionAllowed()) return;
+    /**
+     * The backstop. A reader who never scrolls — and anything that captures the
+     * page in one pass, which is how this was found — left every section below
+     * the fold hidden, so the front page was a hero above 2,600px of nothing.
+     * Whatever is still pending after this is simply shown.
+     */
+    const showEverything = window.setTimeout(() => {
+      for (const target of el.querySelectorAll<HTMLElement>('[data-reveal="pending"]')) {
+        target.dataset.reveal = 'shown';
+      }
+    }, 1500);
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -145,7 +162,10 @@ function useReveal(root: RefObject<HTMLElement | null>) {
       target.dataset.reveal = 'pending';
       observer.observe(target);
     }
-    return () => observer.disconnect();
+    return () => {
+      window.clearTimeout(showEverything);
+      observer.disconnect();
+    };
   }, [root]);
 }
 
@@ -426,6 +446,13 @@ export function LandingPage() {
                 {FEATURED.map(({ actionType, labelKey }) => {
                   const entry = prices?.get(actionType);
                   const isStorage = actionType === 'storage';
+                  /**
+                   * Cashing out is charged from a band schedule, not from this
+                   * rule's own value: the rule says 1%, which is the figure above
+                   * $100 only. The front page quoted that 1% on its own, which
+                   * reads as the whole fee and is not.
+                   */
+                  const isCashOut = actionType === 'cash_out_fee';
                   return (
                     <tr key={actionType}>
                       <th scope="row">
@@ -437,13 +464,14 @@ export function LandingPage() {
                       <td className="num">
                         {/* Until the list arrives, and if it never does, the cell
                           is empty rather than holding a figure nobody quoted. */}
-                        {entry !== undefined && !isStorage && (
-                          <span className="amount">{priceOf(entry)}</span>
-                        )}
-                        {isStorage && storageTerms !== null && (
-                          <span className="landing-included">
-                            {t('landing.price.storageIncluded')}
-                          </span>
+                        {isCashOut ? (
+                          entry !== undefined && <span className="landing-included">{t('prices.cashOutSchedule')}</span>
+                        ) : isStorage ? (
+                          storageTerms !== null && (
+                            <span className="landing-included">{t('landing.price.storageIncluded')}</span>
+                          )
+                        ) : (
+                          entry !== undefined && <span className="amount">{priceOf(entry)}</span>
                         )}
                       </td>
                     </tr>

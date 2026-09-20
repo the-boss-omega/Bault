@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -394,8 +394,22 @@ export class EscrowService {
     const deal = await this.load(dealId);
     this.assertStatus(deal, ['funded']);
 
-    const [it] = await this.db.select().from(item).where(eq(item.id, itemId)).limit(1);
-    if (!it) throw AppError.notFound('Item not found');
+    // The bench scans the card's label, so a serial or barcode is accepted as
+    // well as the internal id — nothing printed in the building carries the id.
+    const needle = itemId.trim();
+    const [it] = await this.db
+      .select()
+      .from(item)
+      .where(
+        or(
+          sql`${item.id}::text = ${needle}`,
+          sql`upper(${item.serialNumber}) = upper(${needle})`,
+          sql`upper(${item.barcode}) = upper(${needle})`,
+        ),
+      )
+      .limit(1);
+    if (!it) throw AppError.notFound(`No item matches "${needle}"`);
+    itemId = it.id;
     if (it.lifecycleState !== 'stored') {
       throw new AppError(ErrorCode.CONFLICT, `That item is ${it.lifecycleState}, not stored`, 409);
     }
@@ -729,16 +743,17 @@ export class EscrowService {
 
   /** Every deal this person is a party to, either side, newest first. */
   async listMine(userId: string) {
-    return this.db
+    const rows = await this.db
       .select()
       .from(escrowDeal)
       .where(or(eq(escrowDeal.raisedBy, userId), eq(escrowDeal.counterpartyUserId, userId)))
       .orderBy(desc(escrowDeal.createdAt));
+    return this.withUsernames(rows);
   }
 
   /** The operator queue: everything that needs somebody to do something. */
   async queue() {
-    return this.db
+    const rows = await this.db
       .select()
       .from(escrowDeal)
       .where(
@@ -747,6 +762,29 @@ export class EscrowService {
         ),
       )
       .orderBy(escrowDeal.createdAt);
+    return this.withUsernames(rows);
+  }
+
+  /**
+   * Both parties by username, and which side each is on.
+   *
+   * The drawer said "Other side: A Bault account" — true, and no help to a
+   * collector with three deals open, or to an operator reading the queue.
+   */
+  private async withUsernames<T extends Deal>(rows: T[]) {
+    const ids = [...new Set(rows.flatMap((r) => [r.raisedBy, r.counterpartyUserId]).filter((v): v is string => !!v))];
+    const names = ids.length
+      ? await this.db
+          .select({ id: userAccount.id, username: userAccount.username })
+          .from(userAccount)
+          .where(inArray(userAccount.id, ids))
+      : [];
+    const byId = new Map(names.map((n) => [n.id, n.username]));
+    return rows.map((r) => ({
+      ...r,
+      raiserUsername: byId.get(r.raisedBy) ?? null,
+      counterpartyUsername: r.counterpartyUserId ? (byId.get(r.counterpartyUserId) ?? null) : null,
+    }));
   }
 
   async detail(dealId: string, actor: EscrowActor) {
@@ -757,7 +795,8 @@ export class EscrowService {
       .where(eq(escrowEvent.dealId, dealId))
       .orderBy(desc(escrowEvent.occurredAt));
     const { buyerId, sellerId } = this.sides(deal);
-    return { deal, events, buyerId, sellerId };
+    const [named] = await this.withUsernames([deal]);
+    return { deal: named ?? deal, events, buyerId, sellerId };
   }
 
   /**

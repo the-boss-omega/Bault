@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gte, ilike, not, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, not, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { ErrorCode } from '../../shared/errors/error-codes';
 import { FIXTURE_EMAIL_DOMAIN } from '../../shared/fixtures';
 import { loginAttempt, userAccount } from '../acc/acc.schema';
-import { item, custodyEvent, itemChangeHistory } from '../cst/cst.schema';
+import { item, custodyEvent, itemChangeHistory, itemLifecycle } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
 import { transaction } from '../mkt/mkt.schema';
 import { PricingService } from '../prc/pricing.service';
@@ -19,7 +21,8 @@ export interface UserPatch {
   role?: 'user' | 'warehouse_operator' | 'admin';
   status?: 'pending' | 'active' | 'suspended' | 'closed';
   firstName?: string;
-  lastName?: string;
+  /** Null or blank clears it: a last name is optional. */
+  lastName?: string | null;
 }
 
 export interface ItemPatch {
@@ -28,7 +31,7 @@ export interface ItemPatch {
   conditionGrade?: string;
   ownerId?: string;
   binId?: string;
-  lifecycleState?: 'received' | 'stored' | 'listed' | 'on-hold' | 'sold' | 'shipped' | 'donated' | 'consigned';
+  lifecycleState?: (typeof itemLifecycle.enumValues)[number];
   holdFlag?: boolean;
 }
 
@@ -122,7 +125,14 @@ export class AdmService {
     // review flag is cleared with it — that is the only thing that clears it here.
     for (const f of ['firstName', 'lastName'] as const) {
       if (patch[f] === undefined) continue;
-      const value = normalizeNamePart(patch[f]);
+      // A last name is optional, so an admin can clear one. (A null used to
+      // reach `normalizeNamePart` and answer 500.)
+      if (f === 'lastName' && (patch.lastName === null || patch.lastName?.trim() === '')) {
+        set.lastName = null;
+        set.nameReviewRequired = false;
+        continue;
+      }
+      const value = normalizeNamePart(patch[f] ?? '');
       if (!isValidNamePart(value)) throw AppError.validation(`${f} is not a valid name`);
       set[f] = value;
       set.nameReviewRequired = false;
@@ -233,22 +243,55 @@ export class AdmService {
   // Disputes (ADM-04)
   // ---------------------------------------------------------------------------
 
-  listDisputes() {
-    return this.db.select().from(dispute).orderBy(sql`${dispute.createdAt} desc`);
+  /**
+   * Disputes with what they are about: the transaction's code, type and amount,
+   * and who bought and sold. The list used to be two UUID fragments and a
+   * status — an admin could not tell one dispute from another without a query.
+   */
+  async listDisputes() {
+    const buyer = alias(userAccount, 'buyer');
+    const seller = alias(userAccount, 'seller');
+    return this.db
+      .select({
+        id: dispute.id,
+        code: dispute.code,
+        transactionId: dispute.transactionId,
+        status: dispute.status,
+        ruling: dispute.ruling,
+        note: dispute.note,
+        createdAt: dispute.createdAt,
+        transactionCode: transaction.code,
+        transactionType: transaction.type,
+        price: transaction.price,
+        buyerUsername: buyer.username,
+        sellerUsername: seller.username,
+      })
+      .from(dispute)
+      .leftJoin(transaction, eq(transaction.id, dispute.transactionId))
+      .leftJoin(buyer, eq(buyer.id, transaction.buyerId))
+      .leftJoin(seller, eq(seller.id, transaction.sellerId))
+      .orderBy(sql`${dispute.createdAt} desc`);
   }
 
   /** Recorded transactions a dispute can reference (Requirement 13.3). */
   listTransactions() {
+    const buyer = alias(userAccount, 'buyer');
+    const seller = alias(userAccount, 'seller');
     return this.db
       .select({
         id: transaction.id,
+        code: transaction.code,
         type: transaction.type,
         price: transaction.price,
         buyerId: transaction.buyerId,
         sellerId: transaction.sellerId,
+        buyerUsername: buyer.username,
+        sellerUsername: seller.username,
         createdAt: transaction.createdAt,
       })
       .from(transaction)
+      .leftJoin(buyer, eq(buyer.id, transaction.buyerId))
+      .leftJoin(seller, eq(seller.id, transaction.sellerId))
       .orderBy(sql`${transaction.executedAt} desc`);
   }
 
@@ -260,6 +303,17 @@ export class AdmService {
       .where(eq(transaction.id, input.transactionId))
       .limit(1);
     if (!tx) throw AppError.validation(`Transaction ${input.transactionId} does not exist`);
+
+    // One live dispute per transaction: a second one splits the record of the
+    // same argument across two rows with two rulings.
+    const [live] = await this.db
+      .select({ code: dispute.code })
+      .from(dispute)
+      .where(and(eq(dispute.transactionId, input.transactionId), inArray(dispute.status, ['open', 'investigating'])))
+      .limit(1);
+    if (live) {
+      throw new AppError(ErrorCode.CONFLICT, `This transaction already has an open dispute (${live.code}).`, 409);
+    }
 
     const [row] = await this.db
       .insert(dispute)

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -14,6 +14,7 @@ import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
 import { facility } from '../inv/facility.schema';
 import { item } from '../cst/cst.schema';
+import { parcel } from '../inv/parcel.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
@@ -638,6 +639,23 @@ export class ShipmentService {
       addOns: (s.addOns as { key: string }[]) ?? [],
       // What the parcel goes out in, so whoever packs it uses the box it was priced in.
       boxSize: s.boxSize,
+      /** Set on a direct-ship shipment: the unopened parcel it carries. */
+      sourceParcelId: s.sourceParcelId,
+      // How it ends — a parcel, a person driving it there, or a show pickup — and,
+      // for the two that aren't a parcel, the quote and the hand-over. The
+      // collector's quote panel and the operator's hand-over both read these.
+      fulfilmentMethod: s.fulfilmentMethod,
+      pickupAddress: s.pickupAddress,
+      pickupFrom: s.pickupFrom,
+      pickupTo: s.pickupTo,
+      deliverFrom: s.deliverFrom,
+      deliverTo: s.deliverTo,
+      quoteMinor: s.quoteMinor,
+      quoteNotes: s.quoteNotes,
+      quotedAt: s.quotedAt,
+      pickupEventId: s.pickupEventId,
+      handedToName: s.handedToName,
+      handedOverAt: s.handedOverAt,
       customerNotes: s.customerNotes,
       groupId: s.groupId,
       paymentDueAt: s.paymentDueAt,
@@ -665,6 +683,22 @@ export class ShipmentService {
    * than `forbidden` on a miss — telling a stranger that some other collector's
    * shipment id exists is itself a leak.
    */
+  /**
+   * The internal id, given either it or the `SHP-` code people read off the
+   * packing slip — the warehouse types the code, and nothing printed carries the id.
+   */
+  private async resolveId(idOrCode: string): Promise<string> {
+    const needle = idOrCode.trim();
+    if (!/^shp-/i.test(needle)) return needle;
+    const [row] = await this.db
+      .select({ id: shipment.id })
+      .from(shipment)
+      .where(sql`upper(${shipment.code}) = upper(${needle})`)
+      .limit(1);
+    if (!row) throw AppError.notFound('Shipment not found');
+    return row.id;
+  }
+
   async loadFor(shipmentId: string, actor: ShipmentActor) {
     const s = await this.load(shipmentId);
     const staff = actor.role === 'warehouse_operator' || actor.role === 'admin';
@@ -707,6 +741,11 @@ export class ShipmentService {
    * figure beats every estimate this system made before it was packed.
    */
   async labelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams?: number) {
+    // A direct parcel has no items to profile: it goes as weighed, from the
+    // facility it is sitting in, in the overnight envelope it was sold as.
+    if (s.sourceParcelId && ((s.itemIds as string[]) ?? []).length === 0) {
+      return this.directLabelRequest(s, measuredWeightGrams);
+    }
     const { profile, measurements } = await this.profileOf(s);
     const contentsGrams = measurements.totalWeightGrams;
     const packagingGrams = profile.packagingGrams;
@@ -737,6 +776,43 @@ export class ShipmentService {
     return { rate, request };
   }
 
+  private async directLabelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams?: number) {
+    const [site] = await this.db
+      .select({ f: facility })
+      .from(parcel)
+      .innerJoin(facility, eq(facility.id, parcel.facilityId))
+      .where(eq(parcel.id, s.sourceParcelId!))
+      .limit(1);
+    const origin =
+      site && !/placeholder|SET REAL ADDRESS/i.test(site.f.line1)
+        ? {
+            name: site.f.name,
+            street1: site.f.line1,
+            city: site.f.city,
+            region: site.f.region,
+            postalCode: site.f.postalCode,
+            country: site.f.country.toUpperCase(),
+          }
+        : undefined;
+    const request: RateRequest = {
+      destination: destinationOf(s),
+      origin,
+      items: [{ weightGrams: measuredWeightGrams && measuredWeightGrams > 0 ? measuredWeightGrams : 100 }],
+      rush: s.rushFlag,
+      signatureRequired: s.signatureRequired,
+    };
+    const rate: Rate = {
+      carrier: s.carrier ?? '',
+      serviceLevel: s.serviceLevel ?? '',
+      costMinor: s.cost ?? 0,
+      currency: s.currency ?? DEFAULT_CURRENCY,
+      estimatedDays: 0,
+      providerShipmentId: s.providerShipmentId ?? undefined,
+      providerRateId: s.providerRateId ?? undefined,
+    };
+    return { rate, request };
+  }
+
   /** Rates for a real shipment, with the same constraint annotations a quote has. */
   async rates(shipmentId: string, actor: ShipmentActor): Promise<QuotedRate[]> {
     const s = await this.loadFor(shipmentId, actor);
@@ -749,14 +825,31 @@ export class ShipmentService {
      Choosing a service, and paying for it
      ------------------------------------------------------------------ */
 
-  async selectRate(shipmentId: string, carrier: string, serviceLevel: string, actor: ShipmentActor) {
-    const s = await this.loadFor(shipmentId, actor);
-    if (s.status !== 'requested' && s.status !== 'rates_selected' && s.status !== 'awaiting_payment') {
+  /**
+   * A service can be chosen while nothing has been paid: on a request, or on a
+   * held shipment (re-choosing replaces the frozen price, and nothing was
+   * taken). Not once it is `rates_selected` — that was paid for, and choosing
+   * again charged the parcel a second time and spent the membership cover twice.
+   */
+  private assertChoosable(s: typeof shipment.$inferSelect) {
+    if (s.status === 'rates_selected') {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        'A service is already chosen and paid for. Cancel this shipment to choose a different one.',
+        409,
+      );
+    }
+    if (s.status !== 'requested' && s.status !== 'awaiting_payment') {
       throw new AppError(ErrorCode.CONFLICT, 'Shipment already in progress', 409);
     }
     if (s.mergedIntoShipmentId) {
       throw new AppError(ErrorCode.CONFLICT, 'This request was merged into another', 409);
     }
+  }
+
+  async selectRate(shipmentId: string, carrier: string, serviceLevel: string, actor: ShipmentActor) {
+    const s = await this.loadFor(shipmentId, actor);
+    this.assertChoosable(s);
 
     const service = findService(carrier, serviceLevel);
     if (!service) throw AppError.validation('Unknown carrier or service');
@@ -779,6 +872,7 @@ export class ShipmentService {
    * for honestly.
    */
   async selectRecommended(shipmentId: string, actor: ShipmentActor) {
+    this.assertChoosable(await this.loadFor(shipmentId, actor));
     const quoted = await this.rates(shipmentId, actor);
     const best = quoted.find((r) => r.recommended);
     if (!best) {
@@ -1006,8 +1100,8 @@ export class ShipmentService {
     return { expired: expired.length, shipmentIds: expired };
   }
 
-  async track(shipmentId: string, actor: ShipmentActor) {
-    const s = await this.loadFor(shipmentId, actor);
+  async track(idOrCode: string, actor: ShipmentActor) {
+    const s = await this.loadFor(await this.resolveId(idOrCode), actor);
     const [owner] = await this.db
       .select({
         username: userAccount.username,
@@ -1039,12 +1133,38 @@ export class ShipmentService {
           .from(item)
           .where(inArray(item.id, ids))
       : [];
-    return {
+    const view = {
       ...this.toTrackingView(s, {
         username: owner?.username ?? null,
         accountName: fullName(owner?.firstName, owner?.lastName),
       }),
       items,
     };
+
+    // Direct from Delaware: the box IS an unopened parcel, so the thing to scan
+    // is the parcel's own label. `itemIds` stays empty — the shipment has no
+    // items — and the parcel is the one line in `items`, which is what the
+    // packing bench matches scans against and sends back as verified.
+    if (s.sourceParcelId && ids.length === 0) {
+      const [p] = await this.db
+        .select({ id: parcel.id, code: parcel.code, trackingNumber: parcel.trackingNumber })
+        .from(parcel)
+        .where(eq(parcel.id, s.sourceParcelId))
+        .limit(1);
+      if (p) {
+        return {
+          ...view,
+          items: [
+            {
+              id: p.id,
+              serialNumber: p.code,
+              barcode: p.trackingNumber ?? p.code,
+              description: 'Unopened parcel, shipped direct',
+            },
+          ],
+        };
+      }
+    }
+    return view;
   }
 }

@@ -120,11 +120,16 @@ export function WalletRequestsSection({
   async function act(request: WalletRequest, action: string, body?: Record<string, unknown>) {
     setBusy(true);
     try {
-      await api.post('/admin/wallet-requests/' + request.id + '/' + action, body ?? {});
+      const res = await api.post<{ status?: string } | undefined>(
+        '/admin/wallet-requests/' + request.id + '/' + action,
+        body ?? {},
+      );
+      // Name the state it is now in — "Request WR-…: Completed." — not the
+      // button that was pressed ("…: Complete and move money.").
       onMsg(
         t('admin.requests.actionDone', {
           code: request.code,
-          status: t(('admin.requests.' + action) as MessageKey),
+          status: res?.status ? statusLabel(t, res.status) : t(('admin.requests.' + action) as MessageKey),
         }),
       );
       await load();
@@ -175,18 +180,18 @@ export function WalletRequestsSection({
               </select>
             </label>
             <label className="control">
+              <span className="control-label">{t('admin.requests.filterFrom')}</span>
               <input
                 type="date"
                 value={from}
-                aria-label={t('admin.requests.filterFrom')}
                 onChange={(e) => setFrom(e.target.value)}
               />
             </label>
             <label className="control">
+              <span className="control-label">{t('admin.requests.filterTo')}</span>
               <input
                 type="date"
                 value={to}
-                aria-label={t('admin.requests.filterTo')}
                 onChange={(e) => setTo(e.target.value)}
               />
             </label>
@@ -198,7 +203,7 @@ export function WalletRequestsSection({
         ) : rows.length === 0 ? (
           <EmptyState title={t('admin.requests.empty')} icon={<IconReceipt />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -216,10 +221,10 @@ export function WalletRequestsSection({
               <tbody>
                 {rows.map((request) => (
                   <tr key={request.id} className={selected?.id === request.id ? 'is-selected' : undefined}>
-                    <td dir="ltr" className="dt-primary">
+                    <td data-label={t('wallet.requests.col.code')} dir="ltr" className="dt-primary">
                       {request.code}
                     </td>
-                    <td>
+                    <td data-label={t('wallet.requests.col.customer')}>
                       {request.customerName || request.email || '—'}
                       {request.username && (
                         <span className="dt-sub" dir="ltr">
@@ -227,16 +232,18 @@ export function WalletRequestsSection({
                         </span>
                       )}
                     </td>
-                    <td>{typeLabel(t, request.type)}</td>
-                    <td className="td-end num" dir="ltr">
+                    <td data-label={t('wallet.requests.col.type')}>{typeLabel(t, request.type)}</td>
+                    <td data-label={t('wallet.requests.col.amount')} className="td-end num" dir="ltr">
                       {formatUsd(request.amount)}
                     </td>
-                    <td>
+                    <td data-label={t('wallet.requests.col.status')}>
                       <StatusBadge tone={WALLET_REQUEST_TONE[request.status] ?? 'neutral'}>
                         {statusLabel(t, request.status)}
                       </StatusBadge>
                     </td>
-                    <td dir="ltr">{formatDate(request.createdAt, locale)}</td>
+                    <td data-label={t('wallet.requests.col.created')} dir="ltr">
+                      {formatDate(request.createdAt, locale)}
+                    </td>
                     <td className="td-tight">
                       <Button size="sm" variant="secondary" onClick={() => void openDetail(request.id)}>
                         {t('wallet.requests.detail')}
@@ -395,7 +402,17 @@ function WalletRequestDrawer({
         )}
         <DetailRow label={t('wallet.request.reference')}>{request.reference || '—'}</DetailRow>
         <DetailRow label={t('wallet.request.document')}>
-          {request.documentKey ? <code dir="ltr">{request.documentKey}</code> : '—'}
+          {/* The attachment, as something a reviewer can open: the key on its own
+              named a file nobody could see. */}
+          {request.documentUrl ? (
+            <a href={request.documentUrl} target="_blank" rel="noreferrer" className="link-more">
+              {t('wallet.request.documentView')}
+            </a>
+          ) : request.documentKey ? (
+            <code dir="ltr">{request.documentKey}</code>
+          ) : (
+            '—'
+          )}
         </DetailRow>
         <DetailRow label={t('wallet.request.notes')}>{request.notes || '—'}</DetailRow>
         <DetailRow label={t('wallet.requests.col.created')}>
@@ -426,7 +443,11 @@ function WalletRequestDrawer({
               </p>
               <p className="dt-sub" dir="ltr">
                 {formatDateTime(event.occurredAt, locale)}
-                {event.actorRole ? ' · ' + event.actorRole : ''}
+                {event.actorRole
+                  ? ' · ' + (['user', 'warehouse_operator', 'admin'].includes(event.actorRole)
+                      ? t(`role.${event.actorRole}` as MessageKey)
+                      : event.actorRole)
+                  : ''}
               </p>
               {event.reason && <p className="card-desc">{event.reason}</p>}
             </li>

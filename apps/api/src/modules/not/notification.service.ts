@@ -33,11 +33,16 @@ export class NotificationService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   /** The caller's own notifications, newest first. */
+  /**
+   * The feed. In-app rows only: an event that was also emailed has a second
+   * row for the email, and returning both showed every such event twice and
+   * doubled the bell's count.
+   */
   listMine(userId: string) {
     return this.db
       .select()
       .from(notification)
-      .where(eq(notification.userId, userId))
+      .where(and(eq(notification.userId, userId), eq(notification.channel, 'in_app')))
       .orderBy(sql`${notification.createdAt} desc`);
   }
 

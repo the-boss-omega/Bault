@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../shared/names';
 import {
   DISPOSAL_CATEGORIES,
   DISPOSAL_OUTCOMES,
+  itemClassLabel,
 } from '../../shared/itemClasses';
 import { useRoute, useNavigation } from '../../shared/routing';
-import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
+import { Barcode, BarcodeLabel, BarcodePrintAllButton, BarcodePrintButton } from '../../shared/Barcode';
 import {
   Button,
   ContextTabs,
@@ -30,7 +31,6 @@ import {
   IconPlus,
   IconScan,
   IconServices,
-  IconShipping,
 } from '../../shared/ui/icons';
 import { ServiceQueue } from './ServiceQueue';
 import { GradingSubmissions } from './GradingSubmissions';
@@ -39,8 +39,11 @@ import { ReceiveParcels } from './ReceiveParcels';
 import { IntakeBench } from './IntakeBench';
 import { HouseOrdersPanel } from './HouseOrdersPanel';
 import { SupportQueue } from './SupportQueue';
+import { OutboundBench } from './OutboundBench';
+import { EscrowQueue } from './EscrowQueue';
+import { NoteLine, useNote } from './feedback';
+import { DisposalsList, ItemLookupPanel, ReconcilePanel, TransferPanel } from './InventoryTools';
 import type { InboundAddress, ParcelWorkflow } from '../../shared/parcels';
-import { boxLabel } from '../../shared/carriers';
 
 /**
  * A shelf, as the console sees one.
@@ -125,7 +128,7 @@ const CUT_LABEL: Record<string, MessageKey> = {
  * the company, and coming back to close the box with nothing checking that
  * anything had been booked at all.
  */
-export function WarehouseConsole() {
+export function WarehouseConsole({ isAdmin = false }: { isAdmin?: boolean }) {
   const { t } = useI18n();
   const route = useRoute();
   const { goTab } = useNavigation(route);
@@ -157,6 +160,17 @@ export function WarehouseConsole() {
    * list of boxes is stale.
    */
   const [queueVersion, setQueueVersion] = useState(0);
+  /**
+   * Bumped by every action that moves stock, so the report under them reloads.
+   * A relocate used to leave the report showing the old shelf counts.
+   */
+  const [stockVersion, setStockVersion] = useState(0);
+  const stockChanged = useCallback(async () => {
+    setStockVersion((v) => v + 1);
+    await loadSummaryRef.current();
+  }, []);
+  /** Open helpdesk tickets, for the count on the Support tab. */
+  const [supportOpen, setSupportOpen] = useState(0);
 
   const tab: WarehouseTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as WarehouseTab)
@@ -185,7 +199,14 @@ export function WarehouseConsole() {
       setError((e as Error).message);
       setShelfRows([]);
     }
+    try {
+      setSupportOpen((await api.get<{ open: number }>('/support/queue/count')).open);
+    } catch {
+      /* the tab simply shows no count */
+    }
   }, []);
+  const loadSummaryRef = useRef(loadSummary);
+  loadSummaryRef.current = loadSummary;
 
   /**
    * Run a receive and refresh what it invalidated.
@@ -228,7 +249,12 @@ export function WarehouseConsole() {
     return { total, inService };
   }, [shelfRows, bins]);
 
-  const tabs = TABS.map((key) => ({ key, label: t(`warehouse.tab.${key}` as MessageKey) }));
+  const tabs = TABS.map((key) => {
+    const label = t(`warehouse.tab.${key}` as MessageKey);
+    // Waiting tickets are counted on the tab, so a customer's question is seen
+    // from any tab rather than only by whoever happens to open Support.
+    return { key, label: key === 'support' && supportOpen > 0 ? `${label} (${supportOpen})` : label };
+  });
 
   return (
     /*
@@ -253,10 +279,18 @@ export function WarehouseConsole() {
         actions={
           /* Secondary, not primary. The bench below has the primary action of
              every screen it appears on, and two gold buttons on one screen is
-             the same as none. */
-          <Button variant="secondary" icon={<IconPlus />} onClick={() => goTab('receiving')}>
-            {t('warehouse.addInventory')}
-          </Button>
+             the same as none. Not drawn on Receiving, where it went nowhere. */
+          tab === 'receiving' ? undefined : (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<IconPlus />}
+              className="ctx-add"
+              onClick={() => goTab('receiving')}
+            >
+              {t('warehouse.addInventory')}
+            </Button>
+          )
         }
       />
 
@@ -278,13 +312,18 @@ export function WarehouseConsole() {
               icon={<IconAlert />}
               tone="amber"
               footer={
-                inbound?.oldestWaitingHours != null ? (
-                  <span className="hint">
-                    {t('warehouse.metric.oldestWaiting', { hours: inbound.oldestWaitingHours })}
-                  </span>
-                ) : (
+                <>
+                  {inbound?.oldestWaitingHours != null && (
+                    <span className="hint">
+                      {inbound.oldestWaitingHours >= 48
+                        ? t('warehouse.metric.oldestWaitingDays', {
+                            days: Math.floor(inbound.oldestWaitingHours / 24),
+                          })
+                        : t('warehouse.metric.oldestWaiting', { hours: inbound.oldestWaitingHours })}
+                    </span>
+                  )}
                   <ViewAllLink onClick={() => goTab('receiving')}>{t('warehouse.viewParcels')}</ViewAllLink>
-                )
+                </>
               }
             />
             <MetricCard
@@ -411,31 +450,37 @@ export function WarehouseConsole() {
             because that is where the scan fields happened to live, and it made
             the receiving bench a page of five unrelated forms.
           */}
+          <ItemLookupPanel onLog={append} />
+
           <Panel title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
-            <RelocatePanel onLog={append} onDone={loadSummary} />
+            <RelocatePanel onLog={append} onDone={stockChanged} />
           </Panel>
 
           <Panel title={t('warehouse.hold.legend')} subtitle={t('warehouse.hold.subtitle')}>
-            <HoldPanel onLog={append} onDone={loadSummary} />
+            <HoldPanel onLog={append} onDone={stockChanged} />
           </Panel>
 
           <Panel title={t('warehouse.lots.legend')} flush>
-            <LotsPanel onLog={append} onDone={loadSummary} />
+            <LotsPanel onLog={append} onDone={stockChanged} />
           </Panel>
+
+          <TransferPanel onLog={append} onDone={() => void stockChanged()} />
+
+          <InventoryTab bins={bins} t={t} version={stockVersion} />
+
+          <ReconcilePanel />
 
           <Panel title={t('warehouse.disposal.legend')} subtitle={t('warehouse.disposal.subtitle')}>
-            <DisposalPanel onLog={append} />
+            <DisposalPanel onLog={append} onDone={() => setStockVersion((v) => v + 1)} />
           </Panel>
 
-          <InventoryTab bins={bins} t={t} />
+          <DisposalsList version={stockVersion} />
         </TabPanel>
       )}
 
       {tab === 'shipments' && (
         <TabPanel tab="shipments">
-          <Panel title={t('warehouse.fulfillShipment')} subtitle={t('warehouse.shipments.subtitle')}>
-            <FulfillmentPanel onLog={append} />
-          </Panel>
+          <OutboundBench onLog={append} />
         </TabPanel>
       )}
 
@@ -447,10 +492,11 @@ export function WarehouseConsole() {
 
       {tab === 'services' && (
         <TabPanel tab="services">
-          <ServiceQueue onChanged={loadSummary} />
+          <ServiceQueue onChanged={loadSummary} isAdmin={isAdmin} />
           {/* The batch sits under the queue because it is the step AFTER
               accepting a grading request, not a separate job. */}
           <GradingSubmissions />
+          <EscrowQueue />
         </TabPanel>
       )}
 
@@ -467,7 +513,7 @@ export function WarehouseConsole() {
    Inventory report
    ============================================================ */
 
-function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
+function InventoryTab({ bins, t, version }: { bins: Bin[]; t: TranslateFn; version: number }) {
   const [cut, setCut] = useState('shelf');
   const [rows, setRows] = useState<ReportRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -486,7 +532,7 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, version]);
 
   const cutKey = CUT_LABEL[cut];
 
@@ -519,7 +565,7 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
         </>
       }
     >
-      {error && <div style={{ padding: 16 }}><ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} /></div>}
+      {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
       <InventoryRows rows={rows ?? []} loading={rows === null} cut={cut} bins={bins} t={t} />
     </Panel>
   );
@@ -572,11 +618,12 @@ function InventoryRows({
           {rows.map((row, index) => {
             const bin = row.key ? byId.get(row.key) : undefined;
             const used = row.count;
+            const name = rowName(t, cut, row, bin);
             return (
               <tr key={`${row.key ?? 'none'}-${index}`}>
                 <td data-label={cutKey ? t(cutKey) : cut}>
-                  <span className="dt-primary" dir="ltr">
-                    {row.label ?? row.key ?? t('warehouse.report.noValue')}
+                  <span className="dt-primary" dir={row.key === null ? undefined : 'ltr'}>
+                    {name}
                   </span>
                 </td>
                 {isShelf && <td data-label={t('warehouse.bins.colZone')}>{bin?.zone ?? '—'}</td>}
@@ -591,7 +638,7 @@ function InventoryRows({
                 {isShelf && (
                   <td data-label={t('admin.col.status')}>
                     {!bin ? (
-                      <StatusBadge>{t('warehouse.status.unshelved')}</StatusBadge>
+                      '—'
                     ) : !bin.active ? (
                       <StatusBadge tone="warning">{t('warehouse.status.outOfService')}</StatusBadge>
                     ) : used === 0 ? (
@@ -608,6 +655,23 @@ function InventoryRows({
       </table>
     </div>
   );
+}
+
+/**
+ * A report row's name, in the reader's language. The API's labels are English
+ * (they are also printed on the PDF), so the rows with no value and the class
+ * names are translated here; a shelf is named by its serial alone, because the
+ * zone has its own column and was being shown twice.
+ */
+function rowName(t: TranslateFn, cut: string, row: ReportRow, bin: Bin | undefined): string {
+  if (row.key === null) {
+    if (cut === 'shelf') return t('warehouse.status.unshelved');
+    if (cut === 'condition') return t('warehouse.report.ungraded');
+    return t('warehouse.report.noValue');
+  }
+  if (cut === 'shelf') return bin?.serialNumber ?? row.label ?? row.key;
+  if (cut === 'item_class') return itemClassLabel(t, row.key);
+  return row.label ?? row.key;
 }
 
 /* ============================================================
@@ -633,18 +697,23 @@ function RelocatePanel({
   const { t } = useI18n();
   const [scanItem, setScanItem] = useState('');
   const [scanBin, setScanBin] = useState('');
+  const { note, ok, fail } = useNote();
 
   async function relocate() {
     try {
       await api.post(`/custody/items/${encodeURIComponent(scanItem.trim())}/relocate`, {
         binId: scanBin.trim(),
       });
-      onLog(t('warehouse.log.relocateDone', { item: scanItem, bin: scanBin }));
+      const line = t('warehouse.log.relocateDone', { item: scanItem.trim(), bin: scanBin.trim() });
+      onLog(line);
+      ok(line);
       setScanItem('');
       setScanBin('');
       await onDone();
     } catch (e) {
-      onLog(t('warehouse.log.relocateError', { message: (e as Error).message }));
+      const line = t('warehouse.log.relocateError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     }
   }
 
@@ -668,6 +737,9 @@ function RelocatePanel({
         >
           {t('warehouse.relocate.submit')}
         </Button>
+      </div>
+      <div className="form-grid-full">
+        <NoteLine note={note} />
       </div>
     </div>
   );
@@ -695,6 +767,7 @@ function HoldPanel({
   const { t } = useI18n();
   const [scanItem, setScanItem] = useState('');
   const [busy, setBusy] = useState(false);
+  const { note, ok, fail } = useNote();
 
   async function act(hold: boolean) {
     const id = scanItem.trim();
@@ -704,22 +777,24 @@ function HoldPanel({
       const res = hold
         ? await api.post<{ changed: boolean }>(path)
         : await api.del<{ changed: boolean }>(path);
-      onLog(
-        t(
-          res.changed
-            ? hold
-              ? 'warehouse.log.holdPlaced'
-              : 'warehouse.log.holdReleased'
-            : hold
-              ? 'warehouse.log.holdAlready'
-              : 'warehouse.log.holdNone',
-          { item: id },
-        ),
+      const line = t(
+        res.changed
+          ? hold
+            ? 'warehouse.log.holdPlaced'
+            : 'warehouse.log.holdReleased'
+          : hold
+            ? 'warehouse.log.holdAlready'
+            : 'warehouse.log.holdNone',
+        { item: id },
       );
+      onLog(line);
+      ok(line);
       setScanItem('');
       await onDone();
     } catch (e) {
-      onLog(t('warehouse.log.holdError', { message: (e as Error).message }));
+      const line = t('warehouse.log.holdError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     } finally {
       setBusy(false);
     }
@@ -748,6 +823,9 @@ function HoldPanel({
           </Button>
         </div>
       </div>
+      <div className="form-grid-full">
+        <NoteLine note={note} />
+      </div>
     </div>
   );
 }
@@ -770,15 +848,20 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
   const { t } = useI18n();
   const [lots, setLots] = useState<OpenLot[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** The lot waiting for its second press. Breaking one cannot be undone. */
+  const [confirming, setConfirming] = useState<string | null>(null);
+  /** The standalone items the last break produced: each needs a label. */
+  const [produced, setProduced] = useState<ProducedItem[]>([]);
+  const { note, ok, fail } = useNote();
 
   const load = useCallback(async () => {
     try {
       setLots(await api.get<OpenLot[]>('/intake/lots'));
     } catch (e) {
-      onLog((e as Error).message);
+      fail((e as Error).message);
       setLots([]);
     }
-  }, [onLog]);
+  }, [fail]);
 
   useEffect(() => {
     void load();
@@ -787,23 +870,58 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
   async function breakLot(lot: OpenLot) {
     setBusy(lot.id);
     try {
-      const res = await api.post<{ producedCount: number }>(`/intake/items/${lot.id}/break-lot`);
-      onLog(t('warehouse.lots.broken', { lot: lot.serialNumber, count: res.producedCount }));
+      const res = await api.post<{ producedCount: number; items: ProducedItem[] }>(
+        `/intake/items/${lot.id}/break-lot`,
+      );
+      const line = t('warehouse.lots.broken', { lot: lot.serialNumber, count: res.producedCount });
+      onLog(line);
+      ok(line);
+      setProduced(res.items ?? []);
+      setConfirming(null);
       await load();
       await onDone();
     } catch (e) {
-      onLog(t('warehouse.lots.breakError', { message: (e as Error).message }));
+      const line = t('warehouse.lots.breakError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     } finally {
       setBusy(null);
     }
   }
 
   if (lots === null) return <SkeletonTable rows={3} columns={4} />;
-  if (lots.length === 0) {
-    return <EmptyState title={t('warehouse.lots.empty')} text={t('warehouse.lots.emptyText')} icon={<IconLayers />} />;
-  }
+
+  const labels = produced.map((p) => ({
+    value: p.barcode,
+    caption: p.binSerial ? `${p.description || p.serialNumber} → ${p.binSerial}` : p.description || p.serialNumber,
+  }));
 
   return (
+    <>
+      <div className="panel-note">
+        <NoteLine note={note} />
+      </div>
+      {/* The cards a break just produced, each with its own new serial. They
+          came out of the lot unlabelled, and nothing showed their serials. */}
+      {produced.length > 0 && (
+        <div className="stack stack--tight intake-labels">
+          <div className="row">
+            <p className="hint">{t('warehouse.lots.labelsHint')}</p>
+            <span className="spacer" />
+            <BarcodePrintAllButton labels={labels} />
+          </div>
+          <ul className="card-grid">
+            {labels.map((l) => (
+              <li key={l.value} className="card">
+                <BarcodeLabel value={l.value} caption={l.caption} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {lots.length === 0 ? (
+        <EmptyState title={t('warehouse.lots.empty')} text={t('warehouse.lots.emptyText')} icon={<IconLayers />} />
+      ) : (
     <div className="dt-wrap dt-wrap--stack">
       <table className="data-table">
         <thead>
@@ -822,21 +940,50 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
               <td data-label={t('warehouse.lots.colLot')}>
                 <code dir="ltr">{lot.serialNumber}</code>
               </td>
-              <td data-label={t('warehouse.intake.description')}>{lot.description || lot.typeClass}</td>
+              <td data-label={t('warehouse.intake.description')}>
+                {lot.description || itemClassLabel(t, lot.typeClass)}
+              </td>
               <td data-label={t('warehouse.lots.colSize')} className="td-end num">
                 {lot.lotSize}
               </td>
-              <td className="td-tight">
-                <Button size="sm" variant="secondary" disabled={busy === lot.id} onClick={() => breakLot(lot)}>
-                  {t('intake.breakLot')}
-                </Button>
+              <td className="td-tight td-actions">
+                {confirming === lot.id ? (
+                  <div className="stack stack--tight">
+                    <span className="field-error">
+                      {t('warehouse.lots.confirm', { count: lot.lotSize })}
+                    </span>
+                    <div className="actions">
+                      <Button size="sm" variant="danger" loading={busy === lot.id} onClick={() => void breakLot(lot)}>
+                        {t('intake.breakLot')}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                        {t('ui.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={() => setConfirming(lot.id)}>
+                    {t('intake.breakLot')}
+                  </Button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+      )}
+    </>
   );
+}
+
+/** One card a lot break produced, with the shelf it inherited. */
+interface ProducedItem {
+  id: string;
+  serialNumber: string;
+  barcode: string;
+  description: string;
+  binSerial?: string | null;
 }
 
 /* ============================================================
@@ -859,7 +1006,7 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
  * This row is the only account of why somebody's property was destroyed, and it
  * has to read as one.
  */
-function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
+function DisposalPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: () => void }) {
   const { t } = useI18n();
   const [ownerUsername, setOwnerUsername] = useState('');
   const [category, setCategory] = useState(DISPOSAL_CATEGORIES[0]?.key ?? 'gps_tracker');
@@ -867,6 +1014,7 @@ function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const { note, ok, fail } = useNote();
 
   const normalizedOwner = normalizeUsername(ownerUsername);
   const ownerOk = isValidUsername(normalizedOwner);
@@ -882,11 +1030,16 @@ function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
         description: description.trim(),
         notes: notes.trim(),
       });
-      onLog(t('warehouse.disposal.recorded', { code: row.code, owner: normalizedOwner }));
+      const line = t('warehouse.disposal.recorded', { code: row.code, owner: normalizedOwner });
+      onLog(line);
+      ok(line);
       setDescription('');
       setNotes('');
+      onDone();
     } catch (e) {
-      onLog(t('warehouse.disposal.error', { message: (e as Error).message }));
+      const line = t('warehouse.disposal.error', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     } finally {
       setBusy(false);
     }
@@ -944,218 +1097,7 @@ function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
           {t('warehouse.disposal.submit')}
         </Button>
       </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   Shipment fulfillment
-   ============================================================ */
-
-interface ShipmentDetail {
-  id: string;
-  code: string | null;
-  status: string;
-  carrier: string | null;
-  itemIds: string[];
-  /** Each item's serial and label barcode, so a scan can be matched to it. */
-  items?: { id: string; serialNumber: string; barcode: string; description: string }[];
-  destinationAddress: string;
-  boxSize: string | null;
-}
-
-/**
- * Structured shipment fulfillment (Requirement 5.3). The operator loads the
- * shipment, SCANS every item into the box, and fills the required carrier /
- * weight / notes fields before the request can be closed.
- *
- * What is sent as `scannedItemIds` is what was scanned — never the shipment's
- * own list. It used to be the shipment's own list (`detail.itemIds`), behind
- * tick-boxes, so the API's "the scanned set must equal the shipment" check
- * compared the list with itself and could not fail: a wrong card in the box
- * shipped. Now a label that isn't in this shipment is shown and blocks
- * completion here, and the API refuses the set if anything still disagrees.
- */
-function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
-  const { t } = useI18n();
-  const [shipmentId, setShipmentId] = useState('');
-  const [detail, setDetail] = useState<ShipmentDetail | null>(null);
-  /** Item ids scanned into the box. */
-  const [scanned, setScanned] = useState<string[]>([]);
-  /** Labels scanned that belong to no item in this shipment. */
-  const [strays, setStrays] = useState<string[]>([]);
-  const [scanInput, setScanInput] = useState('');
-  const [carrier, setCarrier] = useState('DHL');
-  const [weight, setWeight] = useState('500');
-  const [notes, setNotes] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function load() {
-    try {
-      const s = await api.get<ShipmentDetail>(`/shipping/shipments/${shipmentId}`);
-      setDetail(s);
-      setScanned([]);
-      setStrays([]);
-      setScanInput('');
-      setError(null);
-      if (s.carrier) setCarrier(s.carrier);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  /** A scanned label is an item's serial, its barcode, or (typed) its id. */
-  function recordScan(raw: string) {
-    const label = raw.trim();
-    if (!detail || label === '') return;
-    const match = (detail.items ?? []).find(
-      (i) => i.serialNumber === label || i.barcode === label || i.id === label,
-    );
-    if (match) setScanned((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
-    else setStrays((prev) => (prev.includes(label) ? prev : [...prev, label]));
-    setScanInput('');
-  }
-
-  const allScanned = detail ? detail.itemIds.every((id) => scanned.includes(id)) : false;
-  const complete =
-    allScanned && strays.length === 0 && carrier !== '' && weight !== '' && notes.trim() !== '';
-
-  async function completeShipment() {
-    if (!detail || !complete) return;
-    try {
-      const res = await api.post<{ trackingNumber: string }>(`/shipping/shipments/${detail.id}/dispatch`, {
-        scannedItemIds: scanned,
-        carrier,
-        packageWeightGrams: Number(weight),
-        fulfillmentNotes: notes,
-      });
-      onLog(t('warehouse.log.dispatchDone', { id: detail.code ?? detail.id, tracking: res.trackingNumber }));
-      setDetail(null);
-      setShipmentId('');
-      setNotes('');
-    } catch (e) {
-      setError((e as Error).message);
-      onLog(t('warehouse.log.dispatchError', { message: (e as Error).message }));
-    }
-  }
-
-  return (
-    <div className="stack stack--tight">
-      <div className="row">
-        <label className="field" style={{ flex: '1 1 260px' }}>
-          <span className="field-label">{t('warehouse.dispatch.shipmentId')}</span>
-          <input value={shipmentId} onChange={(e) => setShipmentId(e.target.value)} dir="ltr" />
-        </label>
-        <Button
-          variant="navy"
-          icon={<IconShipping />}
-          disabled={!shipmentId}
-          onClick={load}
-          style={{ alignSelf: 'end' }}
-        >
-          {t('warehouse.fulfill')}
-        </Button>
-      </div>
-
-      {error && <ErrorState message={error} />}
-
-      {detail && (
-        <div className="stack stack--tight">
-          <p className="infobox" dir="auto">
-            {detail.destinationAddress}
-          </p>
-          {/* The collector was quoted for this box. Packing it in a bigger one
-              ships a parcel that costs more than they paid. */}
-          <p className="field-hint">
-            {detail.boxSize
-              ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
-              : t('warehouse.dispatch.anyBox')}
-          </p>
-
-          <label className="field">
-            <span className="field-label">{t('warehouse.dispatch.scanLabel')}</span>
-            <input
-              value={scanInput}
-              onChange={(e) => setScanInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  recordScan(scanInput);
-                }
-              }}
-              dir="ltr"
-              autoComplete="off"
-            />
-            <span className="field-hint">
-              {t('warehouse.dispatch.scannedCount', { done: scanned.length, total: detail.itemIds.length })}
-            </span>
-          </label>
-
-          <ul className="check-list">
-            {detail.itemIds.map((id) => {
-              const info = (detail.items ?? []).find((i) => i.id === id);
-              const done = scanned.includes(id);
-              return (
-                <li key={id}>
-                  <span className="check">
-                    <input type="checkbox" checked={done} readOnly tabIndex={-1} aria-label={info?.serialNumber ?? id} />
-                    <code dir="ltr">{info?.serialNumber ?? id}</code>
-                    {info?.description && <span className="field-hint">{info.description}</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-
-          {strays.map((label) => (
-            <p key={label} className="field-error" role="alert">
-              {t('warehouse.dispatch.notInShipment', { serial: label })}
-            </p>
-          ))}
-          {(scanned.length > 0 || strays.length > 0) && (
-            <div className="row">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setScanned([]);
-                  setStrays([]);
-                }}
-              >
-                {t('warehouse.dispatch.clearScans')}
-              </Button>
-            </div>
-          )}
-
-          <div className="form-grid">
-            <label className="field">
-              <span className="field-label">{t('warehouse.carrier')}</span>
-              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field-label">{t('warehouse.packageWeight')}</span>
-              <input
-                type="number"
-                min={1}
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                dir="ltr"
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">{t('warehouse.notes')}</span>
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </label>
-          </div>
-
-          {!complete && <p className="field-hint">{t('warehouse.required')}</p>}
-
-          <div className="row row--end">
-            <Button variant="gold" disabled={!complete} onClick={completeShipment}>
-              {t('warehouse.complete')}
-            </Button>
-          </div>
-        </div>
-      )}
+      <NoteLine note={note} />
     </div>
   );
 }
@@ -1198,23 +1140,32 @@ function BinsPanel({
   const [oversized, setOversized] = useState(false);
   const [facilityCode, setFacilityCode] = useState('');
   const [facilities, setFacilities] = useState<InboundAddress[]>([]);
+  const [facilityError, setFacilityError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** The shelf waiting for a second press to retire it while it still holds stock. */
+  const [retiring, setRetiring] = useState<string | null>(null);
+  const { note, ok, fail } = useNote();
+
+  const loadFacilities = useCallback(async () => {
+    try {
+      const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
+      // Only a storing site can hold a shelf. A forwarding facility holds
+      // nothing by definition — everything that lands there is sent onward —
+      // so offering one here would invite a bin in a building with no shelves.
+      const storing = list.filter((f) => f.role === 'primary');
+      setFacilities(storing);
+      setFacilityError(null);
+      if (storing[0]) setFacilityCode((current) => current || storing[0]!.code);
+    } catch (e) {
+      // The API still defaults a new bin to the primary facility, but the list
+      // failing is said rather than swallowed.
+      setFacilityError((e as Error).message);
+    }
+  }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
-        // Only a storing site can hold a shelf. A forwarding facility holds
-        // nothing by definition — everything that lands there is sent onward —
-        // so offering one here would invite a bin in a building with no shelves.
-        const storing = list.filter((f) => f.role === 'primary');
-        setFacilities(storing);
-        if (storing[0]) setFacilityCode(storing[0].code);
-      } catch {
-        /* the API defaults a new bin to the primary facility on its own */
-      }
-    })();
-  }, []);
+    void loadFacilities();
+  }, [loadFacilities]);
 
   async function create() {
     try {
@@ -1223,12 +1174,16 @@ function BinsPanel({
         facilityCode: facilityCode || undefined,
         oversized,
       });
-      onLog(t('warehouse.log.binCreated', { serial: bin.serialNumber, zone: bin.zone }));
+      const line = t('warehouse.log.binCreated', { serial: bin.serialNumber, zone: bin.zone });
+      onLog(line);
+      ok(line);
       setZone('');
       setOversized(false);
       await reloadBins();
     } catch (e) {
-      onLog(t('warehouse.log.binCreateError', { message: (e as Error).message }));
+      const line = t('warehouse.log.binCreateError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     }
   }
 
@@ -1236,14 +1191,17 @@ function BinsPanel({
     setBusy(b.id);
     try {
       await api.patch(`/custody/bins/${b.id}`, { active });
-      onLog(
-        t(active ? 'warehouse.log.binReturned' : 'warehouse.log.binRetired', {
-          serial: b.serialNumber,
-        }),
-      );
+      const line = t(active ? 'warehouse.log.binReturned' : 'warehouse.log.binRetired', {
+        serial: b.serialNumber,
+      });
+      onLog(line);
+      ok(line);
+      setRetiring(null);
       await reloadBins();
     } catch (e) {
-      onLog(t('warehouse.log.binCreateError', { message: (e as Error).message }));
+      const line = t('warehouse.log.binCreateError', { message: (e as Error).message });
+      onLog(line);
+      fail(line);
     } finally {
       setBusy(null);
     }
@@ -1252,6 +1210,9 @@ function BinsPanel({
   return (
     <>
       <Panel title={t('warehouse.bins.legend')} subtitle={t('warehouse.bins.subtitle')}>
+        {facilityError && (
+          <ErrorState message={facilityError} onRetry={() => void loadFacilities()} retryLabel={t('ui.retry')} />
+        )}
         <div className="form-grid row-baseline">
           <label className="field">
             <span className="field-label">{t('warehouse.bins.zone')}</span>
@@ -1291,13 +1252,14 @@ function BinsPanel({
             </Button>
           </div>
         </div>
+        <NoteLine note={note} />
       </Panel>
 
       <Panel title={t('warehouse.metric.locations')} subtitle={t('warehouse.bins.listSubtitle')} flush>
         {bins.length === 0 ? (
           <EmptyState title={t('warehouse.bins.empty')} text={t('warehouse.bins.emptyText')} icon={<IconLocation />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -1317,10 +1279,12 @@ function BinsPanel({
                     {/* Shelf labels get printed and stuck on the physical bin. The
                         serial is printed under the bars because it is what an
                         operator reads out when the scanner will not read. */}
-                    <td dir="ltr">
+                    <td dir="ltr" data-label={t('warehouse.bins.colSerial')}>
+                      {/* The bars already carry the serial in text beneath them,
+                          so it is not printed a second time beside them. */}
                       <div className="barcode-label">
                         <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />
-                        <code>{b.serialNumber}</code>
+                        {b.barcode !== b.serialNumber && <code>{b.serialNumber}</code>}
                         <BarcodePrintButton value={b.barcode} caption={`Zone ${b.zone}`} />
                       </div>
                     </td>
@@ -1343,15 +1307,41 @@ function BinsPanel({
                         <StatusBadge tone="success">{t('warehouse.status.inStock')}</StatusBadge>
                       )}
                     </td>
-                    <td className="td-tight">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy === b.id}
-                        onClick={() => void setActive(b, !b.active)}
-                      >
-                        {t(b.active ? 'warehouse.bins.retire' : 'warehouse.bins.return')}
-                      </Button>
+                    <td className="td-tight td-actions">
+                      {/* Retiring a shelf that still holds stock is asked twice:
+                          it stops being stowed into, and what is on it has to be
+                          moved off by hand. */}
+                      {retiring === b.id ? (
+                        <div className="stack stack--tight">
+                          <span className="field-error">
+                            {t('warehouse.bins.retireConfirm', { count: b.itemCount })}
+                          </span>
+                          <div className="actions">
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              disabled={busy === b.id}
+                              onClick={() => void setActive(b, false)}
+                            >
+                              {t('warehouse.bins.retire')}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setRetiring(null)}>
+                              {t('ui.cancel')}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy === b.id}
+                          onClick={() =>
+                            b.active && b.itemCount > 0 ? setRetiring(b.id) : void setActive(b, !b.active)
+                          }
+                        >
+                          {t(b.active ? 'warehouse.bins.retire' : 'warehouse.bins.return')}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}

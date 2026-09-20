@@ -33,6 +33,8 @@ vi.mock('../../apps/web/src/shared/api', () => ({
     del: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
+  // `errorText` asks the module which failure this was.
+  apiErrorKey: () => null,
 }));
 
 const { LandingPage } = await import('../../apps/web/src/areas/customer/marketing/LandingPage');
@@ -44,6 +46,7 @@ const PRICE_LIST = {
     {
       group: 'intake',
       entries: [
+        { actionType: 'parcel_processing', model: 'fixed', value: 200, parameters: null },
         { actionType: 'intake', model: 'fixed', value: 500, parameters: null },
         {
           actionType: 'storage',
@@ -116,13 +119,23 @@ describe('the landing page', () => {
     // through the money formatter would turn 5% into "$5.00", which is the exact
     // error a price label exists to prevent.
     expect(await screen.findByText('$5.00')).toBeInTheDocument();
+    expect(screen.getByText('$2.00')).toBeInTheDocument();
     expect(screen.getByText('5%')).toBeInTheDocument();
-    expect(screen.getByText('1.50%')).toBeInTheDocument();
 
-    // $0.00 is PRINTED, not suppressed. Bault adds no handling markup on an
-    // outbound parcel, and that is a fact worth stating rather than an absence
-    // to hide behind an empty cell.
-    expect(screen.getByText('$0.00')).toBeInTheDocument();
+    /**
+     * Cashing out is quoted as the SCHEDULE it is charged on.
+     *
+     * Its rule says 1%, which is only the part above $100, and the page printed
+     * that on its own — a front page telling a collector that taking $50 out
+     * costs 50 cents when it costs $3. The row now carries both bands.
+     *
+     * The handling rule ($0.00) is off the front page for the same reason it was
+     * on it: it is not a price, it is the absence of one, and listing "$0.00"
+     * beside four real figures invited the reader to work out which was which.
+     */
+    expect(screen.getByText(/6% up to \$100 .*minimum \$0\.99.*\$5\.00 plus 1%/)).toBeInTheDocument();
+    expect(screen.queryByText('1.50%')).toBeNull();
+    expect(screen.queryByText('$0.00')).toBeNull();
   });
 
   it('states the storage terms from the rule parameters, not from its fallback value', async () => {

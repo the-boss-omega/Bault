@@ -88,42 +88,25 @@ describe('retired keys are really gone', () => {
 
 describe('brand', () => {
   /**
-   * The ONLY strings permitted to name Ship My Cards, and why.
+   * NOTHING may name Ship My Cards any more.
    *
-   * The FAQ tab presents a catalogue of answers copied verbatim from
-   * shipmycards.com, with a link to that source and a per-entry badge saying
-   * whether Bault does the thing described. These two strings are the
-   * ATTRIBUTION of that quotation. Renaming them would claim third-party copy as
-   * Bault's own — and several of those answers describe services Bault's own
-   * badges say it does not offer.
-   *
-   * The allowance is a two-key list rather than a skipped test, so adding a
-   * third such string is a deliberate act that shows up in review.
+   * There used to be an allowance of three keys: the FAQ tab carried a
+   * catalogue of answers copied verbatim from shipmycards.com, and those
+   * strings were its attribution. The FAQ is Bault's own now — its answers
+   * describe Bault's own storage terms, fees and flows — so the quotation, and
+   * with it the reason to name another company anywhere in the product, is gone.
    */
-  const ATTRIBUTION_KEYS = ['faq.subtitle', 'faq.sourceNote', 'faq.quotedNotice'];
-
   it('says Bault, never ShipMyCards, in every catalogued string', () => {
     expect(MESSAGE_KEYS.length).toBeGreaterThan(100); // the whole catalogue, not a sample
 
     const offenders: string[] = [];
     for (const key of MESSAGE_KEYS) {
-      if (ATTRIBUTION_KEYS.includes(key)) continue;
       for (const locale of LOCALES) {
         const value = t(key, locale);
         if (/ship\s*my\s*cards/i.test(value)) offenders.push(`${locale}:${key} = ${value}`);
       }
     }
     expect(offenders).toEqual([]);
-  });
-
-  it('keeps the attribution strings actually attributing', () => {
-    // If one of these stops naming the source, it is no longer an attribution
-    // and no longer belongs on the allowance above.
-    for (const key of ATTRIBUTION_KEYS) {
-      for (const locale of LOCALES) {
-        expect(t(key as never, locale)).toMatch(/ship\s*my\s*cards/i);
-      }
-    }
   });
 
   it('has no untranslated English string left as its Hebrew original', () => {

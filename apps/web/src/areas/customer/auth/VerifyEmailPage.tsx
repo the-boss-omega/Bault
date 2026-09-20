@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { errorText } from '../../../shared/errors';
 import { navigate } from '../../../shared/routing';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 
@@ -99,7 +100,7 @@ function ResendForm() {
       await api.post('/auth/verify-email/resend', { email: email.trim() });
       setSent(true);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(t, e));
     } finally {
       setBusy(false);
     }

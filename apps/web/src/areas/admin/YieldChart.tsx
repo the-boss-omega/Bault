@@ -132,7 +132,7 @@ export function YieldChart({ rows, title, subtitle }: { rows: readonly YieldBar[
             <span className="chart-label">
               <span className="ltr-run">{row.label}</span>
               <span className="chart-note">
-                {t('yield.chart.occupancy', { occupied: row.occupied, shelves: row.shelves })}
+                {t('yield.chart.occupancy', { occupied: row.occupied, shelves: row.shelves, count: row.shelves })}
               </span>
             </span>
             <span className="chart-value amount">{formatUsd(measure(row))}</span>

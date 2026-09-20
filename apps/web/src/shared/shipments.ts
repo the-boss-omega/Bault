@@ -60,6 +60,10 @@ export interface ShipmentSummary {
   restockingFeeMinor: number;
   /** Set when this request was absorbed into another by a merge. */
   mergedIntoShipmentId: string | null;
+  /** `carrier`, `hand_delivery` or `show_pickup`. */
+  fulfilmentMethod?: string;
+  /** Set on a Direct-from-Delaware shipment: the unopened parcel it carries. */
+  sourceParcelId?: string | null;
   createdAt: string;
   updatedAt: string | null;
   fulfilledAt: string | null;
@@ -125,4 +129,30 @@ export const PREPARING_STATUSES: readonly string[] = [
 
 export function isInTransit(status: string): boolean {
   return status === 'shipped' || status === 'in_transit';
+}
+
+/**
+ * The carrier's own tracking page for a number, when Bault knows where it is.
+ *
+ * A tracking number shown as bare text sends the collector off to find the
+ * carrier's site and paste it; every carrier Bault sells has a public page that
+ * takes the number in the URL. Null for a carrier with no known page, in which
+ * case the number is shown as text.
+ */
+export function carrierTrackingUrl(carrier: string | null, trackingNumber: string | null): string | null {
+  if (!carrier || !trackingNumber) return null;
+  const n = encodeURIComponent(trackingNumber);
+  switch (carrier.toLowerCase()) {
+    case 'usps':
+    case 'epacket':
+      return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`;
+    case 'fedex':
+      return `https://www.fedex.com/fedextrack/?trknbr=${n}`;
+    case 'ups':
+      return `https://www.ups.com/track?tracknum=${n}`;
+    case 'dhl':
+      return `https://www.dhl.com/global-en/home/tracking/tracking-express.html?tracking-id=${n}`;
+    default:
+      return null;
+  }
 }

@@ -90,13 +90,13 @@ export function CustomRequestForm({
 
       {error && <ErrorState message={error} />}
 
+      {/* Same order as every other form in the drawer: the action, then Cancel. */}
       <div className="row">
-        <span className="spacer" />
-        <Button variant="ghost" onClick={onCancel}>
-          {t('ui.cancel')}
-        </Button>
         <Button variant="gold" loading={busy} disabled={!summaryOk || !detailOk} onClick={() => void submit()}>
           {t('custom.submit')}
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          {t('ui.cancel')}
         </Button>
       </div>
     </div>

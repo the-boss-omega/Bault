@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError, api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { errorText } from '../../../shared/errors';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
 import { DEMO_USERS } from './demoUsers';
@@ -60,7 +61,7 @@ export function SignInPage({
       const user = await api.post<SessionUser>('/auth/login', { identifier, password });
       onSignedIn(user);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorText(t, err));
       setUnverified(err instanceof ApiError && err.code === 'email_unverified');
     } finally {
       setBusy(false);
@@ -79,7 +80,7 @@ export function SignInPage({
       await api.post('/auth/verify-email/resend', { email: identifier.trim() });
       setResent(true);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorText(t, err));
     } finally {
       setBusy(false);
     }

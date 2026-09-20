@@ -6,6 +6,7 @@ import type { PickupShow, WhiteGloveTerms } from '../../../shared/escrow';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox, IconCalendar, IconShield } from '../../../shared/ui/icons';
 import { useShippingCountries } from '../../../shared/countries';
+import { itemClassLabel } from '../../../shared/itemClasses';
 
 interface VaultItem {
   id: string;
@@ -118,7 +119,7 @@ export function ShowPickupPanel({
                       onChange={() => setSelected((p) => ({ ...p, [item.id]: !p[item.id] }))}
                     />
                     <span>
-                      {item.typeClass} — {item.description}
+                      {itemClassLabel(t, item.typeClass)} — {item.description}
                     </span>
                   </label>
                 </li>
@@ -192,11 +193,32 @@ export function WhiteGlovePanel({
   }, [onError]);
 
   const chosen = Object.entries(selected).filter(([, v]) => v).map(([id]) => id);
+
+  /**
+   * The API's window rules, checked here as the dates are entered.
+   *
+   * They used to be learned one at a time from a banner at the top of the page,
+   * far from the field — "The delivery window has to be a window." — and only the
+   * first. Each problem is now shown under the field it is about.
+   */
+  const at = (v: string) => (v ? new Date(v).getTime() : NaN);
+  const leadHours = terms?.quoteWithinHours ?? 48;
+  const windowErrors: Record<string, string | undefined> = {};
+  if (pickupFrom && at(pickupFrom) - Date.now() < leadHours * 3_600_000) {
+    windowErrors.pickupFrom = t('ff.wg.err.lead', { hours: leadHours });
+  }
+  if (pickupFrom && pickupTo && at(pickupTo) <= at(pickupFrom)) windowErrors.pickupTo = t('ff.wg.err.window');
+  if (deliverFrom && deliverTo && at(deliverTo) <= at(deliverFrom)) windowErrors.deliverTo = t('ff.wg.err.window');
+  if (pickupFrom && deliverFrom && at(deliverFrom) < at(pickupFrom)) {
+    windowErrors.deliverFrom = t('ff.wg.err.beforePickup');
+  }
+
   const ready =
     chosen.length > 0 &&
     pickupAddress.trim() !== '' &&
     deliveryAddress.trim() !== '' &&
-    [pickupFrom, pickupTo, deliverFrom, deliverTo].every((v) => v !== '');
+    [pickupFrom, pickupTo, deliverFrom, deliverTo].every((v) => v !== '') &&
+    Object.values(windowErrors).every((e) => !e);
 
   async function request() {
     setBusy(true);
@@ -257,7 +279,7 @@ export function WhiteGlovePanel({
                     onChange={() => setSelected((p) => ({ ...p, [item.id]: !p[item.id] }))}
                   />
                   <span>
-                    {item.typeClass} — {item.description}
+                    {itemClassLabel(t, item.typeClass)} — {item.description}
                   </span>
                 </label>
               </li>
@@ -271,11 +293,23 @@ export function WhiteGlovePanel({
         <div className="field-row">
           <label className="field">
             <span className="field-label">{t('ff.wg.pickupFrom')}</span>
-            <input type="datetime-local" value={pickupFrom} onChange={(e) => setPickupFrom(e.target.value)} />
+            <input
+              type="datetime-local"
+              value={pickupFrom}
+              aria-invalid={Boolean(windowErrors.pickupFrom)}
+              onChange={(e) => setPickupFrom(e.target.value)}
+            />
+            {windowErrors.pickupFrom && <span className="field-error">{windowErrors.pickupFrom}</span>}
           </label>
           <label className="field">
             <span className="field-label">{t('ff.wg.pickupTo')}</span>
-            <input type="datetime-local" value={pickupTo} onChange={(e) => setPickupTo(e.target.value)} />
+            <input
+              type="datetime-local"
+              value={pickupTo}
+              aria-invalid={Boolean(windowErrors.pickupTo)}
+              onChange={(e) => setPickupTo(e.target.value)}
+            />
+            {windowErrors.pickupTo && <span className="field-error">{windowErrors.pickupTo}</span>}
           </label>
         </div>
 
@@ -286,11 +320,23 @@ export function WhiteGlovePanel({
         <div className="field-row">
           <label className="field">
             <span className="field-label">{t('ff.wg.deliverFrom')}</span>
-            <input type="datetime-local" value={deliverFrom} onChange={(e) => setDeliverFrom(e.target.value)} />
+            <input
+              type="datetime-local"
+              value={deliverFrom}
+              aria-invalid={Boolean(windowErrors.deliverFrom)}
+              onChange={(e) => setDeliverFrom(e.target.value)}
+            />
+            {windowErrors.deliverFrom && <span className="field-error">{windowErrors.deliverFrom}</span>}
           </label>
           <label className="field">
             <span className="field-label">{t('ff.wg.deliverTo')}</span>
-            <input type="datetime-local" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} />
+            <input
+              type="datetime-local"
+              value={deliverTo}
+              aria-invalid={Boolean(windowErrors.deliverTo)}
+              onChange={(e) => setDeliverTo(e.target.value)}
+            />
+            {windowErrors.deliverTo && <span className="field-error">{windowErrors.deliverTo}</span>}
           </label>
           {/* Was a 4rem text box asking a collector to type a two-letter
               country code from memory. The same select the address form uses. */}

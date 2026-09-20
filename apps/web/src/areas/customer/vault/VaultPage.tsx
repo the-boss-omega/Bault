@@ -3,7 +3,9 @@ import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { BarcodeLabel } from '../../../shared/Barcode';
-import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { itemClassLabel } from '../../../shared/itemClasses';
+import { displayName, setCode, timelineKindLabel, timelineLine, type TimelineEvent } from '../../../shared/timeline';
 import { formatDate, formatUsd } from '../../../shared/money';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -28,6 +30,7 @@ import {
   IconReceipt,
   IconSearch,
   IconServices,
+  IconShipping,
   IconTag,
   IconVault,
 } from '../../../shared/ui/icons';
@@ -83,6 +86,44 @@ interface VaultItem {
   departedAt?: string | null;
   departureReason?: string | null;
   stillOwned?: boolean;
+  /** A house-store copy's catalogue photo stem, when its own serial has none. */
+  photoRef?: string | null;
+  /** What the card is already promised to, if anything. See `Commitment`. */
+  commitment?: Commitment | null;
+}
+
+/**
+ * Something the card is already promised to — an open shipment, a pending
+ * trade, a funded escrow deal, a service in the queue.
+ *
+ * Every picker used to ask only "is it stored?", so a card on a shipment was
+ * still offered for sale, for a trade and for paid services, and only the last
+ * step failed. The vault says what it is promised to instead.
+ */
+interface Commitment {
+  kind: 'shipment' | 'swap' | 'service' | 'escrow';
+  code: string | null;
+  serviceType?: string;
+}
+
+/**
+ * Services that leave the card where it is. A card with one of these open can
+ * still have another; one with anything else open — a buyout, a donation, a
+ * shipment — is spoken for.
+ */
+const IN_PLACE_SERVICES = new Set(['professional_photography', 'video_review', 'condition_inspection', 'custom']);
+
+function commitmentLabel(t: TranslateFn, c: Commitment): string {
+  switch (c.kind) {
+    case 'shipment':
+      return t('vault.commit.shipment', { code: c.code ?? '' });
+    case 'escrow':
+      return t('vault.commit.escrow', { code: c.code ?? '' });
+    case 'swap':
+      return t('vault.commit.swap');
+    default:
+      return t('vault.commit.service', { code: c.code ?? '' });
+  }
 }
 
 /**
@@ -99,12 +140,6 @@ interface ItemMedia {
   url: string;
 }
 
-/** One entry of the item's complete history timeline (Requirement 13.2). */
-interface TimelineEvent {
-  at: string;
-  kind: string;
-  summary: string;
-}
 
 /**
  * `GET /vault/items/:id/storage`.
@@ -202,6 +237,13 @@ interface CardAction {
   /** Opens a form in the drawer rather than firing the request immediately. */
   form?: FormKind;
   /**
+   * Leaves the drawer for another screen (listing a card, shipping it) instead
+   * of calling an endpoint. These are not services and carry no fee here.
+   */
+  goTo?: (item: VaultItem) => void;
+  /** Allowed while an in-place service (a photo shoot, a video) is open on the card. */
+  inPlace?: boolean;
+  /**
    * The `service_request.type` this action creates, so an already-open request
    * of the same kind can be recognised and the action shown as done rather than
    * offered a second time.
@@ -212,17 +254,6 @@ interface CardAction {
 
 type FormKind = 'consignment' | 'grading' | 'inspection' | 'custom';
 
-/**
- * A timeline entry's kind, in words.
- *
- * Falls back to the raw value with its underscores removed, so an event type
- * added on the server before a translation exists still renders as something
- * rather than as a blank badge — the same rule the notification catalogue uses.
- */
-function timelineKindLabel(t: TranslateFn, kind: string): string {
-  const key = `timeline.${kind}` as MessageKey;
-  return hasMessage(key) ? t(key) : kind.replace(/_/g, ' ');
-}
 
 /**
  * Card services moved here from the retired Services section: ordering a service
@@ -235,7 +266,33 @@ function timelineKindLabel(t: TranslateFn, kind: string): string {
  */
 const CARD_ACTIONS: readonly CardAction[] = [
   {
+    /**
+     * The two things a collector most often wants to do with a card were not in
+     * its drawer at all: selling it and sending it home. Both live on their own
+     * screens, so these open those screens with the card already chosen.
+     */
+    key: 'sell',
+    label: 'vault.action.sell',
+    description: 'vault.action.sell.desc',
+    icon: <IconTag />,
+    ok: 'vault.action.sell',
+    states: ['stored'],
+    goTo: (item) => navigate({ section: 'marketplace', tab: 'sell', params: { item: item.id } }),
+    run: async () => undefined,
+  },
+  {
+    key: 'ship',
+    label: 'vault.action.ship',
+    description: 'vault.action.ship.desc',
+    icon: <IconShipping />,
+    ok: 'vault.action.ship',
+    states: ['stored'],
+    goTo: (item) => navigate({ section: 'shipping-services', tab: 'shipping', params: { item: item.id } }),
+    run: async () => undefined,
+  },
+  {
     key: 'photography',
+    inPlace: true,
     serviceType: 'professional_photography',
     label: 'services.photography',
     description: 'services.photography.desc',
@@ -262,6 +319,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     key: 'video',
+    inPlace: true,
     serviceType: 'video_review',
     label: 'services.video',
     description: 'services.video.desc',
@@ -274,6 +332,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     key: 'inspection',
+    inPlace: true,
     serviceType: 'condition_inspection',
     label: 'services.inspection',
     description: 'services.inspection.desc',
@@ -336,6 +395,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
      * after they read it, which is why it carries no figure here.
      */
     key: 'custom',
+    inPlace: true,
     label: 'custom.action',
     description: 'custom.action.desc',
     icon: <IconAsk />,
@@ -559,6 +619,7 @@ export function VaultPage() {
         <RemoveCommonsPanel
           items={items ?? []}
           windowDays={cullWindowDays}
+          values={new Map([...watch].map(([id, row]) => [id, row.estimatedValueMinor]))}
           onDone={(message) => {
             setStatus(message);
             setCulling(false);
@@ -593,7 +654,7 @@ export function VaultPage() {
           </ul>
         ) : items.length === 0 ? (
           <EmptyState
-            title={t(`vault.empty.${scope}` as MessageKey)}
+            title={q ? t('vault.empty.noMatch') : t(`vault.empty.${scope}` as MessageKey)}
             text={q ? t('vault.empty.searchText') : t(`vault.empty.${scope}Text` as MessageKey)}
             icon={scope === 'history' ? <IconArchive /> : <IconBox />}
             /*
@@ -653,6 +714,13 @@ export function VaultPage() {
   );
 }
 
+/** "from $25.00" — the cheapest grading tier, from the same price list. */
+function fromPrice(t: TranslateFn, prices: ReturnType<typeof useServicePrices>): string | null {
+  const tiers = [...prices.values()].filter((p) => p.actionType.startsWith('grading_fee:') && p.model === 'fixed');
+  if (tiers.length === 0) return null;
+  return t('services.fromPrice', { amount: formatUsd(Math.min(...tiers.map((p) => p.value))) });
+}
+
 /**
  * One holding, as a register row.
  *
@@ -684,7 +752,7 @@ function CardTile({
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
   const frozen = Boolean(item.holdFlag) && !historical;
-  const name = item.description || item.typeClass;
+  const name = displayName(item.description) || itemClassLabel(t, item.typeClass);
 
   return (
     <li
@@ -704,7 +772,7 @@ function CardTile({
       {/* The artwork pipeline is untouched — a departed card reuses exactly the
           same component and mapping, desaturated by the container's CSS only. */}
       <div className="card-art">
-        <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
+        <CardPhotoThumb serialNumber={item.photoRef ?? item.serialNumber} title={name} />
         {historical && (
           <span className="card-archive-mark" aria-hidden="true">
             <IconArchive />
@@ -744,6 +812,9 @@ function CardTile({
             card. */}
         {item.oversized && !historical && (
           <StatusBadge tone="warning">{t('vault.oversized')}</StatusBadge>
+        )}
+        {item.commitment && !historical && (
+          <StatusBadge tone="info">{commitmentLabel(t, item.commitment)}</StatusBadge>
         )}
       </div>
 
@@ -1044,6 +1115,14 @@ function ItemDrawer({
   const prices = useServicePrices();
   const [confirming, setConfirming] = useState<CardAction | null>(null);
   const [formOpen, setFormOpen] = useState<FormKind | null>(null);
+  /**
+   * A form opens UNDER the button that asked for it and is scrolled to. It used
+   * to render below all the action buttons, which on a phone is off-screen — the
+   * tap looked like it had done nothing.
+   */
+  const formRef = useCallback((node: HTMLDivElement | null) => {
+    node?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, []);
   const [busy, setBusy] = useState(false);
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
@@ -1104,16 +1183,43 @@ function ItemDrawer({
   // it at all. A held card is frozen, and releasing a hold is a warehouse
   // operation, so a collector gets no actions there either.
   const graded = Boolean(item.conditionGrade && !/^raw$/i.test(item.conditionGrade));
-  const actions = historical || item.holdFlag
+  // A card promised to a shipment, a trade or a deal takes no new actions. One
+  // with an in-place service open (a photo shoot) can still have another of
+  // those, but cannot be sold, shipped, graded or given away until it is done.
+  const commitment = historical ? null : (item.commitment ?? null);
+  const spokenFor =
+    commitment !== null &&
+    !(commitment.kind === 'service' && IN_PLACE_SERVICES.has(commitment.serviceType ?? ''));
+  const actions = historical || item.holdFlag || spokenFor
     ? []
     : CARD_ACTIONS.filter(
         (a) =>
           a.states.includes(item.lifecycleState) &&
+          (commitment === null || a.inPlace === true) &&
           // Offering "split this lot" on a single card, or "crack the slab" on a
           // raw one, would be offering a request the API refuses.
           (!a.lotOnly || (item.isLot && !item.lotBroken)) &&
           (!a.gradedOnly || graded),
       );
+
+  function renderForm(kind: FormKind) {
+    const done = (message: string) => {
+      setFormOpen(null);
+      onActed(message);
+      onClose();
+    };
+    const cancel = () => setFormOpen(null);
+    switch (kind) {
+      case 'consignment':
+        return <ConsignmentForm item={item} onCancel={cancel} onDone={done} onError={setError} />;
+      case 'grading':
+        return <GradingForm item={item} onCancel={cancel} onDone={done} onError={setError} />;
+      case 'custom':
+        return <CustomRequestForm itemId={item.id} onCancel={cancel} onDone={done} onError={setError} />;
+      case 'inspection':
+        return <InspectionForm item={item} onCancel={cancel} onDone={done} onError={setError} />;
+    }
+  }
 
   async function run(action: CardAction) {
     setBusy(true);
@@ -1130,7 +1236,8 @@ function ItemDrawer({
     }
   }
 
-  const name = item.description || item.typeClass;
+  const name = displayName(item.description) || itemClassLabel(t, item.typeClass);
+  const set = setCode(item.description);
   const frozen = Boolean(item.holdFlag) && !historical;
   /**
    * The reason the card is frozen, taken from the custody log rather than
@@ -1138,13 +1245,7 @@ function ItemDrawer({
    * between a frozen card and a broken one.
    */
   const holdReason = frozen
-    ? ((events ?? [])
-        .find((e) => e.kind === 'hold_placed')
-        ?.summary // The API prefixes the operator's reason with the event's own
-        // name — "hold placed — Dispute opened on the sale: …". The sentence
-        // above already says the item is frozen, so the prefix is the same fact
-        // twice and the reader has to read past it to reach the reason.
-        .replace(/^\s*hold placed\s*[—–-]\s*/i, '') ?? null)
+    ? (((events ?? []).find((e) => e.kind === 'hold_placed')?.data?.reason as string | undefined) ?? null)
     : null;
 
   return (
@@ -1176,9 +1277,26 @@ function ItemDrawer({
         flush
         onClose={onClose}
         footer={
-          <Button variant="ghost" onClick={onClose}>
-            {t('ui.close')}
-          </Button>
+          <>
+            {/* A question about THIS card, with the card attached — a ticket
+                about a collectible used to start from a blank form. */}
+            <Button
+              variant="ghost"
+              icon={<IconAsk />}
+              onClick={() =>
+                navigate({
+                  section: 'support',
+                  tab: 'new',
+                  params: { relatedType: 'item', relatedId: item.id, subject: item.serialNumber },
+                })
+              }
+            >
+              {t('vault.askAbout')}
+            </Button>
+            <Button variant="ghost" onClick={onClose}>
+              {t('ui.close')}
+            </Button>
+          </>
         }
       >
         {/*
@@ -1187,7 +1305,7 @@ function ItemDrawer({
           so the least the screen can do is light it like one.
         */}
         <div className={historical ? 'stage stage--departed' : 'stage'}>
-          <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
+          <CardPhotoThumb serialNumber={item.photoRef ?? item.serialNumber} title={name} />
         </div>
 
         <div className="sheet-cols">
@@ -1216,15 +1334,33 @@ function ItemDrawer({
               </p>
             )}
 
+            {commitment && (
+              <p className="drawer-note drawer-note--archive">
+                <IconClock />
+                <span>
+                  <strong>{commitmentLabel(t, commitment)}</strong>{' '}
+                  {spokenFor ? t('vault.commit.note') : t('vault.commit.inPlaceNote')}
+                </span>
+              </p>
+            )}
+
         <dl className="detail-list">
           <div className="detail-row">
             <dt className="detail-label">{t('vault.class')}</dt>
-            <dd className="detail-value">{item.typeClass}</dd>
+            <dd className="detail-value">{itemClassLabel(t, item.typeClass)}</dd>
           </div>
           <div className="detail-row">
             <dt className="detail-label">{t('vault.item.condition')}</dt>
             <dd className="detail-value">{item.conditionGrade ?? '—'}</dd>
           </div>
+          {set && (
+            <div className="detail-row">
+              <dt className="detail-label">{t('vault.item.set')}</dt>
+              <dd className="detail-value">
+                <code dir="ltr">{set}</code>
+              </dd>
+            </div>
+          )}
 
           {historical ? (
             <>
@@ -1271,7 +1407,12 @@ function ItemDrawer({
             <h3 className="drawer-heading">{t('vault.actions.title')}</h3>
             <ul className="drawer-actions">
               {actions.map((action) => {
-                const price = priceLabel(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
+                // Grading is priced per tier, so it shows the cheapest one — it
+                // had no figure at all beside the other priced services.
+                const price =
+                  action.key === 'grading'
+                    ? fromPrice(t, prices)
+                    : priceLabel(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
                 const pending = action.serviceType
                   ? openRequests.find((r) => r.type === action.serviceType)
                   : undefined;
@@ -1290,11 +1431,16 @@ function ItemDrawer({
                       disabled={busy || Boolean(pending)}
                       block
                       onClick={() =>
-                        action.form
-                          ? setFormOpen(action.form)
-                          : action.confirm
-                            ? setConfirming(action)
-                            : void run(action)
+                        action.goTo
+                          ? action.goTo(item)
+                          : action.form
+                            ? setFormOpen(formOpen === action.form ? null : action.form)
+                            : // Every priced action is confirmed with its fee first:
+                              // a photo shoot, a video and a buyout quote used to
+                              // charge on one tap.
+                              action.confirm || price
+                              ? setConfirming(action)
+                              : void run(action)
                       }
                     >
                       <span className="action-line">
@@ -1319,63 +1465,16 @@ function ItemDrawer({
                           )
                         : t(action.description)}
                     </p>
+                    {action.form && formOpen === action.form && (
+                      <div ref={formRef} className="drawer-form">
+                        {renderForm(action.form)}
+                      </div>
+                    )}
                   </li>
                 );
               })}
             </ul>
           </>
-        )}
-
-        {formOpen === 'consignment' && (
-          <ConsignmentForm
-            item={item}
-            onCancel={() => setFormOpen(null)}
-            onDone={(message) => {
-              setFormOpen(null);
-              onActed(message);
-              onClose();
-            }}
-            onError={setError}
-          />
-        )}
-
-        {formOpen === 'grading' && (
-          <GradingForm
-            item={item}
-            onCancel={() => setFormOpen(null)}
-            onDone={(message) => {
-              setFormOpen(null);
-              onActed(message);
-              onClose();
-            }}
-            onError={setError}
-          />
-        )}
-
-        {formOpen === 'custom' && (
-          <CustomRequestForm
-            itemId={item.id}
-            onCancel={() => setFormOpen(null)}
-            onDone={(message) => {
-              setFormOpen(null);
-              onActed(message);
-              onClose();
-            }}
-            onError={setError}
-          />
-        )}
-
-        {formOpen === 'inspection' && (
-          <InspectionForm
-            item={item}
-            onCancel={() => setFormOpen(null)}
-            onDone={(message) => {
-              setFormOpen(null);
-              onActed(message);
-              onClose();
-            }}
-            onError={setError}
-          />
         )}
 
             {/* The barcode is an operational control on a collector's screen, so
@@ -1417,12 +1516,14 @@ function ItemDrawer({
                       */}
                       <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
                       {/*
-                        The summary comes back from the API in English whatever
-                        the reader's locale — an operator's own words on a custody
-                        event. Isolated, so a Hebrew page lays it out as the Latin
-                        run it is instead of reordering it.
+                        Built here from the event's facts, in the reader's
+                        language. The API's own summary was English for everyone
+                        and read "Moved intake → <bin id>". Operator reasons are
+                        quoted as written, isolated so Hebrew doesn't reorder them.
                       */}
-                      <p className="register-entry ltr-run">{event.summary}</p>
+                      <p className="register-entry">
+                        <bdi>{timelineLine(t, event)}</bdi>
+                      </p>
                     </div>
                   </li>
                 ))}
@@ -1434,13 +1535,17 @@ function ItemDrawer({
 
       {confirming && (
         <ConfirmationModal
-          title={t(confirming.confirmTitle ?? 'services.donation.confirmTitle')}
+          title={
+            confirming.confirmTitle
+              ? t(confirming.confirmTitle)
+              : t('services.confirmPaidTitle', { service: t(confirming.label) })
+          }
           body={
             <>
               <p>
-                {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                  item: `${item.typeClass} — ${item.description}`,
-                })}
+                {confirming.confirmBody
+                  ? t(confirming.confirmBody, { item: `${itemClassLabel(t, item.typeClass)} — ${name}` })
+                  : t(confirming.description)}
               </p>
               {/* Donating a card charges $20, and the dialog asking somebody to
                   do something irreversible said nothing about money at all. */}
@@ -1452,7 +1557,7 @@ function ItemDrawer({
           }
           confirmLabel={t(confirming.label)}
           cancelLabel={t('ui.cancel')}
-          tone="danger"
+          tone={confirming.confirm ? 'danger' : 'gold'}
           busy={busy}
           onConfirm={() => void run(confirming)}
           onCancel={() => setConfirming(null)}

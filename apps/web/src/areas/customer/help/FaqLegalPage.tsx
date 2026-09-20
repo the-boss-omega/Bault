@@ -11,53 +11,29 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
-import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
+import {
+  FAQ_CATEGORIES,
+  FAQ_ENTRIES,
+  entryText,
+  type FaqBlock,
+  type FaqEntry,
+  type FaqLocale,
+} from './faqContent';
+import { answerQuestion, type HelpMatch } from './helpSearch';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
-import { LEGAL_DOCUMENTS, PENDING_DOCUMENTS } from './legalContent';
+import { LEGAL_DOCUMENTS, OPEN_SOURCE_NOTICES, type LegalDocument } from './legalContent';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
-
-/**
- * How each availability value is presented.
- *
- * Three values rather than the original two, because "Bault has no such
- * capability" and "Bault does most of this but not the part about lodging a
- * broker instruction" are different answers, and collapsing them into one
- * badge made the second look like the first. `partial` is warned rather than
- * greyed out: it is a thing Bault does, with a stated limit, so hiding it
- * behind the "not relevant" filter would bury a capability people have.
- */
-/** Whether any catalogued entry is outright unavailable — see the filter. */
-const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
-
-const AVAILABILITY_TONE: Record<FaqAvailability, 'info' | 'warning' | 'neutral'> = {
-  adapted: 'info',
-  partial: 'warning',
-  unavailable: 'neutral',
-};
-
-const AVAILABILITY_BADGE: Record<FaqAvailability, MessageKey> = {
-  adapted: 'faq.badge.adapted',
-  partial: 'faq.badge.partial',
-  unavailable: 'faq.badge.unavailable',
-};
-
-const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
-  adapted: 'faq.note.adaptedTitle',
-  partial: 'faq.note.partialTitle',
-  unavailable: 'faq.note.unavailableTitle',
-};
 
 const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
 type HelpTab = (typeof TABS)[number];
 
 /**
- * FAQ & Legal.
+ * Help.
  *
- * Six contextual tabs on the shared shell: Ask (the placeholder assistant),
- * Guides (Bault's own workflow walkthroughs), FAQ (the copied Ship My Cards
- * content), Shows (the card-show calendar, from real rows), Contact (how to
- * reach a person) and Legal Terms (the documents that genuinely govern Bault).
+ * Eight contextual tabs on the shared shell: Ask (search across everything
+ * below), Guides (workflow walkthroughs), FAQ (Bault's own answers), What we
+ * accept, Prices, Shows, Contact and Legal.
  *
  * The tab lives in the route, so a link can open any of them; the FAQ's `q`
  * param deep-links a single answer open and the Guides' `g` param a single
@@ -126,35 +102,23 @@ export function FaqLegalPage() {
    Ask
    ============================================================ */
 
-/**
- * The single seam a real assistant will be wired into.
- *
- * Every query resolves to exactly `#1DDD` and nothing else — no answer text, no
- * heuristics, no lookup against the FAQ. It is deliberately `async` and
- * deliberately ignores its argument so that swapping the body for a real call is
- * the only change needed at the integration point; every caller already awaits
- * it and already handles a pending state.
- *
- * It performs NO network request. That is a requirement of this placeholder, not
- * an implementation detail: nothing typed into Ask leaves the browser.
- */
-export async function answerQuestion(_query: string): Promise<string> {
-  return '#1DDD';
-}
-
 interface Turn {
   id: number;
   question: string;
-  answer: string | null;
+  matches: HelpMatch[] | null;
 }
 
 /**
- * A conversation surface that is real UI on a placeholder brain: the transcript,
- * the pending state, the keyboard handling and the live region are all what the
- * connected version will use. Only `answerQuestion` changes.
+ * Ask a question, get Bault's own answers.
+ *
+ * This screen used to be a conversation with a placeholder that replied `#1DDD`
+ * to everything — real transcript, real pending state, no answer. It now
+ * searches the FAQ and the guides in the browser and shows what matches, with a
+ * link into the full answer. Nothing typed here leaves the device, nothing is
+ * generated, and every line shown is text Bault wrote.
  */
 function AskPanel() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -172,12 +136,12 @@ function AskPanel() {
     const question = draft.trim();
     if (!question || busy) return;
     const id = nextId.current++;
-    setTurns((prev) => [...prev, { id, question, answer: null }]);
+    setTurns((prev) => [...prev, { id, question, matches: null }]);
     setDraft('');
     setBusy(true);
     try {
-      const answer = await answerQuestion(question);
-      setTurns((prev) => prev.map((turn) => (turn.id === id ? { ...turn, answer } : turn)));
+      const matches = await answerQuestion(question, locale as FaqLocale);
+      setTurns((prev) => prev.map((turn) => (turn.id === id ? { ...turn, matches } : turn)));
     } finally {
       setBusy(false);
     }
@@ -185,13 +149,6 @@ function AskPanel() {
 
   return (
     <Panel title={t('faq.ask.title')} subtitle={t('faq.ask.subtitle')}>
-      {/* Unobtrusive, but never hidden: the assistant is not connected, and a
-          user should know that before they read its reply as an answer. */}
-      <p className="ask-notice" role="note">
-        <IconAsk />
-        <span>{t('faq.ask.notConnected')}</span>
-      </p>
-
       <div className="ask-log" ref={logRef} role="log" aria-live="polite" aria-label={t('faq.ask.logLabel')}>
         {turns.length === 0 ? (
           <EmptyState title={t('faq.ask.emptyTitle')} text={t('faq.ask.emptyText')} icon={<IconAsk />} />
@@ -203,14 +160,31 @@ function AskPanel() {
                   <span className="ask-who">{t('faq.ask.you')}</span>
                   {turn.question}
                 </p>
-                <p className="ask-bubble ask-bubble--bot">
+                <div className="ask-bubble ask-bubble--bot">
                   <span className="ask-who">{t('faq.ask.assistant')}</span>
-                  {turn.answer === null ? (
+                  {turn.matches === null ? (
                     <span className="hint">{t('faq.ask.thinking')}</span>
+                  ) : turn.matches.length === 0 ? (
+                    <p>
+                      {t('faq.ask.noMatch')}{' '}
+                      <a href="#/support/new">{t('faq.ask.openTicket')}</a>
+                    </p>
                   ) : (
-                    <code dir="ltr">{turn.answer}</code>
+                    <ul className="ask-answers">
+                      {turn.matches.map((match) => (
+                        <li key={`${match.kind}-${match.id}`}>
+                          <a href={match.href} className="ask-answer-title">
+                            {match.title}
+                          </a>
+                          <StatusBadge tone="neutral" plain>
+                            {t(match.kind === 'faq' ? 'faq.ask.fromFaq' : 'faq.ask.fromGuide')}
+                          </StatusBadge>
+                          <p className="hint">{match.excerpt}</p>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </p>
+                </div>
               </li>
             ))}
           </ul>
@@ -240,59 +214,42 @@ function AskPanel() {
    FAQ
    ============================================================ */
 
-/** Flatten an entry to the plain text the search matches against. */
-function searchableText(entry: FaqEntry): string {
-  const parts: string[] = [entry.question, entry.category];
-  for (const block of entry.blocks) {
-    if (block.kind === 'ul') {
-      for (const li of block.items) {
-        parts.push(li.text, ...(li.items ?? []));
-      }
-    } else {
-      parts.push(block.text);
-    }
-  }
-  return parts.join(' \n ').toLowerCase();
-}
-
-// Built once: the catalogue is static, so re-deriving it per keystroke is waste.
-const SEARCH_INDEX = new Map(FAQ.entries.map((e) => [e.id, searchableText(e)]));
-
 function FaqPanel() {
   const { t, locale } = useI18n();
   const route = useRoute();
   const { openRecord, closeRecord } = useNavigation(route);
+  const lang = locale as FaqLocale;
 
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string>('all');
-  // The imported catalogue is mostly ShipMyCards workflows Bault does not have.
-  // Default to the entries that describe something Bault actually does, and let
-  // the reader opt into the full copied source set.
-  const [showAll, setShowAll] = useState(false);
 
   const openId = route.params.q ?? null;
 
+  // The catalogue is static, so the searchable text is derived once per language.
+  const index = useMemo(
+    () => new Map(FAQ_ENTRIES.map((e) => [e.id, entryText(e, lang).toLowerCase()])),
+    [lang],
+  );
+
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return FAQ.entries.filter((entry) => {
-      if (!showAll && entry.availability === 'unavailable') return false;
+    return FAQ_ENTRIES.filter((entry) => {
       if (category !== 'all' && entry.category !== category) return false;
       if (!needle) return true;
-      return (SEARCH_INDEX.get(entry.id) ?? '').includes(needle);
+      return (index.get(entry.id) ?? '').includes(needle);
     });
-  }, [q, category, showAll]);
+  }, [q, category, index]);
 
-  // A deep link may point at an entry the current filters hide. Reveal it rather
+  // A deep link may point at an entry the current filter hides. Reveal it rather
   // than opening nothing — the link is the stronger signal of intent.
   useEffect(() => {
     if (!openId) return;
-    const entry = FAQ.entries.find((e) => e.id === openId);
+    const entry = FAQ_ENTRIES.find((e) => e.id === openId);
     if (!entry) return;
-    if (entry.availability === 'unavailable') setShowAll(true);
     setCategory((current) => (current === 'all' || current === entry.category ? current : 'all'));
   }, [openId]);
 
-  const categories = ['all', ...FAQ.categoryOrder];
+  const categories = ['all', ...FAQ_CATEGORIES];
 
   return (
     <>
@@ -322,39 +279,7 @@ function FaqPanel() {
               </button>
             ))}
           </div>
-
-          {/* Offered only when there is something to reveal. Every entry in the
-              catalogue currently describes something Bault does, in whole or in
-              part, so a permanent "also show what does not apply" control would
-              be a toggle that changes nothing — and would imply a set of
-              excluded answers that does not exist. */}
-          {HAS_UNAVAILABLE && (
-            <label className="check">
-              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              {t('faq.showAll')}
-            </label>
-          )}
         </div>
-
-        {/*
-          The provenance notice.
-
-          This catalogue is third-party text reproduced verbatim, and it stays
-          that way: the brand rename to Bault covered the product's own strings
-          and deliberately did NOT rewrite quoted copy. Renaming inside a
-          quotation would attribute another company's policies — and services
-          Bault's own badges say it does not offer — to Bault.
-
-          So the notice is stated as a quotation, above the entries rather than
-          below them, and carries the source link.
-        */}
-        <p className="infobox faq-source">
-          {t('faq.sourceNote', { count: FAQ.source.entryCount, date: formatDate(FAQ.source.retrieved, locale) })}{' '}
-          <a href={FAQ.source.url} target="_blank" rel="noreferrer noopener" dir="ltr">
-            {FAQ.source.url}
-          </a>
-        </p>
-        <p className="hint">{t('faq.quotedNotice')}</p>
       </Panel>
 
       <Panel title={t('faq.resultsTitle', { count: results.length })} flush>
@@ -364,7 +289,13 @@ function FaqPanel() {
             text={t('faq.noResultsText')}
             icon={<IconSearch />}
             action={
-              <Button size="sm" onClick={() => { setQ(''); setCategory('all'); setShowAll(true); }}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setQ('');
+                  setCategory('all');
+                }}
+              >
                 {t('faq.clearFilters')}
               </Button>
             }
@@ -375,8 +306,8 @@ function FaqPanel() {
               <FaqItem
                 key={entry.id}
                 entry={entry}
+                locale={lang}
                 open={openId === entry.id}
-                t={t}
                 onToggle={() => (openId === entry.id ? closeRecord('q') : openRecord('q', entry.id))}
               />
             ))}
@@ -394,14 +325,14 @@ function FaqPanel() {
  */
 function FaqItem({
   entry,
+  locale,
   open,
   onToggle,
-  t,
 }: {
   entry: FaqEntry;
+  locale: FaqLocale;
   open: boolean;
   onToggle: () => void;
-  t: TranslateFn;
 }) {
   const ref = useRef<HTMLLIElement>(null);
 
@@ -424,12 +355,7 @@ function FaqItem({
           <span className="faq-chevron" aria-hidden="true">
             <IconChevronDown />
           </span>
-          <span className="faq-q-text" lang="en" dir="ltr">
-            {entry.question}
-          </span>
-          <StatusBadge tone={AVAILABILITY_TONE[entry.availability]} plain>
-            {t(AVAILABILITY_BADGE[entry.availability])}
-          </StatusBadge>
+          <span className="faq-q-text">{entry.question[locale]}</span>
         </button>
       </h3>
 
@@ -440,24 +366,9 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        {/* Bault's own note comes FIRST: the copied answer below it describes
-            another company's service, and the reader needs that framing before
-            they read it as Bault policy. */}
-        <p className={`faq-note faq-note--${entry.availability}`}>
-          <strong>
-            {t(AVAILABILITY_NOTE[entry.availability])}
-          </strong>{' '}
-          {entry.baultNote}
-        </p>
-
-        {/* The copied source answer, verbatim. Held in English and LTR
-            regardless of the app locale — translating published policy text
-            would change what it says. */}
-        <div className="faq-source-answer" lang="en" dir="ltr">
-          {entry.blocks.map((block, i) => (
-            <FaqBlockView key={i} block={block} />
-          ))}
-        </div>
+        {entry.answer[locale].map((block, i) => (
+          <FaqBlockView key={i} block={block} />
+        ))}
       </div>
     </li>
   );
@@ -465,35 +376,21 @@ function FaqItem({
 
 function FaqBlockView({ block }: { block: FaqBlock }) {
   if (block.kind === 'p') return <p>{renderInline(block.text)}</p>;
-  if (block.kind === 'h') {
-    // Source levels start at h4 inside an accordion; clamp so the page's own
-    // heading order is not broken by the copied content.
-    const Tag = (block.level >= 5 ? 'h5' : 'h4') as 'h4' | 'h5';
-    return <Tag>{renderInline(block.text)}</Tag>;
-  }
   return (
     <ul>
       {block.items.map((item, i) => (
-        <li key={i}>
-          {renderInline(item.text)}
-          {item.items && item.items.length > 0 && (
-            <ul>
-              {item.items.map((sub, j) => (
-                <li key={j}>{renderInline(sub)}</li>
-              ))}
-            </ul>
-          )}
-        </li>
+        <li key={i}>{renderInline(item)}</li>
       ))}
     </ul>
   );
 }
 
 /**
- * Render the two inline markers the extracted content carries: `**bold**` and
- * `[[label|url]]`. Deliberately not a Markdown parser and deliberately not
- * `dangerouslySetInnerHTML` — the source is third-party text, so it is rendered
- * as React nodes and can never inject markup.
+ * Render the two inline markers the content carries: `**bold**` and
+ * `[[label|href]]`. Deliberately not a Markdown parser and deliberately not
+ * `dangerouslySetInnerHTML` — everything is rendered as React nodes and can
+ * never inject markup. A link into the app stays in this tab; anything else
+ * opens in a new one.
  */
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -508,8 +405,14 @@ function renderInline(text: string): ReactNode[] {
     } else {
       const label = (match[1] ?? '').replace(/\*\*/g, '');
       const href = match[2] ?? '';
+      const internal = href.startsWith('#');
       nodes.push(
-        <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
+        <a
+          key={key++}
+          href={href}
+          target={internal ? undefined : '_blank'}
+          rel={internal ? undefined : 'noreferrer noopener'}
+        >
           {label}
         </a>,
       );
@@ -546,19 +449,21 @@ function LegalPanel() {
 
   return (
     <>
-      {/* Said plainly and first: Bault's own terms do not exist yet, so nobody
-          mistakes the licence below for an agreement with Bault. */}
-      <Panel title={t('legal.pendingTitle')} subtitle={t('legal.pendingSubtitle')}>
-        <ul className="legal-pending">
-          {PENDING_DOCUMENTS.map((key) => (
-            <li key={key}>
-              <StatusBadge tone="warning" plain>
-                {t('legal.notPublished')}
-              </StatusBadge>
-              <span>{t(key as MessageKey)}</span>
-            </li>
-          ))}
-        </ul>
+      {/* One sentence, not a list of documents that do not exist. The policy
+          below IS in force, and support answers anything it does not cover. */}
+      <Panel title={t('legal.pendingTitle')}>
+        <p className="measure">{t('legal.pendingBody')}</p>
+        <div className="row">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              window.location.hash = '#/support/new';
+            }}
+          >
+            {t('contact.openHelpdesk')}
+          </Button>
+        </div>
       </Panel>
 
       <Panel
@@ -582,9 +487,7 @@ function LegalPanel() {
           </div>
         }
       >
-        <p className="hint">
-          {t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}
-        </p>
+        <p className="hint">{t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}</p>
 
         {LEGAL_DOCUMENTS.length > 1 && (
           <div className="chip-row" role="group" aria-label={t('legal.documentLabel')}>
@@ -619,7 +522,17 @@ function LegalPanel() {
             <ol>
               {doc.sections.map((section) => (
                 <li key={section.id}>
-                  <a href={`#legal-${section.id}`}>{section.heading}</a>
+                  {/* Scrolled to in place: an `#legal-…` href is a route to the hash
+                      router, which sent it to the Vault as an unknown section. */}
+                  <a
+                    href={`#legal-${section.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById(`legal-${section.id}`)?.scrollIntoView({ block: 'start' });
+                    }}
+                  >
+                    {section.heading}
+                  </a>
                 </li>
               ))}
             </ol>
@@ -639,6 +552,59 @@ function LegalPanel() {
           </div>
         </div>
       </Panel>
+
+      <OpenSourceNotices t={t} />
     </>
+  );
+}
+
+/**
+ * The licences of software bundled with Bault. They are notices, not terms —
+ * the font licence was sitting beside the account policy as though a collector
+ * had agreed to it.
+ */
+function OpenSourceNotices({ t }: { t: TranslateFn }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  return (
+    <Panel title={t('legal.openSource.title')} subtitle={t('legal.openSource.subtitle')}>
+      <ul className="check-list list-unbounded">
+        {OPEN_SOURCE_NOTICES.map((notice: LegalDocument) => (
+          <li key={notice.id}>
+            <span>{notice.title}</span>
+            <span className="row" style={{ gap: 'var(--sp-2)' }}>
+              {notice.downloadPath && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<IconDownload />}
+                  onClick={() => window.open(notice.downloadPath ?? '', '_blank', 'noopener')}
+                >
+                  {t('legal.download')}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setOpenId((current) => (current === notice.id ? null : notice.id))}
+              >
+                {t(openId === notice.id ? 'legal.openSource.hide' : 'legal.openSource.read')}
+              </Button>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {OPEN_SOURCE_NOTICES.filter((n) => n.id === openId).map((notice) => (
+        <div key={notice.id} className="legal-text stack-top" lang="en" dir="ltr">
+          {notice.sections.map((section) => (
+            <section key={section.id} className="legal-section">
+              <h3>{section.heading}</h3>
+              <pre className="legal-pre">{section.body}</pre>
+            </section>
+          ))}
+        </div>
+      ))}
+    </Panel>
   );
 }

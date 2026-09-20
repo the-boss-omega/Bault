@@ -15,6 +15,8 @@ const post = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: { get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a), patch: vi.fn(), del: vi.fn() },
   ApiError: class ApiError extends Error {},
+  // `errorText` asks the module which failure this was.
+  apiErrorKey: () => null,
 }));
 vi.mock('../../apps/web/src/shared/Barcode', () => ({
   Barcode: () => null,
@@ -52,12 +54,15 @@ function renderShipmentsTab() {
 }
 
 async function loadShipment(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(await screen.findByLabelText('Shipment ID'), 'shp-1');
-  await user.click(screen.getByRole('button', { name: /fulfill/i }));
+  // The bench takes the SHP- code people read off the slip; the API resolves it.
+  await user.type(await screen.findByLabelText('Shipment code'), 'SHP-TEST');
+  await user.click(screen.getByRole('button', { name: /^open$/i }));
   await screen.findByText('SN-DX107-0003');
 }
 
 async function fillForm(user: ReturnType<typeof userEvent.setup>) {
+  // Weight is no longer prefilled: a parcel nobody weighed must not pass.
+  await user.type(screen.getByLabelText(/package weight/i), '120');
   await user.type(screen.getByLabelText('Notes'), 'Packed and sealed');
 }
 
@@ -90,6 +95,10 @@ describe('warehouse dispatch', () => {
     const [path, body] = post.mock.calls.at(-1)!;
     expect(path).toBe('/shipping/shipments/shp-1/dispatch');
     expect((body as { scannedItemIds: string[] }).scannedItemIds.sort()).toEqual(['item-a', 'item-b']);
+    // The carrier the customer paid for is the one preselected.
+    expect((body as { carrier: string }).carrier).toBe('USPS');
+    // And the tracking number is said on the bench, not only in a log.
+    expect(await screen.findByText(/Tracking number: SBX123/)).toBeInTheDocument();
   });
 
   it('blocks completion when a card that is not in the shipment is scanned', async () => {

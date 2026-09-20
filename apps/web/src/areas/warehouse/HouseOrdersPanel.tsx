@@ -6,7 +6,8 @@ import { formatDate } from '../../shared/money';
 import { useI18n } from '../../shared/i18n';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 import { Serial } from '../../shared/ui/Serial';
-import { Button, EmptyState, Field, Panel } from '../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, Field, Panel, SuccessNote } from '../../shared/ui/primitives';
+import type { StowSuggestion } from './IntakeBench';
 import { IconBox } from '../../shared/ui/icons';
 
 interface HouseOrderRow {
@@ -36,10 +37,23 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();
   const [orders, setOrders] = useState<HouseOrderRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Where the last card went. The row vanishes once shelved, so it is said here. */
+  const [done, setDone] = useState<string | null>(null);
+  /**
+   * The shelf auto-stow will use, shown BEFORE the press. It used to pick one
+   * silently and name it only in a log at the foot of the page, so the operator
+   * holding the card did not know which aisle to walk to.
+   */
+  const [suggestion, setSuggestion] = useState<StowSuggestion | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setOrders(await api.get<HouseOrderRow[]>('/marketplace/house/orders/queue'));
+      const [queue, next] = await Promise.all([
+        api.get<HouseOrderRow[]>('/marketplace/house/orders/queue'),
+        api.get<StowSuggestion>('/custody/bins/suggest').catch(() => null),
+      ]);
+      setOrders(queue);
+      setSuggestion(next);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -61,7 +75,8 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
         />
       }
     >
-      {error && <p className="field-error">{error}</p>}
+      {error && <ErrorState message={error} />}
+      {done && !error && <SuccessNote>{done}</SuccessNote>}
       {orders.length === 0 ? (
         <EmptyState title={t('house.queue.empty')} icon={<IconBox />} />
       ) : (
@@ -71,8 +86,10 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
               key={o.id}
               order={o}
               when={formatDate(o.createdAt, locale)}
+              suggestion={suggestion}
               onStowed={async (line) => {
                 onLog(line);
+                setDone(line);
                 await load();
               }}
               onError={setError}
@@ -87,11 +104,13 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
 function HouseOrderRowView({
   order,
   when,
+  suggestion,
   onStowed,
   onError,
 }: {
   order: HouseOrderRow;
   when: string;
+  suggestion: StowSuggestion | null;
   onStowed: (line: string) => Promise<void>;
   onError: (message: string | null) => void;
 }) {
@@ -142,7 +161,14 @@ function HouseOrderRowView({
       </div>
 
       <div className="form-grid">
-        <Field label={t('warehouse.intake.stowScan')} hint={t('house.queue.binHint')}>
+        <Field
+          label={t('warehouse.intake.stowScan')}
+          hint={
+            !bin.trim() && suggestion
+              ? t('house.queue.willGoTo', { bin: suggestion.serialNumber, zone: suggestion.zone })
+              : t('house.queue.binHint')
+          }
+        >
           <input value={bin} onChange={(e) => setBin(e.target.value)} placeholder="BIN-XXXXXXXX" dir="ltr" />
         </Field>
       </div>

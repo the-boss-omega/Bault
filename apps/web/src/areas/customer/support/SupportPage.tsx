@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { formatDateTime } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
@@ -90,6 +90,15 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
       {tab === 'new' && (
         <TabPanel tab="new">
           <NewTicketForm
+            // "Ask about this card" arrives here with the record it is about,
+            // so the ticket carries it and the operator is not asked to work out
+            // which card the question is about.
+            related={
+              route.params.relatedType && route.params.relatedId
+                ? { type: route.params.relatedType, id: route.params.relatedId }
+                : null
+            }
+            aboutLabel={route.params.subject ?? null}
             onOpened={async (code) => {
               setStatus(t('support.opened', { code }));
               await load();
@@ -209,13 +218,19 @@ function TicketList({
 function NewTicketForm({
   onOpened,
   onError,
+  related,
+  aboutLabel,
 }: {
   onOpened: (code: string) => Promise<void>;
   onError: (m: string) => void;
+  /** The record the question is about, when the form was opened from one. */
+  related?: { type: string; id: string } | null;
+  /** How that record reads to a person — a serial, a code. */
+  aboutLabel?: string | null;
 }) {
   const { t } = useI18n();
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]?.key ?? 'other');
-  const [subject, setSubject] = useState('');
+  const [subject, setSubject] = useState(aboutLabel ? t('support.aboutSubject', { what: aboutLabel }) : '');
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -228,6 +243,7 @@ function NewTicketForm({
         category,
         subject: subject.trim(),
         body: body.trim(),
+        ...(related ? { relatedType: related.type, relatedId: related.id } : {}),
       });
       setSubject('');
       setBody('');
@@ -242,6 +258,11 @@ function NewTicketForm({
   return (
     <Panel title={t('support.newTitle')} subtitle={t('support.newSubtitle')}>
       <div className="stack stack--tight" style={{ maxWidth: 620 }}>
+        {aboutLabel && (
+          <p className="infobox">
+            {t('support.about', { what: aboutLabel })}
+          </p>
+        )}
         <label className="field">
           <span className="field-label">{t('support.col.category')}</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -359,9 +380,12 @@ export function ThreadDrawer({
           <Button variant="gold" disabled={busy || reply.trim() === ''} onClick={() => void send()}>
             {t('support.send')}
           </Button>
-          {staff && !resolved && (
+          {/* Staff close a ticket they have answered; the person who raised it
+              can close their own — "never mind, I worked it out" was a state
+              they could reach and never record. */}
+          {!resolved && (
             <Button variant="secondary" disabled={busy} onClick={() => void resolve()}>
-              {t('support.resolve')}
+              {t(staff ? 'support.resolve' : 'support.resolveMine')}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
@@ -394,9 +418,23 @@ export function ThreadDrawer({
             {thread.messages.map((m) => (
               <li key={m.id} className="detail-row" style={{ display: 'block' }}>
                 <div className="row" style={{ gap: 'var(--sp-2)' }}>
+                  {/* Whose words these are depends on who is reading. To the
+                      customer it is "You" and "Bault"; to staff the customer is
+                      their @username and a colleague's reply is Bault's, signed
+                      — the operator was being shown the customer's message as
+                      "You". */}
                   <StatusBadge tone={m.authorRole === 'staff' ? 'gold' : 'info'} plain>
-                    {m.authorRole === 'staff' ? t('support.fromStaff') : t('support.fromYou')}
+                    {m.authorRole === 'staff'
+                      ? t('support.fromStaff')
+                      : staff
+                        ? `@${m.authorUsername ?? '—'}`
+                        : t('support.fromYou')}
                   </StatusBadge>
+                  {staff && m.authorRole === 'staff' && m.authorUsername && (
+                    <span className="hint" dir="ltr">
+                      @{m.authorUsername}
+                    </span>
+                  )}
                   <span className="hint" dir="ltr">
                     {formatDateTime(m.createdAt, locale)}
                   </span>

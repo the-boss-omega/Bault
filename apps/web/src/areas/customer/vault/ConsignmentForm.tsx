@@ -72,6 +72,11 @@ export function ConsignmentForm({
   }
 
   const ready = Boolean(channel) && cents !== null && cents > 0 && problems.length === 0;
+  // Said once there is something to say it about: the form opened with "choose
+  // a show" in red before anybody had typed anything. A card that can never go
+  // down this channel (graded-only) is said at once, since no input changes it.
+  const gradedOnly = t('consign.problem.gradedOnly');
+  const visible = price.trim() === '' ? problems.filter((p) => p === gradedOnly) : problems;
 
   async function submit() {
     if (!channel || cents === null) return;
@@ -138,9 +143,9 @@ export function ConsignmentForm({
         hint={t('consign.askingHint')}
       />
 
-      {problems.length > 0 && (
+      {visible.length > 0 && (
         <ul className="check-list list-unbounded">
-          {problems.map((p) => (
+          {visible.map((p) => (
             <li key={p}>
               <StatusBadge tone="error" plain>
                 {p}

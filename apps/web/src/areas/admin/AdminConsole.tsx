@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { ShelfYieldPanel } from './ShelfYieldPanel';
-import { CardPhotoButton } from '../../shared/CardPhoto';
-import { BarcodePrintButton } from '../../shared/Barcode';
 import { dollarsToCents, formatDate, formatUsd } from '../../shared/money';
 import { useI18n } from '../../shared/i18n';
-import type { MessageKey } from '../../shared/i18n';
-import { NAME_PART_MAX, isValidNamePart, normalizeNamePart } from '../../shared/names';
+import type { MessageKey, TranslateFn } from '../../shared/i18n';
+import { ITEM_CLASSES, itemClassLabel } from '../../shared/itemClasses';
+import { actionLabel } from '../../shared/pricingActions';
 import { useNavigation, useRoute } from '../../shared/routing';
 import {
   Button,
@@ -20,56 +19,12 @@ import {
   TabPanel,
   type StatusTone,
 } from '../../shared/ui/primitives';
-import { IconBox, IconGavel, IconPlus, IconReceipt, IconUsers } from '../../shared/ui/icons';
+import { IconGavel, IconPlus, IconReceipt } from '../../shared/ui/icons';
 import { WalletRequestsSection } from './WalletRequestsSection';
+import { ItemsSection, UsersSection, type AdminItem, type AdminUser } from './PeopleAndItems';
 import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
-
-/**
- * `GET /admin/users`.
- *
- * `intakeId` survives HERE and only here. It is retired from every customer
- * workflow, but a manager troubleshooting a parcel that arrived with an old
- * pre-printed OW- label needs to be able to look it up — so it stays on the
- * administrative surface and nowhere else, and is read-only.
- */
-interface AdminUser {
-  id: string;
-  email: string;
-  username: string;
-  firstName: string | null;
-  lastName: string | null;
-  /** Migrated legacy name whose split was a guess nobody has confirmed yet. */
-  nameReviewRequired: boolean;
-  role: string;
-  status: string;
-  intakeId: string | null;
-}
-
-interface AdminItem {
-  id: string;
-  serialNumber: string;
-  barcode: string;
-  typeClass: string;
-  description: string;
-  conditionGrade: string | null;
-  lifecycleState: string;
-  holdFlag: boolean;
-  binId: string | null;
-  ownerId: string;
-  ownerEmail: string | null;
-}
-
-const ROLES = ['user', 'warehouse_operator', 'admin'];
-const STATUSES = ['pending', 'active', 'suspended', 'closed'];
-const STATES = ['received', 'stored', 'listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned'];
-
-const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
-  active: 'success',
-  pending: 'warning',
-  suspended: 'error',
-  closed: 'neutral',
-};
+import { ChargebacksSection } from './ChargebacksSection';
 
 /**
  * `yield` sits FIRST, before the management tables.
@@ -78,7 +33,7 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
  * do — find a user, settle a dispute, change a price. Shelf Yield is the one
  * that tells them what to do, so it is what the section opens on.
  */
-const TABS = ['yield', 'users', 'signins', 'requests', 'items', 'house', 'pricing', 'disputes', 'storage'] as const;
+const TABS = ['yield', 'users', 'signins', 'requests', 'items', 'house', 'pricing', 'disputes', 'chargebacks', 'storage'] as const;
 type SectionKey = (typeof TABS)[number];
 
 const TAB_LABEL: Record<SectionKey, MessageKey> = {
@@ -90,6 +45,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   house: 'admin.section.house',
   pricing: 'admin.section.pricing',
   disputes: 'admin.section.disputes',
+  chargebacks: 'admin.section.chargebacks',
   storage: 'admin.section.storage',
 };
 
@@ -109,7 +65,10 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [items, setItems] = useState<AdminItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /** An action that failed. Shown without a retry: retrying reloads lists, not the action. */
   const [error, setError] = useState<string | null>(null);
+  /** The lists themselves failed to load; this one can be retried. */
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Opens on Shelf Yield, as the comment on `TABS` has always said it does. The
   // code said `users`, so the section an administrator was meant to land on was
@@ -126,9 +85,9 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       ]);
       setUsers(u);
       setItems(i);
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
       setUsers([]);
       setItems([]);
     }
@@ -138,6 +97,22 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
     void load();
   }, [load]);
 
+  // A banner belongs to the tab it was raised on. "Saved." from the store
+  // stayed up on Pricing, and a success and a later error could show together.
+  useEffect(() => {
+    setMessage(null);
+    setError(null);
+  }, [section]);
+
+  const say = useCallback((m: string) => {
+    setError(null);
+    setMessage(m);
+  }, []);
+  const fail = useCallback((m: string) => {
+    setMessage(null);
+    setError(m);
+  }, []);
+
   const tabs = TABS.map((key) => ({ key, label: t(TAB_LABEL[key]) }));
 
   return (
@@ -145,7 +120,8 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       <ContextTabs label={t('admin.title')} tabs={tabs} active={section} onSelect={goTab} />
 
       {message && <SuccessNote>{message}</SuccessNote>}
-      {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
+      {error && <ErrorState message={error} />}
+      {loadError && <ErrorState message={loadError} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
 
       {section === 'yield' && (
         <TabPanel tab="yield">
@@ -155,43 +131,17 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 
       {section === 'users' && (
         <TabPanel tab="users">
-          <Panel
-            title={t('admin.users.heading', { count: users?.length ?? 0 })}
-            subtitle={t('admin.users.subtitle')}
-            flush
-          >
-            {users === null ? (
-              <SkeletonTable rows={5} columns={5} />
-            ) : users.length === 0 ? (
-              <EmptyState title={t('admin.users.empty')} icon={<IconUsers />} />
-            ) : (
-              <div className="dt-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('admin.users.col.email')}</th>
-                      <th scope="col">{t('admin.users.col.username')}</th>
-                      <th scope="col">{t('admin.users.col.name')}</th>
-                      <th scope="col">{t('admin.users.col.role')}</th>
-                      <th scope="col">{t('admin.col.status')}</th>
-                      <th scope="col" className="td-tight" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <UserRow key={u.id} user={u} onSaved={setMessage} onError={setError} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
+          <UsersSection
+            users={users}
+            onMsg={say}
+            onChanged={(next) => setUsers((prev) => prev?.map((u) => (u.id === next.id ? next : u)) ?? prev)}
+          />
         </TabPanel>
       )}
 
       {section === 'house' && (
         <TabPanel tab="house">
-          <HouseStoreSection onMsg={setMessage} onError={setError} />
+          <HouseStoreSection onMsg={say} onError={fail} />
         </TabPanel>
       )}
 
@@ -201,317 +151,48 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
               requests as undecidable by them. The API enforces it regardless. */}
           <WalletRequestsSection
             currentUserId={currentUserId}
-            onMsg={setMessage}
-            onError={setError}
+            onMsg={say}
+            onError={fail}
           />
         </TabPanel>
       )}
 
       {section === 'items' && (
         <TabPanel tab="items">
-          <Panel
-            title={t('admin.items.heading', { count: items?.length ?? 0 })}
-            subtitle={t('admin.items.subtitle')}
-            flush
-          >
-            {items === null ? (
-              <SkeletonTable rows={5} columns={6} />
-            ) : items.length === 0 ? (
-              <EmptyState title={t('admin.items.empty')} icon={<IconBox />} />
-            ) : (
-              <div className="dt-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('admin.items.col.barcode')}</th>
-                      <th scope="col">{t('admin.items.col.description')}</th>
-                      <th scope="col">{t('admin.items.col.type')}</th>
-                      <th scope="col">{t('admin.items.col.condition')}</th>
-                      <th scope="col">{t('admin.items.col.owner')}</th>
-                      <th scope="col">{t('admin.items.col.lifecycle')}</th>
-                      <th scope="col">{t('admin.items.col.hold')}</th>
-                      <th scope="col">{t('admin.items.col.photo')}</th>
-                      <th scope="col" className="td-tight" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it) => (
-                      <ItemRow
-                        key={it.id}
-                        item={it}
-                        users={users ?? []}
-                        onSaved={setMessage}
-                        onError={setError}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
+          <ItemsSection items={items} users={users ?? []} onMsg={say} onChanged={() => void load()} />
         </TabPanel>
       )}
 
       {section === 'pricing' && (
         <TabPanel tab="pricing">
-          <PricingSection onMsg={setMessage} onError={setError} />
+          <PricingSection onMsg={say} onError={fail} />
         </TabPanel>
       )}
 
       {section === 'disputes' && (
         <TabPanel tab="disputes">
-          <DisputesSection onMsg={setMessage} onError={setError} />
+          <DisputesSection onMsg={say} onError={fail} />
+        </TabPanel>
+      )}
+
+      {section === 'chargebacks' && (
+        <TabPanel tab="chargebacks">
+          <ChargebacksSection onMsg={say} />
         </TabPanel>
       )}
 
       {section === 'signins' && (
         <TabPanel tab="signins">
-          <SignInsSection onError={setError} />
+          <SignInsSection onError={fail} />
         </TabPanel>
       )}
 
       {section === 'storage' && (
         <TabPanel tab="storage">
-          <StorageFeesSection onError={setError} />
+          <StorageFeesSection onError={fail} />
         </TabPanel>
       )}
     </>
-  );
-}
-
-/* ============================================================
-   Users
-   ============================================================ */
-
-/**
- * One editable user row.
- *
- * The username column is TEXT, not an input: a username is permanent, the API
- * has no field to change it, and the database trigger installed by migration
- * 0004 rejects the write outright. Presenting it as an input would advertise an
- * edit that cannot happen.
- *
- * The name is two inputs, and saving them clears the migration's review flag —
- * an admin who edits a flagged name has, by doing so, reviewed it.
- */
-function UserRow({
-  user,
-  onSaved,
-  onError,
-}: {
-  user: AdminUser;
-  onSaved: (m: string) => void;
-  onError: (m: string) => void;
-}) {
-  const { t } = useI18n();
-  const [firstName, setFirstName] = useState(user.firstName ?? '');
-  const [lastName, setLastName] = useState(user.lastName ?? '');
-  const [role, setRole] = useState(user.role);
-  const [status, setStatus] = useState(user.status);
-
-  const namesOk =
-    isValidNamePart(normalizeNamePart(firstName)) &&
-    (lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName)));
-  const dirty =
-    normalizeNamePart(firstName) !== (user.firstName ?? '') ||
-    normalizeNamePart(lastName) !== (user.lastName ?? '') ||
-    role !== user.role ||
-    status !== user.status;
-
-  async function save() {
-    try {
-      await api.patch(`/admin/users/${user.id}`, {
-        firstName: normalizeNamePart(firstName),
-        ...(lastName.trim() ? { lastName: normalizeNamePart(lastName) } : {}),
-        role,
-        status,
-      });
-      onSaved(t('admin.users.saved', { email: user.email }));
-    } catch (e) {
-      onError((e as Error).message);
-    }
-  }
-
-  return (
-    <tr>
-      <td dir="ltr" className="dt-primary">
-        {user.email}
-        {user.intakeId && (
-          <span className="dt-sub" dir="ltr" title={t('admin.users.legacyIntakeIdTitle')}>
-            {user.intakeId}
-          </span>
-        )}
-      </td>
-      <td dir="ltr">
-        <code>{user.username}</code>
-      </td>
-      <td>
-        <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <input
-            value={firstName}
-            aria-label={t('auth.firstName')}
-            placeholder={t('auth.firstName')}
-            maxLength={NAME_PART_MAX}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
-          <input
-            value={lastName}
-            aria-label={t('auth.lastName')}
-            placeholder={t('auth.lastName')}
-            maxLength={NAME_PART_MAX}
-            onChange={(e) => setLastName(e.target.value)}
-          />
-        </div>
-        {user.nameReviewRequired && (
-          <span className="dt-sub">{t('admin.users.nameReviewRequired')}</span>
-        )}
-      </td>
-      <td>
-        <select value={role} aria-label={t('admin.users.col.role')} onChange={(e) => setRole(e.target.value)}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <StatusBadge tone={ACCOUNT_STATUS_TONE[user.status] ?? 'neutral'}>{user.status}</StatusBadge>
-          <select
-            value={status}
-            aria-label={t('admin.col.status')}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-      </td>
-      <td className="td-tight">
-        <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk} onClick={save}>
-          {t('admin.action.save')}
-        </Button>
-      </td>
-    </tr>
-  );
-}
-
-/* ============================================================
-   Items
-   ============================================================ */
-
-function ItemRow({
-  item,
-  users,
-  onSaved,
-  onError,
-}: {
-  item: AdminItem;
-  users: AdminUser[];
-  onSaved: (m: string) => void;
-  onError: (m: string) => void;
-}) {
-  const { t } = useI18n();
-  const [description, setDescription] = useState(item.description);
-  const [typeClass, setTypeClass] = useState(item.typeClass);
-  const [conditionGrade, setConditionGrade] = useState(item.conditionGrade ?? '');
-  const [ownerId, setOwnerId] = useState(item.ownerId);
-  const [lifecycleState, setLifecycleState] = useState(item.lifecycleState);
-  const [holdFlag, setHoldFlag] = useState(item.holdFlag);
-
-  async function save() {
-    try {
-      await api.patch(`/admin/items/${item.id}`, {
-        description,
-        typeClass,
-        conditionGrade,
-        ownerId,
-        lifecycleState,
-        holdFlag,
-      });
-      onSaved(t('admin.items.saved', { barcode: item.barcode }));
-    } catch (e) {
-      onError((e as Error).message);
-    }
-  }
-
-  return (
-    <tr>
-      <td dir="ltr">
-        <div className="barcode-label">
-          <code>{item.barcode}</code>
-          <BarcodePrintButton value={item.barcode} caption={item.description || item.typeClass} />
-        </div>
-      </td>
-      <td>
-        <input
-          value={description}
-          aria-label={t('admin.items.col.description')}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </td>
-      <td>
-        <input
-          value={typeClass}
-          aria-label={t('admin.items.col.type')}
-          onChange={(e) => setTypeClass(e.target.value)}
-        />
-      </td>
-      <td>
-        <input
-          value={conditionGrade}
-          aria-label={t('admin.items.col.condition')}
-          onChange={(e) => setConditionGrade(e.target.value)}
-          style={{ width: '5rem' }}
-        />
-      </td>
-      <td>
-        <select
-          value={ownerId}
-          aria-label={t('admin.items.col.owner')}
-          onChange={(e) => setOwnerId(e.target.value)}
-        >
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.email}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <select
-          value={lifecycleState}
-          aria-label={t('admin.items.col.lifecycle')}
-          onChange={(e) => setLifecycleState(e.target.value)}
-        >
-          {STATES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <input
-          type="checkbox"
-          checked={holdFlag}
-          aria-label={t('admin.items.col.hold')}
-          onChange={(e) => setHoldFlag(e.target.checked)}
-        />
-      </td>
-      <td>
-        <CardPhotoButton serialNumber={item.serialNumber} title={item.description || item.typeClass} />
-      </td>
-      <td className="td-tight">
-        <Button size="sm" variant="secondary" onClick={save}>
-          {t('admin.action.save')}
-        </Button>
-      </td>
-    </tr>
   );
 }
 
@@ -539,14 +220,6 @@ const BILLING_LABEL: Record<string, MessageKey> = {
   monthly: 'admin.pricing.billing.monthly',
 };
 
-const ACTION_TYPES = ['intake', 'storage', 'service', 'shipping', 'marketplace_fee'];
-const ACTION_LABEL: Record<string, MessageKey> = {
-  intake: 'admin.pricing.action.intake',
-  storage: 'admin.pricing.action.storage',
-  service: 'admin.pricing.action.service',
-  shipping: 'admin.pricing.action.shipping',
-  marketplace_fee: 'admin.pricing.action.marketplaceFee',
-};
 const MODEL_LABEL: Record<string, MessageKey> = {
   fixed: 'admin.pricing.model.fixed',
   percentage: 'admin.pricing.model.percentage',
@@ -584,6 +257,29 @@ function PricingSection({
   }, [load]);
 
   const value = model === 'fixed' ? dollarsToCents(amount) : percentToBasisPoints(amount);
+
+  /**
+   * Every action a rule exists for, labelled by what the newest rule says it
+   * prices. A new rule for an action supersedes the old one, so offering only
+   * five families meant membership, grading and add-on prices could not be
+   * changed at all.
+   */
+  const actionOptions = (() => {
+    const latest = new Map<string, PricingRule>();
+    for (const r of rules ?? []) {
+      const prev = latest.get(r.actionType);
+      if (!prev || prev.effectiveFrom < r.effectiveFrom) latest.set(r.actionType, r);
+    }
+    for (const base of ['intake', 'storage', 'service', 'shipping', 'marketplace_fee']) {
+      if (!latest.has(base)) latest.set(base, { actionType: base } as PricingRule);
+    }
+    return [...latest.entries()]
+      .map(([key, r]) => ({
+        key,
+        label: key.includes(':') && r.description ? `${actionLabel(t, key)} · ${r.description}` : actionLabel(t, key),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
 
   async function create() {
     if (value === null) return;
@@ -623,23 +319,23 @@ function PricingSection({
             <label className="field">
               <span className="field-label">{t('admin.pricing.col.action')}</span>
               <select value={actionType} onChange={(e) => setActionType(e.target.value)}>
-                {ACTION_TYPES.map((a) => {
-                  const key = ACTION_LABEL[a];
-                  return (
-                    <option key={a} value={a}>
-                      {key ? t(key) : a}
-                    </option>
-                  );
-                })}
+                {actionOptions.map((a) => (
+                  <option key={a.key} value={a.key}>
+                    {a.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="field">
               <span className="field-label">{t('admin.pricing.col.class')}</span>
-              <input
-                placeholder={t('admin.pricing.itemClassPlaceholder')}
-                value={itemClass}
-                onChange={(e) => setItemClass(e.target.value)}
-              />
+              <select value={itemClass} onChange={(e) => setItemClass(e.target.value)}>
+                <option value="">{t('admin.pricing.allClasses')}</option>
+                {ITEM_CLASSES.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {t(c.labelKey)}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="field">
               <span className="field-label">{t('admin.pricing.col.model')}</span>
@@ -716,7 +412,6 @@ function PricingSection({
               </thead>
               <tbody>
                 {rules.map((rule) => {
-                  const actionKey = ACTION_LABEL[rule.actionType];
                   const modelKey = MODEL_LABEL[rule.model];
                   const billingKey = BILLING_LABEL[rule.billingTrigger];
                   return (
@@ -725,10 +420,10 @@ function PricingSection({
                         {rule.description ?? '—'}
                       </td>
                       <td data-label={t('admin.pricing.col.action')}>
-                        {actionKey ? t(actionKey) : rule.actionType}
+                        {actionLabel(t, rule.actionType)}
                       </td>
                       <td data-label={t('admin.pricing.col.class')}>
-                        {rule.itemClass ?? t('admin.pricing.allClasses')}
+                        {rule.itemClass ? itemClassLabel(t, rule.itemClass) : t('admin.pricing.allClasses')}
                       </td>
                       <td data-label={t('admin.pricing.col.model')}>
                         <StatusBadge tone="info">{modelKey ? t(modelKey) : rule.model}</StatusBadge>
@@ -761,7 +456,8 @@ function percentToBasisPoints(input: string): number | null {
   const cleaned = input.trim().replace(/[%\s]/g, '');
   if (cleaned === '' || !/^\d*\.?\d{0,2}$/.test(cleaned)) return null;
   const value = Number(cleaned);
-  if (!Number.isFinite(value) || value <= 0) return null;
+  // A percentage fee above 100% takes more than the whole amount.
+  if (!Number.isFinite(value) || value <= 0 || value > 100) return null;
   return Math.round(value * 100);
 }
 
@@ -771,11 +467,35 @@ function percentToBasisPoints(input: string): number | null {
 
 interface Dispute {
   id: string;
+  code: string | null;
   transactionId: string;
   status: string;
   ruling: string | null;
   note: string | null;
   createdAt: string;
+  transactionCode: string | null;
+  transactionType: string | null;
+  price: number | null;
+  buyerUsername: string | null;
+  sellerUsername: string | null;
+}
+
+const TXN_TYPE_LABEL: Record<string, MessageKey> = {
+  sale: 'admin.txn.sale',
+  swap: 'admin.txn.swap',
+  transfer: 'admin.txn.transfer',
+  consignment: 'admin.txn.consignment',
+};
+
+function txnTypeLabel(t: TranslateFn, type: string | null): string {
+  if (!type) return '—';
+  const key = TXN_TYPE_LABEL[type];
+  return key ? t(key) : type;
+}
+
+/** "@buyer ← @seller", whichever of the two a transaction has. */
+function parties(buyer: string | null, seller: string | null): string {
+  return [seller && `@${seller}`, buyer && `@${buyer}`].filter(Boolean).join(' → ');
 }
 
 const DISPUTE_STATUSES = ['open', 'investigating', 'ruled', 'closed'];
@@ -794,10 +514,13 @@ const DISPUTE_TONE: Record<string, StatusTone> = {
 
 interface AdminTransaction {
   id: string;
+  code: string | null;
   type: string;
-  price: number;
+  price: number | null;
   buyerId: string | null;
   sellerId: string | null;
+  buyerUsername: string | null;
+  sellerUsername: string | null;
   createdAt: string;
 }
 
@@ -808,7 +531,7 @@ function DisputesSection({
   onMsg: (m: string) => void;
   onError: (m: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [disputes, setDisputes] = useState<Dispute[] | null>(null);
   const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
   const [transactionId, setTransactionId] = useState('');
@@ -854,11 +577,19 @@ function DisputesSection({
             {/* A dispute must reference an ACTUAL recorded transaction — pick one. */}
             <label className="field">
               <span className="field-label">{t('admin.disputes.col.transaction')}</span>
-              <select value={transactionId} onChange={(e) => setTransactionId(e.target.value)} dir="ltr">
+              <select value={transactionId} onChange={(e) => setTransactionId(e.target.value)}>
                 <option value="">{t('admin.disputes.selectTransaction')}</option>
                 {transactions.map((tx) => (
                   <option key={tx.id} value={tx.id}>
-                    {tx.id.slice(0, 8)} — {tx.type} — {formatUsd(tx.price)} — {tx.createdAt.slice(0, 10)}
+                    {[
+                      tx.code ?? tx.id.slice(0, 8),
+                      txnTypeLabel(t, tx.type),
+                      tx.price !== null ? formatUsd(tx.price) : null,
+                      parties(tx.buyerUsername, tx.sellerUsername),
+                      formatDate(tx.createdAt, locale),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </option>
                 ))}
               </select>
@@ -882,14 +613,13 @@ function DisputesSection({
         ) : disputes.length === 0 ? (
           <EmptyState title={t('admin.disputes.empty')} icon={<IconGavel />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
                   <th scope="col">{t('admin.disputes.col.id')}</th>
                   <th scope="col">{t('admin.disputes.col.transaction')}</th>
                   <th scope="col">{t('admin.col.status')}</th>
-                  <th scope="col">{t('admin.disputes.col.ruling')}</th>
                   <th scope="col">{t('admin.disputes.col.update')}</th>
                   <th scope="col" className="td-tight" />
                 </tr>
@@ -941,20 +671,30 @@ function DisputeRow({
 
   return (
     <tr>
-      <td dir="ltr">
-        <code>{dispute.id.slice(0, 8)}</code>
+      <td data-label={t('admin.disputes.col.id')}>
+        <code dir="ltr">{dispute.code ?? dispute.id.slice(0, 8)}</code>
+        {dispute.note && <span className="dt-sub">{dispute.note}</span>}
       </td>
-      <td dir="ltr">
-        <code>{dispute.transactionId.slice(0, 8)}</code>
+      <td data-label={t('admin.disputes.col.transaction')}>
+        <code dir="ltr">{dispute.transactionCode ?? dispute.transactionId.slice(0, 8)}</code>
+        <span className="dt-sub">
+          {[
+            txnTypeLabel(t, dispute.transactionType),
+            dispute.price !== null ? formatUsd(dispute.price) : null,
+            parties(dispute.buyerUsername, dispute.sellerUsername),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
       </td>
-      <td>
+      <td data-label={t('admin.col.status')}>
         <StatusBadge tone={DISPUTE_TONE[dispute.status] ?? 'neutral'}>
           {currentLabel ? t(currentLabel) : dispute.status}
         </StatusBadge>
+        {dispute.ruling && <span className="dt-sub">{dispute.ruling}</span>}
       </td>
-      <td>{dispute.ruling ?? '—'}</td>
-      <td>
-        <div className="row" style={{ flexWrap: 'nowrap' }}>
+      <td data-label={t('admin.disputes.col.update')}>
+        <div className="row" style={{ gap: 'var(--sp-2)' }}>
           <select
             value={status}
             aria-label={t('admin.col.status')}

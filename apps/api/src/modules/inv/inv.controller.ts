@@ -19,6 +19,7 @@ import type { AuthUser } from '../sec/auth-context';
 import { IntakeService } from './intake.service';
 import { CorrectionService } from './correction.service';
 import { BatchService } from './batch.service';
+import { StowService } from '../cst/stow.service';
 
 /**
  * `ownerUsername` is the field the intake form fills in. `ownerIntakeId` is
@@ -115,6 +116,7 @@ export class InvController {
     private readonly intake: IntakeService,
     private readonly corrections: CorrectionService,
     private readonly batches: BatchService,
+    private readonly stow: StowService,
   ) {}
 
   @Post('items')
@@ -146,8 +148,10 @@ export class InvController {
   }
 
   @Patch('items/:itemId')
-  correct(@Param('itemId') itemId: string, @Body() dto: CorrectDto, @CurrentUser() user: AuthUser) {
-    return this.corrections.correct(user.id, itemId, dto.patches);
+  async correct(@Param('itemId') itemId: string, @Body() dto: CorrectDto, @CurrentUser() user: AuthUser) {
+    // The bench corrects by scanning the label, so take the barcode or serial too.
+    const target = await this.stow.resolveItem(itemId);
+    return this.corrections.correct(user.id, target.id, dto.patches);
   }
 
   @Post('batches')
