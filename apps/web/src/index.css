@@ -8248,3 +8248,44 @@ input,
 textarea {
   max-width: 100%;
 }
+
+/* ---- The last controls a thumb could not hit ---------------------------
+   Measured on a phone against the running app: a bare tick box in the
+   notification matrix was a 20px square, the account button in the top bar a
+   32px avatar, and a legal contents entry an 18px line of text. The tick box
+   itself stays the size it looks; what grows is the label around it, which is
+   what a tap actually lands on. */
+
+@media (pointer: coarse) {
+  .check {
+    min-inline-size: 44px;
+  }
+
+  .mobile-bar .user-trigger {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    justify-content: center;
+  }
+
+  .skip-link {
+    min-block-size: 44px;
+  }
+
+  /* A list of links that is a list of destinations — the legal contents, the
+     guide index — gets a row each, not a line of text each. */
+  .legal-toc a,
+  .legal-toc li {
+    display: block;
+    min-block-size: 44px;
+    padding-block: 12px;
+  }
+}
+
+/* An icon button and a short tab are square-ish targets, not thin ones: 44px
+   tall was only half the answer when the button is 36px wide. */
+@media (pointer: coarse) {
+  .icon-btn,
+  .ctx-tab {
+    min-inline-size: 44px;
+  }
+}

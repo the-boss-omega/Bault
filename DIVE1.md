@@ -1268,7 +1268,7 @@ Adding an append-only table therefore takes three edits: the migration that crea
 | Money | 2 sandbox top-ups, 1 legacy withdrawal, 4 wallet requests (submitted, processing, rejected, completed-with-ledger-row) | `seed.ts:694-702`, `964-967`, `970-1110` |
 | Other | 1 dispute on the real sale, 3 audit rows, 2 outbox rows, 3 notifications, 1 preference, 3 addresses, 2 card shows, 3 support tickets, 3 parcels, 1 arrival disposal, 3 custom requests, 1 escrow deal at the inspection gate | `seed.ts:1139-1665` |
 
-The nine items: `SN-DR97-0001`, `SN-CL10-0005` and `SN-DX107-0003` (listed) owned by Red, plus `SN-ROS105-0008` bought by Red from Golden and now frozen by a dispute hold (`seed.ts:1333-1337`); `SN-DX102-0002`, `SN-DF97-0004` (open grading request), `SN-SV146-0006` (shipped) and `SN-ROS104-0007` (open donation request) owned by Golden; `SN-EVS194-0009` booked in for Red and donated to the platform custodian (`seed.ts:1292-1317`). Each serial is also the photograph's filename under `assets/images`.
+The nine items: `SN-DR97-0001`, `SN-CL10-0005` and `SN-DX107-0003` (listed) owned by Red, plus `SN-ROS105-0008` bought by Red from Golden and now frozen by a dispute hold (`seed.ts:1333-1337`); `SN-DX102-0002`, `SN-DF97-0004` (open grading request), `SN-SV146-0006` (shipped) and `SN-ROS104-0007` (open donation request) owned by Golden; `SN-EVS194-0009` booked in for Red and donated to the platform custodian (`seed.ts:1292-1317`). Each serial is also the photograph's filename under `assets/images`, and the seed now PUTS that file into the object store under the key each `item_image` row records (`seed.ts` `img`/`putDemoImage`). The rows used to name objects nobody had ever uploaded, so every gallery in the demo answered 404 — a key in `item_image` is only a promise that the bytes are in the store. A store that cannot be reached is not fatal: the rows are still written and the seed ends with a warning naming the count.
 
 **The Rayquaza-only rule.** Every seeded item is a real card with a real photograph and catalogue data matching it. The tenth card, `SN-EVS218-0010`, is deliberately **not** seeded so the intake bench has a real, photographed card to book in (`seed.ts:1289-1290`, summary at `seed.ts:1694-1695`). `tests/web/rayquaza-only.test.ts` enforces it: it fails on seventeen named non-Rayquaza collectibles anywhere in the repo, requires a photograph for every seeded serial and requires every seeded description to contain "rayquaza" (3 tests, passing at HEAD).
 
@@ -9434,7 +9434,7 @@ shrinking:
 - **A grid item is never wider than its column** (`.form-grid > * { min-width: 0 }`): a grid child's
   automatic minimum is its content, and a `<select>` is as wide as its longest option, which is how
   one long option in the pricing form pushed a whole page sideways.
-- **44 px targets under a coarse pointer** (`@media (pointer: coarse)`), for buttons, tabs, chips,
+- **44 px targets under a coarse pointer** (`@media (pointer: coarse)`) — measured on the running app through the tunnel, which is how the last three were found: a bare tick box in the notification matrix (the `label.check` around it is the target, and it is now 44 px wide as well as tall), the account button in the phone bar (a 32 px avatar), and a legal contents entry (an 18 px line of text, now a row). Icon buttons and short tabs get a minimum WIDTH too; 44 px tall and 36 px wide is still a miss. For buttons, tabs, chips,
   breadcrumb links, checkboxes and every text control. The product's small button is 32 px and its
   check box was 16 px, which is fine under a cursor and a guess under a thumb.
 - **The metric strip becomes rows**, separated by a rule above rather than by a left border and an
@@ -11730,7 +11730,7 @@ explanation.
 - `apps/web/src/areas/warehouse/HouseOrdersPanel.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/IntakeBench.tsx` — [§5](#s5), [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/warehouse/InventoryTools.tsx` — [§12](#s12)
-- `apps/web/src/areas/warehouse/OutboundBench.tsx` — [§12](#s12)
+- `apps/web/src/areas/warehouse/OutboundBench.tsx` — [§12](#s12), [§14](#s14)
 - `apps/web/src/areas/warehouse/ParcelQueue.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/ReceiveParcels.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/ServiceQueue.tsx` — [§8](#s8), [§12](#s12)

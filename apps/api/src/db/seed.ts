@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import * as path from 'node:path';
 import * as argon2 from 'argon2';
 import { eq } from 'drizzle-orm';
 import { createDb } from './client';
@@ -14,6 +16,8 @@ import {
   walletRequestEvent,
 } from '../modules/pay/pay.schema';
 import { pricingRule } from '../modules/prc/prc.schema';
+import { S3StorageAdapter, SandboxStorageAdapter, type StorageAdapter } from '@bault/adapters';
+import { loadEnv } from '@bault/config';
 import { MEMBERSHIP_TIERS } from '../modules/mem/tiers';
 import { serviceRequest } from '../modules/dis/dis.schema';
 import { shipment } from '../modules/shp/shp.schema';
@@ -69,8 +73,31 @@ function one<T>(rows: T[]): T {
   return r;
 }
 
+/** The repository root, from this file's own location (…/apps/api/src/db). */
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+
+/**
+ * The object store the API will read these photographs back from.
+ *
+ * Built the same way the API builds one, so a seeded key resolves for the
+ * running app. Under the sandbox provider the objects live in this process
+ * only, which is honest: that adapter holds nothing across a restart either.
+ */
+function createSeedStorage(): StorageAdapter {
+  const env = loadEnv();
+  if (env.STORAGE_PROVIDER !== 's3') return new SandboxStorageAdapter();
+  return new S3StorageAdapter({
+    endpoint: env.STORAGE_ENDPOINT,
+    region: env.STORAGE_REGION,
+    bucket: env.STORAGE_BUCKET,
+    accessKey: env.STORAGE_ACCESS_KEY,
+    secretKey: env.STORAGE_SECRET_KEY,
+  });
+}
+
 async function main(): Promise<void> {
   const { db, pool } = createDb();
+  const storage = createSeedStorage();
   /** The platform's single settlement currency (Requirement 7.1). */
   const CUR = 'USD';
 
@@ -725,6 +752,24 @@ async function main(): Promise<void> {
    */
   const SEEDED_ARRIVAL = new Date(Date.now() - 60 * 86_400_000);
 
+  /**
+   * Put a demo photograph in the object store under the key a row records.
+   *
+   * Uses the configured storage adapter, so it lands wherever the API will look
+   * for it. Failures are collected rather than thrown: a checkout with no object
+   * store should still get a usable database.
+   */
+  const missingImages: string[] = [];
+  const putDemoImage = async (objectKey: string, serial: string) => {
+    try {
+      const file = path.join(REPO_ROOT, 'assets', 'images', `${serial}.png`);
+      const body = await readFile(file);
+      await storage.putObject({ key: objectKey, body, contentType: 'image/png' });
+    } catch {
+      missingImages.push(objectKey);
+    }
+  };
+
   const custody = (v: {
     itemId: string;
     eventType: 'intake' | 'relocate' | 'ownership_transfer' | 'state_change' | 'hold_placed' | 'hold_released' | 'batch_split' | 'dispatch';
@@ -742,8 +787,23 @@ async function main(): Promise<void> {
   const transfer = (itemId: string, fromBinId: string | null, toBinId: string, actorId: string, reason: string) =>
     db.insert(binTransfer).values({ itemId, fromBinId, toBinId, actorId, reason, occurredAt: SEEDED_ARRIVAL });
 
-  const img = (itemId: string, type: 'intake' | 'professional', version: number, objectKey: string) =>
-    db.insert(itemImage).values({ itemId, type, version, objectKey });
+  /**
+   * A photograph of a seeded card, recorded AND stored.
+   *
+   * The rows used to name objects that were never put anywhere — every gallery
+   * in the demo answered 404, because a key in `item_image` is only a promise
+   * that the bytes are in the store. The bytes are the card's own catalogue
+   * photograph from `assets/images`, uploaded under the key the row records, so
+   * the vault drawer shows the card it is about.
+   *
+   * A store that is not reachable (no MinIO on a fresh checkout) is not fatal:
+   * the rows are still written, and the seed says so once at the end.
+   */
+  const img = async (itemId: string, type: 'intake' | 'professional', version: number, serial: string) => {
+    const objectKey = `images/${serial.toLowerCase()}-${type === 'intake' ? 'intake' : 'pro'}.png`;
+    await db.insert(itemImage).values({ itemId, type, version, objectKey });
+    await putDemoImage(objectKey, serial);
+  };
 
   // -------------------------------------------------------------------------
   // 5. WALLET TOP-UPS (so the collectors have spendable balances).
@@ -775,14 +835,14 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayDragon, eventType: 'intake', newOwnerId: red, newBinId: binA1, newState: 'stored', actorId: hermon, reason: 'intake' });
   await transfer(rayDragon, null, binA1, hermon, 'intake');
-  await img(rayDragon, 'intake', 1, 'images/sn-dr97-0001-intake.jpg');
+  await img(rayDragon, 'intake', 1, 'SN-DR97-0001');
   await bill(red, 'intake', INTAKE, rayDragon);
-  await img(rayDragon, 'professional', 2, 'images/sn-dr97-0001-pro.jpg');
+  await img(rayDragon, 'professional', 2, 'SN-DR97-0001');
   await db.insert(serviceRequest).values({
     code: prefixedId(ID_PREFIX.serviceRequest),
     type: 'professional_photography', requesterId: red, itemId: rayDragon, status: 'completed',
-    typeFields: { objectKey: 'images/sn-dr97-0001-pro.jpg', version: 2 },
-    fulfillment: { objectKey: 'images/sn-dr97-0001-pro.jpg', shotCount: 6, lighting: 'diffused softbox', itemVerified: true, notes: 'Front and back, holofoil raked at 45° to show the print lines.' },
+    typeFields: { objectKey: 'images/sn-dr97-0001-pro.png', version: 2 },
+    fulfillment: { objectKey: 'images/sn-dr97-0001-pro.png', shotCount: 6, lighting: 'diffused softbox', itemVerified: true, notes: 'Front and back, holofoil raked at 45° to show the print lines.' },
     fulfilledBy: hermon,
     fulfilledAt: new Date(),
   });
@@ -800,7 +860,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayDeoxys, eventType: 'batch_split', newOwnerId: golden, newBinId: binA2, newState: 'stored', actorId: hermon, reason: 'batch_split' });
   await transfer(rayDeoxys, null, binA2, hermon, 'batch_split');
-  await img(rayDeoxys, 'intake', 1, 'images/sn-dx102-0002-intake.jpg');
+  await img(rayDeoxys, 'intake', 1, 'SN-DX102-0002');
   await bill(golden, 'intake', INTAKE, rayDeoxys);
 
   // (c) Gold Star — the collection's centrepiece. Red has it LISTED, with a
@@ -816,7 +876,7 @@ async function main(): Promise<void> {
   await transfer(rayGoldStar, null, binA2, hermon, 'intake');
   await custody({ itemId: rayGoldStar, eventType: 'relocate', prevBinId: binA2, newBinId: binB1, actorId: hermon, reason: 'scan relocate' });
   await transfer(rayGoldStar, binA2, binB1, hermon, 'scan relocate');
-  await img(rayGoldStar, 'intake', 1, 'images/sn-dx107-0003-intake.jpg');
+  await img(rayGoldStar, 'intake', 1, 'SN-DX107-0003');
   await bill(red, 'intake', INTAKE, rayGoldStar);
   await custody({ itemId: rayGoldStar, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: red, reason: 'listed for sale' });
   const goldStarListing = one(
@@ -835,7 +895,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayDelta, eventType: 'intake', newOwnerId: golden, newBinId: binB1, newState: 'stored', actorId: hermon, reason: 'intake' });
   await transfer(rayDelta, null, binB1, hermon, 'intake');
-  await img(rayDelta, 'intake', 1, 'images/sn-df97-0004-intake.jpg');
+  await img(rayDelta, 'intake', 1, 'SN-DF97-0004');
   await bill(golden, 'intake', INTAKE, rayDelta);
   await db.insert(serviceRequest).values({
     code: prefixedId(ID_PREFIX.serviceRequest),
@@ -855,7 +915,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayLegends, eventType: 'intake', newOwnerId: red, newBinId: binA1, newState: 'stored', actorId: hermon, reason: 'intake' });
   await transfer(rayLegends, null, binA1, hermon, 'intake');
-  await img(rayLegends, 'intake', 1, 'images/sn-cl10-0005-intake.jpg');
+  await img(rayLegends, 'intake', 1, 'SN-CL10-0005');
   await bill(red, 'intake', INTAKE, rayLegends);
 
   // (f) Supreme Victors C LV.X — Golden shipped it home (rush). Ownership stays
@@ -868,7 +928,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayLevelX, eventType: 'intake', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
   await transfer(rayLevelX, null, binB2, hermon, 'intake');
-  await img(rayLevelX, 'intake', 1, 'images/sn-sv146-0006-intake.jpg');
+  await img(rayLevelX, 'intake', 1, 'SN-SV146-0006');
   await bill(golden, 'intake', INTAKE, rayLevelX);
   await custody({ itemId: rayLevelX, eventType: 'state_change', prevState: 'stored', newState: 'shipped', actorId: hermon, reason: 'dispatched via DHL' });
   await db.insert(shipment).values({
@@ -897,7 +957,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayFullArt, eventType: 'batch_split', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'batch_split' });
   await transfer(rayFullArt, null, binB2, hermon, 'batch_split');
-  await img(rayFullArt, 'intake', 1, 'images/sn-ros104-0007-intake.jpg');
+  await img(rayFullArt, 'intake', 1, 'SN-ROS104-0007');
   await bill(golden, 'intake', INTAKE, rayFullArt);
   await db.insert(serviceRequest).values({
     code: prefixedId(ID_PREFIX.serviceRequest),
@@ -915,7 +975,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayMega, eventType: 'intake', newOwnerId: golden, newBinId: binB2, newState: 'stored', actorId: hermon, reason: 'intake' });
   await transfer(rayMega, null, binB2, hermon, 'intake');
-  await img(rayMega, 'intake', 1, 'images/sn-ros105-0008-intake.jpg');
+  await img(rayMega, 'intake', 1, 'SN-ROS105-0008');
   await bill(golden, 'intake', INTAKE, rayMega);
   await custody({ itemId: rayMega, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: golden, reason: 'listed for sale' });
   const megaListing = one(
@@ -1297,7 +1357,7 @@ async function main(): Promise<void> {
   });
   await custody({ itemId: rayAltArt, eventType: 'intake', newOwnerId: red, newBinId: binB1, newState: 'stored', actorId: hermon, reason: 'intake' });
   await transfer(rayAltArt, null, binB1, hermon, 'intake');
-  await img(rayAltArt, 'intake', 1, 'images/sn-evs194-0009-intake.jpg');
+  await img(rayAltArt, 'intake', 1, 'SN-EVS194-0009');
   await bill(red, 'intake', INTAKE, rayAltArt);
   await db.insert(serviceRequest).values({
     code: prefixedId(ID_PREFIX.serviceRequest),
@@ -1694,6 +1754,16 @@ async function main(): Promise<void> {
     '  NOT seeded (intake test material, photos already on disk):\n' +
       '    SN-EVS218-0010  2021 Evolving Skies Rayquaza VMAX (Alt Art secret) #218/203',
   );
+  if (missingImages.length > 0) {
+    // Said plainly: the rows are there and the pictures are not, so every
+    // gallery in the demo will report a photograph it cannot show.
+    console.log(
+      '  WARNING: ' +
+        missingImages.length +
+        ' photographs could not be stored (is the object store running?).' +
+        '\n    docker compose -f infra/docker-compose.yml up -d minio, set STORAGE_PROVIDER=s3, seed again.',
+    );
+  }
 }
 
 main().catch((err) => {
