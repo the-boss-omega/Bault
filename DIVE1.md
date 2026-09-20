@@ -7,18 +7,23 @@ the understanding of the person who designed and built the system: enough to exp
 behaviour, trace any request end to end, debug a failure, extend a subsystem safely, and judge
 where the design is strong and where it is not.
 
-**How it was made.** This edition (19 September 2026) replaces the 48-part changelog that
-DIVE1 had grown into. Every section was rebuilt by reading the code at commit `ab67079` on
-`design/custody-grade`, and every behavioural claim was checked against that code — by reading
-it, and where safe by running typechecks, the `web`, `ux` and `contract` test projects, or
-read-only queries against the development database. What the old parts said that the code no
-longer does has been removed; the decisions that still explain the code are kept, condensed, in
-[Appendix B](#appendix-b).
+**How it was made.** This guide replaced the 48-part changelog DIVE1 had grown into. Every
+section was rebuilt by reading the code at commit `ab67079` on `design/custody-grade`
+(19 September 2026), and every behavioural claim was checked against that code — by reading it,
+and where safe by running typechecks, the `web`, `ux` and `contract` test projects, or read-only
+queries against the development database.
+
+**Kept current.** It was brought forward again at commit `4ee8d9a` (20 September 2026), after a
+screen-by-screen review of the running product at phone and desktop sizes and the work that
+followed it. Each section was re-read against the code it describes, with the sentences that had
+quietly gone out of date — a screen that did not exist, a method nothing called, a figure the
+code no longer charges — rewritten or deleted rather than left standing. The fixes are listed in
+[Appendix D.0](#sd-0); what is still wrong is listed below it. The decisions that explain the
+code, rather than describe it, are kept condensed in [Appendix B](#appendix-b).
 
 ## Conventions
 
-- **References** are repo-relative `path:line` (or `path:start-end`) at commit `ab67079`, updated
-  for the fixes of 19 September 2026 (Appendix D.0). After
+- **References** are repo-relative `path:line` (or `path:start-end`) at commit `4ee8d9a`. After
   the first full path in a section, a file may be cited by name alone (`billing.service.ts:50`).
   Line numbers drift as the code changes; the function or symbol named beside a reference is
   the stable part — find it with `grep -n`.
@@ -207,9 +212,9 @@ the handler's transaction, the audit row, the error envelope — is traced in [�
 
 | Concern | Development | Production-capable | Where |
 |---|---|---|---|
-| Payments | sandbox adapter | PayPal adapter (top-up flow not wired end to end) | [§2](#s2), [§6](#s6) |
+| Payments | sandbox adapter | PayPal adapter (no route creates an order, so the card path is withdrawn rather than offered) | [§2](#s2), [§6](#s6) |
 | Shipping | sandbox adapter (quotes, labels) | EasyPost adapter (not exercised live; tracking still uses the sandbox) | [§2](#s2), [§9](#s9) |
-| Photographs | MinIO | any S3 | [§2](#s2) |
+| Photographs | MinIO, served through the API | any S3 (presigned directly when the browser can reach it) | [§2](#s2) |
 | Email | console sink | provider adapter (console refused in production) | [§2](#s2) |
 | Deployment | `pnpm dev`, the tunnel | Dockerfiles + nginx (Node 20 images; no `.dockerignore`) | [§13](#s13) |
 
@@ -433,13 +438,17 @@ Vitest 2.x workspaces. The `--no-file-parallelism` flag on the scripts is what a
 **`.env.example`.** This is the documented shape of the configuration. It holds no real secrets:
 `minioadmin` is MinIO's public default and `bault/bault` is the local compose password. Every key and
 its default is tabulated in §2.4. Three things in the template are wrong or incomplete at HEAD:
-- Lines 44-49 are a stale fragment. "Payment provider (tokenizing, e.g. Stripe)" is followed by a
+- Lines 49-54 are a stale fragment. "Payment provider (tokenizing, e.g. Stripe)" is followed by a
   sentence that stops mid-way ("naming one fails the boot rather than"). The real PAYMENTS block
-  comes later (`.env.example:168-192`).
-- `AUTH_RATE_LIMIT_PER_MINUTE=10` (`:209`) contradicts the schema default of 30, which the schema
+  comes later (`.env.example:173-197`).
+- `AUTH_RATE_LIMIT_PER_MINUTE=10` (`:214`) contradicts the schema default of 30, which the schema
   comment explains was raised on purpose (`packages/config/src/env.ts:135-142`).
-- `EXPOSE_API_DOCS=true` (`:214`) is the development convenience. The comment above it says "Off by
+- `EXPOSE_API_DOCS=true` (`:219`) is the development convenience. The comment above it says "Off by
   default", which is true of the schema but not of the template.
+
+The STORAGE block (`.env.example:38-41`) now also states why an image URL points at the API rather
+than at the bucket when the endpoint is a loopback address — the rule `createStorageAdapter` applies
+below.
 
 `WEB_PUBLIC_HOST`, `WEB_PREVIEW_USER` and `WEB_PREVIEW_PASSWORD` are read by `vite.config.ts` and
 `scripts/tunnel.mjs`, but the template does not document them. `VITE_API_PROXY_TARGET` is documented
@@ -656,7 +665,7 @@ and is refused in production in two places (§2.4, §2.9).
 **Worked example (why the capture model matters).** A collector approves a $1.00 PayPal order, then
 posts a top-up of `amountMinor: 500000` with that order id. The capture succeeds, and PayPal reports
 `amount.value: "1.00"`, so `settledAmountMinor` is 100. `CheckoutService` compares 100 with 500000 and
-refuses the credit (`apps/api/src/modules/pay/checkout.service.ts:178-181`). Under the sandbox adapter
+refuses the credit (`apps/api/src/modules/pay/checkout.service.ts:178-185`). Under the sandbox adapter
 the settled amount is echoed back, so the same request credits $5,000. The comment at
 `apps/api/src/shared/adapters/adapters.module.ts:56-60` records that this was done for real with
 `pm_totally_fake`.
@@ -810,19 +819,26 @@ database stores only the object key (§5).
 **Interface** (`packages/adapters/src/storage.ts:17-27`): `putObject({ key, body: Buffer, contentType })
 → { key }`, `getSignedUrl(key, expiresInSeconds = 300) → string`, and `getObject(key) → { body,
 contentType } | null` — the bytes, read server-side. The third method is what lets the API serve an
-image from its own origin when the store itself is not reachable by a browser. The callers are
-`MediaService` (`apps/api/src/modules/med/media.service.ts:114,116`), browse
-(`mkt/browse.service.ts:107,121`) and the vault (`vlt/vault.service.ts:432`).
+image from its own origin when the store itself is not reachable by a browser. The callers are `MediaService`
+(`apps/api/src/modules/med/media.service.ts:114` put, `:121` sign), browse
+(`mkt/browse.service.ts:131,146`), the vault (`vlt/vault.service.ts:550`), the parcel bench
+(`inv/parcel.service.ts:510`, through `signAll`) and — since 20 September — the wallet-request
+reviewer, who opens a collector's supporting document through the same signature
+(`pay/wallet-request.service.ts:275`).
 
 **`SandboxStorageAdapter`** (`storage.ts:40-62`). It keeps the most recent `SANDBOX_MAX_OBJECTS` =
-200 objects in a `Map` for the life of the process, evicting oldest-first (`:44-49`). It used to keep
+200 objects in a `Map` for the life of the process, evicting oldest-first (`:43-52`). It used to keep
 nothing at all and hand back `http://localhost:9000/bault-images/<key>` — a URL for a store it had
 never written to — so every photograph screen in development showed a broken image and every
 photograph taken at the local bench was discarded. Keeping them in memory is enough to exercise those
 screens and is still not storage: a restart loses them, which is why production refuses the sandbox
 (§2.4). Its own `getSignedUrl` returns `sandbox://<key>` and is never used, because the sandbox is
-only ever read through the API's route below. The seeded catalogue photos are unaffected either way:
-they are static files served from `assets/images/` by the web server (§12).
+only ever read through the API's route below. The seeded photographs are no longer unaffected: since 20 September the seed PUTS each card's
+catalogue file into whichever store is configured, under the key its `item_image` row records
+(§3.6), so in a sandbox checkout they live in the seed process's memory and not in the API's — the
+rows resolve only once `STORAGE_PROVIDER=s3` points at a real bucket. The catalogue images the
+marketing and vault screens draw directly are a different thing entirely: static files served from
+`assets/images/` by the web server (§12).
 
 **`ProxiedStorageAdapter`** (`storage.ts:76-99`). A wrapper, not a store. `putObject` and `getObject`
 pass straight through to the adapter inside it; `getSignedUrl` instead returns a path on the API —
@@ -952,7 +968,7 @@ to notice.
 | `eslint.config.mjs` | flat ESLint config | ignores :8, script globals :18-32, rules :35-45 |
 | `.prettierrc.json`, `.editorconfig`, `.gitignore` | formatting and ignore policy | `_local/` rationale at the end of `.gitignore` |
 | `vitest.workspace.ts` | 8 test projects and module aliases | `ADAPTERS_SRC` :14, `WEB_MODULES` :27, projects :56-149 |
-| `.env.example` | documented config shape | stale fragment :44-49; PAYMENTS :168-192; `AUTH_RATE_LIMIT` :209; `EXPOSE_API_DOCS` :214 |
+| `.env.example` | documented config shape | STORAGE, with the proxied-URL rule :33-41; stale fragment :49-54; PAYMENTS :173-197; `AUTH_RATE_LIMIT` :214; `EXPOSE_API_DOCS` :219 |
 | `packages/config/src/env.ts` | env schema and loader | `loadDotenvFromRoot` :12, `booleanFromEnv` :34, `EnvSchema` :53, `EXPOSE_API_DOCS` :147, `TRUST_PROXY` :161, `superRefine` :289, production block :335-412, `loadEnv` :426 |
 | `packages/config/src/index.ts` | public surface | `loadEnv`, `Env` |
 | `packages/config/package.json`, `tsconfig.json` | CJS build to `dist/` | deps `dotenv`, `zod` |
@@ -961,8 +977,9 @@ to notice.
 | `packages/adapters/src/shipping.ts` | shipping interface, weight math, sandbox | `DEFAULT_PACKAGING_GRAMS` :41, `DIM_DIVISOR` :61, `billableGrams` :97, `dimensionalGrams` :117, `RateRequest` :123, `Rate` :155, `SANDBOX_SERVICES` :226, `distanceMultiplier` :246, `SandboxShippingAdapter` :254 |
 | `packages/adapters/src/easypost.ts` | EasyPost adapter | `TEST_HOST` :38, class :75, `call` :93, `address` :128, `getRates` :164, `buyLabel` :225, `getTracking` :266 |
 | `packages/adapters/src/email.ts` | email interface, templates, console and SMTP | `actionEmail` :50, `renderEmail` :78, `ConsoleEmailAdapter` :129, `SmtpEmailAdapter` :163 |
-| `packages/adapters/src/storage.ts` | storage interface and sandbox | `StorageAdapter` :17, `SandboxStorageAdapter` :40 |
-| `packages/adapters/src/s3.ts` | hand-written SigV4 S3 adapter | `encodeSegment` :58, `signingKey` :74, `urlFor` :91, `putObject` :111, `getSignedUrl` :180 (clamp :187) |
+| `packages/adapters/src/storage.ts` | storage interface, in-memory sandbox, API-proxy wrapper | `StorageAdapter` :17 (`getObject` :26), `SANDBOX_MAX_OBJECTS` :38, `SandboxStorageAdapter` :40, `ProxiedStorageAdapter` :76 (`getSignedUrl` :86) |
+| `packages/adapters/src/s3.ts` | hand-written SigV4 S3 adapter | `encodeSegment` :58, `signingKey` :74, `urlFor` :91, `putObject` :111, `getSignedUrl` :180 (clamp :187), `getObject` :223 |
+| `apps/api/src/modules/med/media-url.ts` | the signature on an API-served image | `MEDIA_OBJECT_PATH` :13, `mac` :15, `signMediaKey` :21, `verifyMediaKey` :26 |
 | `packages/adapters/package.json`, `tsconfig.json` | CJS build; only runtime dep `nodemailer` | |
 | `packages/contracts/src/index.ts` | placeholder (`export {}`) | :1-8 |
 | `packages/contracts/package.json`, `tsconfig.json` | unused package manifest | |
@@ -1201,8 +1218,8 @@ The list (`0001_append_only.sql:44`), with what each table is:
 
 **How Drizzle decides what to run** (drizzle-orm 0.38, `node_modules/drizzle-orm/pg-core/dialect.js:44-72`). It reads the **newest** row of `drizzle.__drizzle_migrations` and applies, inside **one transaction**, every journal entry whose `when` is greater than that row's `created_at`. Three rules follow:
 
-- **A new migration's `when` must exceed every earlier one.** An entry whose `when` is lower than the last applied value is skipped silently, forever. The hand-written entries use synthetic timestamps 100,000 ms apart, from `1785072000000` (0004) to `1785074600000` (0030) (`apps/api/src/db/migrations/meta/_journal.json`). The dev database has 31 rows in `__drizzle_migrations`, the newest `1785074600000`.
-- **All pending migrations share one transaction.** On a fresh database all 31 run in one transaction. `ALTER TYPE … ADD VALUE` works inside a transaction, but the new value cannot be used until it commits. That is why 0013 adds enum values and then writes no row that uses them (`0013_services_on_a_stored_item.sql:46-54`), and why 0024 builds its indexes without `CONCURRENTLY` (`0024_the_queries_that_run_on_every_request.sql` header).
+- **A new migration's `when` must exceed every earlier one.** An entry whose `when` is lower than the last applied value is skipped silently, forever. The hand-written entries use synthetic timestamps: 100,000 ms apart from `1785072000000` (0004) to `1785074600000` (0030), then 1,000,000 ms apart for 0031-0034, ending at `1785164000000` (`apps/api/src/db/migrations/meta/_journal.json`, 35 entries). The dev database has 35 rows in `__drizzle_migrations`, the newest `1785164000000`.
+- **All pending migrations share one transaction.** On a fresh database all 35 run in one transaction. `ALTER TYPE … ADD VALUE` works inside a transaction, but the new value cannot be used until it commits. That is why 0013 adds enum values and then writes no row that uses them (`0013_services_on_a_stored_item.sql:46-54`), and why 0024 builds its indexes without `CONCURRENTLY` (`0024_the_queries_that_run_on_every_request.sql` header).
 - **`drizzle-kit generate` is no longer the authoring tool.** Snapshots exist only for 0000–0003 (`meta/0000_snapshot.json` … `0003_snapshot.json`). From 0004 onward migrations are hand-written SQL with a hand-added journal entry (0004's header says so). *(Inferred: running `db:generate` now would diff the TypeScript schema against the 0003 snapshot and emit a migration that re-creates everything added since.)* Hand-written migrations use `IF NOT EXISTS` and `DO $$ … EXCEPTION WHEN duplicate_object` so a partial re-run is safe.
 
 Adding an append-only table therefore takes three edits: the migration that creates it, its journal entry, and its name in **both** arrays of `0001_append_only.sql`. The runner re-applies the guards after every run, so the trigger attaches in the same `db:migrate` that creates the table.
@@ -1243,6 +1260,9 @@ Adding an append-only table therefore takes three edits: the migration that crea
 | 0029 | `who_signed_in` | `login_session.ip`/`user_agent`; `login_attempt` (append-only) with outcome enum. |
 | 0030 | `a_downgrade_is_not_a_cancellation` | `membership.scheduled_tier`; `shipment.membership_cover`. |
 | 0031 | `membership_stops_the_storage_clock` | `storage_period_cover` (append-only): storage periods a membership covered, so they are never billed later (§5.13). |
+| 0032 | `sales_tax_in_parts_per_million` | `facility.sales_tax_bps` → `sales_tax_ppm`, existing values ×10. Basis points cannot hold 6.625% as an integer, so the seed wrote 6625 and the app read it as 66.25% (§10). |
+| 0033 | `direct_ship_names_its_parcel` | `shipment.source_parcel_id`: a direct-ship shipment IS a parcel and has no items, so this is what the bench verifies at dispatch (§9.16). |
+| 0034 | `addresses_carry_a_state_and_a_phone` | `shipping_address.line2`, `.region`, `.phone`, all nullable. A US label is routed by state and a courier needs a number (§9). |
 
 <a id="s3-6"></a>
 ### 3.6 The seed
@@ -1250,38 +1270,38 @@ Adding an append-only table therefore takes three edits: the migration that crea
 **Purpose.** `apps/api/src/db/seed.ts` (run as `pnpm db:reset`, which is `pnpm --filter @bault/api db:seed`, root `package.json:20`) wipes all application data and writes a small, internally consistent, Rayquaza-only dataset. It is the clean state of the dev database: integration tests leave fixtures behind that cannot be deleted through the product (items are never deleted, trails are append-only), and re-seeding is the only way back.
 
 **The reset.**
-1. One `TRUNCATE … RESTART IDENTITY` over 48 tables (`seed.ts:83-98`). Row triggers do not fire on `TRUNCATE`, so this clears the append-only tables too (the header says so at `seed.ts:37-42`). It is a dev-only escape hatch; the running application has no path to it.
-2. If a `pgboss` schema exists, `TRUNCATE pgboss.job, pgboss.archive` (`seed.ts:118-123`), clearing the worker's job history but keeping its queues, schedules and version tables (§11).
+1. One `TRUNCATE … RESTART IDENTITY` over 49 tables (`seed.ts:110-125`). Row triggers do not fire on `TRUNCATE`, so this clears the append-only tables too (the header says so at `seed.ts:41-46`). It is a dev-only escape hatch; the running application has no path to it.
+2. If a `pgboss` schema exists, `TRUNCATE pgboss.job, pgboss.archive` (`seed.ts:145-150`), clearing the worker's job history but keeping its queues, schedules and version tables (§11).
 
-> **Gap, verified.** The schema has 49 tables; the one missing from the `TRUNCATE` list is `parcel_photo`. The dev database currently holds 9 `parcel_photo` rows, none of which points at an existing parcel (the oldest from 2026-09-12). Every reset leaves test-run photographs behind as orphans.
+> **Gap, verified.** The schema has 50 tables; the one still missing from the `TRUNCATE` list is `parcel_photo`. Every reset therefore leaves the previous run's parcel photographs behind as orphans, and they accumulate: a read of the dev database on 20 September found 47 `parcel_photo` rows, every one of them pointing at a parcel that no longer exists.
 
-**What it creates** (all money USD, integer cents, `CUR = 'USD'` at `seed.ts:75`; every password `11111111`, argon2-hashed at `seed.ts:78`):
+**What it creates** (all money USD, integer cents, `CUR = 'USD'` at `seed.ts:102`; every password `11111111`, argon2-hashed at `seed.ts:105`):
 
 | Kind | Rows | Where |
 | --- | --- | --- |
-| Users | 7: `eldar` (admin), `hermon` (warehouse_operator), `red`, `golden` (collectors), `veteran` (legacy row with an `OW-` intake id, flagged name, `legacy_display_name`), `platform` (admin, the custodian that receives donations), `dana` (collector, `status = 'suspended'`) | `seed.ts:140-198`, `1323-1325` |
-| Pricing rules | catch-all and per-class intake, `intake_lot`, storage and oversized storage (with `freeDays`/`periodDays`/`percentOfIntakeBps` in `parameters`), service and per-service fees, grading tiers, shipping, rush, GPS tracker, marketplace fee 5%, consignment fees, cash-out, chargeback, escrow 1%, white glove, show pickup, one monthly rule per membership tier (generated from `MEMBERSHIP_TIERS`), parcel processing and forwarding | `seed.ts:205-551` |
-| Facilities | `NJ` (primary) and `DE` (forwarding to NJ, 4 days), both with demo street addresses, states and reserved `555-01xx` telephone numbers | `seed.ts:573-619` |
-| Bins | 6 in NJ: A×2, B×2, oversized O×2, each with a minted `BIN-` serial equal to its barcode | `seed.ts:629-649` |
-| Items | 9 real Rayquaza cards, each raw, each with intake custody event, `bin_transfer`, intake image and an intake charge, all dated 60 days ago (`SEEDED_ARRIVAL`, `seed.ts:726`) | `seed.ts:770-940`, `1267-1292` |
-| Market | 2 listings (Gold Star active with a $2,750 pending offer; M Rayquaza-EX sold), 1 sale `transaction`, 1 swap proposal, 3 house-store products | `seed.ts:821-825`, `896-914`, `922-938`, `954-957` |
-| Money | 2 sandbox top-ups, 1 legacy withdrawal, 4 wallet requests (submitted, processing, rejected, completed-with-ledger-row) | `seed.ts:694-702`, `964-967`, `970-1110` |
-| Other | 1 dispute on the real sale, 3 audit rows, 2 outbox rows, 3 notifications, 1 preference, 3 addresses, 2 card shows, 3 support tickets, 3 parcels, 1 arrival disposal, 3 custom requests, 1 escrow deal at the inspection gate | `seed.ts:1139-1665` |
+| Users | 7: `eldar` (admin), `hermon` (warehouse_operator), `red`, `golden` (collectors), `veteran` (legacy row with an `OW-` intake id, flagged name, `legacy_display_name`), `platform` (admin, the custodian that receives donations), `dana` (collector, `status = 'suspended'`) | `mkUser` `seed.ts:167`; the six built at :195-225; `dana` :1408-1409 |
+| Pricing rules | catch-all and per-class intake, `intake_lot`, storage and oversized storage (with `freeDays`/`periodDays`/`percentOfIntakeBps` in `parameters`), service and per-service fees, grading tiers, shipping, rush, GPS tracker, marketplace fee 5%, consignment fees, cash-out, chargeback, escrow 1%, white glove, show pickup, one monthly rule per membership tier (generated from `MEMBERSHIP_TIERS`), parcel processing and forwarding | `rules` :232-575, inserted in a loop :576-578 |
+| Facilities | `NJ` (primary) and `DE` (forwarding to NJ, 4 days), both with demo street addresses, states and reserved `555-01xx` telephone numbers | :600-641 |
+| Bins | 6 in NJ: A×2, B×2, oversized O×2, each with a minted `BIN-` serial equal to its barcode | `mkBin` :656, the six at :671-676 |
+| Items | 9 real Rayquaza cards, each raw, each with intake custody event, `bin_transfer`, intake image and an intake charge, all dated 60 days ago (`SEEDED_ARRIVAL`, `seed.ts:753`) | `mkItem` :731; the nine at :830-1000 and :1360 |
+| Market | 2 listings (Gold Star active with a $2,750 pending offer; M Rayquaza-EX sold), 1 sale `transaction`, 1 swap proposal, 3 house-store products | listings :883, :982; sale, swap and store rows follow each |
+| Money | 2 sandbox top-ups, 1 legacy withdrawal, 4 wallet requests (submitted, processing, rejected, completed-with-ledger-row) | `TOPUP` :694; withdrawal :1050; the four requests :1084-1171 |
+| Other | 1 dispute on the real sale, 3 audit rows, 2 outbox rows, 3 notifications, 1 preference, 3 addresses, 2 card shows, 3 support tickets, 3 parcels, 1 arrival disposal, 3 custom requests, 1 escrow deal at the inspection gate | dispute :1200; the rest :1200-1700 |
 
-The nine items: `SN-DR97-0001`, `SN-CL10-0005` and `SN-DX107-0003` (listed) owned by Red, plus `SN-ROS105-0008` bought by Red from Golden and now frozen by a dispute hold (`seed.ts:1333-1337`); `SN-DX102-0002`, `SN-DF97-0004` (open grading request), `SN-SV146-0006` (shipped) and `SN-ROS104-0007` (open donation request) owned by Golden; `SN-EVS194-0009` booked in for Red and donated to the platform custodian (`seed.ts:1292-1317`). Each serial is also the photograph's filename under `assets/images`, and the seed now PUTS that file into the object store under the key each `item_image` row records (`seed.ts` `img`/`putDemoImage`). The rows used to name objects nobody had ever uploaded, so every gallery in the demo answered 404 — a key in `item_image` is only a promise that the bytes are in the store. A store that cannot be reached is not fatal: the rows are still written and the seed ends with a warning naming the count.
+The nine items: `SN-DR97-0001`, `SN-CL10-0005` and `SN-DX107-0003` (listed) owned by Red, plus `SN-ROS105-0008` bought by Red from Golden and now frozen by a dispute hold (`seed.ts:1391`); `SN-DX102-0002`, `SN-DF97-0004` (open grading request), `SN-SV146-0006` (shipped) and `SN-ROS104-0007` (open donation request) owned by Golden; `SN-EVS194-0009` booked in for Red and donated to the platform custodian (`seed.ts:1358-1370`). Each serial is also the photograph's filename under `assets/images`, and the seed now PUTS that file into the object store under the key each `item_image` row records (`putDemoImage` `seed.ts:763`, called by `img` :802, through the adapter `createSeedStorage` builds at :86 — the same rule the API applies, so a key seeded here resolves for the running app). The rows used to name objects nobody had ever uploaded, so every gallery in the demo answered 404 — a key in `item_image` is only a promise that the bytes are in the store. A store that cannot be reached is not fatal: the failures are collected (`missingImages` :762) and the seed ends with a warning naming the count and how to fix it (:1757-1765).
 
-**The Rayquaza-only rule.** Every seeded item is a real card with a real photograph and catalogue data matching it. The tenth card, `SN-EVS218-0010`, is deliberately **not** seeded so the intake bench has a real, photographed card to book in (`seed.ts:1289-1290`, summary at `seed.ts:1694-1695`). `tests/web/rayquaza-only.test.ts` enforces it: it fails on seventeen named non-Rayquaza collectibles anywhere in the repo, requires a photograph for every seeded serial and requires every seeded description to contain "rayquaza" (3 tests, passing at HEAD).
+**The Rayquaza-only rule.** Every seeded item is a real card with a real photograph and catalogue data matching it. The tenth card, `SN-EVS218-0010`, is deliberately **not** seeded so the intake bench has a real, photographed card to book in (`seed.ts:1032`, restated at :1349, summary at :1754-1755). `tests/web/rayquaza-only.test.ts` enforces it: it fails on seventeen named non-Rayquaza collectibles anywhere in the repo, requires a photograph for every seeded serial and requires every seeded description to contain "rayquaza" (3 tests, passing at HEAD).
 
 **Worked example: balances are sums, and the seed's sums are exact.** Red: two credits of 500,000 (the sandbox top-up and the completed cash-in), minus four intake charges of 100, minus one photography service charge of 2,000, minus the 26,000 purchase = **971,600 cents ($9,716.00)**. Golden: top-up 500,000, minus five intakes of 100, minus 2,000 grading, minus 3,500 shipping, plus the 26,000 sale credit, minus the 1,300 fee (5% of 26,000), minus the 100,000 withdrawal = **418,700 cents ($4,187.00)**. A read-only query of the dev database returns exactly these (8 ledger rows for Red, 11 for Golden). Until 20 September the seeded intakes were $5.00 each while the rule that charges them was $1.00, so both figures were $4.00 per card lower than the product would have produced.
 
 **Internal inconsistencies (verified, worth knowing when debugging a demo).**
-- The escrow deal is `fundingSource: 'wallet'`, `status: 'inspecting'`, "Held from the buyer wallet" (`seed.ts:1635-1665`), but no `escrow_hold` ledger row is written for Red, so her balance does not show the $1,450 as held.
+- The escrow deal is `fundingSource: 'wallet'`, `status: 'inspecting'`, "Held from the buyer wallet" (`seed.ts:1634-1664`), but no `escrow_hold` ledger row is written for Red, so her balance does not show the $1,450 as held.
 - Dana is described as suspended by the debt sweep for unpaid storage, but has no ledger rows (balance 0) and `auto_suspended_at` is null. The system therefore treats it as a human suspension that the sweep will never lift.
-- The comment at `seed.ts:965-977` still says "the remaining two cards of the ten are left out"; one of them (`SN-EVS194-0009`) is now seeded at `seed.ts:1292`.
+- The comment at `seed.ts:1026-1032` still says "the remaining two cards of the ten are left out"; one of them (`SN-EVS194-0009`) is now seeded at `seed.ts:1352`.
 
-**Arrival is backdated, on purpose.** Every seeded item, and every `bin_transfer` row that shelves it, is stamped `SEEDED_ARRIVAL` — 60 days before the seed runs (`seed.ts:726`, used at `:716` and `:743`). Shelf Yield divides revenue by shelf-days (§10) and the storage sweep counts periods from arrival (§5), so a vault that arrived at the instant of seeding reported "No time yet" on every shelf and made the yield table's ordering arbitrary. Sixty days is inside every included storage window — 180 days for ordinary storage, 90 for oversized — so it creates no storage charge on its own.
+**Arrival is backdated, on purpose.** Every seeded item, and every `bin_transfer` row that shelves it, is stamped `SEEDED_ARRIVAL` — 60 days before the seed runs (`seed.ts:753`, used at `:716` and `:743`). Shelf Yield divides revenue by shelf-days (§10) and the storage sweep counts periods from arrival (§5), so a vault that arrived at the instant of seeding reported "No time yet" on every shelf and made the yield table's ordering arbitrary. Sixty days is inside every included storage window — 180 days for ordinary storage, 90 for oversized — so it creates no storage charge on its own.
 
-**Edge cases.** `mkUser` sets `username` once; a second write would trip the 0004 immutability trigger. `bill` and `ledger` write directly rather than through `BillingService`, so the seed never consults memberships or pricing. The seed runs through `createDb()`, i.e. the pooled `DATABASE_URL`, and ends the pool at `seed.ts:1667`.
+**Edge cases.** `mkUser` sets `username` once; a second write would trip the 0004 immutability trigger. `bill` and `ledger` write directly rather than through `BillingService`, so the seed never consults memberships or pricing. The seed runs through `createDb()`, i.e. the pooled `DATABASE_URL`, and ends the pool at `seed.ts:1726`.
 
 <a id="s3-7"></a>
 ### 3.7 Errors: AppError and the error envelope
@@ -1413,7 +1433,7 @@ What the modules actually import from it (grep): `formatMinor` (11 files), `mone
 
 Worked example (rounding): a percentage rule of 500 bps on a $0.99 base is `Math.round(99 × 500 / 10000) = Math.round(4.95) = 5` cents. On the seeded sale of 26,000 it is exactly 1,300. `Math.round` rounds halves up (toward +∞), so `2.5 → 3`.
 
-**Identifiers** (`apps/api/src/shared/ids.ts`). Primary keys are random UUIDs (`pkId`). Human-facing codes are `prefixedId(prefix, length = 8)`: the prefix, a dash, and eight characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no 0/O/1/I), chosen with `crypto.randomInt` (`:17-23`). Prefixes (`ID_PREFIX`, `:25-46`): `OW` owner (retired), `SN` item, `BIN` bin, `SHP` shipment, `SR` service request, `DSP` dispute, `LOT` lot, `TXN` transaction, `DSL` arrival disposal, `PKG` parcel, `TKT` ticket, `GSB` grading submission, `GRP` shipment group, `ESC` escrow, `HSE` house listing, `ORD` house order. `WR` for wallet requests is passed as a literal (`prefixedId('WR')`, e.g. `seed.ts:1026`), not through `ID_PREFIX`.
+**Identifiers** (`apps/api/src/shared/ids.ts`). Primary keys are random UUIDs (`pkId`). Human-facing codes are `prefixedId(prefix, length = 8)`: the prefix, a dash, and eight characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no 0/O/1/I), chosen with `crypto.randomInt` (`:17-23`). Prefixes (`ID_PREFIX`, `:25-46`): `OW` owner (retired), `SN` item, `BIN` bin, `SHP` shipment, `SR` service request, `DSP` dispute, `LOT` lot, `TXN` transaction, `DSL` arrival disposal, `PKG` parcel, `TKT` ticket, `GSB` grading submission, `GRP` shipment group, `ESC` escrow, `HSE` house listing, `ORD` house order. `WR` for wallet requests is passed as a literal (`prefixedId('WR')`, e.g. `seed.ts:1086`), not through `ID_PREFIX`.
 
 Item and lot serials are the exception: `makeItemSerial()` is `SN-<Date.now() base36>-<randomInt(1000, 9999)>` and `makeLotSerial()` the same with `LOT-` (`apps/api/src/modules/inv/labels.ts:12-25`); the barcode is the serial (`labels.ts:27-30`). Bins use `prefixedId('BIN')` for both serial and barcode (`labels.ts:49-60`).
 
@@ -1470,7 +1490,7 @@ Worked example: a request with `x-request-id: 7b1c…` whose handler throws an u
 | `apps/api/src/db/migrations/0000…0030_*.sql` | Schema history | table in §3.5 |
 | `apps/api/src/db/migrations/meta/_journal.json` | Migration order and `when` stamps | 31 entries; 0004+ are synthetic +100000 ms |
 | `apps/api/src/db/migrations/meta/0000_snapshot.json` … `0003_snapshot.json` | drizzle-kit snapshots (stop at 0003) | — |
-| `apps/api/src/db/seed.ts` | Dev reset + Rayquaza dataset | TRUNCATE 83-98; pg-boss 118-123; users 140-198; rules 205-551; facilities 573-604; bins 620-640; items 745-915, 1267-1292; wallet requests 970-1110; hold 1308; Dana 1323-1325; escrow 1610-1640 |
+| `apps/api/src/db/seed.ts` | Dev reset + Rayquaza dataset, photographs included | `REPO_ROOT` 77; `createSeedStorage` 86; TRUNCATE 110-125; pg-boss 145-150; `mkUser` 167, users 195-225; rules 232-575; facilities 600-641; `mkBin` 656; `SEEDED_ARRIVAL` 753; `missingImages` 762, `putDemoImage` 763, `img` 802; `mkItem` 731, items 830-1000; wallet requests 1084-1171; hold 1392; Dana 1407; unstored-photo warning 1757-1765 |
 | `apps/api/src/shared/shared.module.ts` | Global idempotency + confirmation | 9-14 |
 | `apps/api/src/shared/adapters/adapters.module.ts` | Adapter tokens and env-chosen factories | tokens 23-26; email 38-49; payment 84-105; shipping 125-142; storage 164-185; module 187-197 |
 | `apps/api/src/shared/billing/billing.port.ts` | `BillingPort`, `BillableAction`, token; dead no-op module | action 12-44; port 46-49; token 51; no-op 53-66 |
@@ -1535,7 +1555,7 @@ declared in `apps/api/src/modules/acc/acc.schema.ts`.
 | `verification_token` (`acc.schema.ts:81-90`) | `user_id`, `type` (`email_verification` \| `password_reset`), `token_hash`, `expires_at`, `consumed_at` | Index `verification_token_hash_idx` on `token_hash` (`0024_the_queries_that_run_on_every_request.sql:67-68`) |
 | `login_session` (`acc.schema.ts:92-109`) | `user_id`, `token_hash`, `expires_at`, `revoked_at`, `ip`, `user_agent` | Partial index `login_session_token_active_idx` on `token_hash WHERE revoked_at IS NULL`, and `login_session_user_idx (user_id, expires_at)` (`0024…sql:23-29`) |
 | `login_attempt` (`acc.schema.ts:127-145`) | `identifier`, `user_id` (nullable), `outcome login_attempt_outcome`, `ip`, `user_agent`, `occurred_at` | Append-only: on both guard lists in `apps/api/src/db/sql/0001_append_only.sql:44,87`. Indexes on `occurred_at` and `(user_id, occurred_at)` (`0029_who_signed_in.sql:30-31`) |
-| `shipping_address` (`address.schema.ts:8-24`) | `user_id`, `label`, `recipient`, `line1`, `city`, `country`, `postal_code`, `is_default` | No DB constraint on "one default per user". That is enforced in `ProfileService` (§4.13) |
+| `shipping_address` (`address.schema.ts:8-24`) | `user_id`, `label`, `recipient`, `line1`, `line2`, `city`, `region`, `country`, `postal_code`, `phone`, `is_default` (the three nullable ones added by 0034) | No DB constraint on "one default per user". That is enforced in `ProfileService` (§4.13) |
 | `audit_record` (`sec/audit.schema.ts:9-18`) | `actor_id` (nullable), `action`, `target_entity`, `target_id`, `metadata` jsonb, `occurred_at` | Append-only (`0001_append_only.sql:44`) |
 
 `user_id` columns are `text`, but `user_account.id` is `uuid`. Joins therefore cast, as in
@@ -1602,7 +1622,7 @@ no such sweep exists.
   recovers, which defeats the distinction the column exists for
   (`acc.schema.ts:56-66`).
 - The seeded suspended account `dana` is suspended by a plain status update
-  (`apps/api/src/db/seed.ts:1350`) with no `auto_suspended_at`. The sweep will never lift it,
+  (`apps/api/src/db/seed.ts:1349`) with no `auto_suspended_at`. The sweep will never lift it,
   whatever the seed comment says about the debt sweep.
 - Role and status changes apply **on the next request**. `SessionService.resolve`
   reads `role` and `status` live from `user_account` on every call
@@ -1833,11 +1853,18 @@ returns `true`, so any authenticated user passes. Otherwise it needs `req.user` 
 `required.includes(user.role)` (else 403 `forbidden`, "Requires role: …").
 `getAllAndOverride` means a handler-level `@Roles` **replaces** a class-level one.
 It is not intersected with it. **There is no role hierarchy.** `admin` passes a staff route only because
-the route lists it, and 58 routes say `@Roles('warehouse_operator', 'admin')`. 17
+the route lists it, and 58 routes say `@Roles('warehouse_operator', 'admin')`. 16
 say `@Roles('admin')`, including the class-level one on `AdmController`
 (`adm.controller.ts:51`). A route that listed only `'warehouse_operator'` would shut admins
 out. The role `user` appears in no `@Roles`. "Customer-only" is expressed by
 ownership checks in services, not by RBAC.
+
+That last sentence is also how a route STOPS being staff-only. `POST /support/tickets/:id/resolve`
+carried `@Roles('warehouse_operator', 'admin')` until 20 September; it now carries no role at all
+(`sup/sup.controller.ts:102`) and `SupportService.resolve` decides — staff, or the person who raised
+the ticket, and 403 for anybody else (`sup/support.service.ts:239-242`). The guard cannot express
+"the owner of this row", so a route whose rule involves ownership has to be decided where the row
+is loaded.
 
 **`@CurrentUser()`** (`sec/current-user.decorator.ts:10-14`) returns `req.user` or
 throws 401. It is the only way handlers receive the actor. **`AuthUser`**
@@ -1867,7 +1894,7 @@ Part 17 of the old guide, authentication succeeds for `suspended`
 
 | Route | Where |
 |---|---|
-| `GET /me/profile` (the SPA's boot probe) | `acc/profile.controller.ts:56-60` |
+| `GET /me/profile` (the SPA's boot probe) | `acc/profile.controller.ts:62-66` |
 | `GET /support/tickets` | `sup/sup.controller.ts:45-49` |
 | `POST /support/tickets` | `sup/sup.controller.ts:51-55` |
 | `GET /support/awaiting` | `sup/sup.controller.ts:58-62` |
@@ -1893,7 +1920,7 @@ expression names only `suspended`.
   expires (up to 7 days) or the user clears cookies. The same holds for a `closed` account's cookie, and
   for public pages such as marketplace browsing.
 - The seed's `dana@bault.dev` / `11111111` is the demo account for this state
-  (`seed.ts:1340-1350`).
+  (`seed.ts:1340-1349`).
 
 <a id="s4-8"></a>
 ### 4.8 Password change, reset, and session revocation
@@ -2092,9 +2119,16 @@ to suspended accounts (`acc/profile.controller.ts:42-86`).
     editing it to `isDefault: false`, leaves the user with no default. Two concurrent
     "make default" requests could both win, because nothing in the DB enforces a single default
     *(Inferred: the READ COMMITTED snapshot of the demoting UPDATE cannot see the other insert)*.
+  - Since 20 September an address also carries `line2`, `region` (state or province) and `phone`
+    (migration 0034). All three are optional, and a blank one is stored as NULL rather than as an
+    empty string, so a label never prints an empty line (`blankToNull`, `profile.service.ts:57`,
+    applied on add `:133-136` and on edit `:167-169`). They are what a US carrier routes and a
+    courier calls (§9).
   - Delete is a hard `DELETE` (`profile.service.ts:184-193`). Shipments snapshot their
     destination, so past shipments are unaffected (§9).
-  - There is no length limit on any address field and no cap on the number of addresses.
+  - The three new fields are the only ones with a length limit — `line2` 120, `region` 60, `phone`
+    40 (`profile.controller.ts:25,27,30`). `label`, `recipient`, `line1`, `city` and `postal_code`
+    still have none, and there is no cap on the number of addresses.
 
 <a id="s4-14"></a>
 ### 4.14 The sign-in log: `login_attempt` and `GET /admin/logins`
@@ -2166,7 +2200,7 @@ UX test `tests/ux/sign-ins.test.tsx`). §10 owns the rest of ADM.
 | File | Role | Key functions / lines |
 |---|---|---|
 | `apps/api/src/modules/acc/acc.schema.ts` | ACC tables and enums | `accountStatus` :25, `userRole` :32, `userAccount` :34-74 (`autoSuspendedAt` :66), `verificationToken` :81-90, `loginSession` :92-109, `loginAttemptOutcome` :127, `loginAttempt` :129-145 |
-| `apps/api/src/modules/acc/address.schema.ts` | `shipping_address` table | :8-24 |
+| `apps/api/src/modules/acc/address.schema.ts` | `shipping_address` table | :8-24 (`line2` :14, `region` :17, `phone` :21, added by 0034) |
 | `apps/api/src/modules/acc/acc.dto.ts` | Request DTOs with trimming and name rules | `trimmed` :18, `NAME_PART_RULE` :23, `RegisterDto` :26, `LoginDto` :72, `TokenDto` :87, `EmailDto` :92, `ResetPasswordDto` :97, `ChangePasswordDto` :106, `UpdateProfileDto` :121 |
 | `apps/api/src/modules/acc/acc.module.ts` | Wires ACC. Exports `SessionService` and `SessionAuthGuard` for the global guard | :15-27 |
 | `apps/api/src/modules/acc/allow-suspended.decorator.ts` | `@AllowSuspended()` metadata flag | `ALLOW_SUSPENDED_KEY` :25-26 |
@@ -2179,7 +2213,7 @@ UX test `tests/ux/sign-ins.test.tsx`). §10 owns the rest of ADM.
 | `apps/api/src/modules/acc/verification.service.ts` | Verification and reset tokens, email links | `EMAIL_TTL_MS`/`RESET_TTL_MS` :12-13, `emailLink` :28, `issueEmailVerification` :45, `verifyEmail` :62, `resend` :92, `issuePasswordReset` :103 |
 | `apps/api/src/modules/acc/password.service.ts` | Change and reset, both revoking sessions | `change` :39-62, `requestReset` :64, `reset` :68-101 |
 | `apps/api/src/modules/acc/profile.controller.ts` | `/me/profile`, `/me/addresses` | `CreateAddressDto` :21, `UpdateAddressDto` :35, `get` (`@AllowSuspended`) :62, `update` :68, address routes :73-91 |
-| `apps/api/src/modules/acc/profile.service.ts` | Own profile and own-only addresses | `ProfileView` :20, `get` :66, `update` :95, `listAddresses` :112, `addAddress` :120, `updateAddress` :153, `deleteAddress` :184 |
+| `apps/api/src/modules/acc/profile.service.ts` | Own profile and own-only addresses | `ProfileView` :20, `blankToNull` :57, `get` :66, `update` :95, `listAddresses` :112, `addAddress` :120, `updateAddress` :153, `deleteAddress` :184 |
 | `apps/api/src/modules/acc/intake-id.ts` | Legacy `OW-` code generator. **Unused** | `generateIntakeId` :10 |
 | `apps/api/src/modules/sec/auth-context.ts` | `Role`, `AccountStatus`, `AuthUser`, `Express.Request.user` augmentation | :7-23 |
 | `apps/api/src/modules/sec/current-user.decorator.ts` | `@CurrentUser()`: 401 if there is no user | :10-14 |
@@ -2264,10 +2298,12 @@ only, see §4):
 | `GET /parcels/workflow/status` | signed-in | `ParcelService.workflow` |
 | `GET /parcels`, `POST /parcels/receive[/batch]`, `POST /parcels/:id/{forward,open,process,claim,dispose}` | warehouse_operator, admin | `ParcelService.*` |
 | `POST /custody/items/:id/relocate`, `POST/DELETE /custody/items/:id/hold` | warehouse_operator, admin | `RelocateService` |
+| `GET /custody/items/:id` | warehouse_operator, admin | `InventoryService.lookup` (any scanned label) |
 | `GET /custody/items/:id/{history,timeline}`, `POST /custody/reconcile`, `GET /custody/report[.pdf]` | warehouse_operator, admin | `InventoryService` |
 | `POST/GET /custody/bins`, `GET /custody/bins/{suggest,stowable}`, `PATCH /custody/bins/:id` | warehouse_operator, admin | `InventoryService` / `StowService` |
 | `GET /vault/items`, `/vault/counts`, `/vault/items/:id`, `/vault/items/:id/{storage,timeline}`, `/vault/break-even` | signed-in (owner-scoped in the query) | `VaultService`, `BreakEvenService` |
 | `POST /media/uploads` | signed-in | `MediaService.upload` |
+| `GET /media/object?key&exp&sig` | public, signature-gated (§5.11) | `MedController.object` |
 | `GET /content/intake-policy` | public (`not/content.controller.ts:53-57`) | `intakePolicy()` |
 
 Literal segments are declared before parameterised ones (`items/batch` before
@@ -2289,8 +2325,8 @@ mirrors it by value in `apps/web/src/shared/itemClasses.ts`.
 (what is written to `item.type_class` and named by pricing rules), `label`,
 `oversized`, `lotEligible`, an optional `lotMinSize`, and `typicalWeightGrams`.
 There are twelve classes (`item-classes.ts:86-99`). The seeded intake price is the
-class-scoped `intake` rule (`apps/api/src/db/seed.ts:232-242`). `other` falls to the
-catch-all `intake` rule at $5.00 (`seed.ts:207-209`):
+class-scoped `intake` rule (`apps/api/src/db/seed.ts:258-270`). `other` falls to the
+catch-all `intake` rule at $5.00 (`seed.ts:234-240`):
 
 | key | oversized | lot? | lotMinSize | typical g | seeded intake |
 | --- | --- | --- | --- | --- | --- |
@@ -2307,7 +2343,7 @@ catch-all `intake` rule at $5.00 (`seed.ts:207-209`):
 | `small_collectible` | no | yes | – | 250 | $5.00 |
 | `other` | no | yes | – | 400 | $5.00 (catch-all) |
 
-Every lot is billed under `intake_lot` at $5.00 (`seed.ts:258-262`) whatever its
+Every lot is billed under `intake_lot` at $5.00 (`seed.ts:285-291`) whatever its
 class (§5.8).
 
 **Helpers.**
@@ -2393,8 +2429,12 @@ All tables are in `apps/api/src/modules/cst/cst.schema.ts`. Reference columns ar
 - `item_lifecycle` (`cst.schema.ts:22-49`): `received, stored, listed, on-hold, sold, shipped, donated, consigned, at_grader, discarded`.
 - `custody_event_type` (`cst.schema.ts:235-244`): `intake, relocate, ownership_transfer, state_change, hold_placed, hold_released, batch_split, dispatch`.
   **No code path writes `dispatch`.** Shipping records its move as a `state_change`
-  to `shipped` (`apps/api/src/modules/shp/dispatch.service.ts:81`). The seed comment
-  at `apps/api/src/db/seed.ts:1275-1278` says the same.
+  to `shipped` (`apps/api/src/modules/shp/dispatch.service.ts:81`). The long seed comment at
+  `apps/api/src/db/seed.ts:1333-1347` still says so, and is right about that much — but it goes on
+  to say a shipped card is "invisible in History" and that the branch "stays empty until somebody
+  fixes the query". The query was fixed on 20 September (§5.12): History now matches a terminal
+  state on a card the collector still owns, without needing an owner id on the event. **That
+  comment is stale and should be corrected in the code.**
 
 **Indexes** worth knowing: `item_bin_idx` (`0018_stow_wherever_it_fits.sql:67`), and
 `item_owner_idx` and `custody_event_item_idx`
@@ -2649,11 +2689,11 @@ HTTP: `GET /custody/bins/suggest` and `/custody/bins/stowable`
 
 **Edge cases.**
 
-- **Counts never go down on departure.** `itemCount` counts every item whose
-  `bin_id` is set, regardless of lifecycle state. Shipped, donated, consigned,
-  discarded and broken-lot items keep their `bin_id` (§5.4), so a shelf's count
-  includes goods that have left the building. `suggest` therefore steers away from
-  shelves that once held a lot of stock, not shelves that hold a lot now.
+- **A departed card still records the shelf it left from.** `bin_id` is never cleared (§5.4), so
+  the column is stale the moment a card ships. Every count compensates by filtering on
+  `onShelf()` instead (`stow.service.ts:41-45`), so `itemCount`, `listStowable` and `suggest` all
+  reason about what is on the shelf now. What the stale column still costs is the *address* of a
+  departed card, and a broken lot whose own row keeps its shelf (§5.9).
 - `listStowable` loads every bin with counts and filters in JavaScript. Fine at
   current scale.
 - `suggest` has no lock. Two operators asking at once are sent to the same shelf,
@@ -2743,7 +2783,7 @@ processing fee being charged twice.
   - the parcel must be `received` or `unclaimed` and not already forwarded;
   - its facility must be a `forwarding` one with a destination;
   - if it has an owner, `billing.charge({actionType: 'parcel_forwarding', itemId: parcel.id})`
-    ($4.00, `seed.ts:542-545`). An unclaimed parcel is forwarded **unbilled** (`:540-549`);
+    ($4.00, `seed.ts:569-572`). An unclaimed parcel is forwarded **unbilled** (`:540-549`);
   - moves `facility_id` and sets `forwarded_at` and `forwarded_from_facility_id`;
   - writes event `forwarded` (same from/to status, metadata with the facility codes
     and `transitDays`) and emits `parcel_forwarded`.
@@ -2762,7 +2802,7 @@ processing fee being charged twice.
   - 409 when there is no owner;
   - count `item` rows with `source_parcel_id = parcel`. **Zero items and no
     `emptyReason` → 409** "Nothing has been booked in from this parcel…" (`:672-678`);
-  - charge `parcel_processing` ($2.00, `seed.ts:535-538`) with `itemId: parcel.id`;
+  - charge `parcel_processing` ($2.00, `seed.ts:562-565`) with `itemId: parcel.id`;
   - set `processed_at`, and `charges = {processing: true, forwarding: Boolean(forwardedAt)}`;
   - write event `processed` with `{itemCount, closedEmpty}` metadata and the empty
     reason as notes;
@@ -2796,10 +2836,13 @@ checks membership first (§5.8, §6).
 **Direct ship (hand-off to §9).** `DirectShipService.request`
 (`apps/api/src/modules/shp/direct-ship.service.ts`) ships an unopened `received`
 parcel straight out of the DE facility for a flat price. It writes
-`status = 'processed'` directly with a `direct_shipped` event (`:229-244`). That is
-a `received → processed` move the INV transition table does **not** allow. It is
-written without `ParcelService.assertTransition` and without `parcel_processing`.
-The parcel never produces items. See §9 for the charge and its concurrency.
+`status = 'processed'` with a `direct_shipped` event (`:234-250`). `received → processed` is a
+**listed** transition since 20 September, with the comment saying why it exists
+(`parcel.service.ts:45-48`): the parcel leaves as it arrived, never opened and never booked in. It
+is still written directly rather than through `ParcelService.assertTransition`, and no
+`parcel_processing` fee is raised, because nothing was processed. The parcel produces no items —
+which is why the shipment records the parcel it *is* (`source_parcel_id`, migration 0033) and the
+packing bench verifies that parcel's own label instead of an item list. See §9.16.
 
 **Edge cases and failure modes.**
 
@@ -2880,8 +2923,12 @@ happens in one transaction per item.
    4. Photos: one `item_image` row per key, `type: 'intake'`, `version: index + 1`
       (`:441-451`). The vault drawer already reads these.
    5. Outbox `item_received` `{itemId, ownerId, barcode}` (`:453-458`).
-6. The response is the flat list of created items. The bench renders one label per
-   item and a "print all" control (§12).
+6. The response is the flat list of created items, each carrying the shelf it actually went on
+   (`binSerial`, `binZone`, added by `withShelves`, `intake.service.ts:298-321`; `breakLot` returns
+   the same, `:553`). A mixed run is stowed unit by unit — a card to ordinary shelving, a sealed case
+   to oversized — so one "stow to" line could never be right for all of them, and the label the
+   operator carries to the aisle now names its own shelf. The bench renders one label per item and a
+   "print all" control (§12).
 
 `POST /intake/items` (single DTO) calls `intakeItem` directly, with no pre-check
 pass. It returns one item, or an array when quantity > 1.
@@ -3056,7 +3103,10 @@ column). Disposing of a whole *parcel* is a separate act, `ParcelService.dispose
 route attach them by key (`apps/api/src/modules/med/media.service.ts:7-29`).
 
 **Flow.** `POST /media/uploads` (any signed-in caller, `apps/api/src/modules/med/med.controller.ts:44-52`)
-takes `{contentType, dataBase64, purpose: 'item_intake'|'parcel'}`. The DTO caps the
+takes `{contentType, dataBase64, purpose}`. There are four purposes
+(`media.service.ts:50-60`): `item_intake` and `parcel` from the benches, `service_media` for what a
+paid service produced (the photography shoot handed to the collector), and `wallet_document` for
+the receipt a collector attaches to a cash-in or cash-out request. The DTO caps the
 base64 length at the byte limit × 4/3 + 128 (`med.controller.ts:19-25`).
 `MediaService.upload` (`media.service.ts:68-111`):
 
@@ -3064,16 +3114,23 @@ base64 length at the byte limit × 4/3 + 128 (`med.controller.ts:19-25`).
 2. A `data:` URL prefix is stripped.
 3. The payload is base64-decoded. Empty → 400. More than 10 MB decoded → 400 with
    the size in the message (`MAX_IMAGE_BYTES`, `:48`).
-4. The key is `<intake|parcels>/<yyyy>/<mm>/<uuid>.<ext>` and is never chosen by
-   the caller (`:101-107`).
+4. The key is `<prefix>/<yyyy>/<mm>/<uuid>.<ext>` and is never chosen by the caller
+   (`:104-112`). The prefix is the purpose's: `intake`, `parcels`, `services` or
+   `wallet-documents`.
 5. `StorageAdapter.putObject`.
 6. The response is `{objectKey, bytes, contentType}`.
 
-Reading: `signed(key)` returns a signed URL, or `null` on error (`:114-122`), and
-`signAll` drops unsignable rows (`:125-132`). Parcel photos use `signAll`. The
-vault's `itemCard` calls `storage.getSignedUrl` directly without that tolerance
-(`apps/api/src/modules/vlt/vault.service.ts:547-552`), so one unsignable key fails
-the whole card.
+Reading: `signed(key)` returns a URL, or `null` on error (`:119-127`), and `signAll` drops
+unsignable rows (`:130-137`). Parcel photos use `signAll`. The vault's `itemCard` calls
+`storage.getSignedUrl` directly without that tolerance
+(`apps/api/src/modules/vlt/vault.service.ts:546-551`), so one unsignable key fails the whole card.
+
+**What that URL now points at.** When the object store is one a browser cannot reach — MinIO on
+`localhost`, or the development sandbox — the adapter returns the API's own path instead of a
+presigned store URL: `GET /api/v1/media/object?key&exp&sig`, public in the sense a presigned URL is
+public, signed with an HMAC over key and expiry keyed by `SESSION_COOKIE_SECRET`, and streamed from
+the adapter (§2.8). Before this every photograph in the product rendered broken: an `<img>` on a
+phone, or anywhere but the API's own machine, could not resolve `localhost:9000`.
 
 **Edge cases.**
 
@@ -3082,6 +3139,9 @@ the whole card.
   any string as a key and do not check that it was uploaded (`intake.service.ts:464`,
   `parcel.service.ts:496`).
 - Uploads never attached to anything are never cleaned up.
+- The seed used to record `item_image` rows for objects nobody had uploaded, so the demo's galleries
+  answered 404 for every card. It now PUTs each card's catalogue photograph under the key it records
+  (§3.6). The looser rule above is unchanged: a key is still only a promise that the bytes are there.
 
 The adapter behind all this (sandbox vs S3/MinIO, SigV4) is §2's.
 
@@ -3157,21 +3217,24 @@ is promised to (§12); the API refuses the same thing independently (§8).
   what changed is that the history query no longer needs an owner id on the event — a terminal state
   on a card you still own is enough (`:344`) — that `discarded` joined `TERMINAL`, and that
   `at_grader` joined `LIVE`. Shipped, culled and away-at-a-grader cards were in **no scope** at all
-  before that: `seed.ts` documented the shipped case as a known API bug, and the sentence is gone
-  with the bug. Donations, sales and consignments appeared all along, because they are ownership
+  before that: `seed.ts:1333-1347` documented the shipped case as a known API bug and chose to seed a
+  donation instead, "until somebody fixes the query". Somebody has; the seed comment has not caught
+  up (§5.3). Donations, sales and consignments appeared all along, because they are ownership
   transfers.
 - **Counts cap at 200** per scope.
 - **A former owner sees later history.** `hasHeld` gives a former owner the
   **whole** timeline, including events after they sold it: later sale prices,
   shipments and disputes (`inventory.service.ts:226-272`). That is broader than
   "the record of what passed through their hands" (the comment at `:103-110`).
-- **The drawer is current-owner only.** A former owner can open the timeline but
-  not the drawer (`itemCard` requires current ownership).
+- **A former owner opens the drawer too**, with the current owner and shelf blanked
+  (`vault.service.ts:538-542`, `:590`). What they keep is the record; what they lose is where the
+  card is now.
 
 **Design tradeoff.** History is reconstructed from the append-only custody log
-instead of being stored, so it can never be lost or rewritten. It is only as
-complete as the events that are written, and the missing `new_owner_id` on state
-changes is why the "still mine, left storage" branch is empty in practice.
+instead of being stored, so it can never be lost or rewritten. It is only as complete as the events
+that are written — and since a `state_change` carries no owner ids at all, the branch that catches a
+card you still own has to match on the STATE rather than on the owner (`:344`). That is the branch
+that does the work for every shipped and culled card.
 
 <a id="s5-13"></a>
 ### 5.13 Storage: the included period, the percentage, and the sweep
@@ -3183,7 +3246,7 @@ changes is why the "still mine, left storage" branch is empty in practice.
   charge.
 - There are two parameter sets (`apps/api/src/modules/vlt/storage-policy.ts:43-53`),
   both read from the `parameters` of the in-force pricing rule
-  (`seed.ts:264-291`):
+  (`seed.ts:298-318`):
 
 | Rule | freeDays | periodDays | percentOfIntakeBps | `value` (fallback base) |
 | --- | --- | --- | --- | --- |
@@ -3294,8 +3357,10 @@ period and the membership ends before it runs again, that period is billed when 
   (`storage-policy.ts:80-99`).
 - `periodChargeMinor` (`storage-policy.ts:102-105`) omits the sweep's 1¢ minimum.
 
-`storageFor` does **not** know about membership cover. A covered item's drawer
-still names a next charge date that the sweep will not bill.
+`storageFor` counts covered periods as settled alongside billed ones: it reads
+`storage_period_cover` for the item and returns `periodsCovered`, and `nextChargeAt` is computed
+from `periodsBilled + periodsCovered` (`vault.service.ts:499-534`). Without that the drawer named a
+next charge the sweep would never raise, and a long-covered card read as overdue.
 
 **Edge cases and failure modes.**
 
@@ -3312,10 +3377,14 @@ still names a next charge date that the sweep will not bill.
   is an older flat-fee implementation. No controller or job calls it. Its comment
   claims the worker invokes it, which is false: the worker has its own SQL. Only
   `listStorageFeeRuns` is exposed, at `GET /admin/storage-fee-runs`.
-- **No test runs the sweep.** No automated test exercises `runStorageFees` in the
-  worker (a `grep` of `tests/` finds only the admin read-only check in
-  `tests/integration/adm-pricing-storage.test.ts:73-85`). Part 16 of the old
-  narrative verified it by hand with backdated items.
+- **One test runs the sweep, on the part that was fixed.**
+  `tests/integration/storage-membership.test.ts` imports the worker's `runStorageFees` and drives
+  it against the database three times over one backdated item (`:3`, `:52`, `:61`, `:66`), which is
+  how the membership-cover fix is pinned. It scopes the run to its own item ids (`options.itemIds`),
+  so the arithmetic for everything else — the percentage, the oversized terms, catch-up after an
+  outage — is still only verified by hand, as Part 16 of the old narrative did with backdated items.
+  `tests/integration/adm-pricing-storage.test.ts:73-85` covers only the admin's read-only view of
+  past runs.
 
 **Design tradeoffs.** SQL in the worker makes billing a set operation that reads
 counts and inserts in one transaction. The price is a second expression of the rule
@@ -3371,12 +3440,13 @@ period understates it. If the median sold `trading_card` is 150¢, then
 
 **Report.** `GET /custody/report?cut=shelf|owner|condition|item_class`
 (`cst.controller.ts:129-137`) → `InventoryService.report` (`inventory.service.ts:99-116`).
-It groups **all** `item` rows by the chosen column, with no lifecycle filter, and
-labels them (`labelRows`, `:73-98`):
+It groups the `item` rows that are **on the shelf** (`onShelf()`, `:110`) by the chosen column,
+and labels them (`labelRows`, `:118-150`):
 
 - shelves as `<serial> (<zone>)`, null as "Unshelved";
-- owners by **email**;
-- conditions with null as "Ungraded".
+- owners as `@username` (`:136-138`);
+- conditions with null as "Ungraded";
+- classes by their taxonomy label rather than the raw key.
 
 An invalid cut → 400.
 
@@ -3477,8 +3547,8 @@ sentence and the client had nothing to work with.
 | `apps/api/src/modules/cst/lifecycle.ts` | Lifecycle adjacency list | `TRANSITIONS` :23, `assertTransition` :41 |
 | `apps/api/src/modules/cst/custody.service.ts` | The custody kernel | `lockItem` :33, `createWithIntake` :45, `relocate` :123, `transferOwnership` :147, `changeState` :161, `setHold` :186, `run` :210 |
 | `apps/api/src/modules/cst/relocate.service.ts` | One-transaction wrappers for relocate and hold | :12-24 |
-| `apps/api/src/modules/cst/stow.service.ts` | Scan resolution and directed stow | `resolveBin` :81, `resolveItem` :109, `listWithCounts` :136, `listStowable` :171, `suggest` :193, `facilityIdByCode` :210 |
-| `apps/api/src/modules/cst/inventory.service.ts` | Reports, timeline, bins, reconcile | `history` :90, `report` :99, `reportPdf` :156, `itemTimeline` :172, `createBin` :293, `setBinActive` :363, `reconcile` :387 |
+| `apps/api/src/modules/cst/stow.service.ts` | Scan resolution, on-shelf predicate, directed stow | `ON_SHELF_STATES` :41, `onShelf` :44, `resolveBin` :81, `resolveItem` :109, `listWithCounts` :136, `listStowable` :171, `suggest` :193, `facilityIdByCode` :210 |
+| `apps/api/src/modules/cst/inventory.service.ts` | Look-up, reports, timeline, bins, reconcile | `lookup` :64, `history` :90, `report` :99, `reportPdf` :156, `itemTimeline` :172, `createBin` :293, `setBinActive` :363, `reconcile` :387 |
 | `apps/api/src/modules/cst/report-pdf.ts` | Dependency-free PDF writer | `escapeText` :22, `ROWS_PER_PAGE` :34, `renderReportPdf` :72 |
 | `apps/api/src/modules/cst/cst.controller.ts` | `/custody` routes (staff) | relocate :62, hold :83/:92, history/timeline :109-120, report :129, report.pdf :140, bins :155-206 |
 | `apps/api/src/modules/cst/cst.module.ts` | Global CST wiring and exports | :12-21 |
@@ -3488,7 +3558,8 @@ sentence and the client had nothing to work with.
 | `apps/api/src/modules/vlt/vlt.controller.ts` | `/vault` routes | `toScope` :10, break-even :31, items :42, counts :54, card :59, storage :71, timeline :77 |
 | `apps/api/src/modules/vlt/vlt.module.ts` | VLT wiring | :7-11 |
 | `apps/api/src/modules/med/media.service.ts` | Image upload and URL signing | `ALLOWED_TYPES` :32, `MAX_IMAGE_BYTES` :48, `upload` :73, `signed` :119, `signAll` :130 |
-| `apps/api/src/modules/med/med.controller.ts` | `POST /media/uploads` | `MAX_BASE64_LENGTH` :19, `UploadDto` :21, `upload` :44 |
+| `apps/api/src/modules/med/med.controller.ts` | `POST /media/uploads`, `GET /media/object` | `MAX_BASE64_LENGTH` :19, `UploadDto` :21, `upload` :44, `object` :64 |
+| `apps/api/src/modules/med/media-url.ts` | HMAC for the API's own media URLs | `MEDIA_OBJECT_PATH` :13, `signMediaKey` :21, `verifyMediaKey` :26 |
 | `apps/api/src/modules/med/med.module.ts` | Global MED wiring | :12-18 |
 | `apps/worker/src/jobs/storage-fee.ts` | Daily storage sweep (only storage-charge producer) | rules :66-95, params :102-121, CTE :142-281 (`member_cap` :150, `member_covered` :173, `stored` :189, `elapsed` :220), per-period inserts :291-332, run record :334 |
 
@@ -3688,7 +3759,7 @@ be repeated in all three places.
 - **An empty `itemClass`.** Sent directly to the API, `itemClass: ""` is stored as `''`, not
   NULL. It then matches every call that passes no class, and it beats the catch-all. The admin
   console avoids this by sending `itemClass || undefined`
-  (`apps/web/src/areas/admin/AdminConsole.tsx:288`).
+  (`apps/web/src/areas/admin/AdminConsole.tsx:289`).
 - **`effective_to` is never written.** No code sets it, including the seed and `createRule`
   (verified by grep). Supersession is only "newest wins". The API has no way to schedule a
   future price, to end a rule, or to make an action unpriced again. To withdraw a price you
@@ -3813,7 +3884,7 @@ if (amount.amount === 0) return; // free action; nothing to record
    (`:54-59`). `itemClass` is passed on both attempts. Note that the entitlement key follows
    `feeActionType`, but the price can fall back to `actionType`.
 4. **A zero price records nothing** (`:64`). There is no charge row and no ledger row. The seeded
-   `shipping` handling rule is $0 (`apps/api/src/db/seed.ts:299-305`).
+   `shipping` handling rule is $0 (`apps/api/src/db/seed.ts:326-332`).
 5. **The charge row** (`:66-79`): `action_type = action.actionType` (the *broad* type, not
    `feeActionType`), `pricing_rule_snapshot`, `amount`, `currency`, `payment_means = 'wallet'`,
    `status = 'settled'`, `reference_id = itemId`.
@@ -3831,12 +3902,12 @@ allowed while the wallet was *already* negative is the caller's job, through
 
 | Caller | actionType / feeActionType | Blocked when negative? |
 | --- | --- | --- |
-| `inv/intake.service.ts:421` (book one item) | `intake`, `itemClass`, lot → `feeActionType: 'intake_lot'` | No |
-| `inv/intake.service.ts:518` (break a lot into children) | `intake` + class, one per child | No |
+| `inv/intake.service.ts:444` (book one item) | `intake`, `itemClass`, lot → `feeActionType: 'intake_lot'` | No |
+| `inv/intake.service.ts:541` (break a lot into children) | `intake` + class, one per child | No |
 | `inv/batch.service.ts:137` (split a batch) | `intake` + class | No |
-| `inv/parcel.service.ts:681` (close out a parcel) | `parcel_processing` | No |
-| `inv/parcel.service.ts:544` (forward a parcel, owner known) | `parcel_forwarding` | No |
-| `dis/service.service.ts:102` (a service request) | `service` + `feeActionType` | **Yes**: `assertNotBlocked` at `:97` |
+| `inv/parcel.service.ts:685` (close out a parcel) | `parcel_processing` | No |
+| `inv/parcel.service.ts:548` (forward a parcel, owner known) | `parcel_forwarding` | No |
+| `dis/service.service.ts:107` (a service request) | `service` + `feeActionType` | **Yes**: `assertNotBlocked` at `:101` |
 | `mkt/trade.service.ts:116-117` (swap / transfer approval) | `service` | No |
 
 **Not billed through here** (each has its own charge and a `MembershipService.waive` call,
@@ -3852,8 +3923,8 @@ allowed while the wallet was *already* negative is the caller's job, through
 
 <a id="s6-4-ex"></a>
 **Worked example 1: booking in one trading card.** The seed prices intake with a $5.00 catch-all
-(`seed.ts:206-212`), a class rule `['trading_card', 100]` = $1.00 (`seed.ts:232`), and
-`intake_lot` = $5.00 (`seed.ts:258`). An operator books one ungraded trading card for a collector.
+(`seed.ts:233-239`), a class rule `['trading_card', 100]` = $1.00 (`seed.ts:259`), and
+`intake_lot` = $5.00 (`seed.ts:285`). An operator books one ungraded trading card for a collector.
 The intake path opens a custody transaction and calls:
 
 ```ts
@@ -3983,10 +4054,10 @@ money: storage, intake, chargebacks. It then escalates in three steps, from gent
 
 **What a negative balance blocks** (every `assertNotBlocked` caller):
 
-- new service requests (`dis/service.service.ts:97`)
-- accepting a custom-request quote (`dis/custom-request.service.ts:202`)
+- new service requests (`dis/service.service.ts:101`)
+- accepting a custom-request quote (`dis/custom-request.service.ts:208`)
 - subscribing to a membership (`mem/membership.service.ts:233`)
-- creating a shipment (`shp/shipment.service.ts:511`)
+- creating a shipment (`shp/shipment.service.ts:513`)
 - direct ship (`shp/direct-ship.service.ts:123`)
 - hand delivery (`shp/human-fulfilment.service.ts:109`)
 - show pickup (`shp/human-fulfilment.service.ts:321`)
@@ -4158,7 +4229,7 @@ rejected, completed, cancelled → (terminal)
 - `OPEN_WALLET_REQUEST_STATUSES` is `submitted, pending_review, approved, processing`
   (`:50-55`).
 - `canTransition` (`:61-63`) is the only legality test. Both `applyTransition`
-  (`wallet-request.service.ts:631`) and `complete` (`:361`) call it.
+  (`wallet-request.service.ts:636`) and `complete` (`:366`) call it.
 
 **Rules** (all pure, `wallet-request.rules.ts`):
 
@@ -4185,17 +4256,17 @@ routes need a session. Review routes carry `@Roles('admin')`, and the service re
 anyway (`assertReviewer`, `wallet-request.service.ts:74-78`).
 
 *Submit.* `POST /finance/wallet-requests` (`controller:63-76`) calls `submit`
-(`service:90-187`):
+(`service:92-189`):
 
 1. Normalise the currency and validate. On failure: 400 with `details.violations`
-   (`:94-97`).
-2. **Duplicate guard** (`:103-124`): an open request with the same
+   (`:96-99`).
+2. **Duplicate guard** (`:105-126`): an open request with the same
    type/amount/currency/reference, using `IS NULL` when there is no reference. On a match: 409
    `An identical request (WR-…) is already open`, with the existing id and code in the details.
-3. **For a cash-out**, check `balanceOf(userId) >= amount` (`:126-135`). Otherwise: 409
+3. **For a cash-out**, check `balanceOf(userId) >= amount` (`:128-137`). Otherwise: 409
    `insufficient_balance`, with `availableMinor` and `requestedMinor`. This check is a courtesy.
    It ignores the fee and ignores other open cash-outs.
-4. One transaction (`:137-186`):
+4. One transaction (`:139-188`):
    - INSERT the request with status `submitted` (the funding source is kept only for a cash-in,
      the destination and beneficiary only for a cash-out)
    - append an event (null → `submitted`, `actorRole 'user'`)
@@ -4206,22 +4277,22 @@ anyway (`assertReviewer`, `wallet-request.service.ts:74-78`).
 
 *Read.*
 
-- `GET /finance/wallet-requests` lists your own requests (`service:194-200`).
+- `GET /finance/wallet-requests` lists your own requests (`service:196-202`).
 - `GET /finance/wallet-requests/:id` and `GET /admin/wallet-requests/:id` both call `detail`
-  (`:246-273`). It returns the request, the owner's identity (username, email, full name) and the
-  full event history. `loadFor` (`:281-288`) answers **404, not 403**, when a non-owner who is not
+  (`:248-278`). It returns the request, the owner's identity (username, email, full name) and the
+  full event history. `loadFor` (`:286-293`) answers **404, not 403**, when a non-owner who is not
   a reviewer asks, so that the id does not leak.
-- `GET /admin/wallet-requests` is the review queue (`:206-235`). It can be filtered by `type`,
+- `GET /admin/wallet-requests` is the review queue (`:208-237`). It can be filtered by `type`,
   `status`, `userId` and an inclusive `from`/`to` range on `created_at`, and it is joined to the
   customer's identity.
-- `GET /finance/wallet/pending` → `openTotals` (`:705-720`) sums open cash-in and cash-out
+- `GET /finance/wallet/pending` → `openTotals` (`:716-731`) sums open cash-in and cash-out
   amounts for the wallet summary. It is informational: open cash-outs are **not** a hold, so the
   money stays spendable until completion.
 
-*Transitions.* All of these go through `applyTransition` (`:596-678`), in one transaction:
+*Transitions.* All of these go through `applyTransition` (`:607-689`), in one transaction:
 
 1. `SELECT … FOR UPDATE` on the request.
-2. Separation of duties, for every target except `cancelled` (`:618`).
+2. Separation of duties, for every target except `cancelled` (`:629`).
 3. `canTransition`. On failure: 409 `A request that is X cannot become Y`.
 4. UPDATE the status, with `reviewed_by/at` for approve and reject, and `rejection_reason` for
    reject.
@@ -4231,29 +4302,29 @@ anyway (`assertReviewer`, `wallet-request.service.ts:74-78`).
 
 The callers:
 
-- `cancel` (`:295-301`): the owner only. A non-owner gets 404 from `loadFor`; an admin who is not
+- `cancel` (`:300-306`): the owner only. A non-owner gets 404 from `loadFor`; an admin who is not
   the owner gets 403.
-- `markUnderReview` (`:304-307`)
-- `approve` (`:309-312`), with an optional note
-- `reject` (`:314-325`): the reason is **required**. A blank reason is a 400 before the
+- `markUnderReview` (`:309-312`)
+- `approve` (`:314-317`), with an optional note
+- `reject` (`:319-330`): the reason is **required**. A blank reason is a 400 before the
   transaction.
-- `markProcessing` (`:328-331`)
+- `markProcessing` (`:333-336`)
 
-*Complete.* `POST /admin/wallet-requests/:id/complete` → `complete` (`:342-573`). This is the only
+*Complete.* `POST /admin/wallet-requests/:id/complete` → `complete` (`:347-584`). This is the only
 place a wallet request moves money. One transaction:
 
-1. `SELECT … FOR UPDATE` on the request (`:348-353`). Two reviewers pressing Complete at once
+1. `SELECT … FOR UPDATE` on the request (`:351-357`). Two reviewers pressing Complete at once
    queue here.
-2. Separation of duties (`:356`). Then three refusals, all 409:
-   - already `completed` (`:358`)
-   - `canTransition(status,'completed')` false, i.e. not yet approved (`:361-366`)
-   - `settled_ledger_id` already set (`:367`)
-3. **The fee** (cash-out only): `grossFee = cashOutFeeMinor(amount)` (`:382`), minus
-   `memberships.waive(tx, userId, 'cash_out_fee', grossFee)` (`:385-389`), giving `feeMinor`.
-4. **The binding balance check** (cash-out only, `:391-407`): `balance >= amount` — the fee
+2. Separation of duties (`:361`). Then three refusals, all 409:
+   - already `completed` (`:363`)
+   - `canTransition(status,'completed')` false, i.e. not yet approved (`:366-371`)
+   - `settled_ledger_id` already set (`:372`)
+3. **The fee** (cash-out only): `grossFee = cashOutFeeMinor(amount)` (`:387`), minus
+   `memberships.waive(tx, userId, 'cash_out_fee', grossFee)` (`:390-394`), giving `feeMinor`.
+4. **The binding balance check** (cash-out only, `:396-412`): `balance >= amount` — the fee
    comes out of the amount, not on top of it — otherwise 409 `insufficient_balance` (`The
    balance no longer covers this cash-out`).
-5. **The payout** (cash-out only, `:418-449`):
+5. **The payout** (cash-out only, `:423-454`):
    - `payment.createPayout({ amountMinor: amount − feeMinor, idempotencyKey:
      'wallet_request:<id>', destinationToken: destinationAccount })`
    - `failed` → 409, and the transaction aborts, so nothing is debited
@@ -4261,13 +4332,13 @@ place a wallet request moves money. One transaction:
      provider's)`
 
    The provider is called *before* the ledger row, so a provider outage cannot debit a collector
-   who never gets paid (`:406-417`).
-6. **The movement** (`:453-465`): one `ledger_record`. For a cash-in: `credit_topup` credit. For
+   who never gets paid (`:411-422`).
+6. **The movement** (`:458-470`): one `ledger_record`. For a cash-in: `credit_topup` credit. For
    a cash-out: `withdrawal` debit, for the **gross `amount`**, `reference_type 'wallet_request'`.
 7. **The fee** as its own `charge` (`action_type 'service'`, snapshot
-   `{cashOutFee, grossMinor, feeMinor, netMinor}`) and its own `fee` ledger debit (`:475-507`).
-   It is deliberately not netted into the withdrawal row (`:467-474`).
-8. UPDATE status `completed`, `settled_ledger_id`, `completed_at` (`:509-520`). Append an event
+   `{cashOutFee, grossMinor, feeMinor, netMinor}`) and its own `fee` ledger debit (`:480-512`).
+   It is deliberately not netted into the withdrawal row (`:472-479`).
+8. UPDATE status `completed`, `settled_ledger_id`, `completed_at` (`:514-525`). Append an event
    whose metadata carries `ledgerRecordId, amountMinor, feeMinor, netMinor, payoutRef`. Emit the
    outbox event `wallet_request_completed`. Record the audit entry `wallet_request.complete`.
 
@@ -4280,7 +4351,7 @@ place a wallet request moves money. One transaction:
   `settled_ledger_id` check and the partial unique index all guard it
   (`tests/integration/pay-flow.test.ts:294`).
 - **Four-eyes means requester ≠ reviewer**, whatever the role. `assertSeparationOfDuties`
-  (`service:583-589`) returns 403 `You cannot review your own wallet request`. It is checked on
+  (`service:594-600`) returns 403 `You cannot review your own wallet request`. It is checked on
   every reviewer transition and on complete (`tests/integration/pay-flow.test.ts:342`,
   `tests3/integration/fin-invariants.test.ts:205`). It does **not** require two different
   administrators: the same admin may approve and complete someone else's request.
@@ -4359,7 +4430,7 @@ cycle (`tiers.ts:183`), and a covered cash-out's fee becomes 0.
 
 **The pricing rule is decorative.** `CASHOUT_FEE_ACTION = 'cash_out_fee'` (`:48`) is described as
 "the pricing-rule action carrying a configured override", but **nothing reads it**. Grep finds it
-defined and never used. The seeded `cash_out_fee` rule (`seed.ts:437-451`) exists only so that the
+defined and never used. The seeded `cash_out_fee` rule (`seed.ts:466-479`) exists only so that the
 price list shows the fee. Changing that rule in the admin console changes the price list and not
 the charge. This departs from Principle VI.
 
@@ -4386,8 +4457,8 @@ the charge. This departs from Principle VI.
    - `createPayout(amountMinor = 20 000 − 700 = 19 300, key 'wallet_request:<id>')`
      (`wallet-request.service.ts:429`)
    - INSERT `external_payment(payout, 19 300)`
-   - ledger `withdrawal` debit **19 300** — what left for the bank (`:463-464`)
-   - `charge(service, 700)` plus ledger `fee` debit **700** (`:481-510`)
+   - ledger `withdrawal` debit **19 300** — what left for the bank (`:468-469`)
+   - `charge(service, 700)` plus ledger `fee` debit **700** (`:486-515`)
    - status `completed`
 
    Noa's balance is now 25 000 − 20 000 = **5 000**. She asked for $200.00, gave up exactly
@@ -4446,22 +4517,22 @@ different list from the route keys.
 (`:27-35`). It runs `CheckoutService.checkout` (`checkout.service.ts:107-232`):
 
 1. **Validate.** An unknown route is a 400. A non-instant route is a 400 that says to raise a
-   cash-in request instead (`:102-108`). A card payment with no `paymentMethodToken`, where the
+   cash-in request instead (`:112-117`). A card payment with no `paymentMethodToken`, where the
    provider needs one, is a 400 naming the two routes that do work (`:119-123`) — it used to reach
    the PayPal adapter and come back as a 500. The amount must be within the cash-in limits of
-   $10–$20,000 (`:125-131`). The idempotency key is required (`:132`).
-2. **Idempotency.** `providerRef = '<route>:<key>'` (`:119`). If the user already has an
+   $10–$20,000 (`:126-132`). The idempotency key is required (`:133`).
+2. **Idempotency.** `providerRef = '<route>:<key>'` (`:134`). If the user already has an
    `external_payment` with that ref, the original is returned with `replayed: true` and the
-   provider is not called (`:123-130`). `tests/integration/pay-money-in-out.test.ts:56-73` covers
+   provider is not called (`:136-145`). `tests/integration/pay-money-in-out.test.ts:56-73` covers
    this.
 3. **Provider.** `payment.createTopup({ …, idempotencyKey: providerRef, paymentMethodToken })`
-   (`:132-138`). `failed` → 409 "The payment was declined. Nothing has been charged." (`:140-142`).
-4. **Trust only what the provider settled** (`:163-177`). If the provider reports
+   (`:147-154`). `failed` → 409 "The payment was declined. Nothing has been charged." (`:155-157`).
+4. **Trust only what the provider settled** (`:178-192`). If the provider reports
    `settledAmountMinor` and it differs from the requested amount, or reports a currency other than
    USD: 409, and **no row is written**. A mismatch is refused, not reconciled downward, because
    crediting the smaller figure would silently accept a request that tried to defraud Bault
-   (`:144-162`). `undefined` is tolerated, because not every provider reports it.
-5. **One transaction** (`:179-216`): INSERT `external_payment (provider = route, purpose 'topup',
+   (`:159-177`). `undefined` is tolerated, because not every provider reports it.
+5. **One transaction** (`:194-227`): INSERT `external_payment (provider = route, purpose 'topup',
    status = provider's, amount)`. **Only** on `succeeded`: a `credit_topup` ledger credit
    referencing the payment, plus the outbox event `topup_settled`. A `pending` payment is recorded
    and credits nothing.
@@ -4515,11 +4586,12 @@ two implementations by `PAYMENT_PROVIDER`, which has **no default** (`env.ts:101
 
 **Edge cases and failure modes.**
 
-- **The web top-up does not work with PayPal.** The SPA never sends `paymentMethodToken`
-  (`MoneyPanels.tsx:89-98`), and no API route creates a PayPal order. So with
-  `PAYMENT_PROVIDER=paypal`, a card checkout throws a plain `Error` inside `capture`, which the
-  global filter returns as a **500**. Self-service top-up works end to end only on the sandbox
-  adapter.
+- **Self-service top-up works end to end only on the sandbox adapter.** The SPA still never sends
+  `paymentMethodToken` (`MoneyPanels.tsx:89-98`) and no API route creates a PayPal order, so under
+  `PAYMENT_PROVIDER=paypal` there is no card path. Since 20 September that is *stated* rather than
+  discovered: `routes()` marks the instant routes unavailable and `checkout` refuses the call with a
+  sentence naming the two routes that do work (`checkout.service.ts:40-42,82,119-123`). It used to
+  reach `capture`, throw a plain `Error` and come back as a **500**.
 - **A `pending` PayPal capture never credits**, because the webhook that would settle it is a
   stub.
 - **Webhook rejections come back as 500, not 4xx.** The controller comment says an unverifiable
@@ -4607,7 +4679,7 @@ punishment. It is operator-only and manual, because the provider tells Bault out
 - **Only checkout top-ups can be reversed.** A cash-in settled through a wallet request writes no
   `external_payment`, so it cannot be charged back through this path.
 - **The fee is not configurable.** It is $25 or nothing. The seeded `chargeback_fee` rule
-  (`seed.ts:453-463`) is display-only, like `cash_out_fee`, and `CHARGEBACK_FEE_ACTION`
+  (`seed.ts:466-492`) is display-only, like `cash_out_fee`, and `CHARGEBACK_FEE_ACTION`
   (`money-terms.ts:84`) is never read.
 - **`ChargebackService.terms()` is dead code** (`:46-48`): no route calls it.
 
@@ -4661,7 +4733,7 @@ Every route below needs a session unless marked Public. Admin means `@Roles('adm
 - **Constants beside rules.** `money-terms.ts` puts the cash-out and chargeback fees in code so
   the quote and the charge share one function. The cost is that the matching pricing rules are
   display-only. *(Inferred: the rules were seeded so the price list could show the fees; the seed
-  comment says "the full schedule lives in money-terms.ts", `seed.ts:444-445`.)*
+  comment says "the full schedule lives in money-terms.ts", `seed.ts:471-472`.)*
 - **Reviewed money movement.** Every non-provider movement waits on a person, and that person
   must be a different account. That is slow by design. The four-eyes check is one pair of eyes on
   someone else's request, not two reviewers.
@@ -4791,7 +4863,7 @@ authenticated unless it is marked `@Public()`. `@Roles(...)` narrows it further 
 (`apps/api/src/modules/dis/consignment-event.schema.ts:16-62`, migration `0012`). That table holds card shows with `request_deadline`,
 `capacity` (0 = unlimited) and `active`, plus the pickup columns added by 0016 (`pickup_enabled`,
 `pickup_capacity`, `pickup_fee_minor`, used by show pickup in §9). Shows are never deleted. No API creates
-them: only the seed writes them (`apps/api/src/db/seed.ts:1221`).
+them: only the seed writes them (`apps/api/src/db/seed.ts:1281`).
 
 **The platform custodian.** Store takings, consigned items and bought-out items all belong to the
 account with email `platform@bault.dev`. That account is resolved by email in two places:
@@ -4912,7 +4984,7 @@ controller derives **`purchase-${userId}-${listingId}`** (`:149`). → `Purchase
    3. **Lock the item** `FOR UPDATE`. A held item gets 409 `item_on_hold` (`:97-99`).
    4. `price = priceOverride ?? listing.askingPrice` (`:101`). The override exists only for accepted offers.
    5. **Fee**: `pricing.price('marketplace_fee', { base: price })` (`:105-109`). The seeded rule is
-      percentage 500 bps, i.e. 5% (`seed.ts:307`), computed as `Math.round(price × bps / 10 000)` (`shared/money.ts:45-47`).
+      percentage 500 bps, i.e. 5% (`seed.ts:336`), computed as `Math.round(price × bps / 10 000)` (`shared/money.ts:45-47`).
       The returned `snapshot` is the price freeze (§6).
    6. **Membership waiver**: `memberships.waive(tx, sellerId, 'marketplace_fee', fee, price)` (`:117`).
       `feeMinor = fee − waived` (`:118`). See the worked example below.
@@ -4943,7 +5015,7 @@ Response: `{ transactionId, itemId, price, fee }` (plus `replayed` on a replay).
 The waiver is **value-based and proportional** (`membership.service.ts:570-595`). The same Registry
 member, having already sold $950 this cycle, sells another $160: `waivedOn = min(5 000, 16 000) =
 5 000`, so `waived = round(800 × 5 000 / 16 000) = 250` and the fee charged is 550. The seeded Gold Star
-listing (asking price $3,200, `seed.ts:665`) is the case old Part 47 describes. Its gross fee is $160.
+listing (asking price $3,200, `seed.ts:692`) is the case old Part 47 describes. Its gross fee is $160.
 A fresh Registry cycle waives the share on the first $1,000: `round(16 000 × 100 000 / 320 000) = 5 000`,
 so $110 is charged.
 
@@ -5069,7 +5141,7 @@ creation, so in practice execution waits only on the responder.
   arrays to be non-empty (`trade.controller.ts:9-21`). The requested side must be non-empty because an empty one would make the proposal a gift.
   1. The controller resolves the username through `MarketReadService.counterparty` (`:45-49`).
   2. `proposeSwap` (`trade.service.ts:35-61`) refuses a swap with yourself (403), checks that every offered item belongs to the
-     proposer and every requested item to the responder, and that each is `stored` and unheld (`assertOwnedStoredUnheld`, `:152-161`).
+     proposer and every requested item to the responder, and that each is `stored` and unheld (`assertOwnedStoredUnheld`, `:158-167`).
   3. It inserts the proposal and emits `swap_proposed` (payload `{responderId}`).
 - Gift, step 1: `POST /marketplace/transfers` with `{itemId, toUsername}` → `initiateTransfer` (`:64-70`) validates and
   issues a `transfer` confirmation token (§3).
@@ -5166,7 +5238,7 @@ else's* card (`:62-64`). No outbox event is emitted at purchase.
 While the item is `received`, it shows in the buyer's vault but cannot be listed, shipped or serviced,
 because all of those require `stored`.
 
-**Worked example.** The seed carries three products (`seed.ts:947-963`): Call of Legends Rayquaza SL10 at
+**Worked example.** The seed carries three products (`seed.ts:1007-1023`): Call of Legends Rayquaza SL10 at
 $35 with 3 copies, Roaring Skies Rayquaza-EX #104 at $49 with 2, and Dragon Frontiers Rayquaza ex δ #97 at $165 with 1. Two buyers
 press Buy on the $165 card together. One transaction takes the lock, mints `SN-…`, debits 16 500 and
 sets stock to 0. The other blocks, then reads stock 0 and gets 409 "That card has sold out".
@@ -5194,7 +5266,7 @@ minus its own cut. Each channel differs in the three things a seller decides on:
 
 **Channels** (code, not rows, because they differ in *rules*; `consignment-channels.ts:38-69`):
 
-| Key | Accepts | Min. asking price | Needs a show | Payout window | Bault's cut (seeded rule `consignment_fee:<key>`, `seed.ts:319-338`) |
+| Key | Accepts | Min. asking price | Needs a show | Payout window | Bault's cut (seeded rule `consignment_fee:<key>`, `seed.ts:344-364`) |
 | --- | --- | --- | --- | --- | --- |
 | `card_show` | anything | — | yes | 3–10 days | 10% (1000 bps) |
 | `auction_house` | graded only (grade not blank and not "Raw") | $50 | no | 42–70 days | 1% |
@@ -5346,7 +5418,7 @@ Staff means `role ∈ {warehouse_operator, admin}` (`isStaff`, `:35-37`).
 buyer or the seller. Anyone else gets **404, not 403**, because confirming that another pair's deal exists is itself a
 leak. The integration test "keeps a deal invisible…" checks this. `GET /escrow/mine` lists deals by
 `raised_by` or `counterparty_user_id`. `GET /escrow/queue` (staff) lists every open status, oldest
-first. All three reads pass through `withUsernames` (`escrow.service.ts:774-788`), which adds
+first. All three reads pass through `withUsernames` (`escrow.service.ts:774-796`), which adds
 `raiserUsername` and `counterpartyUsername`, so a deal names the people in it instead of describing
 the other side as "a Bault account".
 
@@ -5382,12 +5454,12 @@ means external, from `sides`, `:107-112`).
 
 **The money.**
 
-- **fund, wallet buyer** (`:331-385`): `balanceOf(buyer) ≥ value`, else 409 "Short by $X". Then, in one transaction:
-  1. a ledger **`escrow_hold` debit** of the full value (`:345-356`);
+- **fund, wallet buyer** (`:337-390`): `balanceOf(buyer) ≥ value`, else 409 "Short by $X". Then, in one transaction:
+  1. a ledger **`escrow_hold` debit** of the full value (`:345-358`);
   2. the status becomes `funded` with `funding_source = 'wallet'`;
   3. a `funded` event is written, and `escrow_funded` is emitted to an account seller.
   The hold is a real debit, not a flag. The wallet balance is derived from the ledger (§6), so a flag would be contradicted by
-  the balance itself. `GET /escrow/held` (`heldFor`, `:770-788`) exists to answer "where did my money go". It sums
+  the balance itself. `GET /escrow/held` (`heldFor`, `:809-827`) exists to answer "where did my money go". It sums
   open wallet-funded deals in which the caller is the buyer.
 - **fund, external buyer** (`:299-329`): staff only, and a `reference` is required (400 otherwise). This writes **no ledger
   row**: `funding_source = 'external'`, `funding_attested_by = operator`, `funding_reference`, and the event says
@@ -5397,36 +5469,36 @@ means external, from `sides`, `:107-112`).
 
 - `receiveItem` (`:393-418`): the deal must be `funded` and the item must be `stored`. It records `item_id` and moves the deal to `inspecting`. Getting the card
   into the vault is ordinary intake (§5). The test books it in under the seller.
-- `inspect` (`:428-471`): `notes` must be non-empty. It records `inspected_by/at`, `inspection_matches` ('yes'/'no') and the notes,
+- `inspect` (`:442-485`): `notes` must be non-empty. It records `inspected_by/at`, `inspection_matches` ('yes'/'no') and the notes,
   moves the deal to `awaiting_release`, and emits `escrow_inspected` to both account parties. **`matches: false` does not return
   the deal by itself.** It gives the buyer a documented reason to refuse. Bault reports, and the parties decide.
 
 **Release and settlement.**
 
-- `release` (`:484-530`) works out which side is releasing:
+- `release` (`:498-544`) works out which side is releasing:
   - An actor who is the buyer or the seller releases their own side. The `*_released_at` column is set and the attested-by column is null.
   - Staff must name `side`, and it must be the **external** side. Otherwise the answer is 400 "That side has an account and has to confirm for
     themselves". Staff fill `*_released_at` **and** `*_release_attested_by`, and the event carries `on_behalf_of =
     counterparty_email`.
   - Anyone else gets 403.
   The patch and the `released_by_<side>` event commit in one transaction. If both sides have then released, it calls `settle`.
-- `settle` (`:539-639`), one `custody.run` transaction:
-  1. An account seller gets an `escrow_release` credit of the full value (`:547-560`). For an external seller **nothing is written**:
+- `settle` (`:553-653`), one `custody.run` transaction:
+  1. An account seller gets an `escrow_release` credit of the full value (`:562-575`). For an external seller **nothing is written**:
      the payout happens off-platform and is not recorded anywhere.
   2. **The fee, with the membership waiver**: `memberships.waive(tx, raisedBy, 'escrow_fee', fee_minor, value,
-     escrowFeeMinor)` (`:566-573`). `feeDue = fee_minor − waived`. When `feeDue > 0`, a `charge` row is inserted **directly**
+     escrowFeeMinor)` (`:580-588`). `feeDue = fee_minor − waived`. When `feeDue > 0`, a `charge` row is inserted **directly**
      (`actionType 'service'`, `payment_means 'wallet'`, status `settled`, and a snapshot of bps, value and minimum, plus
-     `grossFeeMinor` and `membershipWaiver` when a waiver applied). A `fee` ledger debit follows (`:575-607`). This bypasses
+     `grossFeeMinor` and `membershipWaiver` when a waiver applied). A `fee` ledger debit follows (`:597-621`). This bypasses
      `BillingService`, so no balance check or debt policy runs (§6).
-  3. With an item and an account buyer: `transferOwnership(item → buyer)` (`:611-613`). There is no state change, so the card
+  3. With an item and an account buyer: `transferOwnership(item → buyer)` (`:626`). There is no state change, so the card
      stays on its shelf. For `ship_to_buyer`, the buyer raises an ordinary shipment afterwards (§9). With an external buyer,
      ownership does not move.
   4. The status becomes `settled`, a `settled` event is written with `{valueMinor, feeMinor: feeDue, waivedMinor, settlement}`, and
      `escrow_settled` goes to both account parties.
-- `returnDeal` (`:652-701`) requires a reason. For a wallet-funded deal it writes an **`escrow_refund` credit** of the full value.
+- `returnDeal` (`:666-715`) requires a reason. For a wallet-funded deal it writes an **`escrow_refund` credit** of the full value.
   It **charges no fee** ("charging a buyer for the privilege of finding out they were being misled is not a service"). Status
   becomes `returned`. The card is not moved, because it never changed owner.
-- `cancel` (`:704-724`) is allowed only before funding. Nothing needs unwinding, and no notification is sent.
+- `cancel` (`:718-738`) is allowed only before funding. Nothing needs unwinding, and no notification is sent.
 
 **Membership escrow waiver, with its value cap** (`membership.service.ts:598-603`, tiers at
 `mem/tiers.ts:127-201`). The waiver is an **entitlement count**: `escrow_fee: 1` per cycle, **Trust tier
@@ -5477,7 +5549,7 @@ The same file also covers these cases:
   or swap the card. At settlement `transferOwnership` moves it regardless. If the card was listed, this creates the same
   seller/owner mismatch described in §7.6.
 - **The return rule differs from its docblock.** `returnDeal`'s comment says parties may return "once an inspection has been
-  recorded" and staff "at any point after funding". The code (`:655`) lets **either party** return from
+  recorded" and staff "at any point after funding". The code (`:669`) lets **either party** return from
   `funded` onward. A buyer can therefore pull their money back before the card even arrives.
 - **Staff can act for an account holder without leaving a mark.** Staff may `agree` for an account counterparty, and may `fund` by debiting
   an account buyer's wallet. In both cases `on_behalf_of` / attested-by stays null, so the record reads as first-hand.
@@ -5566,6 +5638,15 @@ The same file also covers these cases:
 | `apps/api/src/modules/dis/consignment-event.schema.ts` | Card shows: deadline, capacity, pickup columns | `consignmentEvent :16` |
 | `apps/api/src/modules/dis/consignment.service.ts` | Consignment request/complete, and warehouse transfer | `request :79`, `listEvents :156`, `complete :164`, `warehouseTransfer :236` |
 | `apps/api/src/modules/dis/buyout.service.ts` | One-round buyout: request, quote, accept, decline | `request :53`, `quote :76`, `accept :115`, `decline :176` |
+
+**Web surfaces built on this section** (§12 owns them; listed so the API facts above have a
+visible consumer):
+
+| File | What it uses from here |
+| --- | --- |
+| `apps/web/src/areas/customer/marketplace/ListingActions.tsx` | `GET /marketplace/listings/mine` to tell your own listing from somebody else's, so the shelf offers Manage rather than Buy and Make offer; the `?listing=` drawer reads `GET /marketplace/listings/:id` |
+| `apps/web/src/areas/customer/marketplace/StorefrontPanel.tsx` | `GET /marketplace/sellers/:username` by `?seller=`, with the same Buy and Offer controls as the shelf |
+| `apps/web/src/areas/warehouse/EscrowQueue.tsx` | `GET /escrow/queue` and the staff routes: agree, fund with a reference, receive-item by scanned label, inspect, release for the external side |
 
 Collaborators outside this scope that are referenced above:
 
@@ -5757,10 +5838,18 @@ Several services bypass the machine on purpose:
   (`apps/api/src/modules/vlt/vault.service.ts:572-588`), so the UI can say "already requested"
   instead of offering the button again.
 
-In the web console (`apps/web/src/areas/warehouse/ServiceQueue.tsx:173-249`) a `requested` row
-shows Approve/Decline, which call the generic accept/deny. An `in_progress` row shows the
-type's fulfilment form from the declarative `FORMS` table (`ServiceQueue.tsx:645`). §12 covers the
-screens.
+In the web console the row shows only what its type and stage can actually do
+(`apps/web/src/areas/warehouse/ServiceQueue.tsx`, `QueueActions` `:143`). A `requested` row shows
+Approve and Decline, which call the generic accept/deny; an `in_progress` row shows that type's
+fulfilment form from the declarative `FORMS` table (`:645`). Four types are handled on their own:
+custom by stage (`CustomStage` `:304`), grading approval for an admin (`GradingApproval` `:416`),
+photography as a real upload rather than a typed key (`PhotographyFulfillment` `:454`), and the
+per-area inspection form (`:522`). A type with **no operator step at all** — donation,
+remove-commons, warehouse transfer — says so and offers only "Remove from queue"
+(`HAS_OPERATOR_STEP` `:765`, branch `:159-171`); it used to offer Approve, which answered "this
+request type closes automatically" and left the row in the queue for good. A decline that the API
+requires a reason for collects one (`ReasonAction` `:382`); a one-tap decline of a paid request
+confirms first (`ConfirmedDecline` `:258`). §12 covers the screens.
 
 <a id="s8-4"></a>
 ### 8.4 Creating a request: the chokepoint
@@ -5808,16 +5897,16 @@ code only names the rule.
 
 | Service | Rule the code names | Seeded price | Seed line |
 |---|---|---|---|
-| Photography, lot-split request, donation | `service` | $20.00 | `seed.ts:293` |
-| Grading, PSA Value | `grading_fee:psa_value` | $25.00 | `seed.ts:351` |
-| Grading, PSA Regular | `grading_fee:psa_regular` | $75.00 | `seed.ts:358` |
-| Grading, PSA Express | `grading_fee:psa_express` | $150.00 | `seed.ts:365` |
-| Grading, PSA Walkthrough | `grading_fee:psa_walkthrough` | $300.00 | `seed.ts:372` |
-| Grading, BGS Standard | `grading_fee:bgs_standard` | $65.00 | `seed.ts:379` |
-| Video review | `service_fee:video_review` | $10.00 | `seed.ts:387` |
-| Condition inspection | `service_fee:condition_inspection` | $15.00 | `seed.ts:395` |
-| De-slab | `service_fee:deslab` | $5.00 | `seed.ts:407` |
-| Each child of a lot split | `intake` (per class, through `breakLot`) | $5.00 default | `seed.ts:207` |
+| Photography, lot-split request, donation | `service` | $20.00 | `seed.ts:320` |
+| Grading, PSA Value | `grading_fee:psa_value` | $25.00 | `seed.ts:378` |
+| Grading, PSA Regular | `grading_fee:psa_regular` | $75.00 | `seed.ts:385` |
+| Grading, PSA Express | `grading_fee:psa_express` | $150.00 | `seed.ts:392` |
+| Grading, PSA Walkthrough | `grading_fee:psa_walkthrough` | $300.00 | `seed.ts:399` |
+| Grading, BGS Standard | `grading_fee:bgs_standard` | $65.00 | `seed.ts:406` |
+| Video review | `service_fee:video_review` | $10.00 | `seed.ts:414` |
+| Condition inspection | `service_fee:condition_inspection` | $15.00 | `seed.ts:422` |
+| De-slab | `service_fee:deslab` | $5.00 | `seed.ts:434` |
+| Each child of a lot split | `intake`, per class, through `breakLot` | $1.00 for a card, $5.00 catch-all | `seed.ts:259`, `:234` |
 | Remove commons | (none: `free: true`) | $0 | — |
 | Custom request | quoted per request, not a rule | operator's figure | — |
 
@@ -5884,10 +5973,12 @@ Submit until it is complete. The same rule is written three times.
 
 **Type checks at completion are not uniform.** Video, inspection, de-slab and lot split each
 refuse a request of the wrong type (`media.service.ts:101,164`, `disposal-services.service.ts:100`,
-`lot-split.service.ts:79`). **Photography and grading do not** (`photography.service.ts:53-57`,
-`grading.service.ts:315-320`). An operator who posts to `/services/grading/:id/complete` with the
-id of an accepted *photography* request would write a grade onto that item and close the
-photography request with a grading form *(verified by code reading)*.
+`lot-split.service.ts:79`), and grading joined them on 20 September
+(`grading.service.ts:319`). **Photography still does not** (`photography.service.ts:53-57`): an
+operator who posts to `/services/photography/:id/complete` with the id of any other accepted
+request closes it with a photography form and hangs a `professional` image on its item
+*(verified by code reading)*. Posting a *grade* onto a photography request — the worse direction,
+because it rewrites `condition_grade` — is now refused.
 
 <a id="s8-7"></a>
 ### 8.7 Professional photography and video review: media versions
@@ -6182,8 +6273,9 @@ an `intake` for the lot's class (a membership intake allowance applies). Only af
 child does it set `lotBroken = true` on the parent. The request then closes with
 `producedCount`, the count actually produced rather than the predicted one.
 
-Cost example: a lot of 8 trading cards, split by a non-member, is $20 (request) + 8 × $5 (intake
-at the default rule) = $60.
+Cost example: a lot of 8 trading cards, split by a non-member, is $20 (request) + 8 × $1.00 (the
+`trading_card` intake rule each child resolves, `seed.ts:259`) = **$28**. A lot of 8 sealed boxes
+costs $20 + 8 × $5.00 = $60, because the child's class is what prices it.
 
 Failure modes, verified by code reading:
 - **Partial failure.** If child 5 of 8 fails, children 1–4 are already committed, the parent is
@@ -6296,7 +6388,7 @@ Edge cases, verified by code reading. No integration test covers custom requests
   reference.
 - **A re-quote after acceptance is refused** *(fixed 20 September)*. `quote` now reads the stage as
   well as the status and answers 409 "This request is past quoting." unless the stage is
-  `awaiting_quote` or `quoted` (`custom-request.service.ts:130-134`). A quote can still be revised
+  `awaiting_quote` or `quoted` (`custom-request.service.ts:129-134`). A quote can still be revised
   while the collector is thinking about it; it cannot be revised after they have paid, which used to
   set the stage back to `quoted` and let them be charged a second time. The warehouse console used
   to make that easy to do by accident — for any `in_progress` custom row it showed a blank quote
@@ -6333,10 +6425,10 @@ because the drawer is not the only way to raise a request.
 | Operator denies, or admin refuses approval | Status becomes `cancelled`. The charge and any spent membership allowance stay. No DIS code path refunds or credits. The UI calls deny "Decline". | `service.service.ts:264-276`, `grading.service.ts:146` |
 | Stale confirmation token (donation, cull, de-slab) | `confirm*` re-checks nothing about the item: not the owner, not `holdFlag`, not whether it is graded. Within the 300 s TTL, an item gifted to someone else through a trade (the state stays `stored`, `apps/api/src/modules/mkt/trade.service.ts:109`) could be donated or culled from the *new* owner, because `transferOwnership` does not compare owners (`custody.service.ts:147-158`). A hold placed after step 1 does not stop the confirm, because `changeState` does not read `holdFlag`. An illegal state change, such as `listed → donated`, does abort it. | `donation.service.ts:45-54`, `disposal-services.service.ts:73-87,171-196` |
 | Double-submitted completion | `assertAccepted` runs on an unlocked read. Two concurrent completes of the same request both run their side effects: two image versions, two history rows, or a double lot split. | §8.3 |
-| Wrong-type completion | Photography and grading completions accept any accepted request id. | §8.6 |
+| Wrong-type completion | The photography completion accepts any accepted request id. Grading, video, inspection, de-slab and lot split each check the type. | §8.6 |
 | `service_request.charge_id` | Never written, and the charge carries `referenceId = itemId`. To tie a charge to a request you must match by item and time. | `billing.service.ts:76`, `dis.schema.ts:53` |
 | Platform account missing | Donation and "cull, donate" fail with 400 "Platform custodian account not seeded". | `service.service.ts:352` |
-| Seed rows the API cannot produce | The seed inserts a `donation` in status `requested` (`seed.ts:904`) and a legacy `third_party_grading` row whose `type_fields` are `{ gradingBody, targetGrade, submittedAt }`, with no tier or declared value (`seed.ts:842`). The donation, if accepted from the queue, has no completion route. The grading row appears in `readyFor('PSA')` because a missing `approvalState` defaults to `not_required`. | `seed.ts:842,879` |
+| Seed rows the API cannot produce | The seed inserts a `donation` in status `requested` (`seed.ts:964`) and a legacy `third_party_grading` row whose `type_fields` are `{ gradingBody, targetGrade, submittedAt }`, with no tier or declared value (`seed.ts:902-904`). The donation has no completion route, which the queue now states rather than offering an Approve that leads nowhere (§8.3). The grading row appears in `readyFor('PSA')` because a missing `approvalState` defaults to `not_required`. | `seed.ts:902,964` |
 
 <a id="s8-19"></a>
 ### 8.19 Design tradeoffs
@@ -6381,7 +6473,7 @@ All paths are under `apps/api/src/modules/dis/`.
 | File | Role | Key functions / lines |
 |---|---|---|
 | `dis.schema.ts` | `service_request` table and its two enums | type enum `:12-36`; status enum `:38-43`; table `:45-66`; `code` `:47`; `charge_id` `:53`; fulfilment columns `:61-63` |
-| `service.service.ts` | Request framework: create and bill, duplicate guard, queue, accept/deny, fulfilment closer, platform account | `ServiceType` `:18-30`; `SERVICE_LABEL` `:39-52`; `create` `:70-127`; `assertNotAlreadyOpen` `:175-202`; `get` `:204`; `listMine` `:223`; `listQueue` `:237`; `accept`/`deny`/`transition` `:259-276`; `assertAccepted` `:279`; `setStatus` `:285`; `completeWithFulfillment` `:307-342`; `platformAccountId` `:345` |
+| `service.service.ts` | Request framework: create and bill, duplicate and open-shipment guards, queue, accept/deny, fulfilment closer, platform account | `ServiceType` `:18-30`; `SERVICE_LABEL` `:39-52`; `create` `:70-126`; `assertNotShipping` `:147-173`; `assertNotAlreadyOpen` `:175-202`; `get` `:204`; `listMine` `:223`; `listQueue` `:237`; `accept`/`deny`/`transition` `:259-276`; `assertAccepted` `:279`; `setStatus` `:285`; `completeWithFulfillment` `:307-342`; `platformAccountId` `:345` |
 | `dis.controller.ts` | `/services/*` routes and DTOs, including the consignment/buyout/transfer routes described in §7 | DTOs `:35-187`; mine/queue/get `:206-229`; accept/deny `:232-241`; photography `:244-252`; grading and submissions `:263-340`; inspection areas, video, inspection `:344-377`; deslab `:380-398`; cull `:402-415`; lot split `:418-431`; donation `:434-441`; consignment channels `:450` (§7); buyout `:457-460, 516-535` (§7); custom `:473-521`; consignment `:545-553` (§7); warehouse transfer `:556-565` (§7) |
 | `dis.module.ts` | Nest wiring: 10 DIS providers plus `IntakeService` | `:19-34` |
 | `photography.service.ts` | Professional photography request and completion (new `professional` media version) | `REQUIRED` `:19`; `request` `:41`; `complete` `:53-83` |
@@ -6480,8 +6572,8 @@ the global guard unless marked `@Public`, and staff-only where `@Roles` appears 
 | `GET countries` | signed in | `apps/api/src/modules/shp/shp.controller.ts:177` → `shippingCountries()` |
 | `GET services` | signed in | `:182` → `ShipmentService.services` (`apps/api/src/modules/shp/shipment.service.ts:225`) |
 | `POST quote` | signed in | `:194` → `ShipmentService.quote` (`apps/api/src/modules/shp/shipment.service.ts:257`) |
-| `POST shipments` | signed in | `:199` → `ShipmentService.create` (`:509`) |
-| `GET shipments` | signed in (staff see all) | `:210` → `listFor` (`:580`) |
+| `POST shipments` | signed in | `:199` → `ShipmentService.create` (`:511`) |
+| `GET shipments` | signed in (staff see all) | `:210` → `listFor` (`:582`) |
 | `GET/POST groups…` | signed in | `:217-251` → `GroupShipmentService` |
 | `GET white-glove/terms`, `POST white-glove` | signed in | `:255-269` → `HumanFulfilmentService` |
 | `POST white-glove/:id/quote` | operator/admin | `:271-275` → `quoteHandDelivery` |
@@ -6489,9 +6581,9 @@ the global guard unless marked `@Public`, and staff-only where `@Roles` appears 
 | `GET pickup/shows`, `POST pickup` | signed in | `:284-292` |
 | `GET direct/terms`, `GET direct/:parcelId/eligibility`, `POST direct/:parcelId` | signed in | `:296-313` → `DirectShipService` |
 | `GET shipments/:id/rates` | owner/staff | `:317` → `rates` (`apps/api/src/modules/shp/shipment.service.ts:817`) |
-| `POST shipments/:id/select-rate` | owner/staff | `:322` → `selectRate` (`:751`) |
-| `POST shipments/:id/choose-for-me` | owner/staff | `:328` → `selectRecommended` (`:780`) |
-| `POST shipments/:id/pay` | owner/staff | `:334` → `pay` (`:921`) |
+| `POST shipments/:id/select-rate` | owner/staff | `:322` → `selectRate` (`:850`) |
+| `POST shipments/:id/choose-for-me` | owner/staff | `:328` → `selectRecommended` (`:874`) |
+| `POST shipments/:id/pay` | owner/staff | `:334` → `pay` (`:1016`) |
 | `PATCH shipments/:id` | owner/staff | `:340` → `ShipmentEditService.update` |
 | `POST shipments/:id/merge`, `…/cancel` | owner/staff | `:346`, `:351` |
 | `GET shipments/:id/customs`, `…/customs/readiness` | owner/staff | `:357`, `:369` → `CustomsService` |
@@ -6524,7 +6616,7 @@ One row per request out of the vault. It is mutable (not append-only). The money
 | Method | `fulfilment_method` (`carrier` \| `hand_delivery` \| `show_pickup`, default `carrier`, `:78`), `pickup_address/from/to`, `deliver_from/to`, `quote_minor/notes`, `quoted_by/at`, `pickup_event_id`, `handed_to_name`, `handed_over_at/by` | Plain text, not an enum; values in `apps/api/src/modules/shp/fulfilment.ts:27`. |
 | Value | `declared_value_minor`, `insured_value_minor`, `insurance_premium_minor` (frozen at selection), `signature_required`, `add_ons` (jsonb `[{key}]`), `customs_lines` (jsonb, frozen at create/edit), `customer_notes` | |
 | Lifecycle | `merged_into_shipment_id`, `group_id`, `payment_due_at`, `cancelled_at`, `cancel_reason`, `restocking_fee_minor` | |
-| Parcel | `box_size` (key from `SHIPPING_BOXES`, `:158`), `membership_cover` (jsonb `AppliedShippingCover`, `:173`), `provider_shipment_id`, `provider_rate_id` (`:174-175`) | |
+| Parcel | `box_size` (key from `SHIPPING_BOXES`, `:158`), `source_parcel_id` (`:149`: set only by direct ship, which ships a parcel and has no items), `membership_cover` (jsonb `AppliedShippingCover`, `:173`), `provider_shipment_id`, `provider_rate_id` (`:174-175`) | |
 | Money | `cost` (the **net** total charged, after membership cover), `currency` | |
 | Carrier result | `status`, `tracking_number`, `estimated_delivery_at`, `label_object_key` | |
 | Fulfilment form | `package_weight_grams`, `fulfillment_notes`, `fulfillment` (jsonb), `fulfilled_by`, `fulfilled_at` | |
@@ -6543,7 +6635,8 @@ values, `shipment_group`, and the indexes `shipment_group_id_idx` and `shipment_
 (`user_id, status`, the one behind every "open shipments" query). `0016_a_person_in_the_middle.sql`
 added the fulfilment-method columns. `0025_the_box_a_parcel_goes_in.sql` added `box_size`.
 `0028_a_label_that_can_be_bought.sql` added `destination_detail` and the provider ids.
-`0030_a_downgrade_is_not_a_cancellation.sql` added `membership_cover`. There are no CHECK constraints
+`0030_a_downgrade_is_not_a_cancellation.sql` added `membership_cover`, and
+`0033_direct_ship_names_its_parcel.sql` added `source_parcel_id`. There are no CHECK constraints
 or triggers on `shipment`. Every rule below is enforced in TypeScript.
 
 #### `shipment_group` (`apps/api/src/modules/shp/shipment-group.schema.ts:37-65`)
@@ -6593,7 +6686,7 @@ The enum (`apps/api/src/modules/shp/shp.schema.ts:9-33`) has eleven values. Only
 | --- | --- | --- |
 | — → `requested` | `create` (`apps/api/src/modules/shp/shipment.service.ts:570`), `requestHandDelivery` (`apps/api/src/modules/shp/human-fulfilment.service.ts:142`) | items shippable and free |
 | — → `rates_selected` | `requestPickup` (`apps/api/src/modules/shp/human-fulfilment.service.ts:367`), `DirectShipService.request` (`apps/api/src/modules/shp/direct-ship.service.ts:194`) | paid on the spot |
-| `requested`/`rates_selected`/`awaiting_payment` → `rates_selected` or `awaiting_payment` | `selectRate`/`selectRecommended` → `settle` | status check `apps/api/src/modules/shp/shipment.service.ts:830`; not merged `:756`; balance `:831` |
+| `requested`/`awaiting_payment` → `rates_selected` or `awaiting_payment` | `selectRate`/`selectRecommended` → `settle` | `assertChoosable` (`apps/api/src/modules/shp/shipment.service.ts:834-852`): a `rates_selected` shipment is refused, not re-charged; balance `:908` |
 | `awaiting_payment` → `rates_selected` | `pay` | `apps/api/src/modules/shp/shipment.service.ts:1018`, balance `:930` |
 | `requested` → `rates_selected` (hand delivery) | `acceptQuote` | `apps/api/src/modules/shp/human-fulfilment.service.ts:208-219` |
 | `requested`/`awaiting_payment`/`rates_selected` → `cancelled` | `ShipmentEditService.cancel` | `apps/api/src/modules/shp/shipment-edit.service.ts:250-257` |
@@ -6605,7 +6698,7 @@ The enum (`apps/api/src/modules/shp/shp.schema.ts:9-33`) has eleven values. Only
 
 Three facts about this machine:
 
-1. **`picking`, `packed` and `labeled` are dead values.** No code writes them (grep over `apps/api`
+1. **`picking`, `packed` and `labeled` are never written.** No code writes them (grep over `apps/api`
    and `apps/worker`). They appear only in `OPEN_STATUSES` (`apps/api/src/modules/shp/shipment.service.ts:180-187`). Dispatch
    goes straight from `rates_selected` to `shipped`. The edit window's documented rule, "open while
    `requested`", is therefore the real rule. The cancel refusal message ("already being packed")
@@ -6820,11 +6913,11 @@ like a carrier limitation (`apps/api/src/modules/shp/countries.ts:6-24`).
   (`:117-119`). Everything ships from the US.
 - **Add-on price** comes from the pricing rule `shipping_addon:<key>` if one exists, otherwise from
   the catalogue (`ShipmentService.priceAddOns`, `apps/api/src/modules/shp/shipment.service.ts:464-475`). The seed has
-  `shipping_addon:gps_tracker` = $30 (`apps/api/src/db/seed.ts:431`).
+  `shipping_addon:gps_tracker` = $30 (`apps/api/src/db/seed.ts:458`).
 - **Rush** is a **Bault handling charge**, not a carrier one. Its price is `tryPrice('shipping_rush')`
-  (seed $10, `apps/api/src/db/seed.ts:419`), added to handling (`apps/api/src/modules/shp/shipment.service.ts:344-345`). The adapter receives
+  (seed $10, `apps/api/src/db/seed.ts:446`), added to handling (`apps/api/src/modules/shp/shipment.service.ts:344-345`). The adapter receives
   `rush` and ignores it. The carrier's transit estimate is left alone.
-- **Handling** is `pricing.price('shipping')`, which is $0 in the seed (`apps/api/src/db/seed.ts:300`). `price()`
+- **Handling** is `pricing.price('shipping')`, which is $0 in the seed (`apps/api/src/db/seed.ts:327`). `price()`
   (not `tryPrice`) is used, so deleting that rule makes every quote throw (§6 owns pricing
   resolution).
 
@@ -7048,22 +7141,25 @@ wallet balance is **not** checked here.
 The box is stored because selecting a service re-rates from the shipment row. A box that lived only
 in the quote would be charged as no box (`:563-565`).
 
-#### `rates` and `selectRate` (`:740-771`)
+#### `rates` and `selectRate` (`:817-865`)
 
-`rates` loads the shipment through `loadFor`, rebuilds the profile with `profileOf` (`:675-691`:
+`rates` loads the shipment through `loadFor`, rebuilds the profile with `profileOf` (`:710-726`:
 reload items, measure, `destinationOf(s)`, `boxFor(s.boxSize)`), and runs the same
 `priceServices` with the stored add-ons, rush and the owner's **current** cover.
 
-`selectRate(id, carrier, serviceLevel)` accepts status `requested`, `rates_selected` or
-`awaiting_payment` (`:753`) and refuses a merged source (`:756`). It resolves the catalogue service
+`selectRate(id, carrier, serviceLevel)` runs `assertChoosable` (`:834-852`), which accepts a
+`requested` or `awaiting_payment` shipment and refuses a merged source. A **`rates_selected`
+shipment is refused** with "A service is already chosen and paid for. Cancel this shipment to
+choose a different one." *(Fixed 20 September 2026: it used to accept `rates_selected` too, so
+choosing again charged the parcel a second time and spent the membership cover twice — Appendix D.1.)* It resolves the catalogue service
 by `(carrier, serviceLevel)`, **re-rates** (a client can never supply a price), refuses a missing or
 ineligible rate with the rate's first problem, and calls `settle`.
 
-#### `settle` (`:806-862`)
+#### `settle` (`:901-957`)
 
 1. `estimatedDeliveryAt = now + rate.estimatedDays` (from the adapter; EasyPost returns 0 when the
    carrier gives nothing, which makes the ETA "now").
-2. The balance is read **outside** any transaction (`:813`).
+2. The balance is read **outside** any transaction (`:908`).
 3. `common` = carrier, level, `serviceKey`, `providerShipmentId`/`providerRateId` from the rate,
    `membershipCover`, `cost = totalMinor`, `insurancePremiumMinor` (gross), currency, ETA.
 4. **If balance < total**: update to `awaiting_payment` with `paymentDueAt = now + 7 days` and
@@ -7333,7 +7429,7 @@ parcel it is, so the bench has exactly one thing to verify: `dispatch` treats a 
 (`dispatch.service.ts:57-58`). `track()` returns the parcel as the single line in `items` so the
 packing screen has something to tick off, with `itemIds` still `[]`
 (`shipment.service.ts:1148-1160`), and `labelRequest` builds the parcel's own profile instead of
-asking the vault for items that do not exist (`:746-790`) — it is bought from **the parcel's
+asking the vault for items that do not exist (`:743-777`) — it is bought from **the parcel's
 facility**, not the vault's, because the box is in Delaware. Nothing moves in custody: a direct
 parcel never entered it.
 
@@ -7359,7 +7455,7 @@ journey. `show_pickup` has no delivery: the cards ride Bault's van to a show it 
 #### White glove (hand delivery)
 
 - **Terms** (`apps/api/src/modules/shp/human-fulfilment.service.ts:73-85`): base prices from the pricing rules
-  `white_glove:domestic` ($1,000) and `white_glove:international` ($1,500) (`apps/api/src/db/seed.ts:482`, `:489`),
+  `white_glove:domestic` ($1,000) and `white_glove:international` ($1,500) (`apps/api/src/db/seed.ts:509`, `:489`),
   with fallbacks in `apps/api/src/modules/shp/fulfilment.ts:51-52`. Also a 48-hour quote lead time and "travel quoted
   separately". These bases are **informational**. Nothing adds them to the quote. The operator's
   figure is the whole price.
@@ -7399,10 +7495,14 @@ This closes a shipment that has no tracking number. It needs a non-empty `handed
 with the reason "collected at a show" or "hand-delivered". The shipment goes to **`delivered`** with
 `handedToName/At/By` and the fulfilment fields, and `handed_over` is emitted.
 
-No web screen calls the operator white-glove quote, hand-over or direct-ship endpoints. Only
-`GET white-glove/terms` and `POST white-glove/:id/accept` are used (`apps/web/src`
-grep, `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx:188`, `:385`). A pickup nobody collects
-has no sweep, and the shipment stays `rates_selected`.
+Every one of these routes now has a screen *(since 20 September)*. The warehouse's outbound bench
+quotes a hand delivery (`apps/web/src/areas/warehouse/OutboundBench.tsx:472`) and closes a pickup or
+hand delivery with the same scan set dispatch uses (`:295`); the collector sees the terms and accepts
+the quote (`apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx:188`, `:431`); direct ship
+is booked from the parcel drawer (`apps/web/src/areas/customer/inbound/InboundPage.tsx:724`, `:759`).
+Before that, a white-glove request could be made and never answered, and neither a pickup nor a hand
+delivery could be closed at all. A pickup nobody collects still has no sweep, and the shipment stays
+`rates_selected` until somebody hands it over or cancels it.
 
 <a id="s9-18"></a>
 ### 9.18 Worker jobs: tracking refresh and payment expiry
@@ -8167,10 +8267,10 @@ Routes (`apps/api/src/modules/not/notification.controller.ts`), all for the curr
 
 | Route | Service | Behaviour |
 |---|---|---|
-| `GET /notifications` (`:33-36`) | `listMine` (`notification.service.ts:36-49`) | The user's **in-app** rows, newest first. No limit. The channel filter was added on 20 September. |
+| `GET /notifications` (`:33-36`) | `listMine` (`notification.service.ts:41-47`) | The user's **in-app** rows, newest first. No limit. The channel filter was added on 20 September. |
 | `GET /notifications/preferences` (`:39-42`) | `getPreferences` (`notification.service.ts:58-84`) | The full matrix: every catalogue event × both channels, with `enabled`, `isDefault`, `mandatory`; plus `categories`, `channels` and the raw `rows`. |
-| `PUT /notifications/preferences` (`:44-47`) | `setPreference` (`:82-121`) | Upsert one `(event, channel)`. DTO `channel` defaults to `in_app` (`:18`) so an older client written against the one-boolean shape still works. |
-| `PUT /notifications/preferences/channel` (`:50-53`) | `setChannel` (`:131-140`) | Master switch: sets every catalogue event on that channel, skipping mandatory ones when turning off. |
+| `PUT /notifications/preferences` (`:44-47`) | `setPreference` (`:87-126`) | Upsert one `(event, channel)`. DTO `channel` defaults to `in_app` (`:18`) so an older client written against the one-boolean shape still works. |
+| `PUT /notifications/preferences/channel` (`:50-53`) | `setChannel` (`:136-145`) | Master switch: sets every catalogue event on that channel, skipping mandatory ones when turning off. |
 
 `setPreference` rejects an unknown channel, an event not in the catalogue, and **turning off a
 mandatory in-app event** (`notification.service.ts:88-94`), with a message saying why: it only fires
@@ -8197,11 +8297,14 @@ fields (which the SPA keeps for deep links). Both channels send the same sentenc
   "Your item … sold for $125.00."
 - `ref(payload, ...keys)` (`:33-39`) prefers a human code (barcode, `PKG-`, `SHP-`, `TKT-`, deal
   code); a value longer than 12 characters (a uuid) is cut to its first 8; missing → `unknown`.
+  A counter-offer no longer goes through `ref` at all: it takes the listing code or the card's
+  barcode, and says "a listing" when it has neither, because "listing 6876eae6" named nothing a
+  person could look up (`:64-68`, 20 September).
 - Sentences carry the consequence, not just the fact: `grading_shipped` says the card cannot be sold,
-  swapped or shipped while away (`:132-140`); `parcel_damaged` and `arrival_not_accepted` state the
-  damage or disposal plainly (`:96-104`, `:113-129`); `payment_reversed` names the amount and
-  handling fee (`:182-192`).
-- An event with no `case` falls through to its title-cased key plus a full stop (`:254-257`). Six
+  swapped or shipped while away (`:134-142`); `parcel_damaged` and `arrival_not_accepted` state the
+  damage or disposal plainly (`:98-106`, `:115-131`); `payment_reversed` names the amount and
+  handling fee (`:184-194`).
+- An event with no `case` falls through to its title-cased key plus a full stop (`:256-258`). Six
   catalogue events currently do: `buyout_quoted`, `custom_request_raised`, `custom_request_quoted`,
   `custom_request_declined`, `wallet_request_submitted`, `wallet_request_completed` (for example,
   "Buyout quoted."). Their subject lines are specific; their bodies are not.
@@ -8299,20 +8402,20 @@ Transitions are driven by who spoke, never set by hand (`support.service.ts:174-
 |---|---|---|
 | `GET /support/tickets` (`:46`) | owner, `@AllowSuspended` | `listMine` — newest activity first (`support.service.ts:108-124`) |
 | `POST /support/tickets` (`:52`) | owner, `@AllowSuspended` | `open` — ticket + first message in one transaction (`:71-105`) |
-| `GET /support/awaiting` (`:59`) | owner, `@AllowSuspended` | count of the caller's `awaiting_customer` tickets (`:275-281`) |
+| `GET /support/awaiting` (`:59`) | owner, `@AllowSuspended` | count of the caller's `awaiting_customer` tickets (`:283-289`) |
 | `GET /support/tickets/:id` (`:69`) | owner or staff, `@AllowSuspended` | `thread` — ticket + messages oldest first (`:157-172`) |
 | `POST /support/tickets/:id/messages` (`:76`) | owner or staff, `@AllowSuspended` | `reply` (`:182-228`) |
 | `GET /support/queue` (`:84`) | `warehouse_operator`, `admin` | `listQueue` — non-resolved, **oldest `last_message_at` first**, with the customer's username and account status (`:133-154`) |
-| `GET /support/queue/count` (`:90`) | staff | count of `open` (`:266-272`) |
+| `GET /support/queue/count` (`:90`) | staff | `openCount` — count of `open` tickets (`:274-280`) |
 | `POST /support/tickets/:id/assign` (`:96`) | staff | `assign` — sets `assigned_to` to the caller (`:255-263`) |
-| `POST /support/tickets/:id/resolve` (`:102`) | staff **or the person who raised it** | `resolve` (`:237-258`) |
+| `POST /support/tickets/:id/resolve` (`:102`) | staff **or the person who raised it** | `resolve` (`:237-260`) |
 
 **Rules.**
 
 - **Access** — `loadFor` (`support.service.ts:63-68`) answers `notFound`, not `forbidden`, when a
   collector asks for someone else's ticket, so existence is not confirmed. Staff (either staff role)
   see every ticket.
-- **Who may close one** — staff, or the account that raised it (`support.service.ts:239-241`). The
+- **Who may close one** — staff, or the account that raised it (`support.service.ts:238-241`). The
   route lost its `@Roles` gate on 20 September and the service decides instead, because "never mind,
   I worked it out" was a state a collector could reach and could not record: only staff could close
   a ticket, so a question the asker had already answered sat in the queue waiting for somebody else
@@ -8363,22 +8466,22 @@ the global audit interceptor records every mutating call (§4).
 
 | Route | Service | What it does |
 |---|---|---|
-| `GET /admin/users` (`:85`) | `listUsers` (`adm.service.ts:70-88`) | A projection of every account, ordered by email, **excluding** integration fixtures (`email ILIKE '%@fixture.bault.test'`, `FIXTURE_EMAIL_DOMAIN` in `apps/api/src/shared/fixtures.ts:19`). |
-| `PATCH /admin/users/:id` (`:94`) | `updateUser` (`adm.service.ts:107-166`) | Edit `role`, `status`, `firstName`, `lastName`. A blank or null `lastName` **clears** it (`:130-134`); it used to reach `normalizeNamePart` and answer 500, so an admin could never remove one. `username` is not in the DTO at all (`adm.controller.ts:12-22`). |
-| `GET /admin/items` (`:99`) | `listItems` (`:149-167`) | Every item with its owner's email, newest first. |
-| `PATCH /admin/items/:id` (`:104`) | `updateItem` (`:179-240`) | Override edit; see below. The DTO's `lifecycleState` now lists **every** state in the enum, `at_grader` and `discarded` included (`adm.controller.ts:26-30`): both were missing, so any edit to an item in either state failed validation before the service saw it. |
-| `GET /admin/disputes`, `POST`, `PATCH /:id` (`:111-124`) | `listDisputes`, `openDispute`, `updateDispute` (`:236-289`) | Disputes; see below. |
-| `GET /admin/transactions` (`:127`) | `listTransactions` (`:241-253`) | Marketplace transactions a dispute may reference. |
-| `GET /admin/storage-fee-runs` (`:134`) | `listStorageFeeRuns` (`:376-378`) | Read-only history of the worker's storage sweeps (§5). |
-| `GET /admin/logins` (`:80`) | `recentLogins` (`:392-442`) | Last 200 sign-in attempts (capped at 500), 24-hour totals, and identifiers with ≥5 failures in 24 h. The security side is §4. |
-| `GET /admin/shelf-yield`, `/zones`, `/customers` (`:62-77`) | `ShelfYieldService` | §10.16. |
+| `GET /admin/users` (`:92`) | `listUsers` (`adm.service.ts:70-88`) | A projection of every account, ordered by email, **excluding** integration fixtures (`email ILIKE '%@fixture.bault.test'`, `FIXTURE_EMAIL_DOMAIN` in `apps/api/src/shared/fixtures.ts:19`). |
+| `PATCH /admin/users/:id` (`:101`) | `updateUser` (`adm.service.ts:107-157`) | Edit `role`, `status`, `firstName`, `lastName`. A blank or null `lastName` **clears** it (`:130-133`); it used to reach `normalizeNamePart` and answer 500, so an admin could never remove one. `username` is not in the DTO at all (`adm.controller.ts:12-22`). |
+| `GET /admin/items` (`:106`) | `listItems` (`:159-177`) | Every item with its owner's email, newest first. |
+| `PATCH /admin/items/:id` (`:111`) | `updateItem` (`:179-240`) | Override edit; see below. The DTO's `lifecycleState` now lists **every** state in the enum, `at_grader` and `discarded` included (`adm.controller.ts:22`, `:33-34`): both were missing, so any edit to an item in either state failed validation before the service saw it. |
+| `GET /admin/disputes`, `POST`, `PATCH /:id` (`:118-128`) | `listDisputes`, `openDispute`, `updateDispute` (`:251-343`) | Disputes; see below. |
+| `GET /admin/transactions` (`:134`) | `listTransactions` (`:277-296`) | Marketplace transactions a dispute may reference. |
+| `GET /admin/storage-fee-runs` (`:141`) | `listStorageFeeRuns` (`:430-432`) | Read-only history of the worker's storage sweeps (§5). |
+| `GET /admin/logins` (`:87`) | `recentLogins` (`:446-496`) | Last 200 sign-in attempts (capped at 500), 24-hour totals, and identifiers with ≥5 failures in 24 h. The security side is §4. |
+| `GET /admin/shelf-yield`, `/zones`, `/customers` (`:69-81`) | `ShelfYieldService` | §10.16. |
 
 **`updateUser` and the self-lockout guard.** Suspending yourself used to succeed, after which the
 next admin request answered `account_suspended` and nothing in the product could undo it; demoting
-yourself had the same effect (`adm.service.ts:90-106`). Now, when `actorId === id`, any `status`
+yourself had the same effect (`adm.service.ts:90-104`). Now, when `actorId === id`, any `status`
 other than `active` and any `role` other than `admin` is refused with a message telling the admin to
-ask another administrator (`:105-116`). Name parts are normalised and validated; writing one clears
-`name_review_required` (`:123-129`). An empty patch is a validation error. The update is a plain
+ask another administrator (`:108-119`). Name parts are normalised and validated; writing one clears
+`name_review_required` (`:126-138`). An empty patch is a validation error. The update is a plain
 `UPDATE` then re-select, with no transaction; 404 comes after the update if the id did not exist.
 Tested in `tests3/integration/band3-guardrails.test.ts:19-63`.
 
@@ -8400,14 +8503,14 @@ It does not validate that the new owner or bin exists, writes no `bin_transfer` 
 `transaction.id` (`adm.service.ts:298-330`), sets `openedBy` and `assignedAdminId` to the caller and
 mints a `DSP-` code. It refuses a **second live dispute on the same transaction** — 409 "This
 transaction already has an open dispute (DSP-…)" when one is `open` or `investigating`
-(`:309-316`, added 20 September), because two rows about one argument produce two rulings.
+(`:307-316`, added 20 September), because two rows about one argument produce two rulings.
 `updateDispute` allows any of `open | investigating | ruled | closed` to any other, with an optional
-free-text `ruling` (`:278-289`). Status is text, not an enum. A dispute moves no money and notifies
+free-text `ruling` (`:332-343`). Status is text, not an enum. A dispute moves no money and notifies
 nobody; it is a record.
 
 `listDisputes` and `listTransactions` now answer with what the dispute is **about**: the
 transaction's code, type and price, and the buyer's and seller's usernames, joined through two
-aliases of `user_account` (`adm.service.ts:251-276`, `:277-296`). The console showed two
+aliases of `user_account` (`adm.service.ts:251-274`, `:277-296`). The console showed two
 eight-character uuid fragments and a status, which is not enough to tell one dispute from another
 without a query.
 
@@ -8525,7 +8628,7 @@ per-shelf attribution, totals, null yield, dead items, ordering, zone grouping, 
 | `apps/api/src/modules/sup/sup.controller.ts` | `/support` routes, `@AllowSuspended` on collector routes | DTOs :12-22, collector routes :45-79, staff routes :83-106 |
 | `apps/api/src/modules/sup/sup.module.ts` | SUP module (no exports) | `@Module` :9 |
 | `apps/api/src/modules/adm/adm.controller.ts` | `/admin` routes, class-level `@Roles('admin')` | DTOs :12-47, `@Roles` :51, shelf-yield :69-84, logins :87, users :92-104, items :106-114, disputes :118-131, transactions :134, storage-fee-runs :141 |
-| `apps/api/src/modules/adm/adm.service.ts` | Users, items, disputes, sign-ins, dead storage sweep | `listUsers` :70, `updateUser` :107 (self-guard :108-119), `updateItem` :179, `listDisputes` :246, `listTransactions` :277, `openDispute` :298, `updateDispute` :332, `runStorageFees` :357 (no callers), `listStorageFeeRuns` :430, `recentLogins` :446 |
+| `apps/api/src/modules/adm/adm.service.ts` | Users, items, disputes, sign-ins, dead storage sweep | `listUsers` :70, `updateUser` :107 (self-guard :108-119), `updateItem` :179, `listDisputes` :251, `listTransactions` :277, `openDispute` :298, `updateDispute` :332, `runStorageFees` :357 (no callers), `listStorageFeeRuns` :430, `recentLogins` :446 |
 | `apps/api/src/modules/adm/adm.schema.ts` | `dispute`, `storage_fee_run` | `dispute` :9, `storageFeeRun` :27 |
 | `apps/api/src/modules/adm/shelf-yield.service.ts` | Revenue per shelf-month | `revenueByItem` :85, `slotDaysByItem` :129, `perSlotMonth` :159, `byShelf` :168, `byZone` :256, `byCustomer` :292 |
 | `apps/api/src/modules/adm/adm.module.ts` | ADM module | `@Module` :10 |
@@ -8836,8 +8939,14 @@ no special handling.
 - Two `theme-color` metas keyed on `prefers-color-scheme` so the browser chrome matches the page
   ground in each theme.
 - No `og:url`/`og:image` on purpose: the comment says Bault has neither a canonical URL nor a brand
-  image, and inventing them would build a broken link preview. `og:locale` still declares `he_IL`
-  as primary with `en_US` alternate (`index.html:56-57`), a leftover from the Hebrew-first default.
+  image, and inventing them would build a broken link preview. `og:locale` is `en_US` with `he_IL`
+  as the alternate (`index.html:58-59`); it was the other way round until 20 September, on a site
+  whose first-visit locale is English.
+- A `<link rel="icon" type="image/svg+xml" href="/favicon.svg">` (`index.html:13`), added so the
+  browser stops asking for `/favicon.ico` and logging a 404 on every page. The file is
+  `assets/favicon.svg`, which is this app's `publicDir` (`vite.config.ts:91`) and therefore copied
+  into `dist/` — it was first written to `apps/web/public/`, which this app does not serve, so for
+  a day the 404 was simply renamed.
 
 **Boot order.** `src/main.tsx` (48 lines):
 
@@ -9250,6 +9359,12 @@ or the AppError envelope → back through `request()`.
 | Confirmation token (POST → `{confirmationToken}` → POST `…/confirm`) | Deslab and donation (`VaultPage.tsx:426-430`, `:387-391`), remove-commons (`RemoveCommonsPanel.tsx:100-105`), delist (`SellerPanels.tsx:94-98`), gift transfer (`ProposeTradePanel.tsx:109-114`). In every case the two calls run back to back after the user has confirmed in the UI (a `ConfirmationModal`, except the gift, which has none). |
 | Idempotency key | House-store purchase sends `Idempotency-Key: crypto.randomUUID()` minted once per confirmation dialog (`HouseStorePanel.tsx:72-76`, key from `:136`). Instant top-up sends `idempotencyKey` **in the body**, regenerated on every click (`MoneyPanels.tsx:90-99`). Nothing else sends one — marketplace purchase relies on the server's replay detection (`replayed` flag, `MarketplacePage.tsx:180-183`). |
 
+**A notification leads to the thing it is about.** `eventRoute` (`shared/notifications.ts:122-136`)
+maps an event type to a screen by family — `offer_*`/`item_sold`/`swap_*` to the marketplace,
+`parcel_*` to Inbound, `shipment_*` to tracking, `support_*` to the helpdesk, `wallet_*` to the
+wallet — and the feed renders a row that navigates there (`NotificationsPage.tsx:161-172`). An event
+in no family renders as plain text rather than a control that goes nowhere.
+
 **The notification feed** (`hooks.ts:52-88`). The API has no read flag, so "unseen" is derived on the
 client: items whose `createdAt` string sorts after `localStorage['bault.notificationsSeenAt']`
 (`hooks.ts:35`, `:85`). Opening the bell or the Notifications page calls `markSeen`. The feed is
@@ -9434,9 +9549,18 @@ shrinking:
 - **A grid item is never wider than its column** (`.form-grid > * { min-width: 0 }`): a grid child's
   automatic minimum is its content, and a `<select>` is as wide as its longest option, which is how
   one long option in the pricing form pushed a whole page sideways.
-- **44 px targets under a coarse pointer** (`@media (pointer: coarse)`) — measured on the running app through the tunnel, which is how the last three were found: a bare tick box in the notification matrix (the `label.check` around it is the target, and it is now 44 px wide as well as tall), the account button in the phone bar (a 32 px avatar), and a legal contents entry (an 18 px line of text, now a row). Icon buttons and short tabs get a minimum WIDTH too; 44 px tall and 36 px wide is still a miss. For buttons, tabs, chips,
-  breadcrumb links, checkboxes and every text control. The product's small button is 32 px and its
-  check box was 16 px, which is fine under a cursor and a guess under a thumb.
+- **44 px targets under a coarse pointer** (`@media (pointer: coarse)`, `index.css:8084-8093`,
+  `:8260-8290`). Every button, small button, icon button, state control, chip, tab, `.control`
+  capsule, `link-more` and breadcrumb button gets `min-height: 44px`; every `input`, `select` and
+  `textarea` the same (a textarea 88px); a tick box keeps its 20px square but the `label.check`
+  around it — which is what a tap actually lands on — is 44px in both directions; an icon button and
+  a tab also get a minimum WIDTH, because 44px tall and 36px wide is still a miss. The product's
+  small button is 32px and its check box 16px, which is fine under a cursor and a guess under a
+  thumb. The last three were found by measuring the running app through the tunnel rather than by
+  reading the stylesheet: a bare tick box in the notification matrix, the account button in the
+  phone bar (a 32px avatar), and a legal contents entry (an 18px line of text, now a row). A
+  breadcrumb link is left at the width of its word: it is 44px tall and generously spaced, and
+  padding a text link out to a square target would read as a button.
 - **The metric strip becomes rows**, separated by a rule above rather than by a left border and an
   indent, and the figure sits at the start of its card so Hebrew lines it up under its label.
 
@@ -9494,8 +9618,12 @@ comments record: selecting a destination remounts the workspace under a *station
 browser fires a `mouseleave`/`mouseenter` pair — which, when `pointerEnter` cleared `dismissed`,
 reopened the rail after every click. Only `mousemove` now reopens it. On mobile the machine is
 bypassed and the rail is a drawer with a scrim (`NavigationRail.tsx:72`, `:85`). The active item is a
-2px custody-green rule plus `aria-current="page"` (`NavigationRail.tsx:185`); the unseen-notification
-count shows as a dot and a `99+`-capped badge.
+2px custody-green rule plus `aria-current="page"` (`NavigationRail.tsx:185`); a count shows as a dot
+and a `99+`-capped badge (`:190-196`). Two destinations carry one: Notifications shows unseen events,
+and Support shows how many of the reader's tickets are `awaiting_customer` — the helpdesk has
+answered and asked something back (`App.tsx:384`, `:449-458`; `useAwaitingReply`, `hooks.ts:97-114`). The
+route behind the second (`GET /support/awaiting`, §10.14) existed from the start and nothing read it,
+so a question put to a collector sat in a thread they had no reason to open again.
 
 **Header controls** (`shared/ui/PageHeader.tsx`): `PageHeader` (`:34`, h1 + breadcrumb),
 `AccountPill` (`@username` and role, or a warning pill when suspended, `:97`), `NotificationBell`
@@ -9556,7 +9684,10 @@ and a close. `data-density="marketing"` (`LandingPage.tsx:298`).
 
 - **Prices are fetched, never written.** `GET /pricing/list` (`LandingPage.tsx:240`), a `@Public()`
   route (`apps/api/src/modules/prc/prc.controller.ts:43-44`). Five featured rules (`FEATURED`,
-  `LandingPage.tsx:54-60`): intake, storage, shipping, marketplace fee, cash-out fee. Intake is priced
+  `LandingPage.tsx:54-60`): parcel processing, intake, storage, marketplace fee, cash-out fee. The
+  shipping rule it used to feature is a $0.00 handling surcharge, which read as a promise the page
+  could not keep; what a collector actually pays on the way in is the per-parcel receiving fee.
+  Intake is priced
   per item class now, so the page takes the **`trading_card`** intake rule specifically and skips every
   other class-specific rule (`LandingPage.tsx:252-259`); otherwise whichever came last — a sealed
   case's $20 — would headline. `priceOf` (`LandingPage.tsx:100-104`) prints a percentage rule's basis
@@ -10046,29 +10177,29 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | Two-step confirmation where step 2 fails | deslab, donation, commons, delist, gift | Step 1's token is wasted; the user repeats the whole action. |
 | Preview gate locked | `/__preview/sign-in` | 429 bilingual "try again in 15 minutes". |
 
-**Known defects found while writing this section** (verified in code; none fixed):
+**Known defects found while writing this section.** Eight of the thirteen were fixed on
+20 September and are described where they belong (§12.11-§12.14, Appendix D.0); what follows is
+what is still true at HEAD, re-verified line by line.
 
-- The legal page's table of contents uses `href="#legal-<id>"` (`FaqLegalPage.tsx:525`), which the hash
-  router reads as section `legal-<id>` — clicking an entry leaves the page instead of scrolling.
-- The storefront advertises `#/marketplace/store?seller=<me>` (`StorefrontPanel.tsx:105`), but nothing
-  reads a `seller` param.
-- Two marketplace reloads call `loadListings(q)` with the raw search text instead of the built query
-  (`MarketplacePage.tsx:409`, `:417`), so after listing an item or answering an offer the browse list
-  is fetched with a malformed query string and without the other filters.
-- The wallet's running-balance column is computed over whatever rows it is given, starting from 0
-  (`WalletPage.tsx:590-599`), so it is wrong on the Overview (six rows) and on a filtered Transactions
-  view.
+- One marketplace reload still calls `loadListings(q)` with the raw search text rather than the
+  built query (`MarketplacePage.tsx:448`; `q` is `route.params.q ?? ''`, `:78`), so answering an
+  offer refetches browse without the type, condition, price and sort filters. The sibling reloads
+  after listing and after a purchase now pass `query` (`:409`, `:172`).
 - The admin wallet-request Reject dialog passes `busy` while the reason is empty
-  (`WalletRequestsSection.tsx:291`), which also disables Cancel and the backdrop — only Escape closes it.
-- `ReceiveParcels` always resets its form after submit, because the console's `receiveParcels` swallows
-  the error; a failed receive loses the operator's input and photos.
-- `TopUpPanel` shows the pay form when the chosen route is `instant` without checking `available`
-  (`MoneyPanels.tsx:144`).
+  (`WalletRequestsSection.tsx:293`), which also disables Cancel and the backdrop — only Escape
+  closes it.
+- `TopUpPanel` decides to show the pay form on `chosen?.instant` alone, without consulting
+  `available` (`MoneyPanels.tsx:144`). It is no longer reachable — the route select disables
+  unavailable options (`:125`) and the panel now starts on a route that is available (`:66-72`) —
+  so the check is a guard that was never added rather than a fault a collector can reach.
 - The legal page offers the SIL OFL for "the bundled Libertinus Math" with a download at
-  `/fonts/OFL.txt` (`legalContent.ts:23`, `:140`); `assets/fonts/` contains only Plex and Frank Ruhl
-  `.woff2` files and no `OFL.txt`, so the link is dead and the named font is not shipped.
-- Reduced motion still delays the landing pitch by up to 720 ms (§12.10).
-- The error boundary's buttons use non-existent classes (§12.4).
+  `/fonts/OFL.txt` (`legalContent.ts:26`, `:135`). `apps/web/public/` holds only `favicon.svg` and
+  `assets/fonts/` holds Plex and Frank Ruhl `.woff2` files with no `OFL.txt`, so the link is dead
+  and the named font is not shipped. Moving the licence to Open-source notices (§12.11) changed
+  where it is read, not whether the file exists.
+- The error boundary's buttons use `btn btn-gold` and `btn btn-secondary`
+  (`ErrorBoundary.tsx:77`, `:82`); the design system defines `.btn--gold` and `.btn--secondary`
+  (§12.7), so the one screen that appears when everything else has failed renders unstyled buttons.
 
 <a id="s12-16"></a>
 ### 12.16 Design tradeoffs
@@ -10125,7 +10256,7 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/shared/routing.ts` | Hash router | `LAST_SECTION_KEY` :24; `LEGACY_ROUTES` :36; `LEGACY_TABS` :52; `legacyRedirect` :78; `parse` :88; `useRoute` :123; `navigate` :133; `useNavigation` :174; `setParams` :206 |
 | `apps/web/src/shared/i18n.tsx` | Catalogue, provider | `DEFAULT_LOCALE` :21; `LOCALES` :22; `he` :29; `MessageKey` :2725; `en` :2727; `hasMessage` :5444; `MESSAGE_KEYS` :5457; `t` :5464; `I18nProvider` :5490 |
 | `apps/web/src/shared/theme.tsx` | Light/dark/system | `ThemeProvider` :52; `data-theme` stamping :65-74; `cycle` :77 |
-| `apps/web/src/shared/hooks.ts` | Media query, notification feed | `useMediaQuery` :5; `usePrefersReducedMotion` :22 (unused); `useNotificationFeed` :52 |
+| `apps/web/src/shared/hooks.ts` | Media query, notification feed, tickets waiting on the reader | `useMediaQuery` :5; `usePrefersReducedMotion` :22 (unused); `useNotificationFeed` :52; `useAwaitingReply` :97-114 |
 | `apps/web/src/shared/useVaultItems.ts` | Stored-item picker source | `useVaultItems` :26 |
 | `apps/web/src/shared/money.ts` | USD and date formatting | `formatUsd` :20; `dollarsToCents` :40; `formatDateTime` :54 |
 | `apps/web/src/shared/names.ts` | Username/name rules | `PASSWORD_MIN` :28; `isValidUsername` :34; `fullName` :76; `initialsFrom` :85 |
@@ -10165,7 +10296,7 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/areas/customer/auth/ResetPasswordPage.tsx` | Set new password | `ready` :32; `/auth/password/reset` :44 |
 | `apps/web/src/areas/customer/auth/VerifyEmailPage.tsx` | Email verification | `/auth/verify-email` :36 |
 | `apps/web/src/areas/customer/auth/demoUsers.ts` | Dev-only demo line | `DEMO_USERS` :22 |
-| `apps/web/src/areas/customer/vault/VaultPage.tsx` | Vault register, item sheet | `SCOPES` :199; `CARD_ACTIONS` :267; `VaultPage` :465; `CardTile` :738; `Watch` :886; `ItemDrawer` :1097 |
+| `apps/web/src/areas/customer/vault/VaultPage.tsx` | Vault register, item sheet | `SCOPES` :199; `CARD_ACTIONS` :267; `VaultPage` :465; `CardTile` :738; `Watch` :886; `ItemDrawer` :1098 |
 | `apps/web/src/areas/customer/vault/GradingForm.tsx` | Grading request | `GradingForm` :22 |
 | `apps/web/src/areas/customer/vault/InspectionForm.tsx` | Inspection request | `InspectionForm` :15 |
 | `apps/web/src/areas/customer/vault/ConsignmentForm.tsx` | Consignment request | `ConsignmentForm` :21 |
@@ -10174,9 +10305,11 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/areas/customer/inbound/InboundPage.tsx` | Addresses, parcels, backlog | `TABS` :53; `InboundPage` :56 |
 | `apps/web/src/areas/customer/finance/WalletPage.tsx` | Wallet | `TABS` :91; `WalletPage` :143; `load` :163 |
 | `apps/web/src/areas/customer/finance/WalletRequestForms.tsx` | Cash-in/out request form | `WalletRequestForm` :37 |
-| `apps/web/src/areas/customer/finance/MoneyPanels.tsx` | Top-up, cash-out quote | `TopUpPanel` :46; checkout :90-99; `CashOutQuotePanel` :221 |
+| `apps/web/src/areas/customer/finance/MoneyPanels.tsx` | Top-up, cash-out quote | `TopUpPanel` :46 (starts on a route that is available, :66-72); checkout :90-99; `CashOutQuotePanel` :221 |
+| `apps/web/src/areas/customer/finance/CardPaymentsPanel.tsx` | What has already been paid by card, with the provider's reference | `CardPaymentsPanel` :52 |
 | `apps/web/src/areas/customer/membership/MembershipPage.tsx` | Tiers and subscription | `MembershipPage` :41 |
 | `apps/web/src/areas/customer/marketplace/MarketplacePage.tsx` | Marketplace | `TABS` :33; `MarketplacePage` :42; query :145-157 |
+| `apps/web/src/areas/customer/marketplace/ListingActions.tsx` | Buy / Make offer, or "Your listing" and a way to manage it | `ListingActions` :29 |
 | `apps/web/src/areas/customer/marketplace/HouseStorePanel.tsx` | Bault's store | purchase with `Idempotency-Key` :72-76 |
 | `apps/web/src/areas/customer/marketplace/SellerPanels.tsx` | Listings, offers, swaps | `MyListingsPanel` :38; `OffersPanel` :284; `OfferActions` :461; `SwapsPanel` :583 |
 | `apps/web/src/areas/customer/marketplace/ProposeTradePanel.tsx` | Swap / gift | `ProposeTradePanel` :39 |
@@ -10195,10 +10328,16 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/areas/customer/help/helpSearch.ts` | The Ask search over FAQ and guides | `searchHelp` :90; `answerQuestion` :118 |
 | `apps/web/src/areas/customer/help/policyText.ts` | Hebrew for the API's refusal reasons, English as fallback | — |
 | `apps/web/src/areas/customer/help/guideContent.ts` | 12 guides | `GUIDES` :52; `matchesGuideSearch` :624 |
+| `apps/web/src/areas/customer/help/helpSearch.ts` | Ask: a scored keyword search over the FAQ and the guides, in the browser | `searchHelp` :90 |
+| `apps/web/src/areas/customer/help/policyText.ts` | Hebrew for the refusal reasons and intake rules the API sends in English | `REFUSAL_REASON_HE` :16; `POLICY_RULE_HE` :33 |
 | `apps/web/src/areas/customer/help/legalContent.ts` | Legal documents and open-source notices | `LEGAL_DOCUMENTS` :56; `OPEN_SOURCE_NOTICES` :129 |
 | `apps/web/src/areas/customer/notifications/NotificationsPage.tsx` | Feed and preferences | `TABS` :53; `NotificationsPage` :64 |
 | `apps/web/src/areas/customer/profile/ProfilePage.tsx` | Profile, addresses, password | `TABS` :71; `ProfilePage` :87 |
-| `apps/web/src/areas/warehouse/WarehouseConsole.tsx` | Staff console | `TABS` :106; `WarehouseConsole` :131; density :273; `FulfillmentPanel` :1100; dispatch :1100 |
+| `apps/web/src/areas/warehouse/WarehouseConsole.tsx` | Staff console | `TABS` :106; `WarehouseConsole` :131; density :268; `HoldPanel` :760 (a hold keeps the scanned label, a release clears it, :790-795) |
+| `apps/web/src/areas/warehouse/OutboundBench.tsx` | Ready-to-pack list, dispatch or hand-over, white-glove quoting | `OutboundBench` :72; `PackPanel` :229 (checklist from `items`, falling back to `itemIds`, :264-273); `WhiteGloveQuoteRow` :459 |
+| `apps/web/src/areas/warehouse/InventoryTools.tsx` | Item look-up by scanned label, intake correction, warehouse transfer, stock check, disposals | `lifecycleLabel` :58; `ItemLookupPanel` :73; `TransferPanel` :235; `ReconcilePanel` :329; `DisposalsList` :411 |
+| `apps/web/src/areas/warehouse/EscrowQueue.tsx` | Operator escrow queue: agreement, funds, arrival by scan, inspection, release | `EscrowQueue` :19 |
+| `apps/web/src/areas/warehouse/feedback.tsx` | The bench's inline success/failure line, beside the button that caused it | `useNote` :18; `NoteLine` :26 |
 | `apps/web/src/areas/warehouse/ReceiveParcels.tsx` | Record an arrival | `ReceiveParcels` :27 |
 | `apps/web/src/areas/warehouse/ParcelQueue.tsx` | Parcel state moves | `ParcelQueue` :43; `ParcelActions` :189 |
 | `apps/web/src/areas/warehouse/IntakeBench.tsx` | Book contents into the vault | `IntakeBench` :85 |
@@ -10206,7 +10345,9 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/areas/warehouse/ServiceQueue.tsx` | Service fulfilment | `ServiceQueue` :48; `FORMS` :645 |
 | `apps/web/src/areas/warehouse/GradingSubmissions.tsx` | Grading batches | `GradingSubmissions` :61 |
 | `apps/web/src/areas/warehouse/SupportQueue.tsx` | Staff helpdesk queue | `SupportQueue` :35 |
-| `apps/web/src/areas/admin/AdminConsole.tsx` | Management console | `TABS` :36; `AdminConsole` :60; `PricingSection` :228; `DisputesSection` :527 |
+| `apps/web/src/areas/admin/AdminConsole.tsx` | Management console | `TABS` :36 (ten tabs, `chargebacks` added 20 September); `AdminConsole` :60; `PricingSection` :228; `DisputesSection` :527 |
+| `apps/web/src/areas/admin/PeopleAndItems.tsx` | Accounts and items as readable registers, edited in a drawer | `STATE_META` :67; `TERMINAL` :81; `UsersSection` :109; `UserDrawer` :188 (sends only what changed, clears a last name); `ItemsSection` :300; `ItemDrawer` :388 |
+| `apps/web/src/areas/admin/ChargebacksSection.tsx` | Reversible card payments, and recording a reversal | `ChargebacksSection` :29; `RecordDrawer` :113 |
 | `apps/web/src/areas/admin/ShelfYieldPanel.tsx` | Shelf yield | `ShelfYieldPanel` :104 |
 | `apps/web/src/areas/admin/YieldChart.tsx` | Zone bar chart | `YieldChart` :48 |
 | `apps/web/src/areas/admin/PeopleAndItems.tsx` | Users and items: register + editing drawer | `UsersSection`, `ItemsSection` |
@@ -10219,6 +10360,7 @@ price, never re-quoted) and any pre-dispatch shipment has **Cancel**.
 | `apps/web/src/areas/customer/marketplace/ListingActions.tsx` | Buy / offer / "Your listing" | `ListingActions` |
 | `apps/web/src/shared/errors.ts` | The API's failures, in the reader's language | `errorText` |
 | `apps/web/src/shared/timeline.ts` | The custody timeline's sentence, composed client-side | — |
+| `apps/web/src/shared/errors.ts` | The API answers in English; these are the failures a person meets, in their language | `KNOWN` :13; `errorText` :20 |
 | `apps/web/src/shared/pricingActions.ts` | What a priced action is, by family | `actionLabel` |
 | `apps/web/src/areas/admin/SignInsSection.tsx` | Sign-in log | `SignInsSection` :48 |
 | `apps/web/src/areas/admin/WalletRequestsSection.tsx` | Wallet-request review | `reviewerActions` :34; `WalletRequestsSection` :66 |
@@ -10271,10 +10413,14 @@ pnpm dev                        # API + web; add `pnpm dev:worker` in another te
 ```
 
 The template ships with `PAYMENT_PROVIDER=paypal` and empty PayPal credentials
-(`.env.example:187-191`). A straight copy therefore fails at boot with three "required when
-PAYMENT_PROVIDER=paypal" issues (§2.4). The developer `.env` at HEAD uses `sandbox`, raises the rate
-limits to 5000/20000 for the test suites, and leaves `STORAGE_PROVIDER` unset, so photographs taken at
-the local intake bench go to the sandbox and are discarded (§2.8).
+(`.env.example:192-196`). A straight copy therefore fails at boot with three "required when
+PAYMENT_PROVIDER=paypal" issues (§2.4). The developer `.env` at HEAD uses `sandbox` for payments and
+raises the rate limits to 5000/20000 for the test suites. It used to leave `STORAGE_PROVIDER` unset,
+so every photograph taken at the local bench went to the sandbox and was discarded; since 20
+September it sets `STORAGE_PROVIDER=s3` against the MinIO in `infra/docker-compose.yml`, which is
+what makes the seeded photographs survive a restart and resolve for the running app (§2.8, §3.6).
+The sandbox is no longer a bin either — it keeps the most recent 200 objects for the life of the
+process — but it is still not storage, and production still refuses it.
 
 <a id="s13-2"></a>
 ### 13.2 The development loop: `pnpm dev` and friends
@@ -10345,21 +10491,21 @@ drizzle's `meta/`. Later files have descriptive names such as
 The seed begins with one `TRUNCATE … RESTART IDENTITY` over every application table, including the
 append-only history (`apps/api/src/db/seed.ts:83-99`). The append-only guards are per-row triggers,
 and those do not fire on TRUNCATE. It then truncates `pgboss.job` and `pgboss.archive` when the
-`pgboss` schema exists (`:117-124`). It clears only pg-boss's history tables: emptying `queue`,
+`pgboss` schema exists (`:145-150`). It clears only pg-boss's history tables: emptying `queue`,
 `schedule` or `version` would stop the worker from starting.
 
-**What the clean state is.** Seven accounts, all with the password `11111111` (`:78`):
+**What the clean state is.** Seven accounts, all with the password `11111111` (`:105`):
 - `eldar` (admin) and `platform` (admin, the house-store custodian);
 - `hermon` (warehouse operator);
 - `red`, `golden` and `veteran` (collectors);
-- `dana`, a suspended collector (`:168-191`, `:1323`).
+- `dana`, a suspended collector (`:195-225` for the six, `:1407` for Dana).
 
 Nine items:
 - the eight Rayquaza cards `SN-DR97-0001` … `SN-ROS105-0008`, four owned by Red and four by Golden
-  (`:733-890`);
-- `SN-EVS194-0009`, owned by `platform` (`:1268`).
+  (`:830-1000`);
+- `SN-EVS194-0009`, owned by `platform` (`:1359-1371`).
 
-`SN-EVS218-0010` is **deliberately never seeded** (`:938-947`, `:1264-1265`). Its photograph is on
+`SN-EVS218-0010` is **deliberately never seeded** (`:1032`, restated at `:1349`). Its photograph is on
 disk so the intake bench always has a real card to book in, and the landing page uses the photograph
 of a card that sits in nobody's vault. Two rules follow, and the project's working memory treats them
 as fixed:
@@ -10370,8 +10516,11 @@ as fixed:
 2. **Rayquaza only.** Every seeded or fixture card is a real Rayquaza with its real catalogue data and
    photograph, and `SN-EVS218-0010` is never added to the seed. `tests/web/rayquaza-only.test.ts` walks
    every `.ts`, `.tsx`, `.md`, `.css` and `.sql` file in the repository, including this document, and
-   fails on any of seventeen named non-Rayquaza collectibles. Only the verbatim third-party FAQ is
-   exempt. It is part of the `web` project, so it runs on every CI push.
+   fails on any of seventeen named non-Rayquaza collectibles. One file is exempt:
+   `apps/web/src/areas/customer/help/faqContent.ts` (`tests/web/rayquaza-only.test.ts:50`). That
+   exemption is now pointing at content that no longer needs it — the FAQ was rewritten as Bault's
+   own on 20 September (§12) — and the comment above it still describes the third-party price list
+   it used to hold. It is part of the `web` project, so it runs on every CI push.
 
 **Danger: the seed has no production guard.** Nothing in `seed.ts` checks `NODE_ENV`. The word
 "production" appears only in the header comment "never TRUNCATE in production" (`:42`). `nest build`
@@ -10568,9 +10717,13 @@ Confirmed in the container: the rendered `default.conf` has
    just installed *(Inferred consequence: on a Windows host those are pnpm junctions and may not
    resolve inside Linux; not built)*.
 5. **The seed ships in the API image** (§13.3).
-6. **CSP versus storage origin.** `img-src 'self' data: blob:` blocks S3 signed URLs on another
-   origin (§2.8). The same comment applies to `connect-src 'self'` and a cross-origin API, which the
-   file itself calls out (`nginx.conf:29-31`).
+6. **CSP versus storage origin.** `img-src 'self' data: blob:`
+   (`apps/web/nginx-security-headers.conf:7`) blocks a presigned URL on the bucket's own origin.
+   Since 20 September that only bites a deployment whose `STORAGE_ENDPOINT` is a real host: a
+   loopback endpoint is wrapped in `ProxiedStorageAdapter`, so its images come from the API's own
+   origin and `'self'` covers them (§2.8). A production bucket still needs its origin added to
+   `img-src`, or the proxy applied to it as well. The same comment applies to `connect-src 'self'`
+   and a cross-origin API, which the file itself calls out (`nginx.conf:29-31`).
 
 **What nginx does right.**
 - `location /api/` (`:92-100`) exists. Before 19 September it did not, and every API call in the built
@@ -10717,6 +10870,14 @@ schedules `dump` either. There is no cron, no job and no manifest.
 | C8 | PayPal payout reconciliation: no job reads a payout's later state (§2.5) |
 | — | Worker heartbeat or liveness: not built (`apps/worker/Dockerfile:55-58`) |
 | — | Node 20 runtime images (§13.6) |
+
+**New operational surface, 20 September.** `GET /api/v1/media/object` is the first `@Public()` route
+that serves bytes (§2.8). It sits behind the same global `ThrottlerGuard` as everything else — the
+guard is first in the `APP_GUARD` chain, before authentication (`app.module.ts:106-108`) — so it is
+counted in the `default` bucket, `RATE_LIMIT_PER_MINUTE` per IP, 300 by default
+(`packages/config/src/env.ts:130`). One vault drawer costs one request per photograph against that
+bucket, which is worth knowing before the limit is lowered. Its own protection is the signature and
+the expiry, not the session.
 
 **New findings from this pass, not in the readiness document:**
 1. *(Fixed 19 September.)* The CSP and anti-framing headers were not sent on the HTML document (§13.6 item 1).
@@ -10948,9 +11109,17 @@ const get = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: { get: (...a) => get(...a), post: (...a) => post(...a), patch: vi.fn(), del: vi.fn() },
   ApiError: class ApiError extends Error {},
+  apiErrorKey: () => null,
 }));
 const { SignInPage } = await import('../../apps/web/src/areas/customer/auth/SignInPage');
 ```
+
+`apiErrorKey` joined the mock in every file on 20 September, because a factory mock replaces the
+WHOLE module: when `shared/errors.ts` (§12.6) started asking the api module which kind of failure it
+had been handed, eight files that mocked `api` and `ApiError` but not the new export threw
+"No apiErrorKey export is defined on the mock" from inside the component under test, which reads as
+a component fault rather than a missing mock. A module seam is only as good as the completeness of
+the double.
 
 The file header states why the seam is `api` and not `fetch`: the component's contract is "call
 the API this way and render what comes back" (`tests/ux/auth.test.tsx:14-16`). The project exists
@@ -11069,15 +11238,18 @@ cards, and other collectibles crept back twice through fixtures and comments. Th
 1. A textual sweep of every `.ts/.tsx/.md/.css/.sql` file in the repository (skipping
    `node_modules`, `.git`, `dist`, `build`, `.claude`, `coverage`, `assets1`) for seventeen
    forbidden names — other Pokémon, famous sports cards and comic keys (the list is `FORBIDDEN`, `:29-47`; it is not repeated here because this file is scanned too)
-   (`rayquaza-only.test.ts:29-47`, sweep at `:77-86`). Exempt: the verbatim Ship My Cards FAQ copy
-   and the test itself (`:50-55`). This includes `DIVE1.md`, so documentation is held to it too.
+   (`rayquaza-only.test.ts:29-47`, sweep at `:77-86`). The only exemption left is the test itself,
+   which names them in order to ban them (`:49-52`); the `faqContent.ts` exemption was dropped on
+   20 September, when that file stopped reproducing another company's FAQ and became Bault's own
+   thirty answers — the largest body of customer-facing prose in the repository is now swept like
+   everything else, and passes. This includes `DIVE1.md`, so documentation is held to it too.
 2. Every `serialNumber: 'SN-…'` in `apps/api/src/db/seed.ts` has a photograph named after it in
-   `assets/images`, and every seeded description contains "rayquaza" (`rayquaza-only.test.ts:88-111`). The serial *is*
+   `assets/images`, and every seeded description contains "rayquaza" (`rayquaza-only.test.ts:86-109`). The serial *is*
    the filename; this test is the only thing enforcing the coupling. At HEAD the seed has nine
    serials; `assets/images` holds ten photographs, the tenth (`SN-EVS218-0010`) deliberately never
-   seeded , so the intake bench has a real, photographed card to book in by hand (`seed.ts:1289-1290`, `docs/demo-intake.md`).
+   seeded , so the intake bench has a real, photographed card to book in by hand (`seed.ts:1348-1350`, summary at `:1753-1755`, `docs/demo-intake.md`).
 3. Any fixture `description: '…'` in `tests/` or `tests3/` that starts with a four-digit year — i.e. quotes a real
-   card — must say Rayquaza (`rayquaza-only.test.ts:113-129`).
+   card — must say Rayquaza (`rayquaza-only.test.ts:111-127`).
 
 **No credentials in the bundle** — `tests/web/no-credentials-in-bundle.test.ts`. It greps
 `apps/web/dist/assets/*.{js,css}` for the seed password `11111111`, each seeded address and the
@@ -11098,8 +11270,10 @@ a total map over it). This test catches what types cannot:
   would print a sentence with a hole in it;
 - no key longer than 25 characters is byte-identical in both locales while containing Hebrew
   (`:129-139`) — an untranslated string;
-- no string says "Ship My Cards" except three attribution keys (`faq.subtitle`, `faq.sourceNote`,
-  `faq.quotedNotice`, `:103-117`), and those three must keep naming the source (`:119-127`);
+- **no** catalogued string names Ship My Cards, in either locale (`:99-110`). There used to be an
+  allowance of three attribution keys, because the FAQ tab carried answers copied verbatim from
+  that company; the FAQ is Bault's own since 20 September, so the quotation went and the
+  allowance with it, and the rule is now absolute;
 - `LOCALES` is `['he', 'en']` and `DEFAULT_LOCALE` is `'en'` (`:22-24`);
 - retired keys stay gone: no rail pin/unpin, no display-name strings, no customer-facing
   intake-id strings (`:57-87`).
@@ -11286,7 +11460,7 @@ Always pass `--project`: the root `vitest run` without it starts all eight proje
 | `no-credentials-in-bundle.test.ts` | Built `dist/assets` carries no seeded credential | :36-43, :45-66 |
 | `notification-catalogue.test.ts` | API, worker and SPA agree on events, subjects, email defaults, mandatory in-app | `not/event-types`, worker `notification-events`, `shared/notifications` |
 | `proxy-target.test.ts` | Vite proxy target: 127.0.0.1 default, `API_PORT`, override, loud failure | `apps/web/proxy-target` |
-| `rayquaza-only.test.ts` | Repository names no other collectible; seed serial ↔ photo ↔ Rayquaza | :29-47, :77, :88, :113 |
+| `rayquaza-only.test.ts` | Repository names no other collectible; seed serial ↔ photo ↔ Rayquaza | :29-47, :75, :86, :111 |
 | `routing.test.ts` | Legacy route redirects, including negative cases | `shared/routing` `legacyRedirect` |
 | `session.test.ts` | `loadProfile` de-duplicates concurrent calls, does not cache, 401 = signed out | `shared/session` |
 | `shipment-tracking.test.ts` | Tracking search fields, status tones cover the API enum, retired wallet tabs redirect | `shared/shipments`, `shared/routing` |
@@ -11459,7 +11633,7 @@ explanation.
 - `apps/api/src/db/migrations/0030_a_downgrade_is_not_a_cancellation.sql` — [§9](#s9), [§10](#s10), [§13](#s13)
 - `apps/api/src/db/migrations/0031_membership_stops_the_storage_clock.sql` — [§5](#s5)
 - `apps/api/src/db/migrations/0032_sales_tax_in_parts_per_million.sql` — [§3](#s3), [§4](#s4), [§6](#s6), [§8](#s8), [§13](#s13), [App. B](#appendix-b)
-- `apps/api/src/db/migrations/0033_direct_ship_names_its_parcel.sql` — [§3](#s3), [§4](#s4), [§6](#s6), [§8](#s8), [§13](#s13), [App. B](#appendix-b)
+- `apps/api/src/db/migrations/0033_direct_ship_names_its_parcel.sql` — [§9](#s9)
 - `apps/api/src/db/migrations/0034_addresses_carry_a_state_and_a_phone.sql` — [§3](#s3), [§4](#s4), [§6](#s6), [§8](#s8), [§13](#s13), [App. B](#appendix-b)
 - `apps/api/src/db/schema/_helpers.ts` — [§3](#s3), [§6](#s6), [App. B](#appendix-b)
 - `apps/api/src/db/schema/index.ts` — [§3](#s3)
@@ -11533,10 +11707,10 @@ explanation.
 - `apps/api/src/modules/inv/labels.ts` — [§3](#s3), [§5](#s5), [App. B](#appendix-b)
 - `apps/api/src/modules/inv/parcel.controller.ts` — [§5](#s5)
 - `apps/api/src/modules/inv/parcel.schema.ts` — [§5](#s5)
-- `apps/api/src/modules/inv/parcel.service.ts` — [§3](#s3), [§5](#s5), [§6](#s6), [App. B](#appendix-b)
+- `apps/api/src/modules/inv/parcel.service.ts` — [§2](#s2), [§3](#s3), [§5](#s5), [§6](#s6), [App. B](#appendix-b)
 - `apps/api/src/modules/med/med.controller.ts` — [§2](#s2), [§5](#s5), [App. B](#appendix-b)
 - `apps/api/src/modules/med/med.module.ts` — [§3](#s3), [§5](#s5)
-- `apps/api/src/modules/med/media-url.ts` — [§2](#s2)
+- `apps/api/src/modules/med/media-url.ts` — [§2](#s2), [§5](#s5), [App. B](#appendix-b)
 - `apps/api/src/modules/med/media.service.ts` — [§2](#s2), [§5](#s5), [App. B](#appendix-b)
 - `apps/api/src/modules/mem/mem.controller.ts` — [§10](#s10), [§12](#s12)
 - `apps/api/src/modules/mem/mem.module.ts` — [§3](#s3), [§10](#s10)
@@ -11577,7 +11751,7 @@ explanation.
 - `apps/api/src/modules/pay/topup.service.ts` — [§2](#s2), [§6](#s6)
 - `apps/api/src/modules/pay/wallet-request.controller.ts` — [§6](#s6), [§10](#s10)
 - `apps/api/src/modules/pay/wallet-request.rules.ts` — [§6](#s6)
-- `apps/api/src/modules/pay/wallet-request.service.ts` — [§4](#s4), [§6](#s6), [§10](#s10), [App. B](#appendix-b)
+- `apps/api/src/modules/pay/wallet-request.service.ts` — [§2](#s2), [§4](#s4), [§6](#s6), [§10](#s10), [App. B](#appendix-b)
 - `apps/api/src/modules/pay/wallet.service.ts` — [§6](#s6), [§8](#s8), [§10](#s10), [App. B](#appendix-b)
 - `apps/api/src/modules/pay/withdrawal.service.ts` — [§3](#s3), [§6](#s6)
 - `apps/api/src/modules/prc/prc.controller.ts` — [§6](#s6), [§10](#s10), [§12](#s12), [App. B](#appendix-b)
@@ -11616,7 +11790,7 @@ explanation.
 - `apps/api/src/modules/sup/sup.controller.ts` — [§4](#s4), [§10](#s10)
 - `apps/api/src/modules/sup/sup.module.ts` — [§10](#s10)
 - `apps/api/src/modules/sup/sup.schema.ts` — [§10](#s10), [App. B](#appendix-b)
-- `apps/api/src/modules/sup/support.service.ts` — [§10](#s10)
+- `apps/api/src/modules/sup/support.service.ts` — [§4](#s4), [§10](#s10)
 - `apps/api/src/modules/vlt/break-even.service.ts` — [§5](#s5)
 - `apps/api/src/modules/vlt/storage-policy.ts` — [§5](#s5), [App. B](#appendix-b)
 - `apps/api/src/modules/vlt/vault.service.ts` — [§2](#s2), [§5](#s5), [§6](#s6), [§8](#s8), [App. B](#appendix-b)
@@ -11696,21 +11870,21 @@ explanation.
 - `apps/web/src/areas/customer/help/HelpPanels.tsx` — [§10](#s10), [§12](#s12)
 - `apps/web/src/areas/customer/help/IntakePolicyPanel.tsx` — [§10](#s10), [§12](#s12)
 - `apps/web/src/areas/customer/help/PriceListPanel.tsx` — [§12](#s12)
-- `apps/web/src/areas/customer/help/faqContent.ts` — [§10](#s10), [§12](#s12)
+- `apps/web/src/areas/customer/help/faqContent.ts` — [§10](#s10), [§12](#s12), [§13](#s13), [§14](#s14), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/help/guideContent.ts` — [§10](#s10), [§12](#s12)
-- `apps/web/src/areas/customer/help/helpSearch.ts` — [§12](#s12)
+- `apps/web/src/areas/customer/help/helpSearch.ts` — [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/help/legalContent.ts` — [§10](#s10), [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/help/policyText.ts` — [§12](#s12)
-- `apps/web/src/areas/customer/inbound/InboundPage.tsx` — [§12](#s12)
+- `apps/web/src/areas/customer/inbound/InboundPage.tsx` — [§9](#s9), [§12](#s12)
 - `apps/web/src/areas/customer/marketing/DemoSlab.tsx` — [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/marketing/LandingPage.tsx` — [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/marketplace/EscrowTab.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/HouseStorePanel.tsx` — [§7](#s7), [§12](#s12)
-- `apps/web/src/areas/customer/marketplace/ListingActions.tsx` — [§12](#s12)
+- `apps/web/src/areas/customer/marketplace/ListingActions.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/MarketplacePage.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/ProposeTradePanel.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/SellerPanels.tsx` — [§12](#s12)
-- `apps/web/src/areas/customer/marketplace/StorefrontPanel.tsx` — [§12](#s12)
+- `apps/web/src/areas/customer/marketplace/StorefrontPanel.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/customer/membership/MembershipPage.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/notifications/NotificationsPage.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/profile/ProfilePage.tsx` — [§12](#s12)
@@ -11725,12 +11899,12 @@ explanation.
 - `apps/web/src/areas/customer/vault/InspectionForm.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/vault/RemoveCommonsPanel.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/vault/VaultPage.tsx` — [§5](#s5), [§12](#s12)
-- `apps/web/src/areas/warehouse/EscrowQueue.tsx` — [§12](#s12)
+- `apps/web/src/areas/warehouse/EscrowQueue.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/warehouse/GradingSubmissions.tsx` — [§8](#s8), [§12](#s12)
 - `apps/web/src/areas/warehouse/HouseOrdersPanel.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/IntakeBench.tsx` — [§5](#s5), [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/warehouse/InventoryTools.tsx` — [§12](#s12)
-- `apps/web/src/areas/warehouse/OutboundBench.tsx` — [§12](#s12), [§14](#s14)
+- `apps/web/src/areas/warehouse/OutboundBench.tsx` — [§9](#s9), [§12](#s12), [§14](#s14)
 - `apps/web/src/areas/warehouse/ParcelQueue.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/ReceiveParcels.tsx` — [§12](#s12)
 - `apps/web/src/areas/warehouse/ServiceQueue.tsx` — [§8](#s8), [§12](#s12)
@@ -11746,7 +11920,7 @@ explanation.
 - `apps/web/src/shared/barcode128.ts` — [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/shared/carriers.ts` — [§9](#s9), [§12](#s12)
 - `apps/web/src/shared/countries.ts` — [§12](#s12)
-- `apps/web/src/shared/errors.ts` — [§12](#s12)
+- `apps/web/src/shared/errors.ts` — [§12](#s12), [§14](#s14)
 - `apps/web/src/shared/escrow.ts` — [§12](#s12)
 - `apps/web/src/shared/grading.ts` — [§12](#s12)
 - `apps/web/src/shared/hooks.ts` — [§10](#s10), [§12](#s12)
@@ -11831,7 +12005,7 @@ explanation.
 - `packages/adapters/src/payment.ts` — [§2](#s2), [§6](#s6), [App. B](#appendix-b)
 - `packages/adapters/src/s3.ts` — [§2](#s2), [§13](#s13), [App. B](#appendix-b)
 - `packages/adapters/src/shipping.ts` — [§2](#s2), [§9](#s9), [App. B](#appendix-b)
-- `packages/adapters/src/storage.ts` — [§2](#s2)
+- `packages/adapters/src/storage.ts` — [§2](#s2), [App. B](#appendix-b)
 
 **`packages/config/src`**
 
@@ -11955,7 +12129,7 @@ explanation.
 
 Bault was built over about fifty passes, each one written up as a Part of the old guide. This
 appendix keeps only the decisions that still explain the code at HEAD: what was decided, why, and
-where it lives now. Every reference was checked at `ab67079`. "Part N" names the old Part the
+where it lives now. Every reference was checked at `ab67079` and re-checked at `4ee8d9a`. "Part N" names the old Part the
 decision comes from. Where a later Part replaced an earlier one, only the surviving form is kept.
 
 <a id="sB-1"></a>
@@ -12468,7 +12642,7 @@ the stylesheet mirrors through logical properties (Parts 7, 10, 48).
 
 **The seed is the demo, and its photographs are static files keyed by serial.** Every seeded item
 is a real, cert-matched Rayquaza card, and a repository-wide test enforces it
-(`tests/web/rayquaza-only.test.ts:77`). `assets/` is Vite's `publicDir` (`apps/web/vite.config.ts:91`),
+(`tests/web/rayquaza-only.test.ts:75`). `assets/` is Vite's `publicDir` (`apps/web/vite.config.ts:91`),
 and a photograph's URL comes from the serial alone (`apps/web/src/shared/CardPhoto.tsx:22`). This is
 separate from the signed-URL `item_image` pipeline. The cost is that everything in `assets/` is
 public, which is how a stray PDF once shipped (Parts 2, 7, 10, 35, 45).
@@ -12503,11 +12677,32 @@ percentages as percentages, and shows a sentence rather than a guessed figure wh
 (`LandingPage.tsx:100`). The bare root shows the landing page without waiting for the session probe,
 so the front door loads even when the database is down (`App.tsx:211`) (Parts 42, 47).
 
-**Quoted text stays quoted, and nothing legal is invented.** The FAQ reproduces the reference
-service's copy verbatim, with a per-entry availability badge (`partial` exists because a limit is
-not an absence). It is rendered through a marker parser, never raw HTML. Terms, Privacy and Cookies
-are listed as unpublished with no body (`apps/web/src/areas/customer/help/legalContent.ts:55`).
-Text nobody authored would read as binding (Parts 12, 13, 25).
+**Nothing legal is invented, and the help is Bault's own.** The rule that no unwritten policy may
+appear as policy has not moved: Terms, Privacy and Cookies have no body, so the Legal tab says in
+one sentence that they are not published yet and points at the helpdesk rather than listing three
+documents as "Not published"; the SIL Open Font Licence is reproduced under open-source notices,
+where it cannot be mistaken for an agreement with the customer
+(`apps/web/src/areas/customer/help/legalContent.ts:56`, `:129`).
+
+What did move is the FAQ. It used to reproduce the reference service's copy verbatim, each entry
+carrying a badge saying whether Bault did the same — honest about provenance and useless as help,
+because a collector asking how storage works was shown somebody else's storage policy. It is now
+Bault's own, thirty answers in both languages, every figure taken from the rule or constant that
+charges it (`apps/web/src/areas/customer/help/faqContent.ts:62`), and "Ask" searches those answers
+and the guides in the browser instead of returning a placeholder
+(`apps/web/src/areas/customer/help/helpSearch.ts`). Both versions follow the same rule: text nobody
+authored is not shown as if somebody had (Parts 12, 13, 25; 20 September 2026).
+
+**A phone gets the same product, arranged for a thumb.** The shell's controls — theme, language,
+notifications, account — are rendered once and placed twice: in the page header on a desktop, and in
+the dark top bar on a phone, where repeating them under every page title was six controls and a
+second copy of the page's own name (`apps/web/src/App.tsx:494`, `:549`). A register is one shape
+that stacks into labelled rows below 768px rather than a table that scrolls sideways with its
+actions off-screen, a strip of tabs scrolls and keeps the active one in view, and every control is
+44px in both directions under a coarse pointer — measured on the running app, because that is how
+the last three misses were found (a bare tick box, the account avatar, a contents link). The bar
+keeps its own colour token in both themes: it was drawn with `--ink`, which inverts in dark mode and
+took the white icons with it (20 September 2026).
 
 <a id="sB-9"></a>
 ### B.9 Operations
@@ -12553,6 +12748,17 @@ status code, not the body (`apps/api/src/shared/observability/health.controller.
 `backup.sh verify` restores into a scratch database and checks invariants
 (`infra/ops/backup.sh:83`) (Parts 3, 11, 39, 47).
 
+**A photograph is served by whoever can actually be reached.** An object store signs its own URLs,
+which is right in production and wrong on a laptop: MinIO signs `http://localhost:9000`, which no
+phone on a tunnel can open, so every picture in the product rendered broken. The adapter now wraps a
+loopback store and returns `/api/v1/media/object?key=…&exp=…&sig=…` instead — the same bargain a
+presigned URL makes (everything needed is in the query string, and it expires), signed with
+`SESSION_COOKIE_SECRET` and served from the API's own origin
+(`apps/api/src/modules/med/media-url.ts`, `packages/adapters/src/storage.ts`). A real endpoint is
+still linked directly. The seed also puts each demo card's catalogue photograph in the store under
+the key its `item_image` row records, because a key is only a promise that the bytes are there
+(20 September 2026).
+
 **CI is the real sequence.** It builds packages, lints and typechecks, runs the pure suites,
 migrates and seeds, starts the API, waits for `/readyz`, and runs the live suites
 (`.github/workflows/ci.yml:132-167`). It uses Node 24 (jsdom 30), MinIO from quay.io, and the
@@ -12593,7 +12799,7 @@ hypotheses to test, not facts.
 - [§6.6](#s6-6) — Inferred: derived from the query, not exercised by a test.
 - [§6.7](#s6-7) — Inferred: not exercised by a test.
 - [§6.7](#s6-7) — Inferred: the race follows from the code; no concurrency test covers it. The only concurrency test is `tests/concurrency/no-double-sale.test.ts`.
-- [§6.13](#s6-13) — Inferred: the rules were seeded so the price list could show the fees; the seed comment says "the full schedule lives in money-terms.ts", `seed.ts:444-445`.
+- [§6.13](#s6-13) — Inferred: the rules were seeded so the price list could show the fees; the seed comment says "the full schedule lives in money-terms.ts", `seed.ts:471-472`.
 - [§6.13](#s6-13) — Inferred: no code handles a commit failure after a successful payout; the idempotency key `wallet_request:<id>` would make a retried Complete converge at the provider.
 - [§7.12](#s7-12) — Inferred: no comment discusses it
 - [§7.12](#s7-12) — Inferred rationale; old Part 18 lists "no expiry" as a known limitation
@@ -12672,6 +12878,9 @@ Each owning section describes the corrected behaviour.
 | Escrow stopped dead at `funded`: no screen could book in the card, record the inspection, or act for a counterparty without an account. | The warehouse has an escrow queue. | [§7.10](#s7-10) |
 | A white-glove request could be made and never answered; a pickup or hand delivery could never be closed. | Operators quote from the outbound bench, and hand-over closes them. | [§9.17](#s9-17), [§12.12](#s12-12) |
 | The FAQ tab was another company's FAQ, copied verbatim, and "Ask" answered `#1DDD` to everything. | Bault's own FAQ in both languages, and Ask searches it. | [§12.11](#s12-11) |
+| Every gallery in the product answered 404: `item_image` named objects — `images/sn-dr97-0001-intake.jpg` — that nobody had ever uploaded. | The seed puts each card's catalogue photograph in the store under the key the row records, and warns when it cannot. | [§3.6](#s3-6) |
+| A bare tick box (20px), the account button on the phone bar (32px) and a legal contents entry (an 18px line) could not be hit with a thumb. | Measured on the running app: 44px in both directions under a coarse pointer. | [§12](#s12) |
+| The storage drawer named a next charge for items a membership was covering. | `storageFor` reads `storage_period_cover` and counts covered periods, so the date it shows is the one the sweep would bill. | [§5.13](#s5-13) |
 
 <a id="sd-0b"></a>
 ### D.0b Fixed on 19 September 2026
@@ -12704,7 +12913,7 @@ the corrected behaviour and names the test that pins it.
 | Interest accrual is not idempotent: a same-day re-run or a pg-boss retry after a partial failure charges interest twice. | Verified | [§6.6](#s6-6), [§11](#s11) |
 | Service denial and refused grading approval never refund the charge or return the allowance. | Verified | [§8](#s8) |
 | Two concurrent accept-quote calls on one custom request can each write a debit (`acceptQuote` reads the stage outside its transaction). *(The re-quote half of this was fixed on 20 September.)* | Inferred | [§8.16](#s8-16) |
-| The escrow fee ignores the `escrow_fee` pricing rule, is charged without a balance check, and `terms().configuredBps` always reports 0. | Verified | [§7.10](#s7-10) |
+| The escrow fee ignores the `escrow_fee` pricing rule: `terms()` reads it (`escrow.service.ts:71-78`) and the charge does not — `fund` takes `escrowFeeMinor(valueMinor)` off the constant `ESCROW_FEE_BPS` (`:187`), so configuring the rule changes what is published and not what is billed. | Verified | [§7.10](#s7-10) |
 | No purchase path locks the buyer's wallet, so concurrent debits can take a balance negative; concurrent cash-outs likewise. | Inferred | [§6.7](#s6-7), [§7](#s7) |
 | Double execution under concurrency: escrow `fund`/`release` (no row locks), consignment `complete` and buyout `accept` (`assertTransition` allows `from === to`), membership renewal (roll-forward has no status predicate), house-store purchase with the same idempotency key. | Inferred | [§7](#s7), [§10](#s10), [§3.8](#s3-8) |
 | An open consignment does not reserve the item: completing it takes the card from its current owner and credits the original requester. | Verified | [§7](#s7) |
@@ -12732,7 +12941,7 @@ the corrected behaviour and names the test that pins it.
 |---|---|---|
 | Swap approval doesn't re-check the items (a listed, sold, held or shipped card can be transferred); a gift sends no notification. *(Rejecting an executed swap was fixed on 20 September.)* | Verified | [§7](#s7) |
 | A seller's counter-offer notifies the seller instead of the buyer; two identical concurrent offers produce a 500. | Verified | [§7](#s7) |
-| Escrow never checks the hold flag or who owns the card it receives. | Verified | [§7.10](#s7-10), [§5](#s5) |
+| Escrow does not check the hold flag or who owns the card it receives: `receiveItem` resolves a scanned label and refuses anything that is not `stored` (`escrow.service.ts:393-415`), which lets a held card — `stored` with `hold_flag` set — be booked into somebody else's deal. | Verified | [§7.10](#s7-10), [§5](#s5) |
 | The tracking job hard-codes the sandbox adapter, so parcels never reach `delivered` or `exception`, even with EasyPost configured; EasyPost rates would mostly fail to match the catalogue by name. | Verified | [§9](#s9), [§2](#s2) |
 | An item keeps its `bin_id` after it leaves, so a departed card still records the shelf it left from and auto-stow still counts it as occupying space. *(The counts themselves — bins, report, overview — were fixed on 20 September by filtering on state.)* | Verified | [§5.6](#s5-6) |
 | The admin item editor writes owner, shelf and state directly, skipping the lifecycle check and the `bin_transfer` row. | Verified | [§5](#s5) |
@@ -12740,7 +12949,7 @@ the corrected behaviour and names the test that pins it.
 | A lot split that fails part-way leaves some children created, and a retry duplicates them. | Verified | [§8](#s8) |
 | Donation, cull and de-slab confirmations don't re-check the owner or hold; de-slab overwrites the grade with free text instead of clearing it. | Verified | [§8](#s8) |
 | Shipment fulfilment method is never checked by select-rate, edit, merge, cancel or dispatch; the group view answers 409 once any member's items have shipped. | Verified | [§9](#s9) |
-| The custody report PDF prints "?" for `·` and any non-ASCII text; the storage drawer shows a next charge for items a membership covers. | Verified | [§5](#s5) |
+| The custody report PDF prints "?" for `·` and any non-ASCII text. | Verified | [§5](#s5) |
 
 <a id="sd-4"></a>
 ### D.4 Tests that prove less than they claim

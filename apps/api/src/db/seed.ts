@@ -1331,20 +1331,19 @@ async function main(): Promise<void> {
    * History scope has something in it for the collector the demo signs in as.
    *
    * It is a donation rather than a shipment for a reason worth writing down.
-   * `VaultService.listHistory` finds a departed card two ways — the customer is
-   * the PREVIOUS OWNER of an ownership transfer, or a custody event names them
-   * as `new_owner_id` on a change into a terminal state. Nothing in the
-   * application ever writes the second shape: `CustodyService.changeState` does
-   * not set `new_owner_id`, and no code path writes a `dispatch` event at all.
-   * A card the customer still owns but has shipped home is therefore invisible
-   * in History — including Golden's SN-SV146-0006, seeded long before this pass.
+   * `VaultService.listHistory` used to find a departed card two ways only — the
+   * customer as the PREVIOUS OWNER of an ownership transfer, or named as
+   * `new_owner_id` on a change into a terminal state — and the application
+   * writes neither shape when a card is dispatched or culled, because
+   * `CustodyService.changeState` records no owner ids at all. A card the
+   * collector still owned but had shipped home was therefore in no tab of the
+   * vault, including Golden's SN-SV146-0006.
    *
-   * That is an API bug, and the seed is not the place to hide it. Writing a
-   * `new_owner_id` onto a state change here would make this one row appear while
-   * every row the running product creates stayed missing, which is worse than
-   * the bug. So Red's departure is modelled as the thing that genuinely works,
-   * the bug is reported in docs/design/01-audit.md, and the second branch stays
-   * empty until somebody fixes the query.
+   * The query gained a third branch on 20 September: a terminal state change on
+   * a card the collector still owns (`vault.service.ts:344`). So a donation and
+   * a shipment both appear now, and this row keeps modelling the path that has
+   * always worked — ownership genuinely leaving — rather than the one the fix
+   * added.
    *
    * The tenth card (SN-EVS218-0010) is still deliberately unseeded, so the
    * warehouse intake bench keeps a real, photographed item to book in.

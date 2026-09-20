@@ -48,8 +48,6 @@ const FORBIDDEN = [
 
 /** Files that legitimately contain a forbidden word, and why. */
 const EXEMPT = [
-  // Ship My Cards' own copy, reproduced verbatim and badged as quoted.
-  join('apps', 'web', 'src', 'areas', 'customer', 'help', 'faqContent.ts'),
   // This file names them in order to ban them.
   join('tests', 'web', 'rayquaza-only.test.ts'),
 ];

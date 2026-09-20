@@ -947,12 +947,13 @@ function ItemMediaGallery({
   /**
    * Which of these the browser could not fetch.
    *
-   * Item media are presigned object-storage URLs, and in this environment they
-   * answer 403 — the signature parameters are absent from the URL (reported in
-   * docs/design/01-audit.md; the fix is in the storage adapter, not here). An
-   * <img> that fails renders its alt text sprawled across a grey box, which for
-   * a catalogue description is six lines of it. A photograph that did not load
-   * should say that it did not load.
+   * Item media are signed URLs. Where the store is one a browser can reach they
+   * are presigned by the store itself; where it is not — MinIO on a loopback
+   * address, which no phone on a tunnel can open — the API signs a URL to its
+   * own `/media/object` instead (§2). Either way a URL can still expire or a
+   * key can be missing, and an <img> that fails renders its alt text sprawled
+   * across a grey box: for a catalogue description, six lines of it. A
+   * photograph that did not load should say that it did not load.
    */
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
 

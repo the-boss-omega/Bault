@@ -146,12 +146,12 @@ function createShippingAdapter(): ShippingAdapter {
 /**
  * The storage adapter, and the boot that must fail rather than eat photographs.
  *
- * `SandboxStorageAdapter.putObject` returns the key and writes nothing. That is
- * fine for a checkout with no bucket and silently destructive anywhere real:
- * every intake photograph and every arrival-condition photograph is accepted,
- * acknowledged, and discarded, while the database records an `item_image` or
- * `parcel_photo` row pointing at a key that resolves to nothing. Nobody finds
- * out until a damage claim needs the evidence.
+ * `SandboxStorageAdapter` keeps the last few hundred objects in memory and
+ * nothing beyond that: enough for a checkout with no bucket to render the photo
+ * it just uploaded, and still destructive anywhere real, because the process
+ * forgets everything when it restarts while the database goes on recording an
+ * `item_image` or `parcel_photo` row for each one. Nobody finds out until a
+ * damage claim needs the evidence.
  *
  * It was bound unconditionally, and the five `STORAGE_*` variables the schema
  * has always REQUIRED were read by nothing at all — so a correctly configured
