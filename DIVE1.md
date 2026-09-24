@@ -10872,6 +10872,20 @@ that settle without contacting anybody. That refusal is right, so the compose fi
 `STORAGE_*` values are required whatever the provider is** (`:80-84`): the sandbox never reads them
 and the config will not parse without them, which is the failure this deployment hit first.
 
+**The stale upstream, and the 502 it caused.** `proxy_pass http://api:3000` is a STATIC upstream:
+nginx resolves the name once when it loads its configuration and caches that address for the life of
+the process. Container addresses are not stable — recreating the API, which every backend-only deploy
+does, gives it a new one — so nginx went on proxying to an address that no longer existed and answered
+**502 Bad Gateway for every API call with a perfectly healthy API beside it**. Reproduced on 24
+September by parking a container on the API's address and recreating it: 502, with `web` untouched.
+The fix names Docker's embedded resolver and defers the lookup to request time
+(`apps/web/nginx.conf:95-113`) — `resolver 127.0.0.11 valid=10s`, the upstream in a variable, and
+`$bault_api$request_uri`, which is required because nginx only passes the original URI unchanged when
+`proxy_pass` contains no variable. Verified on the same reproduction: the API moved
+`172.20.0.5 → 172.20.0.6`, `web` was not restarted, and `/api/v1/healthz`, `/readyz`, a 401 path, a
+query string and a POST body all went through. `deploy.sh` also restarts `web` unconditionally, which
+is redundant and costs a second — the failure it guards against is silent and faces the customer.
+
 **Two traps, both found by running it.**
 1. **`$` in a bcrypt hash.** Compose interpolates `${...}` in `environment:` *and* in `env_file:`
    values, so a Caddy hash pasted raw arrives with pieces missing and every login fails silently.

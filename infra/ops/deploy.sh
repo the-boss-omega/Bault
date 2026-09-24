@@ -86,6 +86,16 @@ say "Migrating the database"
 say "Starting"
 "${COMPOSE[@]}" up -d --remove-orphans
 
+# Belt and braces for the stale-upstream 502.
+#
+# `nginx.conf` now re-resolves the API on every request, so this should never be
+# needed. It stays because the failure it prevents is silent and user-facing —
+# a recreated API gets a new address, and a web container that had cached the
+# old one answers 502 for everything with a healthy API beside it. Restarting a
+# container that serves static files costs a second; explaining a Bad Gateway to
+# a customer costs more.
+"${COMPOSE[@]}" restart web >/dev/null
+
 # --- Wait for the API to actually answer ------------------------------------
 # `up -d` returns when the containers are started, which is not the same as the
 # API being able to serve a request. /readyz answers 503 while the database is
