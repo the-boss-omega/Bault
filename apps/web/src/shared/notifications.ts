@@ -122,7 +122,7 @@ export function renderContent(content: unknown, label: string): string {
 export function eventRoute(eventType: string): { section: string; tab?: string } | null {
   const rules: [RegExp, { section: string; tab?: string }][] = [
     [/^(offer_|item_sold|swap_|listing_)/, { section: 'marketplace', tab: 'offers' }],
-    [/^escrow_/, { section: 'marketplace', tab: 'escrow' }],
+    [/^escrow_/, { section: 'escrow' }],
     [/^(parcel_|arrival_not_accepted)/, { section: 'inbound', tab: 'parcels' }],
     [/^(shipment_|direct_ship|handed_over|white_glove|show_pickup|group_shipment)/, { section: 'shipping-services', tab: 'tracking' }],
     [/^(custom_request|buyout_|service_|grading_|inspection_|video_|photography_|consignment_)/, { section: 'shipping-services', tab: 'requests' }],

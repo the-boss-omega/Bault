@@ -5208,7 +5208,7 @@ The buyer owns a real record at once. The physical work of labelling and shelvin
 1. **Key**: the client's `Idempotency-Key`, or else **a random UUID** (`:161`). The key is deliberately *not* derived from
    (buyer, product) the way the marketplace key is. A product has copies, and a derived key would answer a collector's second
    copy with the receipt for the first. The endpoint is `house-purchase:<listingId>`. The web sends one key per
-   confirmation dialog (`apps/web/src/areas/customer/marketplace/HouseStorePanel.tsx:73-75`).
+   confirmation dialog (`apps/web/src/areas/customer/store/BaultStorePage.tsx:88-92`).
 2. In one transaction:
    1. Lock the product `FOR UPDATE` (`:169-174`). It must be `active` with `stock > 0`, else 409 `item_no_longer_available` "That
       card has sold out" (`:176-178`). The lock is what makes the last copy sell once.
@@ -9184,12 +9184,12 @@ swaps only the `<main key={section}>` body (`App.tsx:566`). Keyed on the section
 *tab* updates in place instead of remounting. It is **not** keyed on locale (`App.tsx:359-366`): a
 language switch re-renders through context and keeps open drawers, filters and half-typed forms.
 
-**Role-scoped sections.** `SECTIONS` (`App.tsx:86-139`) lists eleven rail destinations; two carry
+**Role-scoped sections.** `SECTIONS` (`App.tsx:90-156`) lists thirteen rail destinations; two carry
 `requires`:
 
 | Section key | Rail label | Requires |
 | --- | --- | --- |
-| `vault`, `inbound`, `wallet`, `membership`, `marketplace`, `shipping-services` | primary | — |
+| `vault`, `inbound`, `wallet`, `membership`, `marketplace`, `bault-store`, `escrow`, `shipping-services` | primary | — |
 | `warehouse` | primary | `staff` (`warehouse_operator` or `admin`) |
 | `notifications`, `support`, `faq` | secondary (below the divider) | — |
 | `admin` ("Management") | secondary | `admin` |
@@ -9281,11 +9281,14 @@ contextual tab strip, and params carry the open record and the active filters.
   `''`/`null`/`undefined`, and defaults to `replace: true` (`routing.ts:206-219`) — typing in a filter
   box does not add one history entry per keystroke, and an unfiltered shelf is `#/marketplace/browse`,
   not `?type=&condition=&min=&max=`. The marketplace is the main user (§12.11).
-- **Legacy redirects** (`routing.ts:36-86`). Retired *sections*: `services → shipping-services/
+- **Legacy redirects** (`routing.ts:36-104`). Retired *sections*: `services → shipping-services/
   requests`, `shipping → shipping-services/shipping`. Retired *tabs*, keyed per section so a name
   retired in one cannot redirect another: `wallet/topup → cash-in`, `wallet/withdrawals → cash-out`,
-  `warehouse/parcels → receiving`, `warehouse/intake → receiving`. A retired section wins over a retired
-  tab. The shell applies it with `replace` and renders `null` for that frame so the fallback section
+  `warehouse/parcels → receiving`, `warehouse/intake → receiving`. A tab target is either a bare tab
+  name (it moved within the section) or a `{ section, tab }` pair (`TabTarget`, `routing.ts:54`) for a
+  tab **promoted out** of its section: `marketplace/house → bault-store`, `marketplace/escrow →
+  escrow`, which is what keeps the FAQ's `#/marketplace/house` and every held bookmark off Browse. A
+  retired section wins over a retired tab. The shell applies it with `replace` and renders `null` for that frame so the fallback section
   does not flash (`App.tsx:426-436`, `:464`). Because `legacyRedirect` is run on `requested`, a stale
   `bault.tab = 'services'` from an old build is redirected too. Unit-tested in
   `tests/web/routing.test.ts`.
@@ -9367,7 +9370,7 @@ or the AppError envelope → back through `request()`.
 | Pattern | Where the SPA uses it |
 | --- | --- |
 | Confirmation token (POST → `{confirmationToken}` → POST `…/confirm`) | Deslab and donation (`VaultPage.tsx:426-430`, `:387-391`), remove-commons (`RemoveCommonsPanel.tsx:100-105`), delist (`SellerPanels.tsx:94-98`), gift transfer (`ProposeTradePanel.tsx:109-114`). In every case the two calls run back to back after the user has confirmed in the UI (a `ConfirmationModal`, except the gift, which has none). |
-| Idempotency key | House-store purchase sends `Idempotency-Key: crypto.randomUUID()` minted once per confirmation dialog (`HouseStorePanel.tsx:72-76`, key from `:136`). Instant top-up sends `idempotencyKey` **in the body**, regenerated on every click (`MoneyPanels.tsx:90-99`). Nothing else sends one — marketplace purchase relies on the server's replay detection (`replayed` flag, `MarketplacePage.tsx:180-183`). |
+| Idempotency key | House-store purchase sends `Idempotency-Key: crypto.randomUUID()` minted once per confirmation dialog (`BaultStorePage.tsx:88-92`, key from `:161`). Instant top-up sends `idempotencyKey` **in the body**, regenerated on every click (`MoneyPanels.tsx:90-99`). Nothing else sends one — marketplace purchase relies on the server's replay detection (`replayed` flag, `MarketplacePage.tsx:172-180`). |
 
 **A notification leads to the thing it is about.** `eventRoute` (`shared/notifications.ts:122-136`)
 maps an event type to a screen by family — `offer_*`/`item_sold`/`swap_*` to the marketplace,
@@ -9806,13 +9809,32 @@ its open record in a URL param. Server behaviour is in the domain sections noted
 *register* of their items in three views — `active`, `hold`, `history` (`SCOPES`, `VaultPage.tsx:199`)
 — as a segmented control with live counts. Search is debounced 250 ms and drives both
 `GET /vault/items?scope=&q=` and `GET /vault/counts` (`VaultPage.tsx:498-499`); it is local state, not
-in the URL. Each row (`CardTile`, `:670`) leads with the serial, then state (frozen and departed have
-their own treatments), bin and zone, and the **Break-Even Watch** (`Watch`, `:815`): money spent on
+in the URL. Each row (`CardTile`, `:839`) leads with the serial, then state (frozen and departed have
+their own treatments), bin and zone, and the **Break-Even Watch** (`Watch`, `:1082`): money spent on
 storage against the item's estimated value, from `GET /vault/break-even`, amber at ≥ 0.66 and "over"
-past 1. Opening an item (`?item=<id>`) shows the `ItemDrawer` sheet (`:1026`): photograph on the stage,
+past 1.
+
+**Two views of one collection** (`VIEWS`, `:228`). The register above is the WORKING shape — a 56px
+stamp and four columns you can run your eye down. `?view=case` renders the same items as a **display
+case** (`CaseTile`, `:972`): the photograph becomes the tile on the same `--surface-stage` the sheet
+lights a card on, and the columns become a caption of serial, name, grade and — only when the state
+is not the ordinary `stored` — a badge, because a wall of forty cards each saying "Stored" is a wall
+of noise. The tile is one button and uses `CardPhoto` (`shared/CardPhoto.tsx:50`) rather than
+`CardPhotoThumb`, which is itself a button and would swallow the click into the lightbox. It is a
+*view*, not a scope: it composes with `active`/`hold`/`history` and lives in the URL through
+`setParams`, so a linked vault arrives looking the way the sender meant, and `register` — the default
+— clears the parameter rather than writing itself into every copied URL. Motion is the point here and
+nowhere else (`DESIGN.md` §7): tiles arrive 40 ms apart, capped at twelve, and a card leans toward the
+pointer with a highlight tracking across it (`useCardTilt`, `shared/hooks.ts:41`), which writes
+`--tilt-*`/`--shine-*` custom properties and costs no React render. The hook returns **no handlers at
+all** under `prefers-reduced-motion` or for a touch pointer, and the CSS removes the transforms in the
+same query — a collapsed duration would otherwise apply them instantly rather than not at all.
+Asserted in `tests/ux/customer-screens.test.tsx`.
+
+Opening an item (`?item=<id>`) shows the `ItemDrawer` sheet (`:1294`): photograph on the stage,
 details, storage terms (`GET /vault/items/:id/storage`), media, the custody timeline
 (`GET /vault/items/:id/timeline`), a printable barcode, and the **card actions** (`CARD_ACTIONS`,
-`:236`): **List for sale**, **Manage the listing**, **Ship this item**, photography, grading, video,
+`:301`): **List for sale**, **Manage the listing**, **Ship this item**, photography, grading, video,
 inspection, lot split, consignment, buyout, custom request, deslab and donation — filtered by
 lifecycle state, lot/graded
 rules, hidden entirely for frozen or departed items, disabled with the request code while one of the
@@ -9833,11 +9855,20 @@ list although `PhotographyService.request` asks only that the card is yours
 (`apps/api/src/modules/dis/photography.service.ts:22-28`) — and better photographs are most wanted on
 a card somebody is trying to sell — and a listed card with any open commitment lost even the route to
 its own listing, because the commitment filter keeps only `inPlace` actions. A `navigational` action
-changes nothing about the card, so it is exempt (`:1219`). **Every priced action is confirmed with its fee** before it is
+changes nothing about the card, so it is exempt (`:1430`). **Every priced action is confirmed with its fee** before it is
 raised — photography, video, buyout and lot split used to fire on one tap, so two taps could turn
 $5.00 of costs into $50.00. Each form opens directly under the button that asked for it and is
 scrolled into view; they used to render below all eight buttons, which on a phone looked like a tap
-that had done nothing. Deslab and donation are irreversible: a `ConfirmationModal`, then the two-step
+that had done nothing. **An action no longer closes the sheet.** `run` and a form's `done` used to
+call `onClose()` on success, so ordering a service threw the reader out of the card they were reading
+and put the confirmation on a banner behind it; a second thing done to the same card started again
+from finding the row. Both now set a sheet-local `status` rendered beside the buttons, still call
+`onActed` (the register behind reloads — the row's commitment has changed), and call `reloadCard`
+(`VaultPage.tsx:1386`), which re-reads `GET /vault/items/:id` and the timeline WITHOUT nulling them
+first, so the request appears in the history and the button it came from becomes "queued as #CODE"
+rather than offering the same service twice. The three `goTo` actions (sell, ship, manage the
+listing) still leave, because each is a different screen. Asserted in
+`tests/ux/customer-screens.test.tsx`. Deslab and donation are irreversible: a `ConfirmationModal`, then the two-step
 confirmation-token call. Grading, inspection, consignment and
 custom requests open inline forms (`GradingForm.tsx`, `InspectionForm.tsx`, `ConsignmentForm.tsx`,
 `CustomRequestForm.tsx`) that repeat the server's rules so problems show before submit. The Active view
@@ -9884,22 +9915,45 @@ used to be one unguarded click. On a phone the comparison table shows **one tier
 by a control above it that starts on the collector's own tier: four columns in 390 px rendered as a
 single legible column and three slivers.
 
-**Marketplace** (`areas/customer/marketplace/MarketplacePage.tsx:51`, §7). Tabs `browse`, `house`,
-`sell`, `listings`, `offers`, `trade`, `escrow`, `store`. Browse filters (`q`, `type`, `condition`,
+**Marketplace** (`areas/customer/marketplace/MarketplacePage.tsx:49`, §7). Tabs `browse`, `sell`,
+`listings`, `offers`, `trade`, `store` (`:40`). Browse filters (`q`, `type`, `condition`,
 `min`, `max`, `sort`) live in the URL via `setParams`; the query is built with dollars converted to
-cents (`MarketplacePage.tsx:145-157`) and fetched from `GET /marketplace/listings` debounced 250 ms.
+cents (`MarketplacePage.tsx:141-153`) and fetched from `GET /marketplace/listings` debounced 250 ms.
 Buy goes through a `ConfirmationModal` then `POST /marketplace/listings/:id/purchase`. Other panels:
-`HouseStorePanel.tsx` (Bault's own stock, idempotency-keyed purchase), `SellerPanels.tsx` (my listings
-with reprice/delist; offers whose controls key off the API's `yourTurn` — **when it is your own price,
-Accept is not rendered at all**, only Change and Withdraw, `DESIGN.md` §12; swaps approve/reject),
-`ProposeTradePanel.tsx` (swap with a collector found by username, or a gift via a confirmation token),
-`EscrowTab.tsx` (raise, agree, fund, release, return, and **cancel** while a deal is still
-`proposed` or `agreed` — the action shown is gated by status and side, and both parties are named by
-username), and `StorefrontPanel.tsx`, which reads `?seller=` so a storefront link opens the seller it
-names, shows the full link with a copy button, and carries the same Buy and Make-offer controls as
-the shelf. A listing of your own is marked "Your listing" with a link to manage it, rather than
-offering you a Buy button that answers `403 self_dealing_forbidden` after you confirm, and a single
-listing has a link of its own (`?listing=`).
+`SellerPanels.tsx` (my listings with reprice/delist; offers whose controls key off the API's
+`yourTurn` — **when it is your own price, Accept is not rendered at all**, only Change and Withdraw,
+`DESIGN.md` §12; swaps approve/reject), `ProposeTradePanel.tsx` (swap with a collector found by
+username, or a gift via a confirmation token), and `StorefrontPanel.tsx`, which reads `?seller=` so a
+storefront link opens the seller it names, shows the full link with a copy button, and carries the
+same Buy and Make-offer controls as the shelf. A listing of your own is marked "Your listing" with a
+link to manage it, rather than offering you a Buy button that answers `403 self_dealing_forbidden`
+after you confirm, and a single listing has a link of its own (`?listing=`).
+
+**The three ways a collectible changes hands are three destinations, not one.** `house` and `escrow`
+were the second and seventh tab of the marketplace, and neither belonged there: Browse is other
+collectors' shelves, the Bault store is stock the house sells itself, and an escrow deal was agreed
+somewhere else and has no listing anywhere. Both are rail sections of their own now
+(`App.tsx:105-106`), ordered by who is selling — another collector, Bault, a stranger — and the old
+tab URLs redirect (`routing.ts:70-73`, above).
+
+**Bault store** (`areas/customer/store/BaultStorePage.tsx:49`, §7.7). `GET /marketplace/house/listings`
+on a shelf of the house's own products, each with its stock count; Buy opens a `ConfirmationModal`
+that says what is different about buying here — the copy is booked into the vault at payment with a
+serial of its own, and the warehouse labels and shelves it afterwards — then
+`POST /marketplace/house/listings/:id/purchase` with an `Idempotency-Key` minted **once per
+confirmation dialog** (`:88-92`, key from `:161`), so a double-click is one purchase while a second
+copy is a second one. The receipt names the serial the new card was given. The page carries its own
+banners now that it is not a tab of a page that had them, and its subtitle — not a repeated heading —
+sits under the page title.
+
+**Escrow** (`areas/customer/escrow/EscrowPage.tsx:44`, §7.10). Raise, agree, fund, release, return, and
+**cancel** while a deal is still `proposed` or `agreed` — the action shown is gated by status and
+side, and both parties are named by username. `GET /escrow/mine`, `/escrow/terms` and `/escrow/held`
+load together; the deal drawer (`DealDrawer` `:300`) renders the inspection finding **before** the
+release controls and loudly when it is negative, because a buyer releasing without having read "this
+is a PSA 8, not a PSA 10" is the failure the whole feature exists to prevent. Which side of a row the
+reader is on is answered by their own id, read with `loadProfile` (`:57-62`) rather than handed down
+from the marketplace — a deal stores ids, so a username cannot answer it.
 
 **Shipping & Services** (`areas/customer/shipping/ShippingServicesPage.tsx:107`, §9). Tabs
 `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `history`, `not-accepted`
@@ -10290,15 +10344,15 @@ what is still true at HEAD, re-verified line by line.
 | `apps/web/Dockerfile` | Build → nginx image | see §13 |
 | `apps/web/nginx.conf` | Production static + `/api/` proxy, CSP | see §13 |
 | `apps/web/src/main.tsx` | Entry | `bault.railPinned` cleanup :17-21; provider/boundary order :38-48 |
-| `apps/web/src/App.tsx` | Shell, boot state, role-scoped sections | `SECTIONS` :86; `TAB_PREFIX` :145; `BootState` :168; `TOKEN_ROUTES` :184; `AUTH_ROUTES` :204; `probeSession` :227; landing short-circuit :296; `Workspace` :378; suspended :401; `allowed` :403; section resolution :415-418; legacy redirect :426-436; `signOut` :466; sections render :566-581 |
-| `apps/web/src/index.css` | Design system | tokens :40-385; legacy vocabulary :285-377; density :394-413; dark :429-543; `.serial` :699; `.amount` :749; `.ltr-run` :816; shell :879; rail :933; landing :4025-4913; landing motion :4109-4308; reduced motion :6414; `.proportion` :6748; `.steps` :6998; `.offer` :7092 |
+| `apps/web/src/App.tsx` | Shell, boot state, role-scoped sections | `SECTIONS` :90 (`bault-store`, `escrow` :105-106); `TAB_PREFIX` :157; `BootState` :180; `TOKEN_ROUTES` :196; `AUTH_ROUTES` :216; `probeSession` :239; landing short-circuit :308; `Workspace` :390; suspended :414; `allowed` :416; section resolution :427-431; legacy redirect :439-449; `signOut` :487; sections render :588-603 |
+| `apps/web/src/index.css` | Design system | tokens :40-385; legacy vocabulary :285-377; density :394-413; dark :429-543; `.serial` :699; `.amount` :749; `.ltr-run` :816; shell :879; rail :933; display case :3651-3872 (its own reduced-motion block :3853); `.view-controls` :5761; landing :4025-4913; landing motion :4109-4308; global reduced motion :6696; `.proportion` :6748; `.steps` :6998; `.offer` :7092 |
 | `apps/web/src/fonts.css` | Generated `@font-face` (19) | by `scripts/fetch-fonts.mjs` |
 | `apps/web/src/shared/api.ts` | Fetch client, `ApiError` | `BASE` :12; `ApiError` :28; `apiErrorKey` :62; `kindForStatus` :80; `request` :91; `api` :123 |
 | `apps/web/src/shared/session.ts` | `/me/profile` probe | `inFlight` :47; `loadProfile` :49; `resetProfileRequest` :66 |
-| `apps/web/src/shared/routing.ts` | Hash router | `LAST_SECTION_KEY` :24; `LEGACY_ROUTES` :36; `LEGACY_TABS` :52; `legacyRedirect` :78; `parse` :88; `useRoute` :123; `navigate` :133; `useNavigation` :174; `setParams` :206 |
-| `apps/web/src/shared/i18n.tsx` | Catalogue, provider | `DEFAULT_LOCALE` :21; `LOCALES` :22; `he` :29; `MessageKey` :2725; `en` :2727; `hasMessage` :5444; `MESSAGE_KEYS` :5457; `t` :5464; `I18nProvider` :5490 |
+| `apps/web/src/shared/routing.ts` | Hash router | `LAST_SECTION_KEY` :24; `LEGACY_ROUTES` :36; `TabTarget` :54; `LEGACY_TABS` :56; `legacyRedirect` :95; `parse` :106; `useRoute` :141; `navigate` :151; `useNavigation` :192; `setParams` :224 |
+| `apps/web/src/shared/i18n.tsx` | Catalogue, provider | `DEFAULT_LOCALE` :21; `LOCALES` :22; `he` :29; `MessageKey` :2727; `en` :2729; `hasMessage` :5448; `MESSAGE_KEYS` :5461; `t` :5468; `I18nProvider` :5494 |
 | `apps/web/src/shared/theme.tsx` | Light/dark/system | `ThemeProvider` :52; `data-theme` stamping :65-74; `cycle` :77 |
-| `apps/web/src/shared/hooks.ts` | Media query, notification feed, tickets waiting on the reader | `useMediaQuery` :5; `usePrefersReducedMotion` :22 (unused); `useNotificationFeed` :52; `useAwaitingReply` :97-114 |
+| `apps/web/src/shared/hooks.ts` | Media query, card tilt, notification feed, tickets waiting on the reader | `useMediaQuery` :5; `usePrefersReducedMotion` :22; `useCardTilt` :41 (returns nothing under reduced motion or a touch pointer); `useNotificationFeed` :101; `useAwaitingReply` :146 |
 | `apps/web/src/shared/useVaultItems.ts` | Stored-item picker source | `useVaultItems` :26 |
 | `apps/web/src/shared/money.ts` | USD and date formatting | `formatUsd` :20; `dollarsToCents` :40; `formatDateTime` :54 |
 | `apps/web/src/shared/names.ts` | Username/name rules | `PASSWORD_MIN` :28; `isValidUsername` :34; `fullName` :76; `initialsFrom` :85 |
@@ -10319,7 +10373,7 @@ what is still true at HEAD, re-verified line by line.
 | `apps/web/src/shared/walletRequests.ts` | Cash-in/out client rules | `WALLET_REQUEST_LIMITS` :56; `validateDraft` :165; `findOpenDuplicate` :229 |
 | `apps/web/src/shared/barcode128.ts` | Code 128-B SVG encoder | `barcodeSvg` :102; `barcodeDataUrl` :151 |
 | `apps/web/src/shared/Barcode.tsx` | Barcode render + print | `Barcode` :23; `printBarcodes` :74; `BarcodeLabel` :211 |
-| `apps/web/src/shared/CardPhoto.tsx` | Static card photos | `cardPhotoUrl` :22; `CardPhotoThumb` :73 |
+| `apps/web/src/shared/CardPhoto.tsx` | Static card photos | `cardPhotoUrl` :22; `CardPhoto` :50 (the photograph alone, for the display case); `CardPhotoThumb` :98 (a button — opens the lightbox) |
 | `apps/web/src/shared/ui/primitives.tsx` | Component kit | `Button` :25; `Field` :90; `MoneyField` :182; `StatusBadge` :309; `ErrorState` :354; `ContextTabs` :476 |
 | `apps/web/src/shared/ui/DetailDrawer.tsx` | Drawer, confirmation modal | overlay stack :23; `DetailDrawer` :84; `ConfirmationModal` :188 |
 | `apps/web/src/shared/ui/ErrorBoundary.tsx` | Root render-error fallback | `ErrorBoundary` :34; `componentDidCatch` :41 |
@@ -10338,7 +10392,7 @@ what is still true at HEAD, re-verified line by line.
 | `apps/web/src/areas/customer/auth/ResetPasswordPage.tsx` | Set new password | `ready` :32; `/auth/password/reset` :44 |
 | `apps/web/src/areas/customer/auth/VerifyEmailPage.tsx` | Email verification | `/auth/verify-email` :36 |
 | `apps/web/src/areas/customer/auth/demoUsers.ts` | Dev-only demo line | `DEMO_USERS` :22 |
-| `apps/web/src/areas/customer/vault/VaultPage.tsx` | Vault register, item sheet | `SCOPES` :199; `CARD_ACTIONS` :267; `VaultPage` :465; `CardTile` :738; `Watch` :886; `ItemDrawer` :1098 |
+| `apps/web/src/areas/customer/vault/VaultPage.tsx` | Vault register, display case, item sheet | `SCOPES` :202; `VIEWS` :228; `CARD_ACTIONS` :301; `VaultPage` :520; `CardTile` :839; `CaseTile` :972; `Watch` :1082; `ItemDrawer` :1294; `reloadCard` :1386 |
 | `apps/web/src/areas/customer/vault/GradingForm.tsx` | Grading request | `GradingForm` :22 |
 | `apps/web/src/areas/customer/vault/InspectionForm.tsx` | Inspection request | `InspectionForm` :15 |
 | `apps/web/src/areas/customer/vault/ConsignmentForm.tsx` | Consignment request | `ConsignmentForm` :21 |
@@ -10350,13 +10404,13 @@ what is still true at HEAD, re-verified line by line.
 | `apps/web/src/areas/customer/finance/MoneyPanels.tsx` | Top-up, cash-out quote | `TopUpPanel` :46 (starts on a route that is available, :66-72); checkout :90-99; `CashOutQuotePanel` :221 |
 | `apps/web/src/areas/customer/finance/CardPaymentsPanel.tsx` | What has already been paid by card, with the provider's reference | `CardPaymentsPanel` :52 |
 | `apps/web/src/areas/customer/membership/MembershipPage.tsx` | Tiers and subscription | `MembershipPage` :41 |
-| `apps/web/src/areas/customer/marketplace/MarketplacePage.tsx` | Marketplace | `TABS` :33; `MarketplacePage` :42; query :145-157 |
+| `apps/web/src/areas/customer/marketplace/MarketplacePage.tsx` | Marketplace | `TABS` :40; `MarketplacePage` :49; query :141-153 |
 | `apps/web/src/areas/customer/marketplace/ListingActions.tsx` | Buy / Make offer, or "Your listing" and a way to manage it | `ListingActions` :29 |
-| `apps/web/src/areas/customer/marketplace/HouseStorePanel.tsx` | Bault's store | purchase with `Idempotency-Key` :72-76 |
 | `apps/web/src/areas/customer/marketplace/SellerPanels.tsx` | Listings, offers, swaps | `MyListingsPanel` :38; `OffersPanel` :284; `OfferActions` :461; `SwapsPanel` :583 |
 | `apps/web/src/areas/customer/marketplace/ProposeTradePanel.tsx` | Swap / gift | `ProposeTradePanel` :39 |
-| `apps/web/src/areas/customer/marketplace/EscrowTab.tsx` | Escrow deals | `EscrowTab` :43; `DealDrawer` :279 |
 | `apps/web/src/areas/customer/marketplace/StorefrontPanel.tsx` | Public storefronts | `StorefrontPanel` :27 |
+| `apps/web/src/areas/customer/store/BaultStorePage.tsx` | Bault's store, a rail section of its own | `BaultStorePage` :49; purchase with `Idempotency-Key` :88-92 |
+| `apps/web/src/areas/customer/escrow/EscrowPage.tsx` | Escrow deals, a rail section of its own | `EscrowPage` :44; own id :57-62; `DealDrawer` :300 |
 | `apps/web/src/areas/customer/shipping/ShippingServicesPage.tsx` | Shipping & Services | `TABS` :63; page :134; `TrackingTab` :482; `ShipmentDrawer` :686; `RequestTable` :1324 |
 | `apps/web/src/areas/customer/shipping/ShipmentComposer.tsx` | Quote and create a shipment | `signatureForced` :149; load :153-168; `body` :170; debounced quote :191-213; `commit` :224-286 |
 | `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx` | Show pickup, white glove | `ShowPickupPanel` :25; `WhiteGlovePanel` :160; `WhiteGloveQuotes` :379 |
@@ -11917,11 +11971,10 @@ explanation.
 - `apps/web/src/areas/customer/help/helpSearch.ts` — [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/help/legalContent.ts` — [§10](#s10), [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/help/policyText.ts` — [§12](#s12)
+- `apps/web/src/areas/customer/escrow/EscrowPage.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/customer/inbound/InboundPage.tsx` — [§9](#s9), [§12](#s12)
 - `apps/web/src/areas/customer/marketing/DemoSlab.tsx` — [§12](#s12), [App. B](#appendix-b)
 - `apps/web/src/areas/customer/marketing/LandingPage.tsx` — [§12](#s12), [App. B](#appendix-b)
-- `apps/web/src/areas/customer/marketplace/EscrowTab.tsx` — [§12](#s12)
-- `apps/web/src/areas/customer/marketplace/HouseStorePanel.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/ListingActions.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/MarketplacePage.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/marketplace/ProposeTradePanel.tsx` — [§12](#s12)
@@ -11934,6 +11987,7 @@ explanation.
 - `apps/web/src/areas/customer/shipping/SharedParcelsTab.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/shipping/ShipmentComposer.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/shipping/ShippingServicesPage.tsx` — [§12](#s12)
+- `apps/web/src/areas/customer/store/BaultStorePage.tsx` — [§7](#s7), [§12](#s12)
 - `apps/web/src/areas/customer/support/SupportPage.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/vault/ConsignmentForm.tsx` — [§12](#s12)
 - `apps/web/src/areas/customer/vault/CustomRequestForm.tsx` — [§12](#s12)

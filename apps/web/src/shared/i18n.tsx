@@ -227,7 +227,6 @@ const he = {
   'market.tab.offers': 'הצעות',
   'market.tab.trade': 'החלפות',
   'market.tab.store': 'החנות שלי',
-  'market.tab.house': 'החנות של Bault',
   'admin.section.house': 'החנות של Bault',
   'house.title': 'החנות של Bault',
   'house.subtitle': 'פריטים ש-Bault עצמה מוכרת. כל עותק שנקנה מקבל מספר סידורי וברקוד משלו ונכנס לכספת שלכם.',
@@ -641,6 +640,8 @@ const he = {
   'notifications.event.parcel_disposed': 'חבילה בוטלה',
   'tab.wallet': 'ארנק',
   'tab.marketplace': 'שוק',
+  'tab.baultStore': 'החנות של Bault',
+  'tab.escrow': 'עסקה מוגנת',
   'tab.shippingServices': 'משלוחים ושירותים',
   'tab.faqLegal': 'שאלות ותנאים',
   'tab.notifications': 'התראות',
@@ -1914,7 +1915,6 @@ const he = {
   'prices.trigger.monthly': 'חודשי',
 
   // ---- Escrow, and fulfilment that is a person ----
-  'market.tab.escrow': 'עסקה מוגנת',
   'ss.tab.in-person': 'מסירה אישית',
 
   'esc.title': 'עסקה מוגנת',
@@ -2176,6 +2176,9 @@ const he = {
   'vault.scope.history': 'היסטוריה',
   'vault.scopeWithCount': '{label} ({count})',
   'vault.stateGroup': 'מצב הכרטיסים',
+  'vault.viewGroup': 'תצוגה',
+  'vault.view.register': 'רשימה',
+  'vault.view.case': 'ויטרינה',
   'vault.openCard': 'פתח את {name}',
   'vault.empty.active': 'אין עדיין פריטים בכספת',
   'vault.empty.activeText': 'פריטי האספנות שלכם יופיעו כאן לאחר קליטתם במחסן.',
@@ -2927,7 +2930,6 @@ const en: Record<MessageKey, string> = {
   'market.tab.offers': 'Offers',
   'market.tab.trade': 'Trade',
   'market.tab.store': 'Storefront',
-  'market.tab.house': 'Bault store',
   'admin.section.house': 'Bault store',
   'house.title': 'The Bault store',
   'house.subtitle': 'Items Bault sells itself. Every copy you buy gets its own serial and barcode and goes straight into your vault.',
@@ -3341,6 +3343,8 @@ const en: Record<MessageKey, string> = {
   'notifications.event.parcel_disposed': 'Parcel closed',
   'tab.wallet': 'Wallet',
   'tab.marketplace': 'Marketplace',
+  'tab.baultStore': 'Bault store',
+  'tab.escrow': 'Escrow',
   'tab.shippingServices': 'Shipping & Services',
   'tab.faqLegal': 'FAQ & Legal',
   'tab.notifications': 'Notifications',
@@ -4610,10 +4614,9 @@ const en: Record<MessageKey, string> = {
   'prices.trigger.monthly': 'monthly',
 
   // ---- Escrow, and fulfilment that is a person ----
-  'market.tab.escrow': 'Escrow',
   'ss.tab.in-person': 'In person',
 
-  'esc.title': 'Escrow — a private deal with us in the middle',
+  'esc.title': 'Escrow',
   'esc.subtitle': 'Two people agreed a sale somewhere else, and neither wants to go first.',
   'esc.how': 'We hold the money, the collectible comes to us, we look at it and tell you what we found — and only when both sides confirm does the money go to the seller and the collectible to the buyer.',
   'esc.terms': '{percent}% of the value, minimum {min}. Deals start at {floor}.',
@@ -4872,6 +4875,9 @@ const en: Record<MessageKey, string> = {
   'vault.scope.history': 'History',
   'vault.scopeWithCount': '{label} ({count})',
   'vault.stateGroup': 'Status',
+  'vault.viewGroup': 'View',
+  'vault.view.register': 'Register',
+  'vault.view.case': 'Display case',
   'vault.openCard': 'Open {name}',
   'vault.empty.active': 'Nothing in your vault yet',
   'vault.empty.activeText': 'Your collectibles appear here once the warehouse books them in.',

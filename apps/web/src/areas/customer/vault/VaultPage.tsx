@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
-import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { CardPhoto, CardPhotoThumb } from '../../../shared/CardPhoto';
+import { useCardTilt } from '../../../shared/hooks';
 import { BarcodeLabel } from '../../../shared/Barcode';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { itemClassLabel } from '../../../shared/itemClasses';
@@ -25,8 +26,10 @@ import {
   IconAsk,
   IconArchive,
   IconBox,
+  IconCase,
   IconChart,
   IconClock,
+  IconRows,
   IconReceipt,
   IconSearch,
   IconServices,
@@ -203,6 +206,31 @@ const SCOPE_ICON: Record<Scope, ReactNode> = {
   active: <IconVault />,
   hold: <IconClock />,
   history: <IconArchive />,
+};
+
+/**
+ * Two ways to look at one collection.
+ *
+ * The REGISTER is the working shape: a 56px stamp and four columns you can run
+ * your eye down — state, where it is, what it is costing — which is what somebody
+ * managing a vault needs and what this screen has always been.
+ *
+ * The DISPLAY CASE is the other thing a collection is for. Nobody frames a
+ * spreadsheet: these cards were bought to be looked at, and a register answers
+ * "where is it and what does it cost" while answering nothing about the object.
+ * Same data, same click, same sheet — the photograph is simply allowed to be the
+ * size of the thing itself.
+ *
+ * It is a VIEW, not a scope: `?view=case` on top of whichever scope is open, so
+ * the case works on Active, Hold and History alike and a linked vault arrives
+ * looking the way the person who sent it meant.
+ */
+const VIEWS = ['register', 'case'] as const;
+type View = (typeof VIEWS)[number];
+
+const VIEW_ICON: Record<View, ReactNode> = {
+  register: <IconRows />,
+  case: <IconCase />,
 };
 
 /* ============================================================
@@ -492,11 +520,15 @@ const CARD_ACTIONS: readonly CardAction[] = [
 export function VaultPage() {
   const { t, locale } = useI18n();
   const route = useRoute();
-  const { openRecord, closeRecord, goTab } = useNavigation(route);
+  const { openRecord, closeRecord, goTab, setParams } = useNavigation(route);
 
   const scope: Scope = (SCOPES as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as Scope)
     : 'active';
+
+  const view: View = (VIEWS as readonly string[]).includes(route.params.view ?? '')
+    ? (route.params.view as View)
+    : 'register';
 
   const [items, setItems] = useState<VaultItem[] | null>(null);
   const [counts, setCounts] = useState<VaultCounts | null>(null);
@@ -625,6 +657,33 @@ export function VaultPage() {
           })}
         </div>
 
+        {/* Register or display case. Beside the scope control because it is the
+            same kind of decision — which view of one collection — and small,
+            icon-led and never louder than the scope it sits next to. */}
+        <div className="view-controls" role="group" aria-label={t('vault.viewGroup')}>
+          {VIEWS.map((v) => {
+            const label = t(`vault.view.${v}` as MessageKey);
+            return (
+              <button
+                key={v}
+                type="button"
+                className={`view-control${view === v ? ' is-on' : ''}`}
+                aria-pressed={view === v}
+                title={label}
+                aria-label={label}
+                /* `register` is the default, so it clears the parameter rather
+                   than writing `?view=register` — an unfiltered vault has a
+                   clean URL, the same rule the marketplace filters follow. */
+                onClick={() => setParams({ view: v === 'register' ? null : v })}
+              >
+                <span className="state-icon" aria-hidden="true">
+                  {VIEW_ICON[v]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <span className="spacer" />
 
         {/* The count of what is on screen, and the one bulk action that acts on
@@ -708,6 +767,21 @@ export function VaultPage() {
               ) : undefined
             }
           />
+        ) : view === 'case' ? (
+          <ul className="case-grid">
+            {items.map((item, i) => (
+              <CaseTile
+                key={item.id}
+                item={item}
+                t={t}
+                /* The tiles arrive in sequence rather than all at once. Capped,
+                   because a vault of two hundred cards must not make the last
+                   one wait four seconds to exist. */
+                index={Math.min(i, 11)}
+                onOpen={() => openRecord('item', item.id)}
+              />
+            ))}
+          </ul>
         ) : (
           <ul className="card-grid card-grid--register">
             <RegisterHead t={t} scope={scope} />
@@ -877,6 +951,101 @@ function CardTile({
         alone, which is a true and useful sentence rather than a gap.
       */}
       {watch && !historical ? <Watch row={watch} t={t} /> : <div className="watch" />}
+    </li>
+  );
+}
+
+/**
+ * One card in the display case.
+ *
+ * Everything the register row says is still here, but ranked the other way up:
+ * the photograph is the tile and the text is a caption under it. Only what
+ * identifies the object and what would change how you feel about it — the serial,
+ * the name, the grade, and a state badge ONLY when the state is not the ordinary
+ * one — because a wall of forty cards each shouting "Stored" is a wall of noise,
+ * and the point of this view is the cards.
+ *
+ * The whole tile is one button, so there is nothing to hunt for: `CardPhoto`
+ * rather than `CardPhotoThumb` precisely because the latter is itself a button
+ * and would swallow the click into a lightbox.
+ */
+function CaseTile({
+  item,
+  t,
+  index,
+  onOpen,
+}: {
+  item: VaultItem;
+  t: TranslateFn;
+  /** Position in the wall, so the tiles arrive in sequence rather than at once. */
+  index: number;
+  onOpen: () => void;
+}) {
+  const tilt = useCardTilt();
+  const meta = STATE_META[item.lifecycleState];
+  const historical = Boolean(item.historical);
+  const frozen = Boolean(item.holdFlag) && !historical;
+  const name = displayName(item.description) || itemClassLabel(t, item.typeClass);
+  const ordinary = !historical && !frozen && item.lifecycleState === 'stored';
+
+  return (
+    <li
+      className={[
+        'case-card',
+        historical ? 'case-card--historical' : '',
+        frozen ? 'case-card--frozen' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={{ '--i': index } as CSSProperties}
+    >
+      {/* The accessible name is the same short sentence the register row gives —
+          "Open <name>". Without it the name is every string in the tile run
+          together, so a screen reader announced the catalogue line twice and the
+          grade before the reader knew what the control did. */}
+      <button
+        type="button"
+        className="case-hit"
+        aria-label={t('vault.openCard', { name })}
+        onClick={onOpen}
+        {...tilt}
+      >
+        <span className="case-stage">
+          <CardPhoto serialNumber={item.photoRef ?? item.serialNumber} title={name} />
+          {/* The light that moves across the sleeve. Decorative, pointer-driven,
+              and absent entirely under reduced motion — the hook returns no
+              handlers, so `--shine-o` never leaves 0. */}
+          <span className="case-shine" aria-hidden="true" />
+          {historical && (
+            <span className="case-mark" aria-hidden="true">
+              <IconArchive />
+            </span>
+          )}
+        </span>
+
+        <span className="case-caption">
+          <span className="case-serial">
+            <Serial value={item.serialNumber} lead />
+          </span>
+          <span className="case-name" title={name}>
+            {name}
+          </span>
+          <span className="case-meta">
+            <span className="case-grade">
+              {t('vault.condition', { grade: item.conditionGrade ?? '—' })}
+            </span>
+            {historical ? (
+              <StatusBadge tone="neutral">{stateLabel(t, item.lifecycleState)}</StatusBadge>
+            ) : frozen ? (
+              <span className="pill pill--frozen">{t('vault.frozen.label')}</span>
+            ) : ordinary ? null : (
+              <StatusBadge tone={meta?.tone ?? 'neutral'}>
+                {stateLabel(t, item.lifecycleState)}
+              </StatusBadge>
+            )}
+          </span>
+        </span>
+      </button>
     </li>
   );
 }
@@ -1152,6 +1321,17 @@ function ItemDrawer({
     node?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
   }, []);
   const [busy, setBusy] = useState(false);
+  /**
+   * What the last action did, said INSIDE the sheet.
+   *
+   * Ordering a service used to shut the sheet: one tap on "Photography" and the
+   * card you were reading was gone, its confirmation on a banner behind it, and
+   * anything else you meant to do to the same card — grade it, ask about it,
+   * read the timeline that had just changed — started again from finding the row
+   * and opening it. The sheet stays open now, so this is where the confirmation
+   * has to be: beside the button that was pressed, not behind the sheet.
+   */
+  const [status, setStatus] = useState<string | null>(null);
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
 
@@ -1191,6 +1371,30 @@ function ItemDrawer({
         setOpenRequests([]);
       }
     })();
+  }, [item.id]);
+
+  /**
+   * Re-read the card after an action, WITHOUT blanking what is on screen.
+   *
+   * The effects above null their state first, which is right when the sheet
+   * opens on a different card and wrong when the same card has just changed:
+   * the reader would watch the photographs and the timeline they are looking at
+   * flash away and come back. This only overwrites, so the request that was just
+   * raised appears in the timeline and on the button — which becomes "queued as
+   * #CODE" rather than offering the same service a second time.
+   */
+  const reloadCard = useCallback(async () => {
+    try {
+      const [card, timeline] = await Promise.all([
+        api.get<{ images: ItemMedia[]; openRequests?: OpenServiceRequest[] }>(`/vault/items/${item.id}`),
+        api.get<TimelineEvent[]>(`/vault/items/${item.id}/timeline`),
+      ]);
+      setMedia(card.images ?? []);
+      setOpenRequests(card.openRequests ?? []);
+      setEvents(timeline);
+    } catch {
+      /* the sheet keeps what it already has rather than emptying itself */
+    }
   }, [item.id]);
 
   // Storage is loaded separately and allowed to fail quietly: it is context, and
@@ -1233,8 +1437,12 @@ function ItemDrawer({
   function renderForm(kind: FormKind) {
     const done = (message: string) => {
       setFormOpen(null);
+      setError(null);
+      setStatus(message);
+      // The list behind the sheet still reloads — the card's commitment and its
+      // row have changed — but the sheet it was opened from stays put.
       onActed(message);
-      onClose();
+      void reloadCard();
     };
     const cancel = () => setFormOpen(null);
     switch (kind) {
@@ -1254,9 +1462,11 @@ function ItemDrawer({
     try {
       await action.run(item);
       setError(null);
+      setStatus(t(action.ok));
       onActed(t(action.ok));
-      onClose();
+      await reloadCard();
     } catch (e) {
+      setStatus(null);
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -1433,6 +1643,9 @@ function ItemDrawer({
         {actions.length > 0 && (
           <>
             <h3 className="drawer-heading">{t('vault.actions.title')}</h3>
+            {/* Beside the buttons, not at the top of a sheet the reader has
+                already scrolled past. */}
+            {status && <SuccessNote>{status}</SuccessNote>}
             <ul className="drawer-actions">
               {actions.map((action) => {
                 // Grading is priced per tier, so it shows the cheapest one — it

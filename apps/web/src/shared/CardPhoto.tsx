@@ -39,6 +39,31 @@ function useCardPhotoSource(serialNumber: string) {
 }
 
 /**
+ * The photograph alone: no button, no lightbox, the same extension walk.
+ *
+ * `CardPhotoThumb` is a control — it opens the lightbox — which is right on a
+ * register row where the photograph is a 56px stamp beside four columns of text.
+ * It is wrong in the display case, where the tile IS the control and the
+ * photograph fills it: a button inside a button is not a thing, and a reader who
+ * clicks a card they want to open should not get a lightbox instead.
+ */
+export function CardPhoto({ serialNumber, title }: { serialNumber: string; title: string }) {
+  const t = useT();
+  const photo = useCardPhotoSource(serialNumber);
+
+  if (photo.exhausted) return <span className="photo-thumb-empty">{t('photo.none')}</span>;
+  return (
+    <img
+      className="photo-thumb-img"
+      src={photo.src}
+      alt={title}
+      loading="lazy"
+      onError={photo.onError}
+    />
+  );
+}
+
+/**
  * Camera button that opens the item's photo in a lightbox. Rendered on every card
  * surface (vault, marketplace, admin table).
  */

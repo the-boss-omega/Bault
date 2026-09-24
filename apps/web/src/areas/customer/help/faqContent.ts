@@ -534,8 +534,8 @@ export const FAQ_ENTRIES: readonly FaqEntry[] = [
     category: 'marketplace',
     question: { en: 'What is the Bault store?', he: 'מהי החנות של Bault?' },
     answer: {
-      en: [p('Items Bault sells itself, at fixed prices, in [[Marketplace > Bault store|#/marketplace/house]]. What you buy is booked into your vault the moment you pay, with its own serial number and no intake fee; you can list or ship it once the warehouse has put it on a shelf.')],
-      he: [p('פריטים ש־Bault מוכרת בעצמה, במחירים קבועים, ב[[שוק > החנות של Bault|#/marketplace/house]]. מה שקניתם נרשם בכספת שלכם ברגע התשלום, עם מספר סידורי משלו וללא עמלת קליטה; אפשר להציע אותו למכירה או לשלוח אותו אחרי שהמחסן הניח אותו על מדף.')],
+      en: [p('Items Bault sells itself, at fixed prices, in [[Bault store|#/bault-store]]. What you buy is booked into your vault the moment you pay, with its own serial number and no intake fee; you can list or ship it once the warehouse has put it on a shelf.')],
+      he: [p('פריטים ש־Bault מוכרת בעצמה, במחירים קבועים, ב[[החנות של Bault|#/bault-store]]. מה שקניתם נרשם בכספת שלכם ברגע התשלום, עם מספר סידורי משלו וללא עמלת קליטה; אפשר להציע אותו למכירה או לשלוח אותו אחרי שהמחסן הניח אותו על מדף.')],
     },
   },
 

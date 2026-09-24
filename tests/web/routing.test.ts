@@ -39,6 +39,31 @@ describe('legacy route redirects', () => {
     });
   });
 
+  it('sends the promoted marketplace tabs to their own sections', () => {
+    /**
+     * The Bault store and escrow left the marketplace's tab strip for the rail.
+     * Neither was a way of browsing other collectors' shelves — the store is
+     * stock the house sells itself, and an escrow deal was agreed somewhere else
+     * and has no listing anywhere — but the FAQ, bookmarks and old notification
+     * links still say `#/marketplace/house`. Falling back to Browse would answer
+     * "where is the Bault store?" with somebody else's shelf.
+     */
+    expect(legacyRedirect(route('marketplace', 'house'))).toEqual({
+      section: 'bault-store',
+      tab: null,
+    });
+    expect(legacyRedirect(route('marketplace', 'escrow'))).toEqual({
+      section: 'escrow',
+      tab: null,
+    });
+  });
+
+  it('leaves the marketplace tabs that stayed behind alone', () => {
+    for (const tab of ['browse', 'sell', 'listings', 'offers', 'trade', 'store']) {
+      expect(legacyRedirect(route('marketplace', tab))).toBeNull();
+    }
+  });
+
   it('leaves the warehouse tabs that still exist alone', () => {
     expect(legacyRedirect(route('warehouse', 'receiving'))).toBeNull();
     expect(legacyRedirect(route('warehouse', 'inventory'))).toBeNull();
@@ -61,6 +86,8 @@ describe('legacy route redirects', () => {
       'vault',
       'wallet',
       'marketplace',
+      'bault-store',
+      'escrow',
       'shipping-services',
       'warehouse',
       'notifications',

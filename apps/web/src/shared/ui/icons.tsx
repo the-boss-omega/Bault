@@ -65,6 +65,27 @@ export function IconMarketplace(p: IconProps) {
   );
 }
 
+/** Bault store: a shopping bag — the shop's own stock, not a neighbour's stall. */
+export function IconStore(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4.6 7.5h14.8l-1.1 11.4a1.6 1.6 0 0 1-1.6 1.45H7.3a1.6 1.6 0 0 1-1.6-1.45z" />
+      <path d="M8.75 10.25V6.9a3.25 3.25 0 0 1 6.5 0v3.35" />
+    </Svg>
+  );
+}
+
+/** Escrow: a closed padlock — money and card held while both sides commit. */
+export function IconEscrow(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="4.25" y="10" width="15.5" height="10.25" rx="2.5" />
+      <path d="M8 10V7.4a4 4 0 0 1 8 0V10" />
+      <path d="M12 13.75v2.75" />
+    </Svg>
+  );
+}
+
 /** Services: a service package / cube. */
 export function IconServices(p: IconProps) {
   return (
@@ -480,6 +501,29 @@ export function IconUsers(p: IconProps) {
       <circle cx="9.25" cy="8" r="3.5" />
       <path d="M2.75 19.5a6.5 6.5 0 0 1 13 0" />
       <path d="M16 4.9a3.5 3.5 0 0 1 0 6.2M17.5 14.1a6.5 6.5 0 0 1 3.75 5.4" />
+    </Svg>
+  );
+}
+
+/** The register: rows, each with a stamp at its start edge. */
+export function IconRows(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4.75" width="4" height="4" rx="1" />
+      <rect x="3" y="15.25" width="4" height="4" rx="1" />
+      <path d="M10 6.75h11M10 17.25h11M10 12h11M3 12h4" />
+    </Svg>
+  );
+}
+
+/** The display case: the collection as a wall of cards. */
+export function IconCase(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.25" y="3.25" width="7" height="8.5" rx="1.4" />
+      <rect x="13.75" y="3.25" width="7" height="8.5" rx="1.4" />
+      <rect x="3.25" y="14.25" width="7" height="6.5" rx="1.4" />
+      <rect x="13.75" y="14.25" width="7" height="6.5" rx="1.4" />
     </Svg>
   );
 }

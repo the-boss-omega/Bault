@@ -188,4 +188,92 @@ describe('the vault', () => {
     renderIn(<VaultPage />);
     expect(await screen.findByText(/could not reach the vault/i)).toBeInTheDocument();
   });
+
+  /**
+   * The display case is a VIEW of the vault, not a different vault.
+   *
+   * The register is the working shape; the case is the one for looking at the
+   * objects. Both render the same items, from the same request, with the same
+   * click — so the thing worth pinning down is that the switch is in the URL
+   * (a vault someone links to arrives looking the way they meant), that the
+   * default stays the register, and that the case still shows what identifies
+   * each card rather than becoming a wall of anonymous pictures.
+   */
+  it('shows the collection as a wall of cards when the case view is asked for', async () => {
+    get.mockImplementation((path: string) =>
+      Promise.resolve(path.startsWith('/vault/items') ? [ITEM] : { stored: 1 }),
+    );
+    window.location.hash = '#/vault/active?view=case';
+    renderIn(<VaultPage />);
+
+    // The tile is one control, named the same way a register row is named.
+    const tile = await screen.findByRole('button', { name: /^Open .*Rayquaza ex/ });
+    // The serial still identifies it, and the register's column header is gone —
+    // this is the case, not the register with bigger pictures.
+    expect(within(tile).getByText(/SN-DR97-0001/)).toBeInTheDocument();
+    expect(screen.queryByText('Cost so far')).not.toBeInTheDocument();
+  });
+
+  it('defaults to the register, and puts the case in the URL rather than in state', async () => {
+    get.mockImplementation((path: string) =>
+      Promise.resolve(path.startsWith('/vault/items') ? [ITEM] : { stored: 1 }),
+    );
+    window.location.hash = '#/vault/active';
+    renderIn(<VaultPage />);
+
+    // The register is what an unqualified vault renders.
+    expect(await screen.findByText('Cost so far')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Display case' }));
+    await waitFor(() => expect(window.location.hash).toContain('view=case'));
+    // And switching back clears the parameter rather than writing the default
+    // into every vault URL the collector copies.
+    await userEvent.click(screen.getByRole('button', { name: 'Register' }));
+    await waitFor(() => expect(window.location.hash).not.toContain('view='));
+  });
+
+  /**
+   * Ordering a service must not throw the reader out of the card.
+   *
+   * It used to: one tap on a service closed the sheet, put the confirmation on a
+   * banner behind it, and anybody who wanted to do a second thing to the same
+   * card — order another service, ask a question about it, read the timeline the
+   * request had just changed — had to find the row and open it again. The sheet
+   * stays open, says what happened beside the button that was pressed, and
+   * re-reads the card so the service now shows as queued.
+   */
+  it('keeps the card open after a service is ordered, and says so in the sheet', async () => {
+    let requested = false;
+    get.mockImplementation((path: string) => {
+      if (path === '/vault/items/i1/timeline') return Promise.resolve([]);
+      if (path === '/vault/items/i1/storage') return Promise.reject(new Error('no storage'));
+      if (path === '/vault/items/i1')
+        return Promise.resolve({
+          images: [],
+          openRequests: requested
+            ? [{ type: 'professional_photography', status: 'requested', code: 'SR-1' }]
+            : [],
+        });
+      if (path.startsWith('/vault/items')) return Promise.resolve([ITEM]);
+      return Promise.resolve([]);
+    });
+    post.mockImplementation(() => {
+      requested = true;
+      return Promise.resolve({});
+    });
+
+    renderIn(<VaultPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Open .*Rayquaza ex/ }));
+
+    const sheet = await screen.findByRole('dialog');
+    await userEvent.click(await within(sheet).findByRole('button', { name: /professional photography/i }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/services/photography', { itemId: 'i1' }));
+    // The sheet is still the thing on screen, and it carries the confirmation.
+    expect(screen.getByRole('dialog')).toBe(sheet);
+    expect(await within(sheet).findByText(/photography request sent/i)).toBeInTheDocument();
+    // And the card was re-read, so the service reads as queued rather than
+    // offering itself a second time.
+    expect(await within(sheet).findByText(/SR-1/)).toBeInTheDocument();
+  });
 });

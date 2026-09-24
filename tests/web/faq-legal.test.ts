@@ -60,8 +60,9 @@ describe('the FAQ is Bault’s own', () => {
     // Every `[[label|href]]` that starts with `#` is an in-app route, and a link
     // to a section the router does not have would send the reader to the vault.
     const sections = new Set([
-      'vault', 'inbound', 'marketplace', 'shipping-services', 'wallet', 'membership',
-      'notifications', 'support', 'faq', 'profile', 'warehouse', 'admin', 'signin', 'signup',
+      'vault', 'inbound', 'marketplace', 'bault-store', 'escrow', 'shipping-services', 'wallet',
+      'membership', 'notifications', 'support', 'faq', 'profile', 'warehouse', 'admin', 'signin',
+      'signup',
     ]);
     const hrefs = [...JSON.stringify(FAQ_ENTRIES).matchAll(/\[\[[^|\]]*\|(#[^\]"]*)\]\]/g)].map((m) => m[1]!);
     expect(hrefs.length).toBeGreaterThan(5);

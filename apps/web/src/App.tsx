@@ -26,6 +26,7 @@ import { ErrorState, IconButton } from './shared/ui/primitives';
 import {
   IconAsk,
   IconBell,
+  IconEscrow,
   IconInbox,
   IconLegal,
   IconManagement,
@@ -33,6 +34,7 @@ import {
   IconMenu,
   IconShield,
   IconShippingServices,
+  IconStore,
   IconVault,
   IconWallet,
   IconWarehouse,
@@ -47,6 +49,8 @@ import { InboundPage } from './areas/customer/inbound/InboundPage';
 import { SupportPage } from './areas/customer/support/SupportPage';
 import { WalletPage } from './areas/customer/finance/WalletPage';
 import { MarketplacePage } from './areas/customer/marketplace/MarketplacePage';
+import { BaultStorePage } from './areas/customer/store/BaultStorePage';
+import { EscrowPage } from './areas/customer/escrow/EscrowPage';
 import { ShippingServicesPage } from './areas/customer/shipping/ShippingServicesPage';
 import { FaqLegalPage } from './areas/customer/help/FaqLegalPage';
 import { NotificationsPage } from './areas/customer/notifications/NotificationsPage';
@@ -94,6 +98,14 @@ const SECTIONS: readonly SectionSpec[] = [
   // thing somebody wants to see next to it is the balance it comes out of.
   { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
+  // The three ways a collectible changes hands, in their own right and in order
+  // of who is selling: another collector (Marketplace), Bault itself (the Bault
+  // store), and somebody neither of us knows, with a deal agreed elsewhere and
+  // no listing anywhere (Escrow). The last two spent their lives as the second
+  // and seventh tab of the marketplace, where nobody looking for "the Bault
+  // store" or "is my money safe" would think to look.
+  { key: 'bault-store', labelKey: 'tab.baultStore', titleKey: 'house.title', icon: <IconStore /> },
+  { key: 'escrow', labelKey: 'tab.escrow', titleKey: 'esc.title', icon: <IconEscrow /> },
   {
     key: 'shipping-services',
     labelKey: 'tab.shippingServices',
@@ -579,6 +591,8 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             {section === 'wallet' && <WalletPage />}
             {section === 'membership' && <MembershipPage />}
             {section === 'marketplace' && <MarketplacePage />}
+            {section === 'bault-store' && <BaultStorePage />}
+            {section === 'escrow' && <EscrowPage />}
             {section === 'shipping-services' && <ShippingServicesPage />}
             {section === 'faq' && <FaqLegalPage />}
             {section === 'notifications' && (

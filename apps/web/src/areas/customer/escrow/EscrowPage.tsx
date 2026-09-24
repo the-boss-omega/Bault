@@ -12,6 +12,7 @@ import {
 } from '../../../shared/escrow';
 import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { loadProfile } from '../../../shared/session';
 import { IconAlert, IconShield, IconUsers } from '../../../shared/ui/icons';
 
 interface Terms {
@@ -40,8 +41,25 @@ interface Detail {
  * read "this is a PSA 8, not a PSA 10" is the one failure this whole feature
  * exists to prevent.
  */
-export function EscrowTab({ meId }: { meId: string | null }) {
+export function EscrowPage() {
   const { t, locale } = useI18n();
+  /**
+   * The reader's own id.
+   *
+   * Escrow is the one screen that has to know which SIDE of a row the reader is
+   * on — a deal names two people and the next step is different for each — and a
+   * username cannot answer that, because a deal stores ids. It is read here
+   * rather than handed down, now that escrow is a destination of its own rather
+   * than a tab inside the marketplace. `loadProfile` collapses concurrent
+   * callers onto one request, so this costs nothing the shell was not already
+   * paying.
+   */
+  const [meId, setMeId] = useState<string | null>(null);
+  useEffect(() => {
+    void loadProfile()
+      .then((p) => setMeId(p.id))
+      .catch(() => undefined);
+  }, []);
   const [deals, setDeals] = useState<EscrowDeal[] | null>(null);
   const [terms, setTerms] = useState<Terms | null>(null);
   const [held, setHeld] = useState<{ heldMinor: number } | null>(null);
@@ -124,7 +142,10 @@ export function EscrowTab({ meId }: { meId: string | null }) {
       {status && <SuccessNote>{status}</SuccessNote>}
       {error && <ErrorState message={error} />}
 
-      <Panel title={t('esc.title')} subtitle={t('esc.subtitle')}>
+      {/* The page title says "Escrow"; this panel says what escrow IS. It used
+          to repeat the word as its own heading, back when the title above it was
+          the marketplace's. */}
+      <Panel title={t('esc.subtitle')}>
         <p className="field-hint">{t('esc.how')}</p>
         {terms && (
           <p className="field-hint">

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
 import { ITEM_CLASSES, itemClassLabel } from '../../../shared/itemClasses';
-import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Amount, Serial } from '../../../shared/ui/Serial';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
@@ -26,11 +25,19 @@ import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
 import { ProposeTradePanel } from './ProposeTradePanel';
 import { StorefrontPanel } from './StorefrontPanel';
 import { ListingActions, type Listing } from './ListingActions';
-import { HouseStorePanel } from './HouseStorePanel';
 import { loadProfile } from '../../../shared/session';
 
 
-const TABS = ['browse', 'house', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
+/**
+ * The tabs of the marketplace proper: collector-to-collector trade.
+ *
+ * `house` and `escrow` used to sit here and no longer do. Neither was a way of
+ * browsing other collectors' shelves — the Bault store is stock the house sells
+ * itself, and escrow is a deal agreed somewhere else entirely, with no listing
+ * anywhere — so both are destinations of their own on the rail, and a reader
+ * looking for either no longer has to know they are hidden behind Marketplace.
+ */
+const TABS = ['browse', 'sell', 'listings', 'offers', 'trade', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
 
 /**
@@ -113,21 +120,10 @@ export function MarketplacePage() {
   }, [loadMine]);
   /** The reader's own username, so the storefront tab can open on their shop. */
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
-  /**
-   * The reader's own id.
-   *
-   * Escrow is the one screen that has to know which SIDE of a row the reader is
-   * on — a deal names two people and the next step is different for each — and
-   * a username cannot answer that, because a deal stores ids.
-   */
-  const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadProfile()
-      .then((p) => {
-        setMyUsername(p.username);
-        setMeId(p.id);
-      })
+      .then((p) => setMyUsername(p.username))
       .catch(() => undefined);
   }, []);
 
@@ -386,18 +382,6 @@ export function MarketplacePage() {
         </TabPanel>
       )}
 
-      {tab === 'house' && (
-        <TabPanel tab="house">
-          <HouseStorePanel
-            onBought={async (m) => {
-              setStatus(m);
-              await reloadItems();
-            }}
-            onError={setError}
-          />
-        </TabPanel>
-      )}
-
       {tab === 'sell' && (
         <TabPanel tab="sell">
           <SellPanel
@@ -471,12 +455,6 @@ export function MarketplacePage() {
             }}
             onError={setError}
           />
-        </TabPanel>
-      )}
-
-      {tab === 'escrow' && (
-        <TabPanel tab="escrow">
-          <EscrowTab meId={meId} />
         </TabPanel>
       )}
 

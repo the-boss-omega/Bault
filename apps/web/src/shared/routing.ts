@@ -39,7 +39,7 @@ const LEGACY_ROUTES: Record<string, { section: string; tab: string }> = {
 };
 
 /**
- * Retired TABS within a section that still exists.
+ * Retired TABS.
  *
  * The wallet's `topup` and `withdrawals` tabs held forms that moved money
  * directly. Those forms are gone — cash in and cash out are reviewed requests —
@@ -47,12 +47,29 @@ const LEGACY_ROUTES: Record<string, { section: string; tab: string }> = {
  * does that job rather than silently falling back to Overview.
  *
  * Keyed by section so a tab name retired in one section cannot accidentally
- * redirect a same-named tab in another.
+ * redirect a same-named tab in another. A target may be a bare tab name (the tab
+ * moved WITHIN the section) or a `{ section, tab }` pair (the tab was promoted
+ * out of the section entirely).
  */
-const LEGACY_TABS: Record<string, Record<string, string>> = {
+type TabTarget = string | { section: string; tab: string | null };
+
+const LEGACY_TABS: Record<string, Record<string, TabTarget>> = {
   wallet: {
     topup: 'cash-in',
     withdrawals: 'cash-out',
+  },
+  /**
+   * The Bault store and escrow were promoted OUT of the marketplace onto the
+   * rail. Neither was a way of browsing other collectors' shelves: the store is
+   * stock the house sells itself, and an escrow deal was agreed somewhere else
+   * and has no listing anywhere. Links, bookmarks and the FAQ still say
+   * `#/marketplace/house`, so both old tabs land on the new section rather than
+   * falling back to Browse — which would answer "where is the Bault store?" with
+   * somebody else's shelf.
+   */
+  marketplace: {
+    house: { section: 'bault-store', tab: null },
+    escrow: { section: 'escrow', tab: null },
   },
   /**
    * `parcels` and `intake` were two tabs describing one piece of work, and the
@@ -75,12 +92,13 @@ const LEGACY_TABS: Record<string, Record<string, string>> = {
  * A retired section wins over a retired tab: if the whole section moved, its old
  * tab names have no meaning in the new one.
  */
-export function legacyRedirect(route: Route): { section: string; tab: string } | null {
+export function legacyRedirect(route: Route): { section: string; tab: string | null } | null {
   const section = LEGACY_ROUTES[route.section];
   if (section) return section;
 
   const tab = route.tab ? LEGACY_TABS[route.section]?.[route.tab] : undefined;
-  if (tab) return { section: route.section, tab };
+  if (typeof tab === 'string') return { section: route.section, tab };
+  if (tab) return tab;
 
   return null;
 }

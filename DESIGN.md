@@ -241,7 +241,16 @@ Register and Field get denser without a single component being rewritten.
 `--dur-fast` 150 ms · `--dur` 200 ms · `--dur-slow` 250 ms · `--ease` `cubic-bezier(0.16, 1, 0.3, 1)`.
 
 One purpose per animation. Sheets slide in at `--dur-slow`; hovers and focus resolve at `--dur-fast`;
-nothing loops, nothing bounces, nothing draws attention to itself. **Irreversible actions are slower
+nothing loops, nothing bounces, nothing draws attention to itself.
+
+**The one place motion is the point** is the display case, and it is the exception that states the
+rule: the tiles arrive in sequence (40 ms apart, capped at twelve, so the two-hundredth card does not
+wait), and a card leans towards the pointer with a highlight tracking across its sleeve. That is not
+decoration for its own sake — a graded slab is held up and turned, because that is how the surface
+and the foil are read, and a vault that renders it as a flat rectangle has taken that away. The
+angles stay under 8°: past that it stops reading as a card being turned and starts reading as a web
+page showing off. It is absent entirely for a touch pointer, where a finger covers the card it would
+be tilting. **Irreversible actions are slower
 on purpose** — the confirmation sheet opens at `--dur-slow` and its confirm control does not become
 available until the typed confirmation matches, so the fastest possible path through it is still
 slower than a click.
@@ -284,6 +293,7 @@ transform is removed.
 | **`.confirm-sheet`** | Full-height, the item's photograph present, the consequence in one plain sentence as the largest text in the sheet, a typed confirmation, and `--dur-slow`. |
 | **`.ltr-run` / `.bidi`** | Bidi isolation, applied to every string that can carry Latin inside Hebrew. |
 | **`.offer`** | A service with its price stated before its button. Structurally impossible to render one without the other. |
+| **`.case-grid` / `.case-card`** | The display case: the vault's second view, where the photograph is the tile and the register's columns become a caption. The register answers "where is it, what does it cost"; this answers "what is it". A state badge appears only when the state is **not** the ordinary one, because a wall of forty cards each saying "Stored" is a wall of noise. Reached by `?view=case`, so the view is a place. |
 
 ---
 
@@ -330,7 +340,9 @@ Each of these was in the product and is named in the audit.
 - Dark-mode-with-one-neon-accent.
 - Cream paper plus serif everywhere.
 - Interchangeable dashboard grids of KPI cards.
-- Decorative animation — the rail selector's travel, the notch, the rivet.
+- Decorative animation — the rail selector's travel, the notch, the rivet. (The display case's tilt
+  is not an exception to this: it is about the object, not about the interface, and it is the only
+  motion in the product that is allowed to be noticed.)
 - "Balance cards" for money.
 
 ---
