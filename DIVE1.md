@@ -10838,8 +10838,64 @@ Confirmed in the container: the rendered `default.conf` has
 `TRUST_PROXY` naming the nginx network (`uniquelocal` or a CIDR). With the default `loopback`, every
 request looks like it comes from the nginx container, so the rate limiter sees one client and the
 sign-in log records one IP (`docs/production-readiness.md:51-53`, `packages/config/src/env.ts:150-164`).
-No manifest in the repo wires the three images together: there is no production compose file, no
-Kubernetes manifest and no migration job.
+The manifest that wires the three images together is §13.6b; defects 4 and 5 above (no
+`.dockerignore`, the seed in the image) are what it had to work around.
+
+<a id="s13-6b"></a>
+### 13.6b The single-host deployment
+
+**Purpose.** One Hetzner-sized box, one command to update. Written and **verified end to end** on
+24 September: the three images build, `migrate` applies the schema and installs the append-only
+triggers, the API answers `/readyz` with `{"status":"ok","db":true}`, nginx serves the SPA and proxies
+`/api/`, the worker registers its five cron jobs, and the seeded demo signs in and renders in a
+browser. Only the two pieces that need a real domain — Caddy's certificate and the Basic-auth wall —
+are unverified here.
+
+**`.dockerignore`** (new, repo root). §13.6 defect 4 was that there was none, so `COPY packages/` and
+`COPY apps/<app>/` ran *after* `pnpm install` and dragged the host's `node_modules` over the ones the
+image had just installed — pnpm junctions on a Windows host, which do not resolve inside a Linux
+container. It excludes `**/node_modules`, `**/dist`, `.env*`, `.git`, `docs/` and the markdown.
+Verified after adding it: all three images build, and the web image still carries the ten catalogue
+photographs (`/usr/share/nginx/html/images`) and no seeded credentials in its bundle.
+
+**`infra/docker-compose.prod.yml`.** Six services and a job: `postgres` (private, no published port),
+`migrate` (the API image running `node dist/db/migrate.js`, `service_completed_successfully` gating
+`api` and `worker`), `api`, `worker`, `web`, `caddy` (the only published ports, 80 and 443), and
+`code` (code-server, mounting the host checkout and the Docker socket). One replica of each, because
+the throttler is in-memory per process (§13.9, S8).
+
+**Demo mode, and why it needs a switch.** The API image bakes `NODE_ENV=production`, and the env
+schema then refuses to boot on any sandbox adapter (`packages/config/src/env.ts:335-413`) — storage
+that discards photographs, mail that goes to a log file, shipping that cannot buy a label, payments
+that settle without contacting anybody. That refusal is right, so the compose file overrides
+`NODE_ENV` from `APP_NODE_ENV` (default `development`) rather than weakening the schema. **The five
+`STORAGE_*` values are required whatever the provider is** (`:80-84`): the sandbox never reads them
+and the config will not parse without them, which is the failure this deployment hit first.
+
+**Two traps, both found by running it.**
+1. **`$` in a bcrypt hash.** Compose interpolates `${...}` in `environment:` *and* in `env_file:`
+   values, so a Caddy hash pasted raw arrives with pieces missing and every login fails silently.
+   Each `$` must be doubled in `infra/.env.server`; `$$` reaches the container as `$` (verified by
+   reading the value inside a running container). `deploy.sh` refuses to run on an unescaped one.
+2. **A `:?` message containing `: `** is invalid YAML unquoted, which is why `caddy` takes its
+   configuration through `env_file` rather than four `environment:` entries.
+
+**`infra/Caddyfile`.** Two sites — the product and the editor — each behind `basic_auth` and HSTS,
+with automatic Let's Encrypt certificates. Basic auth rather than a login page because it covers the
+**API** as well as the page, which is what an attacker would talk to directly. The editor's upstream
+needs `flush_interval -1`, or code-server buffers into an editor that types one character a second.
+
+**`infra/ops/deploy.sh`.** Pull (refusing a dirty tree), build (before anything is torn down, so a
+failed build leaves the running deployment untouched), migrate as a blocking step, `up -d`, then poll
+`/readyz` until the API actually answers rather than merely reporting "started". Preconditions first:
+the env file exists, has no `REPLACE_WITH` left, has no unescaped `$` in the hash, and names all eight
+required keys.
+
+**Not done by this deployment**, and each stated in the runbook: no object storage (demo mode loses
+uploads and the item media gallery, though the catalogue photographs come from the web image and are
+unaffected), one replica, tracking still on the sandbox adapter (§13.9, B2), and Basic auth is one
+shared password. `docs/deploy-hetzner.md` is the step-by-step, including the iPad workflow
+(code-server on the same box, editing the same checkout `deploy.sh` builds from).
 
 <a id="s13-7"></a>
 ### 13.7 CI: `.github/workflows/ci.yml`
@@ -11068,7 +11124,13 @@ Neither CI nor any package script runs it. It is run by hand. §12 owns the rule
 | `infra/docker-compose.yml` | local Postgres, PgBouncer, MinIO | postgres :8, pgbouncer :29 (`POOL_MODE` :33), minio :43 |
 | `infra/pgbouncer/pgbouncer.ini` | reference config for a non-Docker PgBouncer | `pool_mode` :17, rationale :13-16 |
 | `infra/pgbouncer/userlist.txt` | placeholder auth file | one `"bault"` entry |
-| `infra/ops/backup.sh` | dump / verify / restore | `cmd_dump` :48, `cmd_verify` :83, `cmd_restore` :154, PITR note :176-195 |
+| `infra/ops/backup.sh` | dump / verify / restore | `cmd_dump` :48, `cmd_verify` :83, `cmd_restore` :154, PITR note :176-195. **Host-side**: needs `pg_dump` and a reachable `DIRECT_DATABASE_URL`, so the single-host deployment (§13.6b), whose Postgres is unpublished, dumps from inside the container instead |
+| `infra/docker-compose.prod.yml` | the single-host deployment (§13.6b) | `postgres` :30; `migrate` :57; `api` :77 (`NODE_ENV` override :90); `worker` :110; `web` :133; `caddy` :149 (`env_file`, not `environment` :161); `code` :175 |
+| `infra/Caddyfile` | TLS, Basic auth, two sites | global :21; product :31; editor :60 (`flush_interval -1` :70) |
+| `infra/.env.server.example` | the server's environment, demo mode | `$` escaping :30-45; `APP_NODE_ENV` :69; required `STORAGE_*` :86-95; production switch list :123-146 |
+| `infra/ops/deploy.sh` | pull → build → migrate → up → wait for `/readyz` | preconditions :38-58; pull :61-72; build :77; migrate :83; `up` :87; readiness poll :94-104 |
+| `.dockerignore` | build-context exclusions (§13.6 defect 4) | whole file |
+| `docs/deploy-hetzner.md` | the runbook: server, DNS, deploy, iPad, backups, troubleshooting | whole file |
 | `apps/api/Dockerfile` | API image | build :17-47, runtime :50-82, migrations copy :65-68, healthcheck :76-77 |
 | `apps/worker/Dockerfile` | worker image | build :13-36, runtime :39-59 |
 | `apps/web/Dockerfile` | SPA build → nginx | build :12-35, `assets/` copy :30-32, runtime :37, template :40-47, healthcheck :51-52 |

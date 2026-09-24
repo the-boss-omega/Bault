@@ -11,6 +11,11 @@ build/
 .env
 .env.*
 !.env.example
+# The server's template is committed; the filled-in file beside it never is.
+# `.env.*` above matches at every level, and `!.env.example` only un-ignores a
+# file with that exact name — so the server template needs its own exception,
+# and `infra/.env.server` stays ignored by the line above.
+!infra/.env.server.example
 
 # Logs & coverage
 *.log

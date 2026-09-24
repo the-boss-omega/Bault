@@ -1,0 +1,55 @@
+# =============================================================================
+# Build context exclusions.
+#
+# There was none, so every `docker build` sent the whole repository — including
+# `node_modules`, every `dist/`, the real `.env` and the git history — to the
+# daemon. Two consequences, one slow and one wrong:
+#
+#   SLOW: the context is hundreds of megabytes that are discarded immediately.
+#
+#   WRONG: each Dockerfile runs `pnpm install` and THEN copies `packages/` and
+#   `apps/<app>/`. Without this file those copies bring the host's
+#   `packages/*/node_modules` and `apps/*/node_modules` over the ones the image
+#   just installed. On a Windows host those are pnpm junctions, which do not
+#   resolve inside a Linux container at all.
+#
+# `.env` is not copied by any Dockerfile, but it is excluded here too: a build
+# context is not a place to put secrets on the assumption that nothing reads
+# them.
+# =============================================================================
+
+# Dependencies and build output — every image installs and builds its own.
+**/node_modules
+**/dist
+**/.turbo
+**/.vite
+
+# Secrets and local state.
+.env
+.env.*
+!.env.example
+_local/
+infra/caddy-data/
+infra/caddy-config/
+
+# Version control and editor metadata.
+.git
+.gitignore
+.github
+.vscode
+.idea
+.claude
+
+# Test output, coverage and scratch directories.
+coverage/
+**/.playwright-cli
+test-results/
+playwright-report/
+
+# Documentation and design material: none of it is needed to build a runnable
+# image, and DIVE1 alone is over a megabyte.
+*.md
+docs/
+specs/
+assets1/
+tests3/

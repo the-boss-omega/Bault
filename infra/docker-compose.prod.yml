@@ -1,0 +1,206 @@
+# =============================================================================
+# Bault — the always-on deployment.
+#
+# There was no production manifest anywhere in this repository: three Dockerfiles
+# that each built a runnable image, and nothing that wired them together, ran the
+# migrations or terminated TLS. This is that file.
+#
+# It runs on ONE host and is meant to: a single Hetzner box, one command to
+# update, nothing to orchestrate. It is not a Kubernetes replacement and does not
+# pretend to be — there is one replica of everything, because the rate limiter is
+# in-memory per process (DIVE1 §13.9, S8) and two replicas would silently double
+# every budget.
+#
+#   Bring it up:   docker compose -f infra/docker-compose.prod.yml up -d --build
+#   Update it:     infra/ops/deploy.sh
+#   Read the logs: docker compose -f infra/docker-compose.prod.yml logs -f api
+#
+# Every value that differs between deployments lives in `infra/.env.server`,
+# which is NOT in git. Start from `.env.server.example`.
+# =============================================================================
+
+name: bault
+
+services:
+  # ---------------------------------------------------------------------------
+  # The database. Not exposed to the host: everything that talks to it is on
+  # this network, and a Postgres on a public port is how demo servers become
+  # somebody else's bitcoin miner.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env.server}
+      POSTGRES_DB: ${POSTGRES_DB:-bault}
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bault} -d ${POSTGRES_DB:-bault}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------------------------------------------------------------------------
+  # Migrations, as a job rather than as something somebody remembers to run.
+  #
+  # Same image as the API, so the migrations that run are exactly the ones the
+  # code being deployed expects. It applies the schema AND installs the
+  # append-only triggers (DIVE1 §3.4) — the image ships `src/db/sql` for this.
+  # `restart: "no"`: it is expected to exit 0 and stay exited.
+  # ---------------------------------------------------------------------------
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: bault-api:latest
+    restart: "no"
+    env_file: [.env.server]
+    environment:
+      NODE_ENV: ${APP_NODE_ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-bault}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bault}
+      DIRECT_DATABASE_URL: postgres://${POSTGRES_USER:-bault}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bault}
+    command: ["node", "dist/db/migrate.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # The API. Never published to the host — the only way in is through Caddy and
+  # the web image's nginx, which is what makes the password gate unavoidable.
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: bault-api:latest
+    restart: unless-stopped
+    env_file: [.env.server]
+    environment:
+      # The image bakes NODE_ENV=production. Demo deployments override it,
+      # because production REFUSES to boot on the sandbox adapters by design
+      # (packages/config/src/env.ts:335) — it will not accept storage that
+      # discards photographs or mail that goes to a log file. That refusal is
+      # correct; this is the switch that says "I know, this is a demo".
+      NODE_ENV: ${APP_NODE_ENV:-development}
+      API_PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-bault}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bault}
+      DIRECT_DATABASE_URL: postgres://${POSTGRES_USER:-bault}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bault}
+      # Two hops sit in front: Caddy and nginx, both on this private network.
+      # NEVER `true`, which believes whatever X-Forwarded-For a caller types.
+      TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
+      CORS_ORIGINS: https://${APP_DOMAIN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # The background worker: storage sweeps, renewals, tracking refresh, the
+  # outbox. It has no port and no healthcheck — its liveness is that pg-boss is
+  # connected, which it asserts by exiting non-zero, so the restart policy is
+  # the check (DIVE1 §13.9).
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    image: bault-worker:latest
+    restart: unless-stopped
+    env_file: [.env.server]
+    environment:
+      NODE_ENV: ${APP_NODE_ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-bault}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bault}
+      DIRECT_DATABASE_URL: postgres://${POSTGRES_USER:-bault}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bault}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # The SPA, on nginx, with the CSP and the /api proxy. Its bundle is a
+  # PRODUCTION build regardless of APP_NODE_ENV — `vite build` runs at image
+  # build time and `vite.config.ts` deletes VITE_USER_NODE_ENV, so the demo
+  # credentials are stripped from it (tests/web/no-credentials-in-bundle.test.ts).
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    image: bault-web:latest
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: http://api:3000
+    depends_on: [api]
+
+  # ---------------------------------------------------------------------------
+  # TLS, and the wall in front of everything.
+  #
+  # Caddy gets a real certificate from Let's Encrypt on first boot and renews it
+  # for as long as it runs. It is the ONLY container with published ports.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    # `env_file`, not `environment`, and that is not a style choice: a bcrypt hash
+    # is full of `$`, and a value written through compose's `${...}` substitution
+    # has every `$` eaten as a variable reference. Passing the file straight to
+    # the container leaves BASIC_AUTH_HASH exactly as it was written — see the
+    # escaping note in `.env.server.example`, which still applies to the file
+    # itself. `deploy.sh` checks the four names below are actually set.
+    env_file: [.env.server]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web, code]
+
+  # ---------------------------------------------------------------------------
+  # The editor: VS Code in a browser tab, on the same box as the thing it edits.
+  #
+  # It mounts the repository from the HOST, not from an image, so what you edit
+  # here is what `deploy.sh` builds — one checkout, no syncing.
+  #
+  # It is a terminal on this server behind a URL, so it sits behind BOTH Caddy's
+  # password and its own. That is deliberate belt-and-braces: either one alone is
+  # a single string between the internet and a root-capable shell.
+  # ---------------------------------------------------------------------------
+  code:
+    image: codercom/code-server:latest
+    restart: unless-stopped
+    environment:
+      PASSWORD: ${CODE_SERVER_PASSWORD:?set CODE_SERVER_PASSWORD in infra/.env.server}
+    user: "0:0"
+    working_dir: /home/coder/project
+    volumes:
+      - ${REPO_PATH:-..}:/home/coder/project
+      - code-config:/home/coder/.config
+      - code-local:/home/coder/.local
+      # The Docker socket, so the terminal in the editor can run `deploy.sh`
+      # and read container logs. This is root on the host by another name —
+      # it is here because the alternative is SSH-ing from an iPad to deploy,
+      # and the door is already locked by two passwords.
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - --auth
+      - password
+      - --bind-addr
+      - 0.0.0.0:8080
+      - /home/coder/project
+
+volumes:
+  pgdata:
+  caddy-data:
+  caddy-config:
+  code-config:
+  code-local:

@@ -1,0 +1,68 @@
+# =============================================================================
+# TLS, and the wall in front of everything.
+#
+# Two sites on one certificate authority:
+#
+#   {$APP_DOMAIN}   the product
+#   {$CODE_DOMAIN}  the editor
+#
+# Both are behind HTTP Basic auth, because the brief was "my domain, not the
+# whole world". Basic auth is a blunt instrument and the right one here: it is
+# one dependency-free line, it works in Safari on an iPad, and it puts a password
+# in front of the API as well as the page — which a login form inside the SPA
+# would not, since the API is what an attacker would talk to directly.
+#
+# Caddy obtains and renews the certificates itself. Nothing to run, nothing to
+# remember, no cron. The only requirement is that both names have A records
+# pointing at this host and that ports 80 and 443 reach it.
+# =============================================================================
+
+{
+	email {$ACME_EMAIL}
+	# Uncomment to rehearse against Let's Encrypt's staging CA, whose rate limits
+	# are generous and whose certificates browsers reject. Useful if a DNS record
+	# is wrong and you do not want to burn the real quota finding out.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# ---------------------------------------------------------------------------
+# The product.
+# ---------------------------------------------------------------------------
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	# HSTS. Safe here because this host is HTTPS-only and will stay that way;
+	# it is commented out in the web image's own nginx config precisely because
+	# that image does not know where TLS terminates. Here, it does: this is where.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# Everything — the SPA, its assets, the photographs and `/api/` — goes to the
+	# web image, which serves the bundle and proxies the API. One upstream, so
+	# the browser sees one origin and the CSP's `'self'` covers all of it.
+	reverse_proxy web:8080
+}
+
+# ---------------------------------------------------------------------------
+# The editor.
+#
+# `flush_interval -1` and the websocket-friendly defaults matter: code-server is
+# a persistent connection, and a proxy that buffers it gives you an editor that
+# types one character every few seconds.
+# ---------------------------------------------------------------------------
+{$CODE_DOMAIN} {
+	encode zstd gzip
+
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy code:8080 {
+		flush_interval -1
+	}
+}
