@@ -2458,7 +2458,7 @@ Nest קורא ללוגר עם פרמטרים נוספים לפי מיקום, ב�
 
 **החלטות design.** הפרדה בין liveness ל readiness נכונה. liveness לא צריך לבדוק את ה DB, אחרת תקלה ב DB תגרום ל restart של כל המופעים. readiness צריך סטטוס ולא גוף, וזה תוקן.
 
-**מה יקרה אם אשנה את זה.** הוספת `@SkipThrottle()` על המחלקה תפתור את בעיית ה 429. הוספת בדיקה של הרשומה האחרונה ב `drizzle.__drizzle_migrations` מול מספר הקבצים ב journal תהפוך את readyz לבדיקת גרסה. הסרת `@Public()` תחזיר את הבאג המתועד, שבו כל probe קיבל 401. החזרת גוף עם `code` מהחריגה תשמור אותו דרך ה filter.
+**מה יקרה אם אשנה את זה.** הוספת `@SkipThrottle({ default: true, auth: true })` על המחלקה תפתור את בעיית ה 429. `@SkipThrottle()` בלי ארגומנט מדלג רק על הדלי `default` ב throttler 6.5, ולא יספיק. הוספת בדיקה של הרשומה האחרונה ב `drizzle.__drizzle_migrations` מול מספר הקבצים ב journal תהפוך את readyz לבדיקת גרסה. הסרת `@Public()` תחזיר את הבאג המתועד, שבו כל probe קיבל 401. החזרת גוף עם `code` מהחריגה תשמור אותו דרך ה filter.
 
 ### `apps/api/src/shared/observability/observability.module.ts`, 12 שורות
 **תפקיד ולמה הקובץ קיים.** מודול שכל תפקידו לרשום את `HealthController`.
@@ -7593,7 +7593,7 @@ bin לפי מזהה או ברקוד, שחייב להיות פעיל, או `autoS
 
 #### `list`, שורות 42 עד 65
 
-ציבורי. שבעה פרמטרי query כמחרוזות. `price` מפרסר מספר לא שלילי ומחזיר undefined אחרת. `sort` מאומת מול `BROWSE_SORTS` עם fallback ל `newest`. `limit` הוא `Number(limit)` בלי שום בדיקה. `?limit=abc` נותן NaN, `Math.min(NaN, 200)` הוא NaN, ו drizzle ישלח `LIMIT NaN` או פרמטר לא תקין, שיתורגם ל 500. `?limit=-1` יגיע ל SQL עם ערך שלילי ו Postgres ידחה. `?limit=0` יחזיר מערך ריק. ראה את הממצאים. `q` עובר כמו שהוא, עם `trim` בשירות.
+ציבורי. שבעה פרמטרי query כמחרוזות. `price` מפרסר מספר לא שלילי ומחזיר undefined אחרת. `sort` מאומת מול `BROWSE_SORTS` עם fallback ל `newest`. `limit` הוא `Number(limit)` בלי שום בדיקה. `?limit=abc` נותן NaN, ו `Math.min(NaN, 200)` הוא NaN. drizzle 0.38 משמיט את ה `LIMIT` כשהערך אינו מספר אי שלילי, `pg-core/dialect.js` שורה 275, ולכן `?limit=abc` ו `?limit=-1` מחזירים 200 עם כל המודעות הפעילות, בלי תקרת ה 200, וחותמים URL לתמונה של כל אחת. זה נבדק גם בבקשה ל API מקומי. `?limit=0` יחזיר מערך ריק. ראה את הממצאים. `q` עובר כמו שהוא, עם `trim` בשירות.
 
 #### `mine` ו `myOffers`, שורות 74 עד 83
 
@@ -17899,11 +17899,11 @@ curl -s http://localhost:3099/docs-json | jq '.paths | length'            # 225
   - בדיקה חוזרת מול הקוד. אומת. אומת ש `tracking-refresh.ts` בונה `SandboxShippingAdapter` שמחזיר תמיד `in_transit`, שה job רשום כל 30 דקות ב `worker/src/index.ts` שורה 51, ושהמקום היחיד שכותב `delivered` הוא `human-fulfilment.service.ts` למסירה ידנית. משלוח ספק לא יגיע לעולם ל `delivered`.
 - **F040**, מאומת, סוג `data-integrity`, ביטחון גבוה, מקור בפרק 4
   - מיקום. `apps/api/src/modules/pay/topup.service.ts:64-75`
-  - הבעיה. `handleWebhook` מאמת ומסנן כפילויות ולא מעדכן שום רשומה, ולכן capture או payout שחזרו `pending` לא נסגרים לעולם
+  - הבעיה. `handleWebhook` מאמת ולא מעדכן שום רשומה, ולכן capture או payout שחזרו `pending` לא נסגרים לעולם. גם סינון הכפילויות לא עובד בפועל, כי הוא מחפש `webhookEventId` ששום קוד לא כותב
   - למה היא קיימת. החוזה ב `packages/adapters/src/payment.ts` שורות 256 עד 258 מניח שה webhook יסגור אותם
   - תרחיש ניצול או כשל. payout ב PayPal כמעט תמיד מתחיל ב `PENDING`, ולכן כל משיכה נשארת תלויה
   - השפעה. כסף שיצא או נכנס בלי רשומה סופית ב ledger
-  - תיקון. לממש את הטיפול באירועי `PAYMENT.CAPTURE.*` ו `PAYMENT.PAYOUTS-ITEM.*`
+  - תיקון. לממש את הטיפול באירועי `PAYMENT.CAPTURE.*` ו `PAYMENT.PAYOUTS-ITEM.*`, ולכתוב את `event.id` ל `webhookEventId` באותה טרנזקציה עם אילוץ ייחודי, אחרת webhook שנשלח שוב יזכה פעמיים
   - איך מוודאים שהתיקון עובד. בדיקת אינטגרציה ששולחת webhook חתום מדומה ובודקת שהסטטוס עבר
   - מחיר התיקון. מימוש הטיפול באירועי capture ו payout מוסיף לוגיקה ותחזוקה מתמשכת של webhook, מורכבות סבירה מול הסיכון שכסף שיצא או נכנס יישאר בלי רשומה סופית בספר.
   - בדיקה חוזרת מול הקוד. אומת. המיקום המדויק `apps/api/src/modules/pay/topup.service.ts:63-75`. אומת ש `handleWebhook` רק מאמת ובודק כפילות ואינו כותב דבר, ושאין job התאמה. היום capture חוזר כמעט תמיד `succeeded` בגלל `f0a48813ce`, כך שהנזק המיידי הוא בעיקר ב payouts, והוא חופף ל `fe10ca30ca` אך במיקום אחר.
@@ -17943,7 +17943,7 @@ curl -s http://localhost:3099/docs-json | jq '.paths | length'            # 225
   - למה היא קיימת. `@nestjs/throttler` 6.5.0 מריץ כל throttler בעל שם על כל נתיב אלא אם יש `@SkipThrottle({ auth: true })`, ואין שימוש כזה ב `apps/api/src`
   - תרחיש ניצול או כשל. מפעיל מחסן שסורק יותר מ 30 פריטים בדקה לאותו נתיב, 10 לפי `.env.example`, או כמה משתמשים מאחורי NAT, מקבלים 429, ו probe של readiness כל 5 שניות מסומן לא בריא
   - השפעה. תקלה תפעולית בעבודת מחסן ובניטור, מוסתרת ב CI כי `.github/workflows/ci.yml` מעלה את הערכים ל 5000 ו 20000
-  - תיקון. להגדיר את `auth` רק על `AuthController` באמצעות `@Throttle` מקומי, או `skipIf` שמדלג כשאין metadata, ו `@SkipThrottle()` על `HealthController`
+  - תיקון. להגדיר את `auth` רק על `AuthController` באמצעות `@Throttle` מקומי, או `skipIf` שמדלג כשאין metadata, ו `@SkipThrottle({ default: true, auth: true })` על `HealthController`. `@SkipThrottle()` בלי ארגומנט מדלג רק על הדלי `default` ב throttler 6.5, ולכן לא מספיק. היום `/healthz` ו `/readyz` נספרים בשני הדליים, ובדיקת חיים של load balancer כל שתי שניות מאותו IP מגיעה ל 30 בדקה, ברירת המחדל של `AUTH_RATE_LIMIT_PER_MINUTE`, ומתחילה לקבל 429
   - איך מוודאים שהתיקון עובד. בדיקת אינטגרציה עם `AUTH_RATE_LIMIT_PER_MINUTE=5` ששולחת 20 בקשות ל `GET /api/v1/custody/bins` ומצפה ל 200 בכולן, ו 6 בקשות התחברות שמצפות ל 429 בשישית
   - מחיר התיקון. הגבלת ה throttler רק ל AuthController מחייבת לסמן בזהירות כל endpoint רגיש בנפרד, מחיר תחזוקה קטן מול חסימת כל ה API אחרי דקה של תעבורה לגיטימית.
   - בדיקה חוזרת מול הקוד. אומת חלקית. המיקום המדויק `apps/api/src/app.module.ts:59-70`. אומת בקוד של `@nestjs/throttler` 6.5.0 שכל throttler בעל שם רץ על כל נתיב, ו `@Throttle` רק משנה מגבלות, ולכן `auth` עם 30 לדקה חל על כל handler בנפרד. תיקון קטן, ה probe של 5 שניות ב `docker-compose.yml` שייך ל Postgres, ה HEALTHCHECK של ה API הוא כל 30 שניות, כך שהטענה על readiness היא השערה.
@@ -18343,7 +18343,7 @@ curl -s http://localhost:3099/docs-json | jq '.paths | length'            # 225
   - למה היא קיימת. הבדיקה נכתבה כבדיקת חיבור בלבד
   - תרחיש ניצול או כשל. מופע חדש מול סכמה ישנה מסומן מוכן ומחזיר 500 על כל נתיב עם עמודה חדשה, pool מלא גורם ל probe לקבל timeout במקום 503, ו probe תכוף מקבל 429
   - השפעה. rollout שמפנה תעבורה למופע שבור, או מופע בריא שמסומן לא בריא
-  - תיקון. להוסיף `statement_timeout` קצר לשאילתה, להשוות את הרשומה האחרונה ב `drizzle.__drizzle_migrations` מול ה journal, ולהוסיף `@SkipThrottle()`
+  - תיקון. להוסיף `statement_timeout` קצר לשאילתה, להשוות את הרשומה האחרונה ב `drizzle.__drizzle_migrations` מול ה journal, ולהוסיף `@SkipThrottle({ default: true, auth: true })`
   - איך מוודאים שהתיקון עובד. להריץ מופע מול DB בלי ה migration האחרונה ולצפות ל 503 מ `readyz`
   - מחיר התיקון. השוואת רשומת המיגרציה האחרונה ב readyz מוסיפה תלות בין קוד לבין מצב היומן ועלולה לסמן מופע תקין כלא מוכן אם היא לא מעודכנת, מחיר תחזוקה קטן מול rollout שמפנה תעבורה למופע שבור.
 - **F086**, מאומת, סוג `data-integrity`, ביטחון גבוה, מקור בפרק 5
@@ -19639,11 +19639,11 @@ curl -s http://localhost:3099/docs-json | jq '.paths | length'            # 225
   - מיקום. `apps/api/src/modules/mkt/browse.service.ts:47-90` ו `apps/api/src/modules/mkt/mkt.controller.ts:44-65`
   - הבעיה. מסלול ציבורי בלי pagination, N+1 של שאילתת תמונה וחתימת URL לכל שורה עד 200, ו `limit` שמפורסר ב `Number` בלי ולידציה כך ש `abc` או `-1` מגיעים ל SQL
   - למה היא קיימת. הסינון והמיון נוספו בלי pagination ובלי DTO ל query
-  - תרחיש ניצול או כשל. `?limit=200` בלולאה מאורח, או `?limit=abc` שמחזיר 500
-  - השפעה. עומס על ה pool וסטטוס 500 על קלט פשוט
+  - תרחיש ניצול או כשל. `?limit=200` בלולאה מאורח, או `?limit=abc` ו `?limit=-1`, שמבטלים את התקרה ומחזירים את כל המודעות עם חתימה לכל תמונה
+  - השפעה. עומס על ה pool ועל החתימות, מאורח ובלי שום הרשאה
   - תיקון. `ParseIntPipe` עם טווח, keyset pagination, ושאילתת תמונות אחת עם `DISTINCT ON (item_id)`
   - איך מוודאים שהתיקון עובד. test עם `limit=abc` שמצפה ל 400, ומדידת מספר שאילתות לרשימה של 50.
-  - מחיר התיקון. הוספת עימוד keyset וולידציית קלט משנה את מבנה התשובה של הרשימה הציבורית ומחייבת עדכון בצד הלקוח, מאמץ סביר מול מניעת עומס ותשובות 500.
+  - מחיר התיקון. הוספת עימוד keyset וולידציית קלט משנה את מבנה התשובה של הרשימה הציבורית ומחייבת עדכון בצד הלקוח, מאמץ סביר מול מניעת עומס מאורח.
 - **F230**, הקשחה, סוג `hardening`, ביטחון גבוה, מקור בפרק 12
   - מיקום. `apps/api/src/modules/dis/photography.service.ts:67-72`
   - הבעיה. `objectKey` בצילום ובוידאו ב `media.service.ts:112-117` הוא טקסט חופשי של המחסנאי, לא נבדק שהוא קיים או שנוצר עבור הפריט
@@ -22684,6 +22684,29 @@ curl -s http://localhost:3099/docs-json | jq '.paths | length'            # 225
   - איך מוודאים שהתיקון עובד. הרצה של `pnpm test:ux`
   - מחיר התיקון. הוספת בדיקות UX לכל טפסי המנהל היא עלות תחזוקה מתמשכת ותשתיתית לכתיבה והרצה, מוצדקת כי אלה המסכים הרגישים ביותר שכבר הראו רגרסיות בלי בדיקה שתפסה אותן.
 
+
+#### ממצאים שנוספו במעבר הבדיקה השני
+
+אחרי שהמסמך נכתב, כל טענה במדריך המהיר `docs/DIVE2-fast.md` נבדקה שוב מול הקוד. המעבר הזה מצא שלושה ממצאים שלא היו ברשימות שלמעלה. הם נוספים לספירה של ממצאי P1 ו P2, ומופיעים גם בפרק הבאגים של המדריך המהיר.
+
+- **N1**, מאומת, סוג `confirmed-bug`, ביטחון גבוה, חומרה P1
+  - מיקום. `apps/api/src/modules/dis/consignment.service.ts:247` ו `apps/api/src/modules/cst/stow.service.ts:122-146`
+  - הבעיה. `warehouseTransfer` כותב ל `bin_id` ערך בצורה `EXT:<warehouse>/<bin>`, וה cast המובלע מ `text` ל `uuid` ממיר כל `bin_id` בספירה של `listWithCounts`
+  - השפעה. שורה אחת כזו גורמת ל `GET /custody/bins`, ל `suggest` ולקליטה עם `autoStow` להחזיר 400 לכל המשתמשים, כלומר המחסן מפסיק לקבל הצעות מדף. זו החמרה של F189
+  - תיקון. לשמור מיקום חיצוני בעמודה משלו ולהשאיר את `bin_id` ריק או מזהה של תא אמיתי, ובהמשך להפוך את `bin_id` ל `uuid` עם מפתח זר
+  - איך מוודאים שהתיקון עובד. העברה למחסן חיצוני ואחריה `GET /custody/bins` שמחזיר 200
+- **N2**, מאומת, סוג `confirmed-bug`, ביטחון גבוה, חומרה P2
+  - מיקום. `apps/api/src/modules/vlt/vault.service.ts:223-239`
+  - הבעיה. הענף השני של `departure` ב `listHistory` מחפש `new_owner_id` של המשתמש במעבר למצב סופי, אבל `changeState` לא כותב `new_owner_id` ושום קוד לא כותב אירוע `dispatch`
+  - השפעה. קלף שהלקוח שלח הביתה לא מופיע לעולם בלשונית ההיסטוריה של הכספת. `apps/api/src/db/seed.ts` שורות 1248 עד 1262 מתעד את זה בעצמו
+  - תיקון. לכתוב `new_owner_id` במעבר למצב סופי, או לשנות את השאילתה כך שתמצא מעבר למצב סופי של פריט שהמשתמש היה הבעלים שלו באותו רגע
+  - איך מוודאים שהתיקון עובד. משלוח שהגיע ל `shipped` ומופיע ב `GET /vault/items?scope=history`
+- **N3**, מאומת, סוג `hardening`, ביטחון גבוה, חומרה P2
+  - מיקום. `apps/api/src/modules/mkt/mkt.controller.ts:44-65` ו `apps/api/src/modules/mkt/browse.service.ts`
+  - הבעיה. `?limit=abc` או `?limit=-1` במסלול הציבורי `GET /marketplace/listings` לא מחזירים 500. drizzle 0.38 משמיט את ה `LIMIT` כשהערך אינו מספר אי שלילי, `pg-core/dialect.js` שורה 275
+  - השפעה. אורח בלי שום הרשאה מקבל את כל המודעות הפעילות עם חתימת URL לכל תמונה. זה תיקון של התרחיש ב F229
+  - תיקון. ולידציה של `limit` בין 1 ל 200 עם 400 על כל ערך אחר, ו pagination
+  - איך מוודאים שהתיקון עובד. `?limit=abc` מחזיר 400, ו `?limit=500` מחזיר לכל היותר 200 שורות
 
 ### בקרות קיימות שאסור לאבד
 

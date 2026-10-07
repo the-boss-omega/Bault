@@ -7,34 +7,59 @@
 - **דפוסים מוסברים פעם אחת.** רוב הקבצים בריפו חוזרים על אחד עשר דפוסים, controller, service עם טרנזקציה, טבלת Drizzle, migration, job של worker, מסך React ועוד. פרק הדפוסים מסביר כל דפוס פעם אחת על קובץ אמיתי. בכל מקום אחר כתוב רק `דפוס P3` ומה שונה.
 - **טבלת בלוקים לכל קובץ.** לכל קובץ עם לוגיקה יש טבלה, שורה לכל בלוק, מה הוא עושה, ומה חייבים לדעת לפני שמשנים אותו. העמודה הימנית היא החשובה ביותר.
 - **קבצים טריוויאליים בשורה אחת.** קונפיגורציות קטנות, אייקונים, snapshots ורוב קבצי הבדיקות מופיעים כשורה בטבלה.
-- **פרק עבודה בסוף.** מתכונים מעשיים, איך מריצים, איך מוסיפים route, טבלה, מסך או job, ואיך נוגעים בכסף בלי לשבור דבר.
+- **שלושה פרקים לעבודה בסוף.** מתכונים מעשיים, איך מריצים, איך מוסיפים route, טבלה, מסך או job, ואיך נוגעים בכסף בלי לשבור דבר. מפה של כל הבאגים הידועים עם התיקון של כל אחד. וארבע משימות תרגול שהופכות את הקריאה ליכולת.
 
 ## איך לקרוא
 
-- קראו את העמוד הבא ואת פרק הדפוסים ברצף. בלעדיהם שאר המדריך לא יהיה מובן.
-- בפרקי הקבצים פתחו את הקובץ בחלון שני. קראו את טבלת הבלוקים, והציצו בקוד רק בשורות שמסומנות בעמודה הימנית.
-- מזהה כמו E4 הוא ממצא מאומת. הטבלה בעמוד הבא מסבירה כל אחד בשורה אחת.
+- קראו קודם את העמודים הפותחים, את המילון, את ארבעת המסעות ואת פרק הדפוסים, ברצף. הם המפה של כל השאר.
+- בפרקי הקבצים פתחו את הקובץ בחלון שני. קראו את טבלת הבלוקים, והציצו בקוד רק בשורות שמסומנות בעמודה הימנית. העמודה הימנית היא החשובה ביותר, קראו אותה לאט.
+- בסוף כל פרק יש סעיף בדוק את עצמך. נסו לענות לפני שאתם פותחים את התשובה. מה שלא הצלחתם, חזרו לשורה בטבלה.
+- מזהה כמו E4 הוא ממצא מאומת. הטבלה בעמוד הבא מסבירה כל אחד בשורה אחת, ופרק הבאגים אומר איפה ואיך מתקנים.
 - כשצריך עוד עומק בקובץ מסוים, אותו קובץ מוסבר שורה אחרי שורה ב `docs/DIVE2.md`.
+
+## על מה אפשר לסמוך
+
+מספרי השורות מתייחסים ל commit `897eb15`, שהוא גם ה master הנוכחי. אם הקוד ישתנה, השמות של הפונקציות יישארו נכונים יותר מהמספרים.
+
+- כל קבצי הקוד, 475, מופיעים במדריך, וזה נבדק בסקריפט.
+- כל ההפניות לשורות, יותר מ 2,300, נבדקו בסקריפט מול הקוד. אף אחת לא חורגת מאורך הקובץ שלה, ובכ 1,600 שורות של טבלאות בלוקים נבדק שהשמות שבשורה באמת נמצאים בטווח השורות.
+- אחרי הכתיבה, כל טענה שאפשר לפעול לפיה, באג, בדיקה חסרה, מי קורא למה, איזו טבלה נכתבת, ומה נשבר אם משנים, נבדקה שוב מול הקוד במעבר שני. נבדקו כ 2,600 טענות, וכ 280 תוקנו או חודדו. המעבר הזה מצא גם שלושה באגים חדשים, והם בפרק הבאגים.
+- מתכון ההרמה ומתכון הבדיקות הורצו כפי שהם כתובים על מסד ריק, וכל שמונה חבילות הבדיקות עברו. בדיקות הבאגים בפרק התרגול הורצו ונכשלו על הקוד של היום מהסיבה הנכונה.
+- מה שלא נבדק בהרצה. ספקים אמיתיים, PayPal, EasyPost ו SMTP, אחסון S3 אמיתי, בניית ה images, ומה שרק דפדפן יכול להראות. טענה שמתבססת על קריאת קוד בלבד, או שאי אפשר להכריע בה מהקוד, מסומנת ככזו במקום שבו היא מופיעה.
+- `docs/DIVE2.md` לא עבר את המעבר השני על פרקי הקבצים שלו. הממצאים שלו, פרק 27, כן עודכנו. כשהמדריך הזה והספר המלא אומרים דברים שונים על אותו קוד, המדריך הזה הוא הגרסה שנבדקה פעמיים.
 
 ## כמה זמן זה לוקח
 
 | חלק | נושא | מילים | זמן |
 |---|---|---|---|
-| | העמודים הפותחים | 936 | 5 דקות |
-| פרק הדפוסים | הדפוסים שחוזרים בכל הקוד | 5,784 | 20 דקות |
-| פרק 1 | שלד הריפו, החבילות המשותפות, הסקריפטים, התשתית וה CI | 6,687 | 30 דקות |
-| פרק 2 | תהליך ה API, עלייה, תשתית משותפת וה seed | 8,152 | 35 דקות |
-| פרק 3 | מודל הנתונים וה migrations | 10,848 | 50 דקות |
-| פרק 4 | חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות | 15,310 | שעה ו 10 דקות |
-| פרק 5 | קליטה, משמורת, הכספת, חברויות וקונסולת הניהול בצד השרת | 12,671 | 55 דקות |
-| פרק 6 | השוק, התראות, שירותים על פריט מאוחסן ומשלוחים | 12,750 | 55 דקות |
-| פרק 7 | ה worker והבדיקות | 8,303 | 35 דקות |
-| פרק 8 | ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים | 13,771 | שעה |
-| פרק 9 | שאר מסכי הלקוח, המחסן והמנהל | 9,237 | 40 דקות |
-| פרק העבודה | איך עובדים על הקוד | 6,813 | 30 דקות |
-| | הכל | 111,262 | 8 שעות ו 15 דקות |
+| | העמודים הפותחים | 1,246 | 4 דקות |
+| מילון מונחים | מילון מונחים | 515 | 2 דקות |
+| ארבעה מסעות | ארבעה מסעות מקצה לקצה | 1,385 | 5 דקות |
+| פרק הדפוסים | הדפוסים שחוזרים בכל הקוד | 6,327 | 20 דקות |
+| פרק 1 | שלד הריפו, החבילות המשותפות, הסקריפטים, התשתית וה CI | 7,292 | 35 דקות |
+| פרק 2 | תהליך ה API, עלייה, תשתית משותפת וה seed | 8,957 | 40 דקות |
+| פרק 3 | מודל הנתונים וה migrations | 11,648 | 50 דקות |
+| פרק 4 | חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות | 16,068 | שעה ו 10 דקות |
+| פרק 5 | קליטה, משמורת, הכספת, חברויות וקונסולת הניהול בצד השרת | 13,435 | שעה |
+| פרק 6 | השוק, התראות, שירותים על פריט מאוחסן ומשלוחים | 13,542 | שעה |
+| פרק 7 | ה worker והבדיקות | 8,998 | 40 דקות |
+| פרק 8 | ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים | 14,617 | שעה ו 5 דקות |
+| פרק 9 | שאר מסכי הלקוח, המחסן והמנהל | 9,719 | 45 דקות |
+| פרק העבודה | איך עובדים על הקוד | 6,879 | 25 דקות |
+| פרק הבאגים | כל הבאגים הידועים ואיך מתקנים אותם | 3,710 | 10 דקות |
+| פרק התרגול | ארבע משימות שהופכות ידע ליכולת | 937 | 3 דקות |
+| | הכל | 125,275 | 9 שעות |
 
-ההערכה מניחה קריאה של 300 מילים בדקה, ועוד בערך 35 אחוז זמן להצצה בקוד. חלוקה מומלצת היא חמש ישיבות של שעתיים, ישיבה ראשונה לעמודים הפותחים, לדפוסים ולפרקים 1 ו 2, שנייה לפרקים 3 ו 4, שלישית לפרקים 5 ו 6, רביעית לפרקים 7 ו 8, וחמישית לפרק 9 ולפרק העבודה.
+ההערכה מניחה קריאה של 300 מילים בדקה, ועוד בערך 35 אחוז זמן להצצה בקוד בפרקי הקבצים. פרק התרגול נמדד אחרת. הקריאה שלו קצרה, והעבודה עצמה לוקחת שש עד שמונה שעות, מעבר לזמן בטבלה.
+
+**חלוקה מומלצת לחמש ישיבות של שעתיים.**
+1. העמודים הפותחים, המילון, ארבעת המסעות, פרק הדפוסים, ופרקים 1 ו 2.
+2. פרקים 3 ו 4.
+3. פרקים 5 ו 6.
+4. פרקים 7 ו 8.
+5. פרק 9, פרק העבודה, פרק הבאגים ופרק התרגול.
+
+אחר כך ארבע משימות התרגול, שש עד שמונה שעות, בכמה ישיבות.
 
 ## המערכת בעמוד אחד
 
@@ -101,6 +126,8 @@ flowchart LR
 
 ## תוכן העניינים
 
+- מילון מונחים
+- ארבעה מסעות מקצה לקצה
 - פרק הדפוסים. הדפוסים שחוזרים בכל הקוד
 - פרק 1. שלד הריפו, החבילות המשותפות, הסקריפטים, התשתית וה CI
 - פרק 2. תהליך ה API, עלייה, תשתית משותפת וה seed
@@ -112,6 +139,230 @@ flowchart LR
 - פרק 8. ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים
 - פרק 9. שאר מסכי הלקוח, המחסן והמנהל
 - פרק העבודה. איך עובדים על הקוד
+- פרק הבאגים. כל הבאגים הידועים ואיך מתקנים אותם
+- פרק התרגול. ארבע משימות שהופכות ידע ליכולת
+
+## מילון מונחים
+
+מונחי התחום והמנגנונים שחוזרים לאורך המדריך. נתיב שמתחיל ב `modules`, `shared` או `db` נמצא תחת `apps/api/src`. נתיב שמתחיל בשם של מודול, כמו `cst/lifecycle.ts`, נמצא תחת `apps/api/src/modules`. נתיב שמתחיל ב `worker` נמצא תחת `apps`.
+
+| מונח | משמעות ב Bault | איפה בקוד |
+|---|---|---|
+| vault, כספת | אוסף הפריטים שמאוחסנים עבור לקוח | `modules/vlt` |
+| item, פריט | קלף בודד או יחידה שקיבלה מספר סידורי ויש לה בעלים, מצב ומיקום | טבלת `item`, `modules/cst` |
+| serial, מספר סידורי | מזהה שמודפס על התווית, בצורה `SN-...` | `shared/ids.ts`, `inv/labels.ts` |
+| lifecycle state | מצב הפריט, למשל `received`, `stored`, `listed`, `on-hold`, `sold`, `shipped`, `at_grader` | `cst/lifecycle.ts` |
+| custody event | שורה שלא ניתנת לשינוי שמתעדת מעבר מצב או העברת בעלות | טבלת `custody_event` |
+| bin, תא | מקום פיזי על מדף במחסן | טבלת `bin` |
+| bin transfer | שורה שלא ניתנת לשינוי שמתעדת הזזה בין תאים | טבלת `bin_transfer` |
+| stow | הצבת פריט בתא | `cst/stow.service.ts` |
+| hold | הקפאה של פריט שמונעת מכירה, משלוח או העברה | `cst/cst.controller.ts` |
+| parcel, חבילה | קופסה שהגיעה למחסן לפני שנפתחה | `modules/inv/parcel.service.ts` |
+| intake, קליטה | יצירת פריטים מתוך חבילה שנפתחה | `inv/intake.service.ts` |
+| arrival disposal | החלטה להשמיד, לתרום או להחזיר משהו שהגיע במקום לאחסן אותו | טבלת `arrival_disposal` |
+| ledger, יומן | טבלת תנועות הכסף שממנה נגזרת כל יתרה | טבלת `ledger_record`, `pay/ledger.service.ts` |
+| minor units | סכום כסף כמספר שלם של סנטים | `db/schema/_helpers.ts`, `shared/money.ts` |
+| billing port | ממשק שדרכו מודולים גובים כסף בלי לדעת על היומן | `shared/billing/billing.port.ts` |
+| wallet request | בקשה לטעינה או משיכה שמנהל מאשר | `pay/wallet-request.service.ts` |
+| listing, רישום | הצעה למכירה בשוק הפנימי | טבלת `listing` |
+| offer, הצעה | הצעת מחיר על רישום, עם הצעה נגדית | `mkt/offer.service.ts` |
+| swap, החלפה | החלפת פריטים בין שני לקוחות בהסכמה כפולה | `mkt/trade.service.ts` |
+| house store | חנות שבה Bault עצמה מוכרת | `mkt/house-store.service.ts` |
+| consignment | מסירת פריט ל Bault למכירה בערוץ חיצוני | `dis/consignment.service.ts` |
+| buyout | Bault קונה פריט מלקוח | `dis/buyout.service.ts` |
+| escrow, נאמנות | עסקה שבה הכסף מוחזק עד שהמחסן בודק את הפריט | `modules/esc` |
+| shipment group | משלוח משותף של כמה לקוחות | `shp/group-shipment.service.ts` |
+| human fulfilment | משלוח שאדם במחסן משלים ידנית | `shp/human-fulfilment.service.ts` |
+| membership, tier | מנוי בתשלום שמוותר על עמלות ודמי אחסון עד תקרה | `modules/mem` |
+| storage fee run | הריצה היומית של חיוב דמי האחסון | `worker/src/jobs/storage-fee.ts` |
+| outbox | טבלה שנכתבת באותה טרנזקציה של שינוי ומשמשת לשליחת התראות | `not/outbox`, `worker/src/jobs/outbox-dispatch.ts` |
+| idempotency key | מפתח שמבטיח שבקשה שחוזרת לא תבוצע פעמיים | `shared/idempotency` |
+| confirmation token | אסימון חד פעמי שמאשר פעולה הרסנית בשני שלבים | `shared/confirmation` |
+| append only | טבלה שה trigger שלה דוחה UPDATE ו DELETE | `db/sql/0001_append_only.sql` |
+| sandbox adapter | מימוש מזויף של ספק חיצוני לפיתוח | `packages/adapters` |
+| `@Public`, `@AllowSuspended`, `@Roles` | סימונים על routes שקובעים מי יכול להגיע אליהם | `modules/acc`, `modules/sec` |
+
+## ארבעה מסעות מקצה לקצה
+
+הפרק הזה עוקב אחרי ארבע פעולות מהלחיצה בדפדפן ועד התשובה, דרך כל שכבה. הן נבחרו כי כל אחת מהן מדגימה מנגנון אחר שחוזר בכל המערכת. התחברות מדגימה sessions ו guards. רכישה מדגימה טרנזקציה, נעילות, יומן, משמורת ו outbox. קליטה עם תמונה מדגימה אחסון אובייקטים והרשאות מחסן. טעינת ארנק מדגימה ספק חיצוני ואידמפוטנטיות. אחרי שמבינים את ארבעתן, כל flow אחר במערכת הוא וריאציה.
+
+כל קובץ שמוזכר כאן מוסבר בטבלת הבלוקים שלו בפרקי הקבצים. קראו את המסעות לפני פרק הדפוסים, כדי לראות קודם את התמונה ואחר כך את המנגנון.
+
+### מסע 1. התחברות
+
+```mermaid
+sequenceDiagram
+  participant U as משתמש
+  participant SP as SignInPage.tsx
+  participant AC as shared/api.ts
+  participant NG as Vite proxy או nginx
+  participant MW as Express middleware
+  participant G as Guards
+  participant CT as AuthController.login
+  participant SV as AuthService.login
+  participant SS as SessionService.create
+  participant DB as Postgres
+  U->>SP: הקלדה ושליחת הטופס
+  SP->>AC: api.post('/auth/login', {identifier, password})
+  AC->>NG: POST /api/v1/auth/login, credentials include
+  NG->>MW: X-Forwarded-For נקבע
+  MW->>G: request id, helmet, json, validation
+  G->>G: Throttler, דלי auth. Session guard, אין cookie, route ציבורי
+  G->>CT: LoginDto מאומת
+  CT->>SV: login(identifier, password, {ip, userAgent})
+  SV->>DB: SELECT user_account WHERE email = x OR username = x
+  SV->>SV: argon2.verify
+  SV->>SS: create(userId)
+  SS->>DB: INSERT login_session, רק hash של ה token
+  SV->>DB: INSERT login_attempt
+  CT->>AC: Set-Cookie session=token, HttpOnly, SameSite=Lax, 7 ימים
+  AC->>SP: {id, role}
+  SP->>SP: onSignedIn, App.tsx טוען /me/profile ובוחר אזור
+```
+
+מה קורה בכל שלב, ומה קורה כשהוא נכשל.
+
+| שלב | מה קורה | כשל ומה המשתמש רואה |
+|---|---|---|
+| הטופס | `login` ב `SignInPage.tsx` מונע שליחה רגילה, מדליק `busy`, מנקה שגיאות | אין כשל כאן. `busy` מונע לחיצה כפולה רק אם הכפתור מושבת לפיו |
+| `api.post` | `fetch` עם `credentials: 'include'` ו `Content-Type: application/json` | רשת נפלה, `ApiError` מסוג `unreachable` וההודעה מוצגת |
+| proxy | Vite בפיתוח, nginx בייצור, מעביר ל API | ה API לא רץ. Vite מחזיר 503 עם `api_unreachable`. nginx מחזיר 502 כ HTML, וה `res.json()` נכשל בשקט וההודעה היא `Bad Gateway` |
+| middleware | מזהה בקשה, helmet, מפרסר JSON עד 16 מגה | JSON שבור, 400 עם הודעת המפרסר |
+| ThrottlerGuard | שני דליים לפי IP. `@Throttle(CREDENTIAL_ROUTE)` מגביל את login ל `AUTH_RATE_LIMIT_PER_MINUTE` | 429. אם `TRUST_PROXY` שגוי, כל המשתמשים חולקים דלי אחד |
+| SessionAuthGuard | אין cookie ולכן אין משתמש, ה route מסומן `@Public` ולכן ממשיך | אם יש cookie של חשבון `closed`, נזרק 403 עוד לפני ההתחברות |
+| ValidationPipe | `LoginDto` בודק אורך וסוג | שדה חסר או שדה זר, 400 עם רשימת שדות |
+| `AuthService.login` | מנרמל את המזהה, מחפש לפי מייל או שם משתמש, מאמת argon2 | משתמש לא קיים או סיסמה שגויה, 401 אחיד. אבל משתמש לא קיים מדלג על argon2 ולכן עונה מהר יותר, וזה חושף קיום חשבון בתזמון |
+| סטטוס | `pending` מחזיר קוד `email_unverified`. `closed` מחזיר 403. `suspended` מתחבר | המסך מציע לשלוח מייל אימות מחדש |
+| session | 32 בתים אקראיים, נשמר רק SHA-256 שלהם, תוקף קבוע של שבעה ימים | כשל DB, 500 |
+| `login_attempt` | שורה לכל ניסיון, בתוך try ו catch | כשל בכתיבה לא מפיל את ההתחברות |
+| cookie | `Secure` רק כש `NODE_ENV=production` | בייצור בלי HTTPS, הדפדפן לא ישמור את ה cookie וההתחברות תיראה כמצליחה ואז תיכשל |
+| audit | `req.user` נקבע ב controller כדי שה interceptor ירשום מי התחבר | ראה את הניתוח ב `audit.interceptor.ts` |
+
+אחרי שה cookie נשמר, כל בקשה הבאה עוברת את אותו מסלול, אבל ב guard יש cookie. `SessionService.resolve` מחשב את ה hash, מחפש שורה שלא בוטלה, ובודק שהתוקף לא עבר. אם החשבון `suspended`, רק routes עם `@AllowSuspended` עוברים. ה SPA מגלה את המצב הזה מתשובת `/me/profile` ומציג מסך מוגבל.
+
+### מסע 2. רכישה בשוק
+
+```mermaid
+sequenceDiagram
+  participant MP as MarketplacePage.tsx
+  participant CT as MktController.purchase
+  participant ID as IdempotencyService
+  participant PS as PurchaseService
+  participant DB as Postgres, טרנזקציה אחת
+  MP->>CT: POST /marketplace/listings/:id/purchase, בלי Idempotency-Key
+  CT->>PS: purchase(userId, id, key = purchase-userId-listingId)
+  PS->>ID: lookup(key, purchase:listingId)
+  ID-->>PS: לא נמצא
+  PS->>DB: BEGIN
+  PS->>DB: SELECT listing FOR UPDATE
+  PS->>DB: SELECT item FOR UPDATE
+  PS->>DB: עמלה מ pricing_rule, ויתור מ membership
+  PS->>DB: SUM ledger_record של הקונה
+  PS->>DB: INSERT ledger_record, חיוב קונה, זיכוי מוכר, עמלה
+  PS->>DB: UPDATE item owner, INSERT custody_event פעמיים
+  PS->>DB: UPDATE listing sold, INSERT transaction, INSERT outbox_message
+  PS->>DB: COMMIT
+  PS->>ID: save(key, 201, result)
+  PS-->>MP: {transactionId, itemId, price, fee}
+  MP->>MP: טעינה מחדש של הרשימות והפריטים
+```
+
+שלושה דברים ששווה להבין כאן לעומק.
+
+**למה הנעילות.** `for('update')` הופך את ה SELECT ל `SELECT ... FOR UPDATE`. קונה שני שמגיע באותו רגע נחסם על שורת ה listing עד שהראשון מסיים, ואז קורא אותה מחדש ורואה `sold`, ומקבל 409. בלי הנעילה שניהם היו קוראים `active` ושניהם היו קונים. זו הסיבה היחידה שהבדיקה `tests/concurrency/no-double-sale.test.ts` עוברת. קריאה מומלצת, [explicit locking בתיעוד של `Postgres](https://www.postgresql.org/docs/16/explicit-locking.html#LOCKING-ROWS)`.
+
+**מה לא ננעל.** היתרה של הקונה היא `SUM` על שורות ביומן, ואין שורה אחת שאפשר לנעול. קונה עם מאה דולר ששולח שתי רכישות של מאה דולר על שני רישומים שונים באותו רגע, מקבל שתי טרנזקציות שכל אחת נועלת רישום אחר, כל אחת רואה מאה דולר, ושתיהן מצליחות. היתרה יורדת למינוס מאה. זה ממצא מאומת בפרק הממצאים, והתיקון הוא נעילה לפי משתמש, למשל `pg_advisory_xact_lock` על מזהה הקונה, בתחילת כל טרנזקציה שמורידה כסף.
+
+**אידמפוטנטיות.** המפתח ברירת המחדל הוא `purchase-<buyer>-<listing>`, ומכיוון ש `MarketplacePage.tsx` לא שולח כותרת, זה המפתח שתמיד נמצא בשימוש. לחיצה כפולה מחזירה את התוצאה המקורית עם `replayed: true`. ה save קורה אחרי ה COMMIT ומחוץ לטרנזקציה, כך שקריסה בין השניים תגרום לניסיון החוזר לקבל 409 במקום את התוצאה המקורית, וזה מקובל כי שום דבר לא חויב פעמיים.
+
+| שלב | כשל | תוצאה |
+|---|---|---|
+| listing לא קיים | 404 | ההודעה מוצגת |
+| listing לא `active` | 409 `ITEM_NO_LONGER_AVAILABLE` | ההודעה מוצגת |
+| הקונה הוא המוכר | 403 | |
+| הפריט ב hold | 409 | |
+| יתרה לא מספיקה | 409 `INSUFFICIENT_BALANCE` | שום דבר לא נכתב, כל הטרנזקציה מתבטלת |
+| כל כשל DB באמצע | ROLLBACK | שום שורה לא נשארת, כולל ה outbox, ולכן גם לא יישלחה התראה |
+| הפריט כבר לא אצל המוכר | אין בדיקה | ממצא E4, ראה את פרק הבאגים. `TradeService.approve` יכול להעביר פריט רשום לבעלים אחר, והרכישה תעביר אותו הלאה ותזכה את המוכר המקורי |
+
+### מסע 3. קליטת קלף עם תמונה במחסן
+
+```mermaid
+sequenceDiagram
+  participant IB as IntakeBench.tsx
+  participant PI as PhotoInput.tsx
+  participant MC as MedController
+  participant MS as MediaService
+  participant S3 as bucket
+  participant IC as InvController
+  participant BS as BatchService ו IntakeService
+  participant DB as Postgres
+  IB->>PI: המפעיל מצלם או בוחר קובץ
+  PI->>MC: POST /media/uploads {contentType, dataBase64, purpose}
+  MC->>MS: upload, בלי בדיקת תפקיד
+  MS->>MS: בדיקת contentType מהרשימה, פענוח base64, עד 10 מגה
+  MS->>S3: putObject intake/YYYY/MM/uuid.jpg
+  MS-->>PI: {objectKey}
+  IB->>IC: POST /intake/items/batch {ownerId, units, photoKeys}
+  IC->>BS: דורש warehouse_operator או admin
+  BS->>DB: טרנזקציה, INSERT item, מספר סידורי, custody_event, item_image
+  BS-->>IB: [{id, barcode}]
+  IB->>IB: הדפסת תוויות Code 128
+```
+
+הנקודה החשובה כאן היא ההפרדה בין העלאה לשיוך. התמונה עולה ל bucket לפני שיש פריט, והמפתח חוזר לדפדפן. רק בקריאה השנייה, שדורשת תפקיד מחסן, המפתח משויך לפריט בטבלה `item_image`. זה עיצוב סביר, כי העלאה איטית לא מחזיקה טרנזקציה פתוחה. אבל יש לו שתי השלכות. הראשונה, תמונה שעלתה ושיוכה נכשל נשארת ב bucket לנצח בלי שום שורה שמפנה אליה. השנייה, route ההעלאה עצמו לא דורש תפקיד, כך שכל לקוח מחובר יכול להעלות עשרה מגה לבקשה, בכמה בקשות שמגבלת הקצב הכללית מרשה, ישירות ל bucket.
+
+| שלב | כשל | תוצאה |
+|---|---|---|
+| contentType לא ברשימה | 400 עם הסבר | |
+| התוכן אינו תמונה בכלל | אין בדיקה | הבתים נשמרים עם ה contentType שהלקוח הצהיר |
+| יותר מ 10 מגה | 400 עם הגודל | אבל רק אחרי שכל ה base64 פוענח לזיכרון |
+| ה bucket לא זמין | חריגה לא מטופלת מה adapter | 500 כללי. זה בדיוק מה שהפיל תשעה מבחנים בקו הבסיס |
+| הפריט לא נוצר | ROLLBACK של יצירת הפריט | התמונה נשארת יתומה ב bucket |
+| הצגה בכספת | `MediaService.signAll` חותם כתובת לחמש דקות | אם החתימה נכשלת, התמונה פשוט לא מוצגת |
+
+### מסע 4. טעינת ארנק דרך PayPal
+
+```mermaid
+sequenceDiagram
+  participant WP as MoneyPanels.tsx
+  participant PC as PayController.checkout
+  participant CS as CheckoutService
+  participant PA as PayPalPaymentAdapter
+  participant PP as PayPal
+  participant DB as Postgres
+  WP->>PC: POST /finance/checkout {amountMinor, route, idempotencyKey}, ה SPA לא שולח paymentMethodToken
+  PC->>CS: checkout(userId, input)
+  CS->>CS: route מוכר ומיידי, סכום שלם בין מינימום למקסימום
+  CS->>DB: SELECT external_payment לפי user ו providerRef
+  CS->>PA: createTopup עם idempotencyKey
+  PA->>PP: capture של ההזמנה
+  PP-->>PA: COMPLETED, סכום ומטבע
+  CS->>CS: הסכום והמטבע שהספק דיווח חייבים להתאים לבקשה
+  CS->>DB: BEGIN, INSERT external_payment, INSERT ledger_record credit, outbox, COMMIT
+  CS-->>WP: {status, paymentId, amountMinor}
+  PP->>DB: מאוחר יותר, webhook דרך POST /webhooks/payment עם אימות חתימה
+```
+
+לפני הכל, ממצא שמשנה את כל התמונה. ה flow הזה לא יכול להסתיים בייצור. `PayPalPaymentAdapter.capture` ב `packages/adapters/src/payment.ts` שורות 213 עד 221 דורש מזהה של הזמנת PayPal שהמשלם כבר אישר, ב `paymentMethodToken`. אבל שום קוד בריפו לא יוצר הזמנה כזאת, ה SPA לא טוען את ה SDK של PayPal, וה CSP ב `nginx.conf` היה חוסם אותו בכל מקרה, ו `MoneyPanels.tsx` שורות 79 עד 92 שולח את הבקשה בלי `paymentMethodToken` בכלל. ב sandbox זה עובד כי ה adapter המזויף מאשר הכל. עם PayPal אמיתי ה adapter זורק `Error` רגיל, והלקוח מקבל 500. כלומר בייצור הדרך היחידה להכניס כסף לארנק היא בקשת טעינה ידנית שמנהל מאשר. זה E3, חוסם השקה, וההחלטה אם לממש את זרימת האישור של PayPal או להסתיר את הטעינה המיידית היא החלטה עסקית.
+
+שימו לב גם שמפתח האידמפוטנטיות נוצר בדפדפן מ `Date.now()` ומספר אקראי בכל לחיצה. כלומר הוא מגן מפני ניסיון חוזר של אותה בקשה ברשת, אבל לא מפני לחיצה כפולה, שמייצרת שני מפתחות שונים. ההגנה מפני לחיצה כפולה היא רק `busy` שמשבית את הכפתור.
+
+העיקרון שכדאי לזכור, בהנחה שהזרימה תמומש, הוא שהקוד לא סומך על הלקוח לגבי הסכום שחויב. הלקוח מבקש סכום, הספק מדווח מה נלכד, ורק אם השניים זהים היומן מזוכה. זו בקרה טובה.
+
+הנקודה החלשה היא הסדר. הלכידה אצל PayPal קורית לפני הטרנזקציה במסד. אם המסד נופל, או שבקשה מקבילה עם אותו מפתח כבר הכניסה שורה, הכסף נלכד אצל PayPal ואין לו שורה ביומן. ה webhook אמור לסגור את הפער הזה, והניתוח של `chargeback.service.ts` ו `pay.controller.ts` בפרק הכסף מסביר אם ומתי הוא עושה זאת. בכל מקרה, מצב כזה דורש תהליך התאמה יומי מול דוח PayPal, והוא מופיע במדריך המעבר.
+
+| שלב | כשל | תוצאה |
+|---|---|---|
+| route לא מיידי, למשל העברה בנקאית | 400 | המשתמש מופנה לבקשת טעינה ידנית |
+| סכום לא שלם או מחוץ לטווח | 400 | |
+| אין מפתח אידמפוטנטיות | 400 | |
+| אותו מפתח כבר שימש | מחזיר את התשלום הקיים עם `replayed` | |
+| הספק דחה | 409, שום דבר לא נרשם | |
+| הספק לכד סכום או מטבע אחר | 409, שום דבר לא נרשם | הכסף נלכד אצל PayPal ולא זוכה. דורש החזר ידני |
+| המסד נפל אחרי הלכידה | 500 | הכסף נלכד ולא זוכה. דורש התאמה |
+| אין `paymentMethodToken`, כלומר תמיד היום | `Error` רגיל מה adapter | 500 כללי בייצור |
+| במצב `PAYMENT_PROVIDER=sandbox` | כל token מתקבל | זו הסיבה שה sandbox חסום בייצור בשני מקומות |
 
 ## פרק הדפוסים. הדפוסים שחוזרים בכל הקוד
 
@@ -170,7 +421,7 @@ export class PayModule {}
 | 33 | `exports` קובע מה מודולים אחרים רואים. | שירות שלא מיוצא זמין רק בתוך PAY, גם כשהמודול גלובלי. `TopupService` ו `WithdrawalService` פנימיים. |
 
 **וריאציות שתפגוש.**
-- מודול תכונה רגיל, `esc.module.ts` ו `mkt.module.ts`. רק `controllers` ו `providers`, בלי `imports`, כי כל התלויות מגיעות ממודולים גלובליים.
+- מודול תכונה רגיל, `esc.module.ts` ו `mkt.module.ts`. `controllers` ו `providers`, ב `esc.module.ts` גם `exports`, ובלי `imports`, כי כל התלויות מגיעות ממודולים גלובליים.
 - טוקן `Symbol` עם `useFactory`, ב `db/db.module.ts` עבור `DRIZZLE` וב `shared/adapters/adapters.module.ts`. המפעל רץ פעם אחת באתחול, דפוס P11.
 - `app.module.ts` מחבר את כל המודולים. סדר ה `imports` לא משפיע על DI. מה שמשפיע הוא סדר ה `APP_GUARD` בשורות 98 עד 100, דפוס P2.
 - `shared/billing/billing.port.ts` מגדיר `BillingModule` עם adapter ריק. אף אחד לא מייבא אותו, ו PAY מספק את הטוקן האמיתי. זה קוד מת.
@@ -241,7 +492,7 @@ export class PayModule {}
 | app.module 100 | `RolesGuard` קורא `@Roles` מה method או מהמחלקה ובודק ש `user.role` ברשימה. | `getAllAndOverride` אומר ש `@Roles` על method מחליף את זה של המחלקה ולא מצטרף אליו. אין היררכיה, admin לא עובר route של `warehouse_operator` אם לא נכתב במפורש. |
 | app.module 101 | `AuditInterceptor` כותב `audit_record` אחרי handler מוצלח של POST, PUT, PATCH או DELETE. | רץ רק אחרי הצלחה, מחוץ לטרנזקציה של השירות, ובולע כל שגיאה ב `.catch(() => undefined)`. ההערה בקוד אומרת שהכשל נרשם ללוג, וזה לא נכון. בקשה שנכשלה לא משאירה עקבות. |
 | 83 עד 86 | GET של בקשה אחת. `@Param('id')` מחזיר מחרוזת גולמית. | אין `ParseUUIDPipe`. id שאינו uuid מגיע ל Postgres, וה `AllExceptionsFilter` הופך את שגיאת 22P02 ל 400. |
-| 88 עד 91 | POST עם `@Body() dto: CancelDto`. ה `ValidationPipe` הגלובלי מאמת ומסנן את הגוף לפי הקלאס, דפוס P4. | `@CurrentUser()` זורק 401 כשאין `req.user`. הבקר לא בודק בעלות, השירות בודק. |
+| 88 עד 91 | POST עם `@Body() dto: CancelDto`. ה `ValidationPipe` הגלובלי מאמת את הגוף לפי הקלאס ודוחה שדה לא מוכר, דפוס P4. | `@CurrentUser()` זורק 401 כשאין `req.user`. הבקר לא בודק בעלות, השירות בודק. |
 | 95 עד 106 | תור הסקירה, `@Roles('admin')`, עם חמישה `@Query`. | query strings לא עוברים ולידציה. `WalletRequestType` הוא רק cast של TypeScript, וכל מחרוזת מגיעה לשירות. |
 | 108 עד 112 | אותה מתודת `detail` של השירות דרך route של אדמין. | השירות מקבל את `user` ומחליט לפי התפקיד, כך שמתודה אחת משרתת שני routes. |
 
@@ -321,7 +572,7 @@ export class PayModule {}
 |---|---|---|
 | 52 עד 60 | הבנאי מזריק `DRIZZLE` דרך `@Inject` ואת השירותים הגלובליים לפי מחלקה. | דפוס P1. אין צורך ב `imports` במודול. |
 | 71 עד 85 | בדיקת idempotency לפי key ו endpoint. תשובה שמורה חוזרת עם `replayed: true`. | נקראת מחוץ לטרנזקציה, ו `save` בשורה 180 רץ אחרי ה commit. שתי בקשות מקבילות עם אותו key נכנסות שתיהן. מה שמונע מכירה כפולה הוא הנעילה בשורה 88. |
-| 87 | `this.db.transaction(async (tx) => ...)`. Drizzle לוקח חיבור אחד מה pool, שולח BEGIN, ועושה COMMIT כשה callback מסתיים או ROLLBACK כשהוא זורק. | כל שאילתה בתוך ה callback חייבת לעבור דרך `tx`. שאילתה דרך `this.db` רצה על חיבור אחר, מחוץ לטרנזקציה, ויכולה לחכות לנעילה שה tx עצמו מחזיק עד timeout. |
+| 87 | `this.db.transaction(async (tx) => ...)`. Drizzle לוקח חיבור אחד מה pool, שולח BEGIN, ועושה COMMIT כשה callback מסתיים או ROLLBACK כשהוא זורק. | כל שאילתה בתוך ה callback חייבת לעבור דרך `tx`. שאילתה דרך `this.db` רצה על חיבור אחר, מחוץ לטרנזקציה, ויכולה לחכות לנעילה שה tx עצמו מחזיק. אין בריפו `statement_timeout` או `lock_timeout`, ולכן ההמתנה לא נגמרת. |
 | 88 עד 95 | נועל את ה listing ב `.for('update')`, ורק אז בודק קיום, `active` ושהקונה אינו המוכר. | ב READ COMMITTED, ברירת המחדל, קונה שני נחסם על ה SELECT עד ה commit של הראשון ואז קורא את השורה המעודכנת ורואה `sold`. בדיקה לפני הנעילה בודקת מצב ישן. |
 | 97 עד 99 | נועל את ה item ובודק `holdFlag`. | לא בודק ש `it.ownerId` שווה ל `l.sellerId`. פריט שעבר בעלים בדרך אחרת יימכר מהבעלים החדש, חלק מ E4. |
 | 101 עד 118 | מחיר, עמלה מ `pricing.price(..., tx)`, והנחת מנוי מ `memberships.waive`. | ה snapshot של המחיר נשמר בעסקה, ושינוי מחירון אחר כך לא משנה היסטוריה. `tx as Database` הוא cast, כי הטיפוס של tx ב Drizzle שונה מזה של db. |
@@ -337,7 +588,7 @@ export class PayModule {}
 **וריאציות שתפגוש.**
 - הגרסה הנכונה של הדפוס, `wallet-request.service.ts` שורות 345 עד 365. טעינה בתוך ה tx עם `.for('update')`, בדיקת מעבר סטטוס אחרי הנעילה, ו `audit.record(..., tx)` בשורה 555 באותה טרנזקציה.
 - אתר של E18, `shipment.service.ts` המתודה `pay` בשורות 921 עד 970. `loadFor`, בדיקת סטטוס ובדיקת יתרה רצים לפני `db.transaction`, וה UPDATE הוא לפי `id` בלבד. תשלום כפול או תשלום על משלוח שה worker כבר ביטל אפשריים. אותו מבנה ב `escrow.service.ts` ב `fund` וב `human-fulfilment.service.ts` ב `acceptQuote`.
-- `CustodyService` מקבל `tx` כפרמטר ראשון בכל מתודה ולא פותח טרנזקציה משלו, כדי שהקורא ירכיב כמה פעולות ל commit אחד. `lockItem` בשורות 33 עד 43 הוא עזר הנעילה שלו.
+- `CustodyService` מקבל `tx` כפרמטר ראשון בכל מתודה ולא פותח טרנזקציה משלו, כדי שהקורא ירכיב כמה פעולות ל commit אחד. היוצא מן הכלל הוא `run` בשורות 210 עד 212, עטיפה ל `db.transaction` ששירותי DIS משתמשים בה. `lockItem` בשורות 33 עד 43 הוא עזר הנעילה שלו.
 - שירות קריאה בלבד, כמו `browse.service.ts`, עובד ישירות על `this.db` בלי טרנזקציה.
 
 **מלכודות.**
@@ -398,9 +649,9 @@ class SplitDto {
 |---|---|---|
 | main.ts 130 עד 137 | `ValidationPipe` גלובלי עם `whitelist`, `forbidNonWhitelisted`, `transform` ו `exceptionFactory: validationException`. | `transform` הופך את הגוף למופע של הקלאס. `whitelist` מוריד שדה בלי decorator, ו `forbidNonWhitelisted` הופך אותו ל 400. אין `enableImplicitConversion`, ולכן `"5"` נכשל ב `@IsInt()`. |
 | 77 עד 84 | מערך לא ריק של עד 50 יחידות, כל אחת מאומתת כ `IntakeItemDto`. | בלי `@Type(() => IntakeItemDto)` ה `class-transformer` לא יוצר מופעים, ו `@ValidateNested` לא מאמת את האיברים. השניים באים יחד תמיד. |
-| 86 עד 92 | תיקון גנרי, `field` ו `value` כמחרוזות. | הולידציה לא יודעת אילו שדות מותרים. `CorrectionService` חייב לבדוק את `field` מול רשימה. |
+| 86 עד 92 | תיקון גנרי, `field` ו `value` כמחרוזות. | הולידציה לא יודעת אילו שדות מותרים. `CorrectionService` בודק את `field` מול הרשימה `CORRECTABLE`, ושדה חדש לתיקון נכנס לשם. |
 | 94 עד 98 | שני שדות אופציונליים לזיהוי בעלים. | `@IsOptional` מדלג על כל הבדיקות כשהערך `undefined` או `null`. אין בדיקה שלפחות אחד הגיע, השירות בודק. |
-| 99 עד 107 | פיצול פריט, מערך של `SplitItemDto`. | אין `ArrayNotEmpty` ואין `ArrayMaxSize`, כך שמערך ריק או ענק עובר. |
+| 99 עד 107 | פיצול פריט, מערך של `SplitItemDto`. | אין `ArrayNotEmpty` ואין `ArrayMaxSize`. מערך ריק נעצר רק בשירות, `batch.service.ts` שורה 98, ומערך ענק עובר. |
 | `validation-error.ts` | `validationException` משטח את השגיאות, מתרגם שמות שדות ומחזיר `{ code: 'validation_failed', message, details: { violations } }`. | שם שדה חדש שנראה רע בהודעה נכנס למפה `FIELD_NAMES`. |
 
 **וריאציות שתפגוש.**
@@ -474,7 +725,7 @@ export const transaction = pgTable('transaction', {
 |---|---|---|
 | 1 עד 2 | בוני עמודות מ `drizzle-orm/pg-core` ועזרים מ `_helpers.ts`. | העזרים מחזירים builder חדש בכל קריאה, כדי ששתי טבלאות לא יחלקו אובייקט. |
 | 9 | `pgEnum` מגדיר טיפוס enum במסד וגם union בטיפוסים של TypeScript. | ערך חדש דורש migration עם `ALTER TYPE ... ADD VALUE`, דפוס P6. |
-| 11 עד 20 | `listing`. `pkId()` הוא uuid עם `defaultRandom`, `amountMinor` הוא bigint במצב number, `currency` הוא char באורך 3. | `itemId` ו `sellerId` הם `text` בלי `.references()`. אין foreign key אחד בשום קובץ schema, והשלמות היא באחריות השירות. כמה FK קיימים רק ב SQL של 0013, 0014 ו 0016. |
+| 11 עד 20 | `listing`. `pkId()` הוא uuid עם `defaultRandom`, `amountMinor` הוא bigint במצב number, `currency` הוא char באורך 3. | `itemId` ו `sellerId` הם `text` בלי `.references()`. אין foreign key אחד בשום קובץ schema, והשלמות היא באחריות השירות. כמה FK קיימים רק ב SQL של 0013, 0014, 0016 ו 0026. |
 | 18 עד 19 | `defaultNow()` על זמני יצירה ועדכון. | `defaultNow` פועל רק ב INSERT. כל UPDATE בקוד מציב `updatedAt: new Date()` בעצמו, ו `$onUpdate` של Drizzle לא בשימוש. |
 | 22 עד 37 | `transaction`. `itemIds` ו `frozenPricing` הם jsonb. | jsonb חוזר כ `unknown`, ולכן הקוד עושה cast כמו `s.itemIds as string[]`. המבנה לא נבדק במסד. |
 
@@ -558,7 +809,7 @@ async function main(): Promise<void> {
 - CHECK שמוחלף בבטחה, `DROP CONSTRAINT IF EXISTS` ואז `ADD CONSTRAINT`, ב `0022` שורות 31 עד 33.
 
 **מלכודות.**
-- ה snapshots ב `migrations/meta` נעצרים ב 0003. `pnpm db:generate` ישווה את ה schema ל 0003 ויפיק migration שיוצר מחדש את כל מה שנוסף מאז. כותבים ביד ומוסיפים רשומה ל journal.
+- ה snapshots ב `migrations/meta` נעצרים ב 0003. `pnpm --filter @bault/api db:generate` ישווה את ה schema ל 0003 ויפיק migration שיוצר מחדש את כל מה שנוסף מאז. כותבים ביד ומוסיפים רשומה ל journal.
 - כל ה migrations החדשים רצים בטרנזקציה אחת. ערך enum שנוסף ב migration אחד לא שמיש ב migration מאוחר יותר באותה הרצה, ו Postgres 16 נכשל עם `unsafe use of new value`.
 - רשימת טבלאות ההיסטוריה מופיעה פעמיים ב `0001_append_only.sql`, בשורה 42 לטריגרים ובשורה 87 ל REVOKE. טבלה שנוספה רק לאחת מהן מוגנת חלקית.
 
@@ -620,7 +871,7 @@ export async function expireUnpaidShipments(pool: Pool): Promise<void> {
 
 | שורות | מה זה עושה | למה ככה |
 |---|---|---|
-| index 29 עד 30 | Pool של `pg` ומופע `PgBoss`, שניהם על `DIRECT_DATABASE_URL`. | `pg-boss` צריך LISTEN ו advisory locks, ש PgBouncer במצב transaction לא מעביר. |
+| index 29 עד 30 | Pool של `pg` ומופע `PgBoss`, שניהם על `DIRECT_DATABASE_URL`. | ההערה בקוד מנמקת ב LISTEN ו NOTIFY, אבל `pg-boss` 10.4.2 שמותקן לא מאזין, וה advisory lock שלו הוא `pg_advisory_xact_lock` בתוך טרנזקציה. החיבור הישיר תקין, אבל הנימוק לא תקף לגרסה הזאת. |
 | index 37 | `boss.start()` יוצר את הסכמה של `pg-boss` ומפעיל את מנגנון ה cron. | |
 | index 40 עד 61 | רשימת jobs, שם מ `registry.ts`, ביטוי cron ופונקציה שמקבלת את ה pool. | cron מחושב ב UTC, ברירת המחדל של `pg-boss`. הסדר בין jobs, למשל ריבית ב `03:00` ואז השעיה ב `03:15`, נשען רק על השעות. |
 | index 63 עד 71 | לכל job, `createQueue`, `work` ו `schedule`. | בגרסה 10 התור חייב להתקיים לפני `schedule`. ה cron שולח job אחד לכל tick עם `singletonKey` לפי שם, כך שכמה workers לא יוצרים כפילות. ה handler מתעלם מתוכן ה job. שגיאה שנזרקת מסמנת אותו כנכשל, ו `retry_limit` במסד הוא 2 כברירת מחדל. |
@@ -632,7 +883,7 @@ export async function expireUnpaidShipments(pool: Pool): Promise<void> {
 
 **וריאציות שתפגוש.**
 - `tracking-refresh.ts` בלי טרנזקציה, עם `pool.query` ישיר ו `new SandboxShippingAdapter()` קבוע, E17.
-- `storage-fee.ts` הוא CTE אחד גדול. הוא קורא `pricing_rule` עם WHERE משלו בשורות 66 עד 74 וכותב `charge` ו `ledger_record` ישירות. בחירת הכלל חייבת להתאים ל `PricingService`, והכיוון והסוג של שורות ה ledger ל `LedgerService`.
+- `storage-fee.ts` קורא `pricing_rule` עם WHERE משלו בשורות 68 עד 74, מחשב מה לחייב בשאילתת CTE גדולה שמתחילה בשורה 133, וכותב `charge` ו `ledger_record` ישירות בשורות 270 עד 282. בחירת הכלל חייבת להתאים ל `PricingService`, והכיוון והסוג של שורות ה ledger ל `LedgerService`.
 - `outbox-dispatch.ts` קורא שורות `outbox_message` שלא נשלחו והופך אותן להודעות.
 - `ledger-invariant-check.ts` קורא בלבד ומדווח על סטייה בין יתרה ליומן.
 
@@ -935,13 +1186,13 @@ function createPaymentAdapter(): PaymentAdapter {
 **וריאציות שתפגוש.**
 - `storage.ts` הוא הדפוס בצורה המינימלית, interface של שתי מתודות ו sandbox שלא שומר כלום. המימוש האמיתי ב `s3.ts`.
 - `shipping.ts` מחזיק interface ו sandbox שממציא תעריפים, והמימוש האמיתי ב `easypost.ts`.
-- `email.ts` עם `ConsoleEmailAdapter` ו `SmtpEmailAdapter`. כאן אין חסימה ב production. `EMAIL_PROVIDER` שאינו `smtp` שולח מיילים ל stdout בשקט.
+- `email.ts` עם `ConsoleEmailAdapter` ו `SmtpEmailAdapter`. ה factory לא חוסם כלום, ו `console` נחסם ב production רק בסכמה ב `packages/config/src/env.ts`. מחוץ ל production `console` כותב את המיילים ל stdout בשקט.
 - ה worker לא עובר דרך המפעל. `outbox-dispatch.ts` בוחר adapter של מייל בעצמו, ו `tracking-refresh.ts` יוצר `SandboxShippingAdapter` קבוע, E17.
 - `packages/adapters` הוא חבילת workspace בשם `@bault/adapters` שנבנית ל `dist`. בבדיקות `vitest.workspace.ts` מפנה את השם ישירות ל `src`.
 
 **מלכודות.**
 - E3. אין בשום מקום יצירה של הזמנת PayPal, ולכן טעינה מיידית של ארנק לא עובדת גם עם המימוש האמיתי.
-- בדיקות החוזה ב `tests/contract/payment-adapter.test.ts` בודקות רק את ה sandbox. שום בדיקה לא מוכיחה שהמימוש האמיתי מקיים את אותו חוזה.
+- בדיקות החוזה ב `tests/contract/payment-adapter.test.ts` בודקות רק את ה sandbox. `tests3/contract/paypal-adapter.test.ts` מריץ את `PayPalPaymentAdapter` מול `fetch` מזויף, אבל לא את אותן בדיקות ולא מול PayPal עצמו.
 - קריאה לספק היא תופעת לוואי שלא מתגלגלת. קריאה בתוך `db.transaction` שאחריה משהו נכשל משאירה כסף שזז אצל הספק בלי שורת ledger. תשובה `pending` שמטופלת כהצלחה משאירה מצב שאף קוד לא מעדכן אחר כך.
 
 **תיעוד.** [Nest factory providers](https://docs.nestjs.com/fundamentals/custom-providers#factory-providers-usefactory).
@@ -952,6 +1203,64 @@ function createPaymentAdapter(): PaymentAdapter {
 - דגל כמו `handlesRealMoney`, כדי שהממשק יוכל להראות שזה לא אמיתי.
 - בדיקת חוזה ב `tests/contract` שרצה גם על המימוש האמיתי, לפחות מול סביבת הבדיקה של הספק.
 - קריאה לספק מחוץ לטרנזקציה, או תכנון מפורש של מה קורה כשהטרנזקציה מתגלגלת אחרי שהספק כבר ביצע.
+
+### בדוק את עצמך
+
+1. הסבר באיזה סדר רצים ה guards הגלובליים, ולמה דלי ה rate limit של `auth` חל גם על routes שאינם התחברות.
+<details><summary>תשובה</summary>
+
+`ThrottlerGuard`, אחריו `SessionAuthGuard` ואחריו `RolesGuard`, לפי סדר הרישום ב `apps/api/src/app.module.ts` שורות 98 עד 100. שני הדליים מוגדרים בשורות 63 עד 66, ו `@nestjs/throttler` 6.5 מריץ כל throttler עם שם על כל route שלא סומן `@SkipThrottle`, ואין כזה בריפו.
+
+</details>
+
+2. הסבר למה פעולה רגישה כותבת `audit.record(..., tx)` בעצמה ולא סומכת על ה `AuditInterceptor`.
+<details><summary>תשובה</summary>
+
+ה interceptor כותב רק אחרי handler מוצלח, מחוץ לטרנזקציה של השירות, ובולע כל שגיאה ב `.catch(() => undefined)`, `apps/api/src/modules/sec/audit.interceptor.ts` שורות 36 עד 48. רישום בתוך ה tx, כמו ב `apps/api/src/modules/pay/wallet-request.service.ts` שורות 555 עד 569, נשמר או מתגלגל יחד עם הפעולה עצמה.
+
+</details>
+
+3. תאר מה צריך להוסיף ל `PurchaseService.purchase` כדי ששתי קניות מקבילות של אותו קונה ברשימות שונות לא יעברו שתיהן.
+<details><summary>תשובה</summary>
+
+היום הנעילה היא על ה listing וה item, ו `balanceOf` הוא SUM בלי נעילה, `apps/api/src/modules/mkt/purchase.service.ts` שורות 88 עד 124. צריך לנעול את הארנק של הקונה בתוך ה tx לפני בדיקת היתרה, למשל ב `pg_advisory_xact_lock(hashtext(buyerId))`, וזה התיקון ל E1.
+
+</details>
+
+4. תאר מה יקרה כשלקוח שולח ל `POST /finance/wallet-requests` שדה שאינו ב DTO, או את המחרוזת `"5"` בשדה `amountMinor`.
+<details><summary>תשובה</summary>
+
+שתי הבקשות נדחות עם 400 וקוד `validation_failed`. `forbidNonWhitelisted` הופך שדה בלי decorator לשגיאה, ובלי `enableImplicitConversion` המחרוזת נכשלת ב `@IsInt()`, `apps/api/src/main.ts` שורות 130 עד 137 ו `apps/api/src/modules/pay/wallet-request.controller.ts` שורה 25.
+
+</details>
+
+5. מצא את הבלוק שבגללו ה migrator המקומפל ב image של ה API לא מתקין את ה triggers של append only.
+<details><summary>תשובה</summary>
+
+`apps/api/src/db/migrate.ts` שורות 25 עד 26 בונה את הנתיב ל `0001_append_only.sql` מ `__dirname`, שב image הוא `dist/db`. ה image מעתיק את ה SQL רק ל `src/db/sql`, `apps/api/Dockerfile` שורות 67 עד 68, ולכן ההרצה נופלת ב ENOENT אחרי מיגרציות drizzle, וזה E2.
+
+</details>
+
+6. הסבר איך ה job `shipment-expiry` ב worker ו `ShipmentService.pay` ב API יכולים להשאיר משלוח שבוטל ובכל זאת נגבה.
+<details><summary>תשובה</summary>
+
+ה worker נועל ב `FOR UPDATE` ומבטל, `apps/worker/src/jobs/shipment-expiry.ts` שורות 26 עד 58. `pay` בודק סטטוס ויתרה לפני הטרנזקציה ומעדכן לפי `id` בלבד, `apps/api/src/modules/shp/shipment.service.ts` שורות 921 עד 970, ולכן אחרי שהנעילה משתחררת הוא כותב `rates_selected` מעל `cancelled` ושורות החיוב נשמרות, E18.
+
+</details>
+
+7. תאר איך `SupportQueue` מבדיל בין טעינה, שגיאה ורשימה ריקה, ומה קורה ל GET שלו במצב פיתוח.
+<details><summary>תשובה</summary>
+
+`rows` מתחיל ב `null` לטעינה, מערך ריק מציג `EmptyState`, ושגיאה נשמרת ב `error` ומוצגת ב `ErrorState`, `apps/web/src/areas/warehouse/SupportQueue.tsx` שורות 39 עד 73. `StrictMode` ב `apps/web/src/main.tsx` מריץ את ה effect פעמיים בפיתוח, ולכן ה GET נשלח פעמיים.
+
+</details>
+
+8. הסבר מה מונע מ `SandboxPaymentAdapter` לרוץ ב production, ומתי נקבע איזה adapter רץ.
+<details><summary>תשובה</summary>
+
+הסכמה דוחה `PAYMENT_PROVIDER=sandbox` כש `NODE_ENV=production`, `packages/config/src/env.ts` שורות 393 עד 402, וה factory זורק שוב, `apps/api/src/shared/adapters/adapters.module.ts` שורות 96 עד 103. ה factory רץ פעם אחת כשה provider נבנה, ולכן שינוי של משתנה הסביבה דורש restart.
+
+</details>
 
 ## פרק 1. שלד הריפו, החבילות המשותפות, הסקריפטים, התשתית וה CI
 
@@ -988,7 +1297,7 @@ flowchart LR
 
 | קובץ | מה הוא עושה |
 |---|---|
-| `pnpm-workspace.yaml` | מכריז ש `apps/*` ו `packages/*` הם חבילות. חבילה חדשה מחייבת `COPY` של המניפסט שלה בכל אחד משלושת ה Dockerfile, אחרת `--frozen-lockfile` נכשל |
+| `pnpm-workspace.yaml` | מכריז ש `apps/*` ו `packages/*` הם חבילות. חבילה חדשה מחייבת `COPY` של המניפסט שלה בכל אחד משלושת ה Dockerfile. בלי זה `--frozen-lockfile` דווקא עובר, נבדק עם pnpm 9.15, אבל התלויות של החבילה לא מותקנות והכשל מגיע רק ב build או בריצה |
 | `.npmrc` | `link-workspace-packages`, `auto-install-peers` ו `strict-peer-dependencies=false`. ההערה שטוענת שהאחרון שומר על עץ קפדני הפוכה לאמת. אין `shamefully-hoist`, ולכן `tests/` ו `scripts/` רואים רק תלויות שורש. הוספת `engine-strict=true` תשבור מיד את שלושת ה Dockerfile |
 | `pnpm-lock.yaml` | קובץ נעילה של 6910 שורות, לא נערך ביד. `--frozen-lockfile` ב CI וב Docker נכשל אם אינו תואם ל `package.json` |
 | `tsconfig.base.json` | ES2022, `declaration`, `strict` ו `noUncheckedIndexedAccess`, שבגללו כל גישה לפי אינדקס היא אולי `undefined`, מכאן שרשראות `?.` ב adapters. `exactOptionalPropertyTypes` כבוי במכוון, והדלקתו תשבור עשרות מקומות. שלוש החבילות דורסות `isolatedModules` ל `false` |
@@ -1005,7 +1314,7 @@ flowchart LR
 | 7 עד 17 | `NODE_ENV=development`, `API_PORT=3000`, `VITE_API_PROXY_TARGET` מוער | ההסבר על `127.0.0.1` במקום `localhost` נכון, Node 17 ומעלה פותר קודם ל `::1` |
 | 19 עד 22 | `DATABASE_URL` ל PgBouncer בפורט 6432, `DIRECT_DATABASE_URL` ל Postgres בפורט 5432, `bault:bault` | אותה סיסמה כמו ב compose, ב `userlist.txt` וב CI |
 | 24 עד 26 | `SESSION_COOKIE_SECRET` עם ערך חלש | חובה בסכמה, אבל אף קוד ב `apps/` לא קורא אותו. מי שיחבר אותו לחתימה בעתיד יניח שהוא סודי |
-| 28 עד 42 | `STORAGE_PROVIDER=sandbox` וחמישה ערכי MinIO עם `minioadmin`, ושלוש פקודות ליצירת bucket | `STORAGE_REGION=eu-central` אינו אזור AWS תקני. MinIO מקבל אותו, ספק אמיתי ידחה את החתימה |
+| 28 עד 42 | `STORAGE_PROVIDER=sandbox` וחמישה ערכי MinIO עם `minioadmin`, ושלוש פקודות ליצירת bucket | `STORAGE_REGION=eu-central` אינו אזור AWS תקני. MinIO מקבל אותו, AWS ידחה את החתימה, ולגבי ספקים אחרים אי אפשר לקבוע מהקוד |
 | 44 עד 49 | שארית שבורה של כותרות תשלום, משפט שנקטע באמצע | אפשר למחוק. התשלום האמיתי בשורות 168 עד 196 |
 | 50 עד 64 | `SHIPPING_PROVIDER=sandbox`, `EASYPOST_*` ריקים | הכותרת עוד מזכירה ShipStation ו Easyship שלא מומשו |
 | 66 עד 110 | `EMAIL_PROVIDER=console`, מדריך Gmail app password, `APP_BASE_URL` | `EMAIL_API_KEY` לא נקרא. שורה 96 מבטיחה ששני המצבים מוצפנים, וזה לא נכון בפורט 587 בלי `requireTLS` |
@@ -1014,7 +1323,7 @@ flowchart LR
 | 168 עד 196 | `PAYMENT_PROVIDER=paypal` עם `PAYPAL_ENVIRONMENT=sandbox` וערכים ריקים | העתקה כמו שהיא נכשלת באתחול עד שממלאים או עוברים ל `sandbox`. `PAYPAL_PAYOUT_NOTE` לא נקרא |
 | 198 עד 221 | `CORS_ORIGINS`, rate limits, `EXPOSE_API_DOCS=true`, `TRUST_PROXY=loopback` | `AUTH_RATE_LIMIT_PER_MINUTE=10` בזמן שהסכמה כבר עברה ל 30. `EXPOSE_API_DOCS=true` אחרי הערה שאומרת שהוא כבוי, וה API מאזין על כל הממשקים |
 
-**שים לב.** משתנה חובה חדש בסכמה בלי ברירת מחדל ובלי שורה כאן יתקע כל מפתח חדש באתחול. ה CI לא מושפע, הוא מגדיר את הסביבה בעצמו.
+**שים לב.** משתנה חובה חדש בסכמה בלי ברירת מחדל ובלי שורה כאן יתקע כל מפתח חדש באתחול. ה CI לא קורא את הקובץ, הוא מגדיר את הסביבה ב `ci.yml`, ולכן משתנה כזה צריך שורה גם שם.
 
 #### `vitest.workspace.ts`
 מגדיר את שמונת פרויקטי הבדיקה. הבדיקות חיות בשורש, ב `tests/` וב `tests3/`, ולכן הקובץ בשורש.
@@ -1027,7 +1336,7 @@ flowchart LR
 | 81 עד 86 | `concurrency`, `property`, `contract` | `contract` מקבל את ה alias |
 | 87 עד 111 | `core` ו `core-contract` על `tests3/` | `core` צריך API ומסד, `core-contract` לא |
 | 112 | `web` בסביבת `node` | פונקציות טהורות של ה SPA |
-| 113 עד 148 | `ux` עם jsdom, `jsx: 'automatic'`, setup ו `globals`, ושישה aliases ל React בשורות 133 עד 138 | הסדר קובע. `react-dom/client` לפני `react-dom`, `react/jsx-runtime` לפני `react`. שדרוג React שמשנה את מבנה `node_modules` ישבור את `ux` בשקט |
+| 113 עד 148 | `ux` עם jsdom, `jsx: 'automatic'`, setup ו `globals`, ושישה aliases ל React בשורות 133 עד 138 | הסדר קובע. `react-dom/client` לפני `react-dom`, `react/jsx-runtime` לפני `react`. שדרוג React שמשנה את מבנה `node_modules` ישבור את `ux` |
 
 **שים לב.** שמות הפרויקטים כתובים ביד גם ב `package.json`, ב `scripts/test.mjs` וב `.github/workflows/ci.yml`. פרויקט חדש או שם חדש מחייב את שלושתם.
 
@@ -1049,7 +1358,7 @@ flowchart LR
 | 53 עד 63 | `NODE_ENV`, `API_PORT`, שני ה URL של המסד, `SESSION_COOKIE_SECRET` עם `min(16)`, `SESSION_COOKIE_NAME` | `NODE_ENV=staging` מכשיל אתחול. הסוד חובה ולא נקרא |
 | 79 עד 84 | `STORAGE_PROVIDER` ברירת מחדל `sandbox`, `STORAGE_ENDPOINT` URL חובה, ארבעה `STORAGE_*` | ה endpoint חובה גם ב sandbox. מחרוזת ריקה בשאר עוברת, והבדיקה המותנית תופסת |
 | 101 עד 117 | `PAYMENT_PROVIDER` בלי ברירת מחדל, `PAYPAL_ENVIRONMENT`, שלושת ערכי PayPal, `PAYPAL_PAYOUT_NOTE` | ההערה בשורות 97 עד 99 מסבירה שהוסרה ברירת מחדל `stripe`. `PAYPAL_PAYOUT_NOTE` לא בשימוש |
-| 127 עד 162 | `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE` 300, `AUTH_RATE_LIMIT_PER_MINUTE` 30, `EXPOSE_API_DOCS`, `API_DOCS_PASSWORD`, `TRUST_PROXY` עם `refine` | שורה 145 משתמשת ב `z.coerce.boolean()`, ולכן `false`, `0` ו `no` מדליקים את ה explorer, וזה E7. ה `refine` חוסם רק את המחרוזת `true`, לא `0.0.0.0/0` ולא מספר hops גבוה. ברירת המחדל `loopback` שגויה מאחורי nginx במכולה נפרדת, וזה E14 |
+| 127 עד 162 | `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE` 300, `AUTH_RATE_LIMIT_PER_MINUTE` 30, `EXPOSE_API_DOCS`, `API_DOCS_PASSWORD`, `TRUST_PROXY` עם `refine` | שורה 145 משתמשת ב `z.coerce.boolean()`, ולכן `false`, `0` ו `no` מדליקים את ה explorer, וזה E7. ה `refine` חוסם רק את המחרוזת `true`. `0.0.0.0/0` נכשל ממילא באתחול של Express 5, ומספר מתפרש ככתובת ולא כמספר hops, אבל `0.0.0.0/1,128.0.0.0/1` עובר ומאמין לכל כתובת. ברירת המחדל `loopback` שגויה מאחורי nginx במכולה נפרדת, וזה E14 |
 | 179 עד 228 | משלוח, `EASYPOST_*`, דואר, `SMTP_*`, `APP_BASE_URL` | `SMTP_PASSWORD` בשורות 215 עד 219 מוחק כל רווח, לטובת Gmail app passwords. `EMAIL_API_KEY` לא נקרא |
 | 239 עד 286 | מדיניות חוב, פרטי בנק ותמיכה, `SENTRY_DSN`, `LOG_LEVEL` | `WALLET_SUSPEND_BELOW_MINOR` אי חיובי, ברירת מחדל `-2000` |
 | 287 עד 331 | `superRefine` עם `require` פנימי בשורות 288 עד 296 שמוסיף שגיאה עם `path` מדויק. easypost מחייב מפתח בשורות 301 עד 303, s3 מחייב חמישה `STORAGE_*` בשורות 305 עד 315, smtp מחייב host, user, password ו from בשורות 317 עד 321, paypal מחייב שלושה ערכים בשורות 326 עד 330 | ההערה בשורות 298 עד 300 על SMTP זזה מעל בדיקת EasyPost. השם `require` מסתיר את זה של CommonJS |
@@ -1068,9 +1377,9 @@ flowchart LR
 | `packages/contracts/src/index.ts` | placeholder עם `export {}` בלבד. הטיפוסים מ `openapi.yaml` שהובטחו במשימות T021 ו T137 לא נוצרו. מחיקה מחייבת `pnpm install` והסרת שורת `COPY` מכל Dockerfile |
 
 #### `packages/adapters`
-החבילה לא קוראת משתני סביבה. כל קונפיגורציה מגיעה דרך הבנאים, מ `apps/api/src/shared/adapters/adapters.module.ts` ומה worker. כל adapter אמיתי כתוב עם `fetch` או `node:crypto` ביד, בלי SDK. זה קריא, אבל אין timeout ואין retry באף קריאה, ו `fetch` של Node ממתין עד 300 שניות לכותרות.
+החבילה לא קוראת משתני סביבה. כל קונפיגורציה מגיעה דרך הבנאים, מ `apps/api/src/shared/adapters/adapters.module.ts` ומה worker. כל adapter אמיתי חוץ מ SMTP, שעובר דרך nodemailer, כתוב עם `fetch` או `node:crypto` ביד, בלי SDK. זה קריא, אבל אין timeout ואין retry באף קריאה, ו `fetch` של Node ממתין עד 300 שניות לכותרות.
 
-ההבדל מהדפוס הכללי של P11 הוא שהבחירה בין sandbox לאמיתי לא נעשית בחבילה. היא נעשית ב factories של `adapters.module.ts`, דואר בשורות 40 עד 49, תשלום בשורות 84 עד 105, משלוח בשורות 128 עד 141, אחסון בשורות 164 עד 185, וכל factory זורק על sandbox ב production. ה worker בונה דואר בעצמו ב `outbox-dispatch.ts` שורות 57 עד 71, ומשלוח בלי factory בכלל. ספק חדש דורש מחלקה כאן, שורה ב `index.ts`, ענף ב factory, ערך ב enum של הסכמה עם בדיקה ב `superRefine`, ובדיקת חוזה תחת `tests/contract/`.
+ההבדל מהדפוס הכללי של P11 הוא שהבחירה בין sandbox לאמיתי לא נעשית בחבילה. היא נעשית ב factories של `adapters.module.ts`, דואר בשורות 40 עד 49, תשלום בשורות 84 עד 105, משלוח בשורות 128 עד 141, אחסון בשורות 164 עד 185. factory התשלום, המשלוח והאחסון זורקים על sandbox ב production, ו factory הדואר לא בודק. את `console` חוסמת ב production רק הסכמה ב `env.ts`. ה worker בונה דואר בעצמו ב `outbox-dispatch.ts` שורות 57 עד 71, ומשלוח בלי factory בכלל. ספק חדש דורש מחלקה כאן, שורה ב `index.ts`, ענף ב factory, ערך ב enum של הסכמה עם בדיקה ב `superRefine`, ובדיקת חוזה תחת `tests/contract/`.
 
 | קובץ | מה הוא עושה |
 |---|---|
@@ -1085,14 +1394,14 @@ flowchart LR
 |---|---|---|
 | 12 עד 72 | `ChargeRequest`, `ProviderResult` עם `settledAmountMinor` ו `settledCurrency`, `WebhookEvent`, `WebhookDelivery` עם גוף גולמי ו headers, הממשק עם `providerName`, `handlesRealMoney` וארבע מתודות | החוזה בשורות 31 עד 38, הקורא חייב להשוות את הסכום שנסלק לסכום שביקש. `verifyWebhook` חייב לזרוק ולא להחזיר ריק |
 | 78 עד 101 | `PayPalConfig`, `PAYPAL_BASE` לשתי כתובות, `toDecimal` ו `toMinor` | מניחים שתי ספרות עשרוניות. במטבע כמו JPY ייצא סכום שגוי פי מאה. היום הכל USD |
-| 130 עד 152 | בנאי. זורק בלי `clientId`, `clientSecret` או `webhookId`. `handlesRealMoney` רק ב `live`. `fetchImpl` להזרקה | השכבה השלישית של אותה בדיקה אחרי `env.ts` ו `adapters.module.ts` |
+| 130 עד 152 | בנאי. זורק בלי `clientId`, `clientSecret` או `webhookId`. `handlesRealMoney` רק ב `live`. `fetchImpl` להזרקה | השכבה השנייה של אותה בדיקה אחרי `env.ts`. `adapters.module.ts` רק מעביר את הערכים |
 | 161 עד 185 | `accessToken`, client credentials, cache עד דקה לפני תפוגה | אין ניקוי cache על `401`. token שבוטל מוקדם מפיל הכל עד שה cache פג |
 | 187 עד 204 | `call`, Bearer, `PayPal-Request-Id` מ `idempotencyKey` בשורה 196, זורק עם סטטוס ועד 400 תווים מהגוף | retry עם אותו מפתח לא מבצע פעמיים. אין timeout. JSON שבור זורק `SyntaxError` בלי הקשר |
 | 213 עד 243 | `capture` של order שהמשלם אישר. זורק בלי מזהה order, שולח `POST /v2/checkout/orders/{id}/capture` עם `encodeURIComponent`, שורה 234 לוקחת את ה capture הראשון, שורה 237 קובעת סטטוס, ומחזיר מזהה capture וסכום שנסלק | הסטטוס נקבע לפי `body.status` של ה order ולא של ה capture, ולכן capture ב `PENDING` עלול לזכות ארנק מיד. order בלי captures מחזיר `succeeded` בלי סכום, והקורא לא בודק סכום חסר. אין כאן יצירת order בכלל, חלק מ E3. התיקון הוא לבדוק `capture.status` ולהחזיר `pending` כשאין capture. `checkout.service.ts` כבר רושם `pending` בלי לזכות, אבל בלי webhook שעובד הכסף ייתקע |
 | 245 עד 251 | `createCharge` ו `createTopup` קוראות ל `capture` | אין הבדל ב PayPal |
 | 260 עד 295 | `createPayout` לכתובת דואר. `sender_batch_id`, `sender_item_id` ו `PayPal-Request-Id` כולם המפתח | `SUCCESS` הוא `succeeded`, `DENIED` הוא `failed`, השאר `pending`, כלומר כמעט תמיד `pending`. ה webhook שאמור לסגור אותו לא עושה כלום ב `topup.service.ts`. גישה ל `batch_header` בלי `?.` |
-| 306 עד 345 | `verifyWebhook`. `h` בשורות 307 עד 311 מחפש כותרת וזורק אם חסרה. שורות 313 עד 318 מפענחות את הגוף. שורות 320 עד 334 שולחות חמש כותרות שידור, מזהה webhook ואירוע ל `verify-webhook-signature`, ושורות 336 עד 338 זורקות על תשובה שאינה `SUCCESS` | אין סוד משותף, PayPal חותם בתעודה מתחלפת ולכן האימות עובר דרך ה API שלו. אירוע בלי מזהה מקבל `id` ריק בשורה 341. האירוע נשלח אחרי `JSON.parse` ו `stringify` ולא כגוף המקורי, ועלול לדחות webhook אמיתי. אין בדיקת `transmission_time`, ה replay נחסם לפי `event.id` אצל הקורא |
-| 361 עד 388 | `SandboxPaymentAdapter`, הכל `succeeded` מיד, `providerRef` נגזר מה `idempotencyKey`, והסכום שנסלק הוא בדיוק הסכום שביקשו. `verifyWebhook` מפענח בלי אימות, ו `JSON.parse` לא עטוף | כל שרת עם `NODE_ENV` שאינו `production` מאשר כל טעינת ארנק |
+| 306 עד 345 | `verifyWebhook`. `h` בשורות 307 עד 311 מחפש כותרת וזורק אם חסרה. שורות 313 עד 318 מפענחות את הגוף. שורות 320 עד 334 שולחות חמש כותרות שידור, מזהה webhook ואירוע ל `verify-webhook-signature`, ושורות 336 עד 338 זורקות על תשובה שאינה `SUCCESS` | אין סוד משותף, PayPal חותם בתעודה מתחלפת ולכן האימות עובר דרך ה API שלו. אירוע בלי מזהה מקבל `id` ריק בשורה 341. האירוע נשלח אחרי `JSON.parse` ו `stringify` ולא כגוף המקורי, ועלול לדחות webhook אמיתי. אין בדיקת `transmission_time`. `topup.service.ts` מחפש את `event.id` ב `webhookEventId`, אבל שום קוד לא כותב את העמודה, כך שאין חסימת replay, וה handler ממילא לא עושה כלום |
+| 361 עד 388 | `SandboxPaymentAdapter`, הכל `succeeded` מיד, `providerRef` נגזר מה `idempotencyKey`, והסכום שנסלק הוא בדיוק הסכום שביקשו. `verifyWebhook` מפענח בלי אימות, ו `JSON.parse` לא עטוף | כל שרת עם `PAYMENT_PROVIDER=sandbox` ו `NODE_ENV` שאינו `production` מאשר כל טעינת ארנק |
 
 **שים לב.** שינוי שדות `ProviderResult` שובר את ארבעת שירותי PAY ואת `tests3/contract/paypal-adapter.test.ts` ו `tests/contract/payment-adapter.test.ts`. הוספת timeout בטוחה רק כל עוד הקורא שומר מפתח idempotency יציב בין ניסיונות.
 
@@ -1102,7 +1411,7 @@ flowchart LR
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 21 עד 33 | `ShipAddress`, רק `country` ו `postalCode` חובה | רחוב ועיר נבדקים בזמן ריצה ב EasyPost ולא בטיפוס |
-| 41 עד 70 | `DEFAULT_PACKAGING_GRAMS` 120, `DIM_DIVISOR` 167, המרות פיזיקליות | 167 ולא 139 בכוונה, כדי להתאים לשירות הייחוס. שינוי משנה בבת אחת את ה sandbox, את `carriers.ts` ואת `tests/contract/shipping-adapter.test.ts` |
+| 41 עד 70 | `DEFAULT_PACKAGING_GRAMS` 120, `DIM_DIVISOR` 167, המרות פיזיקליות | 167 ולא 139 בכוונה, כדי להתאים לשירות הייחוס. שינוי משנה בבת אחת את ה sandbox ואת `carriers.ts`, ושובר את `tests/web/shipping-boxes.test.ts`, שמקבע 167 בשורה 29 |
 | 87 עד 107 | `BillingIncrement` ו `billableGrams`, הגדול מבין משקל בפועל לנפחי, ואז עיגול למעלה לאונקיה או פאונד, לפחות יחידה אחת | `continuous` לא מעגל. הסדר, קודם max ואז עיגול, נכון |
 | 117 עד 121 | `dimensionalGrams` ממיר סנטימטרים מעוקבים לגרמים דרך אינצים ופאונדים | אפס בלי מידות |
 | 123 עד 191 | `RateRequest`, `Rate` עם `providerShipmentId` ו `providerRateId`, `LabelResult`, `TrackingStatus` בארבעה ערכים, הממשק עם שלוש מתודות | המזהים קיימים כי EasyPost מוכר תעריף לפי מזהה ולא לפי שם |
@@ -1110,7 +1419,7 @@ flowchart LR
 | 254 עד 294 | `getRates` סוכם משקל עם `Math.max(0, ...)` נגד משקל שלילי, מוסיף אריזה ומשקל נפחי, מסנן לפי בינלאומיות ורשימה רצויה. מחיר קבוע מקבל רק תוספת חתימה, אחרת בסיס ועוד מחיר לקילו, כפול מכפיל המרחק, מעוגל. ממיין לפי מחיר | `rush` לא משנה ימים, זה זמן עיבוד במחסן |
 | 296 עד 307 | `buyLabel` עם מספר `SBX` לפי שניות, `getTracking` תמיד `in_transit` | שתי תוויות באותה שנייה מקבלות אותו מספר. `labelObjectKey` לא קיים באחסון |
 
-**שים לב.** `apps/worker/src/jobs/tracking-refresh.ts` בונה את `SandboxShippingAdapter` ישירות בכל סביבה, ולכן בייצור שום משלוח לא מגיע ל `delivered`. זה E17. כנראה נכון להפסיק לייצא את המחלקה ולהזריק ל worker את ה adapter האמיתי.
+**שים לב.** `apps/worker/src/jobs/tracking-refresh.ts` בונה את `SandboxShippingAdapter` ישירות בכל סביבה, ולכן בייצור שום משלוח לא מגיע ל `delivered`. זה E17. התיקון הוא שה worker יבחר adapter לפי `SHIPPING_PROVIDER`, כמו `adapters.module.ts`. אי אפשר פשוט להפסיק לייצא את המחלקה, כי ה factory של ה API ושתי בדיקות חוזה משתמשים בה.
 
 #### `packages/adapters/src/easypost.ts`
 דפוס P11, המימוש האמיתי של `ShippingAdapter` מול EasyPost. נבנה ב `adapters.module.ts` כש `SHIPPING_PROVIDER=easypost`.
@@ -1119,11 +1428,11 @@ flowchart LR
 |---|---|---|
 | 38 עד 47 | `TEST_HOST`, `gramsToOunces` עם מינימום 0.1, `cmToInches`, `toMinor` | `TEST_HOST` היא הכתובת היחידה של EasyPost גם ל live. המצב נקבע לפי קידומת המפתח |
 | 56 עד 73 | טיפוסי התשובה | `messages` לא נקרא, ולכן כשאין תעריפים הסיבה נזרקת |
-| 75 עד 86 | בנאי זורק בלי מפתח, `isTestMode` לפי `EZTK` | אף קוד מחוץ לקובץ לא קורא ל `isTestMode` |
+| 75 עד 86 | בנאי זורק בלי מפתח, `isTestMode` לפי `EZTK` | שום קוד מוצר לא קורא ל `isTestMode`, רק `tests/contract/easypost-adapter.test.ts` |
 | 93 עד 118 | `call`, Basic auth עם המפתח, מחלץ `error.message`, זורק עם סטטוס ונתיב | הודעת השגיאה עלולה להכיל כתובת לקוח. אין timeout ואין retry |
 | 128 עד 154 | `address` ממפה לשדות EasyPost וזורק בלי רחוב או עיר | נכון, תמחור לפי מיקוד היה משתנה בזמן הקנייה |
-| 164 עד 216 | `getRates` סוכם משקל, מוסיף אריזה וממיר לאונקיות, מוסיף מידות אם ידועות, ושולח `POST /shipments`. חתימה מבוקשת כבר בתמחור, שורות 183 עד 185. שורות 193 עד 202 מסננות לפי `req.services` בלי תלות באותיות. כל תעריף ממופה ל `Rate` עם מזהי ספק, וימים חסרים הופכים ל 0 | כל הצעת מחיר יוצרת shipment חדש בחשבון EasyPost. `shipment.service.ts` מחפש התאמה מדויקת לשמות ב `carriers.ts`, כמו `Priority Mail`, ו EasyPost מחזיר `GroundAdvantage` או `FEDEX_2_DAY`. סביר שהלקוח יקבל רשימה ריקה. לא נבדק מול EasyPost אמיתי |
-| 225 עד 255 | `buyLabel` לפי מזהי shipment ו rate, זורק בלי `tracking_code` | אין idempotency. `labelObjectKey` מקבל URL של EasyPost ולא מפתח אחסון, ו `getSignedUrl` עליו ייתן URL שבור |
+| 164 עד 216 | `getRates` סוכם משקל, מוסיף אריזה וממיר לאונקיות, מוסיף מידות אם ידועות, ושולח `POST /shipments`. חתימה מבוקשת כבר בתמחור, שורות 183 עד 186. שורות 193 עד 202 מסננות לפי `req.services` בלי תלות באותיות. כל תעריף ממופה ל `Rate` עם מזהי ספק, וימים חסרים הופכים ל 0 | כל הצעת מחיר יוצרת shipment חדש בחשבון EasyPost. `shipment.service.ts` מחפש התאמה מדויקת לשמות ב `carriers.ts`, כמו `Priority Mail`, ו EasyPost מחזיר `GroundAdvantage` או `FEDEX_2_DAY`. סביר שהלקוח יקבל רשימה ריקה. לא נבדק מול EasyPost אמיתי |
+| 225 עד 255 | `buyLabel` לפי מזהי shipment ו rate, זורק בלי `tracking_code` | אין idempotency. `labelObjectKey` מקבל URL של EasyPost ולא מפתח אחסון. היום אף קוד לא קורא את העמודה, אבל `getSignedUrl` עליה ייתן URL שבור |
 | 266 עד 283 | `getTracking` דרך `POST /trackers`, סטטוס לא מוכר הופך ל `unknown` | אף קוד לא קורא לה היום, ה worker משתמש ב sandbox |
 
 #### `packages/adapters/src/email.ts`
@@ -1162,7 +1471,7 @@ flowchart LR
 | 164 עד 205 | `portIsBusy` מנסה health ואז חיבור TCP, ומדפיס פקודה לשחרור הפורט לפי מערכת ההפעלה | |
 | 207 עד 234 | זרימה ראשית. API עם פלט ב pipe, יציאה שלו קטלנית, ואז Vite עם `stdio: 'inherit'` | |
 
-**שים לב.** לא מרים worker, Postgres או מיגרציות, ולכן דואר מה outbox לא יוצא ב `pnpm dev`. ה watcher של Nest צופה רק ב `apps/api/src`, שינוי ב `packages/*` נקלט אחרי build והפעלה מחדש. שינוי נתיב ה health שובר את הסקריפט הזה ואת `tunnel.mjs`.
+**שים לב.** לא מרים worker, Postgres או מיגרציות, ולכן דואר מה outbox לא יוצא ב `pnpm dev`. ה watcher של Nest צופה רק ב `apps/api/src`, שינוי ב `packages/*` נקלט אחרי build והפעלה מחדש. שינוי נתיב ה health שובר את הסקריפט הזה, את `tunnel.mjs`, את ה HEALTHCHECK ב `apps/api/Dockerfile` שורה 77 ואת `tests/integration/dev-proxy.test.ts`.
 
 #### `scripts/test.mjs`
 מה ש `pnpm test` מריץ. `SUITES` בשורות 41 עד 50 היא רשימה קשיחה, קודם `web`, `ux`, `contract`, `core-contract`, שלא צריכים מסד, ואחר כך `integration`, `core`, `concurrency`, `property` עם `--no-file-parallelism`. `run` בשורות 52 עד 62 מחזיר את קוד היציאה. הלולאה בשורות 68 עד 74 עוצרת בכישלון הראשון. שורות 76 עד 85 מריצות את ה seed גם אחרי כישלון, אלא אם `--no-reset` או `BAULT_TEST_NO_RESET=1`, ושומרות את קוד הכישלון המקורי.
@@ -1177,7 +1486,7 @@ flowchart LR
 | 38 עד 75 | `PREVIEW_PORT` 4173, `AUTH_LIMIT_DEFAULT` 30, `readEnvFile` מועתק מ `dev.mjs`, בדיקת health ל `127.0.0.1:API_PORT` | 30 משוכפל מהסכמה. מתעלם מ `VITE_API_PROXY_TARGET` |
 | 79 עד 87 | מזהיר אם `AUTH_RATE_LIMIT_PER_MINUTE` גבוה מ 30 | לא עוצר, ולא בודק את `RATE_LIMIT_PER_MINUTE` |
 | 91 עד 93 | `pnpm --filter @bault/web build` סינכרוני | כישלון עוצר לפני חשיפה |
-| 97 עד 153 | משתמש וסיסמה, אקראית של 96 ביט אם לא הוגדרה, מתיר `.trycloudflare.com`, מרים `vite preview` עם basic auth, ובשורות 141 עד 152 דורש `401` | אם ה preview עונה `200` בלי סיסמה הסקריפט מסרב. זה תופס מקרה אמיתי, שורת `WEB_PREVIEW_PASSWORD=` ריקה ב `.env` מנצחת ב `vite.config.ts` ומכבה את ה auth |
+| 97 עד 153 | משתמש וסיסמה, אקראית של 96 ביט אם לא הוגדרה, מתיר `.trycloudflare.com`, מרים `vite preview` עם basic auth, ובשורות 141 עד 152 דורש `401` | אם ה preview עונה `200` בלי סיסמה הסקריפט מסרב. שורת `WEB_PREVIEW_PASSWORD=` ריקה ב `.env` לא מכבה את ה auth, כי ב Vite 6.4.3 ערך מ `process.env` גובר על הקובץ, והסקריפט תמיד מעביר סיסמה |
 | 104 עד 128 | `run` עם `shell: true` ופלט ב pipe, `killTree` ו `shutdown` כמו ב `dev.mjs`, ו handlers ל `SIGINT` ו `SIGTERM` | אותה בעיה של תהליכים יתומים ב Unix |
 | 157 עד 177 | `npx --yes cloudflared`, מחפש את ה URL בפלט ומדפיס אותו עם המשתמש והסיסמה | חבילת צד שלישי בלי גרסה נעולה, מחוץ ל lockfile, על מכונה עם `.env` אמיתי |
 
@@ -1271,7 +1580,7 @@ linter למערכת העיצוב, בלי תלויות. בודק את `apps/web/s
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 12 עד 34 | אותו build כמו ב API, ובשורה 32 `COPY assets/ assets/`, ואז `pnpm --filter @bault/web build` עם `tsc --noEmit` | `packages/` מועתק אף שה SPA לא תלוי בו. בלי `assets/` ה build נכשל, כי הוא ה `publicDir`, וכך 7.9MB של תמונות קטלוג נכנסים ל image. בלי `.dockerignore` גם `apps/web/.env` מקומי נכנס וכל `VITE_` בו מוטמע בבנדל |
+| 12 עד 34 | אותו build כמו ב API, ובשורה 32 `COPY assets/ assets/`, ואז `pnpm --filter @bault/web build` עם `tsc --noEmit` | `packages/` מועתק אף שה SPA לא תלוי בו. ההערה בשורות 30 עד 31 אומרת שבלי `assets/`, ה `publicDir`, ה build נכשל. בפועל הוא עובר עם אזהרות, נבדק עם Vite 6.4.3, ורק הגופנים והתמונות חסרים. ההעתקה מכניסה 7.9MB של תמונות קטלוג ל image. בלי `.dockerignore` גם `apps/web/.env` מקומי נכנס וכל `VITE_` בו מוטמע בבנדל |
 | 37 עד 51 | `nginx:1.27-alpine`, `dist` לתיקיית nginx, `nginx.conf` לתיקיית ה templates, `API_UPSTREAM` ברירת מחדל `http://api:3000`, פורט 8080, healthcheck עם `wget` | ה entrypoint מחליף רק משתני סביבה מוגדרים, ולכן `$uri` נשאר. תהליך ה master רץ כ root, בשונה משני ה images האחרים |
 
 #### `apps/web/nginx.conf`
@@ -1332,6 +1641,64 @@ Bault נבנה עם GitHub Spec Kit, כלי שמוביל סוכן AI דרך spec
 | converge | `.github/agents/speckit.converge.agent.md`, `.github/prompts/speckit.converge.prompt.md` | משווה קוד למפרט ומוסיף משימות חסרות |
 | taskstoissues | `.github/agents/speckit.taskstoissues.agent.md`, `.github/prompts/speckit.taskstoissues.prompt.md` | הופך משימות ל issues ב GitHub |
 
+### בדוק את עצמך
+
+1. הסבר למה `EXPOSE_API_DOCS=false` מדליק את ה explorer, ואיך מתקנים את זה.
+<details><summary>תשובה</summary>
+
+`z.coerce.boolean()` מריץ `Boolean` על המחרוזת, וכל מחרוזת לא ריקה, גם `false`, `0` או `no`, הופכת ל `true`, `packages/config/src/env.ts` שורה 145. התיקון הוא להשתמש ב `booleanFromEnv` שכבר קיים בשורות 34 עד 40, וזה E7.
+
+</details>
+
+2. פרט מה צריך לשנות כשמוסיפים משתנה סביבה חובה חדש, כדי שלא ייפלו מפתח חדש, ה CI או ה worker.
+<details><summary>תשובה</summary>
+
+שדה בסכמה ב `packages/config/src/env.ts` עם ברירת מחדל אם אפשר, שורה ב `.env.example`, ושורה ב `env:` של `.github/workflows/ci.yml` שורות 38 עד 59 אם אין ברירת מחדל. משתנה שתלוי בספק או מסוכן בייצור מקבל בדיקה ב `packages/config/src/env.ts`, ב `superRefine` בשורות 287 עד 331 או בבלוק ה production בשורות 333 עד 412. ה worker מאמת את אותה סכמה.
+
+</details>
+
+3. הסבר למה מאחורי ה image של ה web כל המשתמשים חולקים דלי rate limit אחד.
+<details><summary>תשובה</summary>
+
+nginx קובע `X-Forwarded-For` ל `$remote_addr`, `apps/web/nginx.conf` שורות 92 עד 100, אבל ברירת המחדל `TRUST_PROXY=loopback` סומכת רק על loopback, `packages/config/src/env.ts` שורות 159 עד 162. nginx רץ במכולה אחרת, ולכן `req.ip` הוא הכתובת שלו, ו `ThrottlerGuard` סופר את כולם כלקוח אחד, E14.
+
+</details>
+
+4. מצא את הבלוקים שבגללם דף ה HTML וכל נתיב SPA יוצאים בלי CSP ובלי `X-Frame-Options`.
+<details><summary>תשובה</summary>
+
+`location = /index.html` מוסיף `add_header` משלו ולכן לא יורש את כותרות ה `server`, `apps/web/nginx.conf` שורות 74 עד 76 מול שורות 35 עד 40. כל נתיב SPA נופל דרך `try_files` בשורות 103 עד 105 ל `/index.html` ויוצא באותו אופן, וזה E22.
+
+</details>
+
+5. הסבר למה ה CI עובר למרות E2, ומה צריך כדי לתפוס אותו.
+<details><summary>תשובה</summary>
+
+ב CI ה migrator רץ מהמקור דרך `tsx`, `.github/workflows/ci.yml` שורות 132 עד 135, ושם `__dirname` הוא `src/db` וה SQL נמצא, `apps/api/src/db/migrate.ts` שורה 25. ב image הוא רץ מ `dist/db` בלי `sql`, ולכן רק הרצה של ה migrator בתוך ה image ובדיקה שה triggers קיימים תתפוס אותו.
+
+</details>
+
+6. תאר מה יקרה בייצור למשלוח שנקנתה לו תווית אמיתית ב EasyPost.
+<details><summary>תשובה</summary>
+
+ה job של המעקב ב worker בונה `new SandboxShippingAdapter()` קבוע, `apps/worker/src/jobs/tracking-refresh.ts` שורה 10, ו `getTracking` שלו מחזיר תמיד `in_transit`, `packages/adapters/src/shipping.ts` שורות 305 עד 307. המשלוח לא יגיע ל `delivered` לעולם, וזה E17.
+
+</details>
+
+7. הסבר למה capture של PayPal שעדיין במצב `PENDING` עלול לזכות ארנק מיד.
+<details><summary>תשובה</summary>
+
+`capture` קובע `succeeded` לפי `body.status` של ה order ולא לפי הסטטוס של ה capture עצמו, `packages/adapters/src/payment.ts` שורות 234 עד 241. `apps/api/src/modules/pay/checkout.service.ts` שורות 194 עד 213 מזכה את הארנק על כל `succeeded`.
+
+</details>
+
+8. תאר מה `pnpm test` עושה למסד בסוף הריצה, ולמה זה מסוכן.
+<details><summary>תשובה</summary>
+
+גם אחרי כישלון, `scripts/test.mjs` שורות 76 עד 85 מריץ את ה seed, שמוחק הכל ב TRUNCATE על כל מסד שה `.env` מצביע עליו ובלי בדיקת `NODE_ENV`. ה reset קורה אחרי הריצה ולא לפניה, ולכן ריצה שמתחילה על מסד מלוכלך תלויה בהיסטוריה, E16.
+
+</details>
+
 ## פרק 2. תהליך ה API, עלייה, תשתית משותפת וה seed
 
 ### סקירה
@@ -1357,7 +1724,7 @@ sequenceDiagram
   H--xC: כל זריקה מכל שלב
 ```
 
-שלושה כללים שחוזרים בכל הקבצים. `loadEnv` נקרא לראשונה כבר בזמן ה import של בקרים, לא ב `bootstrap`, והוא מחזיר אובייקט קפוא מ cache. ה guards רצים לפני ה `ValidationPipe`, ולכן הם רואים גוף שלא עבר ולידציה. כל שגיאה מכל שלב, כולל שגיאות middleware של Express, יוצאת מ `AllExceptionsFilter` בצורה `{ error: { code, message, details } }`.
+שלושה כללים שחוזרים בכל הקבצים. `loadEnv` נקרא לראשונה כבר בזמן ה import של `auth.controller.ts`, לא ב `bootstrap`, והוא מחזיר אובייקט קפוא מ cache. ה guards רצים לפני ה `ValidationPipe`, ולכן הם רואים גוף שלא עבר ולידציה. כל שגיאה מכל שלב, כולל שגיאות middleware של Express, יוצאת מ `AllExceptionsFilter` בצורה `{ error: { code, message, details } }`.
 
 מה שכבר עובד ושווה לשמור. ולידציית env לפני בניית האפליקציה, סירוב ל `TRUST_PROXY=true` ול sandbox ב production, guards גלובליים עם opt out, `forbidNonWhitelisted`, 500 אטום ללקוח, `BillingPort` שמקבל `tx`, hash בלבד לכל טוקן, וכסף כמספר שלם עם מטבע.
 
@@ -1366,8 +1733,8 @@ sequenceDiagram
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 7 עד 15 | `dev` בונה קודם את `@bault/adapters` ו `@bault/config`, שנצרכות מה `dist` שלהן, ואז `nest start --watch`. `build` הוא `nest build`, `start` מריץ את `dist/main.js`, ו `typecheck` הוא `tsc --noEmit` שמשמש את הבדיקה ברמת השורש. `db:generate` מפעיל `drizzle-kit generate`. `db:migrate` ו `db:seed` מריצים את קוד המקור דרך `tsx`. | `tsx` הוא devDependency, ולכן שני סקריפטי ה DB לא רצים בתמונת ה production. זה הרקע של E2 ו E11. |
-| 16 עד 34 | תלויות ריצה. Nest, swagger, throttler, `argon2`, class-validator ו class-transformer, `cookie`, `drizzle-orm`, `pg`, `express` 5 שממנו `main.ts` מייבא `json`, `helmet`. | `argon2` חייב להישאר תלות ריצה בגלל ההתחברות. שינוי שם החבילה שובר את `scripts/test.mjs` ואת CI שמסננים לפי `@bault/api`. |
+| 7 עד 15 | `dev` בונה קודם את `@bault/adapters` ו `@bault/config`, שנצרכות מה `dist` שלהן, ואז `nest start --watch`. `build` הוא `nest build`, `start` מריץ את `dist/main.js`, ו `typecheck` הוא `tsc --noEmit` שמשמש את הבדיקה ברמת השורש. `db:generate` מפעיל `drizzle-kit generate`. `db:migrate` ו `db:seed` מריצים את קוד המקור דרך `tsx`. | `tsx` הוא devDependency, וב image אין `tsx` ואין קוד מקור, ולכן שם רצים `dist/db/migrate.js` ו `dist/db/seed.js`. זה הרקע של E2 ו E11. |
+| 16 עד 34 | תלויות ריצה. Nest, swagger, throttler, `argon2`, class-validator ו class-transformer, `cookie`, `drizzle-orm`, `pg`, `express` 5 שממנו `main.ts` מייבא `json`, `helmet`. | `argon2` חייב להישאר תלות ריצה בגלל ההתחברות. שינוי שם החבילה שובר כל מי שמסנן לפי `@bault/api`, ה `package.json` בשורש, `scripts/test.mjs`, `scripts/dev.mjs`, CI וה Dockerfile. |
 | 35 עד 43 | תלויות פיתוח. Nest CLI, `drizzle-kit`, `tsx`, `typescript`. | |
 
 | קובץ | מה הוא עושה |
@@ -1379,15 +1746,15 @@ sequenceDiagram
 #### `apps/api/nest-cli.json`
 הגדרות `nest build`. `sourceRoot` הוא `src`, ו `deleteOutDir` מוחק את `dist` לפני כל build.
 
-**שים לב.** אין מפתח `assets`, ולכן `src/db/sql/0001_append_only.sql` לא מועתק ל `dist`. זה שורש E2. התיקון הוא `"assets": ["db/sql/**/*"]`.
+**שים לב.** אין מפתח `assets`, ולכן `src/db/sql/0001_append_only.sql` לא מועתק ל `dist`. זה שורש E2. התיקון הוא `"assets": ["db/sql/**/*"]` בתוך `compilerOptions`.
 
 #### `apps/api/src/main.ts`
 נקודת הכניסה, `CMD` של ה Dockerfile. כל מה שנוגע ל HTTP ולא שייך למודול נבנה כאן. ההערות בקובץ היסטוריות וחלקן לא מדויקות, קראו את הקוד.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 1 עד 13 | imports. `reflect-metadata` ראשון. | חייב להישאר ראשון, אחרת ה decorators נטענים בלי `Reflect.getMetadata`. |
-| 15 עד 26 | הערת פתיחה ו `loadEnv`. | ההערה לא מזכירה את ה middleware. `loadEnv` כבר רץ קודם, ב import של `auth.controller.ts` ו `SessionAuthGuard`, ולכן כשל סביבה מתפוצץ עם stack של בקר. |
+| 1 עד 13 | imports. `reflect-metadata` ראשון. | מוסכמה בלבד. `@nestjs/common` ו `@nestjs/core` טוענים אותו בעצמם, ולכן הזזה לא שוברת דבר. |
+| 15 עד 26 | הערת פתיחה ו `loadEnv`. | ההערה לא מזכירה את ה middleware. `loadEnv` כבר רץ קודם, ב import של `auth.controller.ts` בשורות 22 ו 50, ולכן כשל סביבה מתפוצץ עם stack של הבקר. |
 | 37 עד 40 | `NestFactory.create` עם `StructuredLogger`. כאן נבנה גרף ה DI ורצים כל ה `useFactory`, ה pool, ה adapters וה throttler. | factory של adapter שזורק מפיל את התהליך לפני `listen`, בכוונה. |
 | 47 | `app.use(requestContext)`, ה middleware הראשון. פותח `AsyncLocalStorage` עם `requestId`. | אם יוזז אחרי `listen` הוא לא ירוץ, ו `requestId` ייעלם מכל הלוגים. |
 | 68 | `trust proxy` מ `TRUST_PROXY`, ברירת מחדל `loopback`. קובע את `req.ip`, שעליו נשענים ה throttler ורישום IP ב session. | E14. מאחורי nginx בקונטיינר אחר כל הלקוחות נראים כ IP אחד, וכולם חולקים דלי throttle. צריך `uniquelocal` או CIDR. הסכמה אוסרת `true`. nginx דורס את `X-Forwarded-For` ולא מוסיף אליו, כך שזיוף מהלקוח לא עובר דרכו. |
@@ -1398,10 +1765,10 @@ sequenceDiagram
 | 116 | `setGlobalPrefix('api/v1')`. | שינוי שובר את ה SPA, nginx, ה healthcheck, `scripts/dev.mjs`, `scripts/tunnel.mjs` וכל הבדיקות. |
 | 119 | `AllExceptionsFilter` נוצר עם `new`, בלי DI. | |
 | 130 עד 137 | `ValidationPipe` עם `whitelist`, `forbidNonWhitelisted`, `transform` ו `exceptionFactory` מ `validation-error.ts`. שדה לא מוכר מחזיר 400, והגוף הופך למופע של מחלקת ה DTO. | חל רק על פרמטרים שהטיפוס שלהם מחלקה עם decorators. פרמטר `string` או `Record` עובר בלי בדיקה. |
-| 147 עד 155 | `EXPOSE_API_DOCS` כבוי, `listen` ויציאה. | E7. הסכמה משתמשת ב `z.coerce.boolean`, ולכן `false` מדליק את התיעוד. רק מחיקת המשתנה מכבה. |
+| 147 עד 155 | `EXPOSE_API_DOCS` כבוי, `listen` ויציאה. | E7. הסכמה משתמשת ב `z.coerce.boolean`, ולכן `false` מדליק את התיעוד. רק ערך ריק או מחיקת המשתנה מכבים. |
 | 157 עד 188 | basic auth על `/docs`. שם המשתמש מתעלם, הסיסמה מושווית ב `timingSafeEqual` אחרי בדיקת אורך. | E19. `app.use('/docs')` לא תופס את `/docs-json`, שם Swagger מגיש את המסמך המלא. רלוונטי כשפורט ה API נגיש ישירות, כי nginx מעביר רק `/api/`. בדיקת האורך מדליפה אורך, בניגוד להערה. בכישלון 401 עם `WWW-Authenticate`, והדפדפן פותח חלון סיסמה. |
 | 190 עד 201 | `DocumentBuilder` עם `addCookieAuth`, `createDocument`, `setup('docs')`, ואז `listen`. | רק ב `listen` Nest רושם את פרסר ה `urlencoded` שלו בתקרה של 100kB, ואת ה router. |
-| 204 | `void bootstrap()`. | כישלון, למשל פורט תפוס, יוצא כ unhandled rejection בלי לוג מובנה. |
+| 204 | `void bootstrap()`. | פורט תפוס נכתב כשורת `error` אחת של Nest ואז יוצא כ unhandled rejection. כישלון אחר יוצא בלי לוג מובנה. |
 
 **שים לב.** E8 נולד כאן. פרסר ה `urlencoded` של Nest מקבל טופס HTML רגיל, ואין טוקן CSRF, כך ש login CSRF אפשרי. התיקון הוא לדחות כל `Content-Type` שאינו JSON לפני הפרסרים, או `bodyParser: false` ורישום `json` בלבד.
 
@@ -1410,10 +1777,10 @@ sequenceDiagram
 | כשל | מתי | איך זה נראה |
 |---|---|---|
 | env חסר או לא תקין | בזמן ה import, לפני `bootstrap` | רשימת בעיות מ `loadEnv` ו stack שמצביע על קובץ בקר |
-| adapter של sandbox ב production | `NestFactory.create` | שגיאה מפורשת מה factory ב `adapters.module.ts` |
+| adapter של sandbox ב production | בזמן ה import | הסכמה דוחה ראשונה. ה throw ב factory של `adapters.module.ts` הוא קו שני שלא מושג |
 | provider שלא נפתר, למשל מודול שאינו גלובלי | `NestFactory.create` | שגיאת DI של Nest |
 | ייצור בלי `API_DOCS_PASSWORD` כשהתיעוד דלוק | בסכמה | דרישה לסיסמה, גם כשהמפעיל כתב `false`, ראה E7 |
-| פורט תפוס | `listen` | unhandled rejection בלי לוג מובנה |
+| פורט תפוס | `listen` | שורת `error` אחת של Nest ואז unhandled rejection |
 | DB לא זמין | לא באתחול | ה pool עצל. התהליך עולה, `readyz` מחזיר 503 ונתיבים מחזירים 500 |
 
 **שים לב.** משתני הסביבה שהקובץ קורא ישירות הם `TRUST_PROXY`, `CORS_ORIGINS`, `EXPOSE_API_DOCS`, `API_DOCS_PASSWORD`, `SESSION_COOKIE_NAME` ו `API_PORT`, ודרך הלוגר גם `LOG_LEVEL` ו `NODE_ENV`. כל middleware חדש נרשם כאן ב `app.use` לפני `listen`, ומיקומו ברשימה הוא מיקומו בשרשרת. תקרת גוף לפי נתיב, למשל 100kB גלובלי ו 16MiB רק להעלאת תמונות ב `MedModule`, דורשת פרסר נפרד שנרשם על הנתיב הספציפי לפני הפרסר הגלובלי. הזזת `enableCors` לפני `json` תחזיר כותרות CORS גם על 400 ו 413.
@@ -1423,13 +1790,13 @@ sequenceDiagram
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 36 עד 58 | הערות פתיחה. | מתיישנות. לא מזכירות את `ThrottlerGuard` ומונות רק ארבעה מודולים. |
+| 36 עד 58 | הערות פתיחה. | מתיישנות. לא מזכירות את `ThrottlerGuard`, ומפספסות את MED, ESC, SUP ו MEM. |
 | 59 עד 69 | `ThrottlerModule.forRootAsync` עם שני דליים בעלי שם, `default` לפי `RATE_LIMIT_PER_MINUTE`, ברירת מחדל 300, ו `auth` לפי `AUTH_RATE_LIMIT_PER_MINUTE`, ברירת מחדל 30, חלון של דקה, storage ב `Map` בזיכרון. | אין `@SkipThrottle({ auth: true })` בקוד, ולכן הדלי הצפוף `auth` חל על כל handler, והמפתח נפרד לכל handler ו IP. מפעיל שסורק יותר מ 30 פעמים בדקה, 10 לפי `.env.example`, מקבל 429. CI מסתיר זאת בערכים 5000 ו 20000. עם שני מופעים כל אחד סופר לבד. |
 | 70 עד 91 | רשימת המודולים. `DbModule` ראשון, אחריו מודולי תשתית גלובליים, `PrcModule` ו `PayModule` שמספק את `BILLING_PORT`, ואז מודולי הפיצ׳רים. | הסדר קובע את סדר הנתיבים וה Swagger, לא את פתרון התלויות. מודול חדש שלא נוסף כאן לא יירשם, וגם הסכמה שלו חייבת להיכנס ל `schema/index.ts`. |
 | 93 | `AppController`. | |
-| 94 עד 102 | `APP_GUARD` שלוש פעמים, `ThrottlerGuard`, `SessionAuthGuard`, `RolesGuard`, ו `APP_INTERCEPTOR` של `AuditInterceptor`. רצים בסדר הרישום ויכולים להזריק שירותים. | opt out, נתיב ציבורי חייב `@Public()`. החלפת הסדר בין Throttler ל SessionAuth תאפשר להציף את טבלת ה sessions. |
+| 94 עד 102 | `APP_GUARD` שלוש פעמים, `ThrottlerGuard`, `SessionAuthGuard`, `RolesGuard`, ו `APP_INTERCEPTOR` של `AuditInterceptor`. רצים בסדר הרישום ויכולים להזריק שירותים. | opt out, נתיב ציבורי חייב `@Public()`. החלפת הסדר בין Throttler ל SessionAuth תריץ חיפוש session ב DB לכל בקשה עם cookie לפני שהיא נספרת. |
 
-**שים לב.** התיקון לדלי `auth` הוא להשאיר דלי אחד גלובלי ולשים `@Throttle` מקומי על `AuthController`, או `skipIf` שמדלג על `auth` כשאין לו metadata על ה handler. ה throttler רץ לפני האימות, ולכן גם בקשות שיידחו כלא מאומתות נספרות, אבל פרסר ה JSON ב `main.ts` כבר עשה את העבודה היקרה לפניו. guard שנרשם כאן, ולא ב `app.useGlobalGuards`, נוצר ב DI ולכן `SessionAuthGuard` מקבל את `SessionService` ואת `Reflector`. ה guards עצמם ו `AuditInterceptor` מוסברים בפרק של ACC ו SEC.
+**שים לב.** התיקון לדלי `auth` הוא להשאיר דלי אחד גלובלי ולהחליף ב `AuthController` את `@Throttle({ auth })` ב `@Throttle({ default })`, כי decorator על דלי שלא מוגדר נבלע בשקט, או `skipIf` שמדלג על `auth` כשאין לו metadata על ה handler. ה throttler רץ לפני האימות, ולכן גם בקשות שיידחו כלא מאומתות נספרות, אבל פרסר ה JSON ב `main.ts` כבר עשה את העבודה היקרה לפניו. guard שנרשם כאן, ולא ב `app.useGlobalGuards`, נוצר ב DI ולכן `SessionAuthGuard` מקבל את `SessionService` ואת `Reflector`. ה guards עצמם ו `AuditInterceptor` מוסברים בפרק של ACC ו SEC.
 
 **שים לב.** קיצורי המודולים ברשימה. ACC חשבונות והזדהות, SEC הרשאות ו audit, NOT התראות, תוכן ו outbox, PRC תמחור, PAY ארנק, ledger וחיובים, CST משמורת, INV קליטה, מדפים וחבילות נכנסות, VLT הכספת של הלקוח, MED תמונות, MKT שוק וחנות, DIS תרומה, consignment, buyout ובקשות מותאמות, SHP משלוחים יוצאים ומכס, ESC escrow, ADM מסוף ניהול, SUP תמיכה, MEM מנויים.
 
@@ -1443,7 +1810,7 @@ sequenceDiagram
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 13 | imports והערה על PgBouncer בפורט 6432. | PgBouncer במצב transaction, ולכן `SET` בלי `LOCAL`, advisory lock ברמת session ו `LISTEN` לא עובדים דרך `DATABASE_URL`. |
-| 14 | `Database` הוא `NodePgDatabase<typeof schema>`. | גם `tx` בתוך `db.transaction` מקבל את הטיפוס הזה, ולכן אפשר להעביר transaction לכל פונקציה שמצפה ל `Database`. כך בנוי `BillingPort.charge`. `db.query.<table>` קיים רק לטבלאות שבאובייקט ה schema. |
+| 14 | `Database` הוא `NodePgDatabase<typeof schema>`. | גם `tx` בתוך `db.transaction` תואם לטיפוס הזה, ולכן אפשר להעביר transaction לכל פונקציה שמצפה ל `Database`. כך בנוי `BillingPort.charge`. `db.query.<table>` קיים רק לטבלאות שבאובייקט ה schema. |
 | 16 עד 21 | `createDb` יוצר `Pool` עם `DATABASE_URL` בלבד ועוטף ב drizzle. מחזיר את ה pool ואת ה handle. | ברירות מחדל של pg. 10 חיבורים, המתנה אינסופית לחיבור, אין `statement_timeout`, ואין מאזין ל `error` של ה pool. restart של PgBouncer או Postgres יכול להפיל את התהליך, ועשר שאילתות תקועות מקפיאות את כל ה API. |
 
 **שים לב.** הצורה המומלצת היא `new Pool({ connectionString, max, connectionTimeoutMillis, statement_timeout })` מתוך env, ו `pool.on('error')` שכותב ללוגר. `statement_timeout` ישפיע גם על ה seed, שמשתמש באותה פונקציה, ועל דוחות כבדים ב `adm.service.ts`. `max` מעל 20 בלי לשנות את `default_pool_size` של PgBouncer רק יעביר את התור ממקום למקום.
@@ -1463,7 +1830,7 @@ sequenceDiagram
 |---|---|---|
 | 18 עד 21 | pool נפרד על `DIRECT_DATABASE_URL`. | DDL צריך session אמיתי, ה migrator של drizzle פותח transaction אחד לכל ה migrations הממתינות. |
 | 23 | `migrate` של drizzle על `'./src/db/migrations'`. יוצר את `drizzle.__drizzle_migrations` אם חסרה, ומריץ כל migration שחותמת הזמן שלה ב `meta/_journal.json` מאוחרת מהאחרונה שהוחלה. | הנתיב יחסי ל cwd, עובד רק מתוך `apps/api`. migration עם חותמת מוקדמת, למשל ממיזוג branches, מדולגת בשקט. אין נעילה בין שתי הרצות מקבילות. |
-| 25 עד 26 | קורא `sql/0001_append_only.sql` יחסית ל `__dirname` ומריץ אותו ב `pool.query` אחד, שרץ כ transaction מרומז אחד. הקובץ אידמפוטנטי. יוצר triggers של `BEFORE UPDATE OR DELETE` על עשר טבלאות היסטוריה, `ledger_record`, `custody_event`, `audit_record`, `bin_transfer`, `wallet_request_event`, `arrival_disposal`, `parcel_event`, `support_message`, `escrow_event`, `login_attempt`, חוסם `DELETE` על `item`, ויוצר role בשם `bault_app`. | E2. ב image, `dist/db/migrate.js` מוצא את ה migrations לפי cwd אבל לא את קובץ ה SQL לפי `__dirname`, ולכן המסד נוצר בלי triggers ויציאה עם ENOENT. ה triggers ברמת שורה, ולכן `TRUNCATE` לא נחסם וה seed נשען על זה. `bault_app` לא בשימוש, `DATABASE_URL` מתחבר כבעלים. טבלה היסטורית חדשה חייבת להיכנס למערכים בקובץ ה SQL. |
+| 25 עד 26 | קורא `sql/0001_append_only.sql` יחסית ל `__dirname` ומריץ אותו ב `pool.query` אחד, שרץ כ transaction מרומז אחד. הקובץ אידמפוטנטי. יוצר triggers של `BEFORE UPDATE OR DELETE` על עשר טבלאות היסטוריה, `ledger_record`, `custody_event`, `audit_record`, `bin_transfer`, `wallet_request_event`, `arrival_disposal`, `parcel_event`, `support_message`, `escrow_event`, `login_attempt`, חוסם `DELETE` על `item`, יוצר role בשם `bault_app`, ויוצר CAST מרומז מ text ל uuid שעליו נשענים joins כמו `eq(userAccount.id, serviceRequest.requesterId)`. | E2. ב image, `dist/db/migrate.js` מוצא את ה migrations לפי cwd אבל לא את קובץ ה SQL לפי `__dirname`, ולכן המסד נוצר בלי triggers ובלי ה CAST, ויציאה עם ENOENT. ה triggers ברמת שורה, ולכן `TRUNCATE` לא נחסם וה seed נשען על זה. `bault_app` לא בשימוש, `DATABASE_URL` מתחבר כבעלים. טבלה היסטורית חדשה חייבת להיכנס למערכים בקובץ ה SQL. |
 | 28 עד 37 | `pool.end()`, הדפסה, ובכישלון `process.exit(1)`. | |
 
 **שים לב.** הזרימה לשינוי סכמה היא לשנות את קובץ ה `*.schema.ts`, לוודא שהוא מיוצא מ `schema/index.ts`, להריץ `db:generate`, לקרוא את ה SQL שנוצר תחת `src/db/migrations`, ואז `db:migrate`. אם הטבלה היסטורית, מוסיפים אותה גם ל `sql/0001_append_only.sql`. migration ידנית שאינה drizzle לא נרשמת בשום טבלה, היא רצה מחדש בכל הרצה ולכן חייבת להיות אידמפוטנטית.
@@ -1502,7 +1869,7 @@ sequenceDiagram
 | `STORAGE_ADAPTER` | `STORAGE_PROVIDER`, `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | `browse.service.ts` ב MKT, `media.service.ts` ב MED, `vault.service.ts` ב VLT |
 
 #### `apps/api/src/shared/billing/billing.port.ts`
-ה port שדרכו INV, DIS ו MKT מחייבים משתמש בלי לייבא את PAY, כדי למנוע תלות מעגלית. המימוש האמיתי נקשר ב `modules/pay/pay.module.ts` כ `useExisting: BillingService`.
+ה port שדרכו INV, DIS ו MKT מחייבים משתמש. נולד כי PAY נבנה אחרי INV, ואינו מונע מעגל, DIS ו MKT כבר מייבאים את `LedgerService` ישירות. המימוש האמיתי נקשר ב `modules/pay/pay.module.ts` כ `useExisting: BillingService`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -1510,39 +1877,39 @@ sequenceDiagram
 | 46 עד 51 | `BillingPort.charge(tx, action)` ו `BILLING_PORT`. | הפרמטר `tx` הוא כל הטעם. החיוב והפעולה העסקית נכתבים או מתבטלים יחד. הסרתו שוברת אטומיות. |
 | 53 עד 66 | `NoopBillingAdapter` ו `BillingModule` גלובלי. | קוד מת. אם יתווסף ל `AppModule`, שני מודולים גלובליים יספקו את אותו token ופעולות בתשלום עלולות לעבור בחינם. למחוק. |
 
-**שים לב.** `BILLING_PORT` מוזרק ב `dis/service.service.ts`, `inv/batch.service.ts`, `inv/intake.service.ts`, `inv/parcel.service.ts` ו `mkt/trade.service.ts`. שינוי חתימת `charge` מחייב שינוי ב `pay/billing.service.ts` ובחמשתם. סוג פעולה חדש נכנס גם ל union כאן וגם ככלל ב `pricing_rule`, אחרת התמחור ייפול לברירת מחדל.
+**שים לב.** `BILLING_PORT` מוזרק ב `dis/service.service.ts`, `inv/batch.service.ts`, `inv/intake.service.ts`, `inv/parcel.service.ts` ו `mkt/trade.service.ts`. שינוי חתימת `charge` מחייב שינוי ב `pay/billing.service.ts` ובחמשתם. סוג פעולה חדש נכנס גם ל union כאן וגם ככלל ב `pricing_rule`, אחרת `pricing.service.ts` זורק 400 והפעולה כולה מתבטלת. רק `feeActionType` בלי כלל נופל חזרה ל `actionType`.
 
 #### `apps/api/src/shared/errors/app-error.ts`
-השגיאה העסקית של הפרויקט. 61 קבצים זורקים אותה. קוד מכונה יציב, סטטוס, הודעה ופרטים.
+השגיאה העסקית של הפרויקט. 59 קבצים זורקים אותה. קוד מכונה יציב, סטטוס, הודעה ופרטים.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 9 עד 17 | `AppError extends HttpException`. ה constructor שומר `code` ו `details` וקורא `super({ code, message, details }, status)`. | הגוף כבר מכיל `code`, ולכן ה filter מעביר אותו כמו שהוא. שינוי מבנה האובייקט יהפוך כל שגיאה עסקית ל `internal`. ה SPA מגיב לפי `code`. |
-| 19 עד 52 | factories סטטיים. `validation` 400, `unauthenticated` 401, `forbidden` 403, `emailUnverified` ו `accountSuspended` 403 עם קוד משלהם, `tokenExpired` 410, `conflict` 409, `notFound` 404. | `emailUnverified` הוא הכישלון היחיד בהתחברות שהמשתמש מתקן בעצמו, וה SPA מציג לפיו כפתור שליחה מחדש. רוב הקוד קורא ל constructor ישירות עם 409. |
+| 9 עד 17 | `AppError extends HttpException`. ה constructor שומר `code` ו `details` וקורא `super({ code, message, details }, status)`. | הגוף כבר מכיל `code`, ולכן ה filter מעביר אותו כמו שהוא. שינוי מבנה האובייקט יחליף כל קוד עסקי בקוד הכללי של הסטטוס, למשל `insufficient_balance` יהפוך ל `conflict`. ה SPA מגיב לפי `code`. |
+| 19 עד 52 | factories סטטיים. `validation` 400, `unauthenticated` 401, `forbidden` 403, `emailUnverified` ו `accountSuspended` 403 עם קוד משלהם, `tokenExpired` 410, `conflict` 409, `notFound` 404. | `emailUnverified` הוא הכישלון היחיד בהתחברות שהמשתמש מתקן בעצמו, וה SPA מציג לפיו כפתור שליחה מחדש. שגיאות 409 נזרקות כמעט תמיד ב constructor ישירות ולא ב `conflict`. |
 
 **שים לב.** קוד חדש נכנס קודם ל `error-codes.ts`, נזרק כ `new AppError(ErrorCode.X, message, status)`, ומתורגם ב SPA לפי הערך. הודעה היא לבני אדם באנגלית, וה SPA לא אמור להשוות אליה. `HttpException` רגיל בלי `code` עובר את ה filter עם `code` שנגזר מהסטטוס בלבד, ולכן כל שגיאה עסקית צריכה להיות `AppError`.
 
 | קובץ | מה הוא עושה |
 |---|---|
-| `apps/api/src/shared/errors/error-codes.ts` | 19 קודים, בהם `item_on_hold`, `item_no_longer_available`, `self_dealing_forbidden`, `insufficient_balance`, `negative_balance_blocked`, `dual_consent_required` ו `confirmation_required`, כאובייקט `as const` וטיפוס union באותו שם. `IDEMPOTENCY_KEY_REUSED` לא נזרק באף מקום, `RATE_LIMITED` נוצר רק ב `mapStatus`. ה SPA לא מייבא את הקובץ, ולכן שינוי ערך שובר אותו בלי שגיאת קומפילציה. |
+| `apps/api/src/shared/errors/error-codes.ts` | 18 קודים, בהם `item_on_hold`, `item_no_longer_available`, `self_dealing_forbidden`, `insufficient_balance`, `negative_balance_blocked`, `dual_consent_required` ו `confirmation_required`, כאובייקט `as const` וטיפוס union באותו שם. `IDEMPOTENCY_KEY_REUSED` לא נזרק באף מקום, `RATE_LIMITED` נוצר רק ב `mapStatus`. ה SPA לא מייבא את הקובץ, ולכן שינוי ערך שובר אותו בלי שגיאת קומפילציה. |
 
 #### `apps/api/src/shared/errors/validation-error.ts`
 ה `exceptionFactory` של ה `ValidationPipe`, נקרא רק מ `main.ts`. הופך את עץ השגיאות של class-validator למשפט אחד קריא ולרשימה ב `details.violations`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 49 עד 55 | `FieldViolation`, שדה בנתיב מנוקד, קוד אילוץ והודעה. | ה SPA מסמן שדות בטופס לפי הצורה הזו. שינוי שובר אותו ואת בדיקות ה contract. |
+| 49 עד 55 | `FieldViolation`, שדה בנתיב מנוקד, קוד אילוץ והודעה. | ה SPA לא קורא את `details.violations` היום. הצורה נבדקת ב `tests3/integration/band1-money-ownership.test.ts`, ושינוי ישבור אותה. |
 | 58 עד 68 | `flatten` עובר רקורסיבית על `children` ובונה נתיבים כמו `items.0.binId`. | |
 | 77 עד 122 | `FIELD_NAMES` ו `humanField`. מילון חריגים, אחרת פיצול camelCase ו snake_case, ותוספת `(item N)` לאינדקס. | שדה עם שם לא קריא מתוקן בהוספה למילון. |
 | 125 עד 146 | `MISSING_CONSTRAINTS` ו `TYPE_CONSTRAINTS`. | אילוץ טיפוס על ערך שלא נשלח נחשב חוסר. |
-| 157 עד 192 | `restate` מנסח הפרה אחת. `each value in`, הודעה ידנית מוחזרת כמו שהיא, ואז ענפים לשדה לא מוכר, חסר, enum, `isPositive`, `isEmail`, `isUUID`. | באג. ההודעה על שדה לא מוכר מתחילה ב `property`, ולכן שורה 164 מסווגת אותה כידנית, והענף של `whitelistValidation` בשורה 167 לא מושג. התיקון הוא להקדים את בדיקת `whitelistValidation`. |
+| 157 עד 192 | `restate` מנסח הפרה אחת. `each value in`, הודעה ידנית מוחזרת כמו שהיא, ואז ענפים לשדה לא מוכר, חסר, enum, `isPositive`, `isEmail`, `isUUID`. | באג. ההודעה על שדה לא מוכר מתחילה ב `property`, ולכן שורה 164 מסווגת אותה כידנית, והענף של `whitelistValidation` בשורה 167 לא מושג. התיקון הוא להקדים את בדיקת `whitelistValidation`. גם `isUUID` כאן וב `TYPE_CONSTRAINTS` לא יתאים לעולם, class-validator מדווח `isUuid`. |
 | 202 עד 287 | `summarise` בונה משפט אחד. מקבץ לפי שדה, חסר גובר על שגוי, פסוקית לחסרים ולא מוכרים, ועד שלושה שגויים. | מסווג לפי קוד ולא לפי הודעה, ולכן כאן שדה לא מוכר יוצא נכון. |
 | 289 עד 318 | `validationException` בונה מפה מנתיב לערך שנשלח כדי לדעת אם שדה נוכח, ומחזיר `BadRequestException` עם `code: validation_failed`, המשפט וההפרות. | ההודעות לא כוללות את הערך שנשלח. ערכי enum נחשפים בכוונה. שדרוג class-validator ישנה ניסוחים בשקט. |
 
-דוגמה לגוף שיוצא כשחסרים שני שדות ונשלח שדה לא מוכר אחד.
+דוגמה לגוף שיוצא כששני שדות `@IsString` חסרים ונשלח שדה לא מוכר אחד.
 
 ```json
-{"error":{"code":"validation_failed","message":"Item id, bin id are required; extra is not a field this accepts.","details":{"violations":[{"field":"itemId","code":"isUuid","message":"item id is required."},"..."]}}}
+{"error":{"code":"validation_failed","message":"Item, bin are required; extra is not a field this accepts.","details":{"violations":[{"field":"extra","code":"whitelistValidation","message":"property extra should not exist"},{"field":"itemId","code":"isString","message":"item is required."},"..."]}}}
 ```
 
 **שים לב.** הודעה ידנית ב DTO, כמו `@IsIn(..., { message })`, לא מתחילה בשם השדה ולכן עוברת כמו שהיא. זו הדרך לתת לשדה מסוים ניסוח משלו. בתשובה אחת מוצגים עד שלושה שדות שגויים, ו `details.violations` תמיד מכיל את כולם.
@@ -1555,7 +1922,7 @@ sequenceDiagram
 | 20 עד 22 | `@Catch()` בלי ארגומנטים ו `Logger('Exceptions')`. | ההקשר נכתב בשדה `detail` של הלוג, לא ב `context`. |
 | 27 עד 47 | `HttpException`. גוף עם `code` עובר כמו שהוא. אחרת `code` מ `mapStatus`, הודעה מ `exception.message`, ו 429 עם הודעה קבועה. | אין לוג בענף הזה, גם ל 5xx. גוף בלי `code` נזרק, ולכן ה 503 של `readyz` מאבד את גופו. 404 של Nest משקף את הנתיב המלא כולל query string. |
 | 49 עד 79 | שגיאת Postgres `22P02` הופכת ל 400 על מזהה לא תקין, עם `warn`. תחליף ל `ParseUUIDPipe`, כי יש נתיבים שמקבלים ברקוד. | גם enum, מספר או JSON לא תקינים יקבלו את ההודעה הזו. הלוג כולל את הערך שהמשתמש שלח. |
-| 81 עד 99 | `statusOf` מוצא `status` או `statusCode` בטווח 4xx, למשל 413 או 400 מ body-parser. מחזיר את אותו סטטוס עם הודעה כללית ו `warn`. | כל שגיאה של ספרייה עם `status` של 4xx, למשל adapter שמעביר 401 של ספק, תוחזר ללקוח כשגיאת לקוח. |
+| 81 עד 99 | `statusOf` מוצא `status` או `statusCode` בטווח 4xx, למשל 413 מ body-parser. מחזיר את אותו סטטוס עם הודעה כללית ו `warn`. JSON שבור לא מגיע לכאן, ראה הטבלה למטה. | כל שגיאה של ספרייה עם `status` של 4xx, למשל adapter שמעביר 401 של ספק, תוחזר ללקוח כשגיאת לקוח. |
 | 101 עד 106 | כל השאר. `error` עם stack מלא, ללקוח 500 עם `Internal server error` בלבד. | הודעות pg בלוג בלי ערכים, כי drizzle 0.38 לא מוסיף SQL ופרמטרים. |
 | 108 עד 117 | `mapStatus`. 401, 403, 404, 409, 400 ו 429 לקודים התואמים. 413 ל `validation_failed`, כל לא מוכר, כולל 410, 422 ו 503, ל `internal`. | |
 | 125 עד 148 | `isInvalidTextRepresentation` בודק `exception.code` ישירות, `statusOf`, `describe`. | שדרוג drizzle, שנדרש בגלל E12, עוטף ב `DrizzleQueryError`. אז 22P02 יהפוך ל 500 בשקט וה SQL והפרמטרים ייכנסו ללוג. צריך לבדוק גם `exception.cause?.code`. |
@@ -1569,7 +1936,8 @@ sequenceDiagram
 | `ThrottlerException` | 429, `rate_limited`, הודעה קבועה | אין |
 | `ServiceUnavailableException` של `readyz` | 503, `internal`, `Service Unavailable Exception` | אין |
 | pg `22P02` | 400, `validation_failed`, מזהה לא תקין | `warn` עם הודעת pg |
-| `PayloadTooLargeError` או JSON שבור | 413 או 400, הודעה כללית | `warn` |
+| `PayloadTooLargeError` | 413, הודעה כללית | `warn` |
+| JSON שבור, ש Nest ממפה מ `SyntaxError` ל `BadRequestException` | 400, `validation_failed`, הודעת ה parser | אין |
 | כל השאר, כולל שגיאות pg אחרות ו `Error` של `money.ts` | 500, `internal`, `Internal server error` | `error` עם stack |
 
 #### `apps/api/src/shared/tokens.ts`
@@ -1609,7 +1977,7 @@ RETURNING payload;
 
 אם לא חזרה שורה, מבחינים בין 400 ל 410 בשאילתה נוספת, שכבר אינה מסוכנת. רצוי להריץ את זה בתוך ה transaction של הקורא, ואז כישלון של הפעולה מחזיר את הטוקן לשימוש.
 
-**שים לב.** שש פעולות משתמשות בו, כל אחת עם שם `action` משלה. `withdrawal` עם סכום, מטבע ויעד, `donation` עם `itemId`, `deslab` ו `remove_commons` ב DIS, `listing_removal` ו `transfer` ב MKT. כל צרכן חושף שני נתיבים, אחד שקורא ל `issue` ומחזיר טוקן, ואחד שמקבל את הטוקן, קורא ל `consume` ומבצע. ב `withdrawal.service.ts` ה `consume` רץ מחוץ ל transaction שבודק יתרה, ולכן ה race כאן מגיע עד הכסף אם בדיקת היתרה שם לא נועלת.
+**שים לב.** שש פעולות משתמשות בו, כל אחת עם שם `action` משלה. `withdrawal` עם סכום, מטבע ויעד, `donation` עם `itemId`, `deslab` ו `remove_commons` ב DIS, `listing_removal` ו `transfer` ב MKT. כל צרכן חי חושף שני נתיבים, אחד שקורא ל `issue` ומחזיר טוקן, ואחד שמקבל את הטוקן, קורא ל `consume` ומבצע. `withdrawal` כבר לא מנותב, ו `POST /finance/withdrawals/confirm` מחזיר 410. אם ינותב מחדש, ה `consume` שם רץ מחוץ ל transaction שבודק יתרה, וה race יגיע עד הכסף.
 
 **שים לב.** הפעולה מתבצעת על ה payload ששמור בשרת ולא על מה שהלקוח שולח בשלב השני. כש `consume` רץ מחוץ ל transaction של הקורא, כישלון אחריו שורף את הטוקן והמשתמש מתחיל מחדש.
 
@@ -1619,19 +1987,19 @@ RETURNING payload;
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 21 | `key` מהלקוח, `userId` כ text שיכול להיות ריק, `endpoint` שהקורא בונה, `statusCode` ו `responseBody` של התשובה השמורה, `createdAt`, `expiresAt` חובה. | `statusCode` ו `responseBody` nullable, כאילו תוכנן placeholder לפני ביצוע, אבל השירות לא עובד כך. |
-| 22 עד 25 | אינדקס ייחודי `idempotency_key_endpoint_unique` על `key` ו `endpoint`. | בלי `user_id`, וזה הבסיס לדליפה בין משתמשים. הוספת `user_id` דורשת migration ושינוי ה `onConflictDoNothing` בשירות. |
+| 22 עד 25 | אינדקס ייחודי `idempotency_key_endpoint_unique` על `key` ו `endpoint`. | בלי `user_id`, וזה הבסיס לדליפה בין משתמשים. הוספת `user_id` דורשת migration ושינוי של `lookup`. `onConflictDoNothing` בלי target ימשיך לעבוד. |
 
 #### `apps/api/src/shared/idempotency/idempotency.service.ts`
 שתי פעולות שהקורא עוטף סביב פעולה שאסור לבצע פעמיים. צרכנים יחידים, `purchase.service.ts` ו `house-store.service.ts` ב MKT.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 23 עד 31 | `lookup` לפי `key` ו `endpoint`. מחזיר סטטוס וגוף, או `null`. | לא מסנן לפי משתמש, לא בודק `expiresAt` ולא משווה את גוף הבקשה. משתמש אחר עם אותו מפתח מקבל את התשובה של הראשון והפעולה שלו לא מתבצעת. |
-| 33 עד 45 | `save` מקבל מפתח, endpoint, `userId`, סטטוס וגוף, ומכניס שורה עם תפוגה של 24 שעות ו `onConflictDoNothing`. | שמירה שנייה נבלעת בשקט. `userId` נשמר אבל אף שאילתה לא קוראת אותו, ולכן הוספתו ל `lookup` היא שינוי מקומי שלא שובר צרכנים. |
+| 23 עד 31 | `lookup` לפי `key` ו `endpoint`. מחזיר סטטוס וגוף, או `null`. | לא מסנן לפי משתמש, לא בודק `expiresAt` ולא משווה את גוף הבקשה. משתמש אחר עם אותו מפתח על אותו listing מקבל את התשובה של הראשון והפעולה שלו לא מתבצעת. |
+| 33 עד 45 | `save` מקבל מפתח, endpoint, `userId`, סטטוס וגוף, ומכניס שורה עם תפוגה של 24 שעות ו `onConflictDoNothing`. | שמירה שנייה נבלעת בשקט. `userId` נשמר אבל אף שאילתה לא קוראת אותו. הוספתו ל `lookup` דורשת פרמטר בשני הקוראים ואת `user_id` באינדקס, אחרת שמירה של משתמש שני נבלעת. |
 
-**שים לב.** המפתח מגיע בכותרת `idempotency-key`, שנקראת ב `mkt.controller.ts`, `offer.controller.ts` ו `house-store.controller.ts`. `purchase.service.ts` קורא ל `lookup` בשורה 72 ול `save` בשורה 180, `house-store.service.ts` בשורות 163 ו 265. התשובה נשמרת עם סטטוס 201 והגוף המלא, ו replay מחזיר אותם כמו שהם.
+**שים לב.** המפתח מגיע בכותרת `idempotency-key`, שנקראת ב `mkt.controller.ts`, `offer.controller.ts` ו `house-store.controller.ts`. `purchase.service.ts` קורא ל `lookup` בשורה 72 ול `save` בשורה 180, `house-store.service.ts` בשורות 163 ו 265. התשובה נשמרת עם סטטוס 201 והגוף המלא, ו replay מחזיר את הגוף עם `replayed: true`.
 
-**שים לב.** הזרימה אצל הקורא היא `lookup`, transaction שמבצע, ורק אחרי ה commit `save`. זה מגן מפני retry אחרי שהבקשה הראשונה הסתיימה, לא מפני כפילות במקביל. ב `purchase.service.ts` נעילת ה listing מצילה, הבקשה השנייה מקבלת 409. ב `house-store.service.ts` שתי בקשות מקבילות עם אותו מפתח קונות שני עותקים ומחויבות פעמיים, ולקוח בלי כותרת מקבל מפתח אקראי, כלומר בלי הגנה. התיקון הוא לתפוס את המפתח ב `INSERT ... ON CONFLICT DO NOTHING RETURNING` בתוך ה transaction של הפעולה, עם `user_id` ו hash של הגוף, ולשמור את התשובה באותו transaction. אם ה insert לא החזיר שורה, הבקשה השנייה ממתינה לנעילת השורה ומחזירה את התשובה השמורה, או 409 עם `IDEMPOTENCY_KEY_REUSED` כשהגוף שונה. בדיקת תפוגה ב `lookup` מחייבת גם job שמנקה את הטבלה.
+**שים לב.** הזרימה אצל הקורא היא `lookup`, transaction שמבצע, ורק אחרי ה commit `save`. זה מגן מפני retry אחרי שהבקשה הראשונה הסתיימה, לא מפני כפילות במקביל. ב `purchase.service.ts` נעילת ה listing מצילה, הבקשה השנייה מקבלת 409. ב `house-store.service.ts`, כשיש במלאי לפחות שניים, שתי בקשות מקבילות עם אותו מפתח קונות שני עותקים ומחויבות פעמיים, ולקוח בלי כותרת מקבל מפתח אקראי, כלומר בלי הגנה. התיקון הוא לתפוס את המפתח ב `INSERT ... ON CONFLICT DO NOTHING RETURNING` בתוך ה transaction של הפעולה, עם `user_id` ו hash של הגוף, ולשמור את התשובה באותו transaction. אם ה insert לא החזיר שורה, הבקשה השנייה ממתינה לנעילת השורה ומחזירה את התשובה השמורה, או 409 עם `IDEMPOTENCY_KEY_REUSED` כשהגוף שונה. בדיקת תפוגה ב `lookup` מחייבת גם job שמנקה את הטבלה.
 
 #### `apps/api/src/shared/ids.ts`
 מזהים קריאים עם קידומת, כמו `SHP-7KQ2M9XA`, שמודפסים על מדבקות ומוקלדים במחסן, לצד ה UUID. 20 קבצים משתמשים בו.
@@ -1639,10 +2007,10 @@ RETURNING payload;
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 14 עד 17 | הערה ו `ALPHABET` של 32 תווים בלי `0`, `O`, `1`, `I`. | ההערה אומרת שהקוראים מנסים שוב בהתנגשות. אין קורא כזה, והתנגשות תהיה 500. ההסתברות זניחה. |
-| 19 עד 23 | `prefixedId` בוחר תווים ב `randomInt` קריפטוגרפי, 8 כברירת מחדל. | שינוי אורך או אלפבית שובר ולידציה בצד לקוח ובסורקים. |
+| 19 עד 23 | `prefixedId` בוחר תווים ב `randomInt` קריפטוגרפי, 8 כברירת מחדל. | אין בקוד ולידציה של הפורמט, ושינוי חל רק על מזהים חדשים. |
 | 25 עד 48 | `ID_PREFIX`, 16 קידומות `as const`, ו `newShipmentCode`. `OW` בעלים, `SN` פריט, `BIN` מדף, `SHP` משלוח, `SR` בקשת שירות, `DSP` מחלוקת, `LOT` מנת קליטה, `TXN` עסקה, `DSL` השמדה, `PKG` חבילה, `TKT` פנייה, `GSB` הגשת grading, `GRP` משלוח משותף, `ESC` escrow, `HSE` מוצר חנות, `ORD` הזמנה. | המספר הסידורי של פריט נוצר ב `modules/inv/labels.ts`, לא כאן. `OW` משמש רק ב seed. |
 
-**שים לב.** מזהים אקראיים ולא מונה רץ, כך שאי אפשר להסיק מהם כמה משלוחים או פניות יש במערכת. שינוי קידומת קיימת שובר חיפוש לפי קידומת ב SPA ובמסוף הניהול.
+**שים לב.** מזהים אקראיים ולא מונה רץ, כך שאי אפשר להסיק מהם כמה משלוחים או פניות יש במערכת. ה SPA לא מפרש קידומות, אבל שינוי קידומת קיימת שובר 18 בדיקות כמו `toMatch(/^SHP-/)`.
 
 #### `apps/api/src/shared/money.ts`
 עזרי כסף. מספר שלם ביחידות קטנות ומטבע מפורש. 16 קבצים, בעיקר PAY, PRC, MKT, SHP, ESC ו DIS.
@@ -1693,7 +2061,7 @@ RETURNING payload;
 {"level":"warn","time":"2026-01-01T10:00:00.000Z","message":"...","requestId":"3f1c...","context":"api","detail":"Exceptions"}
 ```
 
-**שים לב.** אין שורת גישה לכל בקשה, בלי method, path, status ומשך. בפועל רק `AllExceptionsFilter` כותב דרך הלוגר. הוספה פשוטה היא `res.on('finish')` בתוך `requestContext`, בלי לכתוב query string שעלול להכיל טוקנים. `auth.service.ts` ו `ConsoleEmailAdapter` כותבים ישר ל console ועוקפים את הלוגר. שירות שרוצה לכתוב לוג משתמש ב `new Logger('Name')` מ `@nestjs/common`, שעובר דרך `StructuredLogger` ומקבל את `requestId` לבד, ולא ב `console`.
+**שים לב.** אין שורת גישה לכל בקשה, בלי method, path, status ומשך. בפועל, מלבד הודעות האתחול של Nest, רק `AllExceptionsFilter` כותב דרך הלוגר. הוספה פשוטה היא `res.on('finish')` בתוך `requestContext`, בלי לכתוב query string שעלול להכיל טוקנים. `auth.service.ts` ו `ConsoleEmailAdapter` כותבים ישר ל console ועוקפים את הלוגר. שירות שרוצה לכתוב לוג משתמש ב `new Logger('Name')` מ `@nestjs/common`, שעובר דרך `StructuredLogger` ומקבל את `requestId` לבד, ולא ב `console`.
 
 #### `apps/api/src/shared/observability/health.controller.ts`
 דפוס P2, שני נתיבים, שניהם `@Public()`.
@@ -1703,7 +2071,7 @@ RETURNING payload;
 | 24 עד 28 | `live`, `GET /api/v1/healthz`, מחזיר `{ status: 'ok' }` בלי בדיקה. | זה מה שה `HEALTHCHECK` ב Dockerfile, `scripts/dev.mjs` ו `scripts/tunnel.mjs` בודקים. liveness לא נוגע ב DB בכוונה, אחרת תקלה ב DB תגרום ל restart של כל המופעים. |
 | 30 עד 49 | `ready`, `GET /api/v1/readyz`, מריץ `select 1`, ובכישלון `ServiceUnavailableException`, כלומר 503. | ה filter מוחק את הגוף ומחזיר `internal`, בניגוד להערה. לא בודק שה migrations הוחלו ואין timeout, כך ש pool מלא תוקע את ה probe. |
 
-**שים לב.** שני הנתיבים עוברים דרך `ThrottlerGuard` והדלי `auth`. probe כל 5 שניות מאותה כתובת יקבל 429. `@SkipThrottle()` על המחלקה פותר. כדי ש `readyz` יבדוק גרסה, משווים את הרשומה האחרונה ב `drizzle.__drizzle_migrations` מול ה journal, ומוסיפים `statement_timeout` קצר לשאילתה. כדי שהגוף ישרוד את ה filter, צריך לזרוק אותו עם `code`. הסרת `@Public()` תחזיר את הבאג שבו כל probe קיבל 401.
+**שים לב.** שני הנתיבים עוברים דרך `ThrottlerGuard` והדלי `auth`. עם 10 של `.env.example`, probe כל 5 שניות מאותה כתובת יקבל 429. `@SkipThrottle()` בלי ארגומנט מדלג רק על `default`, ולכן צריך `@SkipThrottle({ default: true, auth: true })` על המחלקה. כדי ש `readyz` יבדוק גרסה, משווים את הרשומה האחרונה ב `drizzle.__drizzle_migrations` מול ה journal, ומוסיפים `statement_timeout` קצר לשאילתה. כדי שהגוף ישרוד את ה filter, צריך לזרוק אותו עם `code`. הסרת `@Public()` תחזיר את הבאג שבו כל probe קיבל 401.
 
 | קובץ | מה הוא עושה |
 |---|---|
@@ -1715,23 +2083,23 @@ RETURNING payload;
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 31 | imports של 37 טבלאות, `MEMBERSHIP_TIERS`, `prefixedId`, `ID_PREFIX`, `makeBinSerial`, `makeBinBarcode`. | רשימת הטבלאות כאן היא מה שנכתב, לא מה שנמחק. |
-| 33 עד 63 | הערת פתיחה. איפוס עוקף triggers, לפיתוח בלבד, נתונים עקביים מעצם הבנייה. | האזהרה על production היא הערה בלבד. טענת העקביות לא מתקיימת ב escrow וב `dana`. |
+| 33 עד 63 | הערת פתיחה. איפוס עוקף triggers, לפיתוח בלבד, נתונים עקביים מעצם הבנייה. | האזהרה על production היא הערה בלבד. טענת העקביות לא מתקיימת ב escrow, ו `dana` לא תואמת את ההערה שלה. |
 | 65 עד 70 | `one` מחזיר את השורה הראשונה מ `returning()` או זורק. | קיים בגלל `noUncheckedIndexedAccess`. עדיף על `rows[0]!`. |
 | 72 עד 78 | `createDb()`, `CUR = 'USD'`, ו hash יחיד של `11111111` ב argon2id לכל החשבונות. | אותו salt לכולם, ברור מיד מהטבלה שהסיסמה משותפת. |
 | 80 עד 99 | `TRUNCATE ... RESTART IDENTITY` אחד על 48 טבלאות, ב `pool.query`. | הפתח היחיד לאיפוס, כי ה triggers ברמת שורה. `parcel_photo` חסרה, בלי FK, ולכן נשארות שאריות. טבלה חדשה עם FK שלא תיכנס כאן תפיל את ה seed. נועל `ACCESS EXCLUSIVE`. עושה commit מיד. `RESTART IDENTITY` לא עושה כלום, כל המפתחות UUID. דורש הרשאת בעלים. אילו `DATABASE_URL` היה מתחבר כ `bault_app`, הפקודה הייתה נכשלת, וזו הייתה הגנה טבעית מפני E11. |
 | 100 עד 123 | בלוק `DO` שמרוקן `pgboss.job` ו `pgboss.archive` רק אם הסכמה `pgboss` קיימת. | לא נוגע ב `queue`, `schedule`, `subscription`, `version`, שבלעדיהם ה worker לא עולה. |
 | 125 עד 166 | `mkUser` מכניס `user_account` במצב `active` עם ה hash המשותף. `legacy` יוצר חשבון ישן עם `intakeId`, `nameReviewRequired` ו `legacyDisplayName`. | `username` לא ניתן לשינוי אחר כך, trigger מ migration 0004. |
 | 168 עד 198 | שישה חשבונות. `veteran` נוצר עם `legacy`, כלומר `intakeId` מסוג `OW` ושם שמסומן לבדיקה. `eldar` admin, `hermon` warehouse_operator, `red`, `golden` ו `veteran` משתמשים, `platform` admin. | `platform` נוצר כ `admin` אף שההערה אומרת `system`. בכל סביבה מוזרעת יש שני מנהלים עם סיסמה ידועה. |
-| 200 עד 551 | מערך `rules` של 42 כללי תמחור ולולאה שמכניסה ל `pricing_rule` עם `updatedBy: eldar`. intake כללי ולפי `itemClass`, `intake_lot`, אחסון עם `parameters` שה worker קורא, `service`, `shipping`, `marketplace_fee` של 500 bps, consignment, grading, service fees, rush, cash out, chargeback, escrow, white glove, מנויים מ `MEMBERSHIP_TIERS`, חבילות. | E6. בלי seed אין מחירים. `value` הוא סנטים או bps לפי `model`, ואין עמודת יחידה. כלל חדש נכנס כאובייקט עם `actionType` ייחודי. בסביבה חיה משנים מחיר דרך מסוף הניהול, לא כאן. |
+| 200 עד 551 | מערך `rules` של 42 כללי תמחור ולולאה שמכניסה ל `pricing_rule` עם `updatedBy: eldar`. intake כללי ולפי `itemClass`, `intake_lot`, אחסון עם `parameters` שה worker קורא, `service`, `shipping`, `marketplace_fee` של 500 bps, consignment, grading, service fees, rush, cash out, chargeback, escrow, white glove, מנויים מ `MEMBERSHIP_TIERS`, חבילות. | E6. בלי seed אין מחירים. `value` הוא סנטים או bps לפי `model`, ואין עמודת יחידה. כלל חדש נכנס כאובייקט עם צירוף `actionType` ו `itemClass` חדש. בסביבה חיה משנים מחיר דרך מסוף הניהול, לא כאן. |
 | 553 עד 604 | שני מתקנים. `NJ` עם `salesTaxBps: 6625`, ו `DE` שמעביר ל `NJ` אחרי 4 ימים. | כתובות placeholder ומיקוד `00000`, ומוצגות ללקוח כיעד משלוח. seed בסביבה אמיתית ידרוס כתובות אמיתיות. |
 | 606 עד 640 | `mkBin` עם `makeBinSerial` ו `makeBinBarcode`, שישה מדפים. A1, A2, B1, B2 ושניים באזור `O` עם `oversized`. | `binIds` בבדיקות זורק אם יש פחות משניים. בלי oversized ה stow לא יודע לאן לשלוח פריט גדול. |
 | 642 עד 653 | קבועי כסף בסנטים, `INTAKE` 500, `SERVICE` 2000, `SHIP` 3500, `MEGA_SALE` 26000, `FEE` 1300 שהם 5 אחוז ממנו, מחיר ה Gold Star 320000 וההצעה 275000, `TOPUP` 500000, `WITHDRAW` 100000. | הקבועים לא נקראים מהמחירון. שינוי כלל תמחור לא משנה אותם, ולהפך. |
-| 655 עד 721 | עוזרים. `ledger` מכניס `ledger_record`. `bill` מדמה את `BillingService`, `charge` במצב `settled` עם snapshot מדומה ושורת `fee` או `service_charge`. `topup` מכניס `external_payment` של sandbox ו `credit_topup`. `mkItem`, `custody`, `transfer`, `img`. | `type as never` משתיק בדיקת enum, טעות כתיב נכשלת רק בזמן ריצה. `topup` הוא מסלול שהאפליקציה כבר לא מייצרת, היום כסף נכנס רק דרך בקשת ארנק. ה snapshot המדומה של `bill` אומר שמסך שמציג איזה כלל חייב לא ימצא פרטים אמיתיים. `mkItem` קובע `receivedAt` לזמן הריצה. |
-| 723 עד 949 | שני topup של 5000 דולר, ותשעה קלפים. לכל קלף `mkItem`, אירוע `intake` או `batch_split`, `bin_transfer`, תמונה ו `bill`. ביניהם listing של Gold Star עם הצעה, batch מפוצל, בקשת grading, משלוח DHL, מכירה של `SN-ROS105-0008` מ golden ל red. שלושה מוצרי `house_listing` עם `stock` 3, 2 ו 1. | ה `serialNumber` הוא שם קובץ התמונה תחת `assets/images`. המכירה כותבת `purchase`, `sale_credit` ו `fee` ישירות בלי `charge`. כל הקלפים `Raw`, בלי מספר תעודה מומצא. |
+| 655 עד 721 | עוזרים. `ledger` מכניס `ledger_record`. `bill` מדמה את `BillingService`, `charge` במצב `settled` עם snapshot מדומה ושורת `fee` או `service_charge`. `topup` מכניס `external_payment` של sandbox ו `credit_topup`. `mkItem`, `custody`, `transfer`, `img`. | `type as never` משתיק בדיקת enum, טעות כתיב נכשלת רק בזמן ריצה. `topup` מחקה את מה ש `POST /finance/checkout` כותב כשהספק מאשר. זה המסלול היחיד שעדיין מזכה ארנק בלי בקשת ארנק, ועם PayPal הוא לא עובד, E3. ה snapshot המדומה של `bill` אומר שמסך שמציג איזה כלל חייב לא ימצא פרטים אמיתיים. `mkItem` קובע `receivedAt` לזמן הריצה. |
+| 723 עד 949 | שני topup של 5000 דולר, ושמונה קלפים. לכל קלף `mkItem`, אירוע `intake` או `batch_split`, `bin_transfer`, תמונה ו `bill`. ביניהם listing של Gold Star עם הצעה, batch מפוצל, בקשת grading, משלוח DHL, מכירה של `SN-ROS105-0008` מ golden ל red. שלושה מוצרי `house_listing` עם `stock` 3, 2 ו 1. | ה `serialNumber` הוא שם קובץ התמונה תחת `assets/images`. המכירה כותבת `purchase`, `sale_credit` ו `fee` ישירות בלי `charge`. כל הקלפים `Raw`, בלי מספר תעודה מומצא. |
 | 950 עד 1108 | הצעת החלפה ממתינה בין red ל golden, משיכה של 1000 דולר מ golden במצב `paid` עם יעד מוסתר ושורת ledger, כדי שסוג ההפניה `withdrawal` יהיה מגובה בשורה אמיתית, וארבע בקשות ארנק עם שרשרת `wallet_request_event`. cash_in submitted, cash_out processing, cash_out rejected, cash_in completed עם `credit_topup`. | ה `UPDATE` היחיד על `wallet_request` בשורות 1102 עד 1105 מקשר `settledLedgerId`. בבקשה המושלמת האירועים מדלגים על `pending_review`. |
 | 1110 עד 1225 | מחלוקת במצב `investigating` על עסקת המכירה, שלוש שורות `audit_record` שמדמות את `AuditInterceptor`, שתי `outbox_message` מסוג `item_received` ו `offer_received`, שלוש התראות מנוסחות, העדפה של golden לכבות `hold_placed`, כתובות משלוח, ושתי תערוכות ב `consignment_event` שערוץ ה consignment צריך כדי לא לסרב. `days(n)` קדימה ו `minutes(n)` אחורה. | worker שעולה אחרי seed יעבד את ה outbox כאילו נוצר עכשיו. התאריכים יחסיים לזמן הריצה. |
 | 1226 עד 1312 | מצבי קצה שמסכים צריכים לדעת לצייר. קלף תשיעי במצב `donated` שנשאר על B1, עם בקשת תרומה שהושלמה, העברת בעלות מ red ל `platform` ושינוי מצב. אחר כך `holdFlag` על הקלף שנמכר יחד עם אירוע `hold_placed` עם סיבה. | הדגל והאירוע חייבים לבוא יחד, השאילתה מסננת לפי הדגל והמרשם מציג את האירוע. עדכון `item` מותר כי ה trigger עליה חוסם רק `DELETE`. הקלף שנשלח הביתה לא מופיע בהיסטוריה של הלקוח בגלל באג ב `VaultService.listHistory`, וה seed לא מסתיר אותו. |
-| 1314 עד 1325 | `dana` נוצרת ומעודכנת ל `suspended`. | אין לה חוב ואין `auto_suspended_at`, ולכן `wallet-suspension.ts` לא יחזיר אותה לעולם. מצב שהמערכת לא מייצרת. |
+| 1314 עד 1325 | `dana` נוצרת ומעודכנת ל `suspended`. | ההערה מתארת השעיה על חוב, אבל אין לה חוב ואין `auto_suspended_at`. בפועל זו השעיה ידנית כמו של `updateUser` ב `adm.service.ts`, ו `wallet-suspension.ts` לא יחזיר אותה לעולם. |
 | 1327 עד 1419 | `mkTicket` מחשב `lastMessageAt` מההודעות, ממלא `resolvedAt` ו `resolvedBy` במצב resolved, ומכניס `support_message` עם זמנים בעבר. שלוש פניות, של dana במצב open, של red על הקלף שנמכר במצב awaiting_customer, ושל golden על חיוב במצב resolved. | פניית red אומרת שהיא פתחה את המחלוקת, בעוד שהמחלוקת נפתחה על ידי `eldar`. אי התאמה קטנה בדמו. |
 | 1420 עד 1548 | `mkParcel` מכניס `parcel` ואת שרשרת `parcel_event` שלו. שלוש חבילות, של red במצב expected, של golden במצב received ובינלאומית, ואחת שממוענת ל `r.ashwod` במצב unclaimed בלי בעלים. אחר כך `arrival_disposal` של סוללת ליתיום. | החבילה ל `r.ashwod` לא משויכת ל red בכוונה, ההערה אומרת שאסור לנחש בעלים לפי שם דומה. `parcel_event` ו `arrival_disposal` הן append only, ולכן נכתבות כאן רק ב insert. |
 | 1549 עד 1601 | שלוש בקשות `custom`, השלב ב `typeFields.stage` חופשי. | Postgres לא אוכף את ערכי השלב. |
@@ -1786,7 +2154,7 @@ RETURNING payload;
 | מנויים | fixed לפי `listPriceMinor` | נבנים מ `MEMBERSHIP_TIERS` עם `billingTrigger: 'monthly'`, כדי שהקטלוג והמחירון לא יסטו. |
 | `parcel_processing`, `parcel_forwarding` | fixed 200 ו 400 | |
 
-חשבון היתרות שהבדיקות מניחות. red מקבל 500000 מ topup ועוד 500000 מבקשת ארנק מושלמת, פחות ארבעה intake, service אחד והרכישה, ונשאר עם 970000 סנט. golden מקבל 500000, פחות חמישה intake, service, משלוח, עמלה ומשיכה, ועוד 26000 מהמכירה, ונשאר עם 416700.
+חשבון היתרות שה seed משאיר. אף בדיקה לא משווה אליו, הן מממנות עם `fundWallet`. red מקבל 500000 מ topup ועוד 500000 מבקשת ארנק מושלמת, פחות ארבעה intake, service אחד והרכישה, ונשאר עם 970000 סנט. golden מקבל 500000, פחות חמישה intake, service, משלוח, עמלה ומשיכה, ועוד 26000 מהמכירה, ונשאר עם 416700.
 
 **שים לב.** E11. אין בדיקה של `NODE_ENV`, של המארח או של דגל אישור. `nest build` מקמפל את הקובץ ל `dist/db/seed.js`, וה image מכיל אותו ואת `argon2`. `node dist/db/seed.js` בקונטיינר מוחק ledger ו audit ויוצר שני מנהלים עם סיסמה ידועה. גם `pnpm test` מול `.env` שמצביע על סביבה משותפת יאפס אותה. הכל רץ בלי transaction, כישלון באמצע משאיר מסד ריק או חצי מלא.
 
@@ -1798,6 +2166,64 @@ RETURNING payload;
 
 **שים לב.** כיווני תיקון שלא שוברים דבר קיים. סירוב בתחילת `main` כש `NODE_ENV` הוא `production` בלי דגל מפורש, כי CI, `scripts/test.mjs` ו `db:reset` רצים כולם בסביבה אחרת. הוצאת הקובץ מ `src` כדי שלא ייבנה ל image, תוך וידוא ש `db:seed` עדיין מוצא אותו דרך `tsx`. פיצול לשלושה, seed אידמפוטנטי של כללי תמחור ומתקנים עם `ON CONFLICT DO NOTHING` שמותר בכל סביבה, seed של דמו, ו fixtures של בדיקות. עטיפה ב `db.transaction` דורשת להעביר `tx` לכל העוזרים ולהריץ את ה `TRUNCATE` ואת בלוק pg-boss דרך `tx.execute`. trigger מסוג `BEFORE TRUNCATE` על טבלאות ההיסטוריה, שמסרב בלי משתנה session מפורש, יסגור את הפתח גם ב production.
 
+### בדוק את עצמך
+
+1. תאר את הסדר שבו בקשה עוברת את שכבות ה HTTP עד ה handler, והסבר למה guard רואה גוף שלא עבר ולידציה.
+<details><summary>תשובה</summary>
+
+`apps/api/src/main.ts` רושם לפי הסדר `requestContext`, `trust proxy`, `helmet`, `json` ו CORS בשורות 47 עד 103, ו Nest מוסיף את פרסר ה `urlencoded` ואת ה router רק ב `listen`, בשורה 148 או 199. אחר כך רצים ה guards מ `app.module.ts` שורות 94 עד 102, Throttler, SessionAuth ו Roles, ורק אחריהם ה `ValidationPipe` הגלובלי מ `main.ts` שורות 130 עד 137, כי ב Nest guards רצים לפני pipes.
+
+</details>
+
+2. הסבר למה מסד שנבנה מתוך ה image נשאר בלי triggers של append only ובלי ה CAST מ text ל uuid, ומה התיקון.
+<details><summary>תשובה</summary>
+
+`apps/api/src/db/migrate.ts` שורות 23 עד 26 מוצא את ה migrations יחסית ל cwd, אבל קורא את `sql/0001_append_only.sql` יחסית ל `__dirname`, כלומר `dist/db`, ושם הקובץ חסר, ולכן נכשל ב ENOENT אחרי ה migrations. זה E2, והתיקון הוא `"assets": ["db/sql/**/*"]` בתוך `compilerOptions` ב `apps/api/nest-cli.json` שורות 5 עד 7.
+
+</details>
+
+3. מצא את הבלוק שמאפשר לשתי בקשות מקבילות לצרוך את אותו טוקן אישור, וכתוב את התיקון בשאילתה אחת.
+<details><summary>תשובה</summary>
+
+`apps/api/src/shared/confirmation/confirmation.service.ts` שורות 45 עד 69 קורא את השורה ואז מעדכן לפי `id`, בלי transaction ובלי `consumed_at IS NULL`, ולכן שתי הבקשות מקבלות את ה payload. התיקון הוא `UPDATE confirmation_token SET consumed_at = now() WHERE user_id = $1 AND action = $2 AND token_hash = $3 AND consumed_at IS NULL AND expires_at > now() RETURNING payload`.
+
+</details>
+
+4. תאר מה יקרה כששני משתמשים שולחים את אותו `idempotency-key` לרכישה של אותו listing, ומה קורה בשתי בקשות מקבילות של אותו משתמש בחנות של Bault.
+<details><summary>תשובה</summary>
+
+`apps/api/src/shared/idempotency/idempotency.service.ts` שורות 23 עד 31 מחפש רק לפי מפתח ו endpoint, וה endpoint ב `purchase.service.ts` שורה 71 הוא `purchase:${listingId}`, ולכן המשתמש השני מקבל את התשובה של הראשון והרכישה שלו לא מתבצעת. ב `house-store.service.ts` שורות 163 עד 265 ה `save` קורה רק אחרי ה commit, ולכן שתי בקשות מקבילות קונות שני עותקים כשיש במלאי לפחות שניים.
+
+</details>
+
+5. הסבר למה probe על `/api/v1/readyz` יכול לקבל 429, ולמה `@SkipThrottle()` לבד לא יפתור זאת.
+<details><summary>תשובה</summary>
+
+`apps/api/src/app.module.ts` שורות 59 עד 69 מגדיר שני דליים, `default` ו `auth`, וה guard מפעיל כל דלי על כל handler, כך שעם `AUTH_RATE_LIMIT_PER_MINUTE=10` probe כל 5 שניות עובר את המכסה. `@SkipThrottle()` בלי ארגומנט מדלג רק על `default`, ולכן צריך `@SkipThrottle({ default: true, auth: true })` על `HealthController` ב `health.controller.ts` שורות 20 עד 50.
+
+</details>
+
+6. תאר מה הלקוח מקבל ומה נכתב ללוג עבור `AppError` של 409, עבור מזהה שאינו UUID בנתיב, ועבור שגיאת pg אחרת.
+<details><summary>תשובה</summary>
+
+ב `apps/api/src/shared/errors/all-exceptions.filter.ts` שורות 27 עד 47 גוף ה `AppError` עובר כמו שהוא עם הקוד העסקי ובלי לוג. שורות 69 עד 79 הופכות `22P02` ל 400 עם `validation_failed` ושורת `warn`, ושורות 101 עד 106 מחזירות 500 אטום עם `internal` וכותבות `error` עם stack.
+
+</details>
+
+7. הסבר למה הרצת ה seed מול מסד משותף הרסנית, ומה מאפשר לו למחוק טבלאות append only.
+<details><summary>תשובה</summary>
+
+`apps/api/src/db/seed.ts` שורות 80 עד 99 מריץ `TRUNCATE` על 48 טבלאות בלי בדיקת `NODE_ENV` או דגל, והקובץ נבנה ל `dist/db/seed.js` בתוך ה image, וזה E11. ה triggers מ `0001_append_only.sql` הם ברמת שורה ולא יורים על `TRUNCATE`, ו `DATABASE_URL` מתחבר כבעלים ולא כ `bault_app`.
+
+</details>
+
+8. תאר מה יקרה אם תוסיף ערך חדש ל `actionType` ב `BillableAction` בלי כלל מתאים ב `pricing_rule`.
+<details><summary>תשובה</summary>
+
+`apps/api/src/modules/pay/billing.service.ts` שורות 62 עד 63 קורא ל `pricing.price`, ו `pricing.service.ts` שורה 111 זורק 400 כשאין כלל. כי `charge` רץ על ה `tx` של הקורא, לפי `billing.port.ts` שורות 46 עד 51, כל הפעולה העסקית מתבטלת, ורק `feeActionType` בלי כלל נופל חזרה ל `actionType`.
+
+</details>
+
 ## פרק 3. מודל הנתונים וה migrations
 
 ### סקירה
@@ -1805,7 +2231,7 @@ RETURNING payload;
 Postgres 16 אחד, 49 טבלאות, 33 enum ים, 73 אינדקסים שאינם מפתח ראשי, 6 מפתחות זרים, 12 טריגרים. כל מודול מגדיר את הטבלאות שלו בקובץ `*.schema.ts` לפי דפוס P5, והמיגרציות יושבות ב `apps/api/src/db/migrations` לפי דפוס P6. חמש עובדות חוצות את כל האזור.
 
 - קבצי הסכמה אינם המסד. רק 21 מתוך 73 אינדקסים מוצהרים ב TypeScript, ואף מפתח זר, CHECK או טריגר אינו מוצהר. האמת נמצאת במיגרציות.
-- כמעט כל עמודת הפניה היא `text` שמחזיק UUID, בלי מפתח זר. ה JOIN ים עובדים רק בזכות cast מובלע מ `text` ל `uuid` שמותקן ב `0001_append_only.sql`. 13 עמודות שהן `uuid` במסד מוגדרות `text` ב TypeScript.
+- כמעט כל עמודת הפניה היא `text` שמחזיק UUID, בלי מפתח זר. JOIN שמשווה `uuid` ל `text` בלי `::text` מפורש עובד רק בזכות cast מובלע מ `text` ל `uuid` שמותקן ב `0001_append_only.sql`. 13 עמודות שהן `uuid` במסד מוגדרות `text` ב TypeScript.
 - כסף הוא `bigint` בסנטים דרך `amountMinor`, הסימן בעמודה נפרדת, והיתרה נגזרת תמיד מ `ledger_record`. חריגים ב `integer` בטבלאות `escrow_deal`, `shipment`, `consignment_event`.
 - עשרה יומנים חסומים ל `UPDATE` ו `DELETE` בטריגר, ו `item` חסום למחיקה. `TRUNCATE` עוקף את שניהם.
 - מאז 0004 המיגרציות נכתבות ביד ואין snapshot, ולכן `drizzle-kit generate` ו `drizzle-kit push` מסוכנים.
@@ -1813,15 +2239,15 @@ Postgres 16 אחד, 49 טבלאות, 33 enum ים, 73 אינדקסים שאינ�
 סדר קריאה. `acc`, `cst`, `pay`, אחר כך קובץ ההגנות, שאר הסכמה, המיגרציות לפי המספר, ובסוף `meta`.
 
 #### `apps/api/src/modules/acc/acc.schema.ts`
-טבלאות הזהות. דפוס P5. 25 קבצים ב API מייבאים אותו, בראשם `auth.service.ts` ו `session.service.ts`, וה worker קורא את `user_account` ב SQL גולמי.
+טבלאות הזהות. דפוס P5. 25 קבצים ב API מייבאים אותו, בראשם `auth.service.ts` ו `session.service.ts`, וה worker קורא את `user_account` ב SQL גולמי וכותב אותה ב `wallet-suspension.ts`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 23 | imports והערה על ארבע החלטות. `id` פנימי שלא נחשף, כך שאפשר לשנות כל דבר אחר בלי לשבור הפניות, `username` ציבורי וקבוע, שם פרטי ומשפחה במקום `displayName`, `intakeId` שיצא משימוש | ה CHECK והטריגר על `username` קיימים רק במיגרציה 0004 |
 | 25 עד 32 | enum `account_status` עם `pending`, `active`, `suspended`, `closed`, ו enum `user_role` עם `user`, `warehouse_operator`, `admin` | המסד אינו אוכף מעברי סטטוס. תפקיד אחד לחשבון, אין טבלת תפקידים |
-| 34 עד 74 | `user_account`. `email`, `username`, `password_hash` של argon2, `status`, `intake_id` nullable, `role`, `first_name`, `last_name`, `name_review_required`, `legacy_display_name`, `auto_suspended_at`, `created_at`. שלושה unique בשורות 69 עד 73 | `email` ייחודי ורגיש לאותיות, הנרמול ל lowercase נעשה רק ב `auth.service.ts` שורות 40, 55 ו 112, וכל נתיב כתיבה חדש שישכח לנרמל ייצור שני חשבונות לאותה תיבה. `citext` או unique על `lower(email)` יעבירו את זה למסד. הפיכת `intake_id` ל not null תשבור כל הרשמה, כי ההרשמה אינה כותבת אותו. אין `updated_at`. `auto_suspended_at` מבדיל השעיית חוב של ה worker מהשעיה של מנהל. `user_account_status_idx` מ 0006 אינו מוצהר |
+| 34 עד 74 | `user_account`. `email`, `username`, `password_hash` של argon2, `status`, `intake_id` nullable, `role`, `first_name`, `last_name`, `name_review_required`, `legacy_display_name`, `auto_suspended_at`, `created_at`. שלושה unique בשורות 69 עד 73 | `email` ייחודי ורגיש לאותיות, הנרמול ל lowercase נעשה רק בקוד, ב `auth.service.ts` שורה 40 בהרשמה ושורה 108 בהתחברות, וב `password.service.ts` שורה 65, וכל נתיב כתיבה חדש שישכח לנרמל ייצור שני חשבונות לאותה תיבה. `citext` או unique על `lower(email)` יעבירו את זה למסד. הפיכת `intake_id` ל not null תשבור כל הרשמה, כי ההרשמה אינה כותבת אותו. אין `updated_at`. `auto_suspended_at` מבדיל השעיית חוב של ה worker מהשעיה של מנהל. `user_account_status_idx` מ 0006 אינו מוצהר |
 | 76 עד 90 | enum `verification_token_type` עם `email_verification` ו `password_reset`, וטבלת `verification_token` עם `user_id`, `type`, `token_hash`, `expires_at`, `consumed_at` | נשמר רק hash. אין ניקוי של טוקנים שפגו. `verification_token_hash_idx` מ 0024 אינו מוצהר |
-| 92 עד 109 | `login_session`. `user_id`, `token_hash` של עוגיית httpOnly, `expires_at`, `revoked_at` שנכתב ביציאה, ו `ip` עם `user_agent` מ 0029. ה IP הוא הלקוח האמיתי כי ה API סומך רק על ה proxy המקומי לפי `main.ts` | שני האינדקסים החמים מ 0024 קיימים רק ב SQL. הביטול ב `session.service.ts` שורה 75 מחפש בלי `revoked_at is null` ולכן אינו משתמש באינדקס החלקי |
+| 92 עד 109 | `login_session`. `user_id`, `token_hash` של עוגיית httpOnly, `expires_at`, `revoked_at` שנכתב ביציאה, ו `ip` עם `user_agent` מ 0029. ה IP הוא הלקוח האמיתי רק כשה proxy על loopback, לפי `TRUST_PROXY` ב `main.ts` שורה 68. מאחורי nginx במכולה נרשם ה IP של nginx, E14 | שני האינדקסים החמים מ 0024 קיימים רק ב SQL. הביטול ב `session.service.ts` שורה 75 מחפש בלי `revoked_at is null` ולכן אינו משתמש באינדקס החלקי |
 | 111 עד 145 | `login_attempt`, יומן append only. enum `login_attempt_outcome` עם `success`, `bad_credentials`, `unverified`, `refused`. `identifier` כפי שהוקלד אחרי נרמול, `user_id` nullable, `ip`, `user_agent`, `occurred_at`. שני אינדקסים מוצהרים בשורות 142 ו 143 | הטבלה היחידה בקובץ שמצהירה אינדקס רגיל, כי נכתבה יחד עם 0029. אין `created_at`. הסיסמה לא נשמרת בשום צורה |
 
 **שים לב.** שינוי שם של העמודה `username` מחייב שינוי בפונקציית הטריגר מ 0004, שמתייחסת לשם בגוף שלה.
@@ -1835,21 +2261,21 @@ Postgres 16 אחד, 49 טבלאות, 33 enum ים, 73 אינדקסים שאינ�
 | 8 עד 19 | `shipping_address`. `user_id`, `label`, `recipient`, `line1`, `city`, `postal_code`, `country`, `is_default`, `created_at` | אין אינדקס על `user_id`, אין `updated_at`, אין `line2`. `country` אמור להיות קוד ISO מאז 0021 ואין CHECK. אין partial unique על `is_default`, ולכן שתי ברירות מחדל אפשריות. המשלוח שומר snapshot ב `destination_detail`, כך ששינוי כתובת אינו משנה משלוח קיים |
 
 #### `apps/api/src/modules/cst/cst.schema.ts`
-לב המערכת הפיזית, הפריט, המדף, הקבוצה, התמונות, ושלושת יומני ההיסטוריה. דפוס P5. 32 צרכנים, בהם `custody.service.ts`, `stow.service.ts`, `inventory.service.ts`, כל שירותי DIS, ושירותי MKT ו SHP שמזיזים פריטים. ה worker קורא את `item` ב `storage-fee.ts`.
+לב המערכת הפיזית, הפריט, המדף, הקבוצה, התמונות, ושלושת יומני ההיסטוריה. דפוס P5. 32 צרכנים, בהם `custody.service.ts`, `stow.service.ts`, `inventory.service.ts`, כל שירותי DIS, שירותי MKT, ומ SHP רק `parcel-profile.service.ts` שקורא משקלים, כי SHP מזיז פריטים דרך `CustodyService`. ה worker קורא את `item` ב `storage-fee.ts`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 20 | imports והערה על שלושה עקרונות. פריט לא נמחק ויש לו בעלים אחד, כל שינוי בבעלים, מדף או מצב כותב `custody_event` באותה טרנזקציה, והיומן append only | הראשון והשלישי נאכפים בטריגרים, השני רק דרך `CustodyService` שמקבל `tx` |
-| 22 עד 49 | enum `item_lifecycle` עם עשרה ערכים. `received`, `stored`, `listed`, `on-hold`, `sold`, `shipped`, `donated`, `consigned`, ומ 0013 `at_grader` ו `discarded` | `on-hold` כתוב עם מקף והשאר עם קו תחתון. טבלת המעברים ב `cst/lifecycle.ts` שורות 23 עד 39. `received` רק ל `stored`. מ `stored` לכל אחד מהשמונה האחרים. `listed` ל `stored`, `sold`, `on-hold`. `on-hold` ל `stored`. `sold` ל `stored` או `shipped`. `at_grader` ל `stored` או `discarded`. `shipped`, `donated`, `consigned`, `discarded` סופיים. המסד אינו אוכף, ועדכון ישיר של `lifecycle_state` עוקף את `assertTransition` |
+| 22 עד 49 | enum `item_lifecycle` עם עשרה ערכים. `received`, `stored`, `listed`, `on-hold`, `sold`, `shipped`, `donated`, `consigned`, ומ 0013 `at_grader` ו `discarded` | `on-hold` כתוב עם מקף והשאר עם קו תחתון. טבלת המעברים ב `cst/lifecycle.ts` שורות 23 עד 39. `received` רק ל `stored`. מ `stored` לכל מצב חוץ מ `received`. `listed` ל `stored`, `sold`, `on-hold`. `on-hold` ל `stored`. `sold` ל `stored` או `shipped`. `at_grader` ל `stored` או `discarded`. `shipped`, `donated`, `consigned`, `discarded` סופיים. המסד אינו אוכף, ועדכון ישיר של `lifecycle_state` עוקף את `assertTransition` |
 | 51 עד 111 | `bin`. `serial_number` בצורת `BIN-` ושמונה תווים, `barcode` זהה לו, `zone` כתווית, `facility_id` nullable, `oversized`, `active`. שני unique בשורות 108 ו 109 | אין קיבולת במכוון, אחסון כאוטי שבו פריט נכנס לכל מדף פנוי, ראה 0018. `facility_id` nullable רק כי נוסף לטבלה עם שורות, והוא text בלי FK. `bin_facility_idx` קיים רק במיגרציה. הסריאל האקראי החליף ב 0019 שם סדרתי שנשען על `count(*)` |
 | 113 עד 120 | `batch`, קבוצת פריטים שהגיעה יחד. `owner_id`, `status` text חופשי עם `open`, `split`, `closed` | אין אינדקס ואין CHECK על הסטטוס. `batch_split` הוא גם סוג אירוע משמורת וגם סוג בקשת שירות שנוצרת ב `dis/lot-split.service.ts`, אל תבלבלו |
 | 122 עד 185 | `item`. `owner_id`, `serial_number` ו `barcode` ייחודיים, `type_class`, `description`, `condition_grade`, `lifecycle_state`, `bin_id`, `source_batch_id`, `source_parcel_id`, `hold_flag`, `oversized`, `weight_grams`, `is_lot`, `lot_size`, `lot_broken`, `received_at` | כל ההפניות text בלי FK, כולל הבעלים. `type_class` הוא מפתח מ `inv/item-classes.ts` בלי CHECK, ו 0008 השאירה ערכים ישנים לא ממופים, לכן קוד שקורא אותו צריך לסבול ערך לא מוכר. `received_at` הוא הבסיס לחישוב דמי האחסון ב worker. `oversized` מועתק בקבלה ולא נגזר מהמחלקה, כדי ששינוי טקסונומיה לא ישנה מחיר. `hold_flag` חי לצד המצב `on-hold`. ארבעה אינדקסים קיימים רק במיגרציות 0009, 0010, 0018, 0024. `DELETE` נכשל בטריגר `trg_no_delete_item`. `item` מחזיק מצב ו `custody_event` את הדרך, ושום דבר במסד לא מונע עדכון של `item` בלי אירוע. טריגר `AFTER UPDATE` שכותב את האירוע היה דורש להעביר את השחקן ב `set_config` בתחילת הטרנזקציה |
 | 187 עד 206 | enum `item_image_type` עם `intake`, `professional`, `video`, וטבלת `item_image` עם `item_id`, `type`, `version`, `object_key`, `content_hash` | ההערה אומרת immutable, אבל אין unique על `item_id, type, version` ואין טריגר. שתי העלאות מקבילות יכולות לקבל אותה גרסה. `object_key` מפנה לאחסון תואם S3, והאובייקט עצמו אינו מוגן מפני דריסה ברמת המסד |
 | 208 עד 217 | `item_change_history`. שורה לכל שדה שתוקן, `item_id`, `actor_id`, `field`, `old_value`, `new_value` | נכתבת מ `inv/correction.service.ts`. אינה מוגנת בטריגר, למרות שהיא היסטוריה |
 | 219 עד 233 | `bin_transfer`. `item_id`, `from_bin_id` שהוא NULL בשיבוץ הראשון, `to_bin_id`, `actor_id`, `reason`, `occurred_at`, `created_at` | append only בטריגר. חופף במכוון ל `custody_event` מסוג `relocate` |
-| 235 עד 262 | enum `custody_event_type` עם `intake`, `relocate`, `ownership_transfer`, `state_change`, `hold_placed`, `hold_released`, `batch_split`, `dispatch`, וטבלת `custody_event` עם בעלים, מדף ומצב לפני ואחרי, `actor_id`, `reason`, `metadata` | `prev_state` ו `new_state` הם text ולא enum, כך שהיומן אינו מאומת מולו. append only. שינוי שם של הטבלה ישאיר אותה בלי טריגר, כי רשימת ההגנות היא רשימת שמות |
+| 235 עד 262 | enum `custody_event_type` עם `intake`, `relocate`, `ownership_transfer`, `state_change`, `hold_placed`, `hold_released`, `batch_split`, `dispatch`, וטבלת `custody_event` עם בעלים, מדף ומצב לפני ואחרי, `actor_id`, `reason`, `metadata` | `prev_state` ו `new_state` הם text ולא enum, כך שהיומן אינו מאומת מולו. append only. שינוי שם של הטבלה ישאיר אותה בלי טריגר במסד חדש, כי רשימת ההגנות היא רשימת שמות |
 
-**שים לב.** `seed.ts` מנקה את הטבלאות האלה ב `TRUNCATE`, כי `DELETE` חסום. `updated_at` מ `_helpers.ts` אינו מתעדכן לבד ואין טריגר, וכל `.set` חייב לכתוב `updatedAt: new Date()`. בכל ה API יש 93 קריאות `.set` ורק 47 כותבות אותו, כך שהעמודה ישנה בחלק מהשורות. FK מ `item.owner_id` ל `user_account.id` דורש קודם עמודת `uuid`, כי FK דורש טיפוסים זהים. שינוי שם של ערך ב `item_lifecycle` מחייב גם את `lifecycle.ts`, כל השוואת מחרוזת ב services, וה SQL הגולמי ב worker.
+**שים לב.** `seed.ts` מנקה את הטבלאות האלה ב `TRUNCATE`, כי `DELETE` חסום. `updated_at` מ `_helpers.ts` אינו מתעדכן לבד ואין טריגר, וכל `.set` חייב לכתוב `updatedAt: new Date()`. כמעט כל `.set` ב API כותב אותו, כ `new Date()` או `now`, והחריג הוא `pay/withdrawal.service.ts` שורה 98, בקוד שאינו מנותב. FK מ `item.owner_id` ל `user_account.id` אפשרי גם על `text` בזכות ה cast המובלע, אבל אז הוא תלוי בו, ולכן המרה ל `uuid` עדיפה. שינוי שם של ערך ב `item_lifecycle` מחייב גם את `lifecycle.ts`, כל השוואת מחרוזת ב services, וה SQL הגולמי ב worker.
 
 #### `apps/api/src/modules/pay/pay.schema.ts`
 כל הכסף. אין טבלת יתרות, היתרה היא `sum(credit) - sum(debit)` על `ledger_record`, מחושבת ב `LedgerService.balanceOf` ובשלוש שאילתות של ה worker. דפוס P5. 19 צרכנים ב API, וב worker `debt.ts`, `interest-accrual.ts`, `wallet-suspension.ts`, `storage-fee.ts`, `membership-renewal.ts`, `ledger-invariant-check.ts` ב SQL גולמי.
@@ -1864,9 +2290,9 @@ Postgres 16 אחד, 49 טבלאות, 33 enum ים, 73 אינדקסים שאינ�
 | 84 עד 109 | enum `wallet_request_type` עם `cash_in` ו `cash_out`, ו enum `wallet_request_status` עם שבעה מצבים | המעברים ב `pay/wallet-request.rules.ts` שורות 39 עד 47. `submitted` ל `pending_review`, `approved`, `rejected`, `cancelled`. `pending_review` ל `approved`, `rejected`, `cancelled`. `approved` ל `processing`, `completed`, `rejected`. `processing` ל `completed` או `rejected`. שלושת הסופיים `rejected`, `completed`, `cancelled`, ורק `completed` מזיז כסף. אין `draft` במכוון |
 | 111 עד 145 | `wallet_request`, בקשה להזיז כסף ולא התנועה עצמה. `code` בצורת `WR-XXXXXXXX`, `amount`, פרטי מקור ויעד, `document_key`, `settled_ledger_id`, `reviewed_by`, `reviewed_at`, `rejection_reason`, `completed_at` | ה CHECK על סכום חיובי, היחיד במערכת, ושני ה unique קיימים רק ב 0004. ה partial unique על `settled_ledger_id` מונע משתי בקשות להצביע על אותה שורה, אבל לא מבקשה אחת לייצר שתי שורות. ההגנה מהשלמה כפולה היא הנעילה ומכונת המצבים ב service |
 | 147 עד 165 | `wallet_request_event`, יומן append only של כל מעבר. `request_id`, `actor_id`, `actor_role`, `from_status`, `to_status`, `reason`, `metadata` | הסטטוסים text ולא enum |
-| 167 עד 177 | `withdrawal`, מודל משיכה ישן. `destination_account` רגיש, `status` text עם `requested`, `confirmed`, `paid`, `failed`, `confirmed_at` | עדיין נכתבת ב `withdrawal.service.ts` שורות 76 ו 97, כך שיש שני מסלולי הוצאה. אין אינדקס על `user_id` |
+| 167 עד 177 | `withdrawal`, מודל משיכה ישן. `destination_account` רגיש, `status` text עם `requested`, `confirmed`, `paid`, `failed`, `confirmed_at` | באפליקציה נכתבת רק ב `WithdrawalService.confirm`, `withdrawal.service.ts` שורות 76 ו 97, ואף route לא קורא לו. `POST /finance/withdrawals` יוצר היום בקשת ארנק, ולכן יש מסלול הוצאה אחד. אין אינדקס על `user_id` |
 
-**שים לב.** היתרה מחושבת גם ב worker ב `debt.ts` שורות 45 ו 59 עד 62 וב `wallet-suspension.ts` שורה 61, ושינוי בכללי הסיכום חייב להגיע לשלושתם. `CHECK (amount > 0)` על `ledger_record` אפשר להוסיף כ `NOT VALID` ואז `VALIDATE CONSTRAINT` בלי לנעול את הטבלה בזמן הבדיקה. `bigint` במצב `number` מדויק עד 2 בחזקת 53 סנט. `balanceOf` עושה `sum(...)::text` ואז `Number`, זו הדרך היחידה שלא מאבדת דיוק. מעבר למצב `bigint` של JavaScript ישבור את `JSON.stringify` בכל 19 הצרכנים.
+**שים לב.** היתרה מחושבת גם ב worker ב `debt.ts` שורות 45 ו 59 עד 62 וב `wallet-suspension.ts` שורה 61, ושינוי בכללי הסיכום חייב להגיע לשלושתם. `CHECK (amount > 0)` על `ledger_record` אפשר להוסיף כ `NOT VALID` ואז `VALIDATE CONSTRAINT` בלי לנעול את הטבלה בזמן הבדיקה. `bigint` במצב `number` מדויק עד 2 בחזקת 53 סנט. `balanceOf` עושה `sum(...)::text` ואז `Number`, ולכן גם היתרה מדויקת רק עד הגבול הזה. מעבר למצב `bigint` של JavaScript ישבור את `JSON.stringify` בכל 19 הצרכנים.
 
 #### `apps/api/src/db/sql/0001_append_only.sql`
 ההגנות שהמסד אוכף בלי תלות בקוד. אינו מיגרציה של Drizzle, אינו ביומן, ו `migrate.ts` מריץ אותו מחדש אחרי כל ריצה, מחוץ לטרנזקציה של המיגרציות. השם 0001 מקרי ואין לו קשר ל `0001_petite_betty_brant.sql`.
@@ -1874,18 +2300,18 @@ Postgres 16 אחד, 49 טבלאות, 33 enum ים, 73 אינדקסים שאינ�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 13 | הערה על טריגרים שנאכפים על כל תפקיד ועל תפקיד אפליקציה מוגבל | שורות 4 ו 5 מונות ארבע טבלאות, מיושן. הרשימה בפועל מונה עשר |
-| 15 עד 21 | `bault_reject_mutation`, פונקציית plpgsql שמעלה `append_only_violation` עם SQLSTATE 23514 | האפליקציה מזהה רק 23505, ולכן ניסיון לערוך היסטוריה מגיע ללקוח כשגיאה כללית |
+| 15 עד 21 | `bault_reject_mutation`, פונקציית plpgsql שמעלה `append_only_violation` עם SQLSTATE 23514 | אף קוד לא מטפל ב 23514, ולכן ניסיון לערוך היסטוריה מגיע ללקוח כ 500 כללי |
 | 23 עד 56 | בלוק `DO`. המערך בשורה 42 מונה את עשר הטבלאות, `ledger_record`, `custody_event`, `audit_record`, `bin_transfer`, `wallet_request_event`, `arrival_disposal`, `parcel_event`, `support_message`, `escrow_event`, `login_attempt`. לכל טבלה קיימת יוצר מחדש `trg_append_only_<table>` מסוג `BEFORE UPDATE OR DELETE` | ההערות בשורות 27 עד 41 מסבירות רק חלק מהטבלאות ולא מזכירות את `support_message` ו `escrow_event`. `format` עם `%I` מצטט שמות, אין סיכון הזרקה. טבלה שאינה קיימת מדולגת בשקט, כך ששם שגוי במערך לא יקבל טריגר בלי אזהרה. טריגר שורה לא נורה על `TRUNCATE` ולא תחת `session_replication_role = replica`. `DROP TRIGGER` לוקח `ACCESS EXCLUSIVE` על כל עשר הטבלאות בכל ריצה, כדאי `SET lock_timeout` |
 | 58 עד 97 | יוצר את התפקיד `bault_app` בלי `LOGIN`, ולכל אחת מעשר הטבלאות נותן `SELECT, INSERT` ושולל `UPDATE, DELETE` | התפקיד אינו בשימוש ואינו שמיש, אין לו הרשאה על 39 הטבלאות האחרות. האפליקציה מתחברת כ `bault`, superuser במסד המקומי. כדי שיעבוד צריך `LOGIN`, הרשאות מלאות על כל שאר הטבלאות, `USAGE` על הסכמה, ובעלות שנשארת אצל תפקיד המיגרציה. ה `REVOKE` בשורה 93 אינו עושה דבר. הרשימה משוכפלת בשורה 87, מי שמוסיף טבלה חייב לעדכן את שני המקומות |
 | 99 עד 125 | `bault_reject_delete` עם `never_deleted_violation`, ו `trg_no_delete_item` מסוג `BEFORE DELETE` בלבד על `item` | פריט מתעדכן כל הזמן, ולכן רק מחיקה חסומה |
-| 127 עד 146 | אם אין cast מ `text` ל `uuid` ב `pg_cast`, מריץ `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT` | בלעדיו כל JOIN בין `uuid` ל `text` נכשל עם `operator does not exist`, כלומר הקובץ הוא תנאי לכך שהאפליקציה תעבוד. דורש superuser, ובמסד מנוהל צפוי להיכשל ולבטל את כל הקובץ כטרנזקציה מובלעת אחת. ערך text שאינו UUID תקין זורק שגיאה, ו id לא מאומת יכול להפיל שאילתה ב 500 במקום 404. `${item.id}::text = ${listing.itemId}` ב `browse.service.ts` שורה 82 מעביר את ההמרה לצד המאונדקס ומבטל את `item_pkey` |
+| 127 עד 146 | אם אין cast מ `text` ל `uuid` ב `pg_cast`, מריץ `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT` | בלעדיו כל JOIN בין `uuid` ל `text` נכשל עם `operator does not exist`, כלומר הקובץ הוא תנאי לכך שהאפליקציה תעבוד. דורש superuser, ובמסד מנוהל צפוי להיכשל ולבטל את כל הקובץ כטרנזקציה מובלעת אחת. ערך text שאינו UUID תקין זורק `22P02`, ו `all-exceptions.filter.ts` שורות 69 עד 79 מחזיר עליו 400, גם כשהערך השבור הגיע מהמסד ולא מהלקוח. `${item.id}::text = ${listing.itemId}` ב `browse.service.ts` שורה 82 מעביר את ההמרה לצד המאונדקס ומבטל את `item_pkey` |
 
-**שים לב.** `nest build` אינו מעתיק את `src/db/sql`, ולכן `node dist/db/migrate.js` מחיל את כל המיגרציות ואז נכשל ב `ENOENT` על הקובץ הזה. התוצאה מסד בלי טריגרים ובלי cast. בתמונת Docker אין דרך אחרת, כי `db:migrate` דורש `tsx` שהוא devDependency. CI מריץ רק דרך `tsx` ולא תופס את זה. הוספת `membership_period` לרשימה תשבור את המנויים, הוספת `charge` או `transaction` בטוחה היום. התיקון הקטן הוא `assets` ב `nest-cli.json` שמעתיק את `src/db/sql`, או נתיב מול `process.cwd()` כמו תיקיית המיגרציות, ועוד בדיקה אחרי ההרצה שסופרת לפחות 11 טריגרים. החלופה ארוכת הטווח ל cast היא המרת עמודות ההפניה ל `uuid`.
+**שים לב.** `nest build` אינו מעתיק את `src/db/sql`, ולכן `node dist/db/migrate.js` מחיל את כל המיגרציות ואז נכשל ב `ENOENT` על הקובץ הזה. התוצאה מסד בלי 11 הטריגרים של הקובץ ובלי cast, וזה E2. בתמונת Docker אין דרך אחרת, כי `db:migrate` דורש `tsx` שהוא devDependency. CI מריץ רק דרך `tsx` ולא תופס את זה. הוספת `membership_period` לרשימה תשבור את המנויים, הוספת `charge` או `transaction` בטוחה היום. התיקון הקטן הוא `assets` ב `nest-cli.json` שמעתיק את `src/db/sql`, או נתיב מול `process.cwd()` כמו תיקיית המיגרציות, ועוד בדיקה אחרי ההרצה שסופרת לפחות 11 טריגרים. החלופה ארוכת הטווח ל cast היא המרת עמודות ההפניה ל `uuid`.
 
-**שים לב.** מה המסד אוכף בפועל. עשרת היומנים ו `item` בטריגרים מכאן, `username` קבוע ומנורמל בטריגר וב CHECK מ 0004, ייחודיות של `email`, `username`, `intake_id`, סריאלים וברקודים, בקשת ארנק שנסגרת בשורת ספר אחת וסכום בקשה חיובי מ 0004, הצעה פתוחה אחת לקונה מ 0020, קרדיט אחד לכל `provider_ref` מ 0017, מלאי לא שלילי מ 0026, מנוי אחד ומחזור אחד מ 0027, ומפתח idempotency ייחודי. מה רק הקוד אוכף. מעברי מצב של פריט, חבילה ובקשת ארנק, קיום הבעלים של פריט, כתיבת `custody_event` באותה טרנזקציה, listing פעיל אחד לפריט, פריט שאינו בשני משלוחים פתוחים, סכום חיובי בספר, ועדכון `updated_at`.
+**שים לב.** מה המסד אוכף בפועל. עשרת היומנים ו `item` בטריגרים מכאן, `username` קבוע ומנורמל בטריגר וב CHECK מ 0004, ייחודיות של `email`, `username`, `intake_id`, סריאלים וברקודים, שורת ספר שסוגרת לכל היותר בקשת ארנק אחת וסכום בקשה חיובי מ 0004, הצעה פתוחה אחת לקונה מ 0020, קרדיט אחד לכל `provider_ref` מ 0017, מלאי לא שלילי מ 0026, מנוי אחד ומחזור אחד מ 0027, ומפתח idempotency ייחודי. מה רק הקוד אוכף. מעברי מצב של פריט, חבילה ובקשת ארנק, קיום הבעלים של פריט, כתיבת `custody_event` באותה טרנזקציה, listing פעיל אחד לפריט, פריט שאינו בשני משלוחים פתוחים, סכום חיובי בספר, ועדכון `updated_at`.
 
 #### `apps/api/src/modules/sec/audit.schema.ts`
-יומן ביקורת של כל בקשה שמשנה מצב. דפוס P5. הכותב היחיד הוא `sec/audit.service.ts` דרך ה interceptor.
+יומן ביקורת של כל בקשה שמשנה מצב. דפוס P5. הכותב היחיד הוא `sec/audit.service.ts`, שנקרא מה interceptor וגם ישירות בטרנזקציה מ `wallet-request.service.ts` ו `chargeback.service.ts`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -1897,14 +2323,14 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 11 | imports והערה על ההבטחה הטרנזקציונית | |
-| 12 עד 20 | `outbox_message`. `aggregate_type`, `aggregate_id`, `event_type`, `payload`, ו `dispatched_at` שנשאר NULL עד השליחה | נכתבת רק דרך `not/outbox/outbox.service.ts` עם ה `tx` של השינוי, כך שהתראה לא נשלחת על שינוי שבוטל. האינדקס החלקי `outbox_undispatched_idx` מ 0024 בגודל התור ולא ההיסטוריה. הטבלה גדלה לנצח, אין מחיקה. אין עמודת ניסיונות או שגיאה, הודעה כושלת נשארת בראש התור בלי סימון. הוספת `attempts` ו `last_error` תחייב שינוי ב `outbox-dispatch.ts`. שינוי שם עמודה ישבור את ה SQL של ה worker בלי שגיאת קומפילציה |
+| 12 עד 20 | `outbox_message`. `aggregate_type`, `aggregate_id`, `event_type`, `payload`, ו `dispatched_at` שנשאר NULL עד השליחה | נכתבת דרך `not/outbox/outbox.service.ts` עם ה `tx` של השינוי, וגם ב SQL גולמי ב `shipment-expiry.ts` שורה 54, כך שהתראה לא נשלחת על שינוי שבוטל. האינדקס החלקי `outbox_undispatched_idx` מ 0024 בגודל התור ולא ההיסטוריה. הטבלה גדלה לנצח, אין מחיקה. אין עמודת ניסיונות או שגיאה. כשל במייל נרשם ב `notification` וההודעה מסומנת כנשלחה, וכל שגיאה אחרת עוצרת את הריצה ומשאירה את ההודעה ראשונה בתור בלי סימון. הוספת `attempts` ו `last_error` תחייב שינוי ב `outbox-dispatch.ts`. שינוי שם עמודה ישבור את ה SQL של ה worker בלי שגיאת קומפילציה |
 
 #### `apps/api/src/modules/not/notification.schema.ts`
-הפיד של ההתראות והעדפות לפי ערוץ. דפוס P5. כותבים `not/notification.service.ts` ו `outbox-dispatch.ts` ב worker.
+הפיד של ההתראות והעדפות לפי ערוץ. דפוס P5. `outbox-dispatch.ts` ב worker כותב את `notification`, ו `not/notification.service.ts` קורא את הפיד וכותב את ההעדפות.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 11 עד 30 | `notification`. `user_id`, `event_type`, `content`, `channel` עם `in_app` או `email`, `status` עם `sent` או `failed`, `provider_ref`, `failure_reason` | `channel` ו `status` text בלי CHECK, ערוץ עם שגיאת כתיב ייכתב בשקט. אין עמודת נקרא. האינדקס מ 0015 אינו כולל `created_at`, והמיון של הפיד בזיכרון |
+| 11 עד 30 | `notification`. `user_id`, `event_type`, `content`, `channel` עם `in_app` או `email`, `status` עם `sent` או `failed`, `provider_ref`, `failure_reason` | `channel` ו `status` text בלי CHECK, ערוץ עם שגיאת כתיב ייכתב בשקט. אין עמודת נקרא. האינדקס מ 0015 אינו כולל `created_at`, ו `listMine` ממיין את כל הפיד בלי אינדקס מתאים ובלי `LIMIT` |
 | 32 עד 59 | `notification_preference`. `user_id`, `event_type`, `channel` עם ברירת מחדל `in_app`, `enabled`. unique על שלושתם מוצהר בשורה 53 | היעדר שורה פירושו מופעל, וזה חוסך שורה לכל משתמש ואירוע. `notification_preference_lookup_idx` מ 0015 מיותר, ה unique מתחיל באותן שתי עמודות. מחיקתו בטוחה אם `EXPLAIN` על שאילתת ה dispatch ב worker מראה שימוש ב unique |
 
 #### `apps/api/src/modules/prc/prc.schema.ts`
@@ -1912,8 +2338,8 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 10 עד 22 | enum `pricing_model` עם `fixed` ו `percentage`, ו enum `billing_trigger` עם `per_event`, `daily`, `weekly`, `monthly` | `per_event` מחויב ברגע הפעולה, השאר ב worker |
-| 24 עד 40 | `pricing_rule`. `action_type`, `item_class` שבו NULL פירושו כל המחלקות, `description`, `parameters`, `model`, `value`, `currency`, `billing_trigger`, `effective_from`, `effective_to`, `updated_by` | `value` הוא סנטים ב `fixed` ו basis points ב `percentage`, חובה לבדוק את `model`. שום דבר לא מונע שני כללים חופפים בזמן, הבחירה תלויה ב `order by` של `pricing.service.ts`. ההערה אומרת append only ואין טריגר. טריגר מלא לא מתאים כי `effective_to` נסגר בעדכון, אבל טריגר שחוסם שינוי של `value` ו `model` מתאים. exclusion constraint עם `tstzrange` ו `btree_gist` ימנע חפיפה. עריכת `value` בשורה קיימת משנה מחיר לכל פעולה עתידית, לא לחיובים קיימים שמחזיקים snapshot. מנויים מחפשים `action_type` בצורת `membership:<tier>` |
+| 10 עד 22 | enum `pricing_model` עם `fixed` ו `percentage`, ו enum `billing_trigger` עם `per_event`, `daily`, `weekly`, `monthly` | אף קוד לא מחייב לפי `billing_trigger`, והיא רק מוצגת ב `price-list.service.ts`. ה worker בוחר כללים לפי `action_type` ב `storage-fee.ts` וב `membership-renewal.ts` |
+| 24 עד 40 | `pricing_rule`. `action_type`, `item_class` שבו NULL פירושו כל המחלקות, `description`, `parameters`, `model`, `value`, `currency`, `billing_trigger`, `effective_from`, `effective_to`, `updated_by` | `value` הוא סנטים ב `fixed` ו basis points ב `percentage`, חובה לבדוק את `model`. שום דבר לא מונע שני כללים חופפים בזמן, הבחירה תלויה ב `order by` של `pricing.service.ts`. ההערה אומרת append only ואין טריגר. אף קוד לא מעדכן את הטבלה ו `effective_to` לא נכתב לעולם, כלל חדש גובר לפי `effective_from`, ולכן אפשר להוסיף אותה לרשימת ההגנות. אין `INSERT` לטבלה באף מיגרציה, ומסד בלי seed נכשל ב `pricing.service.ts` שורה 111, E6. exclusion constraint עם `tstzrange` ו `btree_gist` ימנע חפיפה. עריכת `value` בשורה קיימת משנה מחיר לכל פעולה עתידית, לא לחיובים קיימים שמחזיקים snapshot. מנויים מחפשים `action_type` בצורת `membership:<tier>` |
 
 #### `apps/api/src/modules/mkt/mkt.schema.ts`
 השוק בין משתמשים. דפוס P5. 16 צרכנים, בהם `listing.service.ts`, `purchase.service.ts`, `offer.service.ts`, `browse.service.ts`, `market-read.service.ts`, שירותי DIS ו `adm/shelf-yield.service.ts`.
@@ -1923,7 +2349,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 9 עד 20 | enum `listing_status` עם `active`, `sold`, `removed`, וטבלת `listing` עם `item_id`, `seller_id`, `asking_price`, `currency`, `status`, `published_at` | אין אף אינדקס, למרות סינון לפי `status`, `seller_id` ו `item_id` בכל טעינה של השוק. אין partial unique על `item_id where status = 'active'`, ו listing פעיל אחד לפריט נאכף רק דרך מצב החיים של הפריט |
 | 22 עד 37 | enum `transaction_type` עם `sale`, `swap`, `transfer`, `consignment`, וטבלת `transaction` עם `code`, `item_ids` jsonb, `buyer_id`, `seller_id`, `price`, `fee`, `frozen_pricing`, `executed_at` | ההערה בשורה 5 קוראת לה בלתי הפיכה ואין טריגר, ואין קוד שמעדכן אותה, כך שהוספה לרשימת ההגנות בטוחה. `frozen_pricing` מקפיא את הכלל ואסור לאבד אותו. `code` בלי unique. השאלה מה קרה לפריט נענית מ `custody_event`, לא מכאן. אין אינדקס על קונה או מוכר ואין GIN על `item_ids` |
 | 39 עד 60 | enum `offer_status` עם `pending`, `accepted`, `rejected`, `countered`, וטבלת `offer` עם `listing_id`, `buyer_id`, `amount`, `status`, `parent_offer_id` לשרשור הצעות נגד, ו `proposed_by` עם `$type` של `buyer` או `seller` | הכלל הוא שמי שהציע לא מקבל, ולכן נשמר מי הציע. הצעה נגדית של המוכר נשמרת עם `buyer_id` של הקונה ובסטטוס `pending`. `$type` מגן רק ב TypeScript, לא על SQL גולמי. ה CHECK על `proposed_by` וה partial unique `offer_one_open_per_buyer` קיימים רק ב 0020 |
-| 62 עד 75 | enum `swap_status`, וטבלת `swap_proposal` עם `offered_item_ids`, `requested_item_ids`, `proposer_approved` שמתחיל true, `responder_approved` שמתחיל false | אין אינדקסים. `offered_item_ids` שייכים למציע ו `requested_item_ids` למשיב, ואין בדיקת בעלות במסד. `executed` הוא מצב נפרד מ `accepted`. מערכי פריטים ב jsonb בלי שלמות. מעבר לטבלת קישור ישבור את `adm.service.ts` ו `shelf-yield.service.ts` |
+| 62 עד 75 | enum `swap_status`, וטבלת `swap_proposal` עם `offered_item_ids`, `requested_item_ids`, `proposer_approved` שמתחיל true, `responder_approved` שמתחיל false | אין אינדקסים. `offered_item_ids` שייכים למציע ו `requested_item_ids` למשיב, ואין בדיקת בעלות במסד. `executed` הוא מצב נפרד מ `accepted`. מערכי פריטים ב jsonb בלי שלמות. מעבר לטבלת קישור ישבור את `trade.service.ts`, `market-read.service.ts` ו `seed.ts`, שקוראים את המערכים |
 
 #### `apps/api/src/modules/mkt/house.schema.ts`
 החנות של Bault. מוצר עם מלאי, והפריט נוצר ברגע התשלום באותה טרנזקציה עם הכסף. דפוס P5. צרכן `mkt/house-store.service.ts`.
@@ -1948,7 +2374,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 16 עד 62 | `consignment_event`. `name`, `venue`, `city`, `starts_at`, `ends_at`, `request_deadline`, `capacity`, `active`, `pickup_enabled`, `pickup_capacity`, `pickup_fee_minor`, `notes` | 0 בקיבולת פירושו בלי הגבלה, 0 בעמלה פירושו ליפול לכלל התמחור, ולכן אי אפשר איסוף חינם. מעבר ל NULL ידרוש שינוי בכל השוואה ל 0 ב `consignment.service.ts` וב `human-fulfilment.service.ts` ו backfill. `pickup_fee_minor` הוא `integer`. אין CHECK על סדר התאריכים. תערוכה לא נמחקת, רק `active`. `consignment_event_open_idx` רק ב 0012 |
+| 16 עד 62 | `consignment_event`. `name`, `venue`, `city`, `starts_at`, `ends_at`, `request_deadline`, `capacity`, `active`, `pickup_enabled`, `pickup_capacity`, `pickup_fee_minor`, `notes` | 0 בקיבולת פירושו בלי הגבלה, 0 בעמלה פירושו ליפול לכלל התמחור ב `human-fulfilment.service.ts` שורה 288, ולכן אי אפשר איסוף חינם בתערוכה אחת כשקיים כלל לאיסוף. מעבר ל NULL ידרוש שינוי בכל השוואה ל 0 ב `consignment.service.ts` וב `human-fulfilment.service.ts` ו backfill. `pickup_fee_minor` הוא `integer`. אין CHECK על סדר התאריכים. תערוכה לא נמחקת, רק `active`. `consignment_event_open_idx` רק ב 0012 |
 
 #### `apps/api/src/modules/dis/grading-submission.schema.ts`
 משלוח מרוכז של כרטיסים לחברת דירוג אחת. כשהוא נשלח, הפריטים עוברים ל `at_grader`. דפוס P5. צרכן יחיד `dis/grading.service.ts`.
@@ -1964,7 +2390,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 26 עד 35 | enum `shipment_group_status` עם `forming`, `locked`, `dispatched`, `cancelled` | `forming` עוד לפני תמחור וחיוב. `locked` אומר שכולם הצטרפו והמשלם שילם לחברת השילוח. `cancelled` מחזיר כל משלוח חבר להיות עצמאי |
-| 37 עד 65 | `shipment_group`. `code` ייחודי, `payer_user_id`, `destination_address`, `recipient_name`, `destination_country` עם ברירת מחדל `US`, `destination_postal_code`, `destination_detail` מ 0028, `status`, `locked_at`, `cancelled_at` | הכתובת נשמרת על הקבוצה ולא מושווית בין משלוחי החברים, וההסכמה של כל חבר נאכפת בקוד. `payer_user_id` הוא text כאן ו uuid עם FK במסד. `drizzle-kit push` ינסה להמיר אותו ל text וייכשל על ה FK או ימחק אותו |
+| 37 עד 65 | `shipment_group`. `code` ייחודי, `payer_user_id`, `destination_address`, `recipient_name`, `destination_country` עם ברירת מחדל `US`, `destination_postal_code`, `destination_detail` מ 0028, `status`, `locked_at`, `cancelled_at` | הכתובת נשמרת על הקבוצה ולא מושווית בין משלוחי החברים, וההסכמה של כל חבר נאכפת בקוד. `payer_user_id` הוא text כאן ו uuid עם FK במסד. `drizzle-kit push` יציע להמיר אותו ל text ולמחוק את ה FK שאינו מוצהר, ושום דבר לא ייכשל, כי ה cast המובלע מתיר FK מ text ל uuid |
 
 #### `apps/api/src/modules/shp/shp.schema.ts`
 המשלוח היוצא, הטבלה הרחבה ביותר עם 58 עמודות שנצברו בכל גל תכונות. דפוס P5. צרכנים כל שירותי SHP ו `cst/inventory.service.ts`. ה worker קורא ומעדכן ב `shipment-expiry.ts` וב `tracking-refresh.ts`.
@@ -1972,14 +2398,14 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 9 עד 33 | enum `shipment_status` עם 11 ערכים, כולל `awaiting_payment` שנוסף ב 0014 עם `BEFORE 'rates_selected'`, ו `cancelled` | אין טבלת מעברים, המצב נשמר על ידי תנאי `where` בשירותים |
-| 35 עד 45 | `code` בצורת `SHP-XXXXXXXX` nullable בלי unique, `user_id`, `item_ids` jsonb, `destination_address` כשורה לבני אדם, `recipient_name` nullable | אין במסד מניעה של פריט בשני משלוחים פתוחים, רק מצב החיים של הפריט |
+| 35 עד 45 | `code` בצורת `SHP-XXXXXXXX` nullable בלי unique, `user_id`, `item_ids` jsonb, `destination_address` כשורה לבני אדם, `recipient_name` nullable | פריט נשאר `stored` עד השליחה, ולכן פריט בשני משלוחים פתוחים נחסם רק ב `assertItemsFree` ב `shipment.service.ts` שורות 198 עד 220, בבדיקה בלי טרנזקציה ובלי נעילה |
 | 46 עד 65 | `destination_country` עם ברירת מחדל `US`, `destination_postal_code`, `destination_detail` jsonb שהוא snapshot של הכתובת המובנית ברגע ההצעה, כי הכתובת השמורה עשויה להשתנות ותמחור מחדש צריך את אותו יעד | משלוחים מלפני 0014 קיבלו `US` מברירת המחדל, בניגוד להערה במיגרציה |
 | 66 עד 79 | `carrier`, `service_level`, `service_key`, `fulfilment_method` text עם `carrier`, `hand_delivery`, `show_pickup` | האיות `fulfilment` כאן ו `fulfillment` בעמודות אחרות באותה טבלה |
 | 80 עד 117 | חלונות איסוף ומסירה, `quote_minor` integer שבו NULL אומר שאין הצעה, `quoted_by`, `pickup_event_id`, `handed_to_name`, `handed_over_at`, `handed_over_by` | שלוש ההפניות הן uuid במסד ו text כאן. אין CHECK שקושר עמודות חובה ל `fulfilment_method` |
 | 118 עד 140 | `service_mode`, `rush_flag`, `declared_value_minor`, `insured_value_minor`, `insurance_premium_minor` integer, `signature_required`, `add_ons`, `customs_lines`, `customer_notes` | כללי הביטוח והתוספות בקוד ב `shipping-options.ts`, לא במסד |
 | 142 עד 158 | `merged_into_shipment_id`, `group_id`, `payment_due_at`, `cancelled_at`, `cancel_reason`, `restocking_fee_minor`, `box_size` | `shipment-expiry.ts` שורות 33 עד 37 מסנן לפי `status` ו `payment_due_at`, ו `shipment_user_status_idx` שמתחיל ב `user_id` אינו משרת אותו. אינדקס חלקי על `payment_due_at` כש `status = 'awaiting_payment'` יתאים. `box_size` נוסף ב 0025 |
 | 159 עד 175 | `membership_cover` jsonb מ 0030, ו `provider_shipment_id` עם `provider_rate_id` מ 0028 | ההערה בשורות 159 עד 166 מתארת את עמודות הספק אבל יושבת מעל `membership_cover`, קל לקרוא אותה לא נכון |
-| 176 עד 194 | `cost` bigint, `currency`, `status`, `tracking_number`, `estimated_delivery_at`, `label_object_key`, `package_weight_grams`, `fulfillment_notes`, `fulfillment`, `fulfilled_by`, `fulfilled_at` | שלושה טיפוסי מספר לכסף באותה טבלה, `cost` הוא bigint והשאר integer |
+| 176 עד 194 | `cost` bigint, `currency`, `status`, `tracking_number`, `estimated_delivery_at`, `label_object_key`, `package_weight_grams`, `fulfillment_notes`, `fulfillment`, `fulfilled_by`, `fulfilled_at` | שני טיפוסי מספר לכסף באותה טבלה, `cost` הוא bigint והשאר integer, ועוד סכומים בתוך `add_ons` ו `membership_cover` |
 
 **שים לב.** כל שינוי שם עמודה כאן ישבור את ה SQL הגולמי ב worker בלי שגיאת קומפילציה.
 
@@ -1991,13 +2417,13 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 1 עד 37 | imports והערה על שלוש ההחלטות, החזקה כחיוב אמיתי בספר, צד חיצוני בלי חשבון, ושער בדיקה לפני שחרור | |
 | 38 עד 66 | enum `escrow_status` עם שמונה מצבים, שלושה סופיים `settled`, `returned`, `cancelled`. enum `escrow_settlement` עם `buyer_vault` או `ship_to_buyer`. enum `escrow_role` | |
 | 68 עד 94 | הצדדים. `code`, `raised_by`, `raiser_role`, `counterparty_user_id` כשיש חשבון, או `counterparty_name` ו `counterparty_email` כשאין | ב 0016 נכתב never both, ואין CHECK שאוכף את זה או שלפחות אחד קיים. CHECK כזה צריך להתחיל ב `NOT VALID`, לבדוק כמה שורות מפרות, ורק אז `VALIDATE`. צד חיצוני כשדות טקסט ולא כחשבון צל מצמצם PII. במסד `raised_by` ו `counterparty_user_id` הם uuid עם FK ואינדקסים |
-| 95 עד 105 | `description`, `value_minor` integer, `currency` text עם ברירת מחדל `USD`, `fee_minor` integer, `status`, `settlement` | integer ולא bigint, תקרה של כ 21.4 מיליון דולר, ודווקא כאן ערכים גבוהים סבירים. text ולא `char(3)`. ההערה על מתי העמלה מוקפאת סותרת את 0016, הקוד בשירות הוא מקור האמת |
-| 106 עד 120 | המימון. `funding_source` עם `wallet` או `external`, `funded_at`, `funding_attested_by`, `funding_reference` | מימון מהארנק כותב שורת `escrow_hold` בספר באותה טרנזקציה, כך שכסף מוחזק אינו ניתן לבזבוז. מימון חיצוני מאושר על ידי מפעיל שנרשם ב `funding_attested_by` |
+| 95 עד 105 | `description`, `value_minor` integer, `currency` text עם ברירת מחדל `USD`, `fee_minor` integer, `status`, `settlement` | integer ולא bigint, תקרה של כ 21.4 מיליון דולר, ודווקא כאן ערכים גבוהים סבירים. text ולא `char(3)`. ההערה אומרת שהעמלה מוקפאת בהסכמה, 0016 אומרת ביצירה, והקוד מחשב אותה ביצירה ב `escrow.service.ts` שורה 187 |
+| 106 עד 120 | המימון. `funding_source` עם `wallet` או `external`, `funded_at`, `funding_attested_by`, `funding_reference` | מימון מהארנק כותב שורת `escrow_hold` בספר באותה טרנזקציה עם המצב. אבל בדיקת היתרה ב `escrow.service.ts` שורה 335 נעשית מחוץ לטרנזקציה והעדכון לפי `id` בלבד, ולכן החזקה כפולה או מעבר ליתרה אפשריים, E18. מימון חיצוני מאושר על ידי מפעיל שנרשם ב `funding_attested_by` |
 | 121 עד 140 | הכרטיס והבדיקה. `item_id`, `item_received_at`, `inspected_by`, `inspected_at`, `inspection_matches`, `inspection_notes` | `inspection_matches` הוא text למרות שההערה מדברת על `false` |
 | 141 עד 166 | השחרור והסגירה. `buyer_released_at`, `seller_released_at` עם עמודות attested למפעיל שאישר בשם צד חיצוני, `settled_at`, `returned_at`, `cancelled_at`, `close_reason`. רק ה unique על `code` מוצהר | שבע עמודות ההפניה הן uuid במסד ו text כאן |
 | 168 עד 192 | `escrow_event`, יומן append only. `deal_id`, `event_type` text, `from_status`, `to_status`, `actor_id`, `on_behalf_of`, `notes`, `metadata`, `occurred_at` | `deal_id` עם FK במסד, כך שאי אפשר למחוק עסקה שיש לה אירוע |
 
-**שים לב.** 13 העמודות שהן `uuid` במסד ו `text` כאן הן שבע ההפניות של `escrow_deal`, `deal_id` ו `actor_id` של `escrow_event`, `quoted_by`, `pickup_event_id`, `handed_over_by` של `shipment`, ו `payer_user_id` של `shipment_group`. שינוי הטיפוסים כאן ל `uuid` משנה רק את TypeScript, הערכים מחרוזות בשני המקרים. השארתם text מזמינה `drizzle-kit` להציע `ALTER COLUMN TYPE text` שישבור את ה FK.
+**שים לב.** 13 העמודות שהן `uuid` במסד ו `text` כאן הן שבע ההפניות של `escrow_deal`, `deal_id` ו `actor_id` של `escrow_event`, `quoted_by`, `pickup_event_id`, `handed_over_by` של `shipment`, ו `payer_user_id` של `shipment_group`. שינוי הטיפוסים כאן ל `uuid` משנה רק את TypeScript, הערכים מחרוזות בשני המקרים. השארתם text מזמינה `drizzle-kit push` להציע `ALTER COLUMN TYPE text` ומחיקת ה FK, וההמרה תעבור בשקט בזכות ה cast המובלע.
 
 #### `apps/api/src/modules/inv/disposal.schema.ts`
 משלוח שהגיע ולא הפך לפריט, חפץ אסור, טיפול יקר מערכו, או מכשיר מעקב. סירוב אינו אירוע משמורת, ולכן לא נרשם כ `item` שאי אפשר למחוק. דפוס P5. צרכן `inv/disposal.service.ts`.
@@ -2005,7 +2431,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 26 | imports והערה על שלושת המקרים ועל כך שאין חיוב | |
-| 27 עד 45 | `arrival_disposal`. `code` בצורת `DSL-XXXXXXXX`, `owner_id`, `category`, `outcome`, `description`, `notes`, `actor_id`, `occurred_at`, `created_at` | `category` ו `outcome` הם text, והקטלוג ב `inv/item-classes.ts` הוא האכיפה היחידה, `DISPOSAL_OUTCOMES` בשורה 198 הם `destroyed`, `given_away`, `recycled`, `returned`. קטגוריה שהוסרה מהקטלוג תישאר בשורות ישנות בלי תרגום. `owner_id` text בלי FK, ממולא ב `disposal.service.ts` שורות 80 עד 100 מתוך `user_account`. `notes` חובה, אבל מחרוזת ריקה עוברת במסד. ה unique על `code`, האינדקס `owner_id, occurred_at` והטריגר append only קיימים רק ב SQL. אין `corrects_id` לקישור תיקון לשורה המקורית. מילוי עמודה חדשה דורש `DISABLE TRIGGER` בתוך המיגרציה, ואין לזה תקדים בריפו |
+| 27 עד 45 | `arrival_disposal`. `code` בצורת `DSL-XXXXXXXX`, `owner_id`, `category`, `outcome`, `description`, `notes`, `actor_id`, `occurred_at`, `created_at` | `category` ו `outcome` הם text, והקטלוג ב `inv/item-classes.ts` הוא האכיפה היחידה, `DISPOSAL_OUTCOMES` בשורה 198 הם `destroyed`, `given_away`, `recycled`, `returned`. קטגוריה שהוסרה מהקטלוג תישאר בשורות ישנות בלי תרגום. `owner_id` text בלי FK, נשלף מ `user_account` לפי username ב `disposal.service.ts` שורות 71 עד 76. `notes` חובה, אבל מחרוזת ריקה עוברת במסד. ה unique על `code`, האינדקס `owner_id, occurred_at` והטריגר append only קיימים רק ב SQL. אין `corrects_id` לקישור תיקון לשורה המקורית. מילוי עמודה חדשה דורש `DISABLE TRIGGER` בתוך המיגרציה, ואין לזה תקדים בריפו |
 
 #### `apps/api/src/modules/inv/facility.schema.ts`
 מקום פיזי שמקבל חבילות, `primary` ששומר או `forwarding` שמעביר. דפוס P5. כעשרה צרכנים, בהם `facility.service.ts`, `parcel.service.ts`, `stow.service.ts`, `shp/customs.service.ts`.
@@ -2026,7 +2452,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 35 עד 44 | enum `parcel_condition` עם `sound`, `packaging_damaged`, `contents_damaged` | נרשם בפתיחה, לפני רישום הפריטים, כראיה עם חותמת זמן |
 | 46 עד 108 | `parcel`. `code` בצורת `PKG-XXXXXXXX`, `owner_id` nullable, `addressed_to`, `facility_id`, `status`, `carrier`, `tracking_number`, `declared_contents`, `international_origin`, זמני מחזור החיים, `forwarded_from_facility_id`, `condition`, `charges` jsonb, `received_by`, `opened_by`, `unclaimed_at`, `disposed_at` | NULL בבעלים הוא מצב אמיתי, תווית לשם שאינו קיים, ו `addressed_to` שומר את מה שנכתב בתווית. `unclaimed_at` מתחיל את שעון ההחזקה. `international_origin` אומר שהנמען אחראי למכס. `charges` הוא עותק, מקור האמת הוא `charge`. שלושה אינדקסים מ 0009 אינם מוצהרים. אין unique על `tracking_number`, ובדיקת הכפילות ב `parcel.service.ts` שורות 184 עד 205 נעשית מחוץ לטרנזקציה ובלי נעילה. אימוץ רישום מוקדם בשורות 362 עד 369 בוחר שורה ב `expected` בלי `FOR UPDATE`, ושני מפעילים שסורקים במקביל יעדכנו אותה פעמיים. partial unique על `tracking_number` כשהסטטוס פתוח יסגור את זה |
 | 109 עד 134 | `parcel_event`, יומן append only. `parcel_id`, `event_type` text עם `registered`, `received`, `forwarded`, `opened`, `processed`, `unclaimed`, `claimed`, `disposed`, `from_status`, `to_status`, `actor_id` ריק כשהאספן רשם, `facility_id`, `notes`, `metadata` | ערכי `event_type` רק בהערה. הסטטוסים text ולא enum. נכתב באותה טרנזקציה דרך `writeEvent(tx, ...)`. הטריגר והאינדקס רק במסד |
-| 135 עד 157 | `parcel_photo`. `parcel_id`, `kind` עם `$type` של `arrival` או `condition`, `object_key`, `caption`, `uploaded_by` | ה CHECK על `kind` מ 0022. אינה append only במכוון, כדי שאפשר יהיה להסיר תמונה שצורפה לקופסה הלא נכונה |
+| 135 עד 157 | `parcel_photo`. `parcel_id`, `kind` עם `$type` של `arrival` או `condition`, `object_key`, `caption`, `uploaded_by` | ה CHECK על `kind` מ 0022. אינה append only במכוון, כדי שאפשר יהיה להסיר תמונה שצורפה לקופסה הלא נכונה, אבל אין היום קוד שמוחק תמונה |
 
 #### `apps/api/src/modules/sup/sup.schema.ts`
 מערכת הפניות. דפוס P5. צרכן `sup/support.service.ts`. ה worker מכיר רק את אירועי ה outbox.
@@ -2045,7 +2471,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 |---|---|---|
 | 1 עד 19 | imports והערה על הפיצול לשתי טבלאות | שורות 11 ו 12 קוראות ל `membership_period` append only, וזה לא נכון. הוספתה לרשימת ההגנות תשבור כל חיוב מנוי |
 | 20 עד 33 | enum `membership_status` עם `active`, `cancelling`, `ended` | `cancelling` שומר את ההטבה עד `current_period_end`, וה worker מעביר ל `ended` |
-| 35 עד 71 | `membership`. `user_id` uuid, `tier` text, `status`, `started_at`, `current_period_start`, `current_period_end`, `scheduled_tier` מ 0030, `cancelled_at`, `ended_at`. `UNIQUE` constraint על `user_id` בשורה 69 | מנוי אחד לחשבון בכלל, לא רק פעיל, וחידוש אחרי `ended` מעדכן את אותה שורה. ה worker כותב ב `membership-renewal.ts` שורות 40 עד 53, ו `storage-fee.ts` שורה 144 כותב `m.user_id::text` כדי להתאים לעמודות text. `tier` הוא מפתח ב `MEMBERSHIP_TIERS`, והמחיר נשלף מ `pricing_rule` עם `membership:<tier>`, כך ששינוי שם דרגה שובר תמחור. אין FK, והוספתו כאן הכי זולה כי שני הצדדים uuid |
+| 35 עד 71 | `membership`. `user_id` uuid, `tier` text, `status`, `started_at`, `current_period_start`, `current_period_end`, `scheduled_tier` מ 0030, `cancelled_at`, `ended_at`. `UNIQUE` constraint על `user_id` בשורה 69 | מנוי אחד לחשבון בכלל, לא רק פעיל, וחידוש אחרי `ended` מעדכן את אותה שורה. ה worker כותב ב `membership-renewal.ts` שורות 40 עד 43 ו 98 עד 105, ו `storage-fee.ts` שורה 142 כותב `m.user_id::text` כדי להתאים לעמודות text. `tier` הוא מפתח ב `MEMBERSHIP_TIERS`, והמחיר נשלף מ `pricing_rule` עם `membership:<tier>`, כך ששינוי שם דרגה שובר תמחור. אין FK, והוספתו כאן הכי זולה כי שני הצדדים uuid |
 | 73 עד 112 | `membership_period`. `membership_id`, `user_id`, `tier`, `period_start`, `period_end`, `fee`, `currency`, `pricing_rule_snapshot`, `consumed` jsonb, `postage_used`, `commission_waived_on`, `insured_shipments_used`. `UNIQUE` על `membership_id, period_start` ואינדקס `user_id, period_start` | `consumed` הוא מפה של פעולה למונה, למשל `{ intake: 3 }`, ויומן צריכה נדחה במכוון כי השאלה היחידה היא כמה נשאר. העמודה במסד היא `fee` והשדה `feeMinor`. המונים מתעדכנים בתנאי atomic בשאילתה אחת ב `membership.service.ts` שורות 503 עד 586, בדיקה ועדכון בלי מרוץ. המחזור הנוכחי נמצא בשוויון על `period_start`, ו `Date` מדויק למילישנייה בלבד. זה כבר גרם לבאג שתוקן ב worker עם `date_trunc('milliseconds', now())`. כל SQL חדש שכותב זמן כזה חייב לעשות אותו דבר. הסרת ה UNIQUE מבטלת את ההגנה מחיוב כפול |
 
 #### `apps/api/src/modules/adm/adm.schema.ts`
@@ -2054,7 +2480,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 8 | imports והערה שמזכירה ש `dashboard_banner` הוסרה ב 0003 | מייבא את כל חמשת העוזרים מ `_helpers.ts` |
-| 9 עד 20 | `dispute`. `code` בצורת `DSP-XXXXXXXX`, `transaction_id`, `opened_by`, `assigned_admin_id`, `status` text עם ברירת מחדל `open`, `ruling`, `note` | `code` nullable בלי unique. אין אינדקס ואין FK. ארבעת הסטטוסים רק בהערה. המרה ל enum דורשת ניקוי ואז `ALTER COLUMN TYPE` שכותב את הטבלה מחדש |
+| 9 עד 20 | `dispute`. `code` בצורת `DSP-XXXXXXXX`, `transaction_id`, `opened_by`, `assigned_admin_id`, `status` text עם ברירת מחדל `open`, `ruling`, `note` | `code` nullable בלי unique. אין אינדקס ואין FK. ארבעת הסטטוסים נאכפים רק ב `adm.service.ts` שורה 279. המרה ל enum דורשת ניקוי ואז `ALTER COLUMN TYPE` שכותב את הטבלה מחדש |
 | 21 עד 37 | `storage_fee_run`, רשומה של כל ריצת גביית אחסון. `threshold_days`, `run_at`, `triggered_by` עם `system` לריצה האוטומטית, `charged_item_ids` ו `charged_account_ids` jsonb, `total_amount`, `currency` | סיכום ולא מקור אמת, החיובים עצמם ב `charge` עם `action_type` ו `reference_id`. אין אינדקס, ואי אפשר לשאול מהר באיזו ריצה חויב פריט |
 
 #### `apps/api/src/shared/idempotency/idempotency.schema.ts`
@@ -2065,7 +2491,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 10 עד 26 | `idempotency_key`. `key`, `user_id` nullable, `endpoint`, `status_code`, `response_body`, `expires_at`. unique על `key, endpoint` בשורה 24, כך שמפתח אחד אינו משמש לפעולה אחרת | `endpoint` בנוי כ `purchase:<listingId>` או `house-purchase:<listingId>`. `expires_at` נכתב 24 שעות קדימה ואף אחד אינו קורא אותו. שורה עם `status_code` NULL נחשבת כלא קיימת. `lookup` אינו בודק `user_id` ולא `expires_at`, ומשתמש שני עם אותו מפתח לאותה מודעה יקבל את התגובה של הראשון. אין ניקוי והטבלה גדלה לנצח. `save` נקרא אחרי הטרנזקציה, וההגנה האמיתית היא נעילת השורה ברכישה. הסגירה היא unique על `key, endpoint, user_id` עם בדיקת המשתמש ב `lookup`, `insert ... on conflict do nothing returning` בתחילת הטרנזקציה, ו job שמוחק לפי `expires_at` עם אינדקס עליו |
 
 #### `apps/api/src/shared/confirmation/confirmation.schema.ts`
-אסימוני אישור דו שלבי לפעולות בלתי הפיכות. דפוס P5. צרכן `confirmation.service.ts`, ודרכו תרומה, השלכה, משיכה, listing ו trade.
+אסימוני אישור דו שלבי לפעולות בלתי הפיכות. דפוס P5. צרכן `confirmation.service.ts`, ודרכו תרומה, `deslab`, `remove_commons`, הסרת listing והעברה ב trade. הקריאה מ `withdrawal.service.ts` אינה מנותבת.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -2077,11 +2503,11 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 16 | 16 טיפוסי enum. `item_lifecycle` עם שמונה ערכים, `ledger_type` עם שבעה, `service_request_type` עם שישה, `shipment_status` עם תשעה | כל הרחבה מאוחרת נעשתה ב `ALTER TYPE ADD VALUE`, ואף ערך לא הוסר |
-| 17 עד 46 | `login_session`, `user_account` עם `display_name` ו `intake_id` חובה ובלי `username`, `verification_token` | 0002 ו 0004 משנים את שלושת אלה. `password_hash` נשמר כמחרוזת, ו `token_hash` של סשן לא קיבל אינדקס עד 0024 |
+| 17 עד 46 | `login_session`, `user_account` עם `display_name` ו `intake_id` חובה ובלי `username`, `verification_token` | 0002 ו 0004 משנים את `user_account`, ו 0029 את `login_session`. `password_hash` נשמר כמחרוזת, ו `token_hash` של סשן לא קיבל אינדקס עד 0024 |
 | 47 עד 117 | `batch`, `bin` עם `capacity`, `custody_event`, `item`, `item_change_history`, `item_image` | כאן נקבעה המוסכמה של הפניות כ `text`, כי הסכמה ב TypeScript הגדירה `text()` ו `drizzle-kit` תרגם. אין אף FK ואף אינדקס על עמודת הפניה, וכל אינדקס חם נוסף אחר כך על מסד עם נתונים. `capacity` יימחק ב 0018 |
 | 118 עד 138 | `audit_record` ו `outbox_message` | בלי אינדקסים עד 0024 |
 | 139 עד 205 | `charge`, `external_payment`, `ledger_record`, `withdrawal`, `pricing_rule`. כל הסכומים `bigint` ו `char(3)` | `ledger_record` בשורות 167 עד 178 בלי CHECK על סכום חיובי, כי `drizzle-kit` מייצר רק מה שהוצהר. חישוב יתרה סרק את כל הספר עד 0006. `charge.status`, `external_payment.status`, `withdrawal.status` נולדו כ text |
-| 206 עד 285 | `listing`, `offer`, `swap_proposal`, `transaction`, `service_request`, `shipment` | `item_ids` ו `type_fields` ב jsonb. ל `listing` לא יינתן אינדקס לעולם |
+| 206 עד 285 | `listing`, `offer`, `swap_proposal`, `transaction`, `service_request`, `shipment` | `item_ids` ו `type_fields` ב jsonb. ל `listing` לא נוסף אינדקס באף מיגרציה מאוחרת |
 | 286 עד 307 | `idempotency_key` ו `confirmation_token` | שתיהן בלי ניקוי עד היום |
 | 308 עד 313 | שישה unique, על `email`, `intake_id`, `bin.barcode`, `item.serial_number`, `item.barcode`, `idempotency_key` | אלה כל האינדקסים של הסכמה ההתחלתית. `email` בלי `lower()` |
 
@@ -2124,7 +2550,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 22 עד 23 | `shipment_user_created_idx` על `user_id, created_at` לרשימת המשלוחים | |
 
 #### `apps/api/src/db/migrations/0006_wallet_debt_policy.sql`
-דפוס P6. מכאן `IF NOT EXISTS` בכל מקום, להגנה על הרצה ידנית.
+דפוס P6. `IF NOT EXISTS` מופיע כבר מ 0005, אבל `CREATE TYPE` ב 0009 וב 0011 בלי הגנה, והרצה ידנית חוזרת שלהן תיכשל.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -2195,7 +2621,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 8 עד 16 | הערה שמתעדת את הבאג של כרטיס בדירוג שנשאר `stored` | |
 | 46 עד 54 | שבעה ערכי enum. `at_grader` ו `discarded`, `video`, וארבעה סוגי בקשה | הערך שמיש רק אחרי commit, והמיגרטור מבצע commit רק בסוף כל הריצה. גם מיגרציה מאוחרת באותה ריצה אסור לה להשתמש בהם |
 | 56 עד 87 | `grading_submission_status` בתוך `DO` עם `duplicate_object`, וטבלה עם `shipped_by uuid`, unique ואינדקס | הדרך לכתוב `CREATE TYPE IF NOT EXISTS` שאינו קיים ב Postgres |
-| 89 עד 93 | `grading_submission_shipped_by_fk`, המפתח הזר הראשון בסכמה, `ON DELETE no action` | מכאן טבלאות חדשות מקבלות `uuid` ו FK, בלי לחזור לישנות, וה FK לא מוצהר ב TypeScript. מחיקת משתמש לפי GDPR תיכשל כאן וב 0014, 0016 |
+| 89 עד 93 | `grading_submission_shipped_by_fk`, המפתח הזר הראשון בסכמה, `ON DELETE no action` | מכאן רק חלק מהטבלאות החדשות מקבלות `uuid` ו FK, `shipment_group`, `escrow_*` ו `house_order`, ואילו `parcel_photo`, `membership` ו `login_attempt` לא. אף FK אינו מוצהר ב TypeScript. מחיקת משתמש לפי GDPR תיכשל כאן וב 0014, 0016 |
 | 97 עד 98 | אינדקס ביטוי על `type_fields ->> 'submissionId'` | |
 
 #### `apps/api/src/db/migrations/0014_outbound_shipping_that_ships.sql`
@@ -2203,7 +2629,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 48 עד 53 | `awaiting_payment` עם `BEFORE 'rates_selected'`, `cancelled`, ו enum `shipment_group_status` | מיגרציה שתשתמש בערכים החדשים באותה ריצה עם 0014 תיכשל עם `unsafe use of new value` רק על מסד חדש |
+| 48 עד 53 | `awaiting_payment` עם `BEFORE 'rates_selected'`, `cancelled`, ו enum `shipment_group_status` | מיגרציה שתשתמש בערכים החדשים באותה ריצה עם 0014 תיכשל עם `unsafe use of new value` כשהן רצות יחד, תמיד על מסד חדש, ולכן לא תיתפס על מסד פיתוח קיים |
 | 56 | `item.weight_grams` nullable | NULL פירושו שלא נשקל. משקל מומצא היה הופך את העמודה לחסרת ערך |
 | 59 עד 75 | יעד מובנה, `destination_country` עם `US`, `destination_postal_code`, `service_key`, `service_mode`, שלושה סכומי `integer`, `signature_required`, `add_ons`, `customs_lines`, `customer_notes` | כל השורות הישנות קיבלו `US` מברירת המחדל, בניגוד להערה בשורות 121 עד 124 |
 | 78 עד 83 | מיזוג, קבוצה, `payment_due_at`, ביטול, סיבה, `restocking_fee_minor` | |
@@ -2230,7 +2656,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | 68 עד 123 | `escrow_deal`. כל ההפניות `uuid`, הסכומים `integer`, `currency` text עם `USD` | אין CHECK על never both בשורה 78. `inspection_matches` text |
 | 125 עד 140 | unique על `code`, אינדקסים על `raised_by`, `counterparty_user_id`, `status`, ושני FK ל `user_account` | |
 | 142 עד 165 | `escrow_event`, אינדקס `deal_id, occurred_at`, ו FK ל `escrow_deal` | ברשימת ההגנות. ה FK יחד עם הטריגר אומרים שעסקה עם אירוע אינה ניתנת למחיקה, וזה רצוי. שלושת ה FK בקובץ הם `ON DELETE no action` |
-| 169 עד 190 | 14 עמודות ל `shipment`. `fulfilment_method`, חלונות זמן, `quote_minor`, `quoted_by uuid`, `pickup_event_id uuid`, שלוש עמודות מסירה, ואינדקס על `pickup_event_id` | `pickup_event_id` בלי FK. שבע עמודות uuid בקובץ הזה מוגדרות text ב TypeScript |
+| 169 עד 190 | 14 עמודות ל `shipment`. `fulfilment_method`, חלונות זמן, `quote_minor`, `quoted_by uuid`, `pickup_event_id uuid`, שלוש עמודות מסירה, ואינדקס על `pickup_event_id` | `pickup_event_id` בלי FK. 12 עמודות uuid בקובץ הזה מוגדרות text ב TypeScript, כל הפער חוץ מ `payer_user_id` |
 | 194 עד 201 | `pickup_enabled`, `pickup_capacity`, `pickup_fee_minor` ל `consignment_event` | 0 בקיבולת ובעמלה הוא ערך מיוחד, ראה `consignment-event.schema.ts` |
 
 #### `apps/api/src/db/migrations/0017_money_in_money_out.sql`
@@ -2278,7 +2704,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 21 עד 43 | `UPDATE` של `shipping_address.country` עם `CASE` על `lower(trim(country))` שממפה כ 40 שמות, כולל עברית, לקוד. אחרת `upper(trim(country))`. ערך באורך שתיים לא נוגע | שם לא מוכר, כמו Deutschland, נשאר שם באותיות גדולות ועדיין ינותב לא נכון. `profile.service.ts` שורה 127 עדיין שומר טקסט גולמי כשהתרגום נכשל ואין CHECK, כך שהבעיה יכולה לחזור. `shipment.destination_country` לא תוקן. CHECK על שתי אותיות גדולות צריך לבוא אחרי תיקון `profile.service.ts`, כ `NOT VALID` ואז ניקוי ו `VALIDATE`, אחרת כל שמירה עם מדינה לא מוכרת תיפול ב 500 |
+| 21 עד 43 | `UPDATE` של `shipping_address.country` עם `CASE` על `lower(trim(country))` שממפה כ 40 שמות, כולל עברית, לקוד. אחרת `upper(trim(country))`. ערך באורך שתיים לא נוגע | שם לא מוכר, כמו Deutschland, נשאר שם באותיות גדולות ועדיין ינותב לא נכון. `profile.service.ts` שורות 127 ו 153 נופלים לטקסט הגולמי כשהתרגום נכשל, אבל `@IsShippableCountry` ב `profile.controller.ts` שורות 26 ו 37 דוחה ב 400 כל מדינה שאינה מתורגמת, ולכן רק קוד שעוקף את ה DTO יכתוב שם. `shipment.destination_country` לא תוקן. CHECK על שתי אותיות גדולות אפשרי כ `NOT VALID`, ניקוי ו `VALIDATE` |
 
 #### `apps/api/src/db/migrations/0022_a_parcel_can_be_photographed.sql`
 דפוס P6. תמונה של קופסה היא ראיה על מכל, לא על פריט.
@@ -2331,7 +2757,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 1 עד 14 | הערה שמתעדת בדיקה מול מסד חי, ו `ip` ו `user_agent` ל `login_session` | ההערה בשורות 10 עד 12 נכונה רק כשמריצים עם `tsx` |
+| 1 עד 14 | הערה שמתעדת בדיקה מול מסד חי, ו `ip` ו `user_agent` ל `login_session` | ההערה בשורות 10 עד 12 נכונה רק כשמריצים עם `tsx`, ראה E2 |
 | 16 עד 28 | enum `login_attempt_outcome` בתוך `DO`, וטבלת `login_attempt` עם `identifier`, `user_id` text nullable, `outcome`, `ip`, `user_agent`, `occurred_at` | בלי `created_at`, היחידה מבין טבלאות append only. הוספתו עם `DEFAULT now()` תמלא שורות ישנות בזמן המיגרציה |
 | 30 עד 31 | אינדקסים על `occurred_at` ועל `user_id, occurred_at`, מוצהרים גם ב `acc.schema.ts` כי נכתבו באותו commit | אין אינדקס על `identifier` או `ip`, שאילתות האדמין ב `adm.service.ts` שורות 400 עד 427 נשענות על חלון זמן |
 
@@ -2348,7 +2774,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | קובץ | מה הוא עושה |
 |---|---|
 | `apps/api/src/db/migrations/0003_drop_dashboard_banner.sql` | שורה אחת בלי תו סוף שורה, `DROP TABLE "dashboard_banner" CASCADE`. הטבלה נוצרה ב 0001 ונמחקה שמונה ימים אחר כך. נוצרה ב `drizzle-kit` |
-| `apps/api/src/db/migrations/0023_ask_for_something_we_do_not_list.sql` | שורה 27 מוסיפה `custom` ל `service_request_type`. בקשה שמקבלת הצעת מחיר לפני חיוב, כמו buyout. היחידה בלי תחילית `public` ובלי breakpoint |
+| `apps/api/src/db/migrations/0023_ask_for_something_we_do_not_list.sql` | שורה 27 מוסיפה `custom` ל `service_request_type`. בקשה שמקבלת הצעת מחיר לפני חיוב, כמו buyout. ה `ALTER TYPE` היחיד בלי תחילית `public` |
 | `apps/api/src/db/migrations/0025_the_box_a_parcel_goes_in.sql` | שורה 18 מוסיפה `shipment.box_size` nullable, מפתח מ `SHIPPING_BOXES`. NULL פירושו תמחור לפי משקל והמחסן בוחר קופסה |
 
 #### `apps/api/src/db/migrations/meta`
@@ -2359,7 +2785,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | `apps/api/src/db/migrations/meta/0000_snapshot.json` | תמונת הסכמה אחרי 0000 כפי ש `drizzle-kit` הבין אותה, 24 טבלאות ו 16 enums. `prevId` של אפסים. נקרא רק על ידי `drizzle-kit` |
 | `apps/api/src/db/migrations/meta/0001_snapshot.json` | תמונה אחרי 0001, 30 טבלאות, כולל `dashboard_banner`. משורשרת לקודמת דרך `prevId`. עד 0003 ה snapshot תואם למסד בלי פער |
 | `apps/api/src/db/migrations/meta/0002_snapshot.json` | תמונה אחרי 0002, 31 טבלאות ו 17 enums, עם `bin_transfer` ו `billing_trigger`. אינה מכירה את ה `UPDATE` ים שנוספו ביד, כי snapshot מתאר רק מבנה |
-| `apps/api/src/db/migrations/meta/0003_snapshot.json` | התמונה האחרונה שקיימת, 30 טבלאות, הסכמה של 2026-07-26, והבסיס ש `drizzle-kit generate` משווה אליו את ה TypeScript. מבחינת `drizzle-kit` אין `wallet_request`, `parcel`, `escrow_deal` או `membership` |
+| `apps/api/src/db/migrations/meta/0003_snapshot.json` | התמונה האחרונה שקיימת, 30 טבלאות, הסכמה של `2026-07-26`, והבסיס ש `drizzle-kit generate` משווה אליו את ה TypeScript. מבחינת `drizzle-kit` אין `wallet_request`, `parcel`, `escrow_deal` או `membership` |
 
 **שים לב.** המיגרטור מריץ רק רשומות שה `when` שלהן גדול מה `created_at` האחרון ב `drizzle.__drizzle_migrations`, ולכן רשומה חדשה עם `when` שאינו גדול מ 1785074600000 של 0030 תדולג בשקט. יש לכתוב `Date.now()`. שינוי `tag` בלי שינוי שם הקובץ מפיל את המיגרטור. `drizzle-kit generate` היום שואל שאלה אינטראקטיבית ומייצר קובץ של כ 426 שורות עם 19 `CREATE TABLE` לטבלאות קיימות ו `DROP COLUMN` ל `display_name` ול `capacity`, שנכשל על כל מסד קיים ועוצר פריסה. כתבו מיגרציה ביד והוסיפו רשומה ליומן בעצמכם, הצהירו ב `*.schema.ts` גם על האינדקסים, ה FK וה CHECK שהיא יוצרת, הוסיפו טבלת היסטוריה חדשה לשני המערכים בקובץ ההגנות, אל תשתמשו בערך enum חדש באותה ריצה, ופצלו שינוי שקוד ישן לא יסבול לשתי פריסות, קודם הרחבה ורק אחר כך צמצום. במסד המקומי 31 ה hash ים ב `__drizzle_migrations` שווים לקבצים וה `created_at` שווה ל `when`, אבל המיגרטור אינו משווה hash, ולכן בייצור צריך להריץ את אותה בדיקה. שתי דרכים לסדר את זה. להכריז שהמיגרציות ידניות, לתעד שה snapshots קפואים ולהוסיף סקריפט שמוסיף רשומה ליומן, או להשלים את הסכמה ב TypeScript ולייצר snapshot בסיס חדש מהמסד. הראשונה זולה ובטוחה יותר.
 
@@ -2368,7 +2794,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | פעולה | בטוח על מסד חי | איך עושים נכון |
 |---|---|---|
 | `ADD COLUMN` nullable או עם ברירת מחדל קבועה | כן, נעילה רגעית בלי שכתוב | `lock_timeout` כדי שתיכשל ולא תחסום תור |
-| `ADD COLUMN ... DEFAULT now()` | לא, משכתב ומקבע את זמן המיגרציה בשורות ישנות | בלי ברירת מחדל, מילוי באצוות, ואז ברירת מחדל |
+| `ADD COLUMN ... DEFAULT now()` | כן מבחינת נעילה, `now()` מחושב פעם אחת בלי שכתוב, אבל מקבע את זמן המיגרציה בשורות ישנות | בלי ברירת מחדל, מילוי באצוות, ואז ברירת מחדל |
 | `SET NOT NULL` | רק בטבלה קטנה, סריקה תחת `ACCESS EXCLUSIVE` | CHECK `IS NOT NULL` כ `NOT VALID`, `VALIDATE`, ואז `SET NOT NULL` בלי סריקה |
 | `ADD CONSTRAINT` של CHECK או FK | רק בטבלה קטנה | `NOT VALID` ואז `VALIDATE CONSTRAINT`. `VALIDATE` אינו מפעיל טריגר `UPDATE` ולכן עובד גם על יומן מוגן |
 | `CREATE INDEX` ו `CREATE UNIQUE INDEX` | רק בטבלה קטנה, חוסם כתיבות. unique נכשל על כפילות | `CONCURRENTLY` מחוץ למיגרטור ב `psql` מול `DIRECT_DATABASE_URL`, בדיקת `pg_index.indisvalid`, ואחריו מיגרציה עם `IF NOT EXISTS` באותו שם למסדים חדשים. לפני unique, שאילתת כפילויות וניקוי כמו ב 0020 |
@@ -2377,7 +2803,65 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | `ALTER TYPE ... ADD VALUE` | כן | לא להשתמש בערך באותה ריצה |
 | `UPDATE` גדול של backfill | לא בטבלה גדולה, נועל כל שורה עד סוף הריצה | אצוות של אלפי שורות מחוץ למיגרטור |
 
-**שים לב.** אחרי כל הרצה בייצור כדאי לבדוק ש `select count(*) from pg_trigger where not tgisinternal` מחזיר 12, שה cast מ `text` ל `uuid` קיים ב `pg_cast`, ושהשורה האחרונה ב `drizzle.__drizzle_migrations` תואמת לרשומה האחרונה ביומן. מיגרציה שנבדקה רק על מסד ריק לא נבדקה, ו `infra/ops/backup.sh dump` ואז `verify` נותנים עותק משוחזר להרצה ולמדידה. לעולם לא להריץ `seed.ts` מול נתונים אמיתיים, הוא מתחיל ב `TRUNCATE` ואין בו בדיקת `NODE_ENV`.
+**שים לב.** אחרי כל הרצה בייצור כדאי לבדוק ש `select count(*) from pg_trigger where not tgisinternal` מחזיר 12, שה cast מ `text` ל `uuid` קיים ב `pg_cast`, ושהשורה האחרונה ב `drizzle.__drizzle_migrations` תואמת לרשומה האחרונה ביומן. מיגרציה שנבדקה רק על מסד ריק לא נבדקה, ו `verify` ב `infra/ops/backup.sh` משחזר למסד זמני ומוחק אותו ביציאה, ולכן עותק לבדיקה משחזרים ידנית ב `pg_restore` מתוך `dump`. לעולם לא להריץ `seed.ts` מול נתונים אמיתיים, הוא מתחיל ב `TRUNCATE` ואין בו בדיקת `NODE_ENV`.
+
+### בדוק את עצמך
+
+1. הסבר למה התור ב `support.service.ts` עובד אף שהוא משווה את `user_account.id` מסוג `uuid` ל `support_ticket.user_id` מסוג `text`, ותאר מה יקרה לו אחרי `node dist/db/migrate.js` על מסד ריק.
+<details><summary>תשובה</summary>
+
+ה JOIN ב `apps/api/src/modules/sup/support.service.ts` שורה 151 נשען על `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT` ב `apps/api/src/db/sql/0001_append_only.sql` שורות 135 עד 146. `apps/api/src/db/migrate.ts` שורות 23 עד 26 קורא את הקובץ ליד `__dirname`, ו `nest build` אינו מעתיק אותו, ולכן הגרסה המקומפלת נכשלת ב `ENOENT` אחרי המיגרציות ומשאירה מסד בלי cast ובלי 11 הטריגרים, והשאילתה נופלת עם `operator does not exist`. זה E2.
+
+</details>
+
+2. מצא את שתי ההגנות שהמסד אוכף על היסטוריה ועל פריטים, ותאר מה עוקף את שתיהן.
+<details><summary>תשובה</summary>
+
+טריגר `BEFORE UPDATE OR DELETE` על עשרת היומנים ב `apps/api/src/db/sql/0001_append_only.sql` שורות 23 עד 56, וטריגר `BEFORE DELETE` על `item` בשורות 115 עד 125. טריגר שורה לא נורה על `TRUNCATE`, ולכן `apps/api/src/db/seed.ts` שורה 83 מוחק הכל, ואסור להריץ אותו מול נתונים אמיתיים.
+
+</details>
+
+3. תאר מה יקרה אם תוסיף את `membership_period` לרשימת ההגנות, והסבר למה הוספת `charge` בטוחה.
+<details><summary>תשובה</summary>
+
+`apps/api/src/modules/mem/membership.service.ts` שורות 501 עד 522 מעדכן את מוני המחזור ב `UPDATE` מותנה, והטריגר ידחה כל צריכה של הטבה ויפיל חיובי מנוי. ל `charge` אין `update` ב API או ב worker, ולכן מוסיפים אותה בשני המערכים ב `0001_append_only.sql` שורות 42 ו 87.
+
+</details>
+
+4. תאר מה יקרה למיגרציה חדשה שתירשם ביומן עם `when` קטן מזה של 0030.
+<details><summary>תשובה</summary>
+
+המיגרטור מריץ רק רשומות שה `when` שלהן גדול מה `created_at` האחרון ב `drizzle.__drizzle_migrations`, היום 1785074600000 מ `apps/api/src/db/migrations/meta/_journal.json` שורות 215 עד 221. הרשומה תדולג בשקט ובלי שגיאה, ולכן כותבים בה `Date.now()`.
+
+</details>
+
+5. מצא את הבלוק שמונע מפריט להיכלל בשני משלוחים פתוחים, והסבר למה מצב החיים של הפריט אינו עוזר כאן.
+<details><summary>תשובה</summary>
+
+`assertItemsFree` ב `apps/api/src/modules/shp/shipment.service.ts` שורות 198 עד 220. הפריט נשאר `stored` עד השליחה ואין במסד אילוץ על `item_ids`, והבדיקה רצה בלי טרנזקציה ובלי נעילה, ולכן שתי בקשות מקבילות יכולות לעבור.
+
+</details>
+
+6. הסבר למה ה partial unique על `settled_ledger_id` אינו מספיק נגד השלמה כפולה של בקשת ארנק, ומצא מה כן מגן.
+<details><summary>תשובה</summary>
+
+האינדקס ב `apps/api/src/db/migrations/0004_identity_and_wallet_requests.sql` שורות 138 עד 140 מונע רק משתי בקשות להצביע על אותה שורת ספר. ההגנה היא `for('update')` ובדיקת המצב ב `apps/api/src/modules/pay/wallet-request.service.ts` שורות 342 עד 365, יחד עם `completed` סופי ב `wallet-request.rules.ts` שורות 39 עד 47.
+
+</details>
+
+7. תאר מה יציע `drizzle-kit push` מול המסד בגלל `escrow.schema.ts`, והסבר למה זה מסוכן גם כשההמרה מצליחה.
+<details><summary>תשובה</summary>
+
+`apps/api/src/modules/esc/escrow.schema.ts` שורות 68 עד 192 מגדיר תשע הפניות כ `text` ובלי FK, בזמן ש 0016 יצרה אותן `uuid` עם שלושה FK ואינדקסים. push יציע `ALTER COLUMN TYPE text` ומחיקה של FK ואינדקסים שאינם מוצהרים, וההמרה תעבור בשקט בזכות ה cast המובלע, כך שהמסד מאבד אילוצים בלי שגיאה.
+
+</details>
+
+8. הסבר למה שינוי שם של עמודה ב `shipment` או של ערך ב `item_lifecycle` לא ייתפס בקומפילציה.
+<details><summary>תשובה</summary>
+
+ה worker ניגש למסד ב SQL גולמי, למשל `apps/worker/src/jobs/shipment-expiry.ts` שורות 32 עד 37 ו `apps/worker/src/jobs/storage-fee.ts` שורה 173 שמסנן `lifecycle_state = 'stored'`. TypeScript בודק רק את `*.schema.ts`, ולכן השבירה תופיע רק כשה job ירוץ.
+
+</details>
 
 ## פרק 4. חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות
 
@@ -2412,7 +2896,7 @@ flowchart LR
 
 #### רייט לימיט בפועל
 
-ב `@nestjs/throttler` כל throttler שהוגדר ב `forRoot` רץ על כל מסלול, ואין בקוד אף `@SkipThrottle`. `@Throttle` רק דורס limit של דלי בשם. מפתח המונה הוא class, handler, שם הדלי ו IP. לכן דלי `auth`, ברירת מחדל 30, הוא התקרה של כל מסלול ב API, והמונה הוא per route ולא per IP על כל ה API. מפעיל שסורק 31 פריטים בדקה לאותו מסלול יקבל 429. ה CI מעלה את הערך ל 5000. שני replicas מכפילים כל תקציב ו restart מאפס. התיקון שההערות מתארות הוא `@SkipThrottle({ auth: true })` על controllers שאינם זהות, או להוציא את `auth` מהרשימה הגלובלית.
+ב `@nestjs/throttler` כל throttler שהוגדר ב `forRoot` רץ על כל מסלול, ואין בקוד אף `@SkipThrottle`. `@Throttle` רק דורס limit של דלי בשם. מפתח המונה הוא class, handler, שם הדלי ו IP. לכן דלי `auth`, ברירת מחדל 30, הוא התקרה של כל מסלול ב API, והמונה הוא per route ולא per IP על כל ה API. מפעיל שסורק 31 פריטים בדקה לאותו מסלול יקבל 429. ה CI מעלה את הערך ל 5000. שני replicas מכפילים כל תקציב ו restart מאפס. התיקון האפשרי, שלא מוזכר בקוד, הוא `@SkipThrottle({ auth: true })` על controllers שאינם זהות, או להוציא את `auth` מהרשימה הגלובלית.
 
 #### מחזור החיים של session
 
@@ -2479,7 +2963,7 @@ flowchart LR
 | `apps/api/src/modules/sec/sec.module.ts` | דפוס P1. `@Global`, מספק ומייצא `AuditService`, `AuditInterceptor`, `RolesGuard`, `PiiInterceptor`. ה guard וה interceptor הפעילים נוצרים מחדש כ `APP_GUARD` ו `APP_INTERCEPTOR` ב `app.module.ts`, כך שהעותקים כאן לא משרתים בקשות. הסרת `@Global` שוברת את ההזרקה של `AuditService` ב `pay`. |
 | `apps/api/src/modules/sec/auth-context.ts` | שורות 7 עד 14 הטיפוסים `Role`, `AccountStatus`, `AuthUser` עם `id`, `role`, `status` בלבד. שורות 16 עד 23 מרחיבות את `Express.Request` כך ש `req.user` typed ואופציונלי. משכפל ידנית את ה enums במסד, אין קשר מכני. תפקיד חדש דורש migration, עדכון כאן, `SupportService.staff` וכל `@Roles`. |
 | `apps/api/src/modules/sec/current-user.decorator.ts` | `@CurrentUser()` שולף את `req.user` וזורק 401 אם חסר, כך שה handler מקבל `AuthUser` ולא undefined. רשת ביטחון שנייה אחרי ה guard, משנה רק במסלול `@Public` שמשתמש בו. |
-| `apps/api/src/modules/sec/roles.decorator.ts` | `@Roles(...)` שומר רשימה תחת `required_roles`. שינוי המפתח בלי ה guard הופך כל מסלול מוגן לפתוח, fail open. |
+| `apps/api/src/modules/sec/roles.decorator.ts` | `@Roles(...)` שומר רשימה תחת `required_roles`. ה guard מייבא את `ROLES_KEY`, כך ששינוי הערך בטוח. decorator אחר שכותב תחת מפתח אחר לא נקרא, והמסלול נשאר פתוח, fail open. |
 
 #### `apps/api/src/modules/sec/roles.guard.ts`
 guard גלובלי שלישי, אחרי ה throttler ו `SessionAuthGuard`, לפי סדר הרישום ב `app.module.ts`. דפוס P2.
@@ -2521,7 +3005,7 @@ INSERT אחד ל `audit_record`. שורות 6 עד 12 `AuditEntry`, רק `action
 
 ### acc, זהות, sessions ופרופיל
 
-`acc` הוא הבעלים של `user_account` ושל כל מה שמחבר אדם לבקשה. רק `SessionService` מיוצא, כדי שה guard הגלובלי יעלה. שליחת מייל, שינוי סיסמה ופרופיל לא נגישים למודולים אחרים, וזה גבול טוב.
+`acc` הוא הבעלים של `user_account` ושל כל מה שמחבר אדם לבקשה. מיוצאים רק `SessionService` ו `SessionAuthGuard`, כדי שה guard הגלובלי יעלה. שליחת מייל, שינוי סיסמה ופרופיל לא נגישים למודולים אחרים, וזה גבול טוב.
 
 | קובץ | מה הוא עושה |
 |---|---|
@@ -2535,7 +3019,7 @@ INSERT אחד ל `audit_record`. שורות 6 עד 12 `AuditEntry`, רק `action
 | טבלה | עמודות שהקוד כאן קורא או כותב | הערה |
 |---|---|---|
 | `user_account` | `email`, `username`, `password_hash`, `status`, `role`, `first_name`, `last_name`, `name_review_required`, `auto_suspended_at` | email ו username ייחודיים, username קבוע ב trigger. `intake_id` ו `legacy_display_name` שרידים, לא נחשפים בפרופיל |
-| `login_session` | `user_id` כטקסט, `token_hash`, `expires_at`, `revoked_at`, `ip`, `user_agent` | בלי foreign key, כמו בכל המערכת |
+| `login_session` | `user_id` כטקסט, `token_hash`, `expires_at`, `revoked_at`, `ip`, `user_agent` | בלי foreign key, כמו ברוב הטבלאות. חריגים ב `escrow_deal`, `escrow_event` ובמיגרציות 0013 ו 0014 |
 | `login_attempt` | `identifier`, `user_id`, `outcome`, `ip`, `user_agent`, `occurred_at` | append only, אינדקסים לפי זמן ומשתמש בשביל מסך האדמין |
 | `verification_token` | `type` אימות או איפוס, `token_hash`, `expires_at`, `consumed_at` | |
 | `shipping_address` | `label`, `recipient`, `line1`, `city`, `country`, `postal_code`, `is_default` | אין אינדקס לברירת מחדל יחידה |
@@ -2551,7 +3035,7 @@ INSERT אחד ל `audit_record`. שורות 6 עד 12 `AuditEntry`, רק `action
 | 63 עד 65 | מסלול ציבורי עובר, אחרת בלי משתמש 401 | |
 | 68 עד 72 | `readSessionCookie` עם `parse` של הספרייה `cookie` | שני cookies באותו שם, הראשון מנצח. סיכון cookie tossing תלוי פריסה |
 
-**שים לב.** בדיקת הסטטוס קודמת ל `@Public`, וזה ממצא. חשבון `closed` או `suspended` עם cookie תקף מקבל 403 גם על login ועל מסלולי שוק ציבוריים. `POST /auth/logout` לא `@Public` ולא `@AllowSuspended`, וה cookie `HttpOnly`, כך שמושעה לא יכול להתנתק ונשאר תקוע עד שבעה ימים. אין cache, כל בקשה היא JOIN אחד, וזה מה שהופך logout, השעיה ושינוי תפקיד למיידיים. cache ישבור את זה. אין בדיקת מטריצה למושעה, `tests/integration/acc-status-block.test.ts` שורות 41 ו 42 הן TODO. שני תיקונים אפשריים. להחליף את הסדר כך ש `@Public` עובר לפני ה resolve, והמחיר היחיד הוא audit בלי actor במסלולים ציבוריים. או להמשיך לעשות resolve, ובמסלול ציבורי לא לזרוק על סטטוס אלא רק לא לקבוע `req.user`, ובנוסף לסמן את `logout` כ `@Public` כדי שינקה cookie בכל מצב. ה guard לא כותב כלום, ואין לו גישה ל response, ולכן הוא לא יכול לרענן cookie.
+**שים לב.** בדיקת הסטטוס קודמת ל `@Public`, וזה ממצא. חשבון `closed` או `suspended` עם cookie תקף מקבל 403 גם על login ועל מסלולי שוק ציבוריים. `POST /auth/logout` לא `@Public` ולא `@AllowSuspended`, וה cookie `HttpOnly`, כך שמושעה לא יכול להתנתק ונשאר תקוע עד שבעה ימים. אין cache, כל בקשה היא JOIN אחד, וזה מה שהופך logout, השעיה ושינוי תפקיד למיידיים. cache ישבור את זה. אין בדיקת מטריצה למושעה, `tests/integration/acc-status-block.test.ts` שורות 41 ו 42 הן TODO. שני תיקונים אפשריים. להחליף את הסדר כך ש `@Public` עובר לפני ה resolve, והמחיר היחיד הוא audit בלי actor במסלולים ציבוריים. או להמשיך לעשות resolve, ובמסלול ציבורי לא לזרוק על סטטוס אלא רק לא לקבוע `req.user`, ובנוסף לסמן את `logout` כ `@Public` כדי שינקה cookie בכל מצב. ה guard לא כותב כלום ולא נוגע ב response, ולכן אין רענון cookie. רענון אפשרי דרך `ctx.switchToHttp().getResponse()`.
 
 #### `apps/api/src/modules/acc/session.service.ts`
 המקום היחיד שנוגע ב `login_session`. קוראים לו ה guard, `auth.service.ts`, `password.service.ts` ו `auth.controller.ts`.
@@ -2565,7 +3049,7 @@ INSERT אחד ל `audit_record`. שורות 6 עד 12 `AuditEntry`, רק `action
 | 71 עד 76 | `revoke` מסמן `revoked_at` לפי hash | בלי תנאי ובלי ספירה, logout עם cookie מזויף מצליח בשקט |
 | 96 עד 107 | `revokeAllFor` מבטל את כל הפעילים של משתמש, עם חריג אופציונלי לטוקן הנוכחי, ומחזיר ספירה | סופר גם sessions שפגו ולא בוטלו, כך שהמספר למשתמש מנופח |
 
-**שים לב.** אין ניקוי. שורות לא נמחקות לעולם, ומיגרציה 0024 יוצרת אינדקס `login_session_user_idx` ל sweep שלא קיים, וההערה שם קוראת לפונקציה `verify` שאינה קיימת. האינדקס החלקי `login_session_token_active_idx` תואם בדיוק את ה WHERE של `resolve`. העברת בדיקת התוקף ל SQL עם `gt(loginSession.expiresAt, new Date())` בטוחה. הפיכת ה TTL למשתנה סביבה לא דורשת שינוי ב cookie, כי `setSessionCookie` מקבל את `expiresAt` מכאן. sliding expiry יהפוך את `resolve` לכותב בכל בקשה, ויש לעשות אותו מדורג. `SESSION_COOKIE_SECRET` נדרש בקונפיגורציה ולא נקרא, כי אין חתימה, ה DB הוא מקור האמת.
+**שים לב.** אין ניקוי. שורות לא נמחקות לעולם, ומיגרציה 0024 יוצרת אינדקס `login_session_user_idx` ל sweep שלא קיים, ובפועל הוא משרת רק את `revokeAllFor`, וההערה שם קוראת לפונקציה `verify` שאינה קיימת. האינדקס החלקי `login_session_token_active_idx` תואם בדיוק את ה WHERE של `resolve`. העברת בדיקת התוקף ל SQL עם `gt(loginSession.expiresAt, new Date())` בטוחה. הפיכת ה TTL למשתנה סביבה לא דורשת שינוי ב cookie, כי `setSessionCookie` מקבל את `expiresAt` מכאן. sliding expiry יהפוך את `resolve` לכותב בכל בקשה, ויש לעשות אותו מדורג. `SESSION_COOKIE_SECRET` נדרש בקונפיגורציה ולא נקרא, כי אין חתימה, ה DB הוא מקור האמת.
 
 #### `apps/api/src/modules/acc/acc.dto.ts`
 DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4 במהות. ה `ValidationPipe` הגלובלי עם `transform` ו `forbidNonWhitelisted` מריץ transforms ואז validators ומפיל כל שדה לא מוכר, וזה מה שמונע הזרקת `role`, `status` או `username`.
@@ -2574,7 +3058,7 @@ DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4
 |---|---|---|
 | 18 עד 23 | `trimmed` מקצץ מחרוזות לפני הוולידציה. `NAME_PART_RULE` אוסר `<`, `>` ותווי בקרה C0 | לא חוסם תווי כיווניות כמו `U+202E` ולא C1, הטעיה חזותית במסכי אדמין |
 | 26 עד 70 | `RegisterDto`. email בלי trim, ולכן כתובת עם רווח נדחית כאן אף שה service מקצץ, username 3 עד 32 עם `[A-Za-z0-9_.-]`, שמות 1 עד 80, סיסמה `MinLength(8)` בלי trim | ה regex בלי `@` הוא מה שמאפשר ל login לחפש email או username בשדה אחד. אין MaxLength, blocklist או MFA. אין שדה הסכמה לתנאים, חלק מ E21 |
-| 72 עד 85 | `LoginDto`, `identifier` מקוצץ 3 עד 254, סיסמה בלי מינימום | בכוונה, לא לחסום חשבונות ישנים |
+| 72 עד 85 | `LoginDto`, `identifier` מקוצץ 3 עד 254, סיסמה בלי מינימום | כך שהחמרת מדיניות הסיסמה לא נועלת סיסמאות קיימות. הכוונה לא כתובה בקוד |
 | 87 עד 113 | `TokenDto`, `EmailDto`, `ResetPasswordDto`, `ChangePasswordDto` | שינוי מדיניות סיסמה חייב לגעת בשלושה DTOs יחד. `trimmed` על סיסמה ישבור התחברות של סיסמאות קיימות עם רווח |
 | 121 עד 135 | `UpdateProfileDto`, רק שני חלקי השם | שכבה ראשונה לאי שינוי username. השנייה trigger ממיגרציה 0004 |
 
@@ -2584,7 +3068,7 @@ DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 33 עד 50 | נרמול. email ל lowercase, username דרך `normalizeUsername` ו `isValidUsername`, שמות דרך `normalizeNamePart` | בדיקה כפולה אחרי ה DTO, מכוונת |
-| 52 עד 64 | שתי שאילתות ייחודיות עם הודעות שונות | Email is already registered חושף קיום email, בניגוד לזהירות ב reset. 30 בדיקות לדקה ל IP. התיקון המלא הוא להחזיר תמיד `pending_verification` ולשלוח מייל לבעל הכתובת. איחוד ההודעה של username ישבור את `sec-validation.test.ts` שורה 246 |
+| 52 עד 64 | שתי שאילתות ייחודיות עם הודעות שונות | Email is already registered חושף קיום email, בניגוד לזהירות ב reset. 30 בדיקות לדקה ל IP. התיקון המלא הוא להחזיר תמיד `pending_verification` ולשלוח מייל לבעל הכתובת. תשובת 2xx ל username תפוס תשבור את `sec-validation.test.ts` שורה 246, שמצפה ל 4xx. שינוי נוסח ההודעה לבד לא שובר אותה |
 | 66 | `argon2.hash` בברירות מחדל, argon2id, 64 MiB, שלוש איטרציות וארבעה threads | כל hash או verify תופס 64 MiB, ומאה ניסיונות במקביל הם כ 6.4 GB. רייט לימיט per IP לא עוצר תוקף מבוזר. אין `needsRehash`, ופרמטרים חדשים חלים רק על hashes חדשים כי `verify` קורא אותם מה hash |
 | 71 עד 92 | INSERT עם `status: 'pending'` ו `role: 'user'` קבועים, `23505` הופך להודעה כללית, ואז `issueEmailVerification` | ה unique index הוא הערובה. המייל מחוץ לטרנזקציה, כשל SMTP מחזיר 500 על חשבון שכבר נוצר, וניסיון חוזר נתקל ב Email is already registered |
 | 100 עד 120 | login. חיפוש `email = x OR username = x`, וכישלון רושם `bad_credentials` וזורק 401 אחיד | E13 בשורה 117. בלי משתמש ה `\|\|` מדלג על `argon2.verify`, התשובה מהירה בעשרות מילישניות וחושפת קיום חשבון. התיקון verify מול hash דמה. אין נעילה per account |
@@ -2622,7 +3106,7 @@ DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4
 | 39 עד 62 | `change` מאמת את הסיסמה הנוכחית, 400 ולא 401 על טעות, UPDATE של hash, ואז `revokeAllFor` חוץ מהנוכחי | 400 כדי שה SPA לא יחשוב שה session פג. ניחושים לא נרשמים ב `login_attempt` |
 | 64 עד 66 | `requestReset` מנרמל ומעביר ל `issuePasswordReset` | |
 | 68 עד 83 | `reset` מחפש טוקן לפי סוג ו hash, 410 אם חסר, נצרך או פג | הבדיקה מחוץ לטרנזקציה |
-| 85 עד 94 | טרנזקציה שמסמנת `consumed_at` ומעדכנת hash, עם `argon2.hash` בפנים, כך שנעילות על הטוקן והמשתמש מוחזקות עשרות מילישניות | ה UPDATE לא מותנה ב `consumed_at IS NULL`. שתי בקשות מקבילות עם אותו טוקן יצליחו. תיקון מקומי, `isNull` ובדיקת `returning` |
+| 85 עד 94 | טרנזקציה שמסמנת `consumed_at` ומעדכנת hash, עם `argon2.hash` בפנים, כך שהנעילה על שורת הטוקן מוחזקת עשרות מילישניות. הנעילה על המשתמש נלקחת רק אחרי ה hash | ה UPDATE לא מותנה ב `consumed_at IS NULL`. שתי בקשות מקבילות עם אותו טוקן יצליחו. תיקון מקומי, `isNull` ובדיקת `returning` |
 | 100 | `revokeAllFor` בלי חריג | מחוץ לטרנזקציה. הכנסתו פנימה דורשת ש `revokeAllFor` יקבל `tx`. ביטול גם של מי שמאפס נכון, כי הוא לא מחזיק session |
 
 **שים לב.** האיפוס לא בודק `status`, חשבון `pending` נשאר `pending`. טוקני איפוס אחרים לא מבוטלים ואין מייל התראה על שינוי, כך שמי שגנב session ומכיר את הסיסמה מחליף אותה בשקט.
@@ -2634,11 +3118,11 @@ DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4
 |---|---|---|
 | 28 עד 31 | `emailLink` בונה `<base>/#/<route>?token=` מ `APP_BASE_URL` | הטוקן ב fragment, לא מגיע ללוגים ול `Referer`. שינוי מבנה דורש שינוי ב SPA ב `verify-email` ו `reset-password` |
 | 45 עד 59 | `issueEmailVerification`, INSERT של hash ואז `email.send` סינכרוני | בלי outbox. כשל משאיר טוקן יתום ומעלה חריגה |
-| 62 עד 89 | `verifyEmail`, בדיקה מחוץ לטרנזקציה, ואז `consumed_at` ו `status: 'active'` | אותו חוסר אטומיות כמו `reset`. אין `WHERE status = 'pending'`, ולכן מחזיר ל `active` חשבון שאדמין סגר לפני האימות |
+| 62 עד 89 | `verifyEmail`, בדיקה מחוץ לטרנזקציה, ואז `consumed_at` ו `status: 'active'` | אותו חוסר אטומיות כמו `reset`. אין `WHERE status = 'pending'`, ולכן טוקן אימות שלא נצרך ולא פג מחזיר ל `active` גם חשבון `closed` או `suspended` |
 | 92 עד 100 | `resend`, רק ל `pending` | טוקנים קודמים נשארים תקפים, כל resend מוסיף טוקן. טוקנים שפגו לא נמחקים, כמו sessions |
 | 103 עד 123 | `issuePasswordReset`, שקט כשאין חשבון, INSERT ושליחה כשיש | נשלח לכל סטטוס, כולל `closed` |
 
-**שים לב.** השליחה הסינכרונית היא timing oracle, ותקלת SMTP מחזירה 500 רק לכתובות קיימות. שליחה דרך `OutboxService` תסגור את שניהם במחיר עיכוב, ותשבור בדיקות שמחכות למייל מיד.
+**שים לב.** השליחה הסינכרונית היא timing oracle, ותקלת SMTP מחזירה 500 רק לכתובות קיימות. שליחה דרך `OutboxService` תסגור את שניהם במחיר עיכוב. אין בדיקה שקוראת את המייל, כך שהמעבר לא ישבור בדיקות.
 
 #### `apps/api/src/modules/acc/profile.controller.ts`
 `/me/profile` ו `/me/addresses`. אין מסלול שמקבל מזהה משתמש מבחוץ, וזו הגנת ה IDOR העיקרית.
@@ -2666,7 +3150,7 @@ DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4
 | 141 עד 166 | `updateAddress` בטרנזקציה, SELECT לפי `id` ו `userId`, 404 לכתובת זרה, `set` רק משדות שנשלחו, 400 אם ריק | ה UPDATE לפי `id` בלבד, בטוח רק בזכות ה SELECT |
 | 169 עד 178 | `deleteAddress`, בדיקת בעלות ו DELETE | משלוחים קיימים לא נפגעים, `parcel-profile.service.ts` מעתיק את השדות |
 
-**שים לב.** הסרת `eq(shippingAddress.userId, userId)` מאחד ה SELECTs פותחת IDOR מלא, והבדיקה ב `sec-authorization.test.ts` תופסת רק מחיקה. ברירת מחדל יחידה נאכפת בקוד בלבד, בלי אינדקס חלקי, ושתי בקשות מקבילות יכולות להשאיר שתיים.
+**שים לב.** הסרת `eq(shippingAddress.userId, userId)` מאחד ה SELECTs פותחת IDOR מלא, והבדיקות תופסות רשימה ועריכה ב `acc-addresses.test.ts` שורה 43, ומחיקה ב `sec-authorization.test.ts` שורה 339. ברירת מחדל יחידה נאכפת בקוד בלבד, בלי אינדקס חלקי, ושתי בקשות מקבילות יכולות להשאיר שתיים.
 
 ### med, העלאת תמונות
 
@@ -2753,7 +3237,7 @@ stateDiagram-v2
 
 ### מסלול הכסף
 
-אין טבלת יתרות. `ledger_record` מחזיקה תנועה בכל שורה, סכום חיובי, `debit` או `credit`, סוג ומטבע. היתרה היא תמיד שאילתה. trigger ב `0001_append_only.sql` מסרב לכל UPDATE ו DELETE, ולכן תיקון הוא שורה מפצה. `charge`, `external_payment`, `wallet_request` ו `escrow_deal` רק מסבירות שורה דרך `reference_type` ו `reference_id`, טקסט חופשי בלי foreign key.
+אין טבלת יתרות. `ledger_record` מחזיקה תנועה בכל שורה, סכום חיובי, `debit` או `credit`, סוג ומטבע. היתרה היא תמיד שאילתה. trigger ב `0001_append_only.sql` מסרב לכל UPDATE ו DELETE, ולכן תיקון הוא שורה מפצה. TRUNCATE עוקף אותו, וכך `seed.ts` מאפס. `charge`, `external_payment`, `wallet_request` ו `escrow_deal` רק מסבירות שורה דרך `reference_type` ו `reference_id`, טקסט חופשי בלי foreign key.
 
 כסף אמיתי נכנס היום רק דרך בקשת cash_in שאדמין משלים ידנית. checkout עם PayPal לא עובד, E3, וה webhook מאומת ונגמר בקיר. `FOR UPDATE` קיים רק על השורה העסקית, וזה לא מונע משתי פעולות על אובייקטים שונים לרוקן את אותו ארנק.
 
@@ -2761,7 +3245,7 @@ stateDiagram-v2
 |---|---|---|
 | `credit_topup` | credit | `checkout.service.ts`, השלמת cash_in |
 | `withdrawal` | debit | השלמת cash_out |
-| `fee` | debit | `marketplace_fee` ב billing, עמלות משיכה, chargeback ו escrow, שירותים ב `dis` |
+| `fee` | debit | עמלת המסחר ב `mkt/purchase.service.ts`, עמלות משיכה, chargeback ו escrow, consignment ובקשה מותאמת ב `dis` |
 | `service_charge` | debit | billing לכל השאר, `adm`, `mem`, `shp`, workers של אחסון ומנוי |
 | `purchase`, `sale_credit` | debit, credit | `mkt`, `dis` |
 | `interest` | debit | worker `interest-accrual.ts` |
@@ -2819,7 +3303,9 @@ stateDiagram-v2
 | `mkt/house-store.service.ts` | 187 | בתוך הטרנזקציה |
 | `mkt/offer.service.ts` | 173 | מחוץ לטרנזקציה |
 | `dis/custom-request.service.ts` | 203 | בתוך הטרנזקציה |
-| `shp/human-fulfilment.service.ts` | 212, 348 | |
+| `shp/human-fulfilment.service.ts` | 212, 348 | 212 מחוץ לטרנזקציה, E18. 348 בתוכה |
+| `shp/shipment.service.ts` | 813, 929 | `wallet.balance` מחוץ לטרנזקציה, E18 |
+| `shp/direct-ship.service.ts` | 154 | `wallet.balance` מחוץ לטרנזקציה |
 | `pay/withdrawal.service.ts` | 55, 70 | קוד לא מנותב |
 
 `assertNotBlocked` נקרא בעוד שבעה מקומות ב `dis`, `mem` ו `shp`, ומתנהג אותו דבר. נעילה מייעצת לפי משתמש עוזרת רק אם כל המקומות בטבלה לוקחים אותה.
@@ -2847,7 +3333,7 @@ stateDiagram-v2
 | cash_out של 50 | עמלה 3, שישה אחוזים מתחת לפס. לספק נשלח 47. debit `withdrawal` 50, `charge` של 3 ו debit `fee` 3 | הארנק ירד ב 53 והלקוח קיבל 47. ה SPA הבטיח 47 מתוך 50, זו העמלה הכפולה |
 | cash_out של 200 | מעל הפס, 5 ועוד אחוז, כלומר 7. לספק 193, מהארנק 207 | |
 | cash_out של 1000 | עמלה 5 ועוד 10, כלומר 15. לספק 985, מהארנק 1015 | אותו באג, מעל הפס |
-| קליטת פריט עם כלל `fixed` של 3 | `charge` `settled` של 3 עם snapshot, debit `service_charge` 3 | מנוי שמכסה את הפעולה, שום שורה |
+| קליטת פריט עם כלל `fixed` של 3 | `charge` `settled` של 3 עם snapshot, debit `service_charge` 3 | מנוי שמכסה את הפעולה, בלי `charge` ובלי לדג'ר, רק עדכון מכסה |
 | chargeback על checkout של 100 | debit `chargeback` 100, `charge` ו debit `fee` 25, `external_payment` ל `reversed` | הארנק יכול לרדת מתחת לאפס |
 | escrow של 1000, קונה ומוכר עם חשבון | בהעלאה `feeMinor` 25 מוקפא. במימון debit `escrow_hold` 1000 לקונה. בסגירה credit `escrow_release` 1000 למוכר, `charge` ו debit `fee` 25 למעלה, והפריט עובר לקונה | בהחזרה במקום סגירה, credit `escrow_refund` 1000 לקונה ובלי עמלה |
 | escrow של 3000 | עמלה 30, אחוז אחד מעל הרצפה | מתחת ל 2500 העמלה תמיד 25 |
@@ -2858,7 +3344,7 @@ stateDiagram-v2
 |---|---|---|
 | `external_payment.status`, טקסט חופשי | `pending`, `succeeded`, `failed`, `reversed` | `checkout.service.ts` כותב לפי תשובת הספק, `wallet-request.service.ts` כותב payout, `chargeback.service.ts` מעדכן ל `reversed`. שום קוד לא מעדכן `pending` |
 | `external_payment.purpose` | `topup`, `payout` | checkout ו payout בהתאמה. רק `topup` ניתן ל chargeback |
-| `charge.status` | `settled` בפועל תמיד | billing, עמלת משיכה, עמלת chargeback, עמלת escrow |
+| `charge.status` | `settled` בפועל תמיד | billing, עמלות משיכה, chargeback ו escrow, וגם `adm`, `mem`, `shp` וה workers |
 | `wallet_request.status`, enum | שבעת המצבים | רק `applyTransition` ו `complete` |
 | `escrow_deal.status`, enum | שמונת המצבים | כל פעולה ב `escrow.service.ts`, בלי תנאי ב WHERE |
 | חותמות ב `escrow_deal` | `funded_at`, `item_received_at`, `inspected_at`, `buyer_released_at`, `seller_released_at`, `settled_at`, `returned_at`, `cancelled_at` | הפעולה המתאימה. `funding_attested_by` ועמודות `*_release_attested_by` רק כש staff פועל בשם צד חיצוני |
@@ -2867,13 +3353,13 @@ stateDiagram-v2
 
 | טבלה | מה היא מחזיקה | הערה |
 |---|---|---|
-| `ledger_record` | `user_id`, `type`, `amount`, `direction`, `currency`, `reference_type`, `reference_id`, `occurred_at` | append only. ההפניה טקסט חופשי, `charge`, `external_payment`, `wallet_request`, `escrow_deal` או `interest` |
-| `charge` | `action_type`, `pricing_rule_snapshot`, `amount`, `payment_means`, `status`, `reference_id` | מבנה ה snapshot שונה לפי הכותב. עמלות שאינן מ billing נרשמות עם `action_type` `service` |
+| `ledger_record` | `user_id`, `type`, `amount`, `direction`, `currency`, `reference_type`, `reference_id`, `occurred_at` | append only. ההפניה טקסט חופשי, `charge`, `external_payment`, `wallet_request`, `escrow_deal`, `listing`, `transaction`, `service_request` או `interest` |
+| `charge` | `action_type`, `pricing_rule_snapshot`, `amount`, `payment_means`, `status`, `reference_id` | מבנה ה snapshot שונה לפי הכותב. עמלות המשיכה, chargeback ו escrow נרשמות עם `action_type` `service` |
 | `external_payment` | `provider`, `provider_ref` ייחודי, `purpose`, `status`, `amount`, `webhook_event_id` | ב checkout `provider` הוא שם המסלול, ב payout הוא `payout`. `webhook_event_id` לא נכתב |
 | `wallet_request` | `code`, `type`, `status`, `amount`, `funding_source`, `destination_account`, `beneficiary_name`, `reference`, `document_key`, `notes`, `reviewed_by`, `reviewed_at`, `rejection_reason`, `settled_ledger_id`, `completed_at` | `CHECK (amount > 0)`, `settled_ledger_id` ייחודי |
 | `wallet_request_event` | `request_id`, `actor_id`, `actor_role`, `from_status`, `to_status`, `reason`, `metadata` | append only, היסטוריה מלאה לכל בקשה |
 | `withdrawal` | `destination_account`, `status`, `confirmed_at` | נכתבת רק מהקוד הישן שאינו מנותב |
-| `escrow_deal` | צדדים, `value_minor` ו `fee_minor` כ `integer`, `settlement`, `funding_source`, `item_id`, תוצאת בדיקה וחותמות זמן | יחידה בכסף שאינה `bigint` |
+| `escrow_deal` | צדדים, `value_minor` ו `fee_minor` כ `integer`, `settlement`, `funding_source`, `item_id`, תוצאת בדיקה וחותמות זמן | היחידה בטבלאות הכסף כאן שאינה `bigint` |
 | `pricing_rule` | `action_type`, `item_class`, `model`, `value`, `billing_trigger`, `parameters`, `effective_from`, `effective_to`, `updated_by` | נזרעת רק ב `apps/api/src/db/seed.ts`, אף migration לא מכניס כללים |
 
 #### תחקור תקלה בכסף
@@ -2965,10 +3451,10 @@ SELECT * FROM ledger_record WHERE amount <= 0;
 
 | קובץ | מה הוא עושה |
 |---|---|
-| `apps/api/src/modules/prc/prc.module.ts` | דפוס P1, `@Global`, מייצא רק את `PricingService`, כך ש `pay`, `esc`, `mkt`, `shp` ו `dis` מזריקים בלי import. הסרת `@Global` תתגלה רק בעליית האפליקציה. |
+| `apps/api/src/modules/prc/prc.module.ts` | דפוס P1, `@Global`, מייצא רק את `PricingService`, כך ש `pay`, `esc`, `mkt`, `shp`, `dis`, `adm` ו `mem` מזריקים בלי import. הסרת `@Global` תתגלה רק בעליית האפליקציה. |
 
 #### `apps/api/src/modules/prc/pricing.service.ts`
-מנוע התמחור. מחזיר סכום ו snapshot של הכלל, כדי שהחיוב ישמור את מה שהיה בתוקף. הצרכן המרכזי `billing.service.ts`, ואחריו `esc` ושירותים ב `mkt`, `shp`, `dis`.
+מנוע התמחור. מחזיר סכום ו snapshot של הכלל, כדי שהחיוב ישמור את מה שהיה בתוקף. הצרכן המרכזי `billing.service.ts`, ואחריו `esc` ושירותים ב `mkt`, `shp`, `dis`, `adm` ו `mem`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -2988,7 +3474,7 @@ SELECT * FROM ledger_record WHERE amount <= 0;
 | 31 עד 40 | `PRICE_GROUPS`, שבע קבוצות | שינוי שם קבוצה שובר את התרגום ב SPA |
 | 48 עד 73 | `groupFor`, קודם קידומות כמו `grading_fee:` ו `parcel_`, אחר כך שמות מוכרים, ברירת מחדל `services` | `cash_out_fee`, `chargeback_fee` ו `escrow_fee` מוצגים אף שהקוד שגובה אותם לא קורא אותם |
 | 86 עד 97 | שליפת כללים בתוקף, ממוינים לפי פעולה ואז תאריך יורד | `effective_from` מושווה לשעון Node, `effective_to` לשעון המסד |
-| 107 עד 113 | שורה אחת לכל צירוף פעולה ומחלקה, החדשה | משכפל את כלל הבחירה של `price` בכוונה, לשאילתה אחת. שינוי כלל הבחירה צריך לגעת בשני המקומות |
+| 107 עד 113 | שורה אחת לכל צירוף פעולה ומחלקה, החדשה | משכפל את כלל הבחירה של `price` בכוונה, לשאילתה אחת. גם `vlt/vault.service.ts` וה workers `storage-fee.ts` ו `membership-renewal.ts` בוחרים כלל ב SQL משלהם, בלי עדיפות ל `item_class`. שינוי כלל הבחירה צריך לגעת בכולם |
 | 115 עד 142 | קיבוץ, מיפוי לשדות ציבוריים בלי `id` ו `updatedBy`, סינון קבוצות ריקות, `note` ו `generatedAt` | |
 
 #### `apps/api/src/modules/prc/prc.controller.ts`
@@ -3006,18 +3492,18 @@ SELECT * FROM ledger_record WHERE amount <= 0;
 שלושה ערוצים כותבים כסף מבחוץ. `billing.service.ts` לחיובי שירות דרך ה port, `checkout.service.ts` לזיכוי מיידי מספק, ו `wallet-request.service.ts` לכסף ידני בשני הכיוונים. `chargeback.service.ts` הופך זיכוי של checkout. `topup.service.ts` ו `withdrawal.service.ts` הם שרידים, ורק ה webhook וה 410 שלהם נגישים.
 
 #### `apps/api/src/modules/pay/billing.service.ts`
-המימוש של `BillingPort`. קליטה, שירות, עיבוד חבילה ועמלת מסחר מגיעים מ `inv`, `dis` ו `mkt` דרך `BILLING_PORT`.
+המימוש של `BillingPort`. קליטה וחבילות מ `inv`, שירותים מ `dis`, וחיוב `service` על החלפה והעברה מ `mkt/trade.service.ts` מגיעים דרך `BILLING_PORT`. עמלת המסחר לא עוברת כאן, `mkt/purchase.service.ts` גובה אותה ישירות.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 31 | `charge(tx, action)`, `tx` חובה לפי החוזה ב `billing.port.ts` | החיוב בטרנזקציה של הקורא ומתגלגל איתה. אין חיוב יתום |
-| 50 עד 52 | `memberships.consume` על `feeActionType` או `actionType`. מכוסה, חוזר בלי כתיבה | נקודת הבדיקה היחידה להטבות מנוי. עמלות שעוקפות את ה port קוראות ל `memberships.waive` בעצמן |
+| 50 עד 52 | `memberships.consume` על `feeActionType` או `actionType`. מכוסה, חוזר בלי `charge` ובלי לדג'ר, אחרי ש `consume` עדכן את `membership_period` | נקודת הבדיקה היחידה להטבות מנוי. עמלות שעוקפות את ה port קוראות ל `memberships.waive` בעצמן |
 | 60 עד 63 | `tryPrice` על `feeActionType` אם נשלח, ונפילה ל `price` על הפעולה הכללית | הכללית זורקת אם אין כלל, fail closed |
 | 64 | סכום אפס חוזר בלי כתיבה | כאן כלל אחוזים בלי בסיס נעלם בשקט |
 | 66 עד 79 | INSERT ל `charge`, `settled`, עם snapshot, `paymentMeans: 'wallet'`, `referenceId` של הפריט | |
-| 81 עד 92 | debit מסוג `fee` ל `marketplace_fee`, אחרת `service_charge`, עם הפניה ל `charge` | שינוי המיפוי משנה את דף התנועות ואת `adm/shelf-yield.service.ts` |
+| 81 עד 92 | debit מסוג `fee` ל `marketplace_fee`, אחרת `service_charge`, עם הפניה ל `charge` | אף קורא לא שולח `marketplace_fee`, ולכן בפועל תמיד `service_charge`. שינוי המיפוי משנה את דף התנועות. `adm/shelf-yield.service.ts` קורא `charge` ושורות `fee` של `listing`, ולא מושפע |
 
-**שים לב.** אין בדיקת יתרה, בכוונה. חיוב יכול להוריד ארנק מתחת לאפס, וה worker של החוב והריבית מטפל. הוספת בדיקה כאן תשבור קליטה ללקוח עם ארנק ריק, כולל `fin-invariants` שקולט שלושה פריטים. קוראים שהפעולה בה יוזם הלקוח קוראים ל `assertNotBlocked` לפני כן. מי שמחפש את המימוש דרך go to definition על `BILLING_PORT` לא יגיע לכאן, הקשר הוא דרך הסמל ב `pay.module.ts`.
+**שים לב.** אין בדיקת יתרה, בכוונה. חיוב יכול להוריד ארנק מתחת לאפס, וה worker של החוב והריבית מטפל. הוספת בדיקה כאן תשבור קליטה ללקוח עם ארנק ריק. הבדיקות קולטות לחשבונות seed שמומנו, ולכן לא בהכרח יתפסו את זה. רוב הפעולות שהלקוח יוזם קוראות ל `assertNotBlocked` לפני כן, אבל `mkt/trade.service.ts` מחייב החלפה והעברה בלי הבדיקה. מי שמחפש את המימוש דרך go to definition על `BILLING_PORT` לא יגיע לכאן, הקשר הוא דרך הסמל ב `pay.module.ts`.
 
 **איך פעולה מוצאת מחיר.** `BillableAction` ב `shared/billing/billing.port.ts` נושא `actionType` כללי מרשימה סגורה, `intake`, `storage`, `service`, `shipping`, `marketplace_fee`, `parcel_processing`, `parcel_forwarding`, ו `feeActionType` ספציפי אופציונלי. דוגמאות לספציפי הן `intake_lot` ב `inv/intake.service.ts`, `service_fee:deslab`, `service_fee:video_review` ו `service_fee:condition_inspection` ב `dis`, ודרג הדירוג ב `dis/grading.service.ts`. הקצאת מנוי נבדקת לפי הספציפי אם יש. המחיר נלקח מהספציפי אם יש לו כלל, אחרת מהכללי. `charge.action_type` שומר תמיד את הכללי, ולכן דוח לפי עמלה ספציפית חייב לקרוא את `actionType` מתוך ה snapshot.
 
@@ -3080,7 +3566,7 @@ SELECT * FROM ledger_record WHERE amount <= 0;
 | 126 עד 135 | cash_out גדול מהיתרה נדחה ב 409 `INSUFFICIENT_BALANCE` | בלי עמלה ובלי בקשות פתוחות אחרות, בדיקת נוחות בלבד |
 | 137 עד 186 | טרנזקציה של בקשה `submitted` עם קוד `WR-`, אירוע ראשון עם `fromStatus: null`, outbox `wallet_request_submitted` ו audit | שדות שלא שייכים לסוג מאופסים ל null. `documentKey` מחרוזת חופשית שלא נבדקת מול `med` |
 | 194 עד 200 | `listMine`, רק של המשתמש | |
-| 206 עד 235 | `listForReview`, דורש סוקר, מסננים אופציונליים, JOIN לשם, email ו username, החדשה קודם | `new Date` על מחרוזת לא תקינה מגיע למסד ומחזיר 500. בלי עימוד. ה JOIN של uuid מול text עובד בזכות cast ימפליציטי מ `0001_append_only.sql` |
+| 206 עד 235 | `listForReview`, דורש סוקר, מסננים אופציונליים, JOIN לשם, email ו username, החדשה קודם | `new Date` על מחרוזת לא תקינה זורק לפני השאילתה ומחזיר 500. בלי עימוד. ה JOIN של uuid מול text עובד בזכות cast ימפליציטי מ `0001_append_only.sql` |
 | 246 עד 273 | `detail`, `loadFor`, פרטי הבעלים וכל ההיסטוריה | אותה פונקציה ללקוח ולאדמין |
 | 281 עד 288 | `loadFor`, 404 גם לבקשה של אחר אם הקורא לא סוקר | |
 | 295 עד 301 | `cancel`, רק המבקש עצמו, גם אדמין, עם `actorRole: 'user'` | הטבלה מתירה ביטול רק מ `submitted` ו `pending_review` |
@@ -3088,7 +3574,7 @@ SELECT * FROM ledger_record WHERE amount <= 0;
 | 309 עד 312 | `approve`, סוקר, עם `stampReview` שכותב `reviewedBy` ו `reviewedAt` | אישור לא מזיז כסף. `fin-invariants` בודק שאין זיכוי לפני השלמה |
 | 314 עד 325 | `reject`, סוקר, סיבה אחרי trim חובה, נשמרת ב `rejectionReason` | |
 | 328 עד 331 | `markProcessing`, סוקר, ל `processing` | אין לו תוכן כספי, רק סימון |
-| 345 עד 369 | `complete`, טרנזקציה, `FOR UPDATE` על הבקשה, הפרדת תפקידים, 409 אם `completed`, אם המעבר לא חוקי, או אם יש `settledLedgerId` | השלמה כפולה נחסמת פעמיים, בנעילה ובאינדקס `wallet_request_settled_ledger_unique` |
+| 345 עד 369 | `complete`, טרנזקציה, `FOR UPDATE` על הבקשה, הפרדת תפקידים, 409 אם `completed`, אם המעבר לא חוקי, או אם יש `settledLedgerId` | השלמה כפולה נחסמת בנעילה ובבדיקות שאחריה. האינדקס `wallet_request_settled_ledger_unique` מונע רק שתי בקשות על אותה שורת לדג'ר, למרות ההערה במיגרציה 0004 |
 | 382 עד 389 | עמלת משיכה מחושבת עכשיו, ו `memberships.waive` על `cash_out_fee` | |
 | 391 עד 404 | cash_out, `balanceOf` בתוך הטרנזקציה מול סכום ועוד עמלה | לא נועל את הארנק. שתי משיכות מקבילות של אותו משתמש, או משיכה ורכישה ב `mkt`, עוברות שתיהן, אותו שורש כמו E1 |
 | 418 עד 449 | cash_out, `createPayout` בתוך הטרנזקציה עם `request.amount - feeMinor` ומפתח `wallet_request:<id>`. `failed` זורק 409, אחרת `external_payment` מסוג `payout` | שורה 422 שולחת נטו, בעוד שהלדג'ר מחייב סכום מלא ועוד שורת עמלה, כך שהעמלה נגבית פעמיים. `pending`, שהוא מה ש PayPal מחזיר כמעט תמיד, נחשב הצלחה ואיש לא מעדכן אותו. `destinationAccount` חופשי, ו PayPal מצפה למייל |
@@ -3100,7 +3586,7 @@ SELECT * FROM ledger_record WHERE amount <= 0;
 | 681 עד 702 | `appendEvent` ל `wallet_request_event`, append only | |
 | 705 עד 720 | `openTotals`, סכום בקשות פתוחות לפי סוג ב JS | לתצוגה בלבד |
 
-**שים לב.** תיקון העמלה הכפולה בכיוון הלדג'ר ישבור את `tests/integration/pay-money-in-out.test.ts` שורה 152 ושורות 163 עד 183, ובכיוון הספק ישנה את מה שה SPA מבטיח. דרישה שהמשלים שונה מ `reviewedBy` תשבור את `tests3/integration/fin-invariants.test.ts`, שבו אדמין אחד מאשר ומשלים. נעילה מייעצת כאן לבד מגינה רק על עצמה.
+**שים לב.** תיקון העמלה הכפולה בכיוון הלדג'ר ישבור את `tests/integration/pay-money-in-out.test.ts` שורות 152 ו 159 ושורות 163 עד 183, ובכיוון הספק ישנה את מה שה SPA מבטיח. דרישה שהמשלים שונה מ `reviewedBy` תשבור את `fundWallet` ב `tests/integration/helpers/http.ts`, שבו אדמין ה seed היחיד מאשר ומשלים, ואיתו כל חבילה שמממנת ארנק. נעילה מייעצת כאן לבד מגינה רק על עצמה.
 
 #### `apps/api/src/modules/pay/wallet-request.controller.ts`
 נתיבי בקשות הארנק, `@Controller()` בלי prefix. דפוס P2.
@@ -3190,7 +3676,7 @@ stateDiagram-v2
 | `apps/api/src/modules/esc/esc.module.ts` | דפוס P1, לא גלובלי, controller ו service. כל התלויות, `CustodyService`, `LedgerService`, `PricingService`, `OutboxService`, `MembershipService`, מגיעות ממודולים גלובליים. ה export של `EscrowService` לא בשימוש. |
 
 #### `apps/api/src/modules/esc/escrow-terms.ts`
-נתונים ופרדיקטים, משוקפים ב SPA ב `apps/web/src/shared/escrow.ts`.
+נתונים ופרדיקטים. ה SPA מקבל את המספרים מ `GET /escrow/terms`, ו `apps/web/src/shared/escrow.ts` משקף רק צורות ותוויות.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -3201,7 +3687,7 @@ stateDiagram-v2
 | 113 עד 115 | `feePayer` מחזיר את המעלה | לא נקרא, `settle` משתמש ב `raisedBy` ישירות |
 
 #### `apps/api/src/modules/esc/escrow.service.ts`
-דפוס P3 בלי השורה החשובה שלו. בשום פעולה אין `FOR UPDATE` על `escrow_deal`, העסקה נקראת מחוץ לטרנזקציה, וכל UPDATE מסנן לפי `id` בלבד. הקורא היחיד `esc.controller.ts`.
+דפוס P3 בלי השורה החשובה שלו. בשום פעולה אין `FOR UPDATE` על `escrow_deal`, העסקה נקראת מחוץ לטרנזקציה, חוץ מ `settle` שקורא בתוכה בלי נעילה, וכל UPDATE מסנן לפי `id` בלבד. הקורא היחיד `esc.controller.ts`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -3230,7 +3716,7 @@ stateDiagram-v2
 | 652 עד 674 | `returnDeal`, סיבה חובה, כל צד או staff, מ `funded`, `inspecting` או `awaiting_release`, credit `escrow_refund` לקונה רק כשהמימון מהארנק, בלי עמלה. הכרטיס לא זז, כי הבעלות לא עברה | ההערה אומרת שצד מחזיר רק אחרי ממצא, הקוד מתיר כבר ב `funded`. מימון חיצוני לא משאיר רישום של חובת החזר |
 | 675 עד 700 | עדכון ל `returned` עם `closeReason`, אירוע ו outbox | `release` ו `return` מקבילים מזכים גם את המוכר וגם את הקונה מאותו חיוב, והקונה נשאר עם הכרטיס |
 | 704 עד 724 | `cancel` מ `proposed` או `agreed`, בלי כסף | המרוץ עם `fund` שלמעלה |
-| 731 עד 761 | `listMine` לפי מעלה או צד שני, `queue` של כל הפתוחות, `detail` עם אירועים מהחדש לישן, `buyerId` ו `sellerId` | בלי עימוד. `queue` כולל גם `proposed`, שאין בו עבודה לצוות |
+| 731 עד 761 | `listMine` לפי מעלה או צד שני, `queue` של כל הפתוחות, `detail` עם אירועים מהחדש לישן, `buyerId` ו `sellerId` | בלי עימוד. `queue` כולל גם `proposed`, שבו לצוות יש עבודה רק כשהצד השני חיצוני |
 | 770 עד 788 | `heldFor`, סכום עסקאות שמומנו מהארנק בסטטוס פתוח כשהמשתמש הוא הקונה | |
 
 **שים לב.** התיקון המינימלי הוא להעתיק את הדפוס של `wallet-request.service.ts`, לטעון את העסקה בתוך הטרנזקציה עם `FOR UPDATE` ולבדוק שם סטטוס, או להוסיף `AND status = <expected>` לכל UPDATE ולבדוק שעודכנה שורה. `holdFlag` על הפריט בזמן העסקה הוא התיקון הטבעי ל E4, כי `mkt/listing.service.ts`, `mkt/purchase.service.ts` ו `mkt/trade.service.ts` כבר מסרבים לפריט מסומן, אבל צריך לשחרר אותו ב `settle` וב `returnDeal`. אין שום תפוגה, וכסף של קונה יכול להיות מוחזק ללא הגבלת זמן.
@@ -3257,8 +3743,8 @@ stateDiagram-v2
 - `GET /me/profile` הוא ה probe בעלייה, ולכן חייב להישאר `@AllowSuspended` ולהחזיר `status`.
 - הקוד `email_unverified` מפעיל ב `SignInPage.tsx` הצעה לשלוח מייל מחדש. שאר הקודים מוצגים כהודעה בלבד, כולל `negative_balance_blocked`.
 - נתיבי ה hash `verify-email` ו `reset-password` עם `token` ב query של ה fragment, כפי ש `emailLink` בונה.
-- גבולות `WALLET_REQUEST_LIMITS` ומכונת המצבים משוקפים ב `apps/web/src/shared/walletRequests.ts`.
-- עמלות escrow ומינימום העסקה משוקפים ב `apps/web/src/shared/escrow.ts`, והמספרים מגיעים מ `GET /escrow/terms`.
+- גבולות `WALLET_REQUEST_LIMITS`, הסטטוסים וכלל הביטול משוקפים ב `apps/web/src/shared/walletRequests.ts`, ומעברי הסוקר ב `reviewerActions` ב `apps/web/src/areas/admin/WalletRequestsSection.tsx`.
+- עמלת escrow ומינימום העסקה מגיעים מ `GET /escrow/terms`. `apps/web/src/shared/escrow.ts` משקף רק צורות ותוויות.
 - `GET /finance/cash-out-quote` מחזיר `netMinor`, שה SPA מציג כמה שיגיע לחשבון.
 - שמות הקבוצות ב `PRICE_GROUPS` הם מפתחות תרגום במחירון.
 - `MoneyPanels.tsx` מייצר `idempotencyKey` חדש בכל לחיצה ולא שולח `paymentMethodToken`.
@@ -3288,21 +3774,21 @@ stateDiagram-v2
 
 | שינוי | קבצים שצריך לגעת בהם | מלכודת |
 |---|---|---|
-| תפקיד חדש, למשל `support_agent` | migration ל enum `user_role`, `auth-context.ts`, `SupportService.staff`, `isStaff` ב `escrow.service.ts`, `isReviewer` ב `wallet-request.service.ts`, כל `@Roles` רלוונטי | אין היררכיה, וכל מקום שבודק תפקיד ידנית צריך עדכון נפרד |
-| מסלול חדש פתוח למושעה | `@AllowSuspended()` על ה handler | אף פעם על מסלול כספי. אין בדיקת מטריצה שתתפוס טעות |
+| תפקיד חדש, למשל `support_agent` | migration ל enum `user_role`, `auth-context.ts`, `SupportService.staff`, `isStaff` ב `escrow.service.ts`, `isReviewer` ב `wallet-request.service.ts`, בדיקות ידניות ב `inv/parcel.controller.ts` וב `shp/shipment.service.ts`, כל `@Roles` רלוונטי | אין היררכיה, וכל מקום שבודק תפקיד ידנית צריך עדכון נפרד |
+| מסלול חדש פתוח למושעה | `@AllowSuspended()` על ה handler | לא על מסלול שמזיז כסף. אין בדיקת מטריצה שתתפוס טעות |
 | מסלול staff חדש | `@Roles('warehouse_operator', 'admin')` על ה method | בלי `@Roles` המסלול פתוח לכל לקוח. רשימת המסלולים ב `sec-authorization.test.ts` לא מתעדכנת לבד |
 | מסלול שמקבל מזהה ישות של משתמש | סינון לפי `userId` מה session ב service, ו 404 ולא 403 | השכבה היחידה נגד IDOR |
 | שינוי מדיניות סיסמה | `RegisterDto`, `ResetPasswordDto`, `ChangePasswordDto` יחד | trim על סיסמה שובר התחברות קיימת |
 | עמלה חדשה על פעולה קבועה | כלל ב `pricing_rule` וקריאה דרך `BILLING_PORT` בתוך טרנזקציית הפעולה | כלל percentage בלי בסיס יוצא אפס בשקט. בלי seed אין כלל ואין מחיר |
 | שינוי עמלת משיכה, chargeback או escrow | `money-terms.ts` או `escrow-terms.ts`, וה SPA דרך `cash-out-quote` ו `escrow/terms` | הכלל ב `pricing_rule` לא משפיע. בדיקות `pay-money-in-out` מקבעות מספרים |
-| סוג שורת לדג'ר חדש | migration ל enum `ledger_type`, `LedgerEntry.type`, ה worker `ledger-invariant-check.ts` ודף התנועות ב SPA | `balanceOf` סוכם כל סוג, כולל שגוי |
+| סוג שורת לדג'ר חדש | migration ל enum `ledger_type`, `ledgerType` ב `pay.schema.ts`, `LedgerEntry.type` ודף התנועות ב SPA | `balanceOf` סוכם כל סוג, כולל שגוי |
 | מסלול מימון חדש | `FUNDING_ROUTES`, ואם ידני גם `checkout.service.ts` `routes` | `instant: true` פותח checkout מיד דרך אותו אדפטר |
-| מעבר חדש בבקשת ארנק | `WALLET_REQUEST_TRANSITIONS` ו `apps/web/src/shared/walletRequests.ts` | מותר מיד דרך `applyTransition`, ונוצר אירוע outbox חדש בשם `wallet_request_<status>` |
+| מעבר חדש בבקשת ארנק | `WALLET_REQUEST_TRANSITIONS`, `reviewerActions` ב `apps/web/src/areas/admin/WalletRequestsSection.tsx`, ולביטול `canCancel` ב `apps/web/src/shared/walletRequests.ts` | מותר מיד דרך `applyTransition`. מצב יעד חדש יוצר אירוע outbox חדש בשם `wallet_request_<status>` |
 | פעולה חדשה שמחייבת ארנק | בדיקת יתרה בתוך הטרנזקציה, ורצוי נעילה מייעצת משותפת | להוסיף את המקום לטבלת האתרים במסלול הכסף |
 | שדה חדש בפרופיל | `ProfileView` ו `get` ב `profile.service.ts`, ו `SessionProfile` ב SPA | נחשף גם למושעה, כי המסלול `@AllowSuspended` |
 | הסתרת PII ממי שאינו admin | בחירת עמודות ב `select` של ה service | `PiiInterceptor` לא יעבוד על plain objects, אל תסמוך עליו |
 | audit לפעולה שקורית ב worker | INSERT ישיר ל `audit_record` מה job, כי `AuditService` לא זמין שם | היום השעיה אוטומטית וריבית לא נרשמות כלל |
-| מצב חדש ב escrow | `assertStatus` בכל פעולה רלוונטית, `queue`, `heldFor` וה SPA | אין טבלת מעברים, קל לפספס פעולה |
+| מצב חדש ב escrow | migration ל enum `escrow_status`, `assertStatus` בכל פעולה רלוונטית, `queue`, `heldFor` וה SPA | אין טבלת מעברים, קל לפספס פעולה |
 
 ### בדיקות שמכסות את האזור
 
@@ -3345,13 +3831,14 @@ stateDiagram-v2
 | חומרה | מקום | מה | תיקון מינימלי |
 |---|---|---|---|
 | P0 | `escrow.service.ts` 484 עד 701 | `release` ו `return` מקבילים, או שני `settle`, מזכים כסף פעמיים, כי אין נעילה ו `settle` לא בודק סטטוס | `FOR UPDATE` על העסקה בתוך כל טרנזקציה ובדיקת סטטוס שם, ו `settle` שבודק `awaiting_release` |
-| P1 | `escrow.service.ts` 292 עד 386 | `fund` כפול כותב שני `escrow_hold`. `fund` מקביל ל `cancel` נועל כסף, E18 | אותה נעילה, ואינדקס ייחודי חלקי על `ledger_record` לסוג `escrow_hold` ולהפניה |
-| P1 | `escrow.service.ts` 393 עד 418 | פריט לא נבדק ולא מסומן `holdFlag`, ו `settle` לוקח אותו מקונה של ה marketplace, E4 | לבדוק שהבעלים הוא המוכר, לסמן `holdFlag`, ולשחרר ב `settle` וב `returnDeal` |
-| P1 | `wallet-request.service.ts` 419 עד 507 | עמלת משיכה נגבית פעמיים, בארנק ובסכום שנשלח | להחליט על מודל אחד. שליחת `request.amount` לספק לא שוברת בדיקה |
-| P1 | `wallet-request.service.ts` 419 עד 449 | payout `pending` נחשב הצלחה ואיש לא מעדכן | webhook של payouts או job התאמה שמעדכן `external_payment` ומפצה בלדג'ר |
-| P1 | `ledger.service.ts` 57 עד 67 | אין נעילה לפי משתמש, double spend בכל אתרי הטבלה במסלול הכסף, E1 | עזר אחד עם `pg_advisory_xact_lock(hashtext(user_id))`, שכל אתר קורא לו בתוך הטרנזקציה |
+| P0 | `escrow.service.ts` 292 עד 386 | `fund` כפול כותב שני `escrow_hold`. `fund` מקביל ל `cancel` נועל כסף, E18 | אותה נעילה, ואינדקס ייחודי חלקי על `ledger_record` לסוג `escrow_hold` ולהפניה |
+| P0 | `escrow.service.ts` 393 עד 418 | פריט לא נבדק ולא מסומן `holdFlag`, ו `settle` לוקח אותו מקונה של ה marketplace, E4 | לבדוק שהבעלים הוא המוכר, לסמן `holdFlag`, ולשחרר ב `settle` וב `returnDeal` |
+| P0 | `wallet-request.service.ts` 419 עד 507 | עמלת משיכה נגבית פעמיים, בארנק ובסכום שנשלח | להחליט על מודל אחד. שליחת `request.amount` לספק לא שוברת בדיקה |
+| P0 | `wallet-request.service.ts` 419 עד 449 | payout `pending` נחשב הצלחה ואיש לא מעדכן | webhook של payouts או job התאמה שמעדכן `external_payment` ומפצה בלדג'ר |
+| P0 | `ledger.service.ts` 57 עד 67 | אין נעילה לפי משתמש, double spend בכל אתרי הטבלה במסלול הכסף, E1 | עזר אחד עם `pg_advisory_xact_lock(hashtext(user_id))`, שכל אתר קורא לו בתוך הטרנזקציה |
 | P1 | `wallet-request.service.ts` 309 עד 356 | אדמין יחיד מאשר ומשלים cash_in לחשבון שהוא שולט בו | לדרוש ש `reviewedBy` שונה מהמשלים מעל סף סכום, ו `documentKey` חובה ל cash_in |
 | P1 | `checkout.service.ts` 132 עד 216 | checkout עם PayPal לא עובד, ו capture לפני שורה משאיר כסף בלי עקבה, E3 | יצירת הזמנה ב SPA, שורת `pending` לפני הקריאה, ומפתח שנשמר בין ניסיונות |
+| P1 | `app.module.ts` 59 עד 69 | דלי `auth` הוא תקרת כל מסלול | `@SkipThrottle({ auth: true })` מחוץ למסלולי הזהות |
 | P2 | `checkout.service.ts` 179 עד 191 | מזהה ה capture לא נשמר, אין פיוס ואין קישור ל webhook | עמודה למזהה ה capture עם אינדקס ייחודי |
 | P2 | `topup.service.ts` 63 עד 75 | webhook ריק, `pending` לא מזוכה לעולם | טיפול באירועי capture לפי מזהה, וכתיבת `webhook_event_id` עם אינדקס ייחודי באותה טרנזקציה |
 | P2 | `ledger.service.ts` 44 עד 55, `prc.controller.ts` 20 | אין `CHECK (amount > 0)` ואין `@Min(0)`, כלל שלילי הופך חיוב לזיכוי | migration עם `CHECK`, ו `@Min(0)` ב DTO |
@@ -3359,7 +3846,6 @@ stateDiagram-v2
 | P2 | `escrow.service.ts` 247, 331 | staff מסכים ומממן בשם בעל חשבון | להגביל staff לצד חיצוני כמו ב `release`, או לרשום `onBehalfOf` |
 | P2 | `escrow.service.ts` 609 עד 613 | קונה חיצוני עם `ship_to_buyer` משלם ולא מקבל | ליצור משלוח ב `settle` או להחזיק את הפריט עם `holdFlag` עד המשלוח |
 | P2 | `auth.service.ts` 52 עד 64, 117, `verification.service.ts` 91 עד 123 | חשיפת קיום חשבון ברישום, בזמן login, E13, ובזמן ושגיאות של מייל | verify מול hash דמה, תשובה אחידה ברישום, ושליחת מייל דרך outbox |
-| P2 | `app.module.ts` 59 עד 69 | דלי `auth` הוא תקרת כל מסלול | `@SkipThrottle({ auth: true })` מחוץ למסלולי הזהות |
 | P2 | `session-auth.guard.ts` 51 עד 66 | מושעה לא מתנתק, `closed` תקוע עד שבעה ימים | לא לזרוק על סטטוס במסלול ציבורי, ו `logout` כ `@Public` |
 | P2 | `acc.dto.ts` | סיסמה של 8 תווים בלי blocklist ובלי MFA, ואין נעילה per account | blocklist, מינימום גבוה יותר, והשהיה לפי `login_attempt` |
 | P3 | `password.service.ts` 69 עד 94, `verification.service.ts` 63 עד 88 | טוקן חד פעמי לא אטומי | `isNull(consumedAt)` ב UPDATE ובדיקת `returning` |
@@ -3371,7 +3857,7 @@ stateDiagram-v2
 
 ### תוכניות תיקון לממצאים הכבדים
 
-**מרוצי escrow, P0 ו P1.**
+**מרוצי escrow, P0.**
 1. ב `escrow.service.ts` להוסיף `loadLocked(tx, dealId)` שקורא עם `.for('update')`, כמו `complete` ב `wallet-request.service.ts` שורות 348 עד 353.
 2. בכל פעולה לפתוח טרנזקציה קודם, לטעון נעול, ורק אז `assertStatus` ובדיקות הצד.
 3. ב `release` לחשב `buyerDone` ו `sellerDone` מהשורה הנעולה, ולקרוא ל `settle` עם אותו `tx` במקום טרנזקציה נפרדת. `settle` מקבל `tx` ובודק `awaiting_release`.
@@ -3384,11 +3870,11 @@ stateDiagram-v2
 
 **נעילת ארנק, E1 ו E18.**
 1. עזר אחד ב `ledger.service.ts`, למשל `lockWallet(tx, userId)` שמריץ `pg_advisory_xact_lock(hashtext(user_id))`.
-2. לקרוא לו בתוך הטרנזקציה לפני כל בדיקת יתרה בטבלת האתרים במסלול הכסף. בדיקה שנמצאת היום מחוץ לטרנזקציה, כמו ב `fund` וב `mkt/offer.service.ts`, צריכה לעבור פנימה.
+2. לקרוא לו בתוך הטרנזקציה לפני כל בדיקת יתרה בטבלת האתרים במסלול הכסף. בדיקה שנמצאת היום מחוץ לטרנזקציה, כמו ב `fund`, ב `mkt/offer.service.ts` וב `shp`, צריכה לעבור פנימה.
 3. סדר נעילות קבוע, ארנק לפני שורה עסקית, כדי לא ליצור deadlock עם `FOR UPDATE` קיימים.
 
 **עמלת משיכה כפולה.**
-1. להחליט מה הלקוח משלם. אם הנטו שה SPA מציג נכון, הלדג'ר צריך לחייב `amount - fee` כ `withdrawal` ועוד `fee`, וזה שובר את `pay-money-in-out.test.ts` שורה 152 ושורות 163 עד 183.
+1. להחליט מה הלקוח משלם. אם הנטו שה SPA מציג נכון, הלדג'ר צריך לחייב `amount - fee` כ `withdrawal` ועוד `fee`, וזה שובר את `pay-money-in-out.test.ts` שורות 152 ו 159 ושורות 163 עד 183.
 2. אם החיוב הנוכחי נכון, לשלוח `request.amount` לספק ולשנות את התווית ב `MoneyPanels.tsx`.
 3. להוסיף אדפטר תשלום מדומה שמתעד את הסכום שנשלח, ובדיקה שמשווה אותו לחיוב.
 
@@ -3400,12 +3886,70 @@ stateDiagram-v2
 
 ### תלויות, טבלאות וסביבה
 
-- **נכנסות.** `app.module.ts` רושם את ה guards וה interceptor מ `acc` ו `sec`, כך שכל controller במערכת עובר כאן. `BILLING_PORT` נצרך ב `inv`, `dis` ו `mkt`. `LedgerService` ב `mkt`, `dis`, `shp`, `adm`, `mem`, `esc`. `WalletService` ב `dis`, `mem`, `shp`. `PricingService` ב `pay`, `esc`, `mkt`, `shp`, `dis`. `MediaService` ב `inv/parcel.service.ts`.
-- **יוצאות.** `acc` תלוי ב `shp/country.validator.ts` ו `shp/countries.ts`, `shared/tokens.ts`, `shared/names.ts` ו `EMAIL_ADAPTER`. `pay` תלוי ב `PAYMENT_ADAPTER`, `OutboxService`, `AuditService`, `MembershipService` ו `ConfirmationService`. `esc` תלוי ב `CustodyService.run` ו `transferOwnership`.
+- **נכנסות.** `app.module.ts` רושם את ה guards וה interceptor מ `acc` ו `sec`, כך שכל controller במערכת עובר כאן. `BILLING_PORT` נצרך ב `inv`, `dis` ו `mkt`. `LedgerService` ב `mkt`, `dis`, `shp`, `adm`, `mem`, `esc`. `WalletService` ב `dis`, `mem`, `shp`. `PricingService` ב `pay`, `esc`, `mkt`, `shp`, `dis`, `adm`, `mem`. `MediaService` ב `inv/parcel.service.ts`.
+- **יוצאות.** `acc` תלוי ב `shp/country.validator.ts` ו `shp/countries.ts`, `shared/tokens.ts`, `shared/names.ts` ו `EMAIL_ADAPTER`. `pay` תלוי ב `PAYMENT_ADAPTER`, `PricingService`, `OutboxService`, `AuditService`, `MembershipService` ו `ConfirmationService`. `esc` תלוי ב `CustodyService.run` ו `transferOwnership`.
 - **worker.** כותב ל `ledger_record` ב SQL ישיר ב `interest-accrual.ts`, `storage-fee.ts` ו `membership-renewal.ts`, קורא ב `debt.ts`, `wallet-suspension.ts` ו `ledger-invariant-check.ts`, ומשנה `user_account.status` ב `wallet-suspension.ts`. אין לו audit.
 - **SPA.** `MoneyPanels.tsx`, `WalletRequestForms.tsx`, `EscrowTab.tsx`, ומראות של כללים ב `apps/web/src/shared/walletRequests.ts` ו `apps/web/src/shared/escrow.ts`. נתיבי ה hash `verify-email` ו `reset-password`.
 - **סביבה.** `SESSION_COOKIE_NAME`, `NODE_ENV`, `AUTH_RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_PER_MINUTE`, `TRUST_PROXY`, `CORS_ORIGINS`, `APP_BASE_URL`, `EMAIL_PROVIDER` ו `SMTP_*`, `STORAGE_*`, `BANK_*`, `PAYPAL_FF_HANDLE`, `PAYMENT_PROVIDER` ו `PAYPAL_*`. `SESSION_COOKIE_SECRET` ו `PAYPAL_PAYOUT_NOTE` מוגדרים ולא נקראים.
 - **טבלאות.** `user_account`, `login_session`, `login_attempt`, `verification_token`, `shipping_address`, `audit_record`, `support_ticket`, `support_message`, `pricing_rule`, `ledger_record`, `charge`, `external_payment`, `wallet_request`, `wallet_request_event`, `withdrawal`, `escrow_deal`, `escrow_event`, `outbox_message`, ודרך `transferOwnership` גם `item` ו `custody_event`.
+
+### בדוק את עצמך
+
+1. הסבר למה שתי רכישות מקבילות של אותו קונה יכולות להוריד את הארנק מתחת לאפס, גם כשכל אחת בודקת יתרה בתוך טרנזקציה.
+<details><summary>תשובה</summary>
+
+`balanceOf` ב `apps/api/src/modules/pay/ledger.service.ts` שורות 57 עד 67 סוכם שורות ולא נועל דבר, ואין שורת יתרה שאפשר לנעול. ב READ COMMITTED שתי הטרנזקציות רואות אותה יתרה, ו `FOR UPDATE` ב `apps/api/src/modules/mkt/purchase.service.ts` שורות 88 ו 97 נועל רק את הרישום והפריט, זה E1. התיקון הוא `pg_advisory_xact_lock(hashtext(user_id))` בכל אתר בטבלת האתרים.
+
+</details>
+
+2. תאר מה יקרה אם קונה שולח במקביל `release` ו `return` על עסקת escrow שהמוכר כבר שחרר.
+<details><summary>תשובה</summary>
+
+שתי הבקשות קוראות את העסקה מחוץ לטרנזקציה, בלי `FOR UPDATE`, ועוברות את `assertStatus`. `release` קורא ל `settle`, שמזכה את המוכר ב `escrow_release` ומעביר לקונה את הכרטיס, ו `returnDeal` מזכה את הקונה ב `escrow_refund`, כך שאותו חיוב מזוכה פעמיים, `apps/api/src/modules/esc/escrow.service.ts` שורות 484 עד 701. זה ממצא ה P0 של האזור.
+
+</details>
+
+3. מצא את הבלוק שבו עמלת המשיכה נגבית פעמיים, ואת הבדיקות שיישברו אם מתקנים אותו בצד הלדג'ר.
+<details><summary>תשובה</summary>
+
+`apps/api/src/modules/pay/wallet-request.service.ts` שורה 422 שולחת לספק `request.amount - feeMinor`, ושורות 453 עד 507 מחייבות את הסכום המלא ועוד שורת `fee`. חיוב נטו בלדג'ר ישבור את `tests/integration/pay-money-in-out.test.ts` שורות 152, 159 ו 163 עד 183, ושליחת `request.amount` לספק לא שוברת בדיקה.
+
+</details>
+
+4. הסבר למה חשבון מושעה לא יכול להתנתק, ולאילו מסלולים הוא כן מגיע.
+<details><summary>תשובה</summary>
+
+`apps/api/src/modules/acc/session-auth.guard.ts` שורות 52 עד 61 בודק סטטוס לפני `@Public`, ו `POST /auth/logout` ב `apps/api/src/modules/acc/auth.controller.ts` שורות 123 עד 129 אינו `@AllowSuspended`, ולכן הוא מקבל 403 וה cookie נשאר. מושעה מגיע רק ל `GET /me/profile` ולחמשת מסלולי הלקוח ב `apps/api/src/modules/sup/sup.controller.ts` שורות 45 עד 79.
+
+</details>
+
+5. תאר מה קורה ב checkout כשהספק הוא PayPal, ולמה תיקון ה SPA לבדו לא מספיק.
+<details><summary>תשובה</summary>
+
+ה SPA לא שולח `paymentMethodToken`, והאדפטר ב `packages/adapters/src/payment.ts` שורות 213 עד 220 זורק `Error` רגיל שמגיע כ 500, זה E3. גם עם הזמנה, `apps/api/src/modules/pay/checkout.service.ts` שורות 132 עד 138 מבצע capture לפני שיש שורה, וכל כישלון עד הטרנזקציה בשורות 179 עד 216 משאיר כסף אצל PayPal בלי עקבה.
+
+</details>
+
+6. הסבר מה מונע השלמה כפולה של אותה בקשת ארנק, ומה הפרדת התפקידים לא מונעת.
+<details><summary>תשובה</summary>
+
+`complete` ב `apps/api/src/modules/pay/wallet-request.service.ts` שורות 345 עד 369 נועל את הבקשה עם `FOR UPDATE` ובודק `completed` ו `settledLedgerId`, והאינדקס `wallet_request_settled_ledger_unique` רק מונע ששתי בקשות יצביעו על אותה שורת לדג'ר. `assertSeparationOfDuties` בשורות 583 עד 589 בודק רק שהמבצע אינו המבקש, כך שאדמין אחד מאשר ומשלים, ו `fundWallet` בבדיקות נשען על זה.
+
+</details>
+
+7. הסבר איך זמן התגובה של login חושף אם חשבון קיים, ומה התיקון.
+<details><summary>תשובה</summary>
+
+ב `apps/api/src/modules/acc/auth.service.ts` שורה 117, כשאין משתמש ה `||` מדלג על `argon2.verify`, והתשובה מהירה בעשרות מילישניות למרות ה 401 האחיד, זה E13. התיקון הוא verify מול hash דמה קבוע גם כשאין חשבון.
+
+</details>
+
+8. תאר מה יקרה לקליטת פריט על מסד חדש שהורצו עליו migrations בלי seed.
+<details><summary>תשובה</summary>
+
+`apps/api/src/modules/pay/billing.service.ts` שורות 60 עד 63 נופל ל `price` על הפעולה הכללית, ו `apps/api/src/modules/prc/pricing.service.ts` שורות 110 עד 111 זורק 400 כשאין כלל, כך שכל הקליטה מתגלגלת. אף migration לא מכניס `pricing_rule`, ולכן כל פעולה מתומחרת נכשלת, fail closed, זה E6.
+
+</details>
 
 ## פרק 5. קליטה, משמורת, הכספת, חברויות וקונסולת הניהול בצד השרת
 
@@ -3510,7 +4054,7 @@ flowchart LR
 |---|---|
 | `FOR UPDATE` על הפריט בכל שינוי בעלות, מדף, מצב והחזקה | `custody.service.ts` שורות 33 עד 42 |
 | פריט, אירוע ו `bin_transfer` באותה טרנזקציה | `custody.service.ts` שורות 76 עד 118 |
-| append only בטריגר ובהרשאות, ואין מחיקת `item` | `db/sql/0001_append_only.sql` שורות 42 עד 51 ו 120 עד 122 |
+| append only בטריגר ובהרשאות, ואין מחיקת `item` | `db/sql/0001_append_only.sql` שורות 42 עד 56, 87 עד 96 ו 120 עד 122 |
 | קליטה רק לחבילה פתוחה של אותו בעלים | `intake.service.ts` שורות 202 עד 221 |
 | מדף מושבת או במתקן אחר נדחה בקליטה | `intake.service.ts` שורות 168 עד 181 |
 | `processed` בלי יציאות ונעילה, אין חיוב עיבוד כפול | `parcel.service.ts` שורות 42 עד 58 ו 658 עד 716 |
@@ -3534,7 +4078,7 @@ flowchart LR
 | `membership:<tier>` | `openPeriod` ב `subscribe`, וחידוש ב worker | לא רלוונטי | כלל הדרגה או `listPriceMinor` |
 | `storage`, `storage_oversized` | רק ה worker | הפריטים הוותיקים עד `storedItems` | `pricing_rule.parameters` ודמי הקליטה של הפריט |
 
-כל החיובים כאן עוברים `BillingService.charge` בתוך הטרנזקציה של הקורא, חוץ מ `openPeriod` שכותב `charge` ו `ledger_record` בעצמו, והקוד המת `runStorageFees`.
+כל החיובים כאן עוברים `BillingService.charge` בתוך הטרנזקציה של הקורא, חוץ מ `openPeriod` שכותב `charge` ו `ledger_record` בעצמו, ה worker שכותב ב SQL, והקוד המת `runStorageFees`.
 
 תלויות של האזור החוצה, וכל המודולים שהן מגיעות מהם גלובליים.
 
@@ -3575,7 +4119,7 @@ flowchart LR
 | `tests3/integration/sec-authorization.test.ts` | רשימת `ADMIN_ONLY` נבדקת מול לקוח ומול מפעיל. |
 | `tests/web/membership-tiers.test.ts` | מחיר כל דרגה מתחת לעלות `fullUseCostMinor` ולא באופן אבסורדי. |
 
-אין כיסוי למרוצים, פירוק לוט כפול, סילוק אחרי קליטה, העברה של פריט שנשלח, מפתחות תמונה זרים, ולשירות המנוי בצד השרת.
+אין כיסוי למרוצים, כולל פירוק לוט כפול במקביל, לסילוק אחרי קליטה, להעברה של פריט שנשלח, למפתחות תמונה זרים ולשירות המנוי בצד השרת. פירוק שני ברצף כן נבדק.
 
 ### גרעין המשמורת, `cst`
 
@@ -3590,8 +4134,8 @@ flowchart LR
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 11 עד 21 | `LifecycleState`, עשרה מצבים, `received`, `stored`, `listed`, `on-hold`, `sold`, `shipped`, `donated`, `consigned`, `at_grader`, `discarded`. | חייב להתאים ל enum `item_lifecycle` ב `cst.schema.ts` שורות 22 עד 49. ההתאמה לא נאכפת, `custody.service.ts` עושה cast. ערך שקיים רק במסד יגרום ל `TypeError` ו 500. |
-| 23 עד 39 | `TRANSITIONS`, רשימת שכנות מסוג `Record`, ולכן המהדר מחייב שורה לכל מצב. `shipped`, `donated`, `consigned`, `discarded` בלי יציאות. `at_grader` חוזר ל `stored`, או ל `discarded` כשהמדרג מדווח על אובדן. `sold` ממשיך ל `stored` או `shipped`. | `on-hold` לא נכנס לעולם. החזקה היא הדגל `item.hold_flag`, ושלוש הקשתות של `on-hold` הן קוד מת. מכירה בשוק עוברת `listed` ל `stored` עם העברת בעלים, `sold` משמש רק ב `buyout.service.ts`. |
-| 41 עד 51 | `assertTransition`. מצב זהה מחזיר בשקט, מעבר לא ברשימה זורק 409 `CONFLICT` עם `from` ו `to`. | ההחזרה השקטה גורמת ל `changeState` לכתוב `state_change` שבו המצב הקודם שווה לחדש. `grading.service.ts` נשען עליה. |
+| 23 עד 39 | `TRANSITIONS`, רשימת שכנות מסוג `Record`, ולכן המהדר מחייב שורה לכל מצב. `shipped`, `donated`, `consigned`, `discarded` בלי יציאות. `at_grader` חוזר ל `stored`, או ל `discarded` כשהמדרג מדווח על אובדן. `sold` ממשיך ל `stored` או `shipped`. | אף קורא של `changeState` לא מעביר אל `on-hold`, והמצב נכתב רק בעריכת מנהל. החזקה היא הדגל `item.hold_flag`, והקשתות אל `on-hold` הן קוד מת. מכירה בשוק עוברת `listed` ל `stored` עם העברת בעלים, `sold` משמש רק ב `buyout.service.ts`. |
+| 41 עד 51 | `assertTransition`. מצב זהה מחזיר בשקט, מעבר לא ברשימה זורק 409 `CONFLICT` עם `from` ו `to`. | ההחזרה השקטה גורמת ל `changeState` לכתוב `state_change` שבו המצב הקודם שווה לחדש, ולכן קריאה שנייה ל `sold`, `consigned` או `donated` לא נעצרת כאן. `grading.service.ts` בודק `at_grader` לפני הקריאה ולא נשען עליה. |
 
 מי מבצע כל מעבר בפועל, לפי כל הקריאות ל `changeState`.
 
@@ -3618,8 +4162,8 @@ flowchart LR
 | 45 עד 74 | `createWithIntake`, הקלט. בעלים, סריאל, ברקוד, מחלקה, מדף, `sourceBatchId`, `sourceParcelId`, `oversized`, `weightGrams`, לוט, `eventType` שהוא `intake` או `batch_split`, ו `lifecycleState` שהוא `stored` או `received`. | `received` משמש רק לקלף שנמכר מחנות Bault, בבעלות מרגע התשלום ועוד לא על מדף. |
 | 76 עד 120 | מכניס `item` עם ברירות מחדל, מצב `stored`, `lotSize` 1, `oversized` false, `weightGrams` רק אם חיובי. אחר כך אירוע עם `newOwnerId`, `newBinId`, `newState`, ואם יש מדף שורת `bin_transfer` ראשונה עם `fromBinId` ריק. | `receivedAt` בשורה 95 הוא השעון שממנו ה worker סופר תקופות אחסון. `oversized` מועתק כאן ולא נגזר מחדש לעולם. אין בדיקה שהמדף או הבעלים קיימים או פעילים, ואין מפתח זר. |
 | 123 עד 144 | `relocate`. נעילה, `ITEM_ON_HOLD` 409 לפריט מוחזק, עדכון `binId`, אירוע `relocate` ושורת `bin_transfer` עם מקור ויעד. | אין בדיקת מצב, אפשר להעביר פריט `shipped` או `at_grader` למדף. אין בדיקה שהיעד פעיל או שונה מהנוכחי. `reason` קבוע `scan relocate`. בדיקת מצב עתידית חייבת להתיר `received`, כי `house-store.service.ts` מעביר כך פריט שנמכר מהחנות. |
-| 147 עד 158 | `transferOwnership`. נעילה, עדכון `ownerId`, אירוע `ownership_transfer`. | **E4, P0.** זה P0 כי מדובר ברכוש של לקוח ובכסף שזז איתו. מקבל רק את הבעלים החדש. לא משווה את `current.ownerId` לבעלים שהקורא ציפה לו, לא בודק מצב ולא `holdFlag`. שמונה קריאות בשבעה קבצים, `donation`, `disposal-services`, `buyout`, `consignment`, `escrow`, `purchase`, ושתיים ב `trade`, וכל אחת בודקת בעלות בעצמה, חלקן לפני הנעילה. כך אפשר להעביר פריט שכבר עבר ידיים. התיקון, פרמטר `expectedOwnerId` ובדיקת בעלים, מצב ו hold תחת הנעילה, ואז אחת עשרה בדיקות מפוזרות הופכות לאחת. |
-| 161 עד 173 | `changeState`. נעילה, `assertTransition`, עדכון, אירוע `state_change`. | אין בדיקת `holdFlag`, ו `shp/dispatch.service.ts` לא בודק אותו, כך שהחזקה שהונחה אחרי יצירת משלוח לא עוצרת שליחה. יציאה מהמחסן לא מאפסת `binId`, ושום קוד לא מאפס אותו. |
+| 147 עד 158 | `transferOwnership`. נעילה, עדכון `ownerId`, אירוע `ownership_transfer`. | **E4, P0.** זה P0 כי מדובר ברכוש של לקוח ובכסף שזז איתו. מקבל רק את הבעלים החדש. לא משווה את `current.ownerId` לבעלים שהקורא ציפה לו, לא בודק מצב ולא `holdFlag`. שמונה קריאות בשבעה קבצים, `donation`, `disposal-services`, `buyout`, `consignment`, `escrow`, `purchase`, ושתיים ב `trade`. בדיקת הבעלות שקיימת רצה אצל הקורא בשלב קודם, ו `escrow` ו `purchase` לא בודקים בעלים בכלל. כך אפשר להעביר פריט שכבר עבר ידיים. התיקון, פרמטר `expectedOwnerId` ובדיקת בעלים, מצב ו hold תחת הנעילה, ואז הבדיקות המפוזרות בשבעת הקבצים הופכות לאחת. |
+| 161 עד 173 | `changeState`. נעילה, `assertTransition`, עדכון, אירוע `state_change`. | אין בדיקת `holdFlag`, ו `shp/dispatch.service.ts` לא בודק אותו, כך שהחזקה שהונחה אחרי יצירת משלוח לא עוצרת שליחה. יציאה מהמחסן לא מאפסת `binId`, ורק עריכת מנהל ידנית יכולה לאפס אותו. |
 | 186 עד 207 | `setHold`. מחזיר `false` בלי כתיבה אם הדגל כבר בערך המבוקש. אחרת עדכון, אירוע `hold_placed` או `hold_released`, ובהנחה בלבד אירוע `hold_placed` ב outbox. | זו האידמפוטנטיות של נתיבי ההחזקה. לא עובר דרך `assertTransition` כי המצב לא משתנה. |
 | 210 עד 212 | `run`, `this.db.transaction(work)` למי שאין לו טרנזקציה משלו. Drizzle עושה `COMMIT` כשה Promise מצליח ו `ROLLBACK` כשהוא נדחה. | `IntakeService` ו `RelocateService` נשענים עליו, ולכן כל קריאה אליו היא commit נפרד. |
 
@@ -3627,13 +4171,13 @@ flowchart LR
 
 | קורא | מה נבדק ומתי | הפער |
 |---|---|---|
-| `dis/donation.service.ts` שורה 53 | בעלים, `holdFlag` ומצב `stored` נבדקים ב `request`, לפני אסימון האישור. | `confirm` מעביר בלי בדיקה חוזרת. אם הפריט עבר ידיים בין שני השלבים, הבעלים הקודם תורם את הקלף של הבעלים החדש, ו `changeState` ל `donated` עובר כי המצב `stored`. |
-| `dis/disposal-services.service.ts` שורה 191 | אותו מבנה ב `requestCull` ו `confirmCull`. | אותו פער. |
-| `dis/buyout.service.ts` שורה 147 | בודק שהמבקש הוא בעל הבקשה, לא שהוא עדיין הבעלים. | |
-| `dis/consignment.service.ts` שורה 200 | בעלים מתוך `requesterId` של הבקשה. | |
-| `esc/escrow.service.ts` שורה 612 | אין בדיקת בעלים או `holdFlag` סביב הקריאה. | הנאמנות יכולה להעביר פריט מוחזק או שכבר עבר ידיים. |
+| `dis/donation.service.ts` שורה 53 | בעלים, `holdFlag` ומצב `stored` נבדקים ב `request`, לפני אסימון האישור. | `confirm` לא קורא את הפריט שוב, לא בעלים ולא `holdFlag`, והמצב נבדק רק בעקיפין ב `assertTransition`. אם הפריט נמכר בשוק בחמש הדקות של האסימון, הבעלים הקודם תורם את הקלף של הקונה. |
+| `dis/disposal-services.service.ts` שורה 191 | בעלים, מצב, `holdFlag` וחלון 30 הימים נבדקים ב `requestCull`. | `confirmCull` לא בודק אף אחד מהם שוב. במסלול `discard` אין `transferOwnership` בכלל, רק `changeState` ל `discarded`, כך שהבעלים הקודם משמיד קלף של אחר. |
+| `dis/buyout.service.ts` שורה 147 | ב `request` בעלים, `stored` ו `holdFlag` תחת `FOR UPDATE`. ב `accept` רק שהמבקש הוא בעל הבקשה ושיש הצעה. | `accept` לא קורא את הפריט, מזכה את המבקש ומעביר מהבעלים הנוכחי, ו `listed` ל `sold` חוקי. `get` קורא את הבקשה בלי נעילה ו `setStatus` לא בודק מצב קודם, ולכן שתי קבלות מקבילות מזכות פעמיים. |
+| `dis/consignment.service.ts` שורה 200 | ב `request` כמו ב buyout. ב `complete` הבעלים נלקח מ `requesterId` בלי לקרוא את הפריט. | המבקש מזוכה והפריט נלקח ממי שמחזיק בו עכשיו, גם כשהוא מוחזק. המצב נבדק רק דרך `assertTransition`. אותו מרוץ זיכוי כפול דרך `completeWithFulfillment`. |
+| `esc/escrow.service.ts` שורה 612 | `receiveItem` בודק רק מצב `stored`, בלי נעילה ובלי בעלים. `settle` לא בודק דבר ולא קורא ל `changeState`. | הנאמנות מעבירה גם פריט מוחזק, שעבר ידיים או נשלח, והפריט לא מוקפא בזמן העסקה. |
 | `mkt/purchase.service.ts` שורה 145 | `FOR UPDATE` על המודעה ועל הפריט ובדיקת `holdFlag`. | לא בודק שבעל הפריט הוא המוכר במודעה, ראו עריכת מנהל. |
-| `mkt/trade.service.ts` שורות 109 ו 112 | נעילה על ההצעה. | |
+| `mkt/trade.service.ts` שורות 109 ו 112 | `assertOwnedStoredUnheld` ב `proposeSwap` וב `initiateTransfer`, מחוץ לטרנזקציה. ב `approve` רק נעילה על ההצעה. | `approve` מעביר בלי בדיקה חוזרת ובלי `changeState`, גם ימים אחרי ההצעה, ולכן גם פריט שנמכר, נשלח או הוחזק עובר. |
 
 קורא חדש צריך לנעול, לבדוק בעלים צפוי, מצב ו `holdFlag` תחת הנעילה, ואז לקרוא לגרעין עם אותו `tx`. עד שהבדיקה תעבור לגרעין עצמו, זו אחריות של כל קורא.
 
@@ -3649,7 +4193,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 }
 ```
 
-**שים לב.** ההגנה החזקה יושבת במסד. `custody_event`, `bin_transfer`, `parcel_event`, `arrival_disposal` הם append only בטריגר ובביטול הרשאות ב `apps/api/src/db/sql/0001_append_only.sql` שורות 42 עד 51, ו `item` מוגן ממחיקה בטריגר `trg_no_delete_item`. ההערה בשורות 17 עד 18 שאף קוד אחר לא מעדכן את העמודות שגויה, `adm.service.ts` עושה זאת ולא כותב `bin_transfer`. הוספת בדיקת `holdFlag` ל `changeState` או `transferOwnership` משנה כל קורא, בדקו במיוחד את `grading.service.ts` ואת עריכת המנהל.
+**שים לב.** ההגנה החזקה יושבת במסד. `custody_event`, `bin_transfer`, `parcel_event`, `arrival_disposal` הם append only בטריגר ובביטול הרשאות ב `apps/api/src/db/sql/0001_append_only.sql` שורות 42 עד 56 ו 87 עד 96, ו `item` מוגן ממחיקה בטריגר `trg_no_delete_item`. ההערה בשורות 16 עד 18 שאף קוד אחר לא מעדכן את העמודות שגויה, `adm.service.ts` עושה זאת ולא כותב `bin_transfer`. הוספת בדיקת `holdFlag` ל `changeState` או `transferOwnership` משנה כל קורא, בדקו במיוחד את `grading.service.ts` ואת עריכת המנהל.
 
 #### `apps/api/src/modules/cst/stow.service.ts`
 קליטה מכוונת, איזה מדף לבחור, ותרגום של פלט סורק לשורת מדף או פריט. קורא בלבד, `bin`, `item`, `facility`. משמש את הקליטה, האצוות, `inventory.service.ts` ו `cst.controller.ts`.
@@ -3658,8 +4202,8 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 |---|---|---|
 | 9 עד 31 | `StowTarget` וביטוי `UUID`. | השוואה של מחרוזת שאינה UUID לעמודת `uuid` זורקת, ולכן ההשוואה על המזהה מושמטת כשאין התאמה לתבנית. |
 | 67 עד 86 | `resolveBin`. `OR` של `upper(barcode)`, `upper(serial)`, ו UUID אם בצורה הזו, `limit(1)`, 400 אם אין. | הקלט עובר כפרמטר, אין הזרקת SQL. אין אינדקס על `upper`, סריקה מלאה, זניח כי יש מעט מדפים. |
-| 95 עד 111 | `resolveItem`, אותו דבר לפריט. | סריקה מלאה של `item`. השוואה בלי רישיות על שתי עמודות עם `limit(1)` בלי `ORDER BY`, מול אינדקסים ייחודיים רגישים לרישיות ונפרדים. סריאל או ברקוד שמפעיל הכתיב בקליטה יכולים להתנגש, ואז העברת מדף מזיזה פריט שרירותי. |
-| 122 עד 146 | `listWithCounts`. ספירת פריטים לכל `binId`, `leftJoin` למדפים ומתקנים. | בלי סינון מצב. מאחר ש `binId` לא מתאפס, פריטים שנשלחו או נתרמו ולוטים שפורקו נספרים, ומדפים ותיקים נראים מלאים. |
+| 95 עד 111 | `resolveItem`, אותו דבר לפריט, אבל 404 ולא 400. | סריקה מלאה של `item`. השוואה בלי רישיות על שתי עמודות עם `limit(1)` בלי `ORDER BY`, מול אינדקסים ייחודיים רגישים לרישיות ונפרדים. סריאל או ברקוד שמפעיל הכתיב בקליטה יכולים להתנגש, ואז העברת מדף מזיזה פריט שרירותי. |
+| 122 עד 146 | `listWithCounts`. ספירת פריטים לכל `binId`, `leftJoin` למדפים ומתקנים. | בלי סינון מצב. מאחר ש `binId` לא מתאפס, פריטים שנשלחו או נתרמו ולוטים שפורקו נספרים, ומדפים ותיקים נראים מלאים. ה cast המרומז חל על כל `bin_id`, ולכן `EXT:` אחד מ `warehouseTransfer` ב `consignment.service.ts` מפיל ב 400 את `GET /custody/bins`, את `suggest` וקליטה עם `autoStow`. |
 | 157 עד 193 | `listStowable` מסנן בזיכרון לפי פעיל, oversized מדויק ומתקן, וממיין לפי ספירה ואז ברקוד. `suggest` לוקח את הראשון או 400 שמבחין בין חוסר oversized לרגיל. | אין קיבולת, רק פיזור לפי ספירה, מנומק במיגרציה `0018_stow_wherever_it_fits.sql`. לכן מרוץ בין שני מפעילים על אותו מדף אינו בעיה. |
 | 196 עד 206 | `facilityIdByCode`, קוד בלי רישיות, `null` לריק, 400 אם לא נמצא. | `ParcelService.facilityByCode` משווה עם רישיות, אותו קוד יכול לעבוד במסך אחד ולהיכשל באחר. |
 
@@ -3670,7 +4214,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | קובץ | מה הוא עושה |
 |---|---|
 | `apps/api/src/modules/inv/inv.module.ts` | דפוס P1, שורות 21 עד 32. שלושה controllers ושישה שירותים, בלי `exports`. לכן `dis.module.ts` רושם עותק משלו של `IntakeService`, שני מופעים בתהליך. נשען על כך ש `CstModule`, `PayModule`, `NotModule`, `MedModule` גלובליים. |
-| `apps/api/src/modules/inv/labels.ts` | מייצר מחרוזות ברקוד. `makeItemSerial` בשורות 12 עד 17 הוא `SN-` עם זמן בבסיס 36 ומספר אקראי, רק 8999 ערכים במילישנייה ובלי ניסיון חוזר על התנגשות. `makeLotSerial` עם `LOT-`. `makeBinSerial` בשורות 49 עד 51 הוא `BIN-` ושמונה תווים אקראיים. הברקוד תמיד שווה לסריאל, ו `stow.service.ts` מחפש בשתי העמודות. |
+| `apps/api/src/modules/inv/labels.ts` | מייצר מחרוזות ברקוד. `makeItemSerial` בשורות 12 עד 17 הוא `SN-` עם זמן בבסיס 36 ומספר אקראי, רק 8999 ערכים במילישנייה ובלי ניסיון חוזר על התנגשות. `makeLotSerial` עם `LOT-`. `makeBinSerial` בשורות 49 עד 51 הוא `BIN-` ושמונה תווים אקראיים. ברקוד שהמערכת מייצרת שווה לסריאל, אבל בקליטה מפעיל יכול להכתיב ברקוד שונה. `stow.service.ts` מחפש בשתי העמודות. |
 
 #### `apps/api/src/modules/inv/item-classes.ts`
 אוצר המילים הסגור. אילו סוגי פריטים מתקבלים, וקטגוריות הסירוב ותוצאות הסילוק. קובץ טהור שמיובא מ `inv`, `adm`, `mkt/house-store.service.ts`, `shp/parcel-profile.service.ts` ו `shp/boxes.ts`.
@@ -3695,7 +4239,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 96 עד 138 | `RULES`, שבעה כללים בפרוזה, `closed-list`, `trackers`, `refusal-record`, `unattributable`, `condition`, `lots`, `oversized`. כל אחד נשען על קוד, `isKnownItemClass`, `DisposalService.record`, המצב `unclaimed` ב `receiveIn`, ההערות החובה ב `open`, ו `oversized` שמועתק ב `createWithIntake`. `lots` משתמש ב `LOT_MIN_SIZE` בתוך template. | כל כלל מתאר התנהגות בקוד, אבל שום בדיקה לא תתפוס פרוזה שהתיישנה. `trackers` מתאר מדיניות שהקוד לא אוכף. |
 | 147 עד 169 | `intakePolicy` ממפה הכול לאובייקט אחד בכל בקשה, בלי cache. | |
 
-**שים לב.** `tests3/integration/inv-intake-policy.test.ts` בודק שהמחלקות שמתפרסמות הן בדיוק המחלקות שהקליטה מקבלת, ושלכל קטגוריה יש סיבה. לפני הוספת קטגוריה בלי משפט בדקו אם הבדיקה מקבלת את משפט ברירת המחדל.
+**שים לב.** `tests3/integration/inv-intake-policy.test.ts` בודק שהמחלקות שמתפרסמות הן בדיוק המחלקות שהקליטה מקבלת, ושלכל קטגוריה יש סיבה. קטגוריה בלי משפט תכשיל אותה, כי היא דוחה את משפט ברירת המחדל במפורש.
 
 #### `apps/api/src/modules/inv/facility.service.ts`
 מתקנים הם הכתובות שבהן Bault מקבלת דואר. הצרכן היחיד הוא `parcel.controller.ts`.
@@ -3720,14 +4264,14 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 124 עד 147 | `writeEvent`, שורת `parcel_event` עם שדות אופציונליים כ `null`. | `eventType` טקסט חופשי, הרשימה המותרת קיימת רק בהערה ב `parcel.schema.ts`. |
 | 149 עד 160 | `load` בלי נעילה, ו `facilityByCode` עם 400 על קוד לא מוכר או לא פעיל. | השוואת קוד רגישה לרישיות. |
 | 174 עד 182 | `register`, צד האספן. מתקן פעיל לפי קוד, ושם המשתמש נקרא מהחשבון לפי מזהה הסשן. | |
-| 184 עד 206 | בדיקת כפילות של מספר מעקב בין חבילות במצבים `expected`, `received`, `opened`. | גלובלית ולא לפי משתמש, ומחזירה 409 עם קוד החבילה של משתמש אחר. כל מי שיודע מספר מעקב, למשל המוכר, יכול לרשום אותו ראשון ולחסום את הקונה. ההשוואה מדויקת, רגישה לרישיות ולרווחים. |
+| 184 עד 206 | בדיקת כפילות של מספר מעקב בין חבילות במצבים `expected`, `received`, `opened`. | גלובלית ולא לפי משתמש, ומחזירה 409 עם קוד החבילה של משתמש אחר. כל מי שיודע מספר מעקב, למשל המוכר, יכול לרשום אותו ראשון ולחסום את הקונה. ההשוואה רגישה לרישיות ולרווחים פנימיים, רק הקצוות עוברים `trim`. |
 | 208 עד 235 | טרנזקציה, `parcel` במצב `expected` עם קוד `PKG-`, `ownerId` של המשתמש ו `addressedTo` כשם המשתמש, ואירוע `registered` בלי `actorId`. | הבדיקה מחוץ לטרנזקציה ובלי אינדקס ייחודי, לחיצה כפולה יוצרת שתי הרשמות. `expectedAt` לא חוקי הופך ל `Invalid Date` ו 500. |
 | 238 עד 262 | `listMine`, החבילות של המשתמש עם שם מתקן. | בלי `notes` ומזהי עובדים. |
 | 265 עד 286 | `detailFor`, חבילה, אירועים ופריטים שנוצרו ממנה. לקוח שאינו הבעלים מקבל 404. | זה ה guard נגד IDOR, והוא עובד. אבל ללקוח עצמו חוזרת השורה המלאה, כולל `notes` פנימיות, `receivedBy`, `openedBy`, ואירועים עם `actorId`. |
 | 294 עד 315 | `cancelRegistration`. `FOR UPDATE`, בעלים ומצב `expected` בלבד, מעבר ל `disposed` עם `registration_cancelled`. | אין outbox, המשתמש עשה זאת בעצמו. |
 | 334 עד 336 | `receive` עוטף את `receiveIn` בטרנזקציה. | |
 | 347 עד 370 | `receiveIn`, לב הדלפק, רץ בטרנזקציה של הקורא. מתקן לפי קוד, שם מנורמל מהתווית ובעלים לפיו או `null` בלי שגיאה. חיפוש הרשמה `expected` לפי מספר מעקב בלבד. | החיפוש בלי נעילה ובלי סינון מתקן או בעלים, ועם כמה הרשמות `limit(1)` בוחר שרירותית. |
-| 372 עד 409 | אימוץ הרשמה. המצב הבא `received` אם יש בעלים מהתווית או מההרשמה, אחרת `unclaimed`. עדכון ההרשמה למצב, מתקן, זמן ומפעיל, ובעלים `ownerId ?? existing.ownerId`. תמונות `arrival` והודעת `parcel_received`. | מספר מעקב הוא אסימון בעלות. תווית של ב מעבירה בשקט את ההרשמה של א, כולל `declaredContents`, בלי אירוע. תווית ריקה או שגויה מוסרת את החבילה למי שרשם ראשון את המספר. `addressedTo` מקבל כאן את השם המנורמל. הערך המוחזר הוא השורה הישנה עם כמה שדות, ו `ownerId` בו עשוי להיות הישן. |
+| 372 עד 409 | אימוץ הרשמה. המצב הבא `received` אם יש בעלים מהתווית או מההרשמה, אחרת `unclaimed`. עדכון ההרשמה למצב, מתקן, זמן ומפעיל, ובעלים `ownerId ?? existing.ownerId`. תמונות `arrival` והודעת `parcel_received`. | מספר מעקב הוא אסימון בעלות. תווית של ב מעבירה בשקט את ההרשמה של א, כולל `declaredContents`, ואירוע `received` לא מתעד את החלפת הבעלים. תווית ריקה או שגויה מוסרת את החבילה למי שרשם ראשון את המספר. `addressedTo` מקבל כאן את השם המנורמל. הערך המוחזר הוא השורה הישנה עם כמה שדות, ו `ownerId` בו עשוי להיות הישן. |
 | 411 עד 445 | חבילה חדשה. קוד `PKG-`, `ownerId` אולי `null`, הטקסט הגולמי מהתווית, אירוע `received` שב `unclaimed` שומר את התווית שלא זוהתה, תמונות והודעה. | `notifyOwner` מדלג כשאין בעלים. הבלוק `{ ... }` בשורות 375 עד 444 הוא שארית refactor. |
 | 460 עד 476 | `receiveMany`, טרנזקציה אחת לערימה של עד 50, שגיאה נעטפת עם המיקום וגורמת ל rollback של הכול. | זה הנתיב האטומי הנכון, הדפוס שחסר ב `IntakeService`. |
 | 485 עד 507 | `attachPhotos` מכניס `parcel_photo` לכל מפתח. `photos` חותם את כולם דרך `media.signAll`. | המפתח מחרוזת חופשית מה DTO. ההערה שהמפתחות עברו ב `MediaService` שגויה, ומפעיל יכול לשייך כל אובייקט בדלי שיוחתם ללקוח. |
@@ -3767,7 +4311,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 17 עד 85 | `IntakeItemInput`, החוזה הפנימי. `ownerUsername` או `ownerIntakeId` ישן של תוויות `OW-`, `binId` שמקבל גם ברקוד, `autoStow`, `quantity` לעותקים זהים, `isLot` ו `lotSize` לרשומה אחת שמייצגת רבים, `parcelId`, `photoKeys`. | `weightGrams` נשאר `null` אם לא נשקל, משקל מנוחש גרוע ממשקל חסר. |
 | 95 עד 103 | הבנאי. `db` ו `billing` לפי token, `custody`, `stow`, `outbox` לפי מחלקה. | עובד רק כי `CstModule` ו `NotModule` גלובליים. |
 | 117 עד 141 | `resolveOwner`. שם משתמש מנורמל, אחרת `intakeId` אחרי `trim`, אחרת 400. 404 אם לא נמצא. | לא בודק `user_account.status`. אפשר לקלוט, לחייב ולהודיע לחשבון `suspended` או `closed`, למרות שההערה בשורות 272 עד 275 טוענת אחרת. |
-| 160 עד 181 | `resolveStowBin`, מדף שנסרק או נקרא בשמו מנצח. `stow.resolveBin` מתרגם ברקוד, סריאל או UUID. מדף לא פעיל נדחה, ובקליטה מחבילה שאילתה נוספת על `bin.facilityId` דוחה מדף במבנה אחר. | התנאי `row?.facilityId &&` מעביר בשקט מדף ישן בלי מתקן. אין בדיקה שסוג המדף מתאים ל oversized, בכוונה לפי ההערה בשורות 153 עד 158. |
+| 160 עד 181 | `resolveStowBin`, מדף שנסרק או נקרא בשמו מנצח. `stow.resolveBin` מתרגם ברקוד, סריאל או UUID. מדף לא פעיל נדחה, ובקליטה מחבילה שאילתה נוספת על `bin.facilityId` דוחה מדף במבנה אחר. | התנאי `row?.facilityId &&` מעביר בשקט מדף ישן בלי מתקן. אין בדיקה שסוג המדף מתאים ל oversized. ההערה בשורות 146 עד 158 נותנת עדיפות למדף שנסרק ומונה רק את שתי הבדיקות האלה. |
 | 183 עד 192 | בלי מדף ועם `autoStow`, `stow.suggest` עם oversized ומתקן החבילה. בלי שניהם 400. | `suggest` כבר מסנן לא פעילים ומתאים סוג. |
 | 202 עד 221 | `assertParcelOpenFor`. החבילה קיימת, שייכת לאותו בעלים ובמצב `opened`. מחזיר את השורה בשביל `facilityId`. | זו ההגנה מפני שיוך פריט לחבילה של לקוח אחר. היא קוראת בלי נעילה, ולכן מתחרה ב `ParcelService.process`. |
 | 223 עד 252 | שתי הערות JSDoc צמודות. | הראשונה שייכת ל `intakeItem` ונדחקה מעל `intakeUnits`. |
@@ -3823,11 +4367,11 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 10 עד 16 | `RecordDisposalDto`, תיאור עד 200 תווים והערות עד 1000. | אין אורך על `ownerUsername`, `category`, `outcome`, השירות דוחה כל ערך שאינו ברשימה. |
-| 39 עד 46 | `GET /intake/vocabulary`, המחלקות, הקטגוריות והתוצאות מ `item-classes.ts`. | פתוח לכל מחובר. שינוי הנתיב שובר את טופס הקליטה ב `apps/web`. |
+| 39 עד 46 | `GET /intake/vocabulary`, המחלקות, הקטגוריות והתוצאות מ `item-classes.ts`. | פתוח לכל מחובר בכוונה. אין לו קורא ב `apps/web`, ה SPA משתמש בהעתק ב `itemClasses.ts`. |
 | 48 עד 58 | `POST` ו `GET /intake/disposals`, צוות, `actorId` מהסשן. | |
 | 61 עד 64 | `GET /me/disposals`, מסונן לפי `user.id`. | אין פרמטר מזהה ולכן אין IDOR. |
 
-**שים לב.** העברת `@Roles` לרמת המחלקה תנעל את האספן ואת טופס הקליטה בחוץ.
+**שים לב.** העברת `@Roles` לרמת המחלקה תנעל את האספן מחוץ ל `/me/disposals` ותסגור את `/intake/vocabulary`, שפתוח לכולם בכוונה.
 
 #### `apps/api/src/modules/inv/inv.controller.ts`
 דפוס P2 תחת `/intake`, עם `@Roles('warehouse_operator', 'admin')` ברמת המחלקה בשורה 111, כך שנתיב חדש לא נפתח בטעות.
@@ -3851,14 +4395,14 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 16 עד 30 | `Cut` עם ארבעה חתכים, `CUT_LABEL`, ו `TimelineEvent`, צורה אחידה לכל אירוע. | |
-| 46 עד 52 | `history`, אירועי המשמורת של פריט מהחדש לישן. | מזהה שאינו UUID נותן `22P02` שהמסנן הגלובלי ממיר ל 400. |
+| 46 עד 52 | `history`, אירועי המשמורת של פריט מהחדש לישן. | `custody_event.item_id` הוא `text`, ולכן מזהה שגוי או שאינו UUID מחזיר רשימה ריקה ולא 400 או 404. |
 | 55 עד 71 | `report`, בוחר עמודה לפי החתך, `GROUP BY` ו `count(*)`. | בלי סינון מצב, נספר כל פריט שנקלט אי פעם. בחתך מדף פריטים שנשלחו נספרים על המדף שממנו יצאו. בפועל היסטוריה מצטברת ולא מלאי. |
-| 73 עד 98 | `labelRows`. בחתך מדף `serial (zone)`, בחתך בעלים מייל. | בחתך בעלים נטענת כל טבלת המשתמשים בכל בקשה, וכל מפעיל מחסן רואה את מיילי כל הלקוחות. החלפה בשם משתמש לא תשבור צרכן. |
+| 73 עד 98 | `labelRows`. בחתך מדף `serial (zone)`, בחתך בעלים מייל. | בחתך בעלים נטענת כל טבלת המשתמשים בכל בקשה, וכל מפעיל מחסן רואה את המייל של כל לקוח שיש לו פריט. החלפה בשם משתמש לא תשבור צרכן. |
 | 101 עד 110 | `reportPdf`, בונה מסמך ומעביר ל `renderReportPdf`. | הכותרת מכילה `—` ותת הכותרת `·`, ושניהם יוצאים `?`. כל PDF נפתח ב `Bault ? Inventory Report`. |
 | 117 עד 148 | `itemTimeline`, מקורות פנימיים. `contains` בונה `@>` על jsonb, ואז `custody_event`, `item_change_history`, `bin_transfer` לפי `itemId`, כל אחד ממופה ל `TimelineEvent`. | `JSON.stringify([itemId])` עובר כפרמטר, אין הזרקה. |
 | 149 עד 196 | מקורות חיצוניים. `transaction` ו `shipment` לפי `itemIds @>`, הצעות על כל ה listings של הפריט, ומחלוקות על העסקאות שנמצאו. מיון יורד לפי מחרוזת ISO. | הציר לא מסונן לפי תקופת בעלות. בעלים קודם שקורא דרך הכספת רואה הצעות, מחירים, משלוחים ומחלוקות של הבעלים הבא. סינון ידרוש להעביר חלון בעלות מ `vault.service.ts`, כי הצוות צריך לראות הכול. |
 | 214 עד 238 | `createBin`. אזור חובה, מתקן נפתר, סריאל נמטבע ולא נלקח מהקלט, הכנסה אחת. | נבדק ב `tests3/integration/inv-stow.test.ts`. אין ניסיון חוזר על התנגשות, הסיכוי זניח. |
-| 247 עד 274 | `resolveFacilityForBin`. מזהה מפורש, קוד בלי רישיות, או המתקן הראשי הראשון. | מזהה או קוד מפורש יכולים להצביע על מתקן `forwarding` או לא פעיל, רק ברירת המחדל נמנעת מזה. |
+| 247 עד 274 | `resolveFacilityForBin`. מזהה מפורש, קוד בלי רישיות, או המתקן הראשי הראשון. | מזהה או קוד מפורש יכולים להצביע על מתקן `forwarding` או לא פעיל. ברירת המחדל נמנעת רק מ `forwarding`, היא לא מסננת `active`. |
 | 284 עד 292 | `setBinActive`, עדכון לפי `bin.id` בלבד. | סריאל או ברקוד מחזירים 400, בניגוד לשאר נתיבי המדף ולהערה ב `all-exceptions.filter.ts`. |
 | 295 עד 302 | `listBins` מעביר ל `StowService.listWithCounts`. `reconcile` מחזיר `count(*)` וחותמת זמן. | `reconcile` הוא stub עם שם מבטיח, אין שום התאמה. |
 
@@ -3940,9 +4484,9 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 91 עד 101 | `timeline`. `hasHeld` או 404, ואז `InventoryService.itemTimeline`. | 404 ולא 403, לא חושף קיום. הציר המלא חוזר גם לבעלים לשעבר. |
 | 103 עד 129 | `hasHeld`. בעלות נוכחית, או אירוע משמורת כלשהו שבו המשתמש בעלים קודם או חדש. | כל סוג אירוע מספיק, גם העברה של מנהל דרך `AdmService.updateItem` נותנת לבעלים הקודם גישת קריאה קבועה. |
 | 131 עד 145 | `listOwned`, תנאים. ברירת מחדל `active`, ו `history` עובר ל `listHistory`. תמיד `owner_id` שווה למשתמש. `hold` הוא `holdFlag` או מצב `on-hold`, אחרת מצב ב `LIVE` ו `holdFlag` שקר. סינון מחלקה, דרגה וחיפוש. | `` ?? sql`true` `` קיים רק כי `or` של Drizzle עשוי להחזיר `undefined`. אין IDOR, הכול מהסשן. |
-| 149 עד 176 | שליפת שדות הכרטיס עם `leftJoin` ל `bin` לברקוד ואזור, מיון לפי `created_at` יורד, ו `limit` שהוא `filter.limit ?? 50` וחסום ב 200. | הבקר לא מעביר `limit` ואין עימוד. לקוח עם 300 פריטים רואה את 50 החדשים, ו `useVaultItems.ts` משתמש באותה קריאה לרשימות הבחירה של משלוח, שירותים ומודעות. `bin_id` שאינו UUID, למשל אחרי עריכת מנהל, מפיל את כל הכספת ב 400. |
+| 149 עד 176 | שליפת שדות הכרטיס עם `leftJoin` ל `bin` לברקוד ואזור, מיון לפי `created_at` יורד, ו `limit` שהוא `filter.limit ?? 50` וחסום ב 200. | הבקר לא מעביר `limit` ואין עימוד. לקוח עם 300 פריטים רואה את 50 החדשים, ו `useVaultItems.ts` משתמש באותה קריאה לרשימות הבחירה של משלוח, שירותים ומודעות. `bin_id` שאינו UUID באחד מפריטי הבעלים, אחרי עריכת מנהל או `warehouseTransfer`, מפיל את כל הכספת שלו ב 400. |
 | 178 עד 196 | `searchClause`, `ILIKE` על תיאור, מחלקה, סריאל, ברקוד, דרגה ומצב. | פרמטר, בלי הזרקה. `%` ו `_` מהמשתמש לא מוברחים. |
-| 198 עד 239 | `listHistory`, תת השאילתה `departure`. לכל פריט `max(occurred_at)` מאירועי `ownership_transfer`, `state_change`, `dispatch` שבהם המשתמש בעלים קודם, או בעלים חדש עם מצב ב `TERMINAL`. | ההערה בשורות 199 עד 217 מתארת שתי אוכלוסיות, שלי שעזב את המחסן, ושהיה שלי. |
+| 198 עד 239 | `listHistory`, תת השאילתה `departure`. לכל פריט `max(occurred_at)` מאירועי `ownership_transfer`, `state_change`, `dispatch` שבהם המשתמש בעלים קודם, או בעלים חדש עם מצב ב `TERMINAL`. | ההערה בשורות 199 עד 217 מתארת שתי אוכלוסיות, שלי שעזב את המחסן, ושהיה שלי. הענף של בעלים חדש עם מצב סופי לא מתקיים לעולם, `changeState` לא כותב `new_owner_id` ואין קוד שכותב `dispatch`, ולכן קלף שנשלח ועדיין שלי לא מופיע בהיסטוריה. `seed.ts` שורות 1248 עד 1262 מתעד את הבאג. |
 | 241 עד 274 | תנאי על הפריט, בבעלותו ובמצב סופי או בבעלות אחר, `innerJoin` לתת השאילתה, ושדות זהות בלבד בלי בעלים נוכחי ומדף. `stillOwned` מחושב ב SQL. | `limit` ברירת מחדל 50, כמו `listOwned`. |
 | 276 עד 295 | מיפוי כל שורה, `toIso` ל `departedAt`, איפוס שדות המדף, ו `departureReason` לפי בקשה. | N ועוד 1, עד 200 שאילתות במקביל דרך `Promise.all` שמתחרות על ה pool. |
 | 297 עד 319 | `departureReason`, האירוע האחרון שמתאים, `reason` ואז `newState` ואז `eventType`. | בלי סינון סוג אירוע, הסיבה יכולה לבוא מאירוע אחר מזה שקבע את `departedAt`. |
@@ -3964,7 +4508,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 |---|---|---|
 | 8 עד 12 | `SCOPES` ו `toScope`, ערך לא מוכר הופך ל `active`. | בכוונה, סימנייה ישנה עדיין עובדת. |
 | 31 עד 34 | `GET /vault/break-even` אל `summaryFor`. | |
-| 42 עד 51 | `GET /vault/items`, קורא `q`, `scope`, `filter[type]`, `filter[condition]` מה query. | אין DTO ולכן אין ולידציה. מערך ב `q` יגיע ל `ilike` ויסתיים בשגיאת Postgres. אין `limit`, ופרמטר כזה בעתיד חייב תקרה. |
+| 42 עד 51 | `GET /vault/items`, קורא `q`, `scope`, `filter[type]`, `filter[condition]` מה query. | אין DTO ולכן אין ולידציה. `q` כפול לא מפיל, ה `ValidationPipe` עם `transform` הופך מערך למחרוזת מופרדת בפסיקים. אין `limit`, ופרמטר כזה בעתיד חייב תקרה. |
 | 54 עד 57 | `GET /vault/counts`. | |
 | 59 עד 80 | `items/:itemId`, `items/:itemId/storage`, `items/:itemId/timeline`. | אין `ParseUUIDPipe`. מזהה לא חוקי נותן `22P02` שהמסנן הגלובלי ממפה ל 400, בכוונה כי נתיבים אחרים מקבלים ברקוד. |
 
@@ -4048,7 +4592,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 149 עד 167 | `listItems`, כל הפריטים עם מייל הבעלים. | `leftJoin` של `uuid` מול `text` נשען על cast מרומז מ `0001_append_only.sql`. `owner_id` אחד שאינו UUID מפיל את כל המסך ב 400. |
 | 169 עד 197 | `updateItem`, טרנזקציה עם `FOR UPDATE`. מחלקה מוכרת, ולכל שדה תיאורי ששונה שורת `item_change_history`. | דפוס P3 בלי `CustodyService`. |
 | 199 עד 203 | שינוי בעלים ואירוע `ownership_transfer` עם `admin edit`. | עוקף את `CustodyService`. `ownerId` לא נבדק כ UUID או כמשתמש קיים, מחרוזת שגויה מפילה אחר כך את `listItems` ו `byCustomer`, ו UUID של משתמש שלא קיים יוצר פריט יתום שממשיך להיות מחויב. מודעה פעילה לא מתבטלת, ו `purchase.service.ts` לא בודק שהמוכר הוא הבעלים, כך שהזיכוי ילך לבעלים הקודם. |
-| 205 עד 209 | שינוי מדף, מחרוזת ריקה הופכת ל `null`, אירוע `relocate`. | לא כותב `bin_transfer`, ו `ShelfYieldService` ממשיך לחשב לפי המדף הקודם. אין בדיקת קיום. ברקוד במקום UUID מפיל את כל הכספת של הבעלים ב 400. |
+| 205 עד 209 | שינוי מדף, מחרוזת ריקה הופכת ל `null`, אירוע `relocate`. | לא כותב `bin_transfer`, ולכן `ShelfYieldService` מייחס את הפריט למדף החדש וסופר ימים מההגעה לקודם. אין בדיקת קיום. ברקוד במקום UUID מפיל את כל הכספת של הבעלים ואת `GET /custody/bins` ב 400. |
 | 211 עד 215 | שינוי מצב ואירוע `state_change`, בלי `assertTransition`, בכוונה. | החזרת `shipped` ל `stored` גורמת ל worker לחייב את כל התקופות מאז `received_at` המקורי. |
 | 217 עד 221 | החזקה ואירוע `hold_placed` או `hold_released`. | לא שולח `hold_placed` ל outbox, הבעלים לא מקבל הודעה, בניגוד ל `CustodyService.setHold`. |
 | 223 עד 230 | `updatedAt` רק אם משהו השתנה, והחזרת הפריט המלא. | |
@@ -4094,6 +4638,64 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 
 **שים לב.** פיצול `@Roles('admin')` למתודות בודדות יפתח כל נתיב חדש שישכח את הדקורטור לכל משתמש מחובר. אין `@Public` באף נתיב, ו `SessionAuthGuard` דורש סשן לפני ההרשאה.
 
+### בדוק את עצמך
+
+1. הסבר למה `transferOwnership` הוא אתר הממצא E4, ומה התיקון המוצע משנה בחתימה שלו.
+<details><summary>תשובה</summary>
+
+הפונקציה נועלת את הפריט ומעדכנת `ownerId` בלי להשוות את הבעלים הנוכחי לבעלים שהקורא ציפה לו, ובלי לבדוק מצב או `holdFlag`, `apps/api/src/modules/cst/custody.service.ts` שורות 147 עד 158. התיקון מוסיף פרמטר של בעלים צפוי ובודק בעלים, מצב והחזקה תחת אותה נעילה, כך שהעברה של פריט שעבר ידיים מקבלת 409.
+
+</details>
+
+2. תאר מה יקרה אם אספן מבקש תרומה, מוכר את הקלף בשוק ואז מאשר את התרומה בתוך חמש דקות.
+<details><summary>תשובה</summary>
+
+`confirm` צורך את האסימון ומעביר את הפריט לפלטפורמה בלי לקרוא אותו שוב, `apps/api/src/modules/dis/donation.service.ts` שורות 45 עד 83. המכירה החזירה את הפריט ל `stored`, ולכן `changeState` ל `donated` עובר והקלף של הקונה נתרם.
+
+</details>
+
+3. מצא את הבלוק שמאפשר לשתי קבלות מקבילות של הצעת buyout לזכות את הארנק פעמיים, והסבר למה הנעילה על הפריט לא עוצרת את השנייה.
+<details><summary>תשובה</summary>
+
+`accept` קורא את הבקשה דרך `requests.get` מחוץ לטרנזקציה ובודק `stage` בלי נעילה, `apps/api/src/modules/dis/buyout.service.ts` שורות 115 עד 173, ו `setStatus` לא בודק מצב קודם, `apps/api/src/modules/dis/service.service.ts` שורות 234 עד 248. הנעילה ב `transferOwnership` רק מסדרת את שתי הקריאות, ו `assertTransition` מחזיר בשקט מ `sold` ל `sold`.
+
+</details>
+
+4. הסבר למה ברקוד מדף שגוי ביחידה החמישית של `POST /intake/items/batch` משאיר ארבע יחידות מחויבות.
+<details><summary>תשובה</summary>
+
+כל יחידה וכל עותק נכתבים בטרנזקציה נפרדת דרך `custody.run`, והבדיקה המקדימה `assertReceivable` לא קוראת ל `resolveStowBin`, `apps/api/src/modules/inv/intake.service.ts` שורות 253 עד 319. ניסיון חוזר אחרי התיקון קולט את ארבע הראשונות שוב.
+
+</details>
+
+5. תאר מה שובר `warehouseTransfer` של מפעיל, מעבר לכספת של בעל הפריט.
+<details><summary>תשובה</summary>
+
+הוא כותב `EXT:` לתוך `bin_id`, `apps/api/src/modules/dis/consignment.service.ts` שורות 236 עד 254. ה cast המרומז מ `text` ל `uuid` חל על כל `bin_id` בספירה של `listWithCounts`, `apps/api/src/modules/cst/stow.service.ts` שורות 122 עד 146, ולכן `GET /custody/bins`, `suggest` וקליטה עם `autoStow` מחזירים 400 לכולם.
+
+</details>
+
+6. מצא את שני המקומות שמחשבים סכום שונה לתקופת אחסון של פריט עם דמי קליטה אפס, ותאר מה הלקוח רואה.
+<details><summary>תשובה</summary>
+
+הכספת מחשבת `periodChargeMinor` שמחזיר אפס, `apps/api/src/modules/vlt/storage-policy.ts` שורות 101 עד 105, וה worker מחייב `GREATEST(1, ...)`, `apps/worker/src/jobs/storage-fee.ts` שורה 228. הלקוח רואה אפס ומחויב סנט לכל תקופה.
+
+</details>
+
+7. הסבר למה קלף שהאספן שלח הביתה לא מופיע בכספת, לא ב `active` ולא ב `history`.
+<details><summary>תשובה</summary>
+
+`shipped` לא ב `LIVE`, ו `listHistory` דורש אירוע שבו המשתמש בעלים קודם או בעלים חדש עם מצב סופי, `apps/api/src/modules/vlt/vault.service.ts` שורות 218 עד 239. `changeState` לא כותב `new_owner_id` ואף קוד לא כותב `dispatch`, ולכן לקלף שנשלח אין אירוע עזיבה.
+
+</details>
+
+8. הסבר מה מונע משתי פעולות מקבילות לנצל את ההכללה האחרונה במנוי.
+<details><summary>תשובה</summary>
+
+`consume` מעדכן את `membership_period` עם `jsonb_set` ותנאי `WHERE` שבודק שוב שהמונה מתחת לתקרה, ואפס שורות מעודכנות פירושן לא מכוסה, `apps/api/src/modules/mem/membership.service.ts` שורות 501 עד 522. בדיקה ב JavaScript בלבד הייתה מחזירה את המרוץ.
+
+</details>
+
 ## פרק 6. השוק, התראות, שירותים על פריט מאוחסן ומשלוחים
 
 ### סקירה
@@ -4120,7 +4722,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 65 עד 85 | חתימה ואידמפוטנטיות. endpoint הוא `purchase:${listingId}`, `lookup` מחזיר תשובה שמורה עם `replayed: true` | `lookup` לא כולל משתמש. עם המפתח `offer-${offerId}` שהמוכר מכיר, המוכר מקבל replay של עסקת הקונה, דליפת `transactionId` ומחיר |
 | 87 עד 99 | `db.transaction`, נעילת `listing` `FOR UPDATE` בשורה 88, בדיקת `active` עם 409, איסור self dealing עם 403, נעילת `item` בשורה 97, דחיית hold | זה מה שמונע כפל מכירה. סדר הנעילה רשימה ואז פריט זהה ל `ListingService.confirmRemove`, הפיכתו תיצור deadlock. חסרות בדיקות `it.ownerId === l.sellerId` ו `lifecycleState === 'listed'`, פריט שעבר בהחלפה יימכר מהבעלים החדש, E4 |
 | 101 עד 118 | מחיר מ `priceOverride` או `askingPrice`, אף פעם לא מהלקוח. עמלה מ `pricing.price('marketplace_fee')`, ויתור דרך `memberships.waive` באותו `tx` | בלי חוק מחיר הרכישה נכשלת ב 400, E6. הוויתור אוכף תקרה ב SQL |
-| 120 עד 141 | `balanceOf` על `ledger_record`, ואז שלוש שורות ledger, חיוב קונה, זיכוי מוכר, חיוב עמלה מהמוכר | היתרה לא נעולה, E1. `referenceType` הוא `listing` ולא `transaction`. העמלה לא מזוכה לאף חשבון פלטפורמה, בניגוד לחנות הבית |
+| 120 עד 141 | `balanceOf` על `ledger_record`, ואז שלוש שורות ledger, חיוב קונה, זיכוי מוכר, וחיוב עמלה מהמוכר רק כשהעמלה אחרי הוויתור חיובית | היתרה לא נעולה, E1. `referenceType` הוא `listing` ולא `transaction`. העמלה לא מזוכה לאף חשבון פלטפורמה, בניגוד לחנות הבית |
 | 143 עד 148 | `transferOwnership` לקונה, `changeState` מ `listed` ל `stored`, רשימה ל `sold` | `actorId` באירוע המשמורת הוא הקונה גם כשהמוכר לחץ על קבלת הצעה |
 | 150 עד 177 | שורת `transaction` עם קוד `TXN-` ו `frozenPricing`, ואז `outbox.emit` של `item_sold` | ה worker בוחר `sellerId` כנמען, הקונה לא מקבל התראה. אין אינדקס ייחודי על `transaction.code` והטבלה לא מוגנת ב trigger append only |
 | 180 עד 182 | שמירת תשובת האידמפוטנטיות מחוץ לטרנזקציה | קריסה בין COMMIT לשמירה גורמת לניסיון חוזר לקבל 409 על רכישה שהצליחה |
@@ -4162,14 +4764,14 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 39 | ייבוא, `normalizeUsername`, הערה על ההיסטוריה | |
-| 40 עד 60 | `counterparty`. מנרמל שם, מחזיר id ושם מלא. 404 לא נמצא, 400 לעצמך, 400 לחשבון לא `active` | ה oracle היחיד לקיום שם משתמש. מאחורי session ו throttler |
+| 40 עד 60 | `counterparty`. מנרמל שם, מחזיר id ושם מלא. 404 לא נמצא, 400 לעצמך, 400 לחשבון לא `active` | oracle לקיום שם משתמש מאחורי session ו throttler. לא היחיד, `storefront` בשורה 308 ציבורי ומחזיר 404 לשם שלא קיים |
 | 77 עד 112 | `tradableItem`. `counterparty` ואז פריט לפי בעלים ומספר סידורי מדויק. דוחה פריט לא `stored` או עם hold | אותה תשובה לפריט שלא קיים ולפריט של אחר. הבדיקה בזמן חיפוש בלבד, `TradeService.approve` לא חוזר עליה |
 | 120 עד 158 | `myListings`. כל הרשימות של המוכר כולל `sold`, ואז ספירת `pending` לכל רשימה ב `GROUP BY` אחד | `count(*)::int` כי bigint חוזר כמחרוזת. הספירה כוללת הצעות יתומות על רשימות שנמכרו |
 | 174 עד 217 | `myOffers`. join של `offer`, `listing`, `item` ו left join לקונה. גוזר `side` ו `yourTurn = proposedBy !== side` | `yourTurn` משכפל את `OfferService.assertNotProposer`. שינוי באחד בלי השני שובר את ה UI. `buyerUsername` נחוץ ל `SellerPanels.tsx` |
 | 226 עד 290 | `mySwaps`. שלוש שאילתות, הצעות, משתמשים, פריטים. מתנה היא `requested` ריק, `awaitingMe` רק למשיב שלא אישר | מזהים ב jsonb נקראים עם cast בלי ולידציה |
 | 300 עד 328 | `storefront` ציבורי, רשימות פעילות של מוכר | בוחר `status` של המוכר ולא משתמש בו. חנות של חשבון מושעה נשארת פתוחה |
 
-**שים לב.** זה המקום שבו ההקרנה מוקפדת, ובו uuid של משתמש לא נחשף לצד השני. הסרת `buyerUsername` שוברת את `SellerPanels.tsx`. הפיכת `storefront` לפרטי שוברת את `StorefrontPanel.tsx` שקורא בלי session. מזהי פריטים ב `swap_proposal` הם jsonb בלי FK, ולכן אין join, ושלוש שאילתות עם `inArray` הן הפתרון.
+**שים לב.** ההקרנה כאן מפורשת, אבל uuid של משתמש כן נחשף. `counterparty` מחזיר `id`, ו `myOffers` מחזיר `buyerId` ו `sellerId` לשני הצדדים. הסרת `buyerUsername` מעלימה בשקט את שם הקונה ב `SellerPanels.tsx`. הפיכת `storefront` לפרטי לא תשבור את `StorefrontPanel.tsx`, כי ה SPA מציג לאורח רק את `AuthPage`. מזהי פריטים ב `swap_proposal` הם jsonb בלי FK, ולכן אין join, ושלוש שאילתות עם `inArray` הן הפתרון.
 
 #### `apps/api/src/modules/mkt/offer.service.ts`
 משא ומתן על מחיר. הצעה, קבלה, דחייה והצעה נגדית משני הצדדים. הכלל המרכזי, מי שנקב במחיר לא יכול לקבל אותו, נשען על העמודה `proposed_by` ממיגרציה 0020. דפוס P3.
@@ -4232,16 +4834,16 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 81 | ייבוא, `PLATFORM_EMAIL` בשורה 22, טיפוסי קלט ותוצאה, הערת עיצוב | |
-| 82 עד 106 | `listForSale` ציבורי, `active` עם מלאי חיובי בהקרנה מפורשת. `listAll` לאדמין עם `select()` מלא | |
+| 82 עד 107 | `listForSale` ציבורי, `active` עם מלאי חיובי בהקרנה מפורשת. `listAll` לאדמין עם `select()` מלא | |
 | 109 עד 147 | `create` בודק מחלקת פריט ותיאור ומכניס עם קוד `HSE-`. `update` הוא patch של מחיר, מלאי וסטטוס | המלאי נכתב כערך מוחלט. עדכון שחיכה לנעילת רכישה דורס את ההפחתה שלה |
-| 153 עד 175 | `purchase`, אידמפוטנטיות ו `randomUUID()` כשאין כותרת, endpoint `house-purchase:${listingId}`, נעילת המוצר ובדיקת `active` ו `stock > 0` | בלי כותרת מהלקוח אין אידמפוטנטיות בכלל |
-| 176 עד 205 | חשבון פלטפורמה, איסור קנייה מעצמה, יתרה, `createWithIntake` של פריט במצב `received` בלי bin, הקונה כבעלים | היתרה לא נעולה, E1 |
+| 153 עד 178 | `purchase`, אידמפוטנטיות ו `randomUUID()` כשאין כותרת, endpoint `house-purchase:${listingId}`, נעילת המוצר ובדיקת `active` ו `stock > 0` | בלי כותרת מהלקוח אין אידמפוטנטיות בכלל |
+| 180 עד 205 | חשבון פלטפורמה, איסור קנייה מעצמה, יתרה, `createWithIntake` של פריט במצב `received` בלי bin, הקונה כבעלים | היתרה לא נעולה, E1 |
 | 207 עד 242 | `transaction` מסוג `sale` עם `sellerId` של הפלטפורמה, חיוב קונה וזיכוי פלטפורמה עם `referenceType: 'transaction'`, `stock - 1` תחת הנעילה | כאן הפלטפורמה מזוכה, ב `purchase.service.ts` לא. שתי מוסכמות `referenceType` לאותו סוג רשומה |
 | 244 עד 267 | `house_order` עם קוד `ORD-`, החזרת סדרתי וברקוד, שמירת אידמפוטנטיות | אין outbox לרכישה |
 | 274 עד 297 | `queue`, הזמנות `awaiting_stow` מהישנה עם פריט, מוצר וקונה | |
 | 307 עד 357 | `stowOrder`. נעילת הזמנה, `resolveShelf`, `relocate`, `changeState` ל `stored`, תמונות ל `item_image`, סימון `stowed`, outbox `item_received` | `objectKey` של התמונות לא נבדק מול האחסון. `relocate` דוחה hold |
 | 359 עד 370 | `resolveShelf`, bin לפי id או ברקוד, או `stow.suggest` | רץ על `this.db` ולא על `tx`. `relocate` לא בודק קיבולת |
-| 372 עד 380 | `platformAccountId` לפי אימייל קבוע | בלי seed או אחרי שינוי האימייל החנות נופלת ב 400, E6 |
+| 372 עד 380 | `platformAccountId` לפי אימייל קבוע | בלי seed או אחרי שינוי האימייל החנות נופלת ב 400. אותו שורש כמו E6, אבל E6 עצמו הוא כללי תמחור חסרים |
 
 **שים לב.** הפריט נוצר `received` ולא `stored` בכוונה. שינוי ל `stored` יאפשר למכור פריט שעוד לא על מדף.
 
@@ -4265,13 +4867,13 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 41 | `BROWSE_SORTS`, שלושה DTO, הזרקת ארבעה שירותים | |
-| 42 עד 65 | `GET listings` ציבורי. מפרסר מחירים, `sort` עם fallback ל `newest` | `limit` הוא `Number(limit)` בלי בדיקה. `abc` או `-1` מגיעים ל SQL ומחזירים 500 |
+| 42 עד 65 | `GET listings` ציבורי. מפרסר מחירים, `sort` עם fallback ל `newest` | `limit` הוא `Number(limit)` בלי בדיקה. ל `abc` או `-1` drizzle 0.38 משמיט את `LIMIT`, ותקרת ה 200 נעקפת. המסלול הציבורי מחזיר את כל הרשימות הפעילות וחותם תמונה לכל אחת |
 | 70 עד 83 | `GET listings/mine` ו `GET offers/mine` | חייבים להיות מוגדרים לפני `listings/:id`, אחרת `:id` תופס את `mine` |
 | 84 עד 109 | `GET collectors/:username` ו `GET collectors/:username/items/:serial` אל `MarketReadService` | ההערות בשורות 94 עד 101 התערבבו, הקוד נכון |
 | 111 עד 141 | `GET sellers/:username` ציבורי, `POST listings`, `GET listings/:id` ציבורי, `PATCH listings/:id`, `POST listings/:id/remove`, `POST listings/remove/confirm` | |
 | 143 עד 150 | `POST listings/:id/purchase` עם כותרת או `purchase-${user.id}-${id}` | ברירת מחדל עם מזהה המשתמש היא מה שמונע replay זר כאן. אל תקצר אותה |
 
-**שים לב.** אין DTO ל query ואין `ParseIntPipe`. חצי מהפרמטרים מוגנים, `sort` עם fallback ומחירים עם בדיקת אי שליליות, והחצי השני לא. הוספת סינון דורשת שינוי כאן וב `BrowseService.list` יחד. העברת `detail` מעל `mine` תחזיר 404 על `GET listings/mine`.
+**שים לב.** אין DTO ל query ואין `ParseIntPipe`. חצי מהפרמטרים מוגנים, `sort` עם fallback ומחירים עם בדיקת אי שליליות, והחצי השני לא. הוספת סינון דורשת שינוי כאן וב `BrowseService.list` יחד. העברת `detail` מעל `mine` תחזיר 400 על `GET listings/mine`, כי `mine` מושווה לעמודת uuid ונכשל ב `22P02`.
 
 #### `apps/api/src/modules/mkt/mkt.module.ts`
 דפוס P1. ארבעה בקרים ושבעה שירותים, בלי `imports` ובלי `exports`. כל התלויות, `CustodyService`, `PricingService`, `LedgerService`, `OutboxService`, `IdempotencyService`, `ConfirmationService`, `MembershipService`, `BILLING_PORT`, מגיעות ממודולים גלובליים. `StowService` מ `cst` עובד רק כי `CstModule` מייצא אותו.
@@ -4281,7 +4883,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 ### התראות ותוכן, `not`
 
 #### `apps/api/src/modules/not/outbox/outbox.service.ts`
-הכותב של ה outbox הטרנזקציוני. כל שירות משנה מצב במערכת קורא לו, בפרק הזה `purchase`, `offer`, `trade`, `house-store`, וכל שירותי `dis` ו `shp`.
+הכותב של ה outbox הטרנזקציוני. בפרק הזה קוראים לו `purchase`, `offer`, `trade`, `house-store`, ומ `dis` רק buyout, custom, grading, donation ו disposal. ב `shp` כולם חוץ מ `ShipmentService`, שקורא לו רק ב `expireUnpaid` המת.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -4306,10 +4908,10 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | `item_donated` | `donation.service.ts` שורה 75 | התורם דרך `donorId` |
 | `shipment_out`, `shipment_cancelled`, `shipment_expired`, `direct_ship_booked`, `white_glove_requested`, `white_glove_quoted`, `show_pickup_booked`, `handed_over`, `group_shipment_locked` | שירותי `shp` | בעל המשלוח דרך `userId` |
 
-שם אירוע שלא רשום ב `event-types.ts` עדיין יגיע באפליקציה עם משפט גנרי, ולא יגיע באימייל.
+אירוע בלי `case` ב `notification-message.ts` מקבל באפליקציה משפט גנרי, וכך היום `buyout_quoted` וכל `custom_request_*`. ברירת המחדל לאימייל נקבעת ב `EMAIL_BY_DEFAULT` של ה worker, ואירוע שלא רשום ב `event-types.ts` לא מופיע במסך ההעדפות.
 
 #### `apps/api/src/modules/not/event-types.ts`
-קטלוג סוגי האירועים שמשתמש יכול לקבל עליהם התראה. מסך ההעדפות נבנה ממנו, וה worker מחזיק עותק לפי ערך ב `apps/worker/src/notification-events.ts`.
+קטלוג סוגי האירועים שמשתמש יכול לקבל עליהם התראה. מסך ההעדפות נבנה ממנו, וה worker מחזיק עותק לפי ערך ב `apps/worker/src/jobs/notification-events.ts`.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -4332,7 +4934,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 53 עד 79 | `getPreferences` בונה מטריצה של כל אירוע בקטלוג כפול ערוץ, עם `enabled`, `isDefault`, `mandatory`, ומחזיר גם את השורות הגולמיות | `isDefault` אומר שאין שורה, לא שהערך שווה לברירת המחדל. `NotificationsPage.tsx` ושני tests תלויים בצורה |
 | 82 עד 121 | `setPreference`. ערוץ מוכר, אירוע מוכר, איסור כיבוי של חובה, ואז select ואחריו update או insert בטרנזקציה | upsert ידני. שתי קריאות מקבילות מתנגשות באינדקס הייחודי ואחת מקבלת 500. `ON CONFLICT DO UPDATE` היה סוגר |
 | 131 עד 140 | `setChannel`, לולאה על כל הקטלוג עם `setPreference`, מדלג על חובה בכיבוי | 42 טרנזקציות נפרדות, לא אטומי |
-| 143 עד 156 | `isEnabled`, שאילתה עם fallback לקטלוג | לא נקרא מה worker, לו יש עותק משלו |
+| 143 עד 156 | `isEnabled`, שאילתה עם fallback לקטלוג | קוד מת, אף אחד לא קורא לו. ל worker יש עותק משלו |
 
 **שים לב.** הוספת `limit` ל `listMine` בטוחה כל עוד ה SPA לא סופר שורות. cursor על `created_at` ו `id` הוא הצורה הנכונה.
 
@@ -4368,7 +4970,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | 59 עד 63 | `GET locations` | |
 
 #### `apps/api/src/modules/not/not.module.ts`
-דפוס P1, מסומן `@Global()`, מייצא את `OutboxService`, `NotificationService` ו `ContentService`. ה `@Global()` הוא מה שמאפשר לכל מודול להזריק `OutboxService` בלי import. הסרתו מפילה את העלייה, ראשון `CustodyService`.
+דפוס P1, מסומן `@Global()`, מייצא את `OutboxService`, `NotificationService` ו `ContentService`. ה `@Global()` הוא מה שמאפשר לכל מודול להזריק `OutboxService` בלי import. הסרתו מפילה את העלייה, כי 24 שירותים מזריקים את `OutboxService` ואף מודול לא מייבא את `NotModule`.
 
 **תלויות `not`.** `content.service.ts` קורא את `dis/consignment-event.schema.ts` ו `inv/facility.schema.ts`. כותב רק `notification_preference` ו `outbox_message`. `notification` נכתב רק מה worker. משתני סביבה ישירים הם `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_HOURS`, `SUPPORT_TEAM`. הצרכנים ב SPA הם `NotificationsPage.tsx`, `HelpPanels.tsx` ו `IntakePolicyPanel.tsx`.
 
@@ -4419,26 +5021,26 @@ stateDiagram-v2
 
 **כיוון תיקון.** פונקציה `getForUpdate(tx, id)` שנועלת ובודקת מצב תסגור את רוב המרוצים בתיקייה במקום אחד. אינדקס ייחודי חלקי על `item_id`, `requester_id`, `type` למצבים פתוחים, בלי `custom`, יהפוך את `assertNotAlreadyOpen` לאמין, ויחייב לתרגם הפרת ייחודיות ל 409. החזר דורש קודם ש `BillingPort.charge` יחזיר מזהה, וזה נוגע גם ב `inv/batch.service.ts`, `inv/intake.service.ts`, `inv/parcel.service.ts` ו `mkt/trade.service.ts`.
 
-**בדיקות.** `tests/integration/dis-services.test.ts` ו `dis-item-services.test.ts` מכסים את המסגרת ואת רוב השירותים. אין בדיקות ל `buyout`, `custom` ו `consignment`, שהם השירותים שמזיזים הכי הרבה כסף.
+**בדיקות.** `tests/integration/dis-services.test.ts` ו `dis-item-services.test.ts` מכסים את המסגרת ואת רוב השירותים. `tests3/integration/custom-requests.test.ts` מכסה את `custom`, ו `tests3/integration/flows-lifecycle.test.ts` מכסה buyout עד דחייה וסירוב לערוץ קונסיגנציה לא מוכר. אין בדיקה לקבלת buyout ולהשלמת קונסיגנציה, המסלולים שמזיזים כסף ובעלות.
 
 #### `apps/api/src/modules/dis/dis.controller.ts`
 הבקר היחיד של המודול, תחת `/services`. דפוס P2. מכיל 24 DTO של class-validator ואפס לוגיקה. בדיקות הבעלות כולן בשירותים, ולכן כדי לדעת אם נתיב מוגן צריך לקרוא את ה `@Roles` כאן וגם את השירות.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 1 עד 187 | ה DTO. `@IsBoolean() @Equals(true)` על כל `itemVerified`. `InspectionFulfillmentDto` עם `@ValidateNested` ו `@Type` | `ItemDto`, `AddToSubmissionDto`, `ConfirmDto` בלי `@IsUUID`. `CullRequestDto` בלי `@ArrayMaxSize`. רק ה DTO של custom מגדירים `@MaxLength`. `ConsignmentFulfillmentDto.channel` לא נבדק מול הקטלוג |
+| 1 עד 187 | ה DTO. `@IsBoolean() @Equals(true)` על כל `itemVerified`. `InspectionFulfillmentDto` עם `@ValidateNested` ו `@Type` | `ItemDto` ו `AddToSubmissionDto` בלי `@IsUUID`. `ConfirmDto` נושא token של 64 תווים הקסדצימליים ולא uuid, ו `@IsUUID` עליו ישבור כל אישור. `CullRequestDto` בלי `@ArrayMaxSize`. רק ה DTO של custom מגדירים `@MaxLength`. `ConsignmentFulfillmentDto.channel` לא נבדק מול הקטלוג |
 | 191 עד 233 | המחלקה, `GET mine`, `GET queue` לצוות, `GET requests/:id`, `POST requests/:id/accept` ו `deny` לצוות | `GET requests/:id` בלי `@Roles` ובלי בדיקת מבקש. כל משתמש מחובר עם מזהה קורא הצעות, ממצאים והערות. ה SPA לא משתמש בנתיב |
 | 236 עד 244 | `POST photography` ו `photography/:requestId/complete` לצוות | ההשלמה לא בודקת סוג בקשה |
-| 255 עד 332 | `GET grading/tiers`, `POST grading`, `grading/:requestId/approval` לאדמין, `grading/:requestId/complete`, וחמשת נתיבי `grading/submissions` לצוות | `approval` לא נקרא מה SPA, בקשת walkthrough נתקעת. `readyFor` מקבל `gradingBody` שאינו חובה |
+| 255 עד 332 | `GET grading/tiers`, `POST grading`, `grading/:requestId/approval` לאדמין, `grading/:requestId/complete`, וששת נתיבי `grading/submissions` לצוות | `approval` לא נקרא מה SPA, בקשת walkthrough נתקעת. `readyFor` מקבל `gradingBody` שאינו חובה |
 | 336 עד 369 | `GET inspection/areas`, `POST video`, `POST inspection`, והשלמות שלהם לצוות | בהשלמות כאן יש בדיקת סוג |
 | 372 עד 407 | `deslab`, `deslab/confirm`, `deslab/:requestId/complete`, `remove-commons/window`, `remove-commons`, `remove-commons/confirm` | הבעלות נבדקת רק בשלב הראשון |
 | 410 עד 433 | `lot-split` והשלמה, `donation` ו `donation/confirm` | |
-| 435 עד 535 | `GET consignment/channels` עם האירועים, `POST buyout`, `POST custom`, ציטוט ודחייה של custom לצוות, `accept-quote` ו `decline-quote` ללקוח, השלמת custom, ציטוט buyout לצוות, `accept` ו `decline` של buyout ללקוח | `custom/:id/decline` לא נקרא מה SPA |
+| 435 עד 535 | `GET consignment/channels` עם האירועים, `POST buyout`, `POST custom`, ציטוט ודחייה של custom לצוות, `accept-quote` ו `decline-quote` ללקוח, השלמת custom, ציטוט buyout לצוות, `accept` ו `decline` של buyout ללקוח | `custom/:id/decline` ו `custom/:id/complete` לא נקראים מה SPA. הטופס של custom ב `ServiceQueue.tsx` שולח רק ציטוט, גם לבקשה שכבר שולמה |
 | 537 עד 557 | `POST consignment`, `consignment/:requestId/complete` לצוות, `POST warehouse-transfer` לצוות | `warehouse-transfer` לא נקרא מה SPA |
 
 **שים לב.** בחירת נתיב ההשלמה לפי סוג נעשית ב `ServiceQueue.tsx` בשורות 303 עד 415. הנתיב הלא נכון של צילום או דירוג יסגור בקשה מסוג אחר.
 
-**שים לב.** הוספת `@IsUUID()` לכל מזהה כאן בטוחה, כי כל המפתחות הם uuid. היום מזהה שאינו uuid נכשל במסד עם `22P02`, ו `shared/errors/all-exceptions.filter.ts` כבר ממיר אותו ל 400. הוספת `@Roles('warehouse_operator', 'admin')` ל `requests/:id` לא תשבור את ה SPA.
+**שים לב.** הוספת `@IsUUID()` לכל מזהה כאן בטוחה, כי כל המפתחות הם uuid, חוץ מ `confirmationToken` שאינו מזהה. היום מזהה שאינו uuid נכשל במסד עם `22P02`, ו `shared/errors/all-exceptions.filter.ts` כבר ממיר אותו ל 400. הוספת `@Roles('warehouse_operator', 'admin')` ל `requests/:id` לא תשבור את ה SPA.
 
 #### `apps/api/src/modules/dis/consignment-channels.ts`
 קטלוג בקוד של שלושה ערוצי קונסיגנציה וכללי הזכאות. מחירים לא כאן, רק שם הפעולה ב `pricing_rule`.
@@ -4446,11 +5048,11 @@ stateDiagram-v2
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 36 | הערה היסטורית ו `ConsignmentChannel`, `gradedOnly`, `minAskingMinor`, `requiresEvent`, טווח ימי תשלום, `partnerFeeNote` | ימי התשלום הם ציפייה ולא נאכפים |
-| 38 עד 69 | `CONSIGNMENT_CHANNELS`, `card_show` דורש תערוכה, `auction_house` דורש דירוג ומינימום 5000, `ebay_partner` פתוח | |
-| 71 עד 84 | `BY_KEY`, `consignmentChannel`, `isKnownChannel`, `channelFeeAction` שבונה `consignment_fee:<key>` | ערוץ חדש בלי כלל תמחור בשם הזה נופל ל `marketplace_fee`. שינוי `key` שובר בקשות פתוחות ששמרו אותו |
+| 38 עד 69 | `CONSIGNMENT_CHANNELS`, `card_show` דורש תערוכה, `auction_house` דורש דירוג ומינימום 5000 סנט, 50 דולר, `ebay_partner` פתוח | |
+| 71 עד 84 | `BY_KEY`, `consignmentChannel`, `isKnownChannel`, `channelFeeAction` שבונה `consignment_fee:<key>` | ערוץ חדש בלי כלל תמחור בשם הזה נופל ל `marketplace_fee`. אחרי שינוי `key`, בקשה פתוחה ששמרה את הישן תתומחר בהשלמה לפי `marketplace_fee` |
 | 87 עד 132 | `checkEligibility` מחזיר מערך בעיות. מדורג הוא כל `conditionGrade` שאינו ריק ואינו `Raw` | הגדרה חלשה. `Near Mint` נחשב מדורג. קיום התערוכה נבדק בשירות |
 
-**מתכון.** ערוץ חדש הוא אובייקט ב `CONSIGNMENT_CHANNELS` ועוד כלל `consignment_fee:<key>` ב `db/seed.ts` ובאדמין. `ConsignmentForm.tsx` מציג את הקטלוג כפי שהוא מגיע מ `GET /services/consignment/channels`, בלי שינוי בצד הלקוח.
+**מתכון.** ערוץ חדש הוא אובייקט ב `CONSIGNMENT_CHANNELS` ועוד כלל `consignment_fee:<key>` ב `db/seed.ts` ובאדמין. `ConsignmentForm.tsx` מציג את הקטלוג כפי שהוא מגיע מ `GET /services/consignment/channels`, אבל בלי תווית ב `CHANNEL_KEY` של `apps/web/src/shared/market.ts` וב `i18n.tsx` יוצג המפתח הגולמי.
 
 #### `apps/api/src/modules/dis/consignment.service.ts`
 שני דברים בקובץ אחד. קונסיגנציה, שבה המחסנאי סוגר עם סכום מכירה והבעלים מזוכה, והעברה בין מחסנים של מחסנאי. דפוס P3.
@@ -4460,14 +5062,14 @@ stateDiagram-v2
 | 1 עד 78 | טפסי סגירה `ConsignmentFulfillment` ו `TransferFulfillment` עם רשימות חובה, הזרקה | הרשימות מוודאות שכל שם הוא שדה, לא שכל שדה ברשימה |
 | 79 עד 105 | `request`. ערוץ ידוע ומחיר חיובי, `custody.run`, נעילת פריט `for('update')`, בעלות, `stored`, בלי hold, `checkEligibility` | 403 גם לפריט שלא קיים |
 | 107 עד 135 | תערוכה כשהערוץ דורש. אירוע פעיל, דדליין עתידי, ספירת בקשות תפוסות לפי `type_fields ->> 'eventId'` | הספירה לא נעולה, שתי בקשות על המקום האחרון עוברות |
-| 137 עד 153 | `requests.create` עם חיוב `service` שטוח וצילום הערוץ, המחיר, מזהה ושם האירוע וטווח ימי התשלום ב `typeFields` | העמלה האמיתית תנוכה רק בהשלמה, לפי הכלל שבתוקף אז. המוכר לא יודע אותה כשהוא מבקש. שינוי מבנה `type_fields` שובר את `ServiceQueue.tsx` |
+| 137 עד 153 | `requests.create` עם חיוב `service` שטוח וצילום הערוץ, המחיר, מזהה ושם האירוע וטווח ימי התשלום ב `typeFields` | העמלה האמיתית תנוכה רק בהשלמה, לפי הכלל שבתוקף אז. המוכר לא יודע אותה כשהוא מבקש. שינוי מבנה `type_fields` שובר את ספירת המקומות לפי `eventId` בשורה 128 ואת קריאת `channel` ב `complete` בשורה 180. ה SPA לא קורא את השדות האלה |
 | 156 עד 162 | `listEvents`, תערוכות פעילות עם דדליין עתידי | `now()` של המסד כאן מול `Date.now()` של השרת ב `request` |
 | 164 עד 185 | `complete`. `requests.get` בלי נעילה, `in_progress`, סוג ופריט. המזוכה הוא `req.requesterId`. עמלה מ `tryPrice(channelFeeAction)` עם נפילה ל `marketplace_fee` | הערוץ נלקח מ `type_fields`, לא מהטופס. שתי השלמות מקבילות מזכות פעמיים |
 | 187 עד 201 | `sale_credit` ברוטו וחיוב `fee` כשתי שורות כדי שהדף יראה את שתיהן, `transferOwnership` לפלטפורמה, `changeState` ל `consigned` שמותר רק מ `stored` | לא בודק שהמבקש עדיין הבעלים. קלף שנמכר בשוק בזמן הקונסיגנציה נלקח מהקונה והמוכר מקבל פעמיים, E4. העמלה לא מזוכה לאף חשבון |
 | 206 עד 229 | `transaction` מסוג `consignment` עם צילום תמחור, `completeWithFulfillment`, החזרת נטו | |
-| 236 עד 254 | `warehouseTransfer`. בקשה עם `requesterId` של המחסנאי, `custody.relocate` ל `EXT:<warehouse>/<bin>`, סגירה מיידית | המחסנאי מחויב ב `service` ולא הבעלים. אין בדיקת קיום פריט לפני החיוב. `bin_id` טקסט חופשי ודוחות מדף יאבדו את הפריט |
+| 236 עד 254 | `warehouseTransfer`. בקשה עם `requesterId` של המחסנאי, `custody.relocate` ל `EXT:<warehouse>/<bin>`, סגירה מיידית | המחסנאי מחויב ב `service` ולא הבעלים. החיוב קודם לבדיקת קיום הפריט, אבל מתגלגל אחורה כש `relocate` זורק 404. `bin_id` טקסט חופשי ודוחות מדף יאבדו את הפריט |
 
-**כיוון תיקון.** ב `complete`, לנעול את שורת הבקשה ולבדוק `in_progress` תחת הנעילה, לנעול את הפריט ולדרוש בעלות של המבקש, `stored` ובלי hold לפני הזיכוי. עדיף גם לחסום ב `ListingService.create` רישום של פריט עם קונסיגנציה או buyout פתוחים, כי היום הוא לא בודק בקשות שירות. שינוי `changeState` מ `consigned` ל `sold` מותר ב `lifecycle.ts` אבל ישנה את הספירה ב `vlt/vault.service.ts` וב `adm/shelf-yield.service.ts`.
+**כיוון תיקון.** ב `complete`, לנעול את שורת הבקשה ולבדוק `in_progress` תחת הנעילה, לנעול את הפריט ולדרוש בעלות של המבקש, `stored` ובלי hold לפני הזיכוי. עדיף גם לחסום ב `ListingService.create` רישום של פריט עם קונסיגנציה או buyout פתוחים, כי היום הוא לא בודק בקשות שירות. החלפת היעד של `changeState` ל `sold` מותרת, אבל `sold` אינו סופי ב `lifecycle.ts`, וממנו מותר לחזור ל `stored` או לצאת ל `shipped`. הספירות לא ישתנו, `vlt/vault.service.ts` מחזיק את שניהם ב `TERMINAL` ו `adm/shelf-yield.service.ts` לא סופר אף אחד.
 
 #### `apps/api/src/modules/dis/buyout.service.ts`
 Bault קונה את הקלף. בקשה, הצעה של מחסנאי, תשובת הלקוח. רק קבלה מזיזה כסף ובעלות. `stage` ב `type_fields` הוא מכונת המצבים הפנימית.
@@ -4495,7 +5097,7 @@ Bault קונה את הקלף. בקשה, הצעה של מחסנאי, תשובת �
 | 107 עד 140 | `checkTier`. ערך לא חיובי, מעל התקרה, או walkthrough מתחת לסף | אין בדיקה הפוכה לשאר הרמות |
 | 149 עד 154 | `INSPECTION_AREAS`, חמישה אזורים, ו `isKnownArea` | שינוי הרשימה שובר בקשות בדיקה פתוחות |
 
-**מתכון.** רמה חדשה היא אובייקט ב `GRADING_TIERS` ועוד כלל `grading_fee:<key>`. שינוי `gradingBody` של רמה קיימת משנה לאיזה משלוח בקשות חדשות יכולות להצטרף, כי `addToSubmission` משווה את הגוף בבקשה לגוף המשלוח במדויק. שינוי `key` שובר בקשות פתוחות ששמרו אותו ב `type_fields.tier`.
+**מתכון.** רמה חדשה היא אובייקט ב `GRADING_TIERS` ועוד כלל `grading_fee:<key>`. שינוי `gradingBody` של רמה קיימת משנה לאיזה משלוח בקשות חדשות יכולות להצטרף, כי `addToSubmission` משווה את הגוף בבקשה לגוף המשלוח במדויק. שינוי `key` מחייב לשנות גם את הכלל `grading_fee:<key>`, אחרת הרמה נגבית ב `service`. בקשות פתוחות לא נשברות, שום קוד לא קורא את `type_fields.tier` אחרי היצירה.
 
 #### `apps/api/src/modules/dis/grading.service.ts`
 דירוג כצינור. בקשה, accept, אישור אדמין אם נדרש, הצטרפות למשלוח `grading_submission`, יציאה שמעבירה את הפריט ל `at_grader`, וחזרה עם ציון. דפוס P3.
@@ -4513,7 +5115,7 @@ Bault קונה את הקלף. בקשה, הצעה של מחסנאי, תשובת �
 | 315 עד 348 | `complete`. `in_progress`, נעילת פריט, ציון ל `condition_grade`, שורה ב `item_change_history`, `at_grader` חזרה ל `stored`, סגירה | אין בדיקת `req.type`. הנתיב סוגר גם בקשת קונסיגנציה בלי לזכות. אין בדיקת אישור או משלוח |
 | 351 עד 385 | `closeSubmission`. נעילה, `shipped`, ספירת בקשות פתוחות, `returned` | לא סופר בקשות שנסגרו, הפריט שלהן נשאר `at_grader` |
 
-**שים לב.** `at_grader` הוא מצב מחזור חיים, ולכן `assertTransition` חוסם מכירה ומשלוח של קלף אצל המדרג בלי לגעת בשירותים האלה. זה עובד רק אם הכניסה והיציאה סימטריות, ו `complete` הוא היציאה היחידה. התיקון הוא `eq(serviceRequest.status, 'in_progress')` בשאילתת החברים ב `shipSubmission`, בדיקת `req.type` ב `complete`, ונתיב הסרה ממשלוח. שינוי ערכי `approvalState` שובר את השאילתה ב `readyFor` ואת התווית `grade.needsApproval` ב `apps/web/src/shared/i18n.tsx`.
+**שים לב.** `at_grader` הוא מצב מחזור חיים, ולכן `assertTransition` חוסם מכירה ומשלוח של קלף אצל המדרג בלי לגעת בשירותים האלה. זה עובד רק אם הכניסה והיציאה סימטריות, ו `complete` הוא היציאה היחידה. התיקון הוא `eq(serviceRequest.status, 'in_progress')` בשאילתת החברים ב `shipSubmission`, בדיקת `req.type` ב `complete`, ונתיב הסרה ממשלוח. שינוי ערכי `approvalState` שובר את השאילתה ב `readyFor` ואת הבדיקות ב `approve` וב `addToSubmission`. ה SPA לא קורא אותם, והתווית `grade.needsApproval` נגזרת מ `requiresApproval` של הרמה.
 
 #### `apps/api/src/modules/dis/photography.service.ts`
 צילום מקצועי. המחסנאי מצרף מפתח אובייקט כגרסה חדשה ב `item_image` מסוג `professional`. השירות הוותיק ביותר וחסר הגנות.
@@ -4585,7 +5187,7 @@ Bault קונה את הקלף. בקשה, הצעה של מחסנאי, תשובת �
 | 66 עד 106 | `ask`. סיכום 3 תווים ופירוט 10, בעלות אם צוין פריט, `create` עם `free: true` ו `allowDuplicate: true`, outbox `custom_request_raised` | `assertNotBlocked` חוסם שאלה גם כשהיא חינמית |
 | 116 עד 146 | `quote`. סכום והיקף, `assertAccepted`, סוג, ציטוט ל `type_fields`, outbox `custom_request_quoted` | אין בדיקת `stage`. ציטוט אחרי קבלה מחזיר `quoted` והלקוח יכול לשלם שוב |
 | 154 עד 178 | `declineToQuote`, נימוק, דוחה רק `completed` ו `cancelled` | מבטל גם אחרי `accepted` ששולם, בלי החזר. לא נקרא מה SPA |
-| 187 עד 241 | `acceptQuote`. 404 לזר, `stage === 'quoted'`, `assertNotBlocked` ויתרה מספיקה, חיוב `fee` ישירות ל ledger, `stage: 'accepted'` | היחיד בפרק שבודק יתרה מספיקה. עוקף את `BillingPort`, ולכן אין `charge`, אין snapshot ואין הטבת מנוי. `stage` נקרא בלי נעילה, שתי קבלות גובות פעמיים |
+| 187 עד 241 | `acceptQuote`. 404 לזר, `stage === 'quoted'`, `assertNotBlocked` ויתרה מספיקה, חיוב `fee` ישירות ל ledger, `stage: 'accepted'` | היחיד ב `dis` שבודק יתרה מספיקה. עוקף את `BillingPort`, ולכן אין `charge`, אין snapshot ואין הטבת מנוי. `stage` נקרא בלי נעילה, שתי קבלות גובות פעמיים |
 | 244 עד 256 | `declineQuote`, `cancelled` עם `quote_declined` | כאן באמת לא חויב כלום |
 | 264 עד 285 | `complete`, הערות של 5 תווים, `stage === 'accepted'`, `setStatus` | `fulfilled_by` ריק, מי שסיים ב `type_fields.completedBy`. `ShippingServicesPage.tsx` בונה ציר לפי ערכי `stage` |
 
@@ -4651,7 +5253,7 @@ stateDiagram-v2
 | 61 עד 76 | `destinationOf` מחזיר יעד מ `destinationDetail` אם יש בו מדינה ומיקוד, אחרת מהעמודות הישנות | ה cast ל `Partial<Destination>` לא מאמת. כל מה שב jsonb נשלח לספק |
 | 78 עד 134 | `CarrierService`. `key` יציב, זוג `carrier` ו `serviceLevel` להתאמת תעריף, `scope`, `countries` שריק פירושו כל מקום, תקרות משקל, מכס וביטוח, מידות, ושדות של השירות הלילי | אפס בתקרת מכס פירושו בלי תקרה, אפס בביטוח פירושו בלי ביטוח |
 | 137 עד 155 | `DOMESTIC_COUNTRY` הוא US, `EPACKET_COUNTRIES` 32 קודים, `DIRECT_OVERNIGHT_KEY` ו `DIRECT_OVERNIGHT_FACILITY` של DE | `EPACKET_COUNTRIES` הוא גם המקור של רשימת היעדים בטופס הכתובת |
-| 157 עד 285 | `CARRIER_SERVICES`, שבעה שירותים. שלושה מקומיים, ePacket, ePost, FedEx International, והשירות הלילי ב 100 דולר עד חמישה פריטים ו 500 גרם | המספרים הצהרות בקוד בלי מקור. שינוי `carrier` או `serviceLevel` מנתק מתעריפי ה sandbox ושובר משלוחים קיימים ש `findService` מחפש לפי הזוג |
+| 157 עד 285 | `CARRIER_SERVICES`, שבעה שירותים. שלושה מקומיים, ePacket, ePost, FedEx International, והשירות הלילי ב 100 דולר עד חמישה פריטים ו 500 גרם | המספרים הצהרות בקוד בלי מקור. שינוי `carrier` או `serviceLevel` מנתק מתעריפי ה sandbox והשירות פשוט לא יוצג. משלוח קיים לא נשבר, `pay` נופל ל `s.serviceKey` כש `findService` לא מוצא את הזוג |
 | 287 עד 296 | `carrierService` לפי מפתח, `findService` לפי הזוג | `selectRate` ו `pay` משתמשים בזוג |
 | 299 עד 341 | `ParcelProfile` עם `weightGrams` של תכולה ו `packagingGrams` של קופסה, ו `ServiceProblem` עם `rule` מתשעה ערכים ו `limit` | ה SPA מתרגם לפי `rule` |
 | 343 עד 354 | הפורמטרים `usd`, `inches`, `lb` | `usd` מניח דולרים |
@@ -4660,7 +5262,7 @@ stateDiagram-v2
 
 **שים לב.** ההתאמה בין הקטלוג לתעריף שהספק החזיר היא שוויון מחרוזות. ב sandbox השמות זהים בכוונה, ב EasyPost סביר ששום תעריף לא יותאם. לא נבדק מול API חי.
 
-**מה נשבר בשינוי.** שינוי `key` שובר כללי תמחור ושורות ששמרו `serviceKey`. הוספת מדינה ל `EPACKET_COUNTRIES` מוסיפה אותה גם לטופס הכתובת אם יש לה שם ב `COUNTRY_NAMES`. שינוי `DOMESTIC_COUNTRY` לא ישנה את `needsCustoms` ב `shipping-options.ts` ואת `ORIGIN_COUNTRY` ב sandbox, שקשיחים ל US בנפרד.
+**מה נשבר בשינוי.** שינוי `key` לא נוגע בשום כלל תמחור, אף שההערה בשורה 79 אומרת שכללים נקראים בשמו. הוא משאיר שורות ישנות עם `serviceKey` בלי התאמה ומאבד את התרגום ב `SERVICE_KEY` של `apps/web/src/shared/carriers.ts`. הוספת מדינה ל `EPACKET_COUNTRIES` מוסיפה אותה גם לטופס הכתובת אם יש לה שם ב `COUNTRY_NAMES`. שינוי `DOMESTIC_COUNTRY` לא ישנה את `needsCustoms` ב `shipping-options.ts` ואת `ORIGIN_COUNTRY` ב sandbox, שקשיחים ל US בנפרד.
 
 #### `apps/api/src/modules/shp/boxes.ts`
 חמש קופסאות עם מידות, משקל עצמי ותקרה, ובחירת הקטנה שמתאימה. נקרא מ `ParcelProfileService.boxFor` ומה DTO.
@@ -4669,7 +5271,7 @@ stateDiagram-v2
 |---|---|---|
 | 1 עד 38 | הערה ו `ShippingBox` עם `dimensionsCm`, `tareGrams`, `maxContentsGrams`, `onlyClasses`, `takesOversized` | |
 | 40 עד 82 | `SHIPPING_BOXES`, `rigid_mailer` לקלפים וסלאבים עד 500 גרם, `small`, `medium`, `large`, `extra_large` | סכום הצלעות של `large` ו `extra_large` מעל תקרת ePacket, ולכן ePacket נפסל בהן |
-| 84 עד 98 | `SHIPPING_BOX_KEYS` ל `@IsIn`, `BY_KEY`, `shippingBox`, `BY_VOLUME` ממוין פעם אחת | שינוי `key` שובר משלוחים ששמרו `boxSize` |
+| 84 עד 98 | `SHIPPING_BOX_KEYS` ל `@IsIn`, `BY_KEY`, `shippingBox`, `BY_VOLUME` ממוין פעם אחת | אחרי שינוי `key`, משלוח ששמר `boxSize` ישן מקבל בשקט קופסה אוטומטית ב `profileOf`, ואולי לא זו שתומחרה |
 | 100 עד 134 | הערה על השרשרת מחלקה ומשקל, קופסה, מידות, מחיר, ו `chooseBox` שמחזיר את הראשונה בלי בעיות | `undefined` כשאין קופסה |
 | 136 עד 177 | `BoxProblem` ו `checkBox`, משקל תכולה מול תקרה ומחלקה מול `onlyClasses` או oversized | לא יודע כמה פריטים נכנסים פיזית. המידות לא נשמרות על המשלוח ונגזרות מחדש מהמפתח |
 
@@ -4680,7 +5282,7 @@ stateDiagram-v2
 |---|---|---|
 | 1 עד 53 | `MAX_INSURED_VALUE_MINOR` 5,000 דולר, `SIGNATURE_REQUIRED_ABOVE_MINOR` 500 דולר, פרמיה 1.5 אחוז עם מינימום 2 דולר ועיגול למעלה, `signatureForced` | |
 | 59 עד 88 | `SHIPMENT_ADD_ONS` עם `gps_tracker` ב 30 דולר שדורש ביטוח 500 דולר, `shipmentAddOn`, `addOnFeeAction` שבונה `shipping_addon:<key>` | הקידומת משמשת בכללי תמחור ובמכסות VIP ב `mem/membership.service.ts`. `inv/item-classes.ts` אוסר `gps_tracker` בקליטה |
-| 94 עד 105 | `RESTOCKING_FEE_MINOR` 25 דולר, `PAYMENT_WINDOW_DAYS` 7 | ההערה אומרת שהעמלה רק אחרי אריזה. בקוד היא נגבית על כל ביטול מ `rates_selected`. ה worker לא קורא את 7, הוא סומך על `payment_due_at` |
+| 94 עד 105 | `RESTOCKING_FEE_MINOR` 25 דולר, `PAYMENT_WINDOW_DAYS` 7 | ההערה מצדיקה את העמלה באריזה שכבר נעשתה, אבל היא נגבית על כל ביטול מ `rates_selected`, כשעוד לא נארז דבר. ה worker לא קורא את 7, הוא סומך על `payment_due_at` |
 | 117 עד 132 | `needsCustoms` לכל יעד שאינו US, `DEFAULT_HS_CODE` 4911.99, `DEFAULT_COUNTRY_OF_ORIGIN` US | US קשיח כאן בנפרד מ `DOMESTIC_COUNTRY` |
 | 134 עד 190 | `checkOptions`. ערך שלילי, מעל תקרה, חתימה חסרה, ערך מכס לא חיובי בינלאומי, תוספת לא מוכרת, תוספת בלי ביטוח מספיק | כפילויות בתוספות לא נבדקות. `direct-ship.service.ts` לא קורא לה |
 
@@ -4723,11 +5325,11 @@ stateDiagram-v2
 | 55 עד 71 | `loadShippableItems`. dedupe, `inArray`, ספירה שווה, ולכל פריט בעלות, בלי hold ו `stored` | ה control המרכזי נגד שליחת פריט של אחר. הודעת השגיאה בשורה 64 כוללת `serialNumber` של פריט זר. ה `tx` האופציונלי אף פעם לא מועבר |
 | 74 עד 87 | `measure`, משקל נמדד או טיפוסי למחלקה כפול גודל הלוט, ודגל `estimated` | |
 | 95 עד 124 | `boxFor`, קופסה שהמשתמש בחר עם הבעיות שלה, או `chooseBox` | כשאין קופסה מתאימה חוזר `box` ריק בלי בעיה |
-| 134 עד 172 | `resolveDestination`. עם `addressId` טוען כתובת שמורה, `notFound` לזרה, יעד מלא. בלי `addressId` רק מדינה ומיקוד | `region` לא מועבר, ו EasyPost צריך state. אין `toCountryCode`, שם מדינה הופך לשם באותיות גדולות |
+| 134 עד 172 | `resolveDestination`. עם `addressId` טוען כתובת שמורה, `notFound` לזרה, יעד מלא. בלי `addressId` רק מדינה ומיקוד | `region` לא מועבר, ו EasyPost דורש בדרך כלל state, לא נבדק מול API חי. אין `toCountryCode`, שם מדינה הופך לשם באותיות גדולות |
 | 183 עד 215 | `buildCustomsLines` מחלק את הערך המוצהר לפי משקל, ערכים מפורשים גוברים, השורה האחרונה מקבלת את ההפרש | `apportioned` לא סופר ערכים מפורשים, וסכום החשבונית לא שווה לערך המוצהר שנבדק מול ePacket. ערך שברי עובר |
 | 218 עד 241 | `toProfile`, `customsValueMinor` אפס ליעד מקומי, `originFacilityCode` null | |
 
-**שים לב.** העברת ה `tx` של הקורא ל `loadShippableItems` בתוך dispatch היא שינוי רצוי, היא תקרא את מצב הפריטים באותה נקודת זמן של הנעילה. שינוי `buildCustomsLines` משפיע רק על משלוחים חדשים, כי השורות נקפאות על השורה. שינוי ההודעה בשורה 64 ישבור בדיקות שמצפות לטקסט.
+**שים לב.** העברת ה `tx` של הקורא ל `loadShippableItems` בתוך dispatch היא שינוי רצוי, היא תקרא את מצב הפריטים באותה נקודת זמן של הנעילה. שינוי `buildCustomsLines` משפיע רק על משלוחים חדשים, כי השורות נקפאות על השורה. אף בדיקה לא מצפה לטקסט של ההודעה בשורה 64, ולכן אפשר להסיר ממנה את הסדרתי בבטחה.
 
 **שים לב.** ריכוז המדידה, הקופסה והיעד כאן הוא מה ששומר על ציטוט, חיוב ותווית עקביים. מי שמוסיף נתיב שמתמחר חבילה חייב לעבור דרך `measure`, `boxFor` ו `toProfile`, ולא לחשב משקל בעצמו. בחירת קופסה אוטומטית נוספה אחרי שציטוטים בחסר הפכו לחיובים בחסר.
 
@@ -4787,7 +5389,7 @@ stateDiagram-v2
 | 125 עד 141 | `required` ו `outstanding` | לשניהם אין נתיב. `outstanding` טוען הכל לזיכרון |
 | 167 עד 213 | `readiness`, אזהרות על שורות חסרות, ערך אפס ומשקל מוערך, ו `destinationGuidance` | `ready` לא חוסם dispatch |
 
-**שים לב.** הפיכת `ready` לתנאי ל dispatch תחסום משלוחים עם משקל מוערך, שהם רוב המשלוחים. שינוי צורת `invoice` שובר את מסך החשבונית ואת הבדיקה ב `shp-outbound.test.ts`.
+**שים לב.** הפיכת `ready` לתנאי ל dispatch תחסום כל משלוח בינלאומי עם פריט שלא נשקל. משלוח מקומי תמיד `ready`, כי אין לו שורות מכס. שינוי צורת `invoice` שובר את מסך החשבונית ואת הבדיקה ב `shp-outbound.test.ts`.
 
 #### `apps/api/src/modules/shp/group-shipment.service.ts`
 חבילה משותפת לכמה אספנים. כל אחד שומר משלוח ובעלות משלו. בפועל הקבוצה היא תווית מידע, `DispatchService` לא קורא `groupId` ושום דבר לא גובה מהמשלם.
@@ -4822,7 +5424,7 @@ stateDiagram-v2
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 1 עד 41 | הזרקה, הערות על הסריקה ועל `labelRequest` | |
+| 1 עד 41 | imports, הזרקה, וההערה בשורות 14 עד 21 על הסריקה ועל קניית התווית | `labelRequest` עצמו בשימוש בשורות 69 עד 73 |
 | 42 עד 47 | `custody.run` ונעילת המשלוח `FOR UPDATE`, דורש `rates_selected` | אין בדיקת `fulfilmentMethod`. איסוף או מסירה ידנית ששולמו יכולים לקבל תווית |
 | 49 עד 62 | טופס עם מוביל, הערות ומשקל חיובי, ושוויון סטים בין הסרוק ל `itemIds` | control חזק נגד שליחה חלקית או עודפת |
 | 64 עד 74 | `labelRequest` ואז `buyLabel` בתוך הטרנזקציה הפתוחה | קריאת רשת שמוציאה כסף, בלי timeout, עם נעילה וחיבור תפוסים. `labelRequest` קורא פריטים על חיבור אחר |
@@ -4843,7 +5445,7 @@ stateDiagram-v2
 | 159 עד 198 | `quoteHandDelivery` לצוות, סכום והערות, `requested`, עדכון הצעה ו outbox `white_glove_quoted` | אין הגבלה על ציטוט חוזר, והלקוח לא שולח את הסכום שהוא מאשר |
 | 206 עד 254 | `acceptQuote`. `loadFor`, שיטה, הצעה, `requested`, יתרה מחוץ לטרנזקציה, ואז חיוב, ledger ו `rates_selected` | E18. UPDATE בלי תנאי, שתי קבלות גובות פעמיים. אותו מפעיל יכול לצטט ולאשר בשם הלקוח. בלי `assertNotBlocked` |
 | 266 עד 308 | `pickupShows`, תערוכות פעילות שמקבלות איסוף, ספירת משלוחים לכל אחת, `remaining` ו `open` | N ועוד 1 |
-| 317 עד 411 | `requestPickup`. ארנק, פריטים, `assertItemsFree`, דדליין ומקום מחוץ לטרנזקציה, ובתוכה ויתור חברות לפני בדיקת היתרה, כדי שויתור שנכשל לא ייצרך, יתרה, insert ישר ל `rates_selected`, חיוב, outbox `show_pickup_booked` | הקיבולת לא נעולה, בקשות מקבילות עוברות את התקרה. ויתור שנכשל מתגלגל יחד |
+| 317 עד 411 | `requestPickup`. ארנק, פריטים, `assertItemsFree`, דדליין ומקום מחוץ לטרנזקציה, ובתוכה ויתור חברות לפני בדיקת היתרה, כדי שהיתרה תיבדק מול הסכום אחרי הוויתור, יתרה, insert ישר ל `rates_selected`, חיוב, outbox `show_pickup_booked` | הקיבולת לא נעולה, בקשות מקבילות עוברות את התקרה. כשבדיקת היתרה נכשלת, הוויתור מתגלגל אחורה יחד |
 | 426 עד 488 | `handOver` לצוות. נעילת המשלוח, לא `carrier`, `rates_selected`, שוויון סטים, `changeState` ל `shipped`, `delivered` עם מי קיבל, outbox `handed_over` | אין קריאה חיצונית, הטרנזקציה נקייה |
 
 **שים לב.** כל פונקציה שבודקת `rates_selected` צריכה לזכור שזה לא בהכרח משלוח מוביל. `selectRate`, `selectRecommended` ו `dispatch` לא זוכרים. הוספת סכום צפוי לקבלת הצעה דורשת שינוי ב DTO וב `HumanFulfilmentPanels.tsx`.
@@ -4862,12 +5464,70 @@ stateDiagram-v2
 
 **שלושה דפוסי בעלות.** `loadFor` מחזיר 404 ללקוח זר ומעביר צוות תמיד, ולכן כל פעולה דרכו, כולל `pay`, `select-rate`, `cancel` ו `white-glove/:id/accept`, יכולה לחייב לקוח בפעולה של עובד. בקבוצות, `open`, `join` ו `leave` מוסיפים השוואה ל `userId` וזורקים 403 גם לצוות. בחבילות ישירות `loadParcel` בודק `ownerId`. נתיב חדש שמקבל `:id` חייב לעבור באחד מהם, ו `describe` הוא הדוגמה למה שקורה כשהמשתמש לא מועבר. מי ביצע פעולה בשם לקוח נשמר רק ב `quotedBy`, `fulfilledBy` וברשומת ה `AuditInterceptor`.
 
-**סדר הנתיבים.** `GET shipments` מוגדר לפני `GET shipments/:id` ו `GET shipments/:id` מוגדר אחרון. ב Express זה לא חובה לזוג הזה, כי לפרמטר חסר מקטע, אבל זה חשוב לליטרלים באותו עומק כמו `groups/join` מול `groups/:id`. שמרו על ההרגל ונתיבים ספציפיים יבואו לפני פרמטרים.
+**סדר הנתיבים.** `GET shipments` מוגדר לפני `GET shipments/:id` ו `GET shipments/:id` מוגדר אחרון. ב Express זה לא חובה לזוג הזה, כי לפרמטר חסר מקטע, אבל זה חשוב לליטרל באותו עומק ובאותה מתודה, כמו `listings/mine` מול `listings/:id` ב `mkt.controller.ts`. שמרו על ההרגל ונתיבים ספציפיים יבואו לפני פרמטרים.
 
 #### `apps/api/src/modules/shp/shp.module.ts`
 דפוס P1, בקר אחד ושמונה ספקים. `exports: [ShipmentService]` בלי צרכן, `cst/inventory.service.ts` קורא את טבלת `shipment` ישירות. הסרת `ShipmentService` שוברת את חמשת השירותים שמזריקים אותו.
 
 **תלויות `shp`.** קורא ל `cst/custody.service.ts`, `pay/ledger.service.ts`, `pay/wallet.service.ts`, `prc/pricing.service.ts`, `mem/membership.service.ts` לכיסוי ולוויתור, `not/outbox`, ו `SHIPPING_ADAPTER` מ `shared/adapters/adapters.module.ts`. כותב `shipment`, `shipment_group`, `charge`, `ledger_record`, `membership_period`, `parcel`, `parcel_event`, `item`, `custody_event`, `outbox_message`. `cst/inventory.service.ts` קורא את `shipment` ישירות. הצרכנים ב SPA הם המסכים תחת `apps/web/src/areas/customer/shipping` וקונסולת המחסן.
+
+### בדוק את עצמך
+
+1. הסבר למה שני קונים לא יכולים לקנות את אותה רשימה, אבל קונה אחד יכול להוציא יותר ממה שיש לו בארנק.
+<details><summary>תשובה</summary>
+
+נעילת `listing` ב `FOR UPDATE` מסדרת את הקונים בתור, והשני רואה `sold` ומקבל 409, `apps/api/src/modules/mkt/purchase.service.ts` שורות 87 עד 99. היתרה נקראת ב `balanceOf` בלי שום נעילה על הארנק, שורות 120 עד 124, ולכן רכישות מקבילות של אותו קונה על רשימות שונות עוברות כולן, E1.
+
+</details>
+
+2. תאר מה יקרה כשלקוח לוחץ פעמיים מהר על קבלת הצעת buyout.
+<details><summary>תשובה</summary>
+
+`accept` קורא את הבקשה דרך `requests.get` בלי נעילה ובלי בדיקת `status`, ולכן שתי הקריאות רואות `stage === 'quoted'` ורושמות `sale_credit`, `apps/api/src/modules/dis/buyout.service.ts` שורות 115 עד 148. ה `changeState` השני מ `sold` ל `sold` לא זורק, כי `assertTransition` חוזר בשקט כשהמצב זהה, `apps/api/src/modules/cst/lifecycle.ts` שורה 42. הלקוח מזוכה פעמיים.
+
+</details>
+
+3. מצא את הבלוק שבו החלפה מעבירה פריט בלי לבדוק מי הבעלים שלו עכשיו, והסבר מה קורה לקונה שקנה אותו בינתיים.
+<details><summary>תשובה</summary>
+
+`approve` קורא `transferOwnership` לכל פריט בלי לחזור על בדיקת בעלות, `stored` או hold, `apps/api/src/modules/mkt/trade.service.ts` שורות 103 עד 113. `transferOwnership` נועל ומעדכן `ownerId` בלי להשוות לבעלים הנוכחי, `apps/api/src/modules/cst/custody.service.ts` שורות 147 עד 158, ולכן הקלף של הקונה עובר למשיב, E4.
+
+</details>
+
+4. הסבר למה הצעה נגדית של מוכר מגיעה כהתראה למוכר עצמו ולא לקונה.
+<details><summary>תשובה</summary>
+
+המטען של `offer_countered` מכיל `buyerId`, `sellerId` ו `counteredBy` בלי `recipientIds`, `apps/api/src/modules/mkt/offer.service.ts` שורות 263 עד 275. ה worker בוחר את המפתח הראשון שקיים לפי הסדר `ownerId`, `userId`, `sellerId`, `buyerId`, ולכן תמיד המוכר, `apps/worker/src/jobs/outbox-dispatch.ts` שורות 34 עד 48. התיקון הוא `recipientIds` עם הצד השני בלבד.
+
+</details>
+
+5. תאר איך `pay` יכול להחיות משלוח שה worker כבר ביטל, ולאיזה ממצא זה שייך.
+<details><summary>תשובה</summary>
+
+`pay` בודק `awaiting_payment` ויתרה מחוץ לטרנזקציה, ואז מעדכן ל `rates_selected` לפי `id` בלבד, `apps/api/src/modules/shp/shipment.service.ts` שורות 921 עד 970. אם `shipment-expiry` ביטל את השורה בין הבדיקה לעדכון, `apps/worker/src/jobs/shipment-expiry.ts` שורות 32 עד 50, `pay` גובה ומחזיר את המשלוח לחיים. זה E18.
+
+</details>
+
+6. הסבר למה אי אפשר לבנות היום החזר מדויק לחיוב של שירות ב `dis`.
+<details><summary>תשובה</summary>
+
+`BillingPort.charge` מחזיר `void`, `apps/api/src/shared/billing/billing.port.ts` שורות 46 עד 49, ולכן `service_request.charge_id` לא נכתב לעולם. `BillingService` שומר ב `charge.reference_id` את מזהה הפריט ולא את הבקשה, `apps/api/src/modules/pay/billing.service.ts` שורות 66 עד 78, כך שאין קישור חד ערכי מבקשה לחיוב שלה.
+
+</details>
+
+7. מצא למה משלוח לילי ישיר לא יכול להיסגר אף פעם.
+<details><summary>תשובה</summary>
+
+המשלוח נוצר עם `itemIds: []` ישר ב `rates_selected`, `apps/api/src/modules/shp/direct-ship.service.ts` שורות 164 עד 196. `DispatchDto` דורש `@ArrayNotEmpty`, `apps/api/src/modules/shp/shp.controller.ts` שורות 141 עד 146, ו `handOver` מסרב לו, כי `fulfilmentMethod` שלו נשאר `carrier` כברירת מחדל, `apps/api/src/modules/shp/human-fulfilment.service.ts` שורות 437 עד 439.
+
+</details>
+
+8. תאר מה מחזיר `GET /marketplace/listings` עם `limit=-1` ולמה.
+<details><summary>תשובה</summary>
+
+הבקר מעביר `Number(limit)` בלי בדיקה, `apps/api/src/modules/mkt/mkt.controller.ts` שורה 57, ו `BrowseService.list` מחשב `Math.min(-1, 200)`, `apps/api/src/modules/mkt/browse.service.ts` שורה 85. drizzle 0.38 משמיט את `LIMIT` כשהערך שלילי או NaN, ולכן חוזרות כל הרשימות הפעילות, עם חתימת תמונה לכל אחת.
+
+</details>
 
 ## פרק 7. ה worker והבדיקות
 
@@ -4882,7 +5542,7 @@ stateDiagram-v2
 | קובץ | מה הוא עושה |
 |---|---|
 | `apps/worker/package.json` | ה manifest של `@bault/worker`. תלוי ב `pg`, ב `pg-boss` בטווח caret שה lockfile פותר ל 10.4.2, וב `@bault/config` ו `@bault/adapters` דרך ה `dist` שלהן, ולכן `dev` בונה אותן קודם. אין סקריפט `test`. |
-| `apps/worker/tsconfig.json` | יורש מה base, CommonJS עם `outDir` `dist`. מכבה `isolatedModules` כי `JobName` מיוצא גם כ value וגם כ type. `noUncheckedIndexedAccess` מה base הוא הסיבה ל `rows[0]!` בכל העבודות. |
+| `apps/worker/tsconfig.json` | יורש מה base, CommonJS עם `outDir` `dist`. מכבה `isolatedModules` בלי הסבר, והקוד עובר `tsc` גם כשהוא דולק. `noUncheckedIndexedAccess` מה base הוא הסיבה ל `rows[0]!` ול `rows[0]?.` בעבודות. |
 | `apps/worker/src/jobs/registry.ts` | `JobName`, תשעה שמות תורים כ const וכ union type. `IMAGE_SYNC` מוגדר ולא נרשם בשום מקום. ההערה טוענת שה API הוא producer, אבל ה API לא משתמש ב pg-boss כלל. שינוי ערך כאן הוא שינוי שם תור, וה schedule הישן נשאר חי. |
 
 #### `apps/worker/src/index.ts`
@@ -4936,9 +5596,9 @@ stateDiagram-v2
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 19 עד 54 | `EMAIL_BY_DEFAULT`, `Set` של 34 מפתחות. | תואם בדיוק את `emailByDefault: true` בקטלוג של ה API, שיש בו 41 מפתחות. |
+| 19 עד 54 | `EMAIL_BY_DEFAULT`, `Set` של 34 מפתחות. | תואם בדיוק את `emailByDefault: true` בקטלוג של ה API, שיש בו 42 מפתחות. |
 | 63 עד 65 | `defaultEmailEnabled` מחזיר `false` לכל מפתח לא מוכר. | event חדש לא מתחיל לשלוח מייל בלי החלטה. |
-| 74 עד 121 | `SUBJECTS` עם נושא לכל 41 המפתחות, ו `eventSubject` עם fallback גנרי. | |
+| 74 עד 121 | `SUBJECTS` עם נושא לכל 42 המפתחות, ו `eventSubject` עם fallback גנרי. | |
 
 **שים לב.** מה שמחזיק את השכפול הוא `tests/web/notification-catalogue.test.ts`, שמייבא את שני הצדדים ומשווה. `mandatoryInApp` לא שוכפל לכאן.
 
@@ -4949,7 +5609,7 @@ stateDiagram-v2
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 12 עד 44 | עזרים. `str` מחזיר מחרוזת לא ריקה או `null`, `num` מספר סופי או `null`, `usd` מחלק ב 100 ומעצב ב `en-US`, `ref` מחזיר את הערך הראשון מרשימת מפתחות וחותך ל 8 תווים ערך ארוך מ 12, `titleCase` הופך שם event לכותרת. | הפונקציה לא זורקת לעולם על payload עם טיפוס שגוי. `usd` מניח שכל סכום הוא USD. `ref` משאיר קוד אנושי כמו `SH-ABCD1234` שלם וחותך UUID. |
-| 46 עד 253 | `switch` עם `case` לכל event, גרסה עשירה כשהשדה קיים וגרסה חסרה כשלא. דוגמאות, `item_sold` משתמש ב `price`, `parcel_damaged` מוסיף את `conditionNotes` של המפעיל, `escrow_inspected` בודק `p.matches === true`. | שינוי שם שדה ב emitter של ה API מאבד מידע מהמשפט בשקט. טקסט חופשי של מפעיל לא הופך להזרקה במייל, כי `renderEmail` עושה escaping. שינוי ניסוח לא משנה שורות שכבר נכתבו. |
+| 46 עד 253 | `switch` עם 36 `case`, גרסה עשירה כשהשדה קיים וגרסה חסרה כשלא. `buyout_quoted`, שלושת `custom_request_*` ושני `wallet_request_*` נשלחים מה API ונופלים ל `default`. דוגמאות, `item_sold` משתמש ב `price`, `parcel_damaged` מוסיף את `conditionNotes` של המפעיל, `escrow_inspected` בודק `p.matches === true`. | שינוי שם שדה ב emitter של ה API מאבד מידע מהמשפט בשקט. טקסט חופשי של מפעיל לא הופך להזרקה במייל, כי `renderEmail` עושה escaping. שינוי ניסוח לא משנה שורות שכבר נכתבו. |
 | 254 עד 259 | `default` מחזיר את שם ה event בכותרת. | |
 
 **שים לב.** כדי להוסיף event, מוסיפים `case` עם אותם עזרים ובודקים מול ה emitter ב API אילו שמות שדות הוא באמת שולח. אין i18n כאן, ה SPA מתרגם לפי המפתח.
@@ -5013,7 +5673,7 @@ stateDiagram-v2
 |---|---|---|
 | 1 עד 33 | imports והערה. | ההערה אומרת שחשבון מושעה לא מתחבר. זה כבר לא נכון. הוא מתחבר, ו `SessionAuthGuard` חוסם הכל חוץ מ routes עם `@AllowSuspended()`, מסך הפרופיל וה helpdesk. |
 | 34 עד 53 | `negativeAccounts`, סינון `balanceMinor < threshold`, ו UPDATE של `user_account` ל `suspended` עם `auto_suspended_at = now()` לפי `id = ANY($1::uuid[]) AND status = 'active'`. | התנאי על `active` עושה את זה אידמפוטנטי ולא נוגע בהשעיה ידנית או בחשבון סגור. אין תלות בימי ההשהיה, חשבון שירד אתמול מושעה הבוקר. `user_id` שאינו UUID ב ledger יפיל את כל ההרצה ב cast. |
-| 55 עד 74 | CTE `balances` על כל ה ledger ו UPDATE ל `active` עם ניקוי `auto_suspended_at`, רק לשורות `suspended` עם `auto_suspended_at` ויתרה `>= threshold`. | העמודה מבדילה השעיה של מכונה מהשעיה של אדם. הסרת `status = 'active'` מההשעיה תסמן השעיות ידניות כאוטומטיות והן יוחזרו. admin שמחזיר ידנית חשבון בחוב בלי לנקות את העמודה יראה אותו מושעה שוב ב `03:15`. |
+| 55 עד 74 | CTE `balances` על כל ה ledger ו UPDATE ל `active` עם ניקוי `auto_suspended_at`, רק לשורות `suspended` עם `auto_suspended_at` ויתרה `>= threshold`. | העמודה מבדילה השעיה של מכונה מהשעיה של אדם. הסרת `status = 'active'` מההשעיה תסמן השעיות ידניות כאוטומטיות והן יוחזרו. admin שמחזיר ל `active` חשבון שעדיין מתחת לסף יראה אותו מושעה שוב ב `03:15` בכל מקרה. `AdmService.updateUser` לא מנקה את העמודה, ולכן השעיה ידנית מאוחרת של החשבון תוסר כשהיתרה תעלה. |
 | 76 עד 80 | לוג. | |
 
 #### `apps/worker/src/jobs/membership-renewal.ts`
@@ -5022,7 +5682,7 @@ stateDiagram-v2
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 1 עד 29 | import של `Pool` והערה. | ההערה טוענת שאם העבודה לא רצה אין חיוב כפול. נכון להטבות שעוברות דרך `consume`, לא נכון לאחסון, ראה `storage-fee.ts`. |
+| 1 עד 29 | import של `Pool` והערה. | ההערה טוענת שאם העבודה לא רצה אין חיוב כפול ואין חיוב שקט. נכון להטבות שעוברות דרך `consume`, לא נכון לאחסון, שמחויב בשקט ורטרואקטיבית, ראה `storage-fee.ts`. |
 | 30 עד 45 | client אחד. UPDATE של `membership` ל `ended` לכל `cancelling` עם `current_period_end <= now()`. | autocommit, מחוץ לטרנזקציה, אידמפוטנטי בזכות התנאי. אין outbox, המשתמש לא שומע שהמנוי הסתיים. |
 | 47 עד 54 | SELECT של מנויים `active` שהמחזור שלהם עבר, עם `coalesce(scheduled_tier, tier)` כ tier. | זה המנגנון של downgrade מתוזמן, מיגרציה 0030. בלי `FOR UPDATE`, הבחירה מחוץ לטרנזקציה. |
 | 56 עד 85 | לכל מנוי `BEGIN` ובחירת הכלל `membership:<tier>` שבתוקף. בלי כלל, `ROLLBACK`, warning, והמנוי נשאר עם מחזור שפג. | סטיה מה API. `feeFor` שם נופל ל `tier.listPriceMinor` כשאין כלל, כך שה API היה מחדש וה worker לא. |
@@ -5031,7 +5691,7 @@ stateDiagram-v2
 | 126 עד 148 | אם המחיר חיובי, `charge` עם `action_type` `membership:<tier>` ו `reference_id` המנוי, ו `ledger_record` `service_charge` `debit`. `COMMIT`. ב catch `ROLLBACK` ולוג, והלולאה ממשיכה. | זהה במבנה ל `openPeriod` ב API. אין בדיקת יתרה ואין בדיקת השעיה, חשבון מושעה בחוב מחודש וצובר עוד חוב. כשל של מנוי לא מכשיל את העבודה, ולכן אין retry, וזה נכון כאן. |
 | 150 עד 158 | `finally` משחרר, לוג רק אם היה שינוי. | |
 
-**שים לב.** אין התראה על חידוש או סיום, בניגוד לכל אירוע כספי אחר. הוספת outbox מחייבת כניסה ב `notification-message.ts`, ב `notification-events.ts` ובקטלוג של ה API. מעבר לחידוש מ `current_period_end` מחייב אותו שינוי ב `renewDue`.
+**שים לב.** אין התראה על חידוש או סיום, וכך גם בחיובי האחסון והריבית. רק `shipment-expiry.ts` כותב outbox מתוך ה worker. הוספת outbox מחייבת כניסה ב `notification-message.ts`, ב `notification-events.ts` ובקטלוג של ה API. מעבר לחידוש מ `current_period_end` מחייב אותו שינוי ב `renewDue`.
 
 #### `apps/worker/src/jobs/shipment-expiry.ts`
 
@@ -5091,7 +5751,7 @@ stateDiagram-v2
 | 5 עד 10 | טבלה של integration, concurrency, property ו contract. | מיושן. חסרים `web`, `ux`, `tests3`, האחסון ו EasyPost ב contract, `scripts/test.mjs`, מגבלות הקצב המוגדלות ו `--no-file-parallelism`. |
 | 12 | הפניה לקובץ משימות תחת `specs/`. | |
 
-**שים לב.** המפה האמיתית. `vitest.workspace.ts` מגדיר שמונה projects. `integration`, `concurrency`, `property` ו `core` צריכים API חי על `localhost:3000`, מסד ממוגרר וזרוע, ו `.env` עם `AUTH_RATE_LIMIT_PER_MINUTE=5000` ו `RATE_LIMIT_PER_MINUTE=20000`, אחרת 429 אחרי ההתחברות העשירית. `contract`, `core-contract`, `web` ו `ux` לא צריכים דבר, חוץ מ MinIO לארבע בדיקות אחסון. `pnpm test` מריץ את `scripts/test.mjs`, לולאה סדרתית מ `web` דרך `ux`, `contract`, `core-contract`, `integration`, `core`, `concurrency` ועד `property`, שעוצרת בכשלון הראשון ותמיד מסיימת ב `db:seed`, כלומר TRUNCATE בלי לבדוק לאן `DATABASE_URL` מצביע, אותו seed הרסני של E11. ה CI מריץ כל project כצעד נפרד ולא מאפס. `fileParallelism: false` בתוך project לא נאכף ב Vitest 2.1.9, רק הדגל `--no-file-parallelism` אוכף, ולכן `pnpm test:all-parallel` לא אמין. הדגל לא קובע סדר קבצים, וכמה בדיקות מניחות מצב שקובץ אחר שינה, זה E16. אין `testTimeout`, כל בדיקה מקבלת 5 שניות.
+**שים לב.** המפה האמיתית. `vitest.workspace.ts` מגדיר שמונה projects. `integration`, `concurrency`, `property` ו `core` צריכים API חי על `localhost:3000`, מסד ממוגרר וזרוע, ו `.env` עם `AUTH_RATE_LIMIT_PER_MINUTE=5000` ו `RATE_LIMIT_PER_MINUTE=20000`, אחרת 429 אחרי עשר התחברויות בדקה לפי `.env.example`, או 30 לפי ברירת המחדל בקוד. `contract`, `core-contract`, `web` ו `ux` לא צריכים דבר, חוץ מ MinIO לארבע בדיקות אחסון. `pnpm test` מריץ את `scripts/test.mjs`, לולאה סדרתית מ `web` דרך `ux`, `contract`, `core-contract`, `integration`, `core`, `concurrency` ועד `property`, שעוצרת בכשלון הראשון ותמיד מסיימת ב `db:seed`, כלומר TRUNCATE בלי לבדוק לאן `DATABASE_URL` מצביע, אותו seed הרסני של E11. ה CI מריץ כל project כצעד נפרד ולא מאפס. `fileParallelism: false` בתוך project לא נאכף ב Vitest 2.1.9, רק הדגל `--no-file-parallelism` אוכף, ולכן `pnpm test:all-parallel` לא אמין. הדגל לא קובע סדר קבצים, וכמה בדיקות מניחות מצב שקובץ אחר שינה, זה E16. אין `testTimeout`, כל בדיקה מקבלת 5 שניות.
 
 #### `tests/integration/helpers/http.ts`
 
@@ -5119,7 +5779,7 @@ stateDiagram-v2
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 16 | import של `@testing-library/jest-dom/vitest`, ו `cleanup` אחרי כל בדיקה. | עם `globals: true` Testing Library כבר רושמת `cleanup`, כך שזה כפול ולא מזיק. |
-| 18 עד 37 | stub ל `matchMedia` שמחזיר תמיד `matches: false`, ו `scrollTo` ריק, רק אם חסרים. | כל בדיקה רצה כאילו המסך רחב ובלי מצב כהה. stub שמחזיר `true` יעביר רכיבים לפריסה ניידת וישבור את עמדת הקבלה. |
+| 18 עד 37 | stub ל `matchMedia` שמחזיר תמיד `matches: false`, ו `scrollTo` ריק, רק אם חסרים. | כל בדיקה רצה בלי מצב כהה ובלי עכבר מדויק. אף בדיקה לא מרנדרת את `App.tsx`, ולכן הפריסה הניידת לא נבדקת. stub שמחזיר `true` ידליק את `autoFocus` ב `ReceiveParcels.tsx` ואת המצב הכהה. |
 | 39 עד 46 | `scrollIntoView` ריק, בשביל עמדת הקבלה. | |
 | 48 עד 61 | `beforeEach` כותב `en` ל `bault.locale`, שאותו `apps/web/src/shared/i18n.tsx` קורא. | בלעדיו כל הסוויטה בעברית והשאילתות נכשלות. שאר localStorage, למשל `bault.theme`, ו `dir` של המסמך לא מתאפסים. |
 
@@ -5132,11 +5792,11 @@ stateDiagram-v2
 | `tests/integration/acc-addresses.test.ts` | יצירה, עריכה ומחיקה ב `/me/addresses`, בדיוק ברירת מחדל אחת, ומשתמש שלא קורא ולא עורך כתובת זרה. מחיקה של כתובת זרה לא נבדקת, ואחרי הרצה ל `red` אולי אין ברירת מחדל. |
 | `tests/integration/acc-identity.test.ts` | שם משתמש ייחודי, קבוע ומנורמל, שם פרטי ושם משפחה, חשבון ממוגרר, וה intake ID שמוסתר מהלקוח, גלוי ל admin ומתקבל בקליטה. |
 | `tests/integration/acc-lifecycle.test.ts` | רישום במצב `pending_verification`, שדות חובה, התחברות, איסור שינוי שם משתמש, החלפת סיסמה, התנתקות ואסימון אימות לא תקף. לא נבדק ביטול sessions אחרים אחרי החלפת סיסמה ולא איפוס סיסמה. |
-| `tests/integration/acc-status-block.test.ts` | למרות השם לא משעה אף חשבון. בודק רק 401 בלי עוגייה ובסיסמה שגויה. פער אמיתי, החסימה של `SessionAuthGuard` לחשבון מושעה לא נבדקת בשום מקום. |
+| `tests/integration/acc-status-block.test.ts` | למרות השם לא משעה אף חשבון. בודק 401 בלי עוגייה ובסיסמה שגויה, והתחברות בשם משתמש ובמייל לאותו חשבון. פער אמיתי, החסימה של `SessionAuthGuard` לחשבון מושעה לא נבדקת בשום מקום. |
 | `tests/integration/adm-pricing-storage.test.ts` | כל כלל תמחור נושא תיאור, ערך, היקף וטריגר, חיובי אחסון אוטומטיים בלבד, ומחלוקת מצביעה על טרנזקציה קיימת. משנה את התמחור הגלובלי, וכל קובץ שרץ אחריו מתומחר מול כללים שהבדיקה המציאה, E16. |
 | `tests/integration/dev-proxy.test.ts` | החוזה של פיתוח מקומי, `/healthz` שעליו `pnpm dev` מחכה ו `/me/profile` שה SPA שולח בטעינה. בדיקות ה proxy לא רצות ב CI כי ה web לא עולה שם. |
-| `tests/integration/dis-item-services.test.ts` | שירותים לפריט על המדף, דירוג בדרגות מחיר, משלוח למדרג, וידאו, דוח מצב, פתיחת slab, פיצול lot והסרה מרוכזת. אף סכום שחויב לא נבדק, וקולט כ 17 פריטים ל `red` בכל הרצה. |
-| `tests/integration/dis-services.test.ts` | הקובץ הוותיק של שירותי ערך מוסף, קבלה והשלמה עם טופס מבני מלא. הטענה על טרנזקציית `transfer` בשורה 123 עוברת בזכות נתוני seed ולא בזכות התרומה הנבדקת. |
+| `tests/integration/dis-item-services.test.ts` | שירותים לפריט על המדף, דירוג בדרגות מחיר, משלוח למדרג, וידאו, דוח מצב, פתיחת slab, פיצול lot והסרה מרוכזת. אף סכום שחויב לא נבדק. כל הרצה קולטת 13 פריטים ל `red` ועוד שמונה מפיצול ה lot. |
+| `tests/integration/dis-services.test.ts` | הקובץ הוותיק של שירותי ערך מוסף, קבלה והשלמה עם טופס מבני מלא. הטענה בשורה 123 מחפשת טרנזקציית `transfer` כלשהי במסד ולא את זו של התרומה, ולכן מתנה מקובץ אחר או הרצה קודמת מספיקות לה. ה seed כותב רק `sale`. |
 | `tests/integration/esc-and-human-fulfilment.test.ts` | escrow עם שערי מימון ובדיקה, החזרה, קונה בלי כסף, צד חיצוני ופרטיות, white glove ואיסוף בתערוכה. בודק יתרות לפני, באמצע ואחרי, כי החזקת כסף היא שורת ledger אמיתית. מימון מקביל לא נבדק. התערוכה הזרועה מקבלת 12 איסופים ונקבעת 28 יום קדימה, כך שאחרי שש הרצות או כמה שבועות בלי seed הבדיקה נכשלת בהודעה לא מסבירה. |
 | `tests/integration/inv-batch-split.test.ts` | batch שנפתח מתפצל לפריטים, וכל אחד מקבל אירוע `batch_split`, מדף וקישור ל batch. הפיצול הראשון לא נבדק לסטטוס, ופיצולים מקבילים לא נבדקים. |
 | `tests/integration/inv-intake.test.ts` | קליטה יוצרת פריט עם סריאל `SN-` ששווה לברקוד, מדף ואירוע `intake`. גם lot, תיקון, העברת מדף וחסימת לקוח. ההערה מבטיחה חיוב, אבל יתרה ו ledger לא נבדקים. |
@@ -5147,17 +5807,17 @@ stateDiagram-v2
 | `tests/integration/not-channels-and-content.test.ts` | מטריצת העדפות לפי ערוץ, שתי התראות in_app שאי אפשר לכבות, ושלושה endpoints ציבוריים, לוח תערוכות, פרטי קשר ומיקומים, שנקראים ב `fetch` ישיר. בדיקת המסירה עוברת גם עם פיד ריק. שחזור ההעדפות לא נמצא ב `finally`, ואחרי הקובץ ל `golden` יש העדפות מפורשות שונות מה seed. |
 | `tests/integration/not-notifications.test.ts` | כל התראה בפיד נושאת משפט קריא וסכום בדולרים, in_app דלוק כברירת מחדל וביטול נשמר. עובר גם בלי worker, ואז בודק רק את מה שה seed כתב. בדיקת הדולר עוברת אם הודעה אחת מכילה `$`. |
 | `tests/integration/pay-flow.test.ts` | קובץ הארנק המרכזי, בעיקר על `golden`. יתרה משתנה רק בהשלמה. `cash_in` של 300 דולר מזכה פעם אחת עם `credit_topup`, `cash_out` כותב `withdrawal` ו `fee` נפרדים, משיכה מעל היתרה 409 `insufficient_balance`, מעל התקרה 400, בקשה זהה בלי `reference` 409, השלמה בלי אישור או שניה 409, separation of duties ותאימות endpoints ישנים. השלמה כפולה נבדקת רק ברצף, לא במקביל. |
-| `tests/integration/pay-money-in-out.test.ts` | מסלולי מימון, טעינה מיידית בכרטיס עם idempotency, ציטוט עמלת משיכה שתואם לחיוב בפועל, chargeback, ורשימת מחירים ציבורית. שורה 176 יוצאת בשקט אם יצירת הבקשה לא החזירה 201, כך שהבדיקה יכולה לעבור בלי לבדוק. שורה 277 מצפה לקליטה של 100 סנט, בסתירה ל 500 ש `membership-tiers.test.ts` מניח. |
-| `tests/integration/shp-outbound.test.ts` | הגדול בסוויטה. ציטוט שזז עם משקל ויעד, קופסה, שירות שמסרב לחבילה, ביטוח עם חתימה, שינוי, מיזוג וביטול בקשה, בחירה ותשלום, מכס, חבילות משותפות ומשלוח ישיר מאתר ההעברה. נכתב כך שייכשל מול הסטאב הישן שהחזיר אותם שני מחירים לכל חבילה. כתשע התחברויות לבדיקה, קרוב למגבלת 5 השניות. שורה 485 מניחה ש `veteran` עני מהמשלוח לאוסטרליה, וכל הרצה מוסיפה ל `red` כעשרים כתובות. |
+| `tests/integration/pay-money-in-out.test.ts` | מסלולי מימון, טעינה מיידית בכרטיס עם idempotency, ציטוט עמלת משיכה שתואם לחיוב בפועל, chargeback, ורשימת מחירים ציבורית. שורה 176 יוצאת בשקט אם יצירת הבקשה לא החזירה 201, כך שהבדיקה יכולה לעבור בלי לבדוק. שורה 277 מצפה ל 100 סנט לקליטת `trading_card`, ו `UNIT_PRICES` ב `membership-tiers.test.ts` מניח 500, שהוא כלל ה intake הכללי של ה seed. אלה שני כללים ולא סתירה. |
+| `tests/integration/shp-outbound.test.ts` | הגדול בסוויטה. ציטוט שזז עם משקל ויעד, קופסה, שירות שמסרב לחבילה, ביטוח עם חתימה, שינוי, מיזוג וביטול בקשה, בחירה ותשלום, מכס, חבילות משותפות ומשלוח ישיר מאתר ההעברה. נכתב כך שייכשל מול הסטאב הישן שהחזיר אותם שני מחירים לכל חבילה. כתשע התחברויות לבדיקה, קרוב למגבלת 5 השניות. שורה 485 מניחה ש `veteran` עני מהמשלוח לאוסטרליה, וכל הרצה מוסיפה ל `red` כעשרים וחמש כתובות. |
 | `tests/integration/shp-shipment.test.ts` | הקובץ הוותיק של משלוח יוצא, בקשה לכמה פריטים, תעריפים, בחירה ו dispatch שמאומת בסריקה ובטופס מחסן. ה dispatch קונה תווית דרך ה adapter של השרת, ומול EasyPost אמיתי זו קנייה אמיתית. |
-| `tests/integration/shp-tracking-list.test.ts` | משלוח נכנס לרשימת המעקב מעצם יצירתו, עם כל שדות המסך, בלי intake ID, ורק לבעלים. הבדיקה בשורות 114 עד 120 נשענת על משלוח ה seed ולא על זה שנשלח בבדיקה. |
+| `tests/integration/shp-tracking-list.test.ts` | משלוח נכנס לרשימת המעקב מעצם יצירתו, עם כל שדות המסך, בלי intake ID, ורק לבעלים. הבדיקה בשורות 114 עד 120 לא שולחת משלוח בעצמה ונשענת על משלוח `shipped` של golden מה seed, ש `tracking-refresh.ts` של worker פעיל מעביר ל `in_transit`. |
 
 שתי הסוויטות הקטנות מול אותו API חי.
 
 | קובץ | מה הוא עושה |
 |---|---|
-| `tests/concurrency/no-double-sale.test.ts` | הבדיקה היחידה ב `tests` עם שתי כתיבות באותו רגע. `red` מפרסם, `golden` ו `veteran` ממומנים, `Promise.all` שולח שתי קניות, ובדיוק אחת מחזירה 201 והשניה 409 או 403. בדיקת עשן לנעילה `for('update')` על המודעה ב `purchase.service.ts` שורה 88. שום דבר לא מכריח חפיפה, אין טענה על כסף, ולא יכולה לתפוס את E1, קונה אחד על כמה מודעות שונות במקביל שיורד מתחת לאפס. |
-| `tests/property/wallet-ledger.test.ts` | למרות השם, תרחיש קבוע בלי אקראיות. חמש `cash_in` בסכומים לא עגולים מושלמות, שלוש נשארות מאושרות, נדחות או מבוטלות, ומשיכה מפחיתה סכום ועוד עמלה מ `/finance/cash-out-quote`. הבדיקה השניה דורשת שורת ledger אחת לכל בקשה שהושלמה. הטענה שיתרה שווה לסכום השורות כמעט טאוטולוגית, החשובה היא ההשוואה לסכום הצפוי. |
+| `tests/concurrency/no-double-sale.test.ts` | הבדיקה היחידה ב `tests` ששתי כתיבות בה מתחרות על אותו משאב. `red` מפרסם, `golden` ו `veteran` ממומנים, `Promise.all` שולח שתי קניות, ובדיוק אחת מחזירה 201 והשניה 409 או 403. בדיקת עשן לנעילה `for('update')` על המודעה ב `purchase.service.ts` שורה 88. שום דבר לא מכריח חפיפה, אין טענה על כסף, ולא יכולה לתפוס את E1, קונה אחד על כמה מודעות שונות במקביל שיורד מתחת לאפס. |
+| `tests/property/wallet-ledger.test.ts` | למרות השם, תרחיש קבוע בלי אקראיות. חמש `cash_in` מושלמות, שלוש נשארות מאושרות, נדחות או מבוטלות, ומשיכה מפחיתה סכום ועוד עמלה מ `/finance/cash-out-quote`. הבדיקה השניה דורשת שורת ledger אחת לכל בקשה שהושלמה. הטענה שיתרה שווה לסכום השורות כמעט טאוטולוגית, החשובה היא ההשוואה לסכום הצפוי. |
 
 קבצי ה contract בונים adapters מ `@bault/adapters` בתוך תהליך הבדיקה, דרך alias לקוד המקור, בלי API ובלי מסד.
 
@@ -5177,11 +5837,11 @@ stateDiagram-v2
 | `tests/ux/membership.test.tsx` | `MembershipPage` סביב הסכמה. המחיר על הכפתור, לחיצה לא שולחת כלום עד אישור שמזכיר 30 יום ומחיר, ורק אז `POST /membership/subscribe`, והמסך אומר מה קורה כשמכסה נגמרת. כשלון חיוב לא נבדק. |
 | `tests/ux/customer-screens.test.tsx` | טעינה, סיבת כשלון ומצב ריק ב `AccountPill`, `IntakePolicyPanel` ו `VaultPage`. ה mock מחזיר אובייקט שרירותי לכל נתיב לא מוכר. |
 | `tests/ux/sign-ins.test.tsx` | יומן ההתחברויות של ה admin מציג כשלונות, ניחוש כתובת בלי חשבון, ודפוס של ניחוש סיסמאות מעל הטבלה. |
-| `tests/ux/audit-screens.test.tsx` | כל בלוק מצמיד פגם מביקורת UX על מוצר חי, `Field`, טופס הרשמה, `ConfirmationModal`, מחיר על כפתור, שפה לפני התחברות ואוצר מילים. היחיד עם `MockApiError` אמיתי. העברית לא נבדקת. |
+| `tests/ux/audit-screens.test.tsx` | כל בלוק מצמיד פגם מביקורת UX על מוצר חי, `Field`, טופס הרשמה, `ConfirmationModal`, מחיר על כפתור, שפה לפני התחברות ואוצר מילים. היחיד עם `MockApiError` אמיתי. כללי אוצר המילים נבדקים רק על הקטלוג האנגלי. |
 | `tests/ux/barcode-printing.test.tsx` | `printBarcode` ו `printBarcodes` כותבים HTML ל iframe מוסתר, ואצווה היא דיאלוג הדפסה אחד. ה escaping נבדק על הכיתוב בלבד ולא על `<title>`. |
 | `tests/ux/custody-grade.test.tsx` | רכיבי זהות, כסף ומצב, כל בדיקה ב `ltr` וב `rtl` בגלל ארבעה באגים שהופיעו רק בעברית. הרכיב `Row` מוגדר בתוך הבדיקה ולא מיובא מהאפליקציה. |
-| `tests/ux/design-system.test.tsx` | תווית שממקדת שדה, כפתור עסוק שלא נלחץ, ערכת נושא שנשמרת ופאנל תשואת המדפים. בדיקת המיון בשורות 201 עד 213 לא יכולה להיכשל, `ShelfYieldPanel` לא ממיין וה mock כבר מסודר. |
-| `tests/ux/receiving-bench.test.tsx` | עמדת הקבלה ב `WarehouseConsole`, חבילות וקליטה בלשונית אחת, קופסה עם כמה יחידות בבקשה אחת, צילום, תוויות ומצב בלי מדף. הכבד בסוויטה, כארבע שניות, הראשון שייפול על timeout. |
+| `tests/ux/design-system.test.tsx` | תווית שממקדת שדה, כפתור עסוק שלא נלחץ, ערכת נושא שנשמרת ופאנל תשואת המדפים. בדיקת המיון בשורות 201 עד 213 לא בודקת מיון. `ShelfYieldPanel` לא ממיין וה mock כבר מסודר, כך שהיא מוכיחה רק שסדר השרת נשמר. |
+| `tests/ux/receiving-bench.test.tsx` | עמדת הקבלה ב `WarehouseConsole`, חבילות וקליטה בלשונית אחת, קופסה עם כמה יחידות בבקשה אחת, צילום, תוויות ומצב בלי מדף. הכבד בסוויטה, כארבע שניות לקובץ, אבל ה timeout של חמש שניות חל על כל בדיקה לבד. |
 | `tests/ux/warehouse-bench.test.tsx` | החלטת האחסון בעמדת הקבלה, יעד המדף שמוצג למפעיל והמטען שנשלח ל API. השרת מחליט בפועל ב `autoStow`, והבדיקה לא רואה פער בין ההצעה לבחירה. |
 
 קבצי ה `web` רצים ב node בלי DOM ובודקים פונקציות טהורות וקטלוגים. חלקם מייבאים מ `apps/api/src`, מ `apps/worker/src` ומ `packages/adapters/src`. כמה טוענים שהם שומרים התאמה בין עותק בשרת לעותק ב SPA, ורובם מייבאים רק צד אחד.
@@ -5195,10 +5855,10 @@ stateDiagram-v2
 | `tests/web/membership-tiers.test.ts` | הקטלוג ב `apps/api/src/modules/mem/tiers.ts` כאריתמטיקה, אין חיוב על חריגה ולכל מכסה יש תקרה. `UNIT_PRICES` לא נקרא מה seed. |
 | `tests/web/names.test.ts` | כללי שם ושם משתמש ב `apps/web/src/shared/names.ts`. טוען שהוא תופס סטייה מהשרת, אבל מייבא רק את עותק ה web. `describe.each` על שני העותקים יסגור את זה. |
 | `tests/web/nav-rail.test.ts` | ה reducer הטהור של פס הניווט ב `navRailState.ts`, שנכתב כך בדיוק כדי להיבדק בלי DOM. |
-| `tests/web/no-credentials-in-bundle.test.ts` | סורק את `apps/web/dist/assets` ומוודא שאף `.js` או `.css` לא מכיל את סיסמת ה seed או את כתובות החשבונות הזרועים. `FORBIDDEN` הוא שש מחרוזות מילוליות, כי regex היה תופס צבעי hex. נולד משתי תקריות, דרך קטלוג ה i18n ודרך build של פיתוח. כשהתיקייה חסרה הבדיקה עוברת ולא מדלגת, וה CI לא בונה את ה web, כך שם היא תמיד עוברת ריקה. לא סורק `index.html` או קבצי map, והנתיב נבנה מ `process.cwd()`. |
+| `tests/web/no-credentials-in-bundle.test.ts` | סורק את `apps/web/dist/assets` ומוודא שאף `.js` או `.css` לא מכיל את סיסמת ה seed או ארבע מחמש כתובות החשבונות הזרועים, בלי `veteran@bault.dev`. `FORBIDDEN` הוא שש מחרוזות מילוליות, כי regex היה תופס צבעי hex. נולד משתי תקריות, דרך קטלוג ה i18n ודרך build של פיתוח. כשהתיקייה חסרה הבדיקה עוברת ולא מדלגת, וה CI לא בונה את ה web, כך שם היא תמיד עוברת ריקה. לא סורק `index.html` או קבצי map, והנתיב נבנה מ `process.cwd()`. |
 | `tests/web/notification-catalogue.test.ts` | הבדיקה היחידה שמייבאת קוד של ה worker. משווה את `event-types.ts` של ה API ל `defaultEmailEnabled` ו `eventSubject` של `notification-events.ts` ולמפת התוויות של ה SPA. ברירת מחדל זהה, נושא שאינו fallback, רק `arrival_not_accepted` ו `parcel_damaged` חובה ב in_app, מייל לעולם לא חובה, ותווית לכל אירוע ורק לאירוע קיים. בודקת קטלוג ולא התנהגות. |
 | `tests/web/proxy-target.test.ts` | `resolveApiProxyTarget` ו `isLoopbackHost`, שקובעים לאן Vite מעביר את `/api` בפיתוח. ברירת המחדל `127.0.0.1` ולא `localhost`, כי `localhost` נפתר גם ל `::1`. `VITE_API_PROXY_TARGET` גובר על `API_PORT`, וערך לא תקין זורק. |
-| `tests/web/rayquaza-only.test.ts` | מדיניות תוכן. סריקה טקסטואלית של כל קבצי md ו ts בריפו שמוודאת שהקטלוג נשאר עשרה קלפי Rayquaza. מסמך חדש שמצטט מחרוזת מהרשימה יכשיל את `pnpm test:web` ויעצור את `scripts/test.mjs` לפני ה integration. |
+| `tests/web/rayquaza-only.test.ts` | מדיניות תוכן. סורק קבצי `.ts`, `.tsx`, `.md`, `.css` ו `.sql` בריפו מול 17 שמות של פריטי אספנות אחרים, ובודק שכל פריט ב seed הוא Rayquaza עם תמונה לפי הסידורי. מסמך חדש שמצטט מחרוזת מהרשימה יכשיל את `pnpm test:web` ויעצור את `scripts/test.mjs` לפני ה integration. |
 | `tests/web/routing.test.ts` | `legacyRedirect` מעביר כתובות hash ישנות מסימניות למקום החדש. |
 | `tests/web/session.test.ts` | `loadProfile` משתף בקשה אחת בין שני קוראים בו זמנית, כי StrictMode מריץ את האתחול פעמיים. גם כשלון משותף, אין cache לאורך זמן, ניסיון חוזר אחרי כשלון, ו 401 הופך ל `unauthenticated`. |
 | `tests/web/shipment-tracking.test.ts` | `matchesShipmentSearch` ו `SHIPMENT_TONE`. רשימת הסטטוסים הידנית חסרה את `awaiting_payment` ו `cancelled`, וסטטוס חדש ב enum לא יכשיל כלום. ייבוא `shipmentStatus.enumValues` יסגור את זה. |
@@ -5206,25 +5866,83 @@ stateDiagram-v2
 | `tests/web/sign-ins.test.ts` | תרגום user agent וכתובת גולמיים מיומן ההתחברויות לשפה של admin. |
 | `tests/web/wallet-requests.test.ts` | כללי בקשות הארנק כפי שה SPA מיישם אותם. הגבולות נקראים מ `walletRequests.ts` של ה web ולא מושווים ל `wallet-request.rules.ts` בשרת, כך ששינוי בשרת בלבד לא ייתפס. |
 
-החבילות ב `tests3` רצות בשני projects. `core-contract` כולל את `tests3/contract`, לא צריך מסד או שרת, ורץ ב CI לפני שהמסד עולה. `core` כולל את `tests3/integration`, צריך API חי ומסד זרוע ומשתמש באותו `helpers/http.ts`. ב CI הוא רץ אחרי migrate ו seed עם `STORAGE_PROVIDER=s3` מול MinIO ו `PAYMENT_PROVIDER=sandbox`. כל קובץ נכתב אחרי ממצא, וההערה בראשו מספרת מה הצליח כשהיה צריך להיכשל. אף אחד לא שולח שתי בקשות במקביל, אף אחד לא נוגע ב worker, ואף אחד לא מנקה אחריו.
+החבילות ב `tests3` רצות בשני projects. `core-contract` כולל את `tests3/contract`, לא צריך מסד או שרת, ורץ ב CI לפני ה migrate וה seed. `core` כולל את `tests3/integration`, צריך API חי ומסד זרוע ומשתמש באותו `helpers/http.ts`. ב CI הוא רץ אחרי migrate ו seed עם `STORAGE_PROVIDER=s3` מול MinIO ו `PAYMENT_PROVIDER=sandbox`. כל קובץ נכתב אחרי ממצא, וההערה בראשו מספרת מה הצליח כשהיה צריך להיכשל. אף אחד לא מריץ שתי כתיבות מתחרות על אותו משאב, אף אחד לא נוגע ב worker, וכמעט אף אחד לא מנקה אחריו.
 
 | קובץ | מה הוא עושה |
 |---|---|
-| `tests3/contract/payment-provider-gate.test.ts` | נולד מ `POST /finance/checkout` עם token מומצא שסילק 5,000 דולר, כי ה sandbox היה קשור בלי תנאי. מקבע שה sandbox לא בטוח, `createTopup` מצליח עם כל token ו `verifyWebhook` מקבל חתימה מזויפת, וזה מכוון. טבלת החלטה, sandbox רק ב development וב test, ספק לא ממומש נדחה ולא נופל ל sandbox. הטבלה נבדקת על `decide` מקומית ולא על `createPaymentAdapter`, כך ששינוי ב factory לא ישבור כלום. ההגנה האמיתית היא ה enum וה `superRefine` ב `env.ts`. |
+| `tests3/contract/payment-provider-gate.test.ts` | נולד מ `POST /finance/checkout` עם token מומצא שסילק 5,000 דולר, כי ה sandbox היה קשור בלי תנאי. מקבע שה sandbox לא בטוח, `createTopup` מצליח עם כל token ו `verifyWebhook` מקבל חתימה מזויפת, וזה מכוון. טבלת החלטה, sandbox רק ב development וב test, ספק לא ממומש נדחה ולא נופל ל sandbox. הטבלה נבדקת על `decide` מקומית ולא על `createPaymentAdapter`, כך ששינוי ב factory לא ישבור כלום. ההגנה האמיתית היא ה enum וה `superRefine` ב `env.ts` ובדיקת `NODE_ENV` ב `createPaymentAdapter`, ואף אחת מהן לא נבדקת. |
 | `tests3/contract/paypal-adapter.test.ts` | `PayPalPaymentAdapter` מול `fetchImpl` מדומה. top up הוא capture של order מאושר, `settledAmountMinor` הוא מה שהספק סילק גם כשאושר order של דולר וביקשו 5,000, `PayPal-Request-Id` נושא את מפתח האידמפוטנטיות, payout מדווח `pending`, ו webhook נדחה בלי אימות של PayPal או בלי כל אחד מחמשת ה headers. ההשוואה בין סכום שסולק למבוקש יושבת ב `checkout.service.ts` ולא נבדקת, והיא מדלגת כש `settledAmountMinor` הוא `undefined`. שום דבר במוצר לא יוצר את ה order, E3. |
-| `tests3/integration/adm-shelf-yield.test.ts` | דוח תשואת מדפים סגור למפעיל ול collector, מייחס הכנסה גם מעמלת `fee` על listing ולא רק מ `charge`, וסכומיו עקביים. הסף של 1,000 סנט נשבר כש `fin-invariants` מכפיל את מחיר ה intake בכל הרצה, ואז הבדיקה עוברת גם בלי ייחוס עמלה. |
-| `tests3/integration/band1-money-ownership.test.ts` | קונה לא יכול להציע 40 דולר על listing של 100 ולקבל את ההצעה של עצמו, הודעת validation אומרת איזה שדה ולמה, וקנייה כפולה נדחית. הקנייה הכפולה נבדקת ברצף בלבד. |
-| `tests3/integration/band2-negotiation.test.ts` | הצד שהציע מחיר לא יכול לקבל אותו, counter נסגר רק בידי הצד שאליו נשלח, הצעה גבוהה מהיתרה נדחית ב 409, הצעה פתוחה אחת לקונה ל listing. הבדיקה בשורות 140 עד 168 לא בודקת דבר, `/finance/withdrawals` רק מגיש בקשה, היתרה לא יורדת, וה `if` על 409 מדלג על כל ה expect. |
-| `tests3/integration/band3-guardrails.test.ts` | שבעה מעקות שהצליחו כשהיו צריכים לסרב. admin שלא משעה את עצמו ולא מוריד את התפקיד של עצמו, שירות שלא מוזמן פעמיים על אותו כרטיס והארנק יורד פעם אחת, מדינה לפי קוד, הודעת שגיאה לבני אדם בלי שמות שדות פנימיים, חשבון שלא אומת שמקבל 403 `email_unverified` רק עם סיסמה נכונה, סינון ומיון בשוק, hold אידמפוטנטי. ההזמנה הכפולה נבדקת ברצף, ו `assertNotAlreadyOpen` בשירות קורא ואז כותב בלי נעילה. |
+| `tests3/integration/adm-shelf-yield.test.ts` | דוח תשואת מדפים סגור למפעיל ול collector, מייחס הכנסה גם מעמלת `fee` על listing ולא רק מ `charge`, וסכומיו עקביים. הסף של 1,000 סנט תקף כל עוד קליטת `trading_card` זולה ממנו. הכלל הכפול ש `fin-invariants` משאיר הוא כלל intake כללי בלי `itemClass`, וכלל הקלף גובר עליו. |
+| `tests3/integration/band1-money-ownership.test.ts` | קונה לא יכול להציע 40 דולר על listing של 100 ולקבל את ההצעה של עצמו, הודעת validation אומרת איזה שדה ולמה, וקנייה חוזרת של אותו קונה היא replay שלא מחייב שוב. היא נבדקת ברצף בלבד. |
+| `tests3/integration/band2-negotiation.test.ts` | הצד שהציע מחיר לא יכול לקבל אותו, counter נסגר רק בידי הצד שאליו נשלח, הצעה גבוהה מהיתרה נדחית ב 409, הצעה פתוחה אחת לקונה ל listing. הבדיקה בשורות 140 עד 168 בודקת רק שההצעה נוצרה. `/finance/withdrawals` רק מגיש בקשה, היתרה לא יורדת, הקבלה מצליחה, וה `if` על 409 מדלג על שאר ה expect. |
+| `tests3/integration/band3-guardrails.test.ts` | שמונה מעקות שהצליחו כשהיו צריכים לסרב. admin שלא משעה את עצמו ולא מוריד את התפקיד של עצמו, שירות שלא מוזמן פעמיים על אותו כרטיס והארנק יורד פעם אחת, מדינה לפי קוד, הודעת שגיאה לבני אדם בלי שמות שדות פנימיים, חשבון שלא אומת שמקבל 403 `email_unverified` עם הסיסמה הנכונה, סכום בהודעה עם סימן מטבע, סינון ומיון בשוק, hold אידמפוטנטי. ההזמנה הכפולה נבדקת ברצף, ו `assertNotAlreadyOpen` בשירות קורא ואז כותב בלי נעילה. |
 | `tests3/integration/custom-requests.test.ts` | בקשת שירות חופשית בצורה של buyout, מחיר שנקבע רק אחרי קריאה, קבלה, ביצוע, תור וסיום, וקליטה של כמות. `accept-quote` כפול לא נבדק, וגם לא שינוי הצעה אחרי שהתקבלה. |
-| `tests3/integration/fin-invariants.test.ts` | `walletAndLedger` משווה יתרה מוצגת לסכום שורות `/finance/ledger` אחרי מימון, קליטות, מכירה ומשיכה. קנייה מעבירה כסף ופריט יחד, קנייה שנדחתה לא כותבת, append only בפועל, admin לא מאשר בקשה של עצמו, רק `complete` מזיז כסף, ותמחור נשמר כ snapshot. זה הקובץ של E16. הוא יוצר כלל intake במחיר כפול ולא מסיר אותו, ומשאיר משיכה של 2,500 סנט בלי `reference`, כך שבהרצה הבאה על אותו מסד הגנת הכפילות מחזירה 409 נכון. pagination ב `/finance/ledger` ישבור אותו בשקט. |
+| `tests3/integration/fin-invariants.test.ts` | `walletAndLedger` משווה יתרה מוצגת לסכום שורות `/finance/ledger` אחרי מימון, קליטות, מכירה ומשיכה. קנייה מעבירה כסף ופריט יחד, קנייה שנדחתה לא כותבת, append only בפועל, admin לא מאשר בקשה של עצמו, רק `complete` מזיז כסף, ותמחור נשמר כ snapshot. זה הקובץ של E16. הוא יוצר כלל intake במחיר כפול ולא מסיר אותו, ומשאיר משיכה של 2,500 סנט בלי `reference`, כך שבהרצה הבאה על אותו מסד הגנת הכפילות מחזירה 409 נכון. pagination ב `/finance/ledger` יכשיל אותו, כי הסכום יחושב על עמוד אחד. |
 | `tests3/integration/flows-lifecycle.test.ts` | מכסה מודולים שאיש לא בדק, helpdesk, disposals, משטח ה admin, consignment ו buyout, והולך על המעברים האסורים בכל מכונת מצבים, למשל `received` ל `processed` לפני פתיחה, פתיחה שניה, relocate של פריט ב hold, listing שני על אותו פריט. בדיקת העדפות ההתראה מחזירה את המצב המקורי, אחת היחידות שמנקות אחריהן. במשלוח של פריט שנמכר יצירת הכתובת לא נבדקת, ו `addressId` חסר יחזיר 400 מה DTO והבדיקה תעבור בלי לבדוק בעלות. |
-| `tests3/integration/inv-intake-policy.test.ts` | מדיניות הקליטה המפורסמת והנחיות המכס ליעד נגישות ללקוח ולא מתרחקות מהכלל שנאכף. יוצר פריט לכל class בכל הרצה ומשאיר שני משלוחים ב `awaiting_payment` שרק ה worker יבטל. |
+| `tests3/integration/inv-intake-policy.test.ts` | מדיניות הקליטה המפורסמת והנחיות המכס ליעד נגישות ללקוח ולא מתרחקות מהכלל שנאכף. יוצר פריט לכל class בכל הרצה ומשאיר שני משלוחים ב `requested`, שה worker לא מבטל והם תופסים את הפריטים שלהם. |
 | `tests3/integration/inv-stow.test.ts` | זרימת הקליטה כמו שמפעיל עובר אותה. המערכת אומרת לאן, המפעיל סורק barcodes של Bault, וחבילה לא נסגרת ריקה בלי `emptyReason`. יוצר שני מדפים בכל הרצה שמצטברים בדוח התשואה. בדיקת המדף הריק ביותר תלויה בכך שאיש לא קולט באותו רגע. |
-| `tests3/integration/receiving-bench.test.ts` | עמדת הקבלה המאוחדת, ערימת חבילות בקריאה אחת וצילום דרך `/media/uploads`. ערימה עם שורה פגומה נדחית כולה, הכל או כלום, ו `/intake/items/batch` עם יחידה פגומה לא מגדיל את הכספת. תמונת חבילה של אחר מחזירה 404 ולא 403. הבדיקה היחידה של אחסון מול API חי. עם `STORAGE_PROVIDER=s3` ובלי MinIO תשע בדיקות נכשלות ב 500, כשל סביבה שמראה את E10. |
+| `tests3/integration/receiving-bench.test.ts` | עמדת הקבלה המאוחדת, ערימת חבילות בקריאה אחת וצילום דרך `/media/uploads`. ערימה עם שורה פגומה נדחית כולה, הכל או כלום, ו `/intake/items/batch` עם יחידה פגומה לא מגדיל את הכספת. שתי בדיקות ה `/intake/items/batch` סופרות את `/vault/items`, שמחזיר עד 50 פריטים, ואחרי סוויטת ה integration ל `red` יש יותר, כך שהספירה לא יכולה לזוז. תמונת חבילה של אחר מחזירה 404 ולא 403. הבדיקה היחידה של אחסון מול API חי. עם `STORAGE_PROVIDER=s3` ובלי MinIO תשע בדיקות נכשלות ב 500, כשל סביבה שמראה את E10. |
 | `tests3/integration/sec-authorization.test.ts` | מטריצת ההרשאות. ארבע רשימות ביד, `STAFF_ONLY`, `ADMIN_ONLY`, `PUBLIC_ROUTES` ו `OWNER_SCOPED`, מול שלושה probes, אנונימי מקבל 401, תפקיד שגוי 403, ו `golden` לא קורא ולא כותב פריט, parcel, ticket או כתובת של `red`. גם session אחרי logout, cookie מזויף והגבלת קצב על איפוס סיסמה. כשלונות נאספים לרשימה אחת. הרשימות לא נגזרות מהקוד, ולכן endpoint חדש שלא נוסף כאן לא נבדק, וחלק מהבדיקות מקבלות כל 4xx בלי לוודא שההכנה הצליחה. |
 | `tests3/integration/sec-validation.test.ts` | קלט זבל ל API. בקשה רעה מחזירה 4xx, וכל 5xx הוא ליקוי. סכומים שליליים, אפס, שבר ו `MAX_SAFE_INTEGER` בכסף, מזהים שאינם UUID שהיו מפילים את Postgres ל 500, SQL injection ו path traversal בפרמטר, שדה לא מוכר שנדחה בזכות `forbidNonWhitelisted`, תג `script` שנשמר כטקסט, payload ענק, וכמויות קצה. רוב הבדיקות מקבלות כל 4xx ולא מבחינות בין דחייה ב DTO לדחייה בבדיקת יתרה. גבול ה body הוא `16mb` לכל ה API בגלל תמונות ב base64. |
 | `tests3/integration/vlt-break-even.test.ts` | Break-Even Watch לא ממציא מחיר. ל Bault אין מקור מחירים, ולכן רוב הקובץ בודק מה קורה כשאי אפשר לתמחר, ו `valueBasis` מסמן מחיר מבוקש של הבעלים. אין בדיקה שחיובי האחסון שה worker כותב נספרים ב `storageSpentMinor`. |
+
+### בדוק את עצמך
+
+1. הסבר למה חריגה באמצע `interest-accrual.ts` מחייבת לקוחות פעמיים, ומה בהגדרת התורים גורם לזה.
+<details><summary>תשובה</summary>
+
+`apps/worker/src/index.ts` שורות 63 עד 71 יוצר כל תור בלי אופציות, ולכן חלים `retry_limit` 2 ו `retry_delay` 0, וחריגה מריצה את העבודה שוב מיד. `apps/worker/src/jobs/interest-accrual.ts` שורות 37 עד 46 כותב כל שורת `interest` ב autocommit בלי מפתח ליום, כך שמי שחויב לפני החריגה מחויב שוב, עד שלוש פעמים.
+
+</details>
+
+2. תאר מה יקרה לפריט `stored` שמנוי כיסה 400 יום, ביום שבו הכיסוי נגמר.
+<details><summary>תשובה</summary>
+
+`apps/worker/src/jobs/storage-fee.ts` שורות 141 עד 197 מדלג על פריט מכוסה בלי לרשום תקופה, ושורות 210 עד 230 סופרות תקופות מ `received_at` ומחסירות רק חיובים קיימים. הפריט יחויב מיד על שלוש תקופות, בסתירה להבטחה בהערה של `MembershipService.cancel` ב `apps/api/src/modules/mem/membership.service.ts` שורות 437 עד 446.
+
+</details>
+
+3. מצא את ההגנה המדומה מפני חיוב כפול בחידוש מנוי, ותאר את התיקון.
+<details><summary>תשובה</summary>
+
+`apps/worker/src/jobs/membership-renewal.ts` שורות 98 עד 124. ה UPDATE מסנן רק לפי `id` ו `period_start` נגזר מ `now()` של כל טרנזקציה, כך שטרנזקציה שנייה שחיכתה לנעילה כותבת period אחר ו `ON CONFLICT` לא נתקל בשורה. התיקון הוא `AND status = 'active' AND current_period_end <= now()` ב UPDATE ובדיקת `rowCount`.
+
+</details>
+
+4. הסבר איך תשלום משלוח ברגע האחרון משאיר משלוח פעיל עם `cancelled_at` מלא, ולאיזה ממצא זה קשור.
+<details><summary>תשובה</summary>
+
+`apps/worker/src/jobs/shipment-expiry.ts` שורות 21 עד 70 נועל ומבטל, אבל `ShipmentService.pay` ב `apps/api/src/modules/shp/shipment.service.ts` שורות 921 עד 970 בודק סטטוס לפני הטרנזקציה ומעדכן לפי `id` בלבד. אחרי ה commit של ה worker הוא דורס את `cancelled` ל `rates_selected`, וזה אותו שורש כמו E18.
+
+</details>
+
+5. פרט מה צריך לשנות כשמוסיפים ב API אירוע חדש שאמור לשלוח מייל, ומה קורה אם שוכחים חלק.
+<details><summary>תשובה</summary>
+
+כניסה ב `apps/api/src/modules/not/event-types.ts`, כניסה ב `EMAIL_BY_DEFAULT` וב `SUBJECTS` ב `apps/worker/src/jobs/notification-events.ts` שורות 19 עד 117, ו `case` ב `apps/worker/src/jobs/notification-message.ts` שורות 46 עד 253. בלי `case` נשלח משפט גנרי, כמו היום ל `buyout_quoted`, ובלי כניסה ב `EMAIL_BY_DEFAULT` לא יישלח מייל. `tests/web/notification-catalogue.test.ts` תופס רק פער בין הקטלוג של ה API לעותק של ה worker.
+
+</details>
+
+6. הסבר למה `fin-invariants` עובר על seed טרי ונכשל בהרצה שנייה על אותו מסד, ואיזה ממצא זה.
+<details><summary>תשובה</summary>
+
+`tests3/integration/fin-invariants.test.ts` שורות 95 עד 99 מגיש משיכה של 2,500 סנט בלי `reference` ולא מבטל אותה, ובהרצה הבאה הגנת הכפילות מחזירה 409 והבדיקה נכשלת. בשורות 290 עד 296 הוא גם משאיר כלל intake כללי במחיר כפול. זה E16, בדיקות שתלויות במצב המסד ובסדר ההרצה.
+
+</details>
+
+7. הסבר למה הבדיקה `leaves the offer open` לא מוכיחה את מה שבשמה.
+<details><summary>תשובה</summary>
+
+`tests3/integration/band2-negotiation.test.ts` שורות 140 עד 168 מנסה לרוקן את הארנק דרך `/finance/withdrawals`, שרק מגיש בקשת `cash_out` ולא מוריד יתרה. הקבלה מצליחה, וה `if` על 409 מדלג על ה expect שבודקים שההצעה נשארה `pending`.
+
+</details>
+
+8. הסבר למה שתי בדיקות ה `/intake/items/batch` ב `tests3/integration/receiving-bench.test.ts` לא יכולות להיכשל כשהן רצות אחרי סוויטת ה integration.
+<details><summary>תשובה</summary>
+
+`tests3/integration/receiving-bench.test.ts` שורות 368 עד 413 משוות את אורך `/vault/items` לפני ואחרי, אבל `listOwned` ב `apps/api/src/modules/vlt/vault.service.ts` שורות 131 עד 176 מחזיר עד 50 פריטים. אחרי ה integration ל `red` יש יותר מ 50 פריטים פעילים, ולכן האורך הוא 50 בשני המצבים גם אם יחידה נכתבה.
+
+</details>
 
 ## פרק 8. ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים
 
@@ -5261,7 +5979,7 @@ flowchart LR
 | 1 עד 8 | `<html lang="he" dir="rtl">` קובע כיוון בסיס עוד לפני ש React עולה | מונע הבהוב LTR לעברית. משתמש אנגלית רואה הבהוב הפוך עד ה effect של `I18nProvider` |
 | 10 עד 30 | `charset`, `viewport`, `title`, `description`, ושני `theme-color` לפי `prefers-color-scheme` | הצבעים זהים ל `--surface-page`, אבל לא עוקבים אחרי בחירה ידנית ב `ThemeToggle`. אין `og:url` ו `og:image` בכוונה |
 | 32 עד 50 | preload לשני הפונטים של הצביעה הראשונה, Plex לטיני ו Plex עברי, עם `crossorigin` | בלי `crossorigin` הדפדפן מוריד את הפונט פעמיים. שם קובץ שגוי יחזיר ב production את `index.html` במקום פונט |
-| 51 עד 61 | Open Graph, `div#root` ו `script type="module"` אחד ל `/src/main.tsx` | אין inline script, כדי ש `script-src 'self'` יעבוד. המחיר הוא שאי אפשר לקבוע `data-theme` לפני הצביעה. ב production הכותרות לא מגיעות לדף, ראה E22 |
+| 51 עד 61 | Open Graph, `div#root` ו `script type="module"` אחד ל `/src/main.tsx` | אין inline script, כדי ש `script-src 'self'` יעבוד. לכן `data-theme` נקבע רק אחרי הצביעה, אבל סקריפט חיצוני חוסם מאותו origin ב head היה קובע אותו קודם ועובר את ה CSP. ב production הכותרות לא מגיעות לדף, ראה E22 |
 
 #### `apps/web/vite.config.ts`
 קובע איך שרת הפיתוח, הבנייה וה preview מתנהגים. רובו תפעול, לאן מעבירים את `/api`, מי רשאי לגשת לשרת חשוף, ואיך מבטיחים שבנייה היא באמת production.
@@ -5270,13 +5988,13 @@ flowchart LR
 |---|---|---|
 | 1 עד 11 | imports, ו `appDir` ו `repoRoot` מ `import.meta.url`, כי החבילה ESM | |
 | 14 עד 19 | הקונפיג הוא פונקציה של `mode`. `loadEnv` עם prefix ריק קורא את קבצי ה env של השורש ושל `apps/web` כדי לקבל את `API_PORT`, ו `resolveApiProxyTarget` בוחר יעד | prefix ריק מכניס ל `fileEnv` גם את כל `process.env`, שגובר על הקבצים. שום ערך מכאן לא נכנס לבאנדל. נקראים גם `.env.local`, `.env.<mode>` ו `.env.<mode>.local`, והקבצים של `apps/web` דורסים את השורש |
-| 21 עד 44 | `delete process.env.VITE_USER_NODE_ENV`. ה `.env` בשורש מגדיר `NODE_ENV=development`, ו `loadEnv` מציב ממנו את `VITE_USER_NODE_ENV`, ש Vite הופך לבנייה של פיתוח | הבלוק הקריטי בקובץ. בלעדיו `vite build` מייצר באנדל שבו `SignInPage.tsx` ממלא חשבון seed וסיסמה. מגן רק מ `NODE_ENV` שבא מקובץ, לא מ shell ולא מ `apps/web/.env`. חייב לרוץ אחרי שתי קריאות `loadEnv` |
-| 46 עד 64 | `publicHosts`, איחוד של `WEB_PUBLIC_HOST` מקובץ ומהתהליך, מפוצל בפסיקים ובלי כפילויות | |
+| 21 עד 44 | `delete process.env.VITE_USER_NODE_ENV`. ה `.env` בשורש מגדיר `NODE_ENV=development`, ו `loadEnv` מציב ממנו את `VITE_USER_NODE_ENV`, ש Vite הופך לבנייה של פיתוח | הבלוק הקריטי בקובץ. בלעדיו `vite build` מייצר באנדל שבו `SignInPage.tsx` ממלא חשבון seed וסיסמה. מגן רק מ `NODE_ENV` בקבצי השורש, לא מ shell ולא מ `apps/web/.env`, ש Vite עצמו קורא אחרי הקונפיג. חייב לרוץ אחרי שתי קריאות `loadEnv` |
+| 46 עד 64 | `publicHosts`, איחוד של `WEB_PUBLIC_HOST` מ `fileEnv` ומהתהליך, מפוצל בפסיקים ובלי כפילויות | ההערה מבטיחה איחוד, אבל `fileEnv` כבר מכיל את ערך התהליך שגובר על הקובץ. כשהמשתנה מוגדר בשניהם נשאר רק ערך ה shell |
 | 66 עד 80 | `previewUser` עם ברירת מחדל `bault`, ו `previewPassword` עם ברירת מחדל ריקה. סיסמה ריקה פירושה בלי basic auth | `scripts/tunnel.mjs` מייצר סיסמה ומסרב לפתוח tunnel אם ה preview עונה בלי 401 |
 | 82 עד 91 | לוג של יעד ה proxy, `react()`, plugin ה basic auth רק כשיש סיסמה, ו `publicDir` שמצביע על `assets` בשורש | כל קובץ שמונח ב `assets` מתפרסם לכל מבקר. ההערה אומרת jpg, הקבצים PNG |
 | 92 עד 121 | שרת הפיתוח על 5173. עם `publicHosts` הוא מקבל `host: true` ו `allowedHosts` מפורש, אחרת loopback בלבד | לא `allowedHosts: true`, שמבטל הגנת DNS rebinding. שרת פיתוח חשוף אין לו סיסמה והוא מגיש קוד מקור עם הערות |
 | 122 עד 167 | proxy ל `/api` עם `changeOrigin` ו `xfwd`. `secure` כבוי רק ל https על loopback. `configure` מוחק `authorization` מכל בקשה, ובשגיאת חיבור מחזיר 503 עם JSON וקוד `api_unreachable` | הקוד מתואם עם `kindForStatus` ב `api.ts`. הסרת `xfwd` שוברת rate limit לפי IP בפיתוח. המחיקה הגורפת של `authorization` תשבור bearer tokens אם יתווספו |
-| 169 עד 201 | ה preview על 4173 עם אותו תנאי host | Vite מוריש ל preview את `proxy` אבל לא את `host` ו `allowedHosts`, ולכן הבלוק נחוץ |
+| 169 עד 201 | ה preview על 4173 עם אותו תנאי host | ההערה טוענת ש Vite לא מוריש ל preview את `host` ו `allowedHosts`. ב Vite 6.4.3 שבריפו `resolvePreviewOptions` מוריש את שניהם יחד עם `proxy`, ולכן הבלוק כפול ולא מזיק |
 | 205 עד 218 | `collectErrorCodes` אוסף קודי שגיאה, כולל מתוך `AggregateError` של חיבור dual stack | |
 | 220 עד 248 | `previewBasicAuth`. middleware שנרשם ישירות ב `configurePreviewServer`, ולכן רץ לפני הגשת הקבצים ולפני ה proxy. השוואת אורך ואז `timingSafeEqual`, וכישלון מחזיר 401 עם `WWW-Authenticate` | העברת הרישום לפונקציה המוחזרת תריץ אותו אחרי ה proxy ותחשוף את `/api`. אין הגבלת קצב |
 
@@ -5327,7 +6045,7 @@ flowchart LR
 | 451 עד 464 | `signOut` שולח `POST /auth/logout`, מתעלם מכישלון, מוחק את הסקשן האחרון ומנווט ל `vault`. בהפניה ישנה מחזירים `null` לפריים אחד | `navigate` כותב את `vault` מחדש מיד אחרי המחיקה. logout שנכשל משאיר עוגייה תקפה בשרת |
 | 466 עד 561 | ה shell. skip link, `NavigationRail`, `mobile-bar` בנייד, `PageHeader` עם פעמון, ערכה, שפה ותפריט משתמש, ו `main` עם `key={section}` ושרשרת תנאים לפי סקשן | `href="#main"` משנה את ה hash ומקפיץ לסקשן ברירת המחדל. בערכה כהה בנייד `.mobile-bar` בהיר וכפתור התפריט עם `color: '#fff'` נעלם. שורות 554 ו 555 בודקות שוב `isStaff` ו `isAdmin` |
 
-**שים לב.** חשבון מושעה יכול להיכנס. פעם הוא נחסם בכניסה, ומאז שהשעיה אוטומטית על חוב נוספה זה חסם את הדרך היחידה לשלם. היום ה API מגביל הכל חוץ מנתיבי התמיכה, והרייל מצטמצם ל `support`. מי שמוסיף נתיב לקוח שמושעה צריך, מסמן אותו `@AllowSuspended()` בשרת ומוסיף את הסקשן לסינון כאן.
+**שים לב.** חשבון מושעה יכול להיכנס. פעם הוא נחסם בכניסה, ומאז שהשעיה אוטומטית על חוב נוספה זה חסם את הדרך היחידה לשלם. היום ה API מגביל הכל חוץ מנתיבי `@AllowSuspended()`, התמיכה ו `GET /me/profile`, והרייל מצטמצם ל `support`. גם `POST /auth/logout` חסום, ולכן יציאה של מושעה מקבלת 403 שה SPA מתעלם ממנו, ה session נשאר תקף ורענון מחזיר אותו פנימה. מי שמוסיף נתיב לקוח שמושעה צריך, מסמן אותו `@AllowSuspended()` בשרת ומוסיף את הסקשן לסינון כאן.
 
 #### `apps/web/src/index.css`
 גיליון הסגנון היחיד, 7146 שורות, בלי CSS modules ובלי Tailwind. כל רכיב משתמש בשמות מחלקה גלובליים, והמבנה הוא שכבות שנוספו לאורך זמן. אין `@layer`, ולכן הסדר בקובץ הוא העדיפות.
@@ -5354,7 +6072,7 @@ flowchart LR
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
-| 12 | `BASE` הוא `/api/v1`, נתיב יחסי ולכן תמיד אותו origin | שינוי מחייב שינוי מקביל ב `vite.config.ts` וב `nginx.conf` |
+| 12 | `BASE` הוא `/api/v1`, נתיב יחסי ולכן תמיד אותו origin | שינוי מחייב את `setGlobalPrefix` ב `apps/api/src/main.ts`. `vite.config.ts` ו `nginx.conf` מעבירים כל `/api`, ומשתנים רק אם הקידומת יוצאת ממנו |
 | 14 עד 26 | `ApiErrorKind`, שישה סוגים. `unreachable`, `unauthenticated` ל 401, `forbidden`, `not_found`, `server` ל 5xx, ו `client` לכל 4xx אחר | זה החוזה ש `App.tsx` נשען עליו להבחנה בין אורח לתקלה |
 | 28 עד 42 | `ApiError` יורש מ `Error` ומוסיף `kind`, `status` שהוא 0 כשלא הגענו לשרת, ו `code` מהמעטפה האחידה של השרת, למשל `insufficient_funds` | הגבו לפי `code` ולא לפי טקסט ההודעה |
 | 44 עד 47 | `isUnreachable` | |
@@ -5387,9 +6105,9 @@ flowchart LR
 | 17 עד 24 | `Route` עם `section`, `tab` ו `params`, והמפתח `bault.tab` לסקשן האחרון | השם `tab` היסטורי, הערך הוא section. אין union של סקשנים |
 | 26 עד 68 | `LEGACY_ROUTES` של `services` ו `shipping`, ו `LEGACY_TABS` לפי סקשן, למשל `wallet/topup` ל `cash-in` | ההערה טוענת שה tab המבוקש נשמר. הקוד תמיד מחזיר את ה tab הקבוע מהטבלה |
 | 78 עד 86 | `legacyRedirect`, סקשן שהוסר גובר על לשונית שהוסרה | כל היעדים קבועים מטבלה סגורה, ולכן אין open redirect. נבדק ב `tests/web/routing.test.ts` |
-| 88 עד 101 | `parse` מסיר `#/`, מפצל על `?` הראשון, מפענח כל מקטע ומחזיר section ו tab | `decodeURIComponent` בשורה 91 זורק על `#/%E0` בזמן render, והאפליקציה כולה עוברת למסך תקלה שרענון לא מתקן. `?` נוסף בערך שנכתב ביד הולך לאיבוד, ו `build` מקודד אותו |
+| 88 עד 101 | `parse` מסיר `#/`, מפצל על `?` ושומר רק שני חלקים, מפענח כל מקטע ומחזיר section ו tab | `decodeURIComponent` בשורה 91 זורק על `#/%E0` בזמן render, והאפליקציה כולה עוברת למסך תקלה שרענון לא מתקן. `?` נוסף בערך שנכתב ביד הולך לאיבוד, ו `build` מקודד אותו |
 | 103 עד 111 | `build` מקודד מקטעים, משמיט params ריקים, ותמיד מתחיל ב `#/` | |
-| 113 עד 126 | `useRoute` עם `useSyncExternalStore` על `hashchange`, ומרנדר רק כשמחרוזת ה hash משתנה | `parse` מחזיר אובייקט חדש בכל render, מה שמבטל memoization של הפונקציות מ `useNavigation` |
+| 113 עד 126 | `useRoute` עם `useSyncExternalStore` על `hashchange`, ומרנדר רק כשמחרוזת ה hash משתנה | `parse` מחזיר אובייקט חדש בכל render, מה שמבטל memoization של `openRecord`, `closeRecord` ו `setParams` מ `useNavigation` |
 | 133 עד 150 | `navigate` יוצא אם ה hash זהה, כותב את הסקשן ל `localStorage` בתוך `try`. עם `replace` קורא ל `history.replaceState` ומשגר `hashchange` ידנית | בלי השיגור ידני הפניה עם `replace` תשנה URL בלי רינדור |
 | 153 עד 167 | `lastVisitedSection` ו `clearLastVisitedSection`, עטופים ב `try` | |
 | 174 עד 231 | `useNavigation`. `goSection`, `goTab` שמנקה params, `openRecord` שדוחף רשומת history כך ש Back סוגר מגירה, `setParams` עם `replace` כברירת מחדל, ו `closeRecord` | `closeRecord` דוחף רשומה, ולכן Back אחרי סגירה פותח את המגירה שוב. מסנני השוק חיים כאן כדי שקישור לחיפוש ישותף |
@@ -5404,7 +6122,7 @@ flowchart LR
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 22 | `Locale` של `he` או `en`, `DEFAULT_LOCALE`, `LOCALES`, המפתח `bault.locale`, ו `MessageVars` | |
-| 24 עד 2323 | הקטלוג `he`, אובייקט literal אחד עם `as const`. כ 2100 מפתחות בסגנון נקודות, למשל `wallet.request.status.pending`, מחולקים בערך בהערות כותרת | הסדר לא אלפביתי וכותרות חוזרות. מוצאים מפתח בחיפוש טקסט. `error.unreachable` בשורה 1198 מורה להריץ `pnpm dev` גם ב production. כ 91 הערות כותרת מחלקות אותו, והקטלוג האנגלי שומר על אותו סדר בלי אכיפה |
+| 24 עד 2323 | הקטלוג `he`, אובייקט literal אחד עם `as const`. כ 2100 מפתחות בסגנון נקודות, למשל `wallet.request.status.pending`, מחולקים בערך בהערות כותרת | הסדר לא אלפביתי וכותרות חוזרות. מוצאים מפתח בחיפוש טקסט. `error.unreachable` בשורה 1198 מורה להריץ `pnpm dev` גם ב production. כ 47 הערות כותרת מחלקות אותו, והקטלוג האנגלי שומר על אותו סדר בלי אכיפה |
 | 2325 עד 4624 | `MessageKey` נגזר מ `he`, ו `en` מוקלד `Record<MessageKey, string>` | מפתח חסר, עודף או כפול באנגלית נכשל בקומפילציה. ערך שנשאר בעברית או placeholder שנשמט נתפסים רק בבדיקה |
 | 4626 עד 4633 | `messages` ו `MESSAGES` המיוצא לבדיקות | הצרכן היחיד `tests/ux/audit-screens.test.tsx` |
 | 4635 עד 4641 | `format` מחליף `{name}` במעבר אחד. placeholder שלא סופק נשאר מילולי | הפלט טקסט ש React עושה לו escape, וערך מהשרת לא יכול להזריק placeholder או HTML. `name in vars` בודק גם את ה prototype |
@@ -5424,7 +6142,7 @@ flowchart LR
 |---|---|---|
 | 19 עד 33 | `ThemeChoice`, המפתח `bault.theme`, `ThemeValue` עם `choice`, `resolved`, `setChoice` ו `cycle` | |
 | 35 עד 50 | `storedChoice` קורא בתוך `try` ומקבל רק שלושה ערכים. `systemPrefersDark` בודק `matchMedia` | ערך רביעי ב `ThemeChoice` דורש עדכון כאן, אחרת הוא נזרק ל `system` |
-| 52 עד 74 | effect אחד עוקב אחרי `prefers-color-scheme`. השני מוחק `data-theme` ב `system` ומציב אותו אחרת, וכותב ל `localStorage` | התכונה נקבעת אחרי הצביעה הראשונה, ולכן מי שבחר כהה על מערכת בהירה רואה הבהוב. תיקון דורש inline script שה CSP אוסר |
+| 52 עד 74 | effect אחד עוקב אחרי `prefers-color-scheme`. השני מוחק `data-theme` ב `system` ומציב אותו אחרת, וכותב ל `localStorage` | התכונה נקבעת אחרי הצביעה הראשונה, ולכן מי שבחר כהה על מערכת בהירה רואה הבהוב. תיקון אפשרי בסקריפט חיצוני חוסם ב head, ש `script-src 'self'` מתיר |
 | 76 עד 100 | `cycle` עם updater, ערך context ב `useMemo`, ו `useTheme` שזורק בלי provider | |
 
 #### `apps/web/src/shared/hooks.ts`
@@ -5463,7 +6181,7 @@ flowchart LR
 | 303 עד 323 | `StatusTone` של שבעה ערכים ו `StatusBadge` עם `pill--<tone>` | tone `undefined` מקטלוג חסר נותן תג בלי צבע |
 | 329 עד 403 | `EmptyState`, `ErrorState` עם `role="alert"` וכפתור retry רק כשגם `onRetry` וגם `retryLabel` הועברו, ו `SuccessNote` עם `role="status"` | ההודעות מוצגות כטקסט, ולכן הודעת שרת לא מזריקה HTML |
 | 405 עד 431 | `SkeletonTable` ו `SkeletonBlock`, הכל `aria-hidden` | קורא מסך לא שומע הודעת טעינה |
-| 437 עד 460 | `MetricCard` עם `icon` חובה | `.metric-icon` מוסתר ב CSS, האייקון לעולם לא מוצג. הצרכן היחיד `WalletPage.tsx` |
+| 437 עד 460 | `MetricCard` עם `icon` חובה | `.metric-icon` מוסתר ב CSS, האייקון לעולם לא מוצג. שישה קבצים משתמשים בו, בהם `WalletPage.tsx` |
 | 466 עד 532 | `ContextTabs`, `role="tablist"` עם roving tabindex. חצים קוראים את `dir` בזמן הלחיצה ומתהפכים ב RTL, ו Home ו End לקצוות | החצים לא מעבירים פוקוס, הטבעת נשארת על לשונית עם `tabIndex={-1}`. המזהים `tab-<key>` גלובליים |
 | 534 עד 576 | `TabPanel` עם `aria-labelledby`, `ViewAllLink` שהחץ שלו מתהפך ב CSS, ו `DetailRow` כזוג `dt` ו `dd` | `DetailRow` חייב לשבת בתוך `dl` |
 
@@ -5477,7 +6195,7 @@ flowchart LR
 | 6 עד 33 | `FOCUSABLE`, ומחסנית `overlays` של `symbol` ברמת המודול עם `pushOverlay` ו `isTopOverlay` | המחסנית נולדה מבאג שבו Escape בדיאלוג תרומה סגר את כל המגירה |
 | 43 עד 61 | `trapTab` לוכד Tab בין הראשון לאחרון ומסנן מוסתרים לפי `offsetParent` | Shift Tab כשהפוקוס על הפאנל עצמו יוצא מהמגירה, וזה המצב מיד בפתיחה |
 | 84 עד 143 | `DetailDrawer`. ה effect שומר את מי שפתח, דוחף אסימון, מעביר פוקוס לפאנל, מאזין ל `keydown` ב capture על `document`, Escape סוגר רק אם עליון ועוצר propagation, ונועל גלילה. ה cleanup מחזיר הכל | ה effect תלוי ב `onClose`, ורוב הקוראים מעבירים פונקציה inline. כל רינדור של ההורה מקפיץ פוקוס, ומעביר את המגירה לראש המחסנית מעל דיאלוג פתוח. תיקון, `onClose` ב ref ו effect עם תלויות ריקות. `stopPropagation` ב capture על `document` מסתיר את Escape מכל מאזין אחר, ופופאובר בתוך מגירה ייסגר רק יחד איתה |
-| 145 עד 180 | רקע שלחיצה עליו סוגרת אלא אם `dirty`, ו `aside` עם `role="dialog"`, `aria-modal` ו `h2`. כשיש `lead` הכותרת המלאה נוספת כ `sr-only` | `dirty` נבדק רק ברקע. Escape וכפתור הסגירה סוגרים טופס חצי מלא. מגירה נפתחת מ param ב URL דרך `openRecord`, ו `onClose` צריך להיות יציב, למשל `useCallback`. הסרת `aria-modal` או שינוי ה role ישברו את בדיקות ה axe ב `tests/ux` |
+| 145 עד 180 | רקע שלחיצה עליו סוגרת אלא אם `dirty`, ו `aside` עם `role="dialog"`, `aria-modal` ו `h2`. כשיש `lead` הכותרת המלאה נוספת כ `sr-only` | `dirty` נבדק רק ברקע. Escape וכפתור הסגירה סוגרים טופס חצי מלא. מגירה נפתחת מ param ב URL דרך `openRecord`, ו `onClose` צריך להיות יציב, למשל `useCallback`. בריפו אין בדיקת axe, ושום בדיקה לא תיכשל על הסרת `aria-modal` או שינוי ה role של המגירה |
 | 188 עד 232 | `ConfirmationModal`, props עם `tone` ו `busy`, ו effect באותו מבנה בלי נעילת גלילה | Escape קורא ל `onCancel` גם כש `busy`, והבקשה ממשיכה בשרת |
 | 234 עד 270 | הדיאלוג. רקע וכפתור ביטול מושבתים כש `busy`, אישור עם `loading={busy}` | הכותרת `h4`, שוברת את היררכיית הכותרות |
 
@@ -5501,7 +6219,7 @@ flowchart LR
 |---|---|---|
 | 9 עד 50 | `NavDestination` עם `count` אופציונלי, והערה | ההערה אומרת 76px, ב CSS `--rail-w` הוא 72px |
 | 51 עד 81 | `useReducer`. במובייל `expanded` הוא `open` שה shell העביר, בדסקטופ `isExpanded`. `go` מודיע ל shell, שולח `navigate` וסוגר מגירה | |
-| 83 עד 112 | scrim במובייל, `pointerEnter` ו `pointerLeave`, `onMouseMove` שמוסר כשאין מה לשנות, ו `onBlur` שבודק `relatedTarget` | בלי בדיקת `relatedTarget` הרייל יתכווץ בכל Tab בין פריטים |
+| 83 עד 112 | scrim במובייל, `pointerEnter` ו `pointerLeave`, `onMouseMove` שמוסר כשאין מה לשנות, ו `onBlur` שבודק `relatedTarget` | בלי בדיקת `relatedTarget` כל Tab בין פריטים שולח `focusLeave` ומיד `focusEnter`, והמצב הסופי זהה |
 | 113 עד 138 | קישור מותג שמנווט לסקשן המורשה הראשון, ושתי קבוצות עם קו מפריד | |
 | 148 עד 187 | `RailGroup`, כפתור לכל יעד עם `aria-current`, נקודה ומונה `99+` שהם `aria-hidden` | `.rail-label` מוסתר ב `opacity` ולא ב `display: none`, כדי שלכפתור המכווץ יישאר שם נגיש |
 
@@ -5565,7 +6283,7 @@ flowchart LR
 |---|---|---|
 | 23 עד 42 | `Barcode` מחשב SVG ב `useMemo`, מציג `code` טקסטואלי אם הקידוד זורק, ואחרת `dangerouslySetInnerHTML` | השימוש היחיד באפליקציה. בטוח כי כל תו עבר בדיקת ASCII ו `escapeXml` |
 | 45 עד 59 | `PrintableLabel` ו `printBarcode` לתווית אחת | |
-| 74 עד 149 | `printBarcodes` מקודד ברוחב מודול 3, כותב מסמך שלם ל iframe מוסתר עם `document.write`, וקורא ל `print()`. ניקוי ב `onafterprint` או בטיימר של 60 שניות | ההדפסה מבודדת מ `index.css`. הטיימר עלול למחוק iframe בדפדפן שבו `print()` לא חוסם. רוחב מודול 3 וגובה 90 נבחרו כדי שהפס הצר יעבור את סף סורקי הלייזר |
+| 74 עד 149 | `printBarcodes` מקודד ברוחב מודול 3, כותב מסמך שלם ל iframe מוסתר עם `document.write`, וקורא ל `print()`. ניקוי ב `onafterprint` או בטיימר של 60 שניות | ההדפסה מבודדת מ `index.css`. הטיימר נקבע בשורה 148, רק אחרי ש `print()` חוזר, ו `done` מונע ניקוי כפול. כש `print()` חוסם עד סגירת הדיאלוג הטיימר לא מזיק. כשהוא לא חוסם, דיאלוג שפתוח יותר מ 60 שניות מאבד את ה iframe. באילו דפדפנים זה קורה ומה יודפס אז רק בדיקה בדפדפן תגיד, ואין בדיקה לניקוי. רוחב מודול 3 וגובה 90 נבחרו כדי שהפס הצר יעבור את סף סורקי הלייזר |
 | 157 עד 220 | `BarcodePrintAllButton`, `BarcodePrintButton` ו `BarcodeLabel`, כפתורי HTML רגילים | |
 | 222 עד 228 | `escapeHtml` של ארבעה תווים לכיתוב | הסרתו פותחת XSS בתוך iframe מאותו origin |
 
@@ -5586,7 +6304,7 @@ flowchart LR
 |---|---|---|
 | 20 עד 39 | סדר סיומות png ואז jpg, `cardPhotoUrl` עם `encodeURIComponent`, ו `useCardPhotoSource` שמקדם ניסיון ב `onError` | `attempt` לא מתאפס כש `serialNumber` משתנה, ומופע ממוחזר מציג שאין תמונה. ב production `location /images/` מחזיר 404 אמיתי, ולכן `onError` נורה כמצופה |
 | 45 עד 107 | `CardPhotoButton` עם סמל המצלמה 📷, ו `CardPhotoThumb` עם `loading="lazy"` | |
-| 109 עד 163 | `CardPhotoModal`, lightbox עם Escape ב bubble ונעילת גלילה | לא במחסנית ה overlays. בתוך מגירת פריט Escape סוגר את כל המגירה, והגלילה עלולה להישאר נעולה |
+| 109 עד 163 | `CardPhotoModal`, lightbox עם Escape ב bubble ונעילת גלילה | לא במחסנית ה overlays. בתוך מגירת הפריט ב `VaultPage.tsx` המגירה תופסת Escape ב capture, ו Escape או Back סוגרים את שתיהן יחד. React מריץ cleanup מההורה לילד, ה lightbox משחזר אחרון את ה `hidden` ששמר, ו `body.style.overflow` נשאר `hidden` עד רענון. סגירה בכפתור או ברקע תקינה. אם הנעילה חוסמת גלילה בכל דפדפן, למשל ב iOS, רק בדיקה בדפדפן תגיד |
 
 **קטלוגי הדומיין, איך לחשוב עליהם.** רוב הקבצים הבאים בנויים משלוש לבנים. ממשקים שמעתיקים ביד את צורת תשובות השרת, כי ה SPA לא מייבא מ `apps/api`, ולכן שם שדה ששונה בשרת יהיה `undefined` בלי שגיאה. מילון מערך enum למפתח תרגום עם פונקציית `...Label` שנופלת לערך הגולמי. ומילון מערך enum ל `StatusTone`. המילונים מוקלדים `Record<string, ...>`, ולכן אף אחד לא בודק שכל ערכי השרת מכוסים. רק לקטלוג ההתראות יש בדיקה דו כיוונית מול השרת.
 
@@ -5596,7 +6314,7 @@ flowchart LR
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 12 עד 33 | `Intl.NumberFormat` אחד ל USD. `formatUsd` מחלק ב 100, `formatUsdSigned` עם סימן מינוס טיפוגרפי, `formatLedgerAmount` מוסיף סימן לפי `direction` | קוד המטבע שהשרת שולח מתעלמים ממנו בכוונה. מטבע שני יוצג עם סימן דולר. כל כיוון שאינו `credit` מוצג כמינוס |
-| 40 עד 46 | `dollarsToCents` מנקה פסיקים, רווחים וסימן דולר, דוחה יותר משתי ספרות אחרי הנקודה, ומחזיר `Math.round(value * 100)`. אפס ושלילי מחזירים `null` | כל סכום שנשלח לשרת עובר כאן. בלי `Math.round` הערך `0.29` נשלח כ 28 סנט. אין תקרה עליונה, השרת אוכף |
+| 40 עד 46 | `dollarsToCents` מנקה פסיקים, רווחים וסימן דולר, דוחה יותר משתי ספרות אחרי הנקודה, ומחזיר `Math.round(value * 100)`. אפס ושלילי מחזירים `null` | כל סכום שנשלח לשרת עובר כאן. בלי `Math.round` הערך `0.29` נותן `28.999999999999996` ולא 29. אין תקרה עליונה, השרת אוכף |
 | 49 עד 72 | `centsToDollars`, ו `formatDateTime` ו `formatDate` לפי `he-IL` או `en-US` ואזור הזמן של הדפדפן | תאריך יכול להיות שונה ביום ממה שמופיע במייל של השרת. ערך ריק מוצג כקו, ומחרוזת לא תקינה מוצגת כמו שהיא |
 
 #### `apps/web/src/shared/names.ts`
@@ -5631,7 +6349,7 @@ flowchart LR
 |---|---|---|
 | יתרה במשיכה | לפי `availableMinor` מזמן הטעינה, רק כשידוע | לא בכללים. נבדק ב `wallet-request.service.ts` בהגשה, ושוב בזמן `complete` |
 | מטבע | אין, הטופס שולח `USD` קבוע | נבדק מול `SUPPORTED_CURRENCIES` |
-| אורך הערות ואסמכתא | על הערך לפני trim | על מה שהגיע, אחרי שהטופס עשה trim. הערה של 501 תווים שהאחרון רווח נחסמת רק בלקוח |
+| אורך הערות ואסמכתא | על הערך לפני trim | על מה שהגיע, אחרי שהטופס עשה trim. בפועל `maxLength` בטופס עוצר ב 500 וב 120, ולכן הפער לא מורגש |
 
 **שים לב.** ההערה בשורה 10 טוענת ש `tests/web/wallet-requests.test.ts` שומר על ההתאמה, אבל הבדיקה לא מייבאת את קובץ השרת. טבלת המעברים קיימת בשלושה מקומות, בשרת, ב `canCancel` כאן וב `reviewerActions` ב `WalletRequestsSection.tsx`, ושני האחרונים הם קידוד ידני של הראשון.
 
@@ -5641,7 +6359,7 @@ flowchart LR
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 13 עד 57 | `UNLIMITED` של מינוס אחת, `MembershipTier`, `TierCatalogue` ו `MyMembership` עם `perCycle`, `currentFeeMinor` ו `cycleLive` | השרת הוסיף את שני השדות האחרונים בדיוק בשביל החישוב כאן |
-| 65 עד 83 | `COMPARISON_ROWS`, חמש עשרה שורות בסדר הצגה | שורה חדשה דורשת מקרה ב `allowanceCell` ומפתח `membership.row.*` |
+| 65 עד 83 | `COMPARISON_ROWS`, חמש עשרה שורות בסדר הצגה | שורה שאינה מפתח ב `perCycle` דורשת מקרה ב `allowanceCell`, וכל שורה דורשת מפתח `membership.row.*` |
 | 91 עד 119 | `allowanceCell` מחזיר טקסט או `null` לשורה שלא כלולה, ואינסוף ל `UNLIMITED`. `usedFraction` לפס ההתקדמות | שם מפתח ששונה ב `perCycle` בשרת יציג שירות בתשלום כלא כלול. `toLocaleString` של מספר הפריטים לפי הדפדפן ולא לפי שפת האפליקציה |
 | 138 עד 162 | `tierAction` מחזיר `join`, `keep`, `downgrade` או `upgrade`. הנמכה לפי סדר `tierOrder`. בשדרוג זיכוי `Math.floor(currentFeeMinor * left / cycle)` וחיוב `max(0, priceMinor - credit)` | אותה נוסחה כמו ב `membership.service.ts`, אבל עם `Date.now()` של הדפדפן ומחיר מהקטלוג שנטען. המשפט באישור יכול לסטות מהחיוב. השרת לא מקבל סכום מהלקוח, לכן פער תצוגה בלבד |
 
@@ -5856,7 +6574,7 @@ flowchart LR
 
 | קובץ | מה הוא עושה |
 |---|---|
-| `apps/web/src/areas/customer/auth/demoUsers.ts` | מחרוזת חשבונות ה seed והסיסמה המשותפת, מחוץ לקטלוג התרגום כדי שתיפול מהבאנדל. מיובא רק תחת `import.meta.env.DEV`, ו import מכל מקום אחר יכניס אותו לבאנדל |
+| `apps/web/src/areas/customer/auth/demoUsers.ts` | מחרוזת חשבונות ה seed והסיסמה המשותפת, מחוץ לקטלוג התרגום כדי שתיפול מהבאנדל. מיובא ב `SignInPage.tsx` ומוזכר רק בענף `import.meta.env.DEV`, ולכן Rollup משמיט אותו. שימוש מחוץ לענף כזה יכניס אותו לבאנדל |
 
 #### `apps/web/src/areas/customer/finance/WalletPage.tsx`
 מסך הארנק, דפוס P8. בראשו היתרה, שהשרת גוזר מסכום רשומות ה ledger, ומתחתיה חמישה טאבים, סקירה, תנועות, הפקדה, משיכה ובקשות. אין בדף שום פקד שמזיז כסף ישירות. הפקדה מיידית עוברת דרך ספק תשלום ב `TopUpPanel`, וכל השאר הן בקשות שמנהל מאשר. מה שונה מ P8, טאב, תנועה פתוחה ובקשה פתוחה חיים ב hash, והמסננים לא.
@@ -5892,8 +6610,8 @@ flowchart LR
 | 46 עד 69 | `TopUpPanel`, state של `catalogue`, `route` עם ברירת מחדל `card`, `amount` ו `busy`. effect טוען `GET /finance/funding-routes` עם תלות `[onError]` | `WalletPage` מעביר `setError` יציב. פונקציית חץ תיצור לולאת טעינות. כישלון משאיר את הפאנל במצב טעינה לתמיד |
 | 71 עד 77 | `cents` מ `dollarsToCents`, ו `withinLimits` מול `catalogue.limits` | |
 | 79 עד 106 | `pay` שולח `POST /finance/checkout` עם `amountMinor`, `route` ו `idempotencyKey` שנבנה מ `Date.now()` ומחרוזת אקראית. בהצלחה `onStatus`, ניקוי ו `onChanged` | אין `paymentMethodToken` ואין בריפו קוד שיוצר הזמנת PayPal, ולכן ב production המסלול המיידי נכשל תמיד עם 500, ראה E3. המפתח מתחדש בכל לחיצה, ותשובה שאבדה ולחיצה חוזרת יוצרות תשלום שני. המפתח צריך להיווצר פעם אחת לכל טיוטה ב `useRef` ולהתאפס רק אחרי הצלחה או שינוי סכום |
-| 108 עד 192 | `select` של מסלולים, תג מיידי או נבדק. במסלול מיידי `MoneyField` וכפתור `disabled={busy \|\| !withinLimits}`. במסלול ידני פרטי חשבון ב `dir="ltr"` עם מפתחות `money.bank.${k}` | `MoneyField` לא מקבל `error`, וכפתור מושבת לא מסביר את עצמו. שדה בנק חדש בשרת יוצג עם מפתח חסר. ברירת המחדל `card` נבחרת גם כשהיא לא זמינה, ואז מוצג מצב ריק |
-| 194 עד 260 | `CashOutQuotePanel`. אחרי debounce של 250 מילישניות שולח `GET /finance/cash-out-quote`, ומציג לוח עמלות וברוטו, עמלה ונטו | השרת משתמש באותה פונקציה לציטוט ולחיוב. ה cleanup מבטל את הטיימר ולא את הבקשה, ותשובה ישנה יכולה לנצח |
+| 108 עד 192 | `select` של מסלולים, תג מיידי או נבדק. במסלול מיידי `MoneyField` וכפתור `disabled={busy \|\| !withinLimits}`. במסלול ידני פרטי חשבון ב `dir="ltr"` עם מפתחות `money.bank.${k}` | `MoneyField` לא מקבל `error`, וכפתור מושבת לא מסביר את עצמו. שדה בנק חדש בשרת יוצג עם מפתח חסר. `instant` נבדק לפני `available`, ולכן מסלול מיידי לא זמין היה מוצג כטופס תשלום. היום השרת מסמן כל מסלול מיידי כזמין |
+| 194 עד 260 | `CashOutQuotePanel`. אחרי debounce של 250 מילישניות שולח `GET /finance/cash-out-quote`, ומציג לוח עמלות וברוטו, עמלה ונטו | השרת משתמש ב `cashOutFeeMinor` לציטוט ולחיוב, אבל ההשלמה ב `wallet-request.service.ts` גובה את העמלה פעמיים. ה cleanup מבטל רק את הטיימר, בלי `AbortController` ובלי דגל. תשובה שחוזרת אחרי שהשדה התרוקן מוצגת תמיד, ותשובה ישנה דורסת חדשה רק אם היא איטית ממנה ביותר מהפער בין השליחות, לפחות 250 מילישניות. השורה מציגה את הברוטו מהתשובה, ולכן הסכום הישן גלוי. אם זה קורה ברשת אמיתית רק בדיקה בדפדפן תגיד |
 
 **שים לב.** בתיקון E3 אסור להוסיף fallback שמחייב בלי הזמנה מאושרת. `capture` שמסרב בלי order id הוא בקרה נכונה. בצד השרת `checkout.service.ts` מאמת מסלול, סכום שלם בגבולות ומפתח לא ריק, בודק replay לפי `userId` ו `providerRef`, ואינדקס ייחודי על `provider_ref` מגבה זאת במסד. מפתח יציב לכל טיוטה הוא מה שיאפשר להגנה הזו לעבוד.
 
@@ -5960,7 +6678,7 @@ flowchart LR
 | 37 עד 113 | `SupportPage`. `load` טוען `GET /support/tickets` ובכישלון מציב מערך ריק. הודעת השעיה לפני כל תוכן, `TicketList`, `NewTicketForm`, ומגירה לכל `route.params.ticket` | כישלון נראה כאין פניות, ומשתמש מושעה עלול לפתוח פנייה כפולה |
 | 115 עד 207 | `TicketList`, טבלה עם שורה לחיצה וכפתור פתיחה אמיתי שעוצר propagation, וסטטוס לפי `TICKET_TONE` | הכפתור פותר את פער הנגישות של שורות הארנק |
 | 209 עד 278 | `NewTicketForm` עם קטגוריה, נושא וגוף, `maxLength` של 200 ו 5000 תואמים לשרת, ו `POST /support/tickets` | הטופס לא שולח `relatedType` ו `relatedId`, ואין דרך לקשר פנייה לבקשת משיכה. רק ה throttler הגלובלי חל |
-| 280 עד 349 | `ThreadDrawer` עם `staff`. `load` לפי `ticketId`, `send` שולח `POST /support/tickets/:id/messages`, ו `resolve` לצוות בלבד | `thread` ו `reply` לא מתאפסים בהחלפת פנייה, וטיוטה עלולה להישלח לפנייה הלא נכונה. תיקון, `key={ticketId}` או איפוס ב effect. `reply` בשרת בודק בעלות, מוסיף הודעה ומעדכן סטטוס בטרנזקציה אחת |
+| 280 עד 349 | `ThreadDrawer` עם `staff`. `load` לפי `ticketId`, `send` שולח `POST /support/tickets/:id/messages`, ו `resolve` לצוות בלבד | `thread` ו `reply` לא מתאפסים בהחלפת פנייה, וטיוטה עלולה להישלח לפנייה הלא נכונה. תיקון, `key={ticketId}` או איפוס ב effect. `reply` בשרת בודק בעלות, ואז מוסיף הודעה ומעדכן סטטוס בטרנזקציה אחת |
 | 351 עד 421 | רינדור עם `DetailDrawer`, `ul.timeline` של הודעות ב `pre-wrap`, ותיבת תשובה רק אחרי טעינה | שורות 397 ו 398 קובעות תווית לפי `authorRole` בלבד, ובתור הצוות הודעות הלקוח מסומנות אתם |
 | 423 עד 424 | ייצוא מחדש של הטיפוס `TranslateFn` | |
 
@@ -5980,6 +6698,64 @@ flowchart LR
 | 230 עד 284 | טבלת ההשוואה עם `scope` נכון, ו `allowanceCell` שמציג קו ארוך ללא כלול | `aria-label` על `span` בלי role לא נקרא באמינות |
 | 286 עד 338 | פקדי הרכישה. `isCurrent` מציג תג במקום כפתור, `offer-note` מתחלף למשפט האישור, ואישור עם `loading={busy === tier.key}` | הסתרת הכפתור למסלול הנוכחי מונעת את הבקשה היחידה שהשרת דוחה ב 409 |
 | 340 עד 374 | פאנל מה לא כלול, וחמש פונקציות שבונות מפתחות עם `as MessageKey` | מזהה חדש בשרת יוצג כמפתח גולמי |
+
+### בדוק את עצמך
+
+1. הסבר למה תשובת 401 בעלייה מציגה טופס כניסה, ו API שלא עונה מציג מסך חסום עם ניסיון חוזר.
+<details><summary>תשובה</summary>
+
+`probeSession` הופך רק `ApiError` מסוג `unauthenticated` ל `anonymous`, וכל כישלון אחר ל `blocked`, `apps/web/src/App.tsx` שורות 220 עד 246. הסוג נקבע ב `kindForStatus`, שבודק קודם את הקוד `api_unreachable` של ה proxy ורק אחר כך את הסטטוס, `apps/web/src/shared/api.ts` שורות 80 עד 89, כדי שתקלה לא תיראה כהתנתקות ותזמין הקלדת סיסמה.
+
+</details>
+
+2. תאר מה חשבון מושעה רואה אחרי כניסה, ומה קורה כשהוא בוחר ביציאה.
+<details><summary>תשובה</summary>
+
+השומר מעביר מושעה רק בנתיבים עם `@AllowSuspended()`, `apps/api/src/modules/acc/session-auth.guard.ts` שורות 50 עד 60, והרייל מצטמצם ל `support`, `apps/web/src/App.tsx` שורות 386 עד 395. `POST /auth/logout` לא מסומן, ולכן הוא נענה ב 403 ש `signOut` ב `apps/web/src/App.tsx` שורות 451 עד 460 מתעלם ממנו, העוגייה לא נמחקת ורענון מחזיר את המשתמש פנימה.
+
+</details>
+
+3. מצא את הבלוק שגורם לעמודת היתרה בארנק להציג מספרים שגויים, והסבר את התיקון.
+<details><summary>תשובה</summary>
+
+`balanceAfter` מצבר מאפס על `rows`, שהן שש השורות האחרונות בסקירה או הרשימה המסוננת ולא כל ה ledger, `apps/web/src/areas/customer/finance/WalletPage.tsx` שורות 578 עד 587. התיקון הוא לחשב פעם אחת על ה ledger המלא ולהעביר את הערך לפי `row.id`.
+
+</details>
+
+4. הסבר למה ההפקדה המיידית לא יכולה לעבוד ב production, ולמה לחיצה חוזרת אחרי תשובה שאבדה תהיה מסוכנת גם אחרי תיקון.
+<details><summary>תשובה</summary>
+
+`pay` לא שולח `paymentMethodToken`, ומתאם PayPal זורק `Error` כשאין הזמנה מאושרת, ולכן התשובה 500, זה E3, `apps/web/src/areas/customer/finance/MoneyPanels.tsx` שורות 79 עד 106. המפתח נבנה מחדש מ `Date.now()` בכל לחיצה, ולכן `providerRef` שונה ובדיקת ה replay ב `checkout.service.ts` והאינדקס הייחודי לא מזהים את הכפילות.
+
+</details>
+
+5. הסבר למה העברת `onClose` כפונקציית חץ ל `DetailDrawer` היא מלכודת, ומה קורה לדיאלוג אישור שפתוח מעליה.
+<details><summary>תשובה</summary>
+
+ה effect תלוי ב `onClose`, ולכן כל רינדור של ההורה מריץ cleanup שמחזיר את הפוקוס, ואז ריצה חדשה שמעבירה פוקוס לפאנל ודוחפת את המגירה לראש מחסנית ה overlays, `apps/web/src/shared/ui/DetailDrawer.tsx` שורות 111 עד 143. מעל `ConfirmationModal` פתוח Escape יסגור אז את המגירה ולא את הדיאלוג. התיקון הוא `onClose` ב ref ו effect עם תלויות ריקות.
+
+</details>
+
+6. תאר מה יקרה לגלילת הדף אם לוחצים Escape כשה lightbox של תמונה פתוח בתוך מגירת פריט בכספת.
+<details><summary>תשובה</summary>
+
+המגירה תופסת את Escape ב capture על `document` ועוצרת אותו, ולכן היא נסגרת יחד עם ה lightbox, `apps/web/src/shared/ui/DetailDrawer.tsx` שורות 120 עד 138. ב unmount משותף React מריץ cleanup מההורה לילד, המגירה מחזירה `overflow` ריק וה lightbox מחזיר אחריה את ה `hidden` ששמר, `apps/web/src/shared/CardPhoto.tsx` שורות 124 עד 135, ולכן `body.style.overflow` נשאר `hidden` עד רענון. אם זה חוסם גלילה בפועל בכל דפדפן, למשל ב iOS, רק בדיקה בדפדפן תגיד.
+
+</details>
+
+7. הסבר מתי ציטוט עמלת המשיכה מציג סכום שכבר לא מוקלד בשדה.
+<details><summary>תשובה</summary>
+
+ה cleanup מבטל רק את הטיימר של 250 מילישניות, והבקשה ממשיכה בלי `AbortController` ובלי דגל, `apps/web/src/areas/customer/finance/MoneyPanels.tsx` שורות 219 עד 231. תשובה שחוזרת אחרי שהשדה התרוקן מוצגת תמיד, ותשובה ישנה דורסת חדשה רק אם היא איטית ממנה ביותר מהפער בין השליחות, ובשני המקרים השורה מציגה את הברוטו הישן מ `amountMinor` שבתשובה. אם זה קורה ברשת אמיתית רק בדיקה בדפדפן עם האטת רשת תגיד, והשרת ממילא מחשב את העמלה מחדש בהשלמה.
+
+</details>
+
+8. הסבר מתי הטיימר של 60 שניות בהדפסת תוויות יכול להסיר את ה iframe בזמן שהדיאלוג עדיין פתוח.
+<details><summary>תשובה</summary>
+
+`window.setTimeout(cleanup, 60_000)` נקרא רק אחרי ש `win.print()` חוזר, ו `done` מונע ניקוי כפול, `apps/web/src/shared/Barcode.tsx` שורות 136 עד 148. כש `print()` חוסם עד סגירת הדיאלוג הספירה מתחילה אחרי הסגירה ולא מזיקה, וכשהוא חוזר מיד דיאלוג שפתוח יותר מ 60 שניות מאבד את ה iframe. באילו דפדפנים זה קורה ומה יודפס אז רק בדיקה בדפדפן תגיד, כי `tests/ux/barcode-printing.test.tsx` מחליף את `print()` ולא בודק ניקוי.
+
+</details>
 
 ## פרק 9. שאר מסכי הלקוח, המחסן והמנהל
 
@@ -6009,7 +6785,7 @@ flowchart LR
 |---|---|---|
 | 1 עד 133 | imports וחמשת טיפוסי התגובה, `BreakEvenRow`, `VaultItem`, `ItemMedia`, `TimelineEvent`, `StorageStatus`, `VaultCounts`. סכומים בסנטים | `VaultItem` כאן רחב מהטיפוס בעל אותו שם ב `shared/useVaultItems.ts`. עדכון אחד לא מעדכן את השני |
 | 135 עד 157 | `STATE_META` ממפה מצב לגוון ולמפתח תרגום. `stateLabel` מחזיר מחרוזת גולמית למצב לא מוכר | כולל `at_grader` ו `discarded`, אבל השרת לא מחזיר אותם באף לשונית. פריט אצל מדרג או שנזרק נעלם מהכספת |
-| 159 עד 225 | `SCOPES` ו `Scope`, `SCOPE_ICON`, הטיפוסים `OpenServiceRequest`, `CardAction`, `FormKind`, ו `timelineKindLabel` שמתרגם `timeline.<kind>` או מחליף קווים תחתונים ברווחים | `SCOPES` משוכפל ב `vlt.controller.ts` שורה 8. ההערה בשורה 191 על typed confirmation לא נכונה, המודאל הוא כפתור בלבד |
+| 159 עד 225 | `SCOPES` ו `Scope`, `SCOPE_ICON`, הטיפוסים `OpenServiceRequest`, `CardAction`, `FormKind`, ו `timelineKindLabel` שמתרגם `timeline.<kind>` או מחליף קווים תחתונים ברווחים | `SCOPES` משוכפל ב `vlt.controller.ts` שורה 8. ההערה בשורה 191 של `VaultPage.tsx` על typed confirmation לא נכונה, המודאל הוא כפתור בלבד |
 | 236 עד 395 | `CARD_ACTIONS`, עשר פעולות הצהרתיות. כל אחת עם `key`, `states`, מסננים `lotOnly` ו `gradedOnly`, `form` אופציונלי, `serviceType`, ו `run` שקורא ל `/services/*`. photography, grading, video, inspection, lot-split, consignment, buyout, custom, deslab, donation | `key` הוא גם המפתח ב `SERVICE_FEE_ACTION`, שינוי שם מעלים את המחיר מהכפתור. photography בשרת בודק רק בעלות, הרחבת `states` שלו תחייב גם פריט שנשלח. buyout גובה את דמי `service` כבר בבקשת ההצעה. ל custom אין `serviceType` בכוונה, השרת מתיר כמה במקביל. deslab ו donation שולחים בקשה שמחזירה `confirmationToken` ומיד אישור, ולכן המודאל הוא ההגנה מפני טעות אנוש |
 | 405 עד 428 | `VaultPage`. לשונית מ `route.tab` עם ברירת מחדל `active`. state של `items` שמתחיל `null`, `counts`, `q`, `error`, `status`, `culling`, `cullWindowDays`, ו `watch` כ `Map` | הלשונית ב URL והחיפוש ב state, ולכן אין קישור לחיפוש |
 | 430 עד 453 | `load` שולח במקביל `GET /vault/items?scope&q` ו `GET /vault/counts?q` עם אותו `q`. effect עם debounce של 250 מילישניות | מרוץ debounce. השרת מחזיר עד 50 פריטים בלי עימוד, והמונה סופר עד 200 |
@@ -6023,7 +6799,7 @@ flowchart LR
 | 1026 עד 1101 | `ItemDrawer`. state של אירועים, אחסון, מדיה, בקשות פתוחות, `confirming`, `formOpen`, `busy`, ו `useServicePrices`. שלושה effects לפי `item.id`, ציר זמן, `GET /vault/items/:id` למדיה ובקשות פתוחות, ו `/storage` | אין דגל `live` כמו ב `servicePrices.ts`. בלי key תשובה של פריט קודם דורסת. `itemCard` דורש בעלות נוכחית ולכן בפריט היסטורי הגלריה נעלמת בשקט |
 | 1103 עד 1131 | `graded` הוא grade שאינו raw. `actions` ריק לפריט היסטורי או מוקפא, אחרת מסונן לפי מצב, lot ו grade. `run` מריץ, קורא ל `onActed` וסוגר | `conditionGrade` משמש גם למצב פיזי, ולכן כרטיס NM נחשב graded גם בשרת. בשרת `assertNotAlreadyOpen` הוא בדיקה ואז הכנסה בלי אינדקס ייחודי, ו photography ו video לא נועלים `FOR UPDATE` |
 | 1133 עד 1148 | סיבת ההקפאה מהאירוע `hold_placed` האחרון, regex שמסיר את הקידומת | תלוי בפורמט הסיכום ב `inventory.service.ts` שורה 126 |
-| 1150 עד 1386 | `DetailDrawer` עם במה, רשימת פרטים, שגיאה, אחסון וגלריה. רשימת הפעולות בשורות 1269 עד 1327 עם מחיר מ `SERVICE_FEE_ACTION` ו `priceLabel`, או סטטוס בקשה פתוחה. ארבעת הטפסים בשורות 1329 עד 1379 עם `onCancel`, `onDone`, `onError={setError}`. ברקוד בסוף | מלכודת onError בכל ארבעת הטפסים. `busy` של טופס נפרד, ולכן כפתורי הפעולות לא ננעלים בזמן שליחת טופס |
+| 1150 עד 1386 | `DetailDrawer` עם במה, רשימת פרטים, שגיאה, אחסון וגלריה. רשימת הפעולות בשורות 1269 עד 1327 עם מחיר מ `SERVICE_FEE_ACTION` ו `priceLabel`, או סטטוס בקשה פתוחה. ארבעת הטפסים בשורות 1329 עד 1379 עם `onCancel`, `onDone`, `onError={setError}`. ברקוד בסוף | מלכודת onError בשלושה מהטפסים, `CustomRequestForm` לא טוען כלום. `busy` של טופס נפרד, ולכן כפתורי הפעולות לא ננעלים בזמן שליחת טופס |
 | 1398 עד 1431 | ציר הזמן. מפתח `event.at` ועוד אינדקס, סיכום ב `ltr-run` | בשרת `hasHeld` נותן לבעלים קודם לראות אירועים שקרו אחרי שעזב, כולל קודי משלוח ומחירים של הבעלים הבא |
 | 1435 עד 1460 | מודאל אישור לפעולה עם `confirm`, עם עמלה ו `busy` | קפיצת פוקוס. Escape מבטל גם בזמן ריצה, בלי נזק לנתונים |
 
@@ -6120,7 +6896,7 @@ flowchart LR
 | 80 עד 93 | `FAQ.source` עם כתובת, תאריך ומספר ערכים, ו `categoryOrder` עם שש קטגוריות שקובעות את סדר הכפתורים | קטגוריה חדשה צריכה מפתח `faq.category.<key>` בשני האזורים של `i18n.tsx` |
 | 94 עד 2097 | `FAQ.entries`. כל ערך הוא `id`, `sourceIndex`, `question`, `category`, `availability`, `baultNote`, `blocks` | 29 `adapted` ו 2 `partial`. ההערה בשורה 997 שאומרת ש PayPal אינו מסלול של Bault שגויה, `FUNDING_ROUTES` כולל שני מסלולי PayPal. הקישור בשורה 1788 הוא כתובת עריכה של blogger שבורה ללקוח |
 
-**איך עורכים.** ערך חדש צריך `id` ייחודי באותיות קטנות ומקפים, `sourceIndex` שממשיך את הרצף, קטגוריה מתוך `categoryOrder`, `availability`, `baultNote` מעל 60 תווים שמכיל את המילה Bault, ולפחות בלוק אחד. הבדיקות נועלות את התוכן למספרים מדויקים, 31 ערכים בשורה 52, ו 48 רשימות, 174 פריטים ו 12 מקוננים בשורות 163 עד 174, ולכן כל הוספה מחייבת עדכון מכוון של הבדיקה. הבדיקה בשורות 102 עד 113 תופסת רק שמונה ביטויי שלילה קבועים. המודל לא מאפשר ערך ש Bault כתב בעצמו, כל ערך מניח מקור מצוטט. ההמלצה של הספר המלא היא להחליף את הקובץ ב FAQ שכתוב על ידי Bault, שבו כל תשובה היא `baultNote` מורחב.
+**איך עורכים.** ערך חדש צריך `id` ייחודי באותיות קטנות, ספרות ומקפים, `sourceIndex` שממשיך את הרצף, קטגוריה מתוך `categoryOrder`, `availability`, `baultNote` מעל 60 תווים שמכיל את המילה Bault, ולפחות בלוק אחד. הבדיקות ב `tests/web/faq-legal.test.ts` נועלות את התוכן למספרים מדויקים, 31 ערכים בשורה 52, ו 48 רשימות, 174 פריטים ו 12 מקוננים בשורות 163 עד 174, ולכן כל הוספה מחייבת עדכון מכוון של הבדיקה. הבדיקה שם בשורות 102 עד 113 תופסת רק שמונה ביטויי שלילה קבועים. המודל לא מאפשר ערך ש Bault כתב בעצמו, כל ערך מניח מקור מצוטט. ההמלצה של הספר המלא היא להחליף את הקובץ ב FAQ שכתוב על ידי Bault, שבו כל תשובה היא `baultNote` מורחב.
 
 #### `apps/web/src/areas/customer/help/guideContent.ts`
 
@@ -6145,9 +6921,9 @@ flowchart LR
 |---|---|---|
 | 1 עד 33 | הערת ההחלטה לא לכתוב טקסט מחייב שאיש לא אישר, וגוף באנגלית בלבד | |
 | 35 עד 53 | `LegalSection` עם `id`, `heading`, `body` שמרונדר ב `<pre>`. `LegalDocument` עם `provenance` כמפתח i18n, `lastUpdated`, `downloadPath` | שבירות שורה בגוף משמעותיות |
-| 59 עד 63 | `PENDING_DOCUMENTS`, שלושה מפתחות `legal.pending.*` | מפתח חדש צריך תרגום בשני האזורים. הבדיקה בשורות 204 עד 210 מוודאת שהם מפתחות |
-| 65 עד 134 | מדיניות שימוש בחשבון ויתרה, שנים עשר סעיפים | סעיף 7 מבטיח שמירה של 12 חודשים לחבילה לא מזוהה, ו `ParcelService.dispose` לא בודק זמן. סעיף 10 מבטיח שפריט שעזב נשאר בהיסטוריה, ו `discarded` לא נכלל. סעיף 11 מבטיח שקונה יכול להזמין בדיקה, ו `assertOwnedAndPresent` חוסם. סעיפים 5 ו 6 קשיחים מול משתני `WALLET_DEBT_*` |
-| 135 עד 173 | רישיון SIL OFL 1.1 של Libertinus עם `downloadPath` `/fonts/OFL.txt` | הגופן לא נשלח והקובץ לא קיים. הרישיונות של IBM Plex ו Frank Ruhl Libre לא מוצגים. הבדיקה בשורות 212 עד 219 תיכשל אם מסירים, ויש לעדכן אותה יחד |
+| 59 עד 63 | `PENDING_DOCUMENTS`, שלושה מפתחות `legal.pending.*` | מפתח חדש צריך תרגום בשני האזורים. הבדיקה בשורות 204 עד 210 של `tests/web/faq-legal.test.ts` מוודאת שהם מפתחות |
+| 65 עד 134 | מדיניות שימוש בחשבון ויתרה, שנים עשר סעיפים | סעיף 7 מבטיח שמירה של 12 חודשים לחבילה לא מזוהה, ו `ParcelService.dispose` לא בודק זמן. סעיף 10 מבטיח שפריט שעזב נשאר בהיסטוריה, ו `discarded` לא נכלל. סעיף 11 מבטיח שקונה יכול להזמין בדיקה, ו `assertOwnedAndPresent` חוסם. סעיף 5 קשיח מול `parameters` של כללי האחסון, וסעיף 6 מול `WALLET_DEBT_*` ו `WALLET_SUSPEND_BELOW_MINOR` |
+| 135 עד 173 | רישיון SIL OFL 1.1 של Libertinus עם `downloadPath` `/fonts/OFL.txt` | הגופן לא נשלח והקובץ לא קיים. הרישיונות של IBM Plex ו Frank Ruhl Libre לא מוצגים. הבדיקה בשורות 212 עד 219 של `tests/web/faq-legal.test.ts` תיכשל אם מסירים, ויש לעדכן אותה יחד |
 
 | קובץ | מה הוא עושה |
 |---|---|
@@ -6289,7 +7065,7 @@ flowchart LR
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 10 עד 14 | `VaultItem` מצומצם | הטפסים מציגים `typeClass` גולמי |
-| 24 עד 149 | `ShowPickupPanel`. `GET /shipping/pickup/shows`, בחירת תערוכה פתוחה ראשונה, ו `book` ששולח `POST /shipping/pickup` עם פריטים, תערוכה והערות. העמלה מוצגת ונגבית בשרת | בשרת היתרה נבדקת בתוך הטרנזקציה. אין חלון אישור ואין מפתח. כשכל התערוכות סגורות הכפתור מושבת בלי הסבר |
+| 24 עד 149 | `ShowPickupPanel`. `GET /shipping/pickup/shows`, בחירת תערוכה פתוחה ראשונה, ו `book` ששולח `POST /shipping/pickup` עם פריטים, תערוכה והערות. העמלה מוצגת ונגבית בשרת | בשרת היתרה נבדקת בתוך הטרנזקציה אבל בלי נעילה, והקיבולת נבדקת לפניה. אין חלון אישור ואין מפתח. כשכל התערוכות סגורות הכפתור מושבת בלי הסבר |
 | 159 עד 324 | `WhiteGlovePanel`. תשעה שדות, `useShippingCountries`, ו `request` שממיר כל `datetime-local` ל ISO ושולח `POST /shipping/white-glove`. שום דבר לא נגבה | `HandDeliveryDto` מקבל `destinationCountry` עם `MaxLength(2)` בלבד ולא `IsShippableCountry`. אם רשימת המדינות נכשלת נשלח `US` בשקט. אחרי הצלחה רק הפריטים מתאפסים. הודעת ההצלחה נופלת ל 48 שעות קבועות כש `terms` לא נטען. בדיקת חלון האיסוף והמסירה נעשית רק בשרת ב `shp/fulfilment.ts` |
 | 333 עד 405 | `WhiteGloveQuotes`. מסנן `GET /shipping/shipments` לפי `fulfilmentMethod` ו `requested`, מציג `quoteMinor` וכפתור accept | `toTrackingView` בשרת לא מחזיר את השדות האלה, ולכן הפאנל לעולם לא מוצג וההצעה לא ניתנת לקבלה. התיקון הוא להוסיף את השדות ל `toTrackingView` ול `ShipmentSummary`. גם אז accept הוא E18, בדיקה ויתרה מחוץ לטרנזקציה |
 
@@ -6365,7 +7141,7 @@ flowchart LR
 | 126 עד 148 | effect שמציב את החבילה מ `initialParcelId` וטוען מחדש, ו effect שמעתיק את בעלי החבילה | מגיב רק לשינוי ערך. לחיצה חוזרת על אותה חבילה אחרי בחירה ידנית באחרת לא מחזירה אליה, וקליטה הולכת לחבילה הלא נכונה |
 | 150 עד 162 | `facilityCode` מהחבילה, `single`, `lotAllowed` ליחידה אחת, `lotWillSplit`, `oversized` | |
 | 164 עד 222 | `askForBin` של `GET /custody/bins/suggest` לפי מתקן וגודל, ו `createBinHere` שיוצר מדף מתוך הספסל | במצב אוטומטי נשלח `autoStow: true` והשרת בוחר מדף מחדש לכל יחידה. המדף המוצג הוא הערכה, והמדף האמיתי רק על התווית |
-| 224 עד 274 | ולידציה, `patch` פונקציונלי, ו `submit` ששולח את כל היחידות ל `POST /intake/items/batch` עם `binId` או `autoStow`, ו `isLot` רק ליחידה אחת | בשרת כל יחידה בטרנזקציה משלה. כשל באמצע משאיר את כל היחידות בטופס, ולחיצה חוזרת קולטת ומחייבת שוב. אין idempotency. לוט שמתפצל מצמיד תיאור רק לפריט הראשון |
+| 224 עד 274 | ולידציה, `patch` פונקציונלי, ו `submit` ששולח את כל היחידות ל `POST /intake/items/batch` עם `binId` או `autoStow`, ו `isLot` רק ליחידה אחת | בשרת כל יחידה בטרנזקציה משלה, אחרי בדיקה מקדימה של כולן. כשל בזמן הכתיבה משאיר את כל היחידות בטופס, ולחיצה חוזרת קולטת ומחייבת שוב. אין idempotency. לוט שמתפצל מצמיד תיאור רק לפריט הראשון |
 | 276 עד 298 | `closeParcel` שולח `POST /parcels/:id/process` עם `emptyReason`, שמעביר ל `processed` וגובה `parcel_processing` | כסף בלי חלון אישור |
 | 300 עד 548 | בורר חבילה, בעלים, מצב אחסון, הצעת מדף או סריקה, שורות יחידות עם `PhotoInput` ותיבת לוט, ושורת סגירה | `stowError` בלי `role="alert"`. שדה גודל לוט קופץ ל 1 תוך כדי הקלדה |
 | 550 עד 587 | תוויות עם הדפסה בודדת ו `BarcodePrintAllButton` | נמחקות במעבר לשונית |
@@ -6438,7 +7214,7 @@ flowchart LR
 
 #### `apps/web/src/areas/admin/WalletRequestsSection.tsx`
 
-בקשות הפקדה ומשיכה. תור מסונן, מגירה עם פרטים והיסטוריה, וכפתורים רק למעברים החוקיים. כל הנתיבים ב `pay/wallet-request.controller.ts` עם `@Roles('admin')`. הקובץ הרגיש ביותר כספית, והשרת עושה כאן את רוב העבודה נכון. דפוס P8.
+בקשות הפקדה ומשיכה. תור מסונן, מגירה עם פרטים והיסטוריה, וכפתורים רק למעברים החוקיים. כל נתיבי `admin/wallet-requests` ב `pay/wallet-request.controller.ts` עם `@Roles('admin')`. הקובץ הרגיש ביותר כספית, והשרת עושה כאן את רוב העבודה נכון. דפוס P8.
 
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
@@ -6479,6 +7255,64 @@ flowchart LR
 |---|---|
 | `apps/web/src/areas/admin/SignInsSection.tsx` | יומן ניסיונות כניסה מ `GET /admin/logins`. שלושה כרטיסים, טבלת מזהים עם חמישה כשלונות לפחות ביממה, וכל הניסיונות. בשגיאה מציג אפסים כאילו אין תקיפה. הקיבוץ לפי מזהה מנורמל ולא לפי `userId`. `OUTCOME_*` מוקלדים כ `Record` ומחייבים עדכון. |
 | `apps/web/src/areas/admin/YieldChart.tsx` | גרף עמודות SVG של תשואה לפי אזור, נופל להכנסה כשאין עדיין יחס. מסמן את האזור התפוס החלש. ה SVG `aria-hidden` והתוויות `div` מחוצה לו, ולכן `rowHeight` חייב להתאים ל CSS של `chart-row`. |
+
+### בדוק את עצמך
+
+1. הסבר למה כרטיס שנשלח למדרג נעלם מכל לשוניות הכספת, ומה צריך לשנות כדי שיופיע.
+<details><summary>תשובה</summary>
+
+`apps/web/src/areas/customer/vault/VaultPage.tsx` שורות 135 עד 151 מכיר את `at_grader`, אבל `TERMINAL` ו `LIVE` ב `apps/api/src/modules/vlt/vault.service.ts` שורות 65 עד 74 לא כוללים אותו, ולשונית `hold` תופסת רק `holdFlag` או `on-hold`. צריך להוסיף את המצב לאחת הרשימות בשרת, וזה משנה גם את הספירות של `/vault/counts`.
+
+</details>
+
+2. תאר את מלכודת onError ומצא טופס בכספת שחשוף לה.
+<details><summary>תשובה</summary>
+
+טופס ששם את `onError` במערך התלויות של ה effect שטוען נתונים טוען מחדש בכל פעם שזהות הפונקציה משתנה, כמו `apps/web/src/areas/customer/vault/ConsignmentForm.tsx` שורות 40 עד 53. `VaultPage.tsx` מעביר `setError` יציב, ופונקציית חץ במקומו תיצור לולאת בקשות כשהטעינה נכשלת.
+
+</details>
+
+3. הסבר למה לחיצה כפולה על קנייה בשוק לא מחייבת פעמיים, ולמה זה לא סוגר את E1.
+<details><summary>תשובה</summary>
+
+`apps/web/src/areas/customer/marketplace/MarketplacePage.tsx` שורות 152 עד 168 שולח בלי `Idempotency-Key`, ו `apps/api/src/modules/mkt/mkt.controller.ts` שורה 149 משלים מפתח לפי קונה ומודעה, כך שהלחיצה השנייה היא replay. E1 הוא קניות מקבילות של קונה אחד למודעות שונות, ו `apps/api/src/modules/mkt/purchase.service.ts` שורות 88 עד 123 נועל רק את המודעה ובודק יתרה בלי לנעול את הקונה.
+
+</details>
+
+4. מצא את הפאנל שלעולם לא מוצג ללקוח, והסבר מה חסר בשרת.
+<details><summary>תשובה</summary>
+
+`WhiteGloveQuotes` ב `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx` שורות 333 עד 405 מסנן משלוחים לפי `fulfilmentMethod` ומציג `quoteMinor`, אבל `toTrackingView` ב `apps/api/src/modules/shp/shipment.service.ts` שורות 609 עד 651 לא מחזיר את השדות האלה. הרשימה תמיד ריקה, וצריך להוסיף אותם ל `toTrackingView` ול `ShipmentSummary`.
+
+</details>
+
+5. הסבר למה בדיקת הסריקה ב dispatch עוברת תמיד כשהמשלוח נסגר מקונסולת המחסן.
+<details><summary>תשובה</summary>
+
+`apps/web/src/areas/warehouse/WarehouseConsole.tsx` שורה 999 שולח `scannedItemIds: detail.itemIds`, כלומר את מה שהשרת החזיר ולא את מה שנסרק. `apps/api/src/modules/shp/dispatch.service.ts` שורות 53 עד 61 משווה את הקבוצה הזו לפריטי המשלוח, ולכן היא תמיד שווה.
+
+</details>
+
+6. תאר מה יקרה אם מפעיל מציע שוב מחיר לבקשת custom אחרי שהלקוח קיבל את ההצעה ושילם.
+<details><summary>תשובה</summary>
+
+`apps/web/src/areas/warehouse/ServiceQueue.tsx` שורות 289 עד 431 בוחר טופס לפי סוג הבקשה ולא לפי `typeFields.stage`, ולכן מציג שוב טופס הצעה. `quote` ב `apps/api/src/modules/dis/custom-request.service.ts` שורות 116 עד 146 לא בודק שלב ומחזיר `stage` ל `quoted`, כך שהלקוח יכול לקבל ולשלם שוב.
+
+</details>
+
+7. הסבר מה מונע משני מנהלים להשלים את אותה בקשת ארנק ולכתוב שתי שורות ledger, ומה תפקיד הממשק בזה.
+<details><summary>תשובה</summary>
+
+`complete` ב `apps/api/src/modules/pay/wallet-request.service.ts` שורות 342 עד 368 נועל את הבקשה ב `for('update')`, בודק הפרדת תפקידים ומעבר חוקי, ולכן השני מקבל 409. `reviewerActions` ב `apps/web/src/areas/admin/WalletRequestsSection.tsx` שורות 27 עד 47 רק מסתיר כפתורים שהשרת ידחה, וחלון האישור לא מחליף את הנעילה.
+
+</details>
+
+8. מצא משפט ב FAQ שבו Bault אומר על עצמו דבר לא נכון, והסבר למה הבדיקות לא תופסות אותו.
+<details><summary>תשובה</summary>
+
+`apps/web/src/areas/customer/help/faqContent.ts` שורה 997 אומר ש PayPal אינו מסלול של Bault, אבל `FUNDING_ROUTES` ב `apps/api/src/modules/pay/money-terms.ts` שורות 114 עד 145 כולל `paypal_gs` ו `paypal_ff`. הבדיקה ב `tests/web/faq-legal.test.ts` שורות 102 עד 113 מחפשת רק שמונה ביטויי שלילה קבועים, והניסוח של הערך לא ביניהם.
+
+</details>
 
 ## פרק העבודה. איך עובדים על הקוד
 
@@ -6534,6 +7368,13 @@ docker compose -f infra/docker-compose.yml ps
 ```
 
 השירותים הם `postgres` על 5432, `pgbouncer` על 6432, ו `minio` על 9000 עם קונסולה על 9001. המשתמש והסיסמה של Postgres הם `bault`. של MinIO הם `minioadmin`.
+
+**בלי Docker.** Postgres 16 מקומי מספיק לכל המתכונים חוץ מאחסון S3 אמיתי. כך הורץ המתכון הזה בבדיקה של המדריך. צרו משתמש ומסד, והשאירו את `DATABASE_URL` ואת `DIRECT_DATABASE_URL` על 5432. המשתמש צריך להיות superuser כמו ב image של Docker, כי `0001_append_only.sql` שורות 63 עד 64 יוצר את התפקיד `bault_app` כשהוא חסר, ובלי הרשאה ליצור תפקידים ה migrate נופל. זה רק לפיתוח, בייצור התפקידים נוצרים מראש.
+
+```bash
+sudo -u postgres psql -c "CREATE ROLE bault LOGIN SUPERUSER PASSWORD 'bault'" -c "CREATE DATABASE bault OWNER bault"
+psql postgres://bault:bault@localhost:5432/bault -Atc 'select 1'
+```
 
 4. צרו bucket, רק אם אתם רוצים אחסון אמיתי. ברירת המחדל `STORAGE_PROVIDER=sandbox` מקבלת תמונות וזורקת אותן. כדי לעבוד כמו ה CI, קבעו `STORAGE_PROVIDER=s3` וצרו את ה bucket. `S3StorageAdapter` ב `packages/adapters/src/s3.ts` לא יוצר bucket בעצמו.
 
@@ -6672,7 +7513,7 @@ pnpm exec vitest run --project integration tests/integration/mkt-purchase.test.t
 
 ### מתכון 3. מעקב אחרי בקשה אחת מקצה לקצה
 
-**הדרך שבקשה עוברת.** הדפדפן שולח ל `/api/v1/...` על 5173. Vite מעביר ל API עם `X-Forwarded-For`. ב API, לפי הסדר, `requestContext` ב `main.ts` שורה 47 קובע מזהה בקשה, helmet, מפרסר JSON עד 16MB, שלושת ה guards מ `app.module.ts` שורות 98 עד 100, `ThrottlerGuard`, `SessionAuthGuard`, `RolesGuard`, אחר כך `ValidationPipe` משורה 131, ה controller, ה service, ובסוף `AuditInterceptor` כשהבקשה הצליחה או `AllExceptionsFilter` כשנזרקה שגיאה. עבודה אסינכרונית ממשיכה ב worker דרך `outbox_message`.
+**הדרך שבקשה עוברת.** הדפדפן שולח ל `/api/v1/...` על 5173. Vite מעביר ל API עם `X-Forwarded-For`. ב API, לפי הסדר, `requestContext` ב `main.ts` שורה 47 קובע מזהה בקשה, helmet, מפרסר JSON עד 16MB, שלושת ה guards מ `app.module.ts` שורות 98 עד 100, `ThrottlerGuard`, `SessionAuthGuard`, `RolesGuard`, אחר כך `ValidationPipe` מ `main.ts` שורה 131, ה controller, ה service, ובסוף `AuditInterceptor` כשהבקשה הצליחה או `AllExceptionsFilter` כשנזרקה שגיאה. עבודה אסינכרונית ממשיכה ב worker דרך `outbox_message`.
 
 1. **קבלו את מזהה הבקשה.** כל תשובה מכילה כותרת `x-request-id`. בדפדפן, בלשונית Network של כלי המפתחים. ב curl, `-i`. אפשר לשלוח מזהה משלכם, ו `requestContext` ישתמש בו, עד 200 תווים.
 
@@ -7340,3 +8181,269 @@ pnpm test:web && pnpm test:ux && pnpm test:contract && pnpm test:core-contract
 | 15 | שינוי לא נכנס לתוקף | שינוי ב `packages/*` בלי build, כי ה API וה worker קוראים מ `dist`. migration בלי רשומה ב `_journal.json` או עם `when` קטן מדי. מחרוזת שנוספה רק ל `he` | `pnpm --filter "./packages/*" build` ואתחול. `apps/api/src/db/migrations/meta/_journal.json` מול `drizzle.__drizzle_migrations`. `pnpm --filter @bault/web typecheck` |
 
 **שים לב.** בדיקה שנכשלת ב 409 שלא היה קודם היא כמעט תמיד שאריות מהרצה קודמת, E16. seed ואז הרצה חוזרת, לפני שמחפשים באג.
+
+## פרק הבאגים. כל הבאגים הידועים ואיך מתקנים אותם
+
+### איך להשתמש בפרק
+
+הפרק הזה הוא מפת כל הבאגים החשובים שידועים היום, ואיך מתקנים כל אחד. יש בו שתי רשימות. רשימת E היא 22 ממצאים שהוכחו בהרצה. רשימת F היא כל ממצאי P0 ו P1 מהניתוח המלא, אחרי איחוד כפילויות, 26 בחומרה P0 ו 27 בחומרה P1. ממצאים בחומרה P2 ו P3 מופיעים בעמודה הימנית של טבלאות הבלוקים בפרקי הקבצים, והפירוט המלא שלהם בפרק 27 של `docs/DIVE2.md`.
+
+כדי למצוא את ההסבר על הקוד של באג, חפשו את הנתיב שבעמודה איפה. הוא מופיע ככותרת של קובץ באחד מפרקי הקבצים. כדי לדעת באיזה סדר לתקן, השתמשו במדריך המעבר בפרק 29 של `docs/DIVE2.md`. מספר השלב מופיע בטבלת E.
+
+### שלושה תיקונים שסוגרים את רוב הרשימה
+
+רוב ממצאי P0 הם אותה טעות במקומות שונים. שלושה תיקונים שורשיים סוגרים את רובם, ושווה לעשות אותם לפני שמתקנים ממצא בודד.
+
+1. **נעילת ארנק לפי משתמש.** עזר אחד, למשל `lockWallet(tx, userId)`, שנועל את שורת `user_account` עם `FOR UPDATE` או קורא ל `pg_advisory_xact_lock`. קוראים לו בתוך הטרנזקציה לפני כל בדיקת יתרה שאחריה חיוב. סוגר את E1, E18, F005, F014, F015, F024 ואת F002 בחלקו. כשנועלים כמה ארנקים, נועלים לפי מזהה בסדר עולה.
+2. **בעלים צפוי ב `CustodyService`.** פרמטר `expectedOwnerId` ב `transferOwnership`, ובדיקה תחת הנעילה של בעלים, מצב ו `holdFlag`, עם 409 כשמשהו לא מתאים. סוגר את E4, F003, F010, F011, F012, F013, F030 ו F066.
+3. **עדכוני מצב מותנים.** כל UPDATE של סטטוס כולל את הסטטוס הצפוי בתנאי, למשל `AND status = 'awaiting_payment'`, ובודק שעודכנה שורה אחת. אחרת זורקים 409. סוגר את F001, F015, F016, F017, F031, F033, F034 ואת המרוץ ב F067.
+
+אחרי כל תיקון כותבים בדיקת מקביליות שנכשלת לפניו ועוברת אחריו. הדוגמאות בפרק העבודה, מתכון 6, ובפרק התרגול.
+
+### רשימת E, הוכחו בהרצה
+
+| מזהה | חומרה | איפה בקוד | התיקון | שלב |
+|---|---|---|---|---|
+| E1 | P0 | `apps/api/src/modules/pay/ledger.service.ts` `balanceOf`, והקוראים ב `mkt/purchase.service.ts` ו `pay/wallet-request.service.ts` | נעילת ארנק לפי משתמש בתוך הטרנזקציה, לפני בדיקת היתרה | 3 |
+| E2 | P0 | `apps/api/nest-cli.json`, `apps/api/Dockerfile` | להוסיף `assets` שמעתיק את `src/db/sql/*.sql` ל `dist/db/sql`, ולוודא אחרי migrate מתוך ה image שיש 10 triggers ושקיים ה cast המובלע מ `text` ל `uuid`. בלי ה cast כל JOIN בין עמודת `uuid` לעמודת `text` נכשל, כלומר הבאג הזה שובר גם את האפליקציה ולא רק את ההגנות | 9 |
+| E3 | P0 | `apps/api/src/modules/pay/checkout.service.ts`, `packages/adapters/src/payment.ts`, `apps/web/src/areas/customer/finance/MoneyPanels.tsx` | עכשיו להסתיר את הטעינה המיידית ולהשאיר בקשות ידניות. אחר כך לממש זרימת PayPal מלאה, יצירת order, אישור בחלון של PayPal, ו capture | 5 |
+| E4 | P0 | `apps/api/src/modules/cst/custody.service.ts` `transferOwnership`, ושמונה הקוראים שלו | בעלים צפוי, מצב ו hold נבדקים תחת הנעילה, ו 409 כשלא מתאים | 4 |
+| E5 | P0 | `infra/ops/backup.sh` | Postgres מנוהל עם PITR, ותרגיל שחזור מתועד שהורץ לפני ההשקה | 11, 12 |
+| E6 | P1 | `apps/api/src/modules/prc/pricing.service.ts`, `apps/api/src/db/seed.ts` | לטעון את `pricing_rule` כחלק מנוהל ההשקה, ולוודא שכל פעולה מתומחרת לפני שפותחים לציבור | נוהל ההשקה |
+| E7 | P1 | `packages/config/src/env.ts`, `apps/api/src/main.ts` | פענוח בוליאני קפדני, רק `true` או `1` נחשבים אמת | 2 |
+| E8 | P1 | `apps/api/src/main.ts`, `apps/api/src/modules/acc/auth.controller.ts` | לכבות את מפרסר הטפסים, לדרוש JSON, ולבדוק `Origin` בכל בקשה שמשנה מצב, עם החרגה ל webhook | 7 |
+| E9 | P1 | `apps/api/src/modules/med/med.controller.ts`, `media.service.ts` | העלאה רק לתפקידים שצריכים אותה, ובדיקת תוכן הקובץ לפי ה bytes ולא לפי מה שהלקוח הצהיר | 6 |
+| E10 | P1 | `packages/adapters/src/s3.ts`, `apps/api/src/modules/med/media.service.ts` | לתפוס שגיאת אחסון ולהחזיר 503 עם קוד שגיאה ברור במקום 500 כללי | 6 |
+| E11 | P1 | `apps/api/Dockerfile`, `apps/api/src/db/seed.ts` | לא לשלוח את ה seed ב image של הייצור, ושה seed יסרב לרוץ כש `NODE_ENV=production` | 9, 11 |
+| E12 | P1 | `package.json` של החבילות, `pnpm audit --prod` | לעדכן את drizzle-orm ושאר התלויות הפגיעות, ולהריץ את כל החבילות אחרי העדכון | 17 |
+| E13 | P1 | `apps/api/src/modules/acc/auth.service.ts` | להריץ `argon2.verify` גם כשהחשבון לא קיים, מול hash קבוע, כך שהזמן זהה | 8 |
+| E14 | P1 | `packages/config/src/env.ts` `TRUST_PROXY`, `apps/web/nginx.conf` | לקבוע את `TRUST_PROXY` לכתובת או למספר ה hops של ה proxy האמיתי | 2 |
+| E15 | P1 | `apps/worker/src/index.ts` | טיפול ב SIGTERM, עצירה מסודרת של pg-boss עם זמן המתנה, ואות חיים שאפשר לנטר | 10 |
+| E16 | P2 | `scripts/test.mjs`, `.github/workflows/ci.yml` | seed טרי לפני כל חבילה שתלויה במסד | 0 |
+| E17 | P1 | `apps/worker/src/jobs/tracking-refresh.ts` | לבנות את ה adapter לפי הקונפיגורציה, כמו ב `apps/api/src/shared/adapters/adapters.module.ts` | 10 |
+| E18 | P1 | `apps/api/src/modules/shp/shipment.service.ts` `pay` ו `settle`, `shp/human-fulfilment.service.ts`, `esc/escrow.service.ts` `fund` | לבדוק יתרה ומצב בתוך הטרנזקציה אחרי נעילה, עם עדכון מותנה בסטטוס | 3, 4א |
+| E19 | P1 | `apps/api/src/main.ts` | להגן על `/docs-json` באותה סיסמה של `/docs`, או לא להגיש אותו בכלל בייצור | 2 |
+| E20 | P1 | `apps/web/src/areas/customer/help/faqContent.ts` | לכתוב FAQ של Bault ולהסיר את התוכן המועתק | 18 |
+| E21 | P1 | `apps/web/src/areas/customer/help/legalContent.ts`, `SignUpPage.tsx` | לכתוב תנאי שימוש ומדיניות פרטיות, ולהוסיף הסכמה בהרשמה שנשמרת במסד | 18 |
+| E22 | P1 | `apps/web/nginx.conf` | כל `location` שמגדיר `add_header` מגדיר מחדש את כל כותרות האבטחה, או שכולן עוברות לקובץ include אחד | 14 |
+
+### רשימת F, כל ממצאי P0 ו P1
+
+העמודה הבעיה מתארת את הבאג, והעמודה התיקון את הפתרון המומלץ. ממצא שמסומן סביר נמצא בקריאת קוד ולא הוכח בהרצה. ממצאים שהם אותו שורש מאוחדים בשורה אחת, והמיקומים הנוספים כתובים בסוף התיקון. לכל ממצא יש בפרק 27 של `docs/DIVE2.md` גם תרחיש ניצול, השפעה, איך מוודאים שהתיקון עובד, ומחיר התיקון.
+
+### P0, חוסם השקה, 26 ממצאים
+
+| מזהה | איפה | הבעיה | התיקון |
+|---|---|---|---|
+| F001 | `apps/api/src/modules/esc/escrow.service.ts:484-701` | `release`, `settle` ו `returnDeal` קוראים את העסקה מחוץ לטרנזקציה בלי `FOR UPDATE`, מעדכנים לפי `id` בלבד, ו `settle` בשורה 541 לא בודק סטטוס בכלל. | לטעון את העסקה בתוך הטרנזקציה עם `FOR UPDATE`, לבדוק סטטוס שם, להעביר את כל `release` לטרנזקציה אחת עם `settle`, ולהוסיף `AND status = 'awaiting_release'` ל UPDATE עם בדיקת rowCount. |
+| F002 | `apps/api/src/modules/esc/escrow.service.ts:292-386` | `fund` בודק יתרה ומצב מחוץ לטרנזקציה ומעדכן בלי תנאי סטטוס, ו `cancel` בשורות 704 עד 724 באותו דפוס. | אותו תיקון נעילה, ובנוסף אינדקס ייחודי חלקי על `ledger_record (reference_id) WHERE type = 'escrow_hold'`. אותו שורש גם ב F026 `apps/api/src/modules/esc/escrow.service.ts:292-385`. |
+| F003 | `apps/api/src/modules/esc/escrow.service.ts:393-418` | `receiveItem` לא בודק שהפריט שייך למוכר, לא בודק שאינו משויך לעסקה אחרת ולא מסמן `holdFlag`, ו `transferOwnership` ב `cst/custody.service.ts:147-158` מעביר מכל בעלים שהוא. | לבדוק ב `receiveItem` ש `ownerId` שווה למוכר, להדליק `holdFlag` ולכבות אותו ב settle וב return, ולבדוק ב settle שהבעלים הנוכחי הוא המוכר. |
+| F004 | `apps/api/src/modules/pay/wallet-request.service.ts:419-507` | ב cash_out הספק מקבל `request.amount - feeMinor` אבל הלדג'ר מחייב `request.amount` ועוד שורת `fee` של `feeMinor`. | להחליט על מודל אחד, או לשלוח `request.amount` לספק, או לחייב `request.amount - feeMinor` כ withdrawal, ולעדכן את `cashOutQuote` וה SPA בהתאם. |
+| F005 | `apps/api/src/modules/pay/ledger.service.ts:57-67` | היתרה נגזרת ואין שום נעילה לפי משתמש, והבדיקות ב `wallet-request.service.ts:391-404`, `escrow.service.ts:335-342` ו `mkt/purchase.service.ts:121` בודקות יתרה ואז כותבות. | להוסיף עזר `lockWallet(tx, userId)` שקורא ל `pg_advisory_xact_lock(hashtext(user_id))` ולקרוא לו לפני כל בדיקת יתרה שאחריה חיוב. אותו שורש גם ב F020 `apps/api/src/modules/mkt/purchase.service.ts:88-123`, F022 `apps/api/src/modules/mkt/purchase.service.ts:88-124`, F023 `apps/api/src/modules/mkt/purchase.service.ts:87-124`, F035 `apps/api/src/modules/mkt/house-store.service.ts:187`. |
+| F006 | `apps/api/src/modules/inv/intake.service.ts:485-531` | לוט שפורק נשאר במצב `stored` על המדף ומסומן רק ב `lot_broken`. | להעביר את הלוט דרך `CustodyService.changeState` למצב סופי ייעודי או להוסיף `AND NOT i.lot_broken` לשני ה CTE וגם ל `StowService.listWithCounts`. |
+| F007 | `apps/api/src/modules/inv/intake.service.ts:486-529` | פירוק לוט בלי נעילה. | לעטוף את כל הפירוק בטרנזקציה אחת עם `FOR UPDATE` על הלוט או לפחות `UPDATE item SET lot_broken = true WHERE id = $1 AND lot_broken = false RETURNING` כצעד ראשון. אותו שורש גם ב F032 `apps/api/src/modules/dis/lot-split.service.ts:76-99`. |
+| F008 | `apps/api/src/modules/inv/intake.service.ts:253-319,380-385` | קליטה מרובה אינה אטומית למרות ההערה שמבטיחה הכל או כלום. | להעביר `tx` מבחוץ ל `createOne` ולעטוף את כל הבקשה ב `custody.run` אחד כפי ש `BatchService.split` עושה. |
+| F009 | `apps/worker/src/jobs/storage-fee.ts:218-237` | כיסוי אחסון של מנוי לא עוצר את השעון אלא דוחה אותו, כשהכיסוי נגמר ה worker מחייב בבת אחת את כל התקופות שחלפו מאז `received_at + free_days` כולל תקופות שהיו מכוסות. | לספור תקופות רק מסוף הכיסוי האחרון או לכתוב שורת חיוב בסכום אפס עם סימון כיסוי לכל תקופה מכוסה. אותו שורש גם ב F021 `apps/worker/src/jobs/storage-fee.ts:141-230`. |
+| F010 | `apps/api/src/modules/dis/buyout.service.ts:115-173` | `accept` לא קורא את הפריט ולא בודק שהמבקש הוא עדיין הבעלים, ו `transferOwnership` ו `changeState` ל `sold` לא בודקים בעלים ומתירים `stored`. | לקרוא את הפריט עם `for('update')` בתוך הטרנזקציה ולדרוש `ownerId === req.requesterId`, `lifecycleState === 'stored'` ו `!holdFlag` לפני הזיכוי. |
+| F011 | `apps/api/src/modules/dis/consignment.service.ts:164-229` | `complete` מזכה את `req.requesterId` ומעביר את הפריט לפלטפורמה בלי לבדוק שהמבקש הוא הבעלים הנוכחי. | לנעול את שורת הבקשה ולבדוק `in_progress` תחת הנעילה, לנעול את הפריט ולדרוש בעלות, `stored` ואין hold לפני הזיכוי, ועדיף גם לחסום רישום בשוק לפריט עם בקשת קונסיגנציה או buyout פתוחה. |
+| F012 | `apps/api/src/modules/dis/donation.service.ts:45-83` | `confirm` לא בודק מחדש בעלות, מצב ו hold אחרי צריכת האסימון, ו `transferOwnership` לא בודק בעלים. | לנעול את הפריט בתוך הטרנזקציה ולחזור על שלוש הבדיקות מ `request`. |
+| F013 | `apps/api/src/modules/dis/disposal-services.service.ts:171-208` | `confirmCull` משליך או תורם כל פריט ברשימה בלי לבדוק שוב בעלות, hold וחלון הקבלה. | לקרוא את כל הפריטים עם `for('update')` בטרנזקציה ולחזור על הבדיקות. |
+| F014 | `apps/api/src/modules/shp/shipment.service.ts:806-860` | `settle` קורא את היתרה עם `wallet.balance` מחוץ לכל טרנזקציה ובלי נעילה, ואז גובה בטרנזקציה נפרדת. | לנעול נעילה פר משתמש בתוך הטרנזקציה לפני בדיקת היתרה, למשל `pg_advisory_xact_lock(hashtext(user_id))` או `SELECT ... FOR UPDATE` על `user_account`, להעביר את קריאת היתרה לתוך אותה טרנזקציה עם `balanceOf(userId, tx)`, ולבדוק שוב אחרי הנעילה. |
+| F015 | `apps/api/src/modules/shp/shipment.service.ts:921-970` | `pay` בודק `awaiting_payment` ויתרה מחוץ לטרנזקציה, וה UPDATE בשורות 964 עד 967 לא מותנה בסטטוס הקודם. | לנעול את שורת המשלוח עם `FOR UPDATE` בתוך הטרנזקציה, לבדוק שם את הסטטוס והיתרה, או להתנות את ה UPDATE ב `status = 'awaiting_payment'` ולזרוק כשלא נגעה שורה, יחד עם נעילת המשתמש מהממצא הקודם. אותו שורש גם ב F025 `apps/api/src/modules/shp/shipment.service.ts:921-970`. |
+| F016 | `apps/api/src/modules/shp/shipment.service.ts:751-771` | `selectRate` מתיר `rates_selected` ו `settle` גובה שוב בלי לזכות את החיוב הקודם. | לצמצם ל `requested` ו `awaiting_payment`, או לממש החלפה עם זיכוי של החיוב הקודם באותה טרנזקציה. |
+| F017 | `apps/api/src/modules/shp/shipment.service.ts:780-794` | `selectRecommended` לא בודק סטטוס ולא `mergedIntoShipmentId`. | לחלץ את בדיקות הסטטוס והמיזוג לפונקציה משותפת ולקרוא לה בשני המסלולים, ולהריץ את `assertItemsFree` עם `exceptShipmentId`. |
+| F018 | `apps/api/src/modules/shp/shipment-edit.service.ts:246-319` | ביטול מ `rates_selected` גובה 25 דולר ולא מחזיר שום חלק מסכום המשלוח, גם לא את כיסוי החברות. | להוסיף ערך `shipping_refund` ל enum של `ledger_record` במיגרציה, ולזכות ב `cancel` את `s.cost` פחות העמלה ולהחזיר את `membershipCover` באותה טרנזקציה, כל עוד `trackingNumber` ריק. |
+| F019 | `apps/api/src/modules/shp/direct-ship.service.ts:109-268` | משלוח ישיר נגבה 100 דולר ונוצר עם `itemIds: []`, ואין שום מסלול שיכול לסגור אותו. | מסלול dispatch ייעודי ל `DIRECT_OVERNIGHT_KEY` שבונה פרופיל מהחבילה ולא מפריטים, או לחסום את השירות עד שיש מסלול. |
+| F024 | `apps/api/src/modules/shp/human-fulfilment.service.ts:206-253` | קבלת הצעה למסירה ביד יכולה לחייב פעמיים ולרדת מתחת לאפס. | לבצע `UPDATE shipment SET status='rates_selected' WHERE id=$1 AND status='requested' RETURNING` כצעד הראשון בטרנזקציה ולזרוק 409 אם לא הוחזרה שורה, ולבדוק יתרה בתוך הטרנזקציה עם נעילה. |
+| F028 | `packages/adapters/src/payment.ts:213-243` | `capture` מחזיר `succeeded` לפי סטטוס ה order ולא לפי סטטוס ה capture. סביר, לא הוכח בהרצה. | להחזיר `succeeded` רק כאשר `capture.status === 'COMPLETED'` ו `pending` אחרת, כולל כשאין capture. |
+| F029 | `apps/api/src/modules/pay/wallet-request.service.ts:419-449` | payout שחוזר `pending` נחשב הצלחה, הבקשה נסגרת `completed`, ושום קוד לא מעדכן את `external_payment` מאוחר יותר. סביר, לא הוכח בהרצה. | לממש webhook של `PAYMENT.PAYOUTS-ITEM.*` שמעדכן את `external_payment` וכותב שורה מפצה על כישלון, או job שבודק batches ממתינים, ולוודא שהיעד הוא מייל כבר בהגשה. |
+| F030 | `apps/api/src/modules/mkt/trade.service.ts:103-113` | ביצוע החלפה או מתנה ב `approve` מעביר בעלות בלי לבדוק שהפריטים עדיין בבעלות הצד הנכון, במצב `stored`, ובלי hold, הבדיקות רצות רק ב `proposeSwap` ו `initiateTransfer`. סביר, לא הוכח בהרצה. | בתוך הטרנזקציה של `approve` לנעול כל פריט ולדרוש `ownerId` תואם, `lifecycleState === 'stored'`, `holdFlag === false`, ולסמן את ההצעה `rejected` בטרנזקציה נפרדת אם נכשל. |
+| F031 | `apps/api/src/modules/dis/buyout.service.ts:117-169` | `stage` ו `status` נקראים דרך `requests.get` על `this.db` בלי נעילה ו `setStatus` לא בודק מצב קודם. סביר, לא הוכח בהרצה. | לקרוא את הבקשה עם `for('update')` על `tx` ולבדוק `status === 'in_progress'` ו `stage === 'quoted'` תחת הנעילה. |
+| F033 | `apps/api/src/modules/dis/custom-request.service.ts:154-178` | `declineToQuote` מבטל גם בקשה ב `stage: 'accepted'` שכבר שולמה, בלי החזר. סביר, לא הוכח בהרצה. | לאסור דחייה אחרי `accepted` או לרשום זיכוי `credit` באותה טרנזקציה. |
+| F034 | `apps/api/src/modules/dis/custom-request.service.ts:116-146` | `quote` לא בודק `stage`, ו `acceptQuote` בשורות 187 עד 241 קורא `stage` בלי נעילה. סביר, לא הוכח בהרצה. | לדרוש `stage` של `awaiting_quote` או `quoted` ב `quote`, ולקרוא עם `for('update')` ב `acceptQuote`. אותו שורש גם ב F027 `apps/web/src/areas/warehouse/ServiceQueue.tsx:130-168,289-431`. |
+
+### P1, לתקן לפני כסף אמיתי, 27 ממצאים
+
+| מזהה | איפה | הבעיה | התיקון |
+|---|---|---|---|
+| F036 | `apps/api/Dockerfile:65-68` | `node dist/db/migrate.js` בתוך ה image מחיל את מיגרציות drizzle ואז נופל עם ENOENT על `dist/db/sql/0001_append_only.sql`. | להעתיק את `src/db/sql` ל `dist/db/sql` בשלב ה build או לקרוא את הקובץ יחסית ל cwd, ולהוסיף בדיקת אתחול שה triggers קיימים. אותו שורש גם ב F043 `apps/api/src/db/migrate.ts:24-27`, F045 `apps/api/src/db/migrate.ts:23-26`. |
+| F037 | `apps/web/nginx.conf:35-76` | כותרות האבטחה, כולל CSP, `frame-ancestors` ו `X-Frame-Options`, לא נשלחות על `index.html` ולא על `/assets/` ו `/images/`. | להעביר את כל כותרות האבטחה ל include משותף ולכלול אותו בכל location שיש בו `add_header`. אותו שורש גם ב F053 `apps/web/nginx.conf:35-40,56-76`. |
+| F038 | `apps/api/Dockerfile:63` | `dist/db/seed.js` נשלח ב image של production והוא מריץ TRUNCATE על כל הטבלאות בלי לבדוק `NODE_ENV`. | לזרוק ב seed כאשר `NODE_ENV=production` או כאשר ה host אינו localhost בלי דגל מפורש, ולהוציא את `seed.ts` מה build של production. אותו שורש גם ב F042 `apps/api/src/db/seed.ts:72-99`, F052 `scripts/test.mjs:75-85`. |
+| F039 | `apps/worker/src/jobs/tracking-refresh.ts:10` | ה worker בונה `SandboxShippingAdapter` ישירות ומריץ אותו כל 30 דקות בכל סביבה. | להזריק ל worker את אותו adapter לפי `SHIPPING_PROVIDER` ולהפסיק לייצא את ה sandbox לשימוש ישיר. אותו שורש גם ב F050 `apps/worker/src/jobs/tracking-refresh.ts:2-26`. |
+| F040 | `apps/api/src/modules/pay/topup.service.ts:64-75` | `handleWebhook` מאמת ולא מעדכן שום רשומה, ולכן capture או payout שחזרו `pending` לא נסגרים לעולם. גם סינון הכפילויות לא עובד בפועל, כי הוא מחפש `webhookEventId` ששום קוד לא כותב. | לממש את הטיפול באירועי `PAYMENT.CAPTURE.*` ו `PAYMENT.PAYOUTS-ITEM.*`, ולכתוב את `event.id` ל `webhookEventId` באותה טרנזקציה עם אילוץ ייחודי, אחרת webhook שנשלח שוב יזכה פעמיים. |
+| F041 | `infra/ops/backup.sh:176-195` | אין גיבוי מתוזמן, אין PITR ואין העתקה מחוץ למכונה. | לתזמן `dump` ו `verify`, להעתיק את הקבצים לאחסון חיצוני מוצפן, ולהפעיל `archive_mode` עם `archive_command` או להשתמש בשירות מנוהל עם PITR. |
+| F044 | `apps/api/src/app.module.ts:59-69` | הדלי `auth` של ה throttler חל על כל נתיב ב API ולא רק על ההזדהות, והמפתח נפרד לכל handler. | להגדיר את `auth` רק על `AuthController` באמצעות `@Throttle` מקומי, או `skipIf` שמדלג כשאין metadata, ו `@SkipThrottle({ default: true, auth: true })` על `HealthController`. `@SkipThrottle()` בלי ארגומנט מדלג רק על הדלי `default` ב throttler 6.5, ולכן לא מספיק. היום `/healthz` ו `/readyz` נספרים בשני הדליים, ובדיקת חיים של load balancer כל שתי שניות מאותו IP מגיעה ל 30 בדקה, ברירת המחדל של `AUTH_RATE_LIMIT_PER_MINUTE`, ומתחילה לקבל 429. |
+| F046 | `apps/api/src/modules/pay/wallet-request.service.ts:309-356` | הפרדת התפקידים בודקת רק שהמבצע אינו המבקש, אותו אדמין מאשר ומשלים, ו `documentKey` אופציונלי. | לדרוש ש `reviewedBy` שונה מהמשלים לפחות מעל סף סכום, ולדרוש מסמך ל cash_in מעל סף. |
+| F047 | `apps/api/src/modules/pay/checkout.service.ts:132-138` | בתצורת `PAYMENT_PROVIDER=paypal` כל checkout נכשל, כי ה SPA ב `apps/web/src/areas/customer/finance/MoneyPanels.tsx:79-92` לא שולח `paymentMethodToken` ואין בשום מקום יצירת הזמנת PayPal. | להוסיף ל SPA את PayPal JS SDK שיוצר ומאשר הזמנה ושולח את מזהה ההזמנה, או נקודת קצה בשרת שיוצרת הזמנה. אותו שורש גם ב F054 `apps/web/src/areas/customer/finance/MoneyPanels.tsx:79-106`. |
+| F048 | `apps/api/src/modules/dis/grading.service.ts:263-289` | `shipSubmission` שולף את כל חברי המשלוח בלי סינון `status`, כולל בקשות שכבר נסגרו עם ציון, ו `complete` בשורות 315 עד 347 מתיר סגירה לפני יציאה. | להוסיף `eq(serviceRequest.status, 'in_progress')` לשאילתת החברים, או לחסום `complete` לבקשה במשלוח פתוח. |
+| F049 | `apps/api/src/modules/shp/dispatch.service.ts:42-110` | `buyLabel` בשורה 74 נקרא בתוך טרנזקציה פתוחה עם נעילת `FOR UPDATE`, וכל כישלון אחריו מגלגל אחורה את הרשומה אבל לא את הקנייה. | לפצל לשלושה שלבים, לסמן `labeled` או סטטוס ביניים ולבצע commit, לקנות מחוץ לטרנזקציה ולשמור `trackingNumber` ו `label.costMinor` מיד בטרנזקציה קצרה, ורק אז להעביר פריטים ל `shipped`, עם idempotency key לקנייה. |
+| F051 | `apps/worker/src/jobs/interest-accrual.ts:34-46` | אין שום מפתח אידמפוטנטיות לריבית יומית וכל INSERT הוא autocommit. | `reference_id` בפורמט תאריך UTC ואינדקס ייחודי חלקי על `(user_id, reference_id) WHERE type = 'interest'` עם `ON CONFLICT DO NOTHING`. |
+| F055 | `apps/web/src/areas/customer/finance/WalletPage.tsx:578-588` | עמודת היתרה המצטברת מחושבת מאפס על `rows`, שהם שש השורות האחרונות בסקירה או הרשימה המסוננת בטאב התנועות, ולא על ה ledger המלא. | לחשב את המפה פעם אחת על ה ledger המלא ב `WalletPage` ולהעביר לפי `row.id`, או לקבל את העמודה מהשרת. |
+| F056 | `apps/web/src/areas/customer/vault/RemoveCommonsPanel.tsx:44-93` | `chosen` לא מסונן מחדש כשרשימת `items` משתנה בגלל חיפוש או `load`. | לשלוח רק `chosen` שנמצאים ב `rows` הזכאים המוצגים, או לנקות את `chosen` בכל שינוי של `items`. |
+| F057 | `apps/api/src/modules/vlt/vault.service.ts:66-74` | המצבים `at_grader` ו `discarded` לא נכללים ב `LIVE` ולא ב `TERMINAL`, ולכן לא מופיעים באף לשונית של הכספת. | להוסיף `at_grader` ללשונית active או hold ואת `discarded` ל `TERMINAL`. |
+| F058 | `apps/web/src/areas/customer/help/faqContent.ts:1-2098` | ה FAQ שמוצג ללקוחות Bault הוא העתק מילולי של ה FAQ של ShipMyCards, כולל כתובות אריזונה ואורגון בשורות 869 ו 882, טלפון בשורה 886, כתובת PayPal ו Wise בשורות 1032 ו 1056, קישור הפניה אישי ל Wise בשורה 1059, והיתר שיווקי על צילום כרטיסים בשורה 1776. | להוציא את הקובץ מהבנדל ולכתוב FAQ של Bault שמבוסס על `baultNote`, עם ייעוץ משפטי לפני פרסום כלשהו של תוכן צד שלישי. |
+| F059 | `apps/web/src/areas/customer/help/legalContent.ts:59-63` | אין תנאי שימוש, אין מדיניות פרטיות ואין מדיניות עוגיות, ו `SignUpPage.tsx` לא מבקש הסכמה לשום מסמך. | לכתוב את המסמכים עם עורך דין, להוסיף אישור מפורש בהרשמה ולשמור את גרסת המסמך שאושרה על החשבון. |
+| F060 | `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx:345-361` | הפאנל של הצעות מסירה ביד לעולם לא מוצג. | להוסיף את שלושת השדות ל `toTrackingView` ול `ShipmentSummary` ב `shared/shipments.ts` ולהשתמש בטיפוס המשותף. |
+| F061 | `apps/web/nginx.conf:92-100` | מאחורי nginx ב container נפרד כל הבקשות מגיעות ל API מאותה כתובת. סביר, לא הוכח בהרצה. | להגדיר `TRUST_PROXY` לכתובת או לרשת של nginx בפריסה, ולהוסיף בדיקת production ב `packages/config/src/env.ts` או תיעוד מחייב. |
+| F062 | `packages/adapters/src/easypost.ts:164-216` | עם `SHIPPING_PROVIDER=easypost` רשימת אפשרויות המשלוח כנראה ריקה. סביר, לא הוכח בהרצה. | מיפוי מפורש בין שמות EasyPost לקטלוג, ובדיקה שעוברת דרך `shipment.service.ts` ולא רק דרך ה adapter. אותו שורש גם ב F068 `apps/api/src/modules/shp/carriers.ts:157-285`. |
+| F063 | `apps/api/src/db/client.ts:16-21` | אין מאזין לאירוע `error` של ה `Pool`. סביר, לא הוכח בהרצה. | להוסיף `pool.on('error', …)` שכותב ללוגר, ולחשוף את ה pool כ provider. |
+| F064 | `apps/api/src/shared/idempotency/idempotency.service.ts:22-45` | ה idempotency מגן רק מפני retry אחרי שהבקשה הראשונה הסתיימה, לא מפני שתי בקשות מקבילות עם אותו מפתח. סביר, לא הוכח בהרצה. | לתפוס את המפתח ב `INSERT … ON CONFLICT DO NOTHING RETURNING` בתוך ה transaction של הפעולה ולשמור את התשובה באותו transaction. |
+| F065 | `apps/api/src/modules/pay/checkout.service.ts:132-216` | ה capture קורה לפני שיש שורה כלשהי, וכל כישלון אחריו, שגיאת רשת, 409 על אי התאמה, או כישלון בטרנזקציה, משאיר כסף שנתפס ב PayPal בלי שורה ב Bault. סביר, לא הוכח בהרצה. | לכתוב שורת `external_payment` בסטטוס `pending` לפני ה capture, לשמור את מזהה ההזמנה, ולעדכן אחרי, ולשמור את המפתח ב SPA עד הצלחה. |
+| F066 | `apps/api/src/modules/mkt/purchase.service.ts:88-99` | הרכישה לא בודקת `it.ownerId === l.sellerId` ולא `it.lifecycleState === 'listed'`. סביר, לא הוכח בהרצה. | להוסיף שתי בדיקות אחרי נעילת הפריט ולזרוק 409 עם `ITEM_NO_LONGER_AVAILABLE`, ולסמן את הרשימה `removed`. |
+| F067 | `apps/api/src/modules/shp/shipment.service.ts:921-970` | מרוץ בין `pay` לבין `apps/worker/src/jobs/shipment-expiry.ts` שורות 21 עד 70. סביר, לא הוכח בהרצה. | UPDATE מותנה ב `status = 'awaiting_payment'` בתוך הטרנזקציה של `pay` וזריקת 409 כשלא נגעה שורה, ואותו תנאי בענף ההחזקה של `settle` שגם הוא יכול להחיות משלוח שבוטל. אותו שורש גם ב F071 `apps/api/src/modules/shp/shipment.service.ts:921-968`. |
+| F069 | `packages/adapters/src/easypost.ts:164-190` | שורות המכס הקפואות על המשלוח לא נשלחות לספק, `RateRequest` ב `packages/adapters/src/shipping.ts` שורות 123 עד 153 בכלל לא כולל מידע מכס. סביר, לא הוכח בהרצה. | להוסיף `customs` ל `RateRequest`, למפות את `customsLines` ל `customs_items` ב `getRates`, ולשלוח HS code וארץ מקור אמיתיים. |
+| F070 | `apps/worker/src/jobs/storage-fee.ts:115-289` | הספירה של `periods_billed` וה INSERT הם read then write בבידוד READ COMMITTED בלי advisory lock ובלי אילוץ ייחודי לפי פריט ותקופה. סביר, לא הוכח בהרצה. | `pg_advisory_xact_lock` קבוע בתחילת הטרנזקציה ועמודת מספר תקופה ב `charge` עם אינדקס ייחודי חלקי. |
+
+### ממצאים שנוספו במעבר הבדיקה השני
+
+במעבר השני, שבו כל טענה במדריך נבדקה שוב מול הקוד, נמצאו שלושה באגים שלא היו ברשימות, ושלושה ממצאים קיימים התבררו כחמורים או שונים ממה שנכתב. השלושה האחרונים כבר מתוקנים בשורות שלהם למעלה ובפרק 27 של `docs/DIVE2.md`.
+
+| מזהה | חומרה | איפה | הבעיה | התיקון |
+|---|---|---|---|---|
+| N1 | P1 | `apps/api/src/modules/dis/consignment.service.ts:247`, `apps/api/src/modules/cst/stow.service.ts:122-146` | `warehouseTransfer` כותב ל `bin_id` ערך בצורה `EXT:<warehouse>/<bin>`. בגלל ה cast המובלע מ `text` ל `uuid`, הספירה ב `listWithCounts` ממירה כל `bin_id` ל `uuid`, ושורה אחת כזו גורמת ל `GET /custody/bins`, ל `suggest` ולקליטה עם `autoStow` להחזיר 400 לכל המשתמשים. אומת בניסוי על מסד זמני. זו החמרה של F189, שתיאר רק את החיוב השגוי | לשמור מיקום חיצוני בעמודה משלו ולהשאיר את `bin_id` ריק או מזהה של תא אמיתי. בהמשך כדאי להפוך את `bin_id` ל `uuid` עם מפתח זר |
+| N2 | P2 | `apps/api/src/modules/vlt/vault.service.ts:223-239` | הענף השני של `departure` ב `listHistory` מחפש אירוע שבו המשתמש הוא `new_owner_id` במעבר למצב סופי, אבל `changeState` לא כותב `new_owner_id` ושום קוד לא כותב אירוע `dispatch`. לכן קלף שהלקוח שלח הביתה לא מופיע לעולם בלשונית ההיסטוריה. ה seed עצמו מתעד את זה ב `apps/api/src/db/seed.ts` שורות 1248 עד 1262 | לכתוב `new_owner_id` במעבר למצב סופי ב `changeState`, או לשנות את השאילתה כך שתמצא מעבר למצב סופי של פריט שהמשתמש היה הבעלים שלו באותו רגע |
+| N3 | P2 | `apps/api/src/modules/mkt/mkt.controller.ts:44-65`, `browse.service.ts` | ב `GET /marketplace/listings`, שהוא ציבורי, `?limit=abc` או `?limit=-1` לא מחזירים 500 כפי שנכתב קודם. drizzle 0.38 משמיט את ה `LIMIT` כשהערך אינו מספר אי שלילי, ולכן אורח מקבל את כל המודעות הפעילות עם חתימת URL לכל תמונה. אומת בקוד של drizzle ובבקשה ל API מקומי. זה תיקון של F229 | ולידציה של `limit` בין 1 ל 200 עם 400 על כל ערך אחר, ו pagination |
+
+שלושת התיקונים לממצאים קיימים. ב F044, `@SkipThrottle()` בלי ארגומנט לא מוציא את `/healthz` ואת `/readyz` מהדלי `auth`, וצריך `{ default: true, auth: true }`. ב F040, סינון הכפילויות של ה webhook לא עובד בפועל, כי שום קוד לא כותב `webhookEventId`. ב F229, ההתנהגות של `limit` לא תקין היא N3.
+
+## פרק התרגול. ארבע משימות שהופכות ידע ליכולת
+
+### למה הפרק הזה קיים
+
+קריאה נותנת ידע. ארבע המשימות כאן הופכות אותו ליכולת. הן נבחרו כך שכל אחת עוברת דרך כמה שיותר שכבות, ושתיים מהן מתקנות את שני הבאגים המסוכנים ביותר במערכת. עשו אותן לפי הסדר, אחרי שסיימתם לקרוא את המדריך. הזמן הכולל הוא שש עד שמונה שעות.
+
+מה נבדק לפני שהפרק נכתב. מתכון 1 ומתכון 2 בפרק העבודה הורצו כפי שהם כתובים, על מסד ריק. ה API, ה SPA, ה worker עם שמונת ה jobs, ההתחברות ועשרת ה triggers עלו, וכל שמונה חבילות הבדיקות עברו, web 195, ux 115, contract 30 עם 4 דילוגים בלי S3, core-contract 19, integration 189, core 195, concurrency 1 ו property 2. שתי בדיקות הבאגים במשימות 2 ו 3 הורצו על הקוד של היום ונכשלו מהסיבה הנכונה. את התיקון עצמו לא הרצנו, כי המדריך לא משנה קוד. בדיקה שהופכת לירוקה היא ההוכחה שלכם שהתיקון נכון.
+
+לפני שמתחילים, פתחו branch לכל משימה, למשל `git checkout -b fix/e4-expected-owner`, וזכרו ש `db:seed` מוחק את כל הנתונים במסד המקומי.
+
+### משימה 1. הרמה וסיור, 45 דקות
+
+**המטרה.** לראות את המערכת רצה, ולקשר כל פעולה בדפדפן לשורות שהיא כותבת במסד.
+
+1. הרימו הכל לפי מתכון 1 בפרק העבודה. אם אין Docker, Postgres 16 מקומי מספיק. הפנו את `DATABASE_URL` ואת `DIRECT_DATABASE_URL` ל 5432, והשאירו `STORAGE_PROVIDER=sandbox`.
+2. היכנסו כ `red`, כ `hermon` וכ `eldar`, הסיסמה של כולם `11111111`, ועברו על המסכים של כל אזור.
+3. כ `red`, העלו פריט למכירה בשוק. כ `golden`, קנו אותו.
+4. הסתכלו במסד על מה שהקנייה כתבה.
+
+```bash
+psql "$DB" -c "select type, direction, amount, reference_type, occurred_at from ledger_record order by occurred_at desc limit 3"
+psql "$DB" -c "select event_type, reason, occurred_at from custody_event order by occurred_at desc limit 3"
+psql "$DB" -c "select event_type, dispatched_at from outbox_message order by created_at desc limit 3"
+```
+
+**נקודת ביקורת.** לכל שורה שראיתם, מצאו את הבלוק ב `apps/api/src/modules/mkt/purchase.service.ts` שכתב אותה. שורת `purchase` ושורת `sale_credit` ביומן, אירוע `ownership_transfer` ואירוע `state_change` ביומן המשמורת, והודעת `item_sold` ב outbox. אם `dispatched_at` ריק, ה worker לא רץ.
+
+**מה לומדים.** טרנזקציה אחת שכותבת לשלושה יומנים, וה worker שמשלים אותה מאוחר יותר.
+
+### משימה 2. תיקון E4, בעלים צפוי, שעתיים עד שלוש
+
+**המטרה.** שאי אפשר יהיה להעביר פריט מבעלים שכבר אינו הבעלים. זה P0, והתיקון עובר דרך הלב של המערכת.
+
+1. צרו את הבדיקה `tests/integration/e4-expected-owner.test.ts`.
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
+
+describe('E4, expected owner', () => {
+  it('a sold card cannot be moved by a transfer approved afterwards', async () => {
+    const operator = await signIn(SEED.operator);
+    const owner = await signIn(SEED.collector);
+    const item = await intakeFor(operator, SEED.collector, { description: 'E4' });
+    const t = await owner.post('/marketplace/transfers', { itemId: item.id, toUsername: 'veteran' });
+    const c = await owner.post('/marketplace/transfers/confirm', { confirmationToken: t.body.confirmationToken });
+    const listing = await owner.post('/marketplace/listings', { itemId: item.id, askingPrice: 100 });
+    await fundWallet(SEED.collector2, 1000);
+    const buyer = await signIn(SEED.collector2);
+    expect((await buyer.post(`/marketplace/listings/${listing.body.id}/purchase`)).status).toBe(201);
+
+    const recipient = await signIn(SEED.collector3);
+    expect((await recipient.post(`/marketplace/swaps/${c.body.swapId}/approve`)).status).toBe(409);
+  });
+});
+```
+
+2. הריצו אותה וראו אותה נכשלת. על הקוד של היום היא נכשלת עם `expected 201 to be 409`. הקנייה עברה, ואחריה גם האישור של המתנה, כך שהכרטיס עבר מהקונה לנמען.
+
+```bash
+pnpm --filter @bault/api db:seed
+pnpm exec vitest run --project integration tests/integration/e4-expected-owner.test.ts
+psql "$DB" -c "select event_type, reason from custody_event order by occurred_at desc limit 3"
+```
+
+השאילתה מראה את הבאג בנתונים. `ownership_transfer` עם הסיבה `gift transfer` מיד אחרי `sale of listing`.
+
+3. מצאו את כל הקוראים.
+
+```bash
+grep -rn "transferOwnership(" apps/api/src
+```
+
+4. שנו את `transferOwnership` ב `apps/api/src/modules/cst/custody.service.ts`. הוסיפו פרמטר אחרון `expectedOwnerId`, ומיד אחרי `lockItem` זרקו `AppError` עם `ErrorCode.CONFLICT` ו 409 כש `current.ownerId` שונה ממנו. הבדיקה חייבת להיות אחרי הנעילה, אחרת היא שוב בדיקה ואז פעולה.
+5. עברו על כל קורא שמצאתם, ושאלו את עצמכם מי חייב להיות הבעלים ברגע הזה. ב `trade.service.ts`, הפריטים המוצעים חייבים להיות של `s.proposerId` והמבוקשים של `s.responderId`. ב `purchase.service.ts` זה `l.sellerId`. בשאר, בנאמנות, בתרומה, בהשמדה, ב buyout ובקונסיגנציה, זה המוכר או המבקש של הפעולה. בדף של `custody.service.ts` בפרק 5 יש טבלה, המפה של E4, שמפרטת מה כל קורא בודק ומה חסר לו.
+6. הריצו את הבדיקה עד שהיא ירוקה, ואחר כך את כל החבילות שתלויות במסד לפי מתכון 2. אם חבילה קיימת נכשלת, קראו את הבדיקה. או שהקריאה שלכם העבירה בעלים שגוי, או שמצאתם זרימה שהעבירה פריט מבעלים לא צפוי, וזה ממצא אמיתי.
+
+**נקודת ביקורת.** הבדיקה ירוקה, כל החבילות ירוקות, ו `grep` מראה שכל קורא מעביר בעלים צפוי.
+
+**מה לומדים.** `CustodyService`, נעילת שורה, איך 409 מגיע עד ה SPA, ואת שמונה הקריאות בשבעה קבצים שמזיזות פריטים.
+
+### משימה 3. תיקון E1, נעילת ארנק, שעתיים עד שלוש
+
+**המטרה.** שקונה לא יוכל להוציא יותר ממה שיש לו בקניות מקבילות.
+
+1. צרו את הבדיקה `tests/concurrency/e1-wallet-lock.test.ts`.
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { SEED, fundWallet, intakeFor, signIn } from '../integration/helpers/http';
+
+describe('concurrency: one wallet, many purchases', () => {
+  it('never spends more than the balance', async () => {
+    const operator = await signIn(SEED.operator);
+    const seller = await signIn(SEED.collector);
+    const buyer = await signIn(SEED.collector3);
+    const start = (await buyer.get('/finance/wallet')).body.amount as number;
+    if (start < 1000) await fundWallet(SEED.collector3, 1000 - start);
+    const price = (await buyer.get('/finance/wallet')).body.amount as number;
+
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const item = await intakeFor(operator, SEED.collector, { description: `E1 ${i}` });
+      ids.push((await seller.post('/marketplace/listings', { itemId: item.id, askingPrice: price })).body.id);
+    }
+    const res = await Promise.all(ids.map((id) => buyer.post(`/marketplace/listings/${id}/purchase`)));
+
+    expect(res.filter((r) => r.status === 201)).toHaveLength(1);
+    expect((await buyer.get('/finance/wallet')).body.amount).toBeGreaterThanOrEqual(0);
+  });
+});
+```
+
+2. הריצו אותה שלוש פעמים. על הקוד של היום היא נכשלה בכל שלוש ההרצות, עם שלוש עד חמש קניות מוצלחות במקום אחת, כלומר כל הארנק הוצא שלוש עד חמש פעמים.
+
+```bash
+pnpm --filter @bault/api db:seed
+for i in 1 2 3; do pnpm exec vitest run --project concurrency tests/concurrency/e1-wallet-lock.test.ts; done
+```
+
+3. כתבו עזר אחד שנועל ארנק, למשל ב `apps/api/src/modules/pay/ledger.service.ts`. הוא נועל את שורת `user_account` של המשתמש עם `.for('update')` בתוך ה `tx` שקיבל. חלופה היא `pg_advisory_xact_lock`. בדף של `ledger.service.ts` בפרק 4 יש את השיקולים.
+4. ב `purchase.service.ts`, קראו לעזר בתוך הטרנזקציה, אחרי נעילת המודעה והפריט ולפני `balanceOf`. זה הסדר הקבוע שמונע deadlock, קודם שורת העסק, אחר כך הפריטים, ובסוף הארנקים לפי מזהה.
+5. הריצו את הבדיקה חמש פעמים ברצף. היא חייבת לעבור בכל החמש, כי מרוץ שנסגר רק לפעמים לא נסגר.
+6. הרחיבו לכל מקום שבודק יתרה ואז גובה. הרשימה המלאה היא הטבלה איפה בודקים יתרה ואז מחייבים בפרק 4. בכל שורה שלה קראו לעזר הנעילה לפני בדיקת היתרה. בשורות שמסומנות מחוץ לטרנזקציה, אלה E18, `shipment.service.ts` שורות 813 ו 929, `direct-ship.service.ts` שורה 154, `human-fulfilment.service.ts` שורה 212, `escrow.service.ts` שורה 335 ו `offer.service.ts` שורה 173, העבירו קודם את הבדיקה לתוך הטרנזקציה. דלגו על `withdrawal.service.ts`, ששום route לא מגיע אליו. כתבו לפחות לאחת מהן בדיקה באותו מבנה.
+7. הריצו את `concurrency`, `property` ו `core` לפי מתכון 2, ואת השאילתה של ארנקים שליליים ממתכון 6.
+
+**נקודת ביקורת.** הבדיקה עוברת חמש פעמים ברצף, כל החבילות ירוקות, והקונה של הבדיקה לא מופיע ברשימת הארנקים השליליים.
+
+**מה לומדים.** READ COMMITTED, `FOR UPDATE`, סדר נעילות, ולמה יתרה נגזרת צריכה נעילה משלה.
+
+### משימה 4. route חדש מקצה לקצה, שעה עד שעתיים
+
+**המטרה.** לעבור לבד את כל השכבות של פיצ'ר חדש, מה controller ועד הבדיקה.
+
+עשו את מתכון 4 בפרק העבודה, פתיחה מחדש של פנייה סגורה בתמיכה, `POST /api/v1/support/tickets/:id/reopen`, לצוות בלבד. בצעד 3 השתמשו בכלל שלמדתם במשימות 2 ו 3, טעינה עם נעילה ובדיקת מצב בתוך הטרנזקציה. בסוף הוסיפו כפתור במסך של הצוות לפי מתכון 8.
+
+**נקודת ביקורת.** בדיקה שמוכיחה את המסלול הטוב, משתמש בלי הרשאה שמקבל 403, ופנייה פתוחה שמקבלת 409. ה route מופיע במטריצת ההרשאות ב `tests3/integration/sec-authorization.test.ts`.
+
+### אחרי ארבע המשימות
+
+הריצו את מתכון 10 לפני כל push. אחר כך חזרו לסעיפי בדוק את עצמך בפרקים 4 ו 5. אם אתם עונים על כולם בלי לפתוח את המדריך, אתם מכירים את הלב של המערכת. המשימה הבאה שכדאי לקחת היא אחד משלושת התיקונים השורשיים בפרק הבאגים, עדכוני מצב מותנים.
