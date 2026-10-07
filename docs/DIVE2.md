@@ -212,7 +212,7 @@ flowchart LR
 
 ### מה עולה ראשון
 
-בסביבת פיתוח, `pnpm dev` מריץ את `scripts/dev.mjs` שמעלה את ה API, את ה worker ואת Vite כשלושה תהליכים ילדים, ומחכה ל `/api/v1/readyz` לפני שהוא מדווח שהכל מוכן. בסביבת ייצור אין מקבילה, כל image מכיל תהליך אחד וסדר ההעלאה הוא באחריות מי שמפעיל את המכולות. הסדר הנכון הוא Postgres, אחריו PgBouncer, אחריו הרצת migrations פעם אחת, ורק אז ה API וה worker במקביל, ולבסוף nginx עם ה SPA. אם ה API עולה לפני שה migrations רצו, הוא יעלה בהצלחה ויענה ל `healthz`, אבל `readyz` יענה 200 גם כשהסכמה חסרה, כי הוא בודק רק `select 1`. זה פער שמטופל בחלק ב.
+בסביבת פיתוח, `pnpm dev` מריץ את `scripts/dev.mjs` שמעלה את ה API ואת Vite כשני תהליכים ילדים, בלי ה worker, שמורץ בנפרד עם `pnpm dev:worker`, ומחכה ל `/api/v1/healthz` לפני שהוא מדווח שהכל מוכן. בסביבת ייצור אין מקבילה, כל image מכיל תהליך אחד וסדר ההעלאה הוא באחריות מי שמפעיל את המכולות. הסדר הנכון הוא Postgres, אחריו PgBouncer, אחריו הרצת migrations פעם אחת, ורק אז ה API וה worker במקביל, ולבסוף nginx עם ה SPA. אם ה API עולה לפני שה migrations רצו, הוא יעלה בהצלחה ויענה ל `healthz`, אבל `readyz` יענה 200 גם כשהסכמה חסרה, כי הוא בודק רק `select 1`. זה פער שמטופל בחלק ב.
 
 ### איך ה API מאתחל את עצמו
 
@@ -16872,16 +16872,18 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 # לערוך את .env. ערכים שחייבים לפחות:
 #   SESSION_COOKIE_SECRET=<32 תווים אקראיים או יותר>
-#   PAYMENT_PROVIDER=sandbox      (אין ברירת מחדל, בלי זה שום דבר לא עולה)
+#   PAYMENT_PROVIDER=sandbox      (בקובץ הדוגמה כתוב paypal, וזה דורש את שלושת מפתחות PayPal, אחרת ה API לא עולה)
+#   AUTH_RATE_LIMIT_PER_MINUTE=5000   (בקובץ הדוגמה 10, והדלי הזה חל על כל ה API לפי IP, ולכן בפיתוח מקבלים 429)
 #   EXPOSE_API_DOCS=              (ריק, כי כל ערך אחר מדליק אותו, ראה ממצא E7)
 docker compose -f infra/docker-compose.yml up -d
 pnpm --filter "./packages/*" build
 pnpm --filter @bault/api db:migrate
 pnpm --filter @bault/api db:seed
 pnpm dev
+pnpm dev:worker   # בטרמינל נפרד
 ```
 
-`pnpm dev` מריץ את `scripts/dev.mjs`, שמעלה את ה API, את ה worker ואת Vite, ומחכה ל `healthz` לפני שהוא מודיע שהכל מוכן. הדפדפן נפתח על `http://localhost:5173`. כל החשבונות של ה seed משתמשים בסיסמה `11111111`, והרשימה המלאה שלהם בפרק על ה seed.
+`pnpm dev` מריץ את `scripts/dev.mjs`, שמעלה את ה API, מחכה ל `healthz`, ורק אז מעלה את Vite. הוא לא מעלה את ה worker, ולכן צריך להריץ `pnpm dev:worker` בטרמינל נפרד, אחרת אף job מתוזמן לא ירוץ. הדפדפן נפתח על `http://localhost:5173`. כל החשבונות של ה seed משתמשים בסיסמה `11111111`, והרשימה המלאה שלהם בפרק על ה seed.
 
 שתי מלכודות שכדאי להכיר. הראשונה, `DATABASE_URL` בקובץ הדוגמה מצביע על PgBouncer בפורט 6432, ו `DIRECT_DATABASE_URL` על Postgres בפורט 5432. אם מריצים Postgres מקומי בלי PgBouncer, שני המשתנים צריכים להצביע על 5432. השנייה, החבילות המשותפות נצרכות מ `dist`, ולכן אחרי כל שינוי ב `packages/config` או `packages/adapters` צריך להריץ שוב את ה build שלהן, אחרת ה API ימשיך לרוץ מול הגרסה הישנה.
 
