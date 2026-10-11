@@ -23,32 +23,32 @@
 
 - כל קבצי הקוד, 475, מופיעים במדריך, וזה נבדק בסקריפט.
 - כל ההפניות לשורות, יותר מ 2,300, נבדקו בסקריפט מול הקוד. אף אחת לא חורגת מאורך הקובץ שלה, ובכ 1,600 שורות של טבלאות בלוקים נבדק שהשמות שבשורה באמת נמצאים בטווח השורות.
-- אחרי הכתיבה, כל טענה שאפשר לפעול לפיה, באג, בדיקה חסרה, מי קורא למה, איזו טבלה נכתבת, ומה נשבר אם משנים, נבדקה שוב מול הקוד במעבר שני. נבדקו כ 2,600 טענות, וכ 280 תוקנו או חודדו. המעבר הזה מצא גם שלושה באגים חדשים, והם בפרק הבאגים.
+- אחרי הכתיבה, כל טענה שאפשר לפעול לפיה, באג, בדיקה חסרה, מי קורא למה, איזו טבלה נכתבת, ומה נשבר אם משנים, נבדקה שוב מול הקוד במעבר שני. נבדקו כ 2,600 טענות, וכ 290 תוקנו או חודדו.
 - מתכון ההרמה ומתכון הבדיקות הורצו כפי שהם כתובים על מסד ריק, וכל שמונה חבילות הבדיקות עברו. בדיקות הבאגים בפרק התרגול הורצו ונכשלו על הקוד של היום מהסיבה הנכונה.
 - מה שלא נבדק בהרצה. ספקים אמיתיים, PayPal, EasyPost ו SMTP, אחסון S3 אמיתי, בניית ה images, ומה שרק דפדפן יכול להראות. טענה שמתבססת על קריאת קוד בלבד, או שאי אפשר להכריע בה מהקוד, מסומנת ככזו במקום שבו היא מופיעה.
-- `docs/DIVE2.md` לא עבר את המעבר השני על פרקי הקבצים שלו. הממצאים שלו, פרק 27, כן עודכנו. כשהמדריך הזה והספר המלא אומרים דברים שונים על אותו קוד, המדריך הזה הוא הגרסה שנבדקה פעמיים.
+- גם `docs/DIVE2.md` עבר את אותו מעבר שני, כל פרקי הקבצים, כל 497 ממצאי P2 ו P3 ורשימת הבקרות. בכל פרק קבצים תוקנו בין 27 ל 89 טענות, ותיקונים שנמצאו שם הועברו גם למדריך הזה. 437 ממצאים אומתו במלואם, 59 חלקית ואחד הופרך, ונוספו 39 ממצאים חדשים, שמופיעים בפרק הבאגים.
 
 ## כמה זמן זה לוקח
 
 | חלק | נושא | מילים | זמן |
 |---|---|---|---|
-| | העמודים הפותחים | 1,246 | 4 דקות |
-| מילון מונחים | מילון מונחים | 515 | 2 דקות |
-| ארבעה מסעות | ארבעה מסעות מקצה לקצה | 1,385 | 5 דקות |
+| | העמודים הפותחים | 1,255 | 4 דקות |
+| מילון מונחים | מילון מונחים | 533 | 2 דקות |
+| ארבעה מסעות | ארבעה מסעות מקצה לקצה | 1,455 | 5 דקות |
 | פרק הדפוסים | הדפוסים שחוזרים בכל הקוד | 6,327 | 20 דקות |
 | פרק 1 | שלד הריפו, החבילות המשותפות, הסקריפטים, התשתית וה CI | 7,292 | 35 דקות |
 | פרק 2 | תהליך ה API, עלייה, תשתית משותפת וה seed | 8,957 | 40 דקות |
-| פרק 3 | מודל הנתונים וה migrations | 11,648 | 50 דקות |
-| פרק 4 | חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות | 16,110 | שעה ו 10 דקות |
+| פרק 3 | מודל הנתונים וה migrations | 11,722 | 55 דקות |
+| פרק 4 | חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות | 16,129 | שעה ו 15 דקות |
 | פרק 5 | קליטה, משמורת, הכספת, חברויות וקונסולת הניהול בצד השרת | 13,466 | שעה |
-| פרק 6 | השוק, התראות, שירותים על פריט מאוחסן ומשלוחים | 13,542 | שעה |
+| פרק 6 | השוק, התראות, שירותים על פריט מאוחסן ומשלוחים | 13,585 | שעה |
 | פרק 7 | ה worker והבדיקות | 8,998 | 40 דקות |
-| פרק 8 | ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים | 14,617 | שעה ו 5 דקות |
+| פרק 8 | ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים | 14,627 | שעה ו 5 דקות |
 | פרק 9 | שאר מסכי הלקוח, המחסן והמנהל | 9,719 | 45 דקות |
 | פרק העבודה | איך עובדים על הקוד | 6,879 | 25 דקות |
-| פרק הבאגים | כל הבאגים הידועים ואיך מתקנים אותם | 3,710 | 10 דקות |
+| פרק הבאגים | כל הבאגים הידועים ואיך מתקנים אותם | 4,411 | 15 דקות |
 | פרק התרגול | ארבע משימות שהופכות ידע ליכולת | 937 | 3 דקות |
-| | הכל | 125,348 | 9 שעות |
+| | הכל | 126,292 | 9 שעות ו 5 דקות |
 
 ההערכה מניחה קריאה של 300 מילים בדקה, ועוד בערך 35 אחוז זמן להצצה בקוד בפרקי הקבצים. פרק התרגול נמדד אחרת. הקריאה שלו קצרה, והעבודה עצמה לוקחת שש עד שמונה שעות, מעבר לזמן בטבלה.
 
@@ -117,7 +117,7 @@ flowchart LR
 | E16 | P2 | חבילות הבדיקות תלויות במצב המסד ובסדר ההרצה |
 | E17 | P1 | מעקב המשלוחים ב worker תמיד משתמש ב adapter המזויף |
 | E18 | P1 | תשלום משלוח, הצעת white glove ומימון escrow בודקים יתרה מחוץ לטרנזקציה |
-| E19 | P1 | הסיסמה של `/docs` לא מגינה על `/docs-json` |
+| E19 | P1 | הסיסמה של `/docs` לא מגינה על `/docs-json` ועל `/docs-yaml` |
 | E20 | P1 | ה FAQ הוא העתק של ה FAQ של ShipMyCards |
 | E21 | P1 | אין תנאי שימוש ואין מדיניות פרטיות |
 | E22 | P1 | כותרות האבטחה של nginx לא מגיעות לדף ה HTML |
@@ -156,10 +156,10 @@ flowchart LR
 | bin, תא | מקום פיזי על מדף במחסן | טבלת `bin` |
 | bin transfer | שורה שלא ניתנת לשינוי שמתעדת הזזה בין תאים | טבלת `bin_transfer` |
 | stow | הצבת פריט בתא | `cst/stow.service.ts` |
-| hold | הקפאה של פריט שמונעת מכירה, משלוח או העברה | `cst/cst.controller.ts` |
+| hold | הדגל `hold_flag`, ולא המצב `on-hold`. כל שירות בודק אותו בעצמו, ו `transferOwnership` לא | `CustodyService.setHold`, `cst/relocate.service.ts` |
 | parcel, חבילה | קופסה שהגיעה למחסן לפני שנפתחה | `modules/inv/parcel.service.ts` |
 | intake, קליטה | יצירת פריטים מתוך חבילה שנפתחה | `inv/intake.service.ts` |
-| arrival disposal | החלטה להשמיד, לתרום או להחזיר משהו שהגיע במקום לאחסן אותו | טבלת `arrival_disposal` |
+| arrival disposal | רישום של השמדה, מסירה, מחזור או החזרה של משהו שהגיע במקום לאחסן אותו | טבלת `arrival_disposal` |
 | ledger, יומן | טבלת תנועות הכסף שממנה נגזרת כל יתרה | טבלת `ledger_record`, `pay/ledger.service.ts` |
 | minor units | סכום כסף כמספר שלם של סנטים | `db/schema/_helpers.ts`, `shared/money.ts` |
 | billing port | ממשק שדרכו מודולים גובים כסף בלי לדעת על היומן | `shared/billing/billing.port.ts` |
@@ -172,8 +172,8 @@ flowchart LR
 | buyout | Bault קונה פריט מלקוח | `dis/buyout.service.ts` |
 | escrow, נאמנות | עסקה שבה הכסף מוחזק עד שהמחסן בודק את הפריט | `modules/esc` |
 | shipment group | משלוח משותף של כמה לקוחות | `shp/group-shipment.service.ts` |
-| human fulfilment | משלוח שאדם במחסן משלים ידנית | `shp/human-fulfilment.service.ts` |
-| membership, tier | מנוי בתשלום שמוותר על עמלות ודמי אחסון עד תקרה | `modules/mem` |
+| human fulfilment | יציאה מהכספת דרך אדם ולא חבילה, white glove או איסוף בתערוכה | `shp/human-fulfilment.service.ts` |
+| membership, tier | מנוי חודשי קבוע שבו עמלות, אחסון ושירותים בשכבה לא מחויבים עד תקרה | `modules/mem` |
 | storage fee run | הריצה היומית של חיוב דמי האחסון | `worker/src/jobs/storage-fee.ts` |
 | outbox | טבלה שנכתבת באותה טרנזקציה של שינוי ומשמשת לשליחת התראות | `not/outbox`, `worker/src/jobs/outbox-dispatch.ts` |
 | idempotency key | מפתח שמבטיח שבקשה שחוזרת לא תבוצע פעמיים | `shared/idempotency` |
@@ -206,30 +206,30 @@ sequenceDiagram
   SP->>AC: api.post('/auth/login', {identifier, password})
   AC->>NG: POST /api/v1/auth/login, credentials include
   NG->>MW: X-Forwarded-For נקבע
-  MW->>G: request id, helmet, json, validation
+  MW->>G: request id, helmet, json
   G->>G: Throttler, דלי auth. Session guard, אין cookie, route ציבורי
   G->>CT: LoginDto מאומת
   CT->>SV: login(identifier, password, {ip, userAgent})
   SV->>DB: SELECT user_account WHERE email = x OR username = x
   SV->>SV: argon2.verify
-  SV->>SS: create(userId)
+  SV->>SS: create(userId, origin)
   SS->>DB: INSERT login_session, רק hash של ה token
   SV->>DB: INSERT login_attempt
   CT->>AC: Set-Cookie session=token, HttpOnly, SameSite=Lax, 7 ימים
   AC->>SP: {id, role}
-  SP->>SP: onSignedIn, App.tsx טוען /me/profile ובוחר אזור
+  SP->>SP: onSignedIn, App.tsx בוחר אזור לפי role ואז טוען /me/profile
 ```
 
 מה קורה בכל שלב, ומה קורה כשהוא נכשל.
 
 | שלב | מה קורה | כשל ומה המשתמש רואה |
 |---|---|---|
-| הטופס | `login` ב `SignInPage.tsx` מונע שליחה רגילה, מדליק `busy`, מנקה שגיאות | אין כשל כאן. `busy` מונע לחיצה כפולה רק אם הכפתור מושבת לפיו |
+| הטופס | `login` ב `SignInPage.tsx` מונע שליחה רגילה, מדליק `busy`, מנקה שגיאות | אין כשל כאן. `loading={busy}` משבית את הכפתור ומונע לחיצה כפולה |
 | `api.post` | `fetch` עם `credentials: 'include'` ו `Content-Type: application/json` | רשת נפלה, `ApiError` מסוג `unreachable` וההודעה מוצגת |
 | proxy | Vite בפיתוח, nginx בייצור, מעביר ל API | ה API לא רץ. Vite מחזיר 503 עם `api_unreachable`. nginx מחזיר 502 כ HTML, וה `res.json()` נכשל בשקט וההודעה היא `Bad Gateway` |
-| middleware | מזהה בקשה, helmet, מפרסר JSON עד 16 מגה | JSON שבור, 400 עם הודעת המפרסר |
+| middleware | מזהה בקשה, helmet, מפרסר JSON עד 16 מגה | JSON שבור, 400 עם ההודעה הכללית `Bad request.` של `AllExceptionsFilter` |
 | ThrottlerGuard | שני דליים לפי IP. `@Throttle(CREDENTIAL_ROUTE)` מגביל את login ל `AUTH_RATE_LIMIT_PER_MINUTE` | 429. אם `TRUST_PROXY` שגוי, כל המשתמשים חולקים דלי אחד |
-| SessionAuthGuard | אין cookie ולכן אין משתמש, ה route מסומן `@Public` ולכן ממשיך | אם יש cookie של חשבון `closed`, נזרק 403 עוד לפני ההתחברות |
+| SessionAuthGuard | אין cookie ולכן אין משתמש, ה route מסומן `@Public` ולכן ממשיך | cookie תקף של חשבון `suspended` או `closed` זורק 403 לפני ההתחברות |
 | ValidationPipe | `LoginDto` בודק אורך וסוג | שדה חסר או שדה זר, 400 עם רשימת שדות |
 | `AuthService.login` | מנרמל את המזהה, מחפש לפי מייל או שם משתמש, מאמת argon2 | משתמש לא קיים או סיסמה שגויה, 401 אחיד. אבל משתמש לא קיים מדלג על argon2 ולכן עונה מהר יותר, וזה חושף קיום חשבון בתזמון |
 | סטטוס | `pending` מחזיר קוד `email_unverified`. `closed` מחזיר 403. `suspended` מתחבר | המסך מציע לשלוח מייל אימות מחדש |
@@ -259,29 +259,29 @@ sequenceDiagram
   PS->>DB: עמלה מ pricing_rule, ויתור מ membership
   PS->>DB: SUM ledger_record של הקונה
   PS->>DB: INSERT ledger_record, חיוב קונה, זיכוי מוכר, עמלה
-  PS->>DB: UPDATE item owner, INSERT custody_event פעמיים
+  PS->>DB: UPDATE item owner ו state, INSERT custody_event פעמיים
   PS->>DB: UPDATE listing sold, INSERT transaction, INSERT outbox_message
   PS->>DB: COMMIT
-  PS->>ID: save(key, 201, result)
+  PS->>ID: save(key, purchase:listingId, buyerId, 201, result)
   PS-->>MP: {transactionId, itemId, price, fee}
   MP->>MP: טעינה מחדש של הרשימות והפריטים
 ```
 
 שלושה דברים ששווה להבין כאן לעומק.
 
-**למה הנעילות.** `for('update')` הופך את ה SELECT ל `SELECT ... FOR UPDATE`. קונה שני שמגיע באותו רגע נחסם על שורת ה listing עד שהראשון מסיים, ואז קורא אותה מחדש ורואה `sold`, ומקבל 409. בלי הנעילה שניהם היו קוראים `active` ושניהם היו קונים. זו הסיבה היחידה שהבדיקה `tests/concurrency/no-double-sale.test.ts` עוברת. קריאה מומלצת, [explicit locking בתיעוד של `Postgres](https://www.postgresql.org/docs/16/explicit-locking.html#LOCKING-ROWS)`.
+**למה הנעילות.** `for('update')` הופך את ה SELECT ל `SELECT ... FOR UPDATE`. קונה שני שמגיע באותו רגע נחסם על שורת ה listing עד שהראשון מסיים, ואז קורא אותה מחדש ורואה `sold`, ומקבל 409. בלי הנעילה שניהם היו קוראים `active` ושניהם היו קונים. זו הסיבה היחידה שהבדיקה `tests/concurrency/no-double-sale.test.ts` עוברת. קריאה מומלצת, [explicit locking בתיעוד של Postgres](https://www.postgresql.org/docs/16/explicit-locking.html#LOCKING-ROWS).
 
 **מה לא ננעל.** היתרה של הקונה היא `SUM` על שורות ביומן, ואין שורה אחת שאפשר לנעול. קונה עם מאה דולר ששולח שתי רכישות של מאה דולר על שני רישומים שונים באותו רגע, מקבל שתי טרנזקציות שכל אחת נועלת רישום אחר, כל אחת רואה מאה דולר, ושתיהן מצליחות. היתרה יורדת למינוס מאה. זה ממצא מאומת בפרק הממצאים, והתיקון הוא נעילה לפי משתמש, למשל `pg_advisory_xact_lock` על מזהה הקונה, בתחילת כל טרנזקציה שמורידה כסף.
 
-**אידמפוטנטיות.** המפתח ברירת המחדל הוא `purchase-<buyer>-<listing>`, ומכיוון ש `MarketplacePage.tsx` לא שולח כותרת, זה המפתח שתמיד נמצא בשימוש. לחיצה כפולה מחזירה את התוצאה המקורית עם `replayed: true`. ה save קורה אחרי ה COMMIT ומחוץ לטרנזקציה, כך שקריסה בין השניים תגרום לניסיון החוזר לקבל 409 במקום את התוצאה המקורית, וזה מקובל כי שום דבר לא חויב פעמיים.
+**אידמפוטנטיות.** המפתח ברירת המחדל הוא `purchase-<buyer>-<listing>`, ומכיוון ש `MarketplacePage.tsx` לא שולח כותרת, זה המפתח שתמיד נמצא בשימוש. לחיצה אחרי שהראשונה הסתיימה מקבלת את התוצאה המקורית עם `replayed: true`, ומבין שתי בקשות מקבילות השנייה מקבלת 409 מהנעילה. ה save קורה אחרי ה COMMIT ומחוץ לטרנזקציה, כך שקריסה בין השניים תגרום לניסיון החוזר לקבל 409 במקום את התוצאה המקורית, וזה מקובל כי שום דבר לא חויב פעמיים.
 
 | שלב | כשל | תוצאה |
 |---|---|---|
 | listing לא קיים | 404 | ההודעה מוצגת |
-| listing לא `active` | 409 `ITEM_NO_LONGER_AVAILABLE` | ההודעה מוצגת |
-| הקונה הוא המוכר | 403 | |
-| הפריט ב hold | 409 | |
-| יתרה לא מספיקה | 409 `INSUFFICIENT_BALANCE` | שום דבר לא נכתב, כל הטרנזקציה מתבטלת |
+| listing לא `active` | 409 `item_no_longer_available` | ההודעה מוצגת |
+| הקונה הוא המוכר | 403 `self_dealing_forbidden` | |
+| הפריט ב hold | 409 `item_on_hold` | |
+| יתרה לא מספיקה | 409 `insufficient_balance` | שום דבר לא נכתב, כל הטרנזקציה מתבטלת |
 | כל כשל DB באמצע | ROLLBACK | שום שורה לא נשארת, כולל ה outbox, ולכן גם לא יישלחה התראה |
 | הפריט כבר לא אצל המוכר | אין בדיקה | ממצא E4, ראה את פרק הבאגים. `TradeService.approve` יכול להעביר פריט רשום לבעלים אחר, והרכישה תעביר אותו הלאה ותזכה את המוכר המקורי |
 
@@ -295,30 +295,30 @@ sequenceDiagram
   participant MS as MediaService
   participant S3 as bucket
   participant IC as InvController
-  participant BS as BatchService ו IntakeService
+  participant BS as IntakeService.intakeUnits
   participant DB as Postgres
   IB->>PI: המפעיל מצלם או בוחר קובץ
   PI->>MC: POST /media/uploads {contentType, dataBase64, purpose}
   MC->>MS: upload, בלי בדיקת תפקיד
   MS->>MS: בדיקת contentType מהרשימה, פענוח base64, עד 10 מגה
   MS->>S3: putObject intake/YYYY/MM/uuid.jpg
-  MS-->>PI: {objectKey}
-  IB->>IC: POST /intake/items/batch {ownerId, units, photoKeys}
+  MS-->>PI: {objectKey, bytes, contentType}
+  IB->>IC: POST /intake/items/batch {units: [{ownerUsername, photoKeys, ...}]}
   IC->>BS: דורש warehouse_operator או admin
-  BS->>DB: טרנזקציה, INSERT item, מספר סידורי, custody_event, item_image
+  BS->>DB: טרנזקציה לכל יחידה, INSERT item, custody_event, חיוב קליטה, item_image, outbox_message
   BS-->>IB: [{id, barcode}]
   IB->>IB: הדפסת תוויות Code 128
 ```
 
-הנקודה החשובה כאן היא ההפרדה בין העלאה לשיוך. התמונה עולה ל bucket לפני שיש פריט, והמפתח חוזר לדפדפן. רק בקריאה השנייה, שדורשת תפקיד מחסן, המפתח משויך לפריט בטבלה `item_image`. זה עיצוב סביר, כי העלאה איטית לא מחזיקה טרנזקציה פתוחה. אבל יש לו שתי השלכות. הראשונה, תמונה שעלתה ושיוכה נכשל נשארת ב bucket לנצח בלי שום שורה שמפנה אליה. השנייה, route ההעלאה עצמו לא דורש תפקיד, כך שכל לקוח מחובר יכול להעלות עשרה מגה לבקשה, בכמה בקשות שמגבלת הקצב הכללית מרשה, ישירות ל bucket.
+הנקודה החשובה כאן היא ההפרדה בין העלאה לשיוך. התמונה עולה ל bucket לפני שיש פריט, והמפתח חוזר לדפדפן. רק בקריאה השנייה, שדורשת תפקיד מחסן, המפתח משויך לפריט בטבלה `item_image`. זה עיצוב סביר, כי העלאה איטית לא מחזיקה טרנזקציה פתוחה. אבל יש לו שתי השלכות. הראשונה, תמונה שעלתה ושיוכה נכשל נשארת ב bucket לנצח בלי שום שורה שמפנה אליה. השנייה, route ההעלאה עצמו לא דורש תפקיד, כך שכל לקוח מחובר יכול להעלות עשרה מגה לבקשה, בכמה בקשות שהדלי `auth` של מגבלת הקצב מרשה, ישירות ל bucket.
 
 | שלב | כשל | תוצאה |
 |---|---|---|
 | contentType לא ברשימה | 400 עם הסבר | |
 | התוכן אינו תמונה בכלל | אין בדיקה | הבתים נשמרים עם ה contentType שהלקוח הצהיר |
-| יותר מ 10 מגה | 400 עם הגודל | אבל רק אחרי שכל ה base64 פוענח לזיכרון |
+| יותר מ 10 מגה | 400 מ `@MaxLength` ב `med.controller.ts` שורה 17, לפני הפענוח | |
 | ה bucket לא זמין | חריגה לא מטופלת מה adapter | 500 כללי. זה בדיוק מה שהפיל תשעה מבחנים בקו הבסיס |
-| הפריט לא נוצר | ROLLBACK של יצירת הפריט | התמונה נשארת יתומה ב bucket |
+| הפריט לא נוצר | ROLLBACK של היחידה שנכשלה, קודמותיה באותה בקשה כבר נשמרו | התמונה נשארת יתומה ב bucket |
 | הצגה בכספת | `MediaService.signAll` חותם כתובת לחמש דקות | אם החתימה נכשלת, התמונה פשוט לא מוצגת |
 
 ### מסע 4. טעינת ארנק דרך PayPal
@@ -326,31 +326,32 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant WP as MoneyPanels.tsx
-  participant PC as PayController.checkout
+  participant PC as PayController
   participant CS as CheckoutService
   participant PA as PayPalPaymentAdapter
   participant PP as PayPal
   participant DB as Postgres
   WP->>PC: POST /finance/checkout {amountMinor, route, idempotencyKey}, ה SPA לא שולח paymentMethodToken
-  PC->>CS: checkout(userId, input)
+  PC->>CS: pay קורא ל checkout(userId, dto)
   CS->>CS: route מוכר ומיידי, סכום שלם בין מינימום למקסימום
   CS->>DB: SELECT external_payment לפי user ו providerRef
-  CS->>PA: createTopup עם idempotencyKey
+  CS->>PA: createTopup, המפתח route:idempotencyKey
+  Note over PA: היום בלי paymentMethodToken, capture זורק Error
   PA->>PP: capture של ההזמנה
   PP-->>PA: COMPLETED, סכום ומטבע
   CS->>CS: הסכום והמטבע שהספק דיווח חייבים להתאים לבקשה
-  CS->>DB: BEGIN, INSERT external_payment, INSERT ledger_record credit, outbox, COMMIT
+  CS->>DB: BEGIN, INSERT external_payment, ורק אם succeeded גם ledger_record credit ו outbox, COMMIT
   CS-->>WP: {status, paymentId, amountMinor}
-  PP->>DB: מאוחר יותר, webhook דרך POST /webhooks/payment עם אימות חתימה
+  PP->>PC: מאוחר יותר POST /webhooks/payment, אימות חתימה, ושום דבר לא נכתב
 ```
 
-לפני הכל, ממצא שמשנה את כל התמונה. ה flow הזה לא יכול להסתיים בייצור. `PayPalPaymentAdapter.capture` ב `packages/adapters/src/payment.ts` שורות 213 עד 221 דורש מזהה של הזמנת PayPal שהמשלם כבר אישר, ב `paymentMethodToken`. אבל שום קוד בריפו לא יוצר הזמנה כזאת, ה SPA לא טוען את ה SDK של PayPal, וה CSP ב `nginx.conf` היה חוסם אותו בכל מקרה, ו `MoneyPanels.tsx` שורות 79 עד 92 שולח את הבקשה בלי `paymentMethodToken` בכלל. ב sandbox זה עובד כי ה adapter המזויף מאשר הכל. עם PayPal אמיתי ה adapter זורק `Error` רגיל, והלקוח מקבל 500. כלומר בייצור הדרך היחידה להכניס כסף לארנק היא בקשת טעינה ידנית שמנהל מאשר. זה E3, חוסם השקה, וההחלטה אם לממש את זרימת האישור של PayPal או להסתיר את הטעינה המיידית היא החלטה עסקית.
+לפני הכל, ממצא שמשנה את כל התמונה. ה flow הזה לא יכול להסתיים בייצור. `PayPalPaymentAdapter.capture` ב `packages/adapters/src/payment.ts` שורות 213 עד 221 דורש מזהה של הזמנת PayPal שהמשלם כבר אישר, ב `paymentMethodToken`. אבל שום קוד בריפו לא יוצר הזמנה כזאת, ה SPA לא טוען את ה SDK של PayPal, וה CSP ב `nginx.conf`, `script-src 'self'`, היה חוסם אותו אילו הגיע לדף, ראה E22, ו `MoneyPanels.tsx` שורות 79 עד 92 שולח את הבקשה בלי `paymentMethodToken` בכלל. ב sandbox זה עובד כי ה adapter המזויף מאשר הכל. עם PayPal אמיתי ה adapter זורק `Error` רגיל, והלקוח מקבל 500. כלומר בייצור הדרך היחידה להכניס כסף לארנק היא בקשת טעינה ידנית שמנהל מאשר. זה E3, חוסם השקה, ראה את פרק הבאגים, וההחלטה אם לממש את זרימת האישור של PayPal או להסתיר את הטעינה המיידית היא החלטה עסקית.
 
 שימו לב גם שמפתח האידמפוטנטיות נוצר בדפדפן מ `Date.now()` ומספר אקראי בכל לחיצה. כלומר הוא מגן מפני ניסיון חוזר של אותה בקשה ברשת, אבל לא מפני לחיצה כפולה, שמייצרת שני מפתחות שונים. ההגנה מפני לחיצה כפולה היא רק `busy` שמשבית את הכפתור.
 
 העיקרון שכדאי לזכור, בהנחה שהזרימה תמומש, הוא שהקוד לא סומך על הלקוח לגבי הסכום שחויב. הלקוח מבקש סכום, הספק מדווח מה נלכד, ורק אם השניים זהים היומן מזוכה. זו בקרה טובה.
 
-הנקודה החלשה היא הסדר. הלכידה אצל PayPal קורית לפני הטרנזקציה במסד. אם המסד נופל, או שבקשה מקבילה עם אותו מפתח כבר הכניסה שורה, הכסף נלכד אצל PayPal ואין לו שורה ביומן. ה webhook אמור לסגור את הפער הזה, והניתוח של `chargeback.service.ts` ו `pay.controller.ts` בפרק הכסף מסביר אם ומתי הוא עושה זאת. בכל מקרה, מצב כזה דורש תהליך התאמה יומי מול דוח PayPal, והוא מופיע במדריך המעבר.
+הנקודה החלשה היא הסדר. הלכידה אצל PayPal קורית לפני הטרנזקציה במסד. אם המסד נופל אחרי הלכידה, הכסף נלכד אצל PayPal ואין לו שורה ביומן. בקשה מקבילה עם אותו מפתח שולחת אותה כותרת `PayPal-Request-Id`, לא נלכד סכום נוסף, והיא נכשלת ב 500 על אינדקס ייחודי. ה webhook לא סוגר את הפער, כי `handleWebhook` ב `topup.service.ts` שורות 63 עד 75 לא כותב דבר. בכל מקרה, מצב כזה דורש תהליך התאמה יומי מול דוח PayPal, והוא מופיע במדריך המעבר.
 
 | שלב | כשל | תוצאה |
 |---|---|---|
@@ -358,7 +359,8 @@ sequenceDiagram
 | סכום לא שלם או מחוץ לטווח | 400 | |
 | אין מפתח אידמפוטנטיות | 400 | |
 | אותו מפתח כבר שימש | מחזיר את התשלום הקיים עם `replayed` | |
-| הספק דחה | 409, שום דבר לא נרשם | |
+| הספק דחה | ב PayPal, `Error` רגיל ו 500. ה 409 מטפל ב `failed`, ששום adapter לא מחזיר | שום דבר לא נרשם |
+| PayPal לא החזיר `COMPLETED` | `external_payment` במצב `pending` בלי זיכוי | שום קוד לא מעדכן אותה |
 | הספק לכד סכום או מטבע אחר | 409, שום דבר לא נרשם | הכסף נלכד אצל PayPal ולא זוכה. דורש החזר ידני |
 | המסד נפל אחרי הלכידה | 500 | הכסף נלכד ולא זוכה. דורש התאמה |
 | אין `paymentMethodToken`, כלומר תמיד היום | `Error` רגיל מה adapter | 500 כללי בייצור |
@@ -2357,7 +2359,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 1 עד 19 | imports והערה על המודל | בעלות לעולם אינה ממתינה לאדם, הפריט קיים מרגע התשלום גם אם עוד לא על מדף |
-| 20 עד 44 | enum `house_listing_status` עם `active` ו `removed`, וטבלת `house_listing` עם `code` בצורת `HSE-XXXXXXXX`, `type_class`, `photo_ref`, `asking_price`, `stock`, `created_by` | המכירה מורידה מלאי תחת נעילת שורה. ה CHECK `stock >= 0` מ 0026 הוא רשת הביטחון ואינו מוצהר כאן. אסור לאבד אותו |
+| 20 עד 44 | enum `house_listing_status` עם `active` ו `removed`, וטבלת `house_listing` עם `code` בצורת `HSE-XXXXXXXX`, `type_class`, `photo_ref`, `asking_price`, `stock`, `created_by` | המכירה מורידה מלאי תחת נעילת שורה. הנעילה היא ההגנה היחידה. `house-store.service.ts` שורה 241 כותב ערך מוחלט, `product.stock - 1`, ולכן בלי הנעילה שני קונים היו כותבים שניהם 0 וה CHECK `stock >= 0` מ 0026 לא היה נכשל. הוא מגן רק אם כותבים `stock = stock - 1` ב SQL. ה CHECK לא מוצהר כאן |
 | 46 עד 67 | enum `house_order_status` עם `awaiting_stow` ו `stowed`, וטבלת `house_order` עם `code`, `house_listing_id` מסוג uuid, `buyer_id`, `item_id`, `transaction_id`, `price`, `stowed_by`, `stowed_at` | ל `house_listing_id` יש FK במסד, לשאר ההפניות לא, אף שכולן נוצרו באותה מיגרציה. מחיקת `house_listing` עם הזמנות תיכשל, וזה רצוי. אין unique על `item_id`, ו `house-store.service.ts` הוא שמבטיח הזמנה אחת לפריט. אין `updated_at` למרות שהסטטוס משתנה |
 
 #### `apps/api/src/modules/dis/dis.schema.ts`
@@ -2731,7 +2733,7 @@ outbox טרנזקציוני. אירוע נכתב באותה טרנזקציה ש�
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 17 עד 23 | שני enums בתוך `DO` | |
-| 25 עד 42 | מוצר ולא פריט, עם `asking_price bigint` ו `currency char(3)`. `house_listing` עם `stock integer NOT NULL CHECK (stock >= 0)` בשורה 35, ו unique על `code` | ה CHECK הוא רשת הביטחון נגד מכירה כפולה של העותק האחרון |
+| 25 עד 42 | מוצר ולא פריט, עם `asking_price bigint` ו `currency char(3)`. `house_listing` עם `stock integer NOT NULL CHECK (stock >= 0)` בשורה 35, ו unique על `code` | ה CHECK אינו רשת ביטחון נגד מכירה כפולה. הנעילה היא ההגנה היחידה. `house-store.service.ts` שורה 241 כותב ערך מוחלט, `product.stock - 1`, ולכן בלי הנעילה שני קונים היו כותבים שניהם 0 וה CHECK `stock >= 0` מ 0026 לא היה נכשל. הוא מגן רק אם כותבים `stock = stock - 1` ב SQL |
 | 44 עד 61 | הזמנה שמחכה שמפעיל ימצא עותק, ידביק תווית וישים על מדף. `house_order` עם `house_listing_id uuid REFERENCES house_listing(id)` בשורה 47, unique על `code`, אינדקס `status, created_at` | FK inline מקבל שם אוטומטי `house_order_house_listing_id_fkey`. אין unique על `item_id` או `transaction_id`, אין `updated_at` |
 
 #### `apps/api/src/db/migrations/0027_one_fee_instead_of_thirty.sql`
@@ -3794,7 +3796,7 @@ stateDiagram-v2
 
 | קובץ | מה הוא מוכיח | מה חסר |
 |---|---|---|
-| `tests3/integration/sec-authorization.test.ts` | 401 לכל מסלול לא ציבורי, 403 לרשימת מסלולי מחסן ואדמין, IDOR על כרטיסים, כתובות ופריטים, logout שמבטל cookie, cookie מזויף, איפוס בלי חשיפה בגוף ובקצב | לא בודק זמן תגובה, לא בודק מושעה, וההשוואה לרשימה קבועה של מסלולים |
+| `tests3/integration/sec-authorization.test.ts` | 401 לכל מסלול לא ציבורי, 403 לרשימת מסלולי מחסן ואדמין, IDOR על כרטיסים, כתובות ופריטים, logout שמנקה את ה cookie, אבל לא ביטול בצד השרת, כי ה cookie הריק נשלח שוב ואף בדיקה לא תיכשל בלי `sessions.revoke`, cookie מזויף, איפוס בלי חשיפה בגוף ובקצב | לא בודק זמן תגובה, לא בודק מושעה, וההשוואה לרשימה קבועה של מסלולים |
 | `tests3/integration/sec-validation.test.ts` | סכומים שליליים, שדות לא מוכרים, מזהים פגומים מחזירים 4xx, username כפול, סיסמה קצרה, username לא ניתן לשינוי | |
 | `tests/integration/acc-*.test.ts` | רישום ב `pending`, נרמול username, שמות, כתובות עם ברירת מחדל יחידה ובלי חשיפה לזר | `acc-status-block.test.ts` שורות 41 ו 42 הן TODO של חסימת מושעה |
 | `tests/integration/pay-money-in-out.test.ts` | מסלולים, checkout מיידי ואידמפוטנטי ב sandbox, גבולות, ציטוט עמלה, עמלה כשורה נפרדת בהשלמה, chargeback, מחירון ציבורי | לא בודק את הסכום שנשלח ל payout, ולכן העמלה הכפולה עוברת. אין מקביליות ואין webhook |
@@ -4847,7 +4849,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 
 **שים לב.** הפריט נוצר `received` ולא `stored` בכוונה. שינוי ל `stored` יאפשר למכור פריט שעוד לא על מדף.
 
-**כיוון תיקון.** למלאי, `stock = stock + delta` במקום ערך מוחלט, או נעילה וקריאה לפני כתיבה, ה `CHECK (stock >= 0)` ממיגרציה 0026 כבר שומר מפני מינוס. לחשבון הפלטפורמה, משתנה סביבה או דגל `is_platform`. `tests/integration/mkt-house-store.test.ts` מוכיח שהפריט נוצר ברגע התשלום ושהניהול סגור לאדמין והשימה לצוות.
+**כיוון תיקון.** למלאי, `stock = stock + delta` במקום ערך מוחלט, או נעילה וקריאה לפני כתיבה. ה `CHECK (stock >= 0)` ממיגרציה 0026 שומר מפני מינוס רק כשהעדכון יחסי, ועם הכתיבה המוחלטת של היום הוא לא תופס מכירה כפולה. לחשבון הפלטפורמה, משתנה סביבה או דגל `is_platform`. `tests/integration/mkt-house-store.test.ts` מוכיח שהפריט נוצר ברגע התשלום ושהניהול סגור לאדמין והשימה לצוות.
 
 **שים לב.** האינדקס `house_order_status_idx` ממיגרציה 0026 מכסה בדיוק את שאילתת `queue`. תמונות שהמפעיל מצרף בשימה נשמרות כגרסאות ב `item_image` עם `type: 'intake'`, ו `mkt/browse.service.ts` יחתום עליהן כמו על תמונת קליטה רגילה.
 
@@ -4857,7 +4859,7 @@ async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: str
 | שורות | מה הבלוק עושה | שים לב |
 |---|---|---|
 | 22 עד 42 | `CreateHouseListingDto` עם תיאור עד 300, מצב עד 40, `photoRef` בתבנית תווים בטוחים, מחיר חיובי ומלאי לפחות 1. `UpdateHouseListingDto` עם מלאי לפחות 0 וסטטוס. `StowHouseOrderDto` עם `binId`, `autoStow` ועד שישה מפתחות תמונה | `binId` ומפתחות התמונה בלי תקרת אורך |
-| 51 עד 64 | `GET listings` ציבורי. `POST listings/:id/purchase` לכל מחובר עם כותרת אידמפוטנטיות אופציונלית | `HouseStorePanel.tsx` שולח מפתח, בלעדיו אין הגנה מלחיצה כפולה |
+| 51 עד 64 | `GET listings` ציבורי. `POST listings/:id/purchase` לכל מחובר עם כותרת אידמפוטנטיות אופציונלית | `HouseStorePanel.tsx` שולח מפתח. המפתח מגן רק מניסיון חוזר אחרי שהבקשה הראשונה הסתיימה, כי `lookup` רץ לפני הטרנזקציה ו `save` אחרי ה commit, `house-store.service.ts` שורות 163 ו 265. לחיצה כפולה מקבילה עם אותו מפתח קונה שני עותקים ומחייבת פעמיים, F064 |
 | 66 עד 82 | `GET manage`, `POST listings`, `PATCH listings/:id`, כולם `@Roles('admin')` | הסרת `@Roles` מ `PATCH` תפתח מחיר ומלאי לכל משתמש. `HouseStoreSection.tsx` קורא ל `manage` |
 | 84 עד 94 | `GET orders/queue` ו `POST orders/:id/stow` למפעיל או אדמין | `HouseOrdersPanel.tsx` הוא הצרכן |
 
@@ -6304,7 +6306,7 @@ flowchart LR
 |---|---|---|
 | 20 עד 39 | סדר סיומות png ואז jpg, `cardPhotoUrl` עם `encodeURIComponent`, ו `useCardPhotoSource` שמקדם ניסיון ב `onError` | `attempt` לא מתאפס כש `serialNumber` משתנה, ומופע ממוחזר מציג שאין תמונה. ב production `location /images/` מחזיר 404 אמיתי, ולכן `onError` נורה כמצופה |
 | 45 עד 107 | `CardPhotoButton` עם סמל המצלמה 📷, ו `CardPhotoThumb` עם `loading="lazy"` | |
-| 109 עד 163 | `CardPhotoModal`, lightbox עם Escape ב bubble ונעילת גלילה | לא במחסנית ה overlays. בתוך מגירת הפריט ב `VaultPage.tsx` המגירה תופסת Escape ב capture, ו Escape או Back סוגרים את שתיהן יחד. React מריץ cleanup מההורה לילד, ה lightbox משחזר אחרון את ה `hidden` ששמר, ו `body.style.overflow` נשאר `hidden` עד רענון. סגירה בכפתור או ברקע תקינה. אם הנעילה חוסמת גלילה בכל דפדפן, למשל ב iOS, רק בדיקה בדפדפן תגיד |
+| 109 עד 163 | `CardPhotoModal`, lightbox עם Escape ב bubble ונעילת גלילה | לא במחסנית ה overlays. בתוך מגירת הפריט ב `VaultPage.tsx` המגירה תופסת Escape ב capture, ו Escape או Back סוגרים את שתיהן יחד. React מריץ cleanup מההורה לילד, ה lightbox משחזר אחרון את ה `hidden` ששמר, ו `body.style.overflow` נשאר `hidden` עד רענון. סדר ה cleanup אומת בהרצה של React 19.2.7 עם jsdom. סגירה בכפתור או ברקע תקינה. אם הנעילה חוסמת גלילה בכל דפדפן, למשל ב iOS, רק בדיקה בדפדפן תגיד |
 
 **קטלוגי הדומיין, איך לחשוב עליהם.** רוב הקבצים הבאים בנויים משלוש לבנים. ממשקים שמעתיקים ביד את צורת תשובות השרת, כי ה SPA לא מייבא מ `apps/api`, ולכן שם שדה ששונה בשרת יהיה `undefined` בלי שגיאה. מילון מערך enum למפתח תרגום עם פונקציית `...Label` שנופלת לערך הגולמי. ומילון מערך enum ל `StatusTone`. המילונים מוקלדים `Record<string, ...>`, ולכן אף אחד לא בודק שכל ערכי השרת מכוסים. רק לקטלוג ההתראות יש בדיקה דו כיוונית מול השרת.
 
@@ -8194,9 +8196,9 @@ pnpm test:web && pnpm test:ux && pnpm test:contract && pnpm test:core-contract
 
 רוב ממצאי P0 הם אותה טעות במקומות שונים. שלושה תיקונים שורשיים סוגרים את רובם, ושווה לעשות אותם לפני שמתקנים ממצא בודד.
 
-1. **נעילת ארנק לפי משתמש.** עזר אחד, למשל `lockWallet(tx, userId)`, שנועל את שורת `user_account` עם `FOR UPDATE` או קורא ל `pg_advisory_xact_lock`. קוראים לו בתוך הטרנזקציה לפני כל בדיקת יתרה שאחריה חיוב. סוגר את E1, E18, F005, F014, F015, F024 ואת F002 בחלקו. כשנועלים כמה ארנקים, נועלים לפי מזהה בסדר עולה.
-2. **בעלים צפוי ב `CustodyService`.** פרמטר `expectedOwnerId` ב `transferOwnership`, ובדיקה תחת הנעילה של בעלים, מצב ו `holdFlag`, עם 409 כשמשהו לא מתאים. סוגר את E4, F003, F010, F011, F012, F013, F030 ו F066.
-3. **עדכוני מצב מותנים.** כל UPDATE של סטטוס כולל את הסטטוס הצפוי בתנאי, למשל `AND status = 'awaiting_payment'`, ובודק שעודכנה שורה אחת. אחרת זורקים 409. סוגר את F001, F015, F016, F017, F031, F033, F034 ואת המרוץ ב F067.
+1. **נעילת ארנק לפי משתמש.** עזר אחד, למשל `lockWallet(tx, userId)`, שנועל את שורת `user_account` עם `FOR UPDATE` או קורא ל `pg_advisory_xact_lock`. קוראים לו בתוך הטרנזקציה לפני כל בדיקת יתרה שאחריה חיוב. סוגר את E1, E18, F005, F014, F015, F024, F123, F124 ואת F002 בחלקו. כשנועלים כמה ארנקים, נועלים לפי מזהה בסדר עולה.
+2. **בעלים צפוי ב `CustodyService`.** פרמטר `expectedOwnerId` ב `transferOwnership`, ובדיקה תחת הנעילה של בעלים, מצב ו `holdFlag`, עם 409 כשמשהו לא מתאים. סוגר את E4, F003, F010, F011, F012, F013, F030, F066, F117, F177 ו N4.
+3. **עדכוני מצב מותנים.** כל UPDATE של סטטוס כולל את הסטטוס הצפוי בתנאי, למשל `AND status = 'awaiting_payment'`, ובודק שעודכנה שורה אחת. אחרת זורקים 409. סוגר את F001, F015, F016, F017, F031, F033, F034, F191 ואת המרוץ ב F067.
 
 אחרי כל תיקון כותבים בדיקת מקביליות שנכשלת לפניו ועוברת אחריו. הדוגמאות בפרק העבודה, מתכון 6, ובפרק התרגול.
 
@@ -8222,7 +8224,7 @@ pnpm test:web && pnpm test:ux && pnpm test:contract && pnpm test:core-contract
 | E16 | P2 | `scripts/test.mjs`, `.github/workflows/ci.yml` | seed טרי לפני כל חבילה שתלויה במסד | 0 |
 | E17 | P1 | `apps/worker/src/jobs/tracking-refresh.ts` | לבנות את ה adapter לפי הקונפיגורציה, כמו ב `apps/api/src/shared/adapters/adapters.module.ts` | 10 |
 | E18 | P1 | `apps/api/src/modules/shp/shipment.service.ts` `pay` ו `settle`, `shp/human-fulfilment.service.ts`, `esc/escrow.service.ts` `fund` | לבדוק יתרה ומצב בתוך הטרנזקציה אחרי נעילה, עם עדכון מותנה בסטטוס | 3, 4א |
-| E19 | P1 | `apps/api/src/main.ts` | להגן על `/docs-json` באותה סיסמה של `/docs`, או לא להגיש אותו בכלל בייצור | 2 |
+| E19 | P1 | `apps/api/src/main.ts` | להגן על `/docs-json` ועל `/docs-yaml` באותה סיסמה של `/docs`, או לא להגיש אותם בכלל בייצור | 2 |
 | E20 | P1 | `apps/web/src/areas/customer/help/faqContent.ts` | לכתוב FAQ של Bault ולהסיר את התוכן המועתק | 18 |
 | E21 | P1 | `apps/web/src/areas/customer/help/legalContent.ts`, `SignUpPage.tsx` | לכתוב תנאי שימוש ומדיניות פרטיות, ולהוסיף הסכמה בהרשמה שנשמרת במסד | 18 |
 | E22 | P1 | `apps/web/nginx.conf` | כל `location` שמגדיר `add_header` מגדיר מחדש את כל כותרות האבטחה, או שכולן עוברות לקובץ include אחד | 14 |
@@ -8296,15 +8298,38 @@ pnpm test:web && pnpm test:ux && pnpm test:contract && pnpm test:core-contract
 
 ### ממצאים שנוספו במעבר הבדיקה השני
 
-במעבר השני, שבו כל טענה במדריך נבדקה שוב מול הקוד, נמצאו שלושה באגים שלא היו ברשימות, ושלושה ממצאים קיימים התבררו כחמורים או שונים ממה שנכתב. השלושה האחרונים כבר מתוקנים בשורות שלהם למעלה ובפרק 27 של `docs/DIVE2.md`.
+במעבר השני כל טענה במדריך הזה ובספר המלא נבדקה שוב מול הקוד, כולל כל ממצאי P2 ו P3. נמצאו באגים שלא היו ברשימות. N4 בחומרה P0, N1 בחומרה P1, N5 עד N12 בחומרה P2, והם בטבלה כאן. N13 עד N39 בחומרה P3, והם מופיעים רק בפרק 27 של `docs/DIVE2.md`. בנוסף, כמה ממצאים קיימים התבררו כחמורים או שונים ממה שנכתב, והם מתוקנים בשורות שלהם ובטבלה של הממצאים שהועלו ל P1.
 
 | מזהה | חומרה | איפה | הבעיה | התיקון |
 |---|---|---|---|---|
-| N1 | P1 | `apps/api/src/modules/dis/consignment.service.ts:247`, `apps/api/src/modules/cst/stow.service.ts:122-146` | `warehouseTransfer` כותב ל `bin_id` ערך בצורה `EXT:<warehouse>/<bin>`. בגלל ה cast המובלע מ `text` ל `uuid`, הספירה ב `listWithCounts` ממירה כל `bin_id` ל `uuid`, ושורה אחת כזו גורמת ל `GET /custody/bins`, ל `suggest` ולקליטה עם `autoStow` להחזיר 400 לכל המשתמשים. אומת בניסוי על מסד זמני. זו החמרה של F189, שתיאר רק את החיוב השגוי | לשמור מיקום חיצוני בעמודה משלו ולהשאיר את `bin_id` ריק או מזהה של תא אמיתי. בהמשך כדאי להפוך את `bin_id` ל `uuid` עם מפתח זר |
+| N1 | P1 | `apps/api/src/modules/dis/consignment.service.ts:247`, `apps/api/src/modules/cst/stow.service.ts:122-146` | `warehouseTransfer` כותב ל `bin_id` ערך בצורה `EXT:<warehouse>/<bin>`. בגלל ה cast המובלע מ `text` ל `uuid`, הספירה ב `listWithCounts` ממירה כל `bin_id` ל `uuid`, ושורה אחת כזו גורמת ל `GET /custody/bins`, ל `suggest` ולקליטה עם `autoStow` להחזיר 400 לכל המשתמשים. אומת בניסוי על מסד זמני. אותה שורה גם מפילה את בדיקת הגיבוי ב `infra/ops/backup.sh` שורות 131 עד 133, משמיטה את הפריט מדוח המדפים ב `adm/shelf-yield.service.ts`, ומחייבת את המחסנאי 20 דולר על כל העברה. זו החמרה של F189, שתיאר רק את החיוב השגוי | לשמור מיקום חיצוני בעמודה משלו ולהשאיר את `bin_id` ריק או מזהה של תא אמיתי. בהמשך כדאי להפוך את `bin_id` ל `uuid` עם מפתח זר |
 | N2 | P2 | `apps/api/src/modules/vlt/vault.service.ts:223-239` | הענף השני של `departure` ב `listHistory` מחפש אירוע שבו המשתמש הוא `new_owner_id` במעבר למצב סופי, אבל `changeState` לא כותב `new_owner_id` ושום קוד לא כותב אירוע `dispatch`. לכן קלף שהלקוח שלח הביתה לא מופיע לעולם בלשונית ההיסטוריה. ה seed עצמו מתעד את זה ב `apps/api/src/db/seed.ts` שורות 1248 עד 1262 | לכתוב `new_owner_id` במעבר למצב סופי ב `changeState`, או לשנות את השאילתה כך שתמצא מעבר למצב סופי של פריט שהמשתמש היה הבעלים שלו באותו רגע |
 | N3 | P2 | `apps/api/src/modules/mkt/mkt.controller.ts:44-65`, `browse.service.ts` | ב `GET /marketplace/listings`, שהוא ציבורי, `?limit=abc` או `?limit=-1` לא מחזירים 500 כפי שנכתב קודם. drizzle 0.38 משמיט את ה `LIMIT` כשהערך אינו מספר אי שלילי, ולכן אורח מקבל את כל המודעות הפעילות עם חתימת URL לכל תמונה. אומת בקוד של drizzle ובבקשה ל API מקומי. זה תיקון של F229 | ולידציה של `limit` בין 1 ל 200 עם 400 על כל ערך אחר, ו pagination |
+| N4 | P0 | `apps/api/src/modules/shp/human-fulfilment.service.ts:426-458` | `handOver` מעביר פריטים ל `shipped` בלי לבדוק שהם עדיין בבעלות הלקוח של המשלוח ובלי לבדוק `holdFlag`. קלף שנמכר בשוק אחרי שנקבעה מסירה ביד או איסוף בתערוכה נמסר לבעלים הקודם | לנעול כל פריט ולבדוק בעלים, מצב ו hold תחת הנעילה, כמו בתיקון של E4 |
+| N5 | P2 | `apps/api/src/modules/sup/support.service.ts:52-54` | איש צוות מושעה עדיין קורא פניות ועונה כצוות דרך נתיבי `@AllowSuspended` | לבדוק סטטוס פעיל בנתיב הצוות |
+| N6 | P2 | `apps/api/src/modules/pay/wallet-request.service.ts:345-420` | `createPayout` בתוך טרנזקציה אחרי `FOR UPDATE` ובלי timeout, ולכן PayPal תקוע מחזיק נעילה וחיבור עד 300 שניות | להוציא את הקריאה מהטרנזקציה ולהוסיף timeout |
+| N7 | P2 | `apps/worker/src/jobs/wallet-suspension.ts:58-73` | החזרה ידנית לפעילות לא מאפסת `auto_suspended_at`, והשעיה ידנית מאוחרת יותר מוסרת בסריקה הבאה | לאפס את העמודה בכל שינוי סטטוס ידני |
+| N8 | P2 | `apps/api/src/modules/mkt/offer.service.ts:263-275` | הצעה נגדית של מוכר נשלחת למוכר עצמו, והקונה לא שומע עליה | `recipientIds` עם הצד השני |
+| N9 | P2 | `apps/worker/src/jobs/membership-renewal.ts:47-54` | חשבון סגור ממשיך להתחדש ולהיות מחויב, וריבית נצברת על החוב | לסיים חברות בסגירה ולסנן חשבונות לא פעילים |
+| N10 | P2 | `apps/api/src/modules/acc/verification.service.ts:79-89` | קישור אימות שלא נוצל מחזיר לפעילות חשבון שהושעה או נסגר | לעדכן רק מ `pending` ל `active` |
+| N11 | P2 | `apps/api/src/modules/acc/verification.service.ts:92-120` | איפוס סיסמה שולח מייל בתוך הבקשה רק לחשבון קיים, וכשל SMTP או זמן התגובה חושפים אם החשבון קיים | שליחה דרך ה outbox ותשובה זהה תמיד |
+| N12 | P2 | `tests/integration/acc-lifecycle.test.ts:94-97` | אף בדיקה לא מוכיחה ש logout מבטל את ה session בשרת | בדיקה שמשמרת את ה cookie ושולחת אותו שוב אחרי ה logout |
 
 שלושת התיקונים לממצאים קיימים. ב F044, `@SkipThrottle()` בלי ארגומנט לא מוציא את `/healthz` ואת `/readyz` מהדלי `auth`, וצריך `{ default: true, auth: true }`. ב F040, סינון הכפילויות של ה webhook לא עובד בפועל, כי שום קוד לא כותב `webhookEventId`. ב F229, ההתנהגות של `limit` לא תקין היא N3.
+
+### ממצאים שהחומרה שלהם עלתה במעבר הבדיקה השני
+
+במעבר השני כל ממצא בחומרה P2 ו P3 נבדק שוב מול הקוד. שבעה ממצאי P2 התבררו כחמורים יותר ממה שנכתב. לפי הכלל של הפרק, ממצא שבו כסף או בעלות יכולים ללכת לאיבוד או לעבור לאדם הלא נכון הוא P0, ולכן ארבעה מהם הם P0 ושלושה P1. הם נשארים במקומם ברשימת P2, עם הנימוק בשורת הבדיקה החוזרת שלהם, ונספרים מעכשיו בחומרה שבטבלה. ארבעת ה P0 הם מקומות נוספים של שורשים שכבר מטופלים ב P0, נעילת הארנק ובדיקת הבעלים הצפוי, ולכן הם לא מוסיפים עבודה נפרדת אלא נקודות קריאה נוספות לאותו תיקון. בנוסף, F182, F209 ו F211 סומנו כ P0, אבל הם אותו שורש של F005, F008 ו F007, ותיקון השורש סוגר אותם. שני ממצאים חדשים, N4 בחומרה P0 ו N1 בחומרה P1, בטבלה למעלה.
+
+| מזהה | חומרה | איפה | למה | השורש |
+|---|---|---|---|---|
+| F117 | P0 | `apps/api/src/modules/dis/lot-split.service.ts:76-87` | בעלים מבקש פיצול לוט, מעמיד את הלוט למכירה, והפיצול מושלם בלי לבדוק מצב. הלוט והילדים נמכרים שניהם, ואותם קלפים נמכרים פעמיים | בדיקת בעלים ומצב תחת נעילה, כמו E4 |
+| F123 | P0 | `apps/api/src/modules/shp/direct-ship.service.ts:120-237` | בדיקות זכאות ויתרה מחוץ לטרנזקציה ועדכון לפי id בלבד, ולכן חיוב כפול של לפחות 100 דולר | E18 |
+| F124 | P0 | `apps/api/src/modules/shp/human-fulfilment.service.ts:206-254` | קבלת הצעה למסירה ביד בודקת מצב ויתרה מחוץ לטרנזקציה, חיוב כפול של סכום ההצעה | E18 |
+| F171 | P1 | `apps/api/src/modules/esc/escrow.service.ts:609-613` | בעסקה עם קונה חיצוני ו `ship_to_buyer` המוכר מקבל את הכסף, הבעלות לא זזה ושום קוד לא יוצר משלוח. קונה ששילם נשאר בלי הקלף | זרימה שלא הושלמה |
+| F172 | P1 | `apps/api/src/modules/pay/wallet-request.service.ts:418-449` | `createPayout` רץ בתוך הטרנזקציה, וכשל אחריו מגלגל את החיוב בארנק אבל לא את התשלום. כסף אמיתי יוצא בלי חיוב | כמו F065 |
+| F177 | P0 | `apps/api/src/modules/adm/adm.service.ts:200-203` | העברת בעלות של מנהל לא מבטלת מודעה פעילה, והרכישה לא בודקת שהמוכר הוא הבעלים. הזיכוי הולך לבעלים הקודם והפריט נלקח מהחדש | F066 |
+| F191 | P1 | `apps/api/src/modules/shp/shipment.service.ts:751-771` | `selectRate`, `settle` ו dispatch לא בודקים `fulfilmentMethod`, ולקוח יכול לקבל מסירה ביד יקרה בתעריף של מוביל | בדיקת מצב חסרה |
 
 ## פרק התרגול. ארבע משימות שהופכות ידע ליכולת
 
