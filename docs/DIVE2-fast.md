@@ -39,8 +39,8 @@
 | פרק 1 | שלד הריפו, החבילות המשותפות, הסקריפטים, התשתית וה CI | 7,292 | 35 דקות |
 | פרק 2 | תהליך ה API, עלייה, תשתית משותפת וה seed | 8,957 | 40 דקות |
 | פרק 3 | מודל הנתונים וה migrations | 11,648 | 50 דקות |
-| פרק 4 | חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות | 16,068 | שעה ו 10 דקות |
-| פרק 5 | קליטה, משמורת, הכספת, חברויות וקונסולת הניהול בצד השרת | 13,435 | שעה |
+| פרק 4 | חשבונות, אימות, אבטחה, מדיה, תמיכה, כסף, תמחור ונאמנות | 16,110 | שעה ו 10 דקות |
+| פרק 5 | קליטה, משמורת, הכספת, חברויות וקונסולת הניהול בצד השרת | 13,466 | שעה |
 | פרק 6 | השוק, התראות, שירותים על פריט מאוחסן ומשלוחים | 13,542 | שעה |
 | פרק 7 | ה worker והבדיקות | 8,998 | 40 דקות |
 | פרק 8 | ה SPA, עלייה, רכיבי יסוד, מודולים משותפים ומסכי לקוח ראשונים | 14,617 | שעה ו 5 דקות |
@@ -48,7 +48,7 @@
 | פרק העבודה | איך עובדים על הקוד | 6,879 | 25 דקות |
 | פרק הבאגים | כל הבאגים הידועים ואיך מתקנים אותם | 3,710 | 10 דקות |
 | פרק התרגול | ארבע משימות שהופכות ידע ליכולת | 937 | 3 דקות |
-| | הכל | 125,275 | 9 שעות |
+| | הכל | 125,348 | 9 שעות |
 
 ההערכה מניחה קריאה של 300 מילים בדקה, ועוד בערך 35 אחוז זמן להצצה בקוד בפרקי הקבצים. פרק התרגול נמדד אחרת. הקריאה שלו קצרה, והעבודה עצמה לוקחת שש עד שמונה שעות, מעבר לזמן בטבלה.
 
@@ -3046,7 +3046,7 @@ INSERT אחד ל `audit_record`. שורות 6 עד 12 `AuditEntry`, רק `action
 | 12 עד 25 | `ClientOrigin` ו `clampUserAgent`, null לריק וקיצוץ ל 300 תווים | מיוצא ומשמש גם את `login_attempt`. ה IP לא מקוצץ, הוא מגיע מ `req.ip` של Express ולא ישירות מכותרת, ולכן תלוי ב `TRUST_PROXY` |
 | 36 עד 50 | `create` מגריל 32 בייטים כ hex, שומר רק `sha256`, מחזיר את הגולמי ואת התוקף | אין מגבלת sessions ואין ביטול session קודם. כל login שורה חדשה |
 | 53 עד 69 | `resolve`, JOIN ל `user_account` לפי hash ו `revoked_at IS NULL`, תוקף נבדק ב JS. מחזיר `id`, `role`, `status` עדכניים | שורה 63 כותבת `id::text = user_id`, וה cast על צד ה uuid מונע את אינדקס המפתח הראשי. `eq(userAccount.id, loginSession.userId)` היה משתמש בו. `revokedAt` נבחר ולא נקרא |
-| 71 עד 76 | `revoke` מסמן `revoked_at` לפי hash | בלי תנאי ובלי ספירה, logout עם cookie מזויף מצליח בשקט |
+| 71 עד 76 | `revoke` מסמן `revoked_at` לפי hash | בלי תנאי ובלי ספירה. cookie מזויף, פג או מבוטל לא מגיע לכאן בכלל, כי `POST /auth/logout` לא `@Public` ו `SessionAuthGuard` מחזיר 401 קודם |
 | 96 עד 107 | `revokeAllFor` מבטל את כל הפעילים של משתמש, עם חריג אופציונלי לטוקן הנוכחי, ומחזיר ספירה | סופר גם sessions שפגו ולא בוטלו, כך שהמספר למשתמש מנופח |
 
 **שים לב.** אין ניקוי. שורות לא נמחקות לעולם, ומיגרציה 0024 יוצרת אינדקס `login_session_user_idx` ל sweep שלא קיים, ובפועל הוא משרת רק את `revokeAllFor`, וההערה שם קוראת לפונקציה `verify` שאינה קיימת. האינדקס החלקי `login_session_token_active_idx` תואם בדיוק את ה WHERE של `resolve`. העברת בדיקת התוקף ל SQL עם `gt(loginSession.expiresAt, new Date())` בטוחה. הפיכת ה TTL למשתנה סביבה לא דורשת שינוי ב cookie, כי `setSessionCookie` מקבל את `expiresAt` מכאן. sliding expiry יהפוך את `resolve` לכותב בכל בקשה, ויש לעשות אותו מדורג. `SESSION_COOKIE_SECRET` נדרש בקונפיגורציה ולא נקרא, כי אין חתימה, ה DB הוא מקור האמת.
@@ -3069,7 +3069,7 @@ DTOs של `/auth` ושל `/me/profile` ב class-validator, לא zod. דפוס P4
 |---|---|---|
 | 33 עד 50 | נרמול. email ל lowercase, username דרך `normalizeUsername` ו `isValidUsername`, שמות דרך `normalizeNamePart` | בדיקה כפולה אחרי ה DTO, מכוונת |
 | 52 עד 64 | שתי שאילתות ייחודיות עם הודעות שונות | Email is already registered חושף קיום email, בניגוד לזהירות ב reset. 30 בדיקות לדקה ל IP. התיקון המלא הוא להחזיר תמיד `pending_verification` ולשלוח מייל לבעל הכתובת. תשובת 2xx ל username תפוס תשבור את `sec-validation.test.ts` שורה 246, שמצפה ל 4xx. שינוי נוסח ההודעה לבד לא שובר אותה |
-| 66 | `argon2.hash` בברירות מחדל, argon2id, 64 MiB, שלוש איטרציות וארבעה threads | כל hash או verify תופס 64 MiB, ומאה ניסיונות במקביל הם כ 6.4 GB. רייט לימיט per IP לא עוצר תוקף מבוזר. אין `needsRehash`, ופרמטרים חדשים חלים רק על hashes חדשים כי `verify` קורא אותם מה hash |
+| 66 | `argon2.hash` בברירות מחדל, argon2id, 64 MiB, שלוש איטרציות וארבעה threads | כל hash או verify תופס 64 MiB. node-argon2 רץ על ה thread pool של libuv, ארבעה threads כברירת מחדל ו `UV_THREADPOOL_SIZE` לא מוגדר בריפו, ולכן לכל היותר ארבעה רצים בבת אחת, כ 256 MiB, והשאר ממתינים בתור. העומס מתבטא בזמן תגובה ולא בזיכרון. רייט לימיט per IP לא עוצר תוקף מבוזר. אין `needsRehash`, ופרמטרים חדשים חלים רק על hashes חדשים כי `verify` קורא אותם מה hash |
 | 71 עד 92 | INSERT עם `status: 'pending'` ו `role: 'user'` קבועים, `23505` הופך להודעה כללית, ואז `issueEmailVerification` | ה unique index הוא הערובה. המייל מחוץ לטרנזקציה, כשל SMTP מחזיר 500 על חשבון שכבר נוצר, וניסיון חוזר נתקל ב Email is already registered |
 | 100 עד 120 | login. חיפוש `email = x OR username = x`, וכישלון רושם `bad_credentials` וזורק 401 אחיד | E13 בשורה 117. בלי משתמש ה `\|\|` מדלג על `argon2.verify`, התשובה מהירה בעשרות מילישניות וחושפת קיום חשבון. התיקון verify מול hash דמה. אין נעילה per account |
 | 131 עד 136 | `pending` מקבל 403 `email_unverified` ונרשם `unverified` | |
@@ -4163,7 +4163,7 @@ flowchart LR
 | 76 עד 120 | מכניס `item` עם ברירות מחדל, מצב `stored`, `lotSize` 1, `oversized` false, `weightGrams` רק אם חיובי. אחר כך אירוע עם `newOwnerId`, `newBinId`, `newState`, ואם יש מדף שורת `bin_transfer` ראשונה עם `fromBinId` ריק. | `receivedAt` בשורה 95 הוא השעון שממנו ה worker סופר תקופות אחסון. `oversized` מועתק כאן ולא נגזר מחדש לעולם. אין בדיקה שהמדף או הבעלים קיימים או פעילים, ואין מפתח זר. |
 | 123 עד 144 | `relocate`. נעילה, `ITEM_ON_HOLD` 409 לפריט מוחזק, עדכון `binId`, אירוע `relocate` ושורת `bin_transfer` עם מקור ויעד. | אין בדיקת מצב, אפשר להעביר פריט `shipped` או `at_grader` למדף. אין בדיקה שהיעד פעיל או שונה מהנוכחי. `reason` קבוע `scan relocate`. בדיקת מצב עתידית חייבת להתיר `received`, כי `house-store.service.ts` מעביר כך פריט שנמכר מהחנות. |
 | 147 עד 158 | `transferOwnership`. נעילה, עדכון `ownerId`, אירוע `ownership_transfer`. | **E4, P0.** זה P0 כי מדובר ברכוש של לקוח ובכסף שזז איתו. מקבל רק את הבעלים החדש. לא משווה את `current.ownerId` לבעלים שהקורא ציפה לו, לא בודק מצב ולא `holdFlag`. שמונה קריאות בשבעה קבצים, `donation`, `disposal-services`, `buyout`, `consignment`, `escrow`, `purchase`, ושתיים ב `trade`. בדיקת הבעלות שקיימת רצה אצל הקורא בשלב קודם, ו `escrow` ו `purchase` לא בודקים בעלים בכלל. כך אפשר להעביר פריט שכבר עבר ידיים. התיקון, פרמטר `expectedOwnerId` ובדיקת בעלים, מצב ו hold תחת הנעילה, ואז הבדיקות המפוזרות בשבעת הקבצים הופכות לאחת. |
-| 161 עד 173 | `changeState`. נעילה, `assertTransition`, עדכון, אירוע `state_change`. | אין בדיקת `holdFlag`, ו `shp/dispatch.service.ts` לא בודק אותו, כך שהחזקה שהונחה אחרי יצירת משלוח לא עוצרת שליחה. יציאה מהמחסן לא מאפסת `binId`, ורק עריכת מנהל ידנית יכולה לאפס אותו. |
+| 161 עד 173 | `changeState`. נעילה, `assertTransition`, עדכון, אירוע `state_change`. | אין בדיקת `holdFlag` כאן. `shp/dispatch.service.ts` כן בודק אותו, דרך `labelRequest`, `profileOf` ו `loadShippableItems` ב `parcel-profile.service.ts` שורה 65, אבל מחוץ לטרנזקציה של השליחה. הפער האמיתי הוא `handOver` ב `shp/human-fulfilment.service.ts` שורות 426 עד 457, שמעביר ל `shipped` בלי לבדוק `holdFlag`, כך שהחזקה שהונחה אחרי יצירת משלוח ביד לא עוצרת אותו. יציאה מהמחסן לא מאפסת `binId`, ורק עריכת מנהל ידנית יכולה לאפס אותו. |
 | 186 עד 207 | `setHold`. מחזיר `false` בלי כתיבה אם הדגל כבר בערך המבוקש. אחרת עדכון, אירוע `hold_placed` או `hold_released`, ובהנחה בלבד אירוע `hold_placed` ב outbox. | זו האידמפוטנטיות של נתיבי ההחזקה. לא עובר דרך `assertTransition` כי המצב לא משתנה. |
 | 210 עד 212 | `run`, `this.db.transaction(work)` למי שאין לו טרנזקציה משלו. Drizzle עושה `COMMIT` כשה Promise מצליח ו `ROLLBACK` כשהוא נדחה. | `IntakeService` ו `RelocateService` נשענים עליו, ולכן כל קריאה אליו היא commit נפרד. |
 
