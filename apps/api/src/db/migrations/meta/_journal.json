@@ -218,6 +218,13 @@
       "when": 1785074600000,
       "tag": "0030_a_downgrade_is_not_a_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785074800000,
+      "tag": "0032_a_worker_that_can_run_twice",
+      "breakpoints": true
     }
   ]
 }
