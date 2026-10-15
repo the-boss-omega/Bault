@@ -424,6 +424,27 @@ describe("an administrator resetting somebody else's second factor", () => {
   });
 });
 
+describe("the administrator's sign-in log", () => {
+  it('does not count a password that was right, then a code that was right, as a failure', async () => {
+    // Five ordinary two-step sign-ins are five `mfa_challenged` rows. Counted as
+    // failures, every enrolled account that signs in five times a day would be
+    // listed as somebody guessing passwords.
+    const account = await activeAccount('mfalog');
+    const { recoveryCodes } = await enrol(await passwordOnly(account));
+    for (let i = 0; i < 5; i += 1) {
+      const res = await new Client().post('/auth/login/mfa', {
+        challengeToken: await challenge(account),
+        recoveryCode: recoveryCodes[i],
+      });
+      expect(res.status).toBe(200);
+    }
+    const log = await (await signIn(SEED.admin)).get('/admin/logins');
+    expect(log.status).toBe(200);
+    const flagged = (log.body.suspicious as { identifier: string }[]).map((s) => s.identifier);
+    expect(flagged).not.toContain(account.username);
+  });
+});
+
 describe('who the API says must enrol', () => {
   it('reports it on the profile, which the app reads on every load', async () => {
     const account = await activeAccount('mfame');
