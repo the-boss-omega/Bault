@@ -169,7 +169,9 @@ export class VaultService {
         createdAt: item.createdAt,
       })
       .from(item)
-      .leftJoin(bin, eq(bin.id, item.binId))
+      // As text: `bin_id` can hold an `EXT:` location for a card at another
+      // warehouse, and converting that to a uuid failed the owner's whole vault.
+      .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
       .limit(Math.min(filter.limit ?? 50, 200));

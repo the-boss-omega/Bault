@@ -127,10 +127,13 @@ cmd_verify() {
       FROM item i LEFT JOIN user_account u ON u.id = i.owner_id
      WHERE u.id IS NULL
     UNION ALL
+    -- Compared as text: a card sent to another warehouse is recorded as
+    -- 'EXT:<warehouse>/<bin>', which is not a uuid, and one such row made this
+    -- whole check fail under set -e instead of reporting anything.
     SELECT 'items shelved in a bin that does not exist',
            count(*)
-      FROM item i LEFT JOIN bin b ON b.id = i.bin_id
-     WHERE i.bin_id IS NOT NULL AND b.id IS NULL
+      FROM item i LEFT JOIN bin b ON b.id::text = i.bin_id
+     WHERE i.bin_id IS NOT NULL AND i.bin_id NOT LIKE 'EXT:%' AND b.id IS NULL
     UNION ALL
     SELECT 'custody events for an item that does not exist',
            count(*)
