@@ -228,6 +228,15 @@ export class LabelNotPurchasedError extends Error {
     super(message);
     this.name = 'LabelNotPurchasedError';
   }
+
+  /**
+   * Recognised by name as well as by class, because the adapters package can be
+   * loaded twice in one process (built and from source) and `instanceof` then
+   * says no to an error that is exactly this one.
+   */
+  static is(err: unknown): err is LabelNotPurchasedError {
+    return err instanceof LabelNotPurchasedError || (err instanceof Error && err.name === 'LabelNotPurchasedError');
+  }
 }
 
 export interface Rate {

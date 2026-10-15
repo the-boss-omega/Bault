@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -13,6 +13,8 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
 import { facility } from '../inv/facility.schema';
+import { parcel, parcelEvent } from '../inv/parcel.schema';
+import { item } from '../cst/cst.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
@@ -21,6 +23,8 @@ import { ParcelProfileService, customsDeclarationFor, type CustomsLine } from '.
 import { SHIPPING_BOXES } from './boxes';
 import {
   CARRIER_SERVICES,
+  DIRECT_OVERNIGHT_FACILITY,
+  DIRECT_OVERNIGHT_KEY,
   checkService,
   destinationOf,
   findService,
@@ -62,6 +66,9 @@ export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
  * arguable in public, which "we picked the cheap one" is not.
  */
 const DAY_OF_WAITING_MINOR = 250;
+
+/** An id that can be compared with a uuid column without the query failing. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Everything a collector can say about a parcel before it is priced. */
 export interface ShipmentOptionsInput {
@@ -457,17 +464,21 @@ export class ShipmentService {
    *
    * Read from the facility table rather than configured separately, so it is the
    * same address collectors are told to post to and there is one place to change
-   * it. A forwarding site stores nothing, so it can never be an origin.
+   * it. A forwarding site stores nothing, so it is never the origin of a vault
+   * shipment — the one exception is direct overnight, which never entered the
+   * vault and leaves from the forwarding site it arrived at, named by `code`.
    *
    * Left undefined when the facility still carries a placeholder street, which
    * makes the real adapter refuse with a sentence naming the problem instead of
    * quoting against a fictional origin.
    */
-  private async originAddress() {
+  private async originAddress(code?: string) {
     const [site] = await this.db
       .select()
       .from(facility)
-      .where(and(eq(facility.role, 'primary'), eq(facility.active, true)))
+      .where(
+        and(code ? eq(facility.code, code) : eq(facility.role, 'primary'), eq(facility.active, true)),
+      )
       .limit(1);
     if (!site || /placeholder|SET REAL ADDRESS/i.test(site.line1)) return undefined;
     return {
@@ -621,11 +632,17 @@ export class ShipmentService {
       .where(staff ? undefined : eq(shipment.userId, actor.id))
       .orderBy(desc(shipment.createdAt));
 
+    const labels = await this.itemLabels(rows.flatMap((r) => (r.shipment.itemIds as string[]) ?? []));
+    const parcels = await this.directParcels(
+      rows.filter((r) => ShipmentService.isDirect(r.shipment)).map((r) => r.shipment.id),
+    );
     return rows.map((row) =>
-      this.toTrackingView(row.shipment, {
-        username: row.username,
-        accountName: fullName(row.firstName, row.lastName),
-      }),
+      this.toTrackingView(
+        row.shipment,
+        { username: row.username, accountName: fullName(row.firstName, row.lastName) },
+        labels,
+        parcels,
+      ),
     );
   }
 
@@ -638,7 +655,11 @@ export class ShipmentService {
   private toTrackingView(
     s: typeof shipment.$inferSelect,
     owner: { username: string | null; accountName: string },
+    labels: Map<string, { id: string; serialNumber: string; barcode: string; description: string | null }>,
+    parcels: Awaited<ReturnType<ShipmentService['directParcels']>>,
   ) {
+    const itemIds = (s.itemIds as string[]) ?? [];
+    const direct = parcels.get(s.id);
     return {
       id: s.id,
       code: s.code,
@@ -666,7 +687,18 @@ export class ShipmentService {
       rush: s.rushFlag,
       cost: s.cost,
       currency: s.currency,
-      itemIds: (s.itemIds as string[]) ?? [],
+      itemIds,
+      /**
+       * What is printed on each item's label.
+       *
+       * The packing bench checked the operator's scans against nothing: it held
+       * only these ids, which appear on no label, and sent them back as "what was
+       * scanned" — so the server's scan check compared the shipment's list with
+       * itself. With the labels here, the bench can match a real scan to a card.
+       */
+      items: itemIds.map((id) => labels.get(id) ?? { id, serialNumber: null, barcode: null, description: null }),
+      /** A direct-overnight shipment's contents are a parcel, and this is the one. */
+      directParcel: direct ? { code: direct.code, trackingNumber: direct.trackingNumber } : null,
       destinationAddress: s.destinationAddress,
       destinationCountry: s.destinationCountry,
       destinationPostalCode: s.destinationPostalCode,
@@ -755,16 +787,24 @@ export class ShipmentService {
         ? Math.max(1, measuredWeightGrams - (packagingGrams ?? 0))
         : contentsGrams;
 
+    const origin = await this.originAddress();
+    const customsLines = (s.customsLines as CustomsLine[] | null) ?? [];
     const request: RateRequest = {
       destination: destinationOf(s),
-      origin: await this.originAddress(),
+      origin,
       items: [{ weightGrams: measuredContents }],
       rush: s.rushFlag,
       dimensionsCm: profile.dimensionsCm,
       packagingGrams,
       signatureRequired: s.signatureRequired,
+      customs: customsLines.length > 0 ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault') : undefined,
     };
-    const rate: Rate = {
+    return { rate: ShipmentService.chargedRate(s), request };
+  }
+
+  /** The rate a shipment was charged for, with the carrier's handles when it has them. */
+  private static chargedRate(s: typeof shipment.$inferSelect): Rate {
+    return {
       carrier: s.carrier ?? '',
       serviceLevel: s.serviceLevel ?? '',
       costMinor: s.cost ?? 0,
@@ -773,7 +813,74 @@ export class ShipmentService {
       providerShipmentId: s.providerShipmentId ?? undefined,
       providerRateId: s.providerRateId ?? undefined,
     };
-    return { rate, request };
+  }
+
+  /**
+   * Direct overnight: a parcel that never became items.
+   *
+   * There is nothing in the vault to build a profile from — `itemIds` is empty
+   * by design, which is why `labelRequest` cannot serve it. The parcel is the
+   * contents: it leaves from the forwarding site it arrived at, as one envelope
+   * weighing what the scale says.
+   */
+  static isDirect(s: Pick<typeof shipment.$inferSelect, 'serviceKey' | 'itemIds'>): boolean {
+    return s.serviceKey === DIRECT_OVERNIGHT_KEY && ((s.itemIds as string[]) ?? []).length === 0;
+  }
+
+  async directLabelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams: number) {
+    const request: RateRequest = {
+      destination: destinationOf(s),
+      origin: await this.originAddress(DIRECT_OVERNIGHT_FACILITY),
+      items: [{ weightGrams: Math.max(1, measuredWeightGrams) }],
+      // The scale weighed the envelope with the cards in it.
+      packagingGrams: 0,
+      rush: s.rushFlag,
+      signatureRequired: s.signatureRequired,
+    };
+    return { rate: ShipmentService.chargedRate(s), request };
+  }
+
+  /**
+   * The parcel each direct shipment was booked for, by shipment id.
+   *
+   * Read from the parcel's own append-only trail: booking a direct shipment
+   * writes a `direct_shipped` event naming the shipment, and that event is the
+   * link — there is no column to drift from it.
+   */
+  async directParcels(shipmentIds: readonly string[], tx?: Database) {
+    const out = new Map<string, { id: string; code: string; trackingNumber: string | null; status: string; facilityId: string }>();
+    if (shipmentIds.length === 0) return out;
+    const shipmentIdOf = sql<string>`${parcelEvent.metadata} ->> 'shipmentId'`;
+    const rows = await (tx ?? this.db)
+      .select({
+        shipmentId: shipmentIdOf,
+        id: parcel.id,
+        code: parcel.code,
+        trackingNumber: parcel.trackingNumber,
+        status: parcel.status,
+        facilityId: parcel.facilityId,
+      })
+      .from(parcelEvent)
+      .innerJoin(parcel, sql`${parcel.id}::text = ${parcelEvent.parcelId}`)
+      .where(and(eq(parcelEvent.eventType, 'direct_shipped'), inArray(shipmentIdOf, [...shipmentIds])));
+    for (const r of rows) out.set(r.shipmentId, r);
+    return out;
+  }
+
+  /**
+   * What is printed on each item's label, by id — so whoever packs a shipment
+   * can check what they scan against what the shipment holds.
+   */
+  private async itemLabels(itemIds: readonly string[]) {
+    const ids = [...new Set(itemIds)].filter((id) => UUID.test(id));
+    const out = new Map<string, { id: string; serialNumber: string; barcode: string; description: string | null }>();
+    if (ids.length === 0) return out;
+    const rows = await this.db
+      .select({ id: item.id, serialNumber: item.serialNumber, barcode: item.barcode, description: item.description })
+      .from(item)
+      .where(inArray(item.id, ids));
+    for (const r of rows) out.set(r.id, r);
+    return out;
   }
 
   /** Rates for a real shipment, with the same constraint annotations a quote has. */
@@ -1114,9 +1221,11 @@ export class ShipmentService {
       .from(userAccount)
       .where(eq(userAccount.id, s.userId))
       .limit(1);
-    return this.toTrackingView(s, {
-      username: owner?.username ?? null,
-      accountName: fullName(owner?.firstName, owner?.lastName),
-    });
+    return this.toTrackingView(
+      s,
+      { username: owner?.username ?? null, accountName: fullName(owner?.firstName, owner?.lastName) },
+      await this.itemLabels((s.itemIds as string[]) ?? []),
+      ShipmentService.isDirect(s) ? await this.directParcels([s.id]) : new Map(),
+    );
   }
 }
