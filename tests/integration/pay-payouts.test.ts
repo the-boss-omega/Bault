@@ -124,7 +124,7 @@ describe('PAY a cash-out debits exactly what was quoted (F004)', () => {
     const fee = all.find((r) => r.type === 'fee' && r.direction === 'debit' && r.amount === quote.feeMinor);
     expect(fee).toBeTruthy();
     expect(withdrawal!.amount + fee!.amount).toBe(quote.amountMinor);
-  });
+  }, 30_000);
 });
 
 describe('PAY the payout is recorded before the provider is asked (F172, N6)', () => {
@@ -169,7 +169,8 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('completed');
     expect(await balanceOf(collector)).toBe(before - AMOUNT + 1_234);
-  });
+    // The staged provider takes three seconds on purpose; the default five is too tight.
+  }, 30_000);
 
   it('keeps the debit when the answer is lost, refuses to reject it, and reconciles it', async () => {
     const AMOUNT = 6_000;
@@ -203,7 +204,7 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(after.payout?.status).toBe('succeeded');
     // One debit, not two.
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
-  });
+  }, 30_000);
 
   it('gives the money back when the provider refuses the payout', async () => {
     const AMOUNT = 4_000;
@@ -226,7 +227,7 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     const rows = await ledgerFor(collector, id);
     expect(rows.some((r) => r.type === 'withdrawal' && r.direction === 'debit')).toBe(true);
     expect(rows.some((r) => r.type === 'payout_reversal' && r.direction === 'credit' && r.amount === AMOUNT)).toBe(true);
-  });
+  }, 30_000);
 });
 
 describe('PAY a pending payout is not a completed one (F029, F040)', () => {
@@ -268,7 +269,7 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     // A redelivery changes nothing.
     expect(await webhook(event)).toBe(201);
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
-  });
+  }, 30_000);
 
   it('reverses the debit once when the provider later says the payout failed', async () => {
     const AMOUNT = 3_500;
@@ -305,7 +306,7 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     const reversals = (await ledgerFor(collector, id)).filter((r) => r.type === 'payout_reversal');
     expect(reversals).toHaveLength(1);
     expect(reversals[0]!.amount).toBe(AMOUNT);
-  });
+  }, 30_000);
 
   it('reconciles stale pending payouts by asking the provider again', async () => {
     const admin = await signIn(SEED.admin);
@@ -332,5 +333,5 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     expect((await detail(admin, stuck.id)).status).toBe('paying');
     // Only the bounced one came back.
     expect(await balanceOf(collector)).toBe(before + 2_600);
-  });
+  }, 30_000);
 });

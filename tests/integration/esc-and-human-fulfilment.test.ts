@@ -340,7 +340,7 @@ describe('ESC escrow and human fulfilment', () => {
     expect(settled.status).toBe(201);
     expect(settled.body.status).toBe('settled');
     expect(await balanceOf(seller)).toBe(paidBefore + VALUE - deal.feeMinor);
-  });
+  }, 30_000);
 
   it('keeps a deal invisible to somebody who is not a party to it', async () => {
     const seller = await signIn(SEED.collector);

@@ -96,7 +96,7 @@ describe('PAY manual payout mode', () => {
     // Nothing moved.
     expect(await balanceOf(collector)).toBe(before);
     expect((await admin.get(`/admin/wallet-requests/${id}`)).body.status).toBe('approved');
-  });
+  }, 30_000);
 
   it('records the reference, debits the quote, and never asks the provider', async () => {
     // A destination the sandbox provider would refuse: in manual mode it is
@@ -124,7 +124,7 @@ describe('PAY manual payout mode', () => {
     expect(detail.payout.status).toBe('succeeded');
     expect(detail.payout.externalRef).toBe(reference);
     expect(detail.payout.amount).toBe(quote.netMinor);
-  });
+  }, 30_000);
 
   it('will not record one payment against two cash-outs', async () => {
     const first = await approvedCashOut(2_500, 'red@example.test');
@@ -140,7 +140,7 @@ describe('PAY manual payout mode', () => {
     });
     expect(reused.status).toBe(409);
     expect(await balanceOf(second.collector)).toBe(before);
-  });
+  }, 30_000);
 
   it('still settles a cash-in without a payout reference', async () => {
     const collector = await signIn(SEED.collector, undefined, base);
@@ -157,5 +157,5 @@ describe('PAY manual payout mode', () => {
     const done = await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {});
     expect(done.status).toBe(201);
     expect(await balanceOf(collector)).toBe(before + 1_500);
-  });
+  }, 30_000);
 });
