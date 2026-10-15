@@ -15,7 +15,13 @@ export type Database = NodePgDatabase<typeof schema>;
 
 export function createDb(): { pool: Pool; db: Database } {
   const env = loadEnv();
-  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+    max: env.DATABASE_POOL_MAX,
+    // Server-side, so a runaway statement is cancelled by Postgres and releases
+    // its locks, rather than merely abandoned by this process.
+    statement_timeout: env.DATABASE_STATEMENT_TIMEOUT_MS,
+  });
   const db = drizzle(pool, { schema });
   return { pool, db };
 }

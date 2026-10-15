@@ -23,6 +23,7 @@
     "test:seeded": "pnpm --filter @bault/api db:migrate && pnpm db:reset && pnpm test",
     "test:all-parallel": "vitest run",
     "test:web": "vitest run --project web",
+    "test:config": "vitest run --project config",
     "test:integration": "vitest run --no-file-parallelism --project integration",
     "test:concurrency": "vitest run --no-file-parallelism --project concurrency",
     "test:property": "vitest run --no-file-parallelism --project property",

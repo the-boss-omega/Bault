@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -17,6 +18,9 @@ import { Public } from '../../modules/acc/public.decorator';
  * as probes. Neither response exposes anything beyond "up" and "db reachable".
  */
 @ApiTags('meta')
+// Probes poll from one address every few seconds; refusing them with a 429
+// would take a healthy node out of rotation.
+@SkipThrottle({ default: true, auth: true })
 @Controller()
 export class HealthController {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
