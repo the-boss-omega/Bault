@@ -127,6 +127,25 @@ describe('the storage contract', () => {
     ).rejects.toThrow(/Storage upload failed/);
   });
 
+  /**
+   * F428. `encodeSegment` leaves dots alone, and the WHATWG URL parser resolves
+   * a `..` segment before the request is signed — so `intake/../other/x.png`
+   * became a signed link into a DIFFERENT BUCKET on the same endpoint. Needs no
+   * object store: the refusal has to happen before any request is built.
+   */
+  it('refuses a key with a dot segment instead of signing a path out of the bucket', async () => {
+    const s3 = new S3StorageAdapter({ ...CONFIG, endpoint: 'http://127.0.0.1:9' });
+    for (const key of ['intake/../other-bucket/x.png', './x.png', 'a/./b.png', '..', 'a/..']) {
+      await expect(s3.getSignedUrl(key), key).rejects.toThrow(/segment/);
+      await expect(
+        s3.putObject({ key, body: Buffer.from('x'), contentType: 'image/png' }),
+        key,
+      ).rejects.toThrow(/segment/);
+    }
+    // A dot inside a name is not a segment.
+    await expect(s3.getSignedUrl('intake/2026/09/receipt.v2.png')).resolves.toContain('receipt.v2.png');
+  });
+
   it('rejects a half-configured adapter at construction, not at first upload', () => {
     expect(() => new S3StorageAdapter({ ...CONFIG, accessKey: '', secretKey: '' })).toThrow(
       /access key/i,

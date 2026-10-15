@@ -16,6 +16,7 @@ import { Type } from 'class-transformer';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { IntakeService } from './intake.service';
 import { CorrectionService } from './correction.service';
 import { BatchService } from './batch.service';
@@ -63,7 +64,7 @@ class IntakeItemDto {
    * On a bulk intake every copy gets the same photographs, which is the truth:
    * one shot of a run of twelve identical commons describes all twelve.
    */
-  @IsOptional() @IsArray() @ArrayMaxSize(6) @IsString({ each: true }) photoKeys?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(6) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
 /**

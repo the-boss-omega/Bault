@@ -1,5 +1,5 @@
 import { createHash, createHmac } from 'node:crypto';
-import type { PutObjectRequest, StorageAdapter } from './storage';
+import { isSafeObjectKey, type PutObjectRequest, type StorageAdapter } from './storage';
 
 /**
  * A REAL S3-compatible storage adapter — the thing the product has been missing.
@@ -87,8 +87,17 @@ export class S3StorageAdapter implements StorageAdapter {
     this.endpoint = new URL(config.endpoint);
   }
 
-  /** `https://host/bucket/some/key.jpg`, path-style. */
+  /**
+   * `https://host/bucket/some/key.jpg`, path-style.
+   *
+   * Every request is built here, so this is where a dot segment is refused: the
+   * URL parser below would otherwise resolve it and the signature would be
+   * computed over the RESOLVED path — a valid link to whatever it pointed at.
+   */
   private urlFor(key: string): URL {
+    if (!isSafeObjectKey(key)) {
+      throw new Error(`Object key "${key}" has a "." or ".." segment; a key names an object, it never moves a path.`);
+    }
     const url = new URL(this.endpoint.toString());
     const base = url.pathname.replace(/\/+$/, '');
     url.pathname = `${base}/${encodeSegment(this.config.bucket)}/${encodeKey(key)}`;

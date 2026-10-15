@@ -16,6 +16,7 @@ import { Type } from 'class-transformer';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { FacilityService } from './facility.service';
 import { ParcelService } from './parcel.service';
 
@@ -44,7 +45,7 @@ class ReceiveParcelDto {
   @IsOptional() @IsBoolean() internationalOrigin?: boolean;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   /** Keys from `POST /media/uploads` — never image bytes on this route. */
-  @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) photoKeys?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
 /**
@@ -69,7 +70,7 @@ class OpenParcelDto {
   condition!: 'sound' | 'packaging_damaged' | 'contents_damaged';
   @IsString() @MinLength(1) @MaxLength(1000) conditionNotes!: string;
   /** What the arrival check actually saw — evidence, not a sentence about it. */
-  @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) photoKeys?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
 /**
