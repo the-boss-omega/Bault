@@ -2,10 +2,15 @@ import { Body, Controller, Get, Headers, Param, Patch, Post, Query } from '@nest
 import { ApiTags } from '@nestjs/swagger';
 import { IsInt, IsPositive, IsString } from 'class-validator';
 import { Public } from '../acc/public.decorator';
+import { pageLimit } from '../../shared/query';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ListingService } from './listing.service';
 import { BrowseService, type BrowseSort } from './browse.service';
+
+/** A page of the public shelf: what is shown by default, and the most ever returned. */
+const BROWSE_DEFAULT = 50;
+const BROWSE_MAX = 200;
 
 /** The orders the shelf can be shown in. Anything else falls back to the first. */
 const BROWSE_SORTS: readonly string[] = ['newest', 'price_asc', 'price_desc'];
@@ -54,7 +59,9 @@ export class MktController {
       const n = Number(raw);
       return raw !== undefined && raw !== '' && Number.isFinite(n) && n >= 0 ? n : undefined;
     };
-    return this.browse.list(limit ? Number(limit) : undefined, {
+    // Validated here, not coerced: `Number('abc')` reached the query as NaN and
+    // the LIMIT disappeared with it. See `pageLimit`.
+    return this.browse.list(pageLimit(limit, { max: BROWSE_MAX, fallback: BROWSE_DEFAULT }), {
       q,
       type,
       condition,

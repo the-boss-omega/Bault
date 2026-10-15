@@ -150,6 +150,93 @@ export interface RateRequest {
   packagingGrams?: number;
   /** Whether the carrier must collect a signature. Some services surcharge it. */
   signatureRequired?: boolean;
+  /**
+   * The customs declaration, for a parcel that crosses a border.
+   *
+   * It was never sent. The shipment froze per-item customs lines at creation
+   * and printed them as a commercial invoice, and the carrier was asked for a
+   * rate — and later sold a label — with no customs information at all, which
+   * a real carrier refuses for an international parcel or holds at the border.
+   * A real carrier needs it at RATE time: the label is bought against the
+   * shipment that was rated, and that shipment cannot be amended afterwards.
+   */
+  customs?: CustomsDeclaration;
+}
+
+/** One line of a customs declaration — one item, as the commercial invoice lists it. */
+export interface CustomsLineItem {
+  description: string;
+  quantity: number;
+  /** The declared value of the whole line, in minor units. Never adjusted. */
+  valueMinor: number;
+  /** The weight of the whole line, in grams. */
+  weightGrams: number;
+  /** Harmonized System code, with or without dots (`4911.99`). */
+  hsCode: string;
+  /** ISO 3166-1 alpha-2 country the goods were made in. */
+  originCountry: string;
+}
+
+/**
+ * What the parcel declares at the border.
+ *
+ * `contentsType` follows the vocabulary carriers share: merchandise, gift,
+ * documents, returned goods, sample, other. The signer is who certifies the
+ * declaration is true; carriers refuse an uncertified international label.
+ */
+export interface CustomsDeclaration {
+  contentsType: 'merchandise' | 'gift' | 'documents' | 'returned_goods' | 'sample' | 'other';
+  /** Required by carriers when `contentsType` is `other`. */
+  contentsExplanation?: string;
+  signer: string;
+  /** What the carrier does with a parcel it cannot deliver. */
+  nonDelivery: 'return' | 'abandon';
+  currency: string;
+  lines: CustomsLineItem[];
+}
+
+/** How a call to the carrier may be bounded, and how a purchase may be repeated safely. */
+export interface ShippingCallOptions {
+  /**
+   * Abandons the call when it fires.
+   *
+   * Abandoning a PURCHASE does not undo it: the carrier may have sold the label
+   * before the answer was lost. A caller that times out a `buyLabel` has to
+   * treat the outcome as unknown and retry with the same idempotency key, never
+   * as a refusal.
+   */
+  signal?: AbortSignal;
+  /**
+   * The caller's own key for this purchase — one label per key.
+   *
+   * Passed by an adapter whose provider honours one. A provider whose own
+   * shipment object is already single-purchase (EasyPost) gets the same
+   * guarantee by checking that object before buying, and says so.
+   */
+  idempotencyKey?: string;
+}
+
+/**
+ * The carrier answered, and the answer was no: nothing was bought.
+ *
+ * Distinguished from every other failure because it is the only one after
+ * which a caller may safely forget the purchase was ever attempted. A timeout,
+ * a dropped connection or a 5xx says nothing about whether a label now exists.
+ */
+export class LabelNotPurchasedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LabelNotPurchasedError';
+  }
+
+  /**
+   * Recognised by name as well as by class, because the adapters package can be
+   * loaded twice in one process (built and from source) and `instanceof` then
+   * says no to an error that is exactly this one.
+   */
+  static is(err: unknown): err is LabelNotPurchasedError {
+    return err instanceof LabelNotPurchasedError || (err instanceof Error && err.name === 'LabelNotPurchasedError');
+  }
 }
 
 export interface Rate {
@@ -185,8 +272,12 @@ export interface TrackingStatus {
 }
 
 export interface ShippingAdapter {
-  getRates(req: RateRequest): Promise<Rate[]>;
-  buyLabel(rate: Rate, req: RateRequest): Promise<LabelResult>;
+  getRates(req: RateRequest, opts?: ShippingCallOptions): Promise<Rate[]>;
+  /**
+   * Buy a label. Called with the same `idempotencyKey` again, it must not buy a
+   * second one: it returns the label the first call bought.
+   */
+  buyLabel(rate: Rate, req: RateRequest, opts?: ShippingCallOptions): Promise<LabelResult>;
   getTracking(trackingNumber: string): Promise<TrackingStatus>;
 }
 
@@ -251,6 +342,11 @@ function distanceMultiplier(country: string): number {
   return 2.1;
 }
 
+/** A sandbox tracking number derived from an idempotency key: same key, same number. */
+function trackingFromKey(key: string): string {
+  return `SBX${key.replace(/[^A-Za-z0-9]/g, '').slice(-12).toUpperCase()}`;
+}
+
 export class SandboxShippingAdapter implements ShippingAdapter {
   async getRates(req: RateRequest): Promise<Rate[]> {
     const international = req.destination.country.toUpperCase() !== ORIGIN_COUNTRY;
@@ -293,13 +389,31 @@ export class SandboxShippingAdapter implements ShippingAdapter {
       .sort((a, b) => a.costMinor - b.costMinor);
   }
 
-  async buyLabel(rate: Rate): Promise<LabelResult> {
-    return {
-      trackingNumber: `SBX${Math.floor(Date.now() / 1000)}`,
+  /** Labels already "bought", by idempotency key — one label per key. */
+  private readonly bought = new Map<string, LabelResult>();
+
+  /**
+   * Sells a label that cannot be printed — and sells it ONCE per key.
+   *
+   * Honouring the idempotency key here is what lets dispatch's retry path be
+   * exercised without a carrier account: asked again for the same key, it
+   * returns the label it already sold rather than a second one, as a real
+   * provider must. The tracking number is derived from the key, so it is the
+   * same after a restart too.
+   */
+  async buyLabel(rate: Rate, _req?: RateRequest, opts: ShippingCallOptions = {}): Promise<LabelResult> {
+    if (opts.signal?.aborted) throw new Error('Label purchase abandoned before it was sent');
+    const key = opts.idempotencyKey;
+    const already = key ? this.bought.get(key) : undefined;
+    if (already) return already;
+    const label: LabelResult = {
+      trackingNumber: key ? trackingFromKey(key) : `SBX${Math.floor(Date.now() / 1000)}`,
       labelObjectKey: `labels/sbx-${rate.carrier}.pdf`,
       costMinor: rate.costMinor,
       currency: rate.currency,
     };
+    if (key) this.bought.set(key, label);
+    return label;
   }
 
   async getTracking(trackingNumber: string): Promise<TrackingStatus> {

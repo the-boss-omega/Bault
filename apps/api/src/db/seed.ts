@@ -1262,6 +1262,10 @@ async function main(): Promise<void> {
    * the bug is reported in docs/design/01-audit.md, and the second branch stays
    * empty until somebody fixes the query.
    *
+   * The query is fixed now (audit N2): a terminal state change on a card the
+   * customer owns, made since they acquired it, counts as its departure, so
+   * Golden's SN-SV146-0006 is in her History with nothing written here for it.
+   *
    * The tenth card (SN-EVS218-0010) is still deliberately unseeded, so the
    * warehouse intake bench keeps a real, photographed item to book in.
    */

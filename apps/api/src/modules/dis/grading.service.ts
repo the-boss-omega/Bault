@@ -260,16 +260,26 @@ export class GradingService {
         throw new AppError(ErrorCode.CONFLICT, 'This submission has already shipped', 409);
       }
 
+      /**
+       * Only the requests still waiting for a grade travel.
+       *
+       * A grade may be recorded before the batch leaves — `complete` allows it
+       * for a card that never went anywhere — and this used to take every member
+       * regardless. The closed one was moved to `at_grader` along with the rest,
+       * and since the only way back to the shelf is completing a request that
+       * was already complete, that card stayed away and unsellable for good.
+       */
       const members = await tx
         .select()
         .from(serviceRequest)
         .where(
           and(
             eq(serviceRequest.type, 'third_party_grading'),
+            eq(serviceRequest.status, 'in_progress'),
             sql`${serviceRequest.typeFields} ->> 'submissionId' = ${submissionId}`,
           ),
         );
-      if (members.length === 0) throw AppError.validation('Nothing is in this submission yet');
+      if (members.length === 0) throw AppError.validation('Nothing in this submission is waiting to be graded');
 
       const now = new Date();
       for (const req of members) {

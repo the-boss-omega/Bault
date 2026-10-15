@@ -35,6 +35,10 @@ export interface ShipmentSummary {
   cost: number | null;
   currency: string | null;
   itemIds: string[];
+  /** What is printed on each item's label, in `itemIds` order. */
+  items: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
+  /** For a direct-overnight shipment, the parcel it is. Null for everything else. */
+  directParcel: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
   /** ISO country + postal code — what a carrier actually quotes against. */
   destinationCountry: string;
@@ -42,6 +46,11 @@ export interface ShipmentSummary {
   /** The catalogue key of the chosen service, and who chose it. */
   serviceKey: string | null;
   serviceMode: string;
+  /** `carrier`, `hand_delivery` or `show_pickup` — how the shipment ends. */
+  fulfilmentMethod: string;
+  /** A hand delivery's quote, once a person has priced the journey. Null until then. */
+  quoteMinor: number | null;
+  quoteNotes: string | null;
   /** Customs value the collector declared. Zero on a domestic parcel. */
   declaredValueMinor: number;
   insuredValueMinor: number;

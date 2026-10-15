@@ -1,5 +1,6 @@
+import { createRequire } from 'node:module';
 import { describe, it, expect } from 'vitest';
-import { SEED, signIn, intakeFor, fundWallet } from '../../tests/integration/helpers/http';
+import { SEED, signIn, intakeFor, fundWallet, type Client } from '../../tests/integration/helpers/http';
 
 /**
  * A negotiation, driven from both sides.
@@ -232,5 +233,68 @@ describe('the offers list says whose move it is', () => {
     const countered = after.find((r) => r.id === counter.body.id)!;
     expect(countered.proposedBy).toBe('seller');
     expect(countered.yourTurn).toBe(true);
+  });
+});
+
+describe('a counter-offer is addressed to the other side', () => {
+  /**
+   * N8. `offer_countered` carried both `sellerId` and `buyerId` and no
+   * `recipientIds`, and the worker takes the first single-recipient key it
+   * finds — `sellerId`. So a seller's counter was announced to the SELLER, in
+   * the app and by email, and the buyer it was meant for never heard of it.
+   *
+   * Driven through the worker's own dispatch job, against the same database the
+   * API writes to, because the recipient is decided there and nowhere else.
+   */
+  const workerRequire = createRequire(new URL('../../apps/worker/package.json', import.meta.url));
+
+  async function runOutboxDispatch() {
+    // Resolved from the worker's own dependencies: the repository root does not
+    // depend on `pg` or on the config package, and should not start to.
+    const { loadEnv } = workerRequire('@bault/config') as { loadEnv: () => { DATABASE_URL: string } };
+    const { Pool } = workerRequire('pg') as {
+      Pool: new (o: { connectionString: string; max: number }) => { end(): Promise<void> };
+    };
+    const { dispatchOutbox } = await import('../../apps/worker/src/jobs/outbox-dispatch');
+    const pool = new Pool({ connectionString: loadEnv().DATABASE_URL, max: 2 });
+    try {
+      await dispatchOutbox(pool as Parameters<typeof dispatchOutbox>[0]);
+    } finally {
+      await pool.end();
+    }
+  }
+
+  // In-app rows only: the feed lists the email copy of a notification as well.
+  const counteredOn = async (c: Client, listingId: string) =>
+    (
+      (await c.get('/notifications')).body as { eventType: string; channel: string; content: Record<string, unknown> }[]
+    ).filter((n) => n.eventType === 'offer_countered' && n.channel === 'in_app' && n.content.listingId === listingId);
+
+  it('tells the buyer about the seller’s counter, and the seller about the buyer’s', async () => {
+    const { seller, listing: l } = await listing('N8: who hears about a counter', 100_00);
+    await fundWallet(SEED.collector2, 300_00);
+    const buyer = await signIn(SEED.collector2);
+
+    const opening = await buyer.post(`/marketplace/listings/${l.id}/offers`, { amount: 60_00 });
+    const fromSeller = await seller.post(`/marketplace/offers/${opening.body.id}/respond`, {
+      action: 'counter',
+      amount: 85_00,
+    });
+    expect(fromSeller.status).toBe(201);
+    await runOutboxDispatch();
+
+    expect((await counteredOn(buyer, l.id)).length, 'the buyer was not told about the counter').toBeGreaterThan(0);
+    expect(await counteredOn(seller, l.id), 'the seller was told about their own counter').toHaveLength(0);
+
+    const fromBuyer = await buyer.post(`/marketplace/offers/${fromSeller.body.id}/respond`, {
+      action: 'counter',
+      amount: 75_00,
+    });
+    expect(fromBuyer.status).toBe(201);
+    await runOutboxDispatch();
+
+    expect(await counteredOn(seller, l.id)).toHaveLength(1);
+    // Still only the one the buyer was sent, not their own counter echoed back.
+    expect(await counteredOn(buyer, l.id)).toHaveLength(1);
   });
 });

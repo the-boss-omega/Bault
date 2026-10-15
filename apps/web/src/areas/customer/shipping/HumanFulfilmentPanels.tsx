@@ -3,6 +3,7 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { formatDate, formatUsd } from '../../../shared/money';
 import type { PickupShow, WhiteGloveTerms } from '../../../shared/escrow';
+import type { ShipmentSummary } from '../../../shared/shipments';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox, IconCalendar, IconShield } from '../../../shared/ui/icons';
 import { useShippingCountries } from '../../../shared/countries';
@@ -342,15 +343,16 @@ export function WhiteGloveQuotes({
   onChanged: () => void;
 }) {
   const { t } = useI18n();
-  const [rows, setRows] = useState<
-    { id: string; code: string | null; quoteMinor: number | null; quoteNotes: string | null; status: string; fulfilmentMethod: string }[]
-  >([]);
+  // The shared row type, not a hand-written one. This panel used to declare
+  // its own shape with three fields the API never sent, so the compiler had
+  // nothing to object to while the filter below matched nothing, ever.
+  const [rows, setRows] = useState<ShipmentSummary[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        const all = await api.get<typeof rows>('/shipping/shipments');
+        const all = await api.get<ShipmentSummary[]>('/shipping/shipments');
         setRows(all.filter((s) => s.fulfilmentMethod === 'hand_delivery' && s.status === 'requested'));
       } catch (e) {
         onError((e as Error).message);

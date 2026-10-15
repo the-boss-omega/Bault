@@ -120,6 +120,17 @@ export class StowService {
    * that the shelf is "full".
    */
   async listWithCounts(): Promise<StowTarget[]> {
+    /**
+     * Joined as TEXT, not as uuid.
+     *
+     * `item.bin_id` is free text, and a warehouse transfer writes
+     * `EXT:<warehouse>/<bin>` into it for a card that has left for another
+     * building. Joined to `bin.id` directly, every row went through the
+     * text-to-uuid conversion, and that one row made this list — and with it the
+     * stow suggestion and every auto-stowed intake — fail with `invalid input
+     * syntax for type uuid` for everybody. Compared as text, an external
+     * location is simply not one of these shelves, which is the truth.
+     */
     const counts = this.db
       .select({ binId: item.binId, n: sql<number>`count(*)::int`.as('n') })
       .from(item)
@@ -140,7 +151,7 @@ export class StowService {
         facilityCode: facility.code,
       })
       .from(bin)
-      .leftJoin(counts, eq(counts.binId, bin.id))
+      .leftJoin(counts, sql`${bin.id}::text = ${counts.binId}`)
       .leftJoin(facility, eq(facility.id, bin.facilityId))
       .orderBy(asc(bin.zone), asc(bin.barcode));
   }

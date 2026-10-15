@@ -412,6 +412,18 @@ describe('ESC escrow and human fulfilment', () => {
     });
     expect(quoted.status).toBe(201);
 
+    // F060. The collector finds the quote in their shipments list — the panel
+    // that offers "Accept" reads exactly these three fields from it, and the
+    // list used to return none of them, so the quote was never shown.
+    const listed = ((await collector.get('/shipping/shipments')).body as Record<string, unknown>[]).find(
+      (s) => s.id === shipmentId,
+    );
+    expect(listed).toMatchObject({
+      fulfilmentMethod: 'hand_delivery',
+      quoteMinor: 118_000,
+      quoteNotes: '$1,000 base plus $180 travel, Newark to Boston and back the same day.',
+    });
+
     const before = await balanceOf(collector);
     const accepted = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);
     expect(accepted.status).toBe(201);

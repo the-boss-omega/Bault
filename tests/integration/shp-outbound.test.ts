@@ -760,5 +760,36 @@ describe('SHP outbound shipping', () => {
     const shipment = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
     expect(shipment.itemIds).toHaveLength(0);
     expect(shipment.serviceKey).toBe('direct_overnight');
+
+    /**
+     * F019. And it can actually LEAVE. Dispatch demanded a scanned set equal to
+     * the shipment's items, and this shipment has none by design, so a paid
+     * overnight order sat in `rates_selected` forever. What the operator holds
+     * at the dock is the parcel, so the parcel is what they scan.
+     */
+    const form = { carrier: 'FedEx', packageWeightGrams: 180, fulfillmentNotes: 'Overnight envelope, two slabs.' };
+    const wrongParcel = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: 'PKG-NOTTHIS1',
+      ...form,
+    });
+    expect(wrongParcel.status).toBe(409);
+
+    const out = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: registered.body.code,
+      ...form,
+    });
+    expect(out.status).toBe(201);
+    expect(out.body.trackingNumber).toBeTruthy();
+
+    const gone = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
+    expect(gone.status).toBe('shipped');
+    expect(gone.trackingNumber).toBe(out.body.trackingNumber);
+
+    // It is closed, so a second scan cannot buy a second label.
+    const twice = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: registered.body.code,
+      ...form,
+    });
+    expect(twice.status).toBe(409);
   });
 });

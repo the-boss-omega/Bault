@@ -27,7 +27,7 @@
  * value while the SPA fetches the actual list from `GET /shipping/services`.
  */
 
-import { DIM_DIVISOR, type BillingIncrement } from '@bault/adapters';
+import { DIM_DIVISOR, type BillingIncrement, type Rate } from '@bault/adapters';
 
 /** Where the parcel is going. Country is ISO 3166-1 alpha-2. */
 /**
@@ -131,6 +131,18 @@ export interface CarrierService {
   maxItems?: number;
   /** Only offered when every item is already at this facility code. */
   requiresOriginFacility?: string;
+  /**
+   * What EasyPost calls this service: its carrier string and the service codes
+   * that ARE this service, in order of preference.
+   *
+   * The catalogue names services for people ("Ground Advantage", "2Day") and
+   * EasyPost names them for carriers (`GroundAdvantage`, `FEDEX_2_DAY`), and a
+   * rate was matched to the catalogue by comparing the two strings exactly — so
+   * with `SHIPPING_PROVIDER=easypost` nothing matched and a collector was
+   * offered no way to ship at all. Absent means EasyPost sells no service Bault
+   * has confirmed to be this one, and it is simply not offered there.
+   */
+  easypost?: { carrier: string; services: readonly string[] };
 }
 
 /** The United States. Both facilities are here, so this is the domestic country. */
@@ -170,6 +182,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'ounce',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    easypost: { carrier: 'USPS', services: ['GroundAdvantage'] },
   },
   {
     key: 'usps_priority',
@@ -186,6 +199,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'pound',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    easypost: { carrier: 'USPS', services: ['Priority'] },
   },
   {
     key: 'fedex_2day',
@@ -203,8 +217,15 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
     dimDivisor: DIM_DIVISOR,
+    easypost: { carrier: 'FedEx', services: ['FEDEX_2_DAY'] },
   },
   {
+    /**
+     * No EasyPost mapping. ePacket is a postal product sold through
+     * consolidators, and which EasyPost carrier account and service code (if
+     * any) is this exact product has not been confirmed against a live account
+     * — so under EasyPost it is not offered rather than offered as a guess.
+     */
     key: 'epacket',
     carrier: 'ePacket',
     serviceLevel: 'International',
@@ -235,6 +256,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'pound',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    // No EasyPost mapping, for the reason ePacket has none: not confirmed.
   },
   {
     key: 'fedex_intl_priority',
@@ -252,6 +274,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
     dimDivisor: DIM_DIVISOR,
+    // FedEx renamed the service in its newer API; EasyPost accounts return
+    // either name depending on how the FedEx account is connected.
+    easypost: { carrier: 'FedEx', services: ['FEDEX_INTERNATIONAL_PRIORITY', 'INTERNATIONAL_PRIORITY'] },
   },
   {
     /**
@@ -281,6 +306,10 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     flatCostMinor: 10_000, // $100 flat
     maxItems: 5,
     requiresOriginFacility: DIRECT_OVERNIGHT_FACILITY,
+    // Next-morning first, next-afternoon if that is all the account sells: the
+    // promise is "overnight", and both keep it. The collector pays the flat
+    // price either way; which one Bault buys is Bault's cost.
+    easypost: { carrier: 'FedEx', services: ['PRIORITY_OVERNIGHT', 'STANDARD_OVERNIGHT'] },
   },
 ];
 
@@ -288,6 +317,28 @@ const BY_KEY = new Map(CARRIER_SERVICES.map((s) => [s.key, s]));
 
 export function carrierService(key: string): CarrierService | undefined {
   return BY_KEY.get(key);
+}
+
+/**
+ * The carrier's rate for this catalogue service, if the carrier quoted one.
+ *
+ * Two ways to match, and both are exact. A rate named the way the catalogue
+ * names the service is the sandbox's, which speaks the catalogue's language. A
+ * rate named the way EasyPost names it is matched through the service's
+ * `easypost` codes, in preference order — so FedEx International Priority is
+ * found under either of the names FedEx has used for it. Nothing is matched by
+ * resemblance: "Express" is not "Priority", whatever a fuzzy comparison thinks.
+ */
+export function rateFor<R extends Rate>(service: CarrierService, rates: readonly R[]): R | undefined {
+  const exact = rates.find((r) => r.carrier === service.carrier && r.serviceLevel === service.serviceLevel);
+  if (exact) return exact;
+  const ep = service.easypost;
+  if (!ep) return undefined;
+  for (const code of ep.services) {
+    const hit = rates.find((r) => r.carrier.toLowerCase() === ep.carrier.toLowerCase() && r.serviceLevel === code);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 /** Resolve by the carrier/service pair the shipment stores. */

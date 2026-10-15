@@ -189,6 +189,8 @@ export function WalletPage() {
     [ledger, route.params.transaction],
   );
 
+  const balanceAfter = useMemo(() => runningBalances(ledger ?? []), [ledger]);
+
   const tabs = TABS.map((key) => ({ key, label: t(`wallet.tab.${key}` as MessageKey) }));
 
   return (
@@ -245,6 +247,7 @@ export function WalletPage() {
           <OverviewTab
             pending={pending}
             ledger={ledger}
+            balanceAfter={balanceAfter}
             locale={locale}
             t={t}
             onOpen={(id) => openRecord('transaction', id)}
@@ -258,6 +261,7 @@ export function WalletPage() {
         <TabPanel tab="transactions">
           <TransactionsTab
             ledger={ledger}
+            balanceAfter={balanceAfter}
             locale={locale}
             t={t}
             onOpen={(id) => openRecord('transaction', id)}
@@ -347,6 +351,7 @@ export function WalletPage() {
 
 function OverviewTab({
   ledger,
+  balanceAfter,
   pending,
   locale,
   t,
@@ -355,6 +360,7 @@ function OverviewTab({
   selectedId,
 }: {
   ledger: LedgerRow[] | null;
+  balanceAfter: ReadonlyMap<string, number>;
   pending: PendingTotals | null;
   locale: string;
   t: TranslateFn;
@@ -435,6 +441,7 @@ function OverviewTab({
       >
         <TransactionTable
           rows={recent}
+          balanceAfter={balanceAfter}
           loading={ledger === null}
           locale={locale}
           t={t}
@@ -454,6 +461,7 @@ function OverviewTab({
 
 function TransactionsTab({
   ledger,
+  balanceAfter,
   locale,
   t,
   onOpen,
@@ -464,6 +472,7 @@ function TransactionsTab({
   setRange,
 }: {
   ledger: LedgerRow[] | null;
+  balanceAfter: ReadonlyMap<string, number>;
   locale: string;
   t: TranslateFn;
   onOpen: (id: string) => void;
@@ -524,6 +533,7 @@ function TransactionsTab({
     >
       <TransactionTable
         rows={filtered}
+        balanceAfter={balanceAfter}
         loading={ledger === null}
         locale={locale}
         t={t}
@@ -549,9 +559,37 @@ function TransactionsTab({
   );
 }
 
+/**
+ * The balance the wallet stood at once each entry had landed, by entry id.
+ *
+ * Computed ONCE, over the whole ledger, and looked up per row. It used to be
+ * walked inside the table over whatever rows the table was handed — the six
+ * newest on the overview, or the filtered list on the Transactions tab — so the
+ * overview's top row disagreed with the balance in the header as soon as there
+ * were more than six movements, and filtering by type produced negative
+ * "balances" the wallet had never held. A row's balance is a fact about the
+ * ledger, not about which rows happen to be on screen.
+ *
+ * `GET /finance/ledger` returns the WHOLE ledger, newest first (LedgerService
+ * .list has no limit), so the walk runs from the oldest entry and the newest
+ * entry's figure is exactly the balance the header shows. If that endpoint ever
+ * pages, this has to come from the server instead.
+ */
+function runningBalances(ledger: readonly LedgerRow[]): Map<string, number> {
+  const out = new Map<string, number>();
+  let running = 0;
+  for (let i = ledger.length - 1; i >= 0; i -= 1) {
+    const row = ledger[i]!;
+    running += row.direction === 'credit' ? row.amount : -row.amount;
+    out.set(row.id, running);
+  }
+  return out;
+}
+
 /** The shared transaction table: same markup on the overview and the full list. */
 function TransactionTable({
   rows,
+  balanceAfter,
   loading,
   locale,
   t,
@@ -562,6 +600,8 @@ function TransactionTable({
   emptyAction,
 }: {
   rows: readonly LedgerRow[];
+  /** From {@link runningBalances}, over the whole ledger — never over `rows`. */
+  balanceAfter: ReadonlyMap<string, number>;
   loading: boolean;
   locale: string;
   t: TranslateFn;
@@ -571,24 +611,6 @@ function TransactionTable({
   emptyText: string;
   emptyAction?: ReactNode;
 }) {
-  /**
-   * The balance after each row, in the order the rows are displayed.
-   *
-   * `rows` is newest-first, so the walk runs backwards from the oldest entry:
-   * every credit adds, every debit subtracts, and the value recorded against a
-   * row is the balance the wallet stood at once that entry had landed.
-   */
-  const balanceAfter = useMemo(() => {
-    const out = new Array<number>(rows.length);
-    let running = 0;
-    for (let i = rows.length - 1; i >= 0; i -= 1) {
-      const row = rows[i]!;
-      running += row.direction === 'credit' ? row.amount : -row.amount;
-      out[i] = running;
-    }
-    return out;
-  }, [rows]);
-
   if (loading) return <SkeletonTable rows={5} columns={5} />;
   if (rows.length === 0) {
     return <EmptyState title={emptyTitle} text={emptyText} action={emptyAction} />;
@@ -612,7 +634,7 @@ function TransactionTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => {
+          {rows.map((row) => {
             const credit = row.direction === 'credit';
             return (
               <tr
@@ -664,17 +686,13 @@ function TransactionTable({
                   anybody actually brings to it — "what did I have after that?" —
                   cannot be answered by reading it. It was never here.
 
-                  Computed rather than fetched, and that is safe: `GET
-                  /finance/ledger` returns the WHOLE ledger with no limit and no
-                  pagination (LedgerService.list), so the walk below starts from
-                  zero at the oldest row and the newest row's figure is exactly
-                  the balance the wallet header shows. A running balance computed
-                  over a truncated page would be a wrong number in the one place
-                  a wrong number is unforgivable, so if that endpoint ever grows
-                  a limit, this column has to come from the server.
+                  Looked up from the walk over the whole ledger (see
+                  `runningBalances`), never recomputed over the rows on screen:
+                  a running balance over a truncated or filtered list is a wrong
+                  number in the one place a wrong number is unforgivable.
                 */}
                 <td data-label={t('wallet.col.balance')} className="td-end num">
-                  <Amount>{formatUsd(balanceAfter[index] ?? 0)}</Amount>
+                  <Amount>{formatUsd(balanceAfter.get(row.id) ?? 0)}</Amount>
                 </td>
               </tr>
             );

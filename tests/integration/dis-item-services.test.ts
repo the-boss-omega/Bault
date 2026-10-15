@@ -166,6 +166,54 @@ describe('DIS services on a stored item', () => {
     expect(closed.status).toBe(201);
   });
 
+  it('does not send a card whose grade was already recorded with the rest of its batch', async () => {
+    /**
+     * F048. A grade may be recorded for a card that never left (completing a
+     * request does not require the batch to have shipped), and shipping the
+     * batch then moved EVERY member to `at_grader` — including the one whose
+     * request was already closed. Nothing brings a card back from the grader
+     * except completing its request, so that card was stuck, unsellable, for
+     * good.
+     */
+    const { operator, item: graded } = await freshItem({ description: 'F048: graded before the batch left' });
+    const { item: travelling } = await freshItem({ description: 'F048: travels with the batch' });
+    const collector = await signIn(SEED.collector);
+
+    const submission = (await operator.post('/services/grading/submissions', { gradingBody: 'PSA' })).body;
+    const requestIds: string[] = [];
+    for (const it of [graded, travelling]) {
+      const req = (
+        await collector.post('/services/grading', { itemId: it.id, tier: 'psa_regular', declaredMinor: 50_000 })
+      ).body;
+      await accepted(operator, req.id);
+      const added = await operator.post(`/services/grading/submissions/${submission.id}/add`, { requestId: req.id });
+      expect(added.status).toBe(201);
+      requestIds.push(req.id);
+    }
+
+    const early = await operator.post(`/services/grading/${requestIds[0]}/complete`, {
+      grade: 'PSA 8',
+      gradingBody: 'PSA',
+      certificateNumber: 'PSA-F048-0001',
+      itemVerified: true,
+      notes: 'Graded on site before the batch shipped.',
+    });
+    expect(early.status).toBe(201);
+
+    const shipped = await operator.post(`/services/grading/submissions/${submission.id}/ship`, {
+      trackingNumber: '9400111899223197428491',
+      externalReference: 'PSA-SUB-F048',
+      notes: 'One card left; the other was already graded.',
+    });
+    expect(shipped.status).toBe(201);
+    expect(shipped.body.itemCount).toBe(1);
+
+    const stayed = (await collector.get(`/vault/items/${graded.id}`)).body;
+    expect(stayed.item.lifecycleState).toBe('stored');
+    const went = (await collector.get(`/vault/items/${travelling.id}`)).body;
+    expect(went.item.lifecycleState).toBe('at_grader');
+  });
+
   /* ---------------- video and inspection ---------------- */
 
   it('attaches a video as a media version on the item', async () => {
