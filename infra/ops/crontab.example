@@ -7,7 +7,12 @@
 # /etc/bault/backup.env (mode 600, owned by deploy) holds what the job needs,
 # and nothing else:
 #
-#   DIRECT_DATABASE_URL=postgres://bault_owner:<pw>@<host>:<port>/<db>?sslmode=verify-full&sslrootcert=/etc/bault/db-ca.crt
+#   DIRECT_DATABASE_URL='postgres://bault_owner:<pw>@<host>:<port>/<db>?sslmode=verify-full&sslrootcert=/etc/bault/db-ca.crt'
+#
+# QUOTE that URL. The job below sources this file with `.`, and an unquoted `&`
+# ends the assignment there: the shell backgrounds it, DIRECT_DATABASE_URL is
+# never set, and every nightly dump fails. (deploy.sh reads the file literally
+# and drops the quotes, so the same file serves both.)
 #   BACKUP_DIR=/var/backups/bault
 #   BACKUP_RETAIN_DAYS=14
 #   BACKUP_AGE_RECIPIENT=age1...            # the PUBLIC key; the private one is not on this host
