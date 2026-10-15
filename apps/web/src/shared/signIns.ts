@@ -11,7 +11,11 @@
  * browser.
  */
 
-export type SignInOutcome = 'success' | 'bad_credentials' | 'unverified' | 'refused';
+/**
+ * `mfa_challenged` is a right password that was asked for a code — not a
+ * failure, and not yet a sign-in. `mfa_failed` is a wrong code.
+ */
+export type SignInOutcome = 'success' | 'bad_credentials' | 'unverified' | 'refused' | 'mfa_challenged' | 'mfa_failed';
 
 export interface SignInAttempt {
   id: string;

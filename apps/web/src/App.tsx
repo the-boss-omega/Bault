@@ -38,6 +38,8 @@ import {
   IconWarehouse,
 } from './shared/ui/icons';
 import { AuthPage, AuthShell, type AuthMode, type SessionUser } from './areas/customer/auth/AuthPage';
+import { mustEnrolSecondFactor } from './shared/twoFactor';
+import { ForcedEnrollmentPage } from './areas/customer/auth/ForcedEnrollmentPage';
 import { LandingPage } from './areas/customer/marketing/LandingPage';
 import { MembershipPage } from './areas/customer/membership/MembershipPage';
 import { VerifyEmailPage } from './areas/customer/auth/VerifyEmailPage';
@@ -336,6 +338,35 @@ export default function App() {
           // needs a fresh request, so drop any settled in-flight slot first.
           resetProfileRequest();
           void loadSession().catch(() => undefined);
+        }}
+      />
+    );
+  }
+
+  /**
+   * A member of staff who must enrol a second factor and has not.
+   *
+   * The API refuses them everything but enrolment, sign-out and the profile, so
+   * the workspace would mount a rail, a header and a section that each fail. They
+   * are held on the enrolment screen instead, and the console loads once the
+   * profile says they are enrolled.
+   */
+  if (mustEnrolSecondFactor(boot.user)) {
+    return (
+      <ForcedEnrollmentPage
+        onEnrolled={() => {
+          resetProfileRequest();
+          void probeSession();
+        }}
+        onSignOut={() => {
+          void api
+            .post('/auth/logout')
+            .catch(() => undefined)
+            .finally(() => {
+              clearLastVisitedSection();
+              resetProfileRequest();
+              setBoot({ status: 'anonymous' });
+            });
         }}
       />
     );

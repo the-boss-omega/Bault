@@ -4,6 +4,18 @@ import { useT } from '../../../shared/i18n';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
 import { DEMO_USERS } from './demoUsers';
+import { SecondFactorForm } from './SecondFactorForm';
+
+/** What a right password returns for an account with two-factor sign-in, instead of a session. */
+interface MfaChallenge {
+  status: 'mfa_required';
+  challengeToken: string;
+  expiresAt: string;
+}
+
+function isChallenge(body: SessionUser | MfaChallenge): body is MfaChallenge {
+  return (body as MfaChallenge).status === 'mfa_required';
+}
 
 /**
  * Sign-in page — credentials only. Registration lives on its own page
@@ -48,6 +60,12 @@ export function SignInPage({
    */
   const [unverified, setUnverified] = useState(false);
   const [resent, setResent] = useState(false);
+  /**
+   * The challenge a right password earned, for an account with two-factor
+   * sign-in. While it is set the page IS the second step; the password is
+   * cleared, because it has done its job and is not sent again.
+   */
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
   const t = useT();
 
   async function login(e: FormEvent) {
@@ -57,8 +75,13 @@ export function SignInPage({
     setUnverified(false);
     setResent(false);
     try {
-      const user = await api.post<SessionUser>('/auth/login', { identifier, password });
-      onSignedIn(user);
+      const answer = await api.post<SessionUser | MfaChallenge>('/auth/login', { identifier, password });
+      if (isChallenge(answer)) {
+        setPassword('');
+        setChallenge(answer);
+        return;
+      }
+      onSignedIn(answer);
     } catch (err) {
       setError((err as Error).message);
       setUnverified(err instanceof ApiError && err.code === 'email_unverified');
@@ -83,6 +106,19 @@ export function SignInPage({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (challenge) {
+    return (
+      <SecondFactorForm
+        challengeToken={challenge.challengeToken}
+        onSignedIn={onSignedIn}
+        onRestart={(reason) => {
+          setChallenge(null);
+          setError(reason);
+        }}
+      />
+    );
   }
 
   return (

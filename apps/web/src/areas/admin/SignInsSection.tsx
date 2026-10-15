@@ -17,6 +17,8 @@ const OUTCOME_TONE: Record<SignInOutcome, StatusTone> = {
   bad_credentials: 'error',
   unverified: 'warning',
   refused: 'error',
+  mfa_challenged: 'info',
+  mfa_failed: 'error',
 };
 
 const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
@@ -24,7 +26,16 @@ const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
   bad_credentials: 'admin.signIns.outcome.bad_credentials',
   unverified: 'admin.signIns.outcome.unverified',
   refused: 'admin.signIns.outcome.refused',
+  mfa_challenged: 'admin.signIns.outcome.mfa_challenged',
+  mfa_failed: 'admin.signIns.outcome.mfa_failed',
 };
+
+/**
+ * Rows worth a second look. A right password waiting for its code is the
+ * first half of every two-step sign-in, so it is not highlighted; the wrong
+ * code that might follow it is.
+ */
+const ROUTINE: ReadonlySet<SignInOutcome> = new Set(['success', 'mfa_challenged']);
 
 /**
  * Who signed in, and who tried to.
@@ -144,7 +155,7 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
               </thead>
               <tbody>
                 {log.attempts.map((a) => (
-                  <tr key={a.id} className={a.outcome === 'success' ? undefined : 'is-attention'}>
+                  <tr key={a.id} className={ROUTINE.has(a.outcome) ? undefined : 'is-attention'}>
                     <td data-label={t('admin.signIns.col.when')}>
                       <span dir="ltr">{formatDateTime(a.occurredAt, locale)}</span>
                     </td>

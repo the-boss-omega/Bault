@@ -22,6 +22,7 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
+import { TwoFactorPanel } from './TwoFactorPanel';
 import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
 
 /**
@@ -313,6 +314,7 @@ export function ProfilePage() {
       {tab === 'security' && (
         <TabPanel tab="security">
           <PasswordPanel onStatus={setStatus} onError={setError} />
+          <TwoFactorPanel />
         </TabPanel>
       )}
 
