@@ -21,7 +21,10 @@ export interface LedgerEntry {
     | 'escrow_hold'
     | 'escrow_release'
     | 'escrow_refund'
-    | 'chargeback';
+    | 'chargeback'
+    | 'shipping_refund'
+    | 'service_refund'
+    | 'payout_reversal';
   amount: number; // positive minor units
   direction: 'debit' | 'credit';
   currency?: string;
