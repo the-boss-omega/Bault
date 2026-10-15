@@ -18,4 +18,12 @@ ALTER TABLE "user_account" ADD COLUMN IF NOT EXISTS "terms_accepted_at" timestam
 
 ALTER TABLE "user_account" DROP CONSTRAINT IF EXISTS "user_account_terms_acceptance_complete";--> statement-breakpoint
 ALTER TABLE "user_account" ADD CONSTRAINT "user_account_terms_acceptance_complete"
-  CHECK (("terms_version" IS NULL) = ("terms_accepted_at" IS NULL));
+  CHECK (("terms_version" IS NULL) = ("terms_accepted_at" IS NULL));--> statement-breakpoint
+
+-- The accountant's reports (N40) read the ledger by DATE across every account —
+-- a month's totals, a year's CSV export walked in (occurred_at, id) order. The
+-- only index was (user_id, occurred_at), which is the right one for a wallet
+-- and useless for "everything in October", so each report was a full scan of
+-- the busiest append-only table in the database. Same slot, because a work
+-- package gets one migration.
+CREATE INDEX IF NOT EXISTS "ledger_record_occurred_idx" ON "ledger_record" ("occurred_at", "id");

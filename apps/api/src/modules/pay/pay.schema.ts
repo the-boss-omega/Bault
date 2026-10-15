@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
@@ -51,7 +51,15 @@ export const ledgerRecord = pgTable('ledger_record', {
   referenceId: text('reference_id'),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: createdAt(),
-});
+}, (t) => ({
+  /**
+   * The ledger by DATE, across every account (migration 0033): what the
+   * accountant's month summary and CSV export read, walking (occurred_at, id)
+   * in order. `ledger_record_user_occurred_idx` (0006) serves one wallet and
+   * cannot serve "everything in October".
+   */
+  byOccurred: index('ledger_record_occurred_idx').on(t.occurredAt, t.id),
+}));
 
 export const externalPayment = pgTable('external_payment', {
   id: pkId(),
