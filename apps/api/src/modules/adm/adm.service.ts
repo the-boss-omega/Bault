@@ -117,7 +117,16 @@ export class AdmService {
 
     const set: Record<string, unknown> = {};
     if (patch.role) set.role = patch.role;
-    if (patch.status) set.status = patch.status;
+    if (patch.status) {
+      set.status = patch.status;
+      // Any status a person sets is a person's decision, so the debt sweep's
+      // marker goes with it (N7). It survived manual changes before: an
+      // administrator who reinstated a debt-suspended account and later
+      // suspended it for some other reason had that suspension lifted by the
+      // next sweep once the balance recovered, because the sweep still took it
+      // for one of its own.
+      set.autoSuspendedAt = null;
+    }
     // An admin who writes a name part has just reviewed it, so the migration's
     // review flag is cleared with it — that is the only thing that clears it here.
     for (const f of ['firstName', 'lastName'] as const) {

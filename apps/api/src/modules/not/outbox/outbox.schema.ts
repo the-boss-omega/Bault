@@ -1,4 +1,4 @@
-import { pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, text, jsonb, timestamp, integer } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../../db/schema/_helpers';
 
 /**
@@ -16,5 +16,14 @@ export const outboxMessage = pgTable('outbox_message', {
   eventType: text('event_type').notNull(), // e.g. "item_received", "item_sold"
   payload: jsonb('payload').notNull(),
   dispatchedAt: timestamp('dispatched_at', { withTimezone: true }), // null until worker sends it
+  /**
+   * How many times dispatch has failed on this message, and why, last time
+   * (migration 0032, N29). A message that throws no longer stops every message
+   * behind it; it fails alone, is retried a bounded number of times, and then
+   * waits here — undispatched, with its error — for a person to look at it.
+   */
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
   createdAt: createdAt(),
 });

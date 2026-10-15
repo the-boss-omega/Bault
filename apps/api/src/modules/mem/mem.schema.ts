@@ -1,4 +1,5 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
@@ -101,6 +102,14 @@ export const membershipPeriod = pgTable(
     commissionWaivedOnMinor: amountMinor('commission_waived_on').notNull().default(0),
     /** Insured shipments covered so far this cycle. */
     insuredShipmentsUsed: integer('insured_shipments_used').notNull().default(0),
+    /**
+     * For a period the renewal job opened: the end of the cycle it renewed
+     * (migration 0032, N15). A renewal starts at the moment it runs, so two
+     * overlapping runs never agreed on `periodStart` and both charged; they do
+     * agree on which cycle they are renewing. Null on a period opened by joining
+     * or changing tier.
+     */
+    renewsPeriodEnd: timestamp('renews_period_end', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -108,5 +117,9 @@ export const membershipPeriod = pgTable(
     byUser: index('membership_period_user_idx').on(t.userId, t.periodStart),
     /** One period row per membership per cycle — the upsert target. */
     periodUnique: unique('membership_period_unique').on(t.membershipId, t.periodStart),
+    /** A cycle is renewed at most once. */
+    renewalUnique: uniqueIndex('membership_period_renewal_unique')
+      .on(t.membershipId, t.renewsPeriodEnd)
+      .where(sql`${t.renewsPeriodEnd} IS NOT NULL`),
   }),
 );

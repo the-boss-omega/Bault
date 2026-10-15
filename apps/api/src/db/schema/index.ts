@@ -30,3 +30,4 @@ export * from '../../modules/mem/mem.schema';
 export * from '../../modules/shp/shp.schema';
 export * from '../../shared/idempotency/idempotency.schema';
 export * from '../../shared/confirmation/confirmation.schema';
+export * from '../../shared/observability/heartbeat.schema';

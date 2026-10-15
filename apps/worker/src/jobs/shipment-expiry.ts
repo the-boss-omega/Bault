@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { log } from '../log';
 
 /**
  * Release the items of shipments nobody paid for.
@@ -17,6 +18,13 @@ import type { Pool } from 'pg';
  * Raw SQL rather than the API's service, like every other worker job — the
  * worker is deliberately independent of the Nest container, and the outbox row
  * it writes is what tells the collector.
+ *
+ * `SKIP LOCKED`: a second run — a retry, another replica — passes over the
+ * shipments the first is releasing instead of queueing behind them, and a
+ * shipment the API is paying for at this very moment is left for the next run
+ * rather than cancelled out from under the payment. Each row is updated in the
+ * transaction that locked it, and the `status = 'awaiting_payment'` predicate
+ * means a run never releases a shipment twice.
  */
 export async function expireUnpaidShipments(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -34,7 +42,7 @@ export async function expireUnpaidShipments(pool: Pool): Promise<void> {
         WHERE status = 'awaiting_payment'
           AND payment_due_at IS NOT NULL
           AND payment_due_at <= now()
-        FOR UPDATE`,
+        FOR UPDATE SKIP LOCKED`,
     );
 
     for (const row of rows) {
@@ -59,10 +67,10 @@ export async function expireUnpaidShipments(pool: Pool): Promise<void> {
 
     await client.query('COMMIT');
     if (rows.length > 0) {
-      console.log(`[shipment-expiry] released ${rows.length} unpaid shipment(s)`);
+      log.info('unpaid shipments released', { job: 'shipment.expiry-sweep', released: rows.length });
     }
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   } finally {
     client.release();

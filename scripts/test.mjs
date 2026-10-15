@@ -62,6 +62,7 @@ const SUITES = [
   { args: ['--no-file-parallelism', '--project', 'core'], seed: true },
   { args: ['--no-file-parallelism', '--project', 'concurrency'], seed: true },
   { args: ['--no-file-parallelism', '--project', 'property'], seed: true },
+  { args: ['--no-file-parallelism', '--project', 'worker'], seed: true },
 ];
 
 const seed = () => run('pnpm', ['--filter', '@bault/api', 'db:seed']);

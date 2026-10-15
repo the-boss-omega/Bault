@@ -1,4 +1,4 @@
-import { pgTable, text, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, jsonb, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
@@ -34,4 +34,18 @@ export const storageFeeRun = pgTable('storage_fee_run', {
   totalAmount: amountMinor('total_amount').notNull(),
   currency: currency().notNull(),
   createdAt: createdAt(),
+});
+
+/**
+ * When a membership last covered each item's storage (migration 0032, F009,
+ * F021). Written only by the storage sweep, once a night, for every item a
+ * membership allowance covers.
+ *
+ * The sweep counts an item's chargeable periods from its included window — or
+ * from here, whichever is later. Counting from `received_at` alone billed every
+ * period an item had spent covered, all at once, the night cover ended.
+ */
+export const storageCover = pgTable('storage_cover', {
+  itemId: uuid('item_id').primaryKey(),
+  coveredUntil: timestamp('covered_until', { withTimezone: true }).notNull(),
 });

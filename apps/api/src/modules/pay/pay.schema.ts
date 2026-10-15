@@ -1,4 +1,5 @@
-import { pgEnum, pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
@@ -40,18 +41,31 @@ export const ledgerType = pgEnum('ledger_type', [
 
 export const ledgerDirection = pgEnum('ledger_direction', ['debit', 'credit']);
 
-export const ledgerRecord = pgTable('ledger_record', {
-  id: pkId(),
-  userId: text('user_id').notNull(),
-  type: ledgerType('type').notNull(),
-  amount: amountMinor().notNull(), // always positive; sign is carried by `direction`
-  direction: ledgerDirection('direction').notNull(),
-  currency: currency().notNull(),
-  referenceType: text('reference_type'), // 'charge' | 'transaction' | 'withdrawal' | 'external_payment'
-  referenceId: text('reference_id'),
-  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
-  createdAt: createdAt(),
-});
+export const ledgerRecord = pgTable(
+  'ledger_record',
+  {
+    id: pkId(),
+    userId: text('user_id').notNull(),
+    type: ledgerType('type').notNull(),
+    amount: amountMinor().notNull(), // always positive; sign is carried by `direction`
+    direction: ledgerDirection('direction').notNull(),
+    currency: currency().notNull(),
+    referenceType: text('reference_type'), // 'charge' | 'transaction' | 'withdrawal' | 'external_payment' | 'interest'
+    referenceId: text('reference_id'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    /**
+     * One interest row per account per day (migration 0032, F051). The accrual
+     * job puts the UTC date in `reference_id`, so a retry or an overlapping run
+     * the same day inserts nothing.
+     */
+    interestDailyUnique: uniqueIndex('ledger_record_interest_daily_unique')
+      .on(t.userId, t.referenceId)
+      .where(sql`${t.type} = 'interest'`),
+  }),
+);
 
 export const externalPayment = pgTable('external_payment', {
   id: pkId(),

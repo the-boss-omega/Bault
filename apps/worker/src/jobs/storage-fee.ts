@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import { log } from '../log';
+import { renewMemberships } from './membership-renewal';
 
 /**
  * Automatic storage billing (Requirement 12.1).
@@ -45,11 +47,87 @@ import type { Pool } from 'pg';
  * it in application code would mean a read-then-write race that the period count
  * is specifically designed to avoid. The API's `storage-policy.ts` deliberately
  * does NOT duplicate this calculation — it reads what this sweep wrote.
+ *
+ * ...EXCEPT THAT ONE STATEMENT IS NOT A LOCK (F070). Under READ COMMITTED, two
+ * sweeps that overlap — a retry after the job's lease expired while the first
+ * was still running, or a second worker replica — each count the charges that
+ * were committed before either began, and each bills the difference: every
+ * period twice. The sweep now takes a transaction-scoped advisory lock first, so
+ * a second sweep waits for the first to commit and then finds nothing left to
+ * bill. It is the only producer of storage charges (Requirement 12.2), so one
+ * lock covers every path that writes them.
+ *
+ * MEMBERSHIP COVER PAUSES THE CLOCK (F009, F021). An item inside a member's
+ * allowance is skipped, and periods used to be counted from `received_at`
+ * regardless — so the night cover ended, every period the item had spent covered
+ * counted as elapsed and unbilled, and the member was charged for all of them at
+ * once: rent for exactly the months the subscription promised were free. The
+ * sweep now stamps `storage_cover.covered_until` on every item it finds covered,
+ * and an uncovered item's periods run from the later of its included window and
+ * that stamp. When cover ends, at most one period is billed — the one starting
+ * then — and the clock runs on from there.
+ *
+ * And memberships are renewed FIRST. A cycle that ran out after the hourly
+ * renewal's last run and before this sweep was, for those minutes, no cover at
+ * all, and the member's whole allowance was billed storage for a night.
  */
+const SWEEP_LOCK = 'job:storage-fee';
+
+/**
+ * Which items a membership covers tonight — shared by the statement that stamps
+ * them and the one that bills everything else, which run in one transaction and
+ * so see the same `now()`.
+ *
+ * Only a cycle that is actually paid up and running counts: a lapsed or ended
+ * membership covers nothing, which is the safe direction. The allowance is read
+ * out of the tier's own pricing rule, because this process has no access to the
+ * API's modules. Of a member's items, the OLDEST are covered first. Oldest
+ * rather than newest is the only ordering that is stable — with newest-first,
+ * booking one card in would move an older card out of cover and start billing
+ * storage on something that had been free for months, which is exactly the
+ * surprise a subscription is sold to stop.
+ */
+const COVERED = `
+  member_cap AS (
+    SELECT m.user_id::text AS user_id,
+           COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
+      FROM membership m
+      JOIN LATERAL (
+        SELECT parameters
+          FROM pricing_rule
+         WHERE action_type = 'membership:' || m.tier
+           AND effective_from <= now()
+           AND (effective_to IS NULL OR effective_to > now())
+         ORDER BY effective_from DESC
+         LIMIT 1
+      ) pr ON TRUE
+     WHERE m.status IN ('active', 'cancelling')
+       AND now() >= m.current_period_start
+       AND now() <  m.current_period_end
+  ),
+  member_covered AS (
+    SELECT r.id
+      FROM (
+        SELECT i.id,
+               row_number() OVER (
+                 PARTITION BY i.owner_id ORDER BY i.received_at ASC, i.id ASC
+               ) AS rn,
+               c.stored_items
+          FROM item i
+          JOIN member_cap c ON c.user_id = i.owner_id
+         WHERE i.lifecycle_state = 'stored'
+           AND i.received_at IS NOT NULL
+      ) r
+     WHERE r.rn <= r.stored_items
+  )`;
+
 export async function runStorageFees(pool: Pool): Promise<void> {
+  await renewMemberships(pool);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [SWEEP_LOCK]);
 
     /**
      * Both rule variants, with their parameters. An item picks its row by its
@@ -78,8 +156,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
     const standard = byAction.get('storage');
     if (!standard) {
       await client.query('ROLLBACK');
-      // eslint-disable-next-line no-console
-      console.warn('[job:storage-fee] no storage pricing rule in force — nothing billed');
+      log.warn('no storage pricing rule in force — nothing billed', { job: 'storage-fee.run' });
       return;
     }
     // An oversized rule is optional: without one, oversized items simply fall
@@ -112,6 +189,14 @@ export async function runStorageFees(pool: Pool): Promise<void> {
       },
     };
 
+    // Stamp tonight's cover before billing anything else.
+    const covered = await client.query(
+      `WITH ${COVERED}
+       INSERT INTO storage_cover (item_id, covered_until)
+       SELECT id, now() FROM member_covered
+       ON CONFLICT (item_id) DO UPDATE SET covered_until = EXCLUDED.covered_until`,
+    );
+
     /**
      * One row per (item, period) that is due and not yet billed.
      *
@@ -121,7 +206,8 @@ export async function runStorageFees(pool: Pool): Promise<void> {
      * billed something rather than being stored free forever by accident.
      *
      * `periods_billed` counts the storage charges already raised against the
-     * item. That count IS the idempotence guard.
+     * item since its clock last started — its included window, or the end of
+     * its last membership cover. That count IS the idempotence guard.
      */
     const due = await client.query<{
       item_id: string;
@@ -134,52 +220,13 @@ export async function runStorageFees(pool: Pool): Promise<void> {
          SELECT $1::int  AS std_free,  $2::int AS std_period,  $3::int AS std_bps,  $4::bigint AS std_flat,
                 $5::int  AS ovr_free,  $6::int AS ovr_period,  $7::int AS ovr_bps,  $8::bigint AS ovr_flat
        ),
-       -- MEMBERSHIP. The included storage allowance, read out of the tier's own
-       -- pricing rule, because this process has no access to the API's modules.
-       -- Only a cycle that is actually paid up and running counts: a lapsed or
-       -- ended membership covers nothing, which is the safe direction.
-       member_cap AS (
-         SELECT m.user_id::text AS user_id,
-                COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
-           FROM membership m
-           JOIN LATERAL (
-             SELECT parameters
-               FROM pricing_rule
-              WHERE action_type = 'membership:' || m.tier
-                AND effective_from <= now()
-                AND (effective_to IS NULL OR effective_to > now())
-              ORDER BY effective_from DESC
-              LIMIT 1
-           ) pr ON TRUE
-          WHERE m.status IN ('active', 'cancelling')
-            AND now() >= m.current_period_start
-            AND now() <  m.current_period_end
-       ),
-       -- Which of a member's items the allowance actually covers: the OLDEST
-       -- first. Oldest rather than newest is the only ordering that is stable —
-       -- with newest-first, booking one card in would move an older card out of
-       -- cover and start billing storage on something that had been free for
-       -- months, which is exactly the surprise a subscription is sold to stop.
-       member_covered AS (
-         SELECT r.id
-           FROM (
-             SELECT i.id,
-                    row_number() OVER (
-                      PARTITION BY i.owner_id ORDER BY i.received_at ASC, i.id ASC
-                    ) AS rn,
-                    c.stored_items
-               FROM item i
-               JOIN member_cap c ON c.user_id = i.owner_id
-              WHERE i.lifecycle_state = 'stored'
-                AND i.received_at IS NOT NULL
-           ) r
-          WHERE r.rn <= r.stored_items
-       ),
+       ${COVERED},
        stored AS (
          SELECT i.id,
                 i.owner_id,
                 i.oversized,
                 i.received_at,
+                sc.covered_until,
                 COALESCE(
                   (SELECT c.amount FROM charge c
                     WHERE c.action_type = 'intake' AND c.reference_id = i.id::text
@@ -189,8 +236,10 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 ) AS intake_minor,
                 (SELECT count(*) FROM charge c
                   WHERE c.action_type IN ('storage', 'storage_oversized')
-                    AND c.reference_id = i.id::text) AS periods_billed
+                    AND c.reference_id = i.id::text
+                    AND c.created_at >= COALESCE(sc.covered_until, '-infinity'::timestamptz)) AS periods_billed
            FROM item i
+           LEFT JOIN storage_cover sc ON sc.item_id = i.id
           WHERE i.lifecycle_state = 'stored'
             AND i.received_at IS NOT NULL
             AND i.id NOT IN (SELECT id FROM member_covered)
@@ -204,22 +253,30 @@ export async function runStorageFees(pool: Pool): Promise<void> {
                 CASE WHEN s.oversized THEN p.ovr_free ELSE p.std_free END   AS free_days,
                 CASE WHEN s.oversized THEN p.ovr_period ELSE p.std_period END AS period_days,
                 CASE WHEN s.oversized THEN p.ovr_bps ELSE p.std_bps END      AS bps,
-                s.received_at
+                s.received_at,
+                s.covered_until
            FROM stored s CROSS JOIN policy p
        ),
-       elapsed AS (
+       -- When this item's chargeable clock started: the end of its included
+       -- window, or the last time a membership covered it, whichever is later.
+       anchored AS (
          SELECT c.*,
-                -- Periods that have STARTED since the included window closed.
-                -- floor(days_past_free / period) + 1, never below zero.
+                GREATEST(c.received_at + make_interval(days => c.free_days), c.covered_until) AS clock_from
+           FROM computed c
+       ),
+       elapsed AS (
+         SELECT a.*,
+                -- Periods that have STARTED since the clock started.
+                -- floor(days_since / period) + 1, never below zero.
                 GREATEST(
                   0,
                   FLOOR(
-                    EXTRACT(EPOCH FROM (now() - (c.received_at + make_interval(days => c.free_days))))
-                    / (c.period_days * 86400.0)
+                    EXTRACT(EPOCH FROM (now() - a.clock_from))
+                    / (a.period_days * 86400.0)
                   )::int + 1
                 ) AS periods_elapsed
-           FROM computed c
-          WHERE now() >= c.received_at + make_interval(days => c.free_days)
+           FROM anchored a
+          WHERE now() >= a.clock_from
        )
        SELECT id AS item_id,
               owner_id,
@@ -302,10 +359,14 @@ export async function runStorageFees(pool: Pool): Promise<void> {
     );
 
     await client.query('COMMIT');
-    // eslint-disable-next-line no-console
-    console.log(
-      `[job:storage-fee] billed ${chargedCount} period(s) across ${itemIds.length} item(s) / ${accountIds.size} account(s), total ${totalAmount}`,
-    );
+    log.info('storage fees billed', {
+      job: 'storage-fee.run',
+      periods: chargedCount,
+      items: itemIds.length,
+      accounts: accountIds.size,
+      total_minor: totalAmount,
+      covered_by_membership: covered.rowCount ?? 0,
+    });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw err;

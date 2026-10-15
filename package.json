@@ -27,6 +27,7 @@
     "test:integration": "vitest run --no-file-parallelism --project integration",
     "test:concurrency": "vitest run --no-file-parallelism --project concurrency",
     "test:property": "vitest run --no-file-parallelism --project property",
+    "test:worker": "vitest run --no-file-parallelism --project worker",
     "test:contract": "vitest run --project contract",
     "test:core": "vitest run --no-file-parallelism --project core",
     "test:core-contract": "vitest run --project core-contract",

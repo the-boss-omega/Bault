@@ -94,7 +94,8 @@ async function main(): Promise<void> {
     support_ticket, support_message,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
-    membership, membership_period
+    membership, membership_period,
+    storage_cover, worker_heartbeat
     RESTART IDENTITY`);
 
   /**

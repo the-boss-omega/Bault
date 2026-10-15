@@ -13,6 +13,7 @@ export const JobName = {
   IMAGE_SYNC: 'image.sync', // T133
   SHIPMENT_EXPIRY: 'shipment.expiry-sweep', // unpaid shipments release their items
   MEMBERSHIP_RENEWAL: 'membership.renewal', // a cycle ends: renew and charge, or end it
+  SESSION_CLEANUP: 'session.cleanup', // sign-in sessions a month past their expiry are deleted
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];
