@@ -50,7 +50,7 @@ function booleanFromEnv(fallback: boolean) {
  * Secrets themselves are NEVER hard-coded: this only reads them from the
  * environment (Constitution Principle IX). `.env.example` documents the shape.
  */
-const EnvSchema = z.object({
+const BaseSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(3000),
 
@@ -58,8 +58,28 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_DATABASE_URL: z.string().url(),
 
+  /**
+   * Pool size and the longest any one statement may run, per API process.
+   *
+   * Neither was set, so every process opened `pg`'s default of ten connections
+   * and a runaway query could hold one forever. Through PgBouncer the pool is
+   * cheap, but a statement that never ends still holds a server connection and
+   * every row lock it took, and a money path waiting on those locks waits too.
+   */
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
   // Sessions (ACC)
-  SESSION_COOKIE_SECRET: z.string().min(16, 'SESSION_COOKIE_SECRET must be at least 16 chars'),
+  /**
+   * Not used, and accepted only so existing env files still parse.
+   *
+   * It was required and documented as what "signs session cookies", and nothing
+   * read it: a session is a random opaque token whose hash is looked up in
+   * `login_session`, so there is nothing to sign. Requiring it bought the belief
+   * that cookies were signed. Rotating it does NOT sign anybody out; revoking
+   * sessions does (`SessionService.revokeAll`).
+   */
+  SESSION_COOKIE_SECRET: z.string().optional().default(''),
   SESSION_COOKIE_NAME: z.string().default('session'),
 
   // Object storage (item images)
@@ -141,8 +161,14 @@ const EnvSchema = z.object({
    */
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
 
-  /** Serve the OpenAPI explorer. Off by default; see the production check below. */
-  EXPOSE_API_DOCS: z.coerce.boolean().default(false),
+  /**
+   * Serve the OpenAPI explorer. Off by default; see the production check below.
+   *
+   * Read with `booleanFromEnv`, not `z.coerce.boolean()`: the coercion turned the
+   * string "false" into true, so writing EXPOSE_API_DOCS=false switched the
+   * explorer ON.
+   */
+  EXPOSE_API_DOCS: booleanFromEnv(false),
   API_DOCS_PASSWORD: z.string().optional().default(''),
 
   /**
@@ -284,8 +310,23 @@ const EnvSchema = z.object({
   // Observability (T022)
   SENTRY_DSN: z.string().optional().default(''),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-}).superRefine((env, ctx) => {
-  const require = (key: keyof typeof env, when: string) => {
+});
+
+type BaseEnv = z.infer<typeof BaseSchema>;
+type AddIssue = (issue: { path: (string | number)[]; message: string; code?: z.ZodIssueCode }) => void;
+
+/**
+ * The rules about combinations of values, and the production refusals.
+ *
+ * Kept apart from the schema so `loadEnv` can run them even when a variable is
+ * missing. As a zod refinement they ran only after every field had parsed, so a
+ * production boot missing one required variable reported that one and said
+ * nothing about `STORAGE_PROVIDER=sandbox` or the open API explorer: the
+ * operator fixed the one thing named, booted again, and met the next.
+ */
+function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
+  const ctx = { addIssue };
+  const require = (key: keyof BaseEnv, when: string) => {
     if (String(env[key] ?? '').trim() === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -409,8 +450,60 @@ const EnvSchema = z.object({
         message: 'API_DOCS_PASSWORD is required when EXPOSE_API_DOCS=true in production',
       });
     }
+
+    /**
+     * The development default for the proxy.
+     *
+     * `loopback` trusts only a proxy on this machine. In the production layout
+     * nginx is another container, so every request appears to come from it: the
+     * rate limiter sees one client for the whole internet and the sign-in log
+     * records one address for everybody.
+     */
+    if (env.TRUST_PROXY === 'loopback') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TRUST_PROXY'],
+        message:
+          'TRUST_PROXY=loopback is the development default. Name the proxy in front of the API ' +
+          '(for example `uniquelocal` or its subnet in CIDR form).',
+      });
+    }
+
+    /**
+     * Links in email that are not HTTPS.
+     *
+     * Verification and password-reset links are built from this. Over plain
+     * HTTP the reset token in the link travels in the clear, and the session
+     * cookie set on arrival is refused by the browser because it is Secure.
+     */
+    if (env.APP_BASE_URL !== undefined && !env.APP_BASE_URL.startsWith('https://')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['APP_BASE_URL'],
+        message: 'APP_BASE_URL must be the public https:// origin of the app in production',
+      });
+    }
   }
-});
+}
+
+const EnvSchema = BaseSchema.superRefine((env, ctx) =>
+  checkCombinations(env, (issue) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message }),
+  ),
+);
+
+/**
+ * Every field that DOES parse, each on its own, defaults applied. What the
+ * combination checks run against when the schema as a whole failed.
+ */
+function parseWhatParses(source: NodeJS.ProcessEnv): Partial<BaseEnv> {
+  const out: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(BaseSchema.shape)) {
+    const r = (field as z.ZodTypeAny).safeParse(source[key]);
+    if (r.success) out[key] = r.data;
+  }
+  return out as Partial<BaseEnv>;
+}
 
 export type Env = z.infer<typeof EnvSchema>;
 
@@ -427,9 +520,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   loadDotenvFromRoot();
   const result = EnvSchema.safeParse(source);
   if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
-      .join('\n');
+    const lines = result.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`);
+    // The combination and production rules too, against whatever did parse, so
+    // one boot names every problem rather than the first few.
+    checkCombinations(parseWhatParses(source), (i) => lines.push(`  - ${i.path.join('.')}: ${i.message}`));
+    const issues = [...new Set(lines)].join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
 

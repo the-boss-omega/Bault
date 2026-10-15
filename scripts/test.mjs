@@ -40,6 +40,7 @@ const isWindows = process.platform === 'win32';
 /** The suites, in the order the project runs them. */
 const SUITES = [
   ['--project', 'web'],
+  ['--project', 'config'],
   ['--project', 'ux'],
   ['--project', 'contract'],
   ['--project', 'core-contract'],

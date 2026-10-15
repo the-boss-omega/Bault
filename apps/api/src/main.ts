@@ -168,7 +168,10 @@ async function bootstrap(): Promise<void> {
    * with `===` leaks its length and prefix to anyone patient enough to measure.
    */
   if (env.API_DOCS_PASSWORD) {
-    app.use('/docs', (req: IncomingMessage & { headers: Record<string, string | undefined> }, res: ServerResponse, next: () => void) => {
+    // All three paths. Swagger also serves the raw document at /docs-json and
+    // /docs-yaml, which a '/docs' mount does not cover: the explorer asked for a
+    // password while the full route map it renders was one URL away without one.
+    app.use(['/docs', '/docs-json', '/docs-yaml'], (req: IncomingMessage & { headers: Record<string, string | undefined> }, res: ServerResponse, next: () => void) => {
       const header = req.headers.authorization ?? '';
       const supplied = header.startsWith('Basic ')
         ? Buffer.from(header.slice(6), 'base64').toString('utf8').split(':').slice(1).join(':')

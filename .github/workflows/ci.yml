@@ -119,6 +119,9 @@ jobs:
       - name: Web unit tests
         run: pnpm test:web
 
+      - name: Environment schema tests
+        run: pnpm test:config
+
       - name: Component & UX tests
         run: pnpm exec vitest run --project ux
 

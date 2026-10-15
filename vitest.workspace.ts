@@ -111,6 +111,11 @@ export default defineWorkspace([
   },
   { test: { name: 'web', environment: 'node', include: ['tests/web/**/*.test.ts'] } },
   /**
+   * The environment schema, alone: what each value parses to and which
+   * configurations production refuses. Needs nothing running.
+   */
+  { test: { name: 'config', environment: 'node', include: ['tests/config/**/*.test.ts'] } },
+  /**
    * The one suite that RENDERS.
    *
    * The `web` project above covers the SPA's pure units — the message
