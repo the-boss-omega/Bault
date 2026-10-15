@@ -69,14 +69,17 @@ export class AuthController {
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    const { username, firstName, lastName } = await this.auth.register(
+    const { username, firstName, lastName, termsVersion, termsAcceptedAt } = await this.auth.register(
       dto.email,
       dto.username,
       dto.password,
       dto.firstName,
       dto.lastName,
+      dto.acceptedTermsVersion,
     );
-    return { status: 'pending_verification', username, firstName, lastName };
+    // The acceptance is returned as STORED, so the page can show the person
+    // exactly what was recorded against their account.
+    return { status: 'pending_verification', username, firstName, lastName, termsVersion, termsAcceptedAt };
   }
 
   @Public()

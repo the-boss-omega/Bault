@@ -24,6 +24,8 @@ async function register(client: Client, overrides: Record<string, unknown> = {})
     firstName: 'Ada',
     lastName: 'Lovelace',
     password: 'password123',
+    // A valid registration accepts the terms in force (E21, acc-consent.test.ts).
+    acceptedTermsVersion: '2026-10-draft-1',
     ...overrides,
   });
 }

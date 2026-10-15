@@ -9,6 +9,7 @@ import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../sha
 import { VerificationService } from './verification.service';
 import { SessionService, clampUserAgent, type ClientOrigin } from './session.service';
 import type { AuthUser } from '../sec/auth-context';
+import { CURRENT_TERMS_VERSION } from './terms';
 
 /**
  * Registration + login (T029, Principle IX/X).
@@ -36,7 +37,36 @@ export class AuthService {
     password: string,
     firstName: string,
     lastName: string,
-  ): Promise<{ userId: string; username: string; firstName: string; lastName: string }> {
+    acceptedTermsVersion: string,
+  ): Promise<{
+    userId: string;
+    username: string;
+    firstName: string;
+    lastName: string;
+    termsVersion: string;
+    termsAcceptedAt: Date;
+  }> {
+    /**
+     * Consent first, before anything is looked up or hashed.
+     *
+     * An account used to be created without anybody being asked to agree to the
+     * fees, the interest on a negative balance or the suspension rule — there
+     * was nothing to agree to. Now there is, and agreeing to an OLDER text is
+     * not agreeing to this one: a sign-up page left open across a change of
+     * terms sends the version it showed, and recording that as consent to the
+     * current version would be recording something that did not happen. The
+     * page is told which version is in force so it can show it and ask again.
+     */
+    const version = acceptedTermsVersion?.trim() ?? '';
+    if (version !== CURRENT_TERMS_VERSION) {
+      throw AppError.validation(
+        version
+          ? 'The terms have changed since this page was loaded. Reload it, read the current terms and accept them to create an account.'
+          : 'Accept the Terms of Service, Privacy Policy and Cookie notice to create an account.',
+        { currentVersion: CURRENT_TERMS_VERSION },
+      );
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
     // Normalized ONCE, here, so the unique index below is an index over exactly
     // the values a person can type: "Red", " red " and "RED" are one account.
@@ -68,7 +98,7 @@ export class AuthService {
     // This is the ONLY write of `username` anywhere in the platform (Req 4.1).
     // The pre-check above is a friendly error; the unique index is the guarantee,
     // so a concurrent duplicate still fails rather than slipping through.
-    let created: { id: string } | undefined;
+    let created: { id: string; termsVersion: string | null; termsAcceptedAt: Date | null } | undefined;
     try {
       [created] = await this.db
         .insert(userAccount)
@@ -80,16 +110,33 @@ export class AuthService {
           lastName: last,
           status: 'pending',
           role: 'user',
+          // Written in the same INSERT as the account, so there is no instant at
+          // which an account exists without the record of what it agreed to.
+          termsVersion: CURRENT_TERMS_VERSION,
+          termsAcceptedAt: new Date(),
         })
-        .returning({ id: userAccount.id });
+        .returning({
+          id: userAccount.id,
+          termsVersion: userAccount.termsVersion,
+          termsAcceptedAt: userAccount.termsAcceptedAt,
+        });
     } catch (e) {
       if (isUniqueViolation(e)) throw AppError.validation('Email or username is already taken');
       throw e;
     }
-    if (!created) throw AppError.validation('Failed to create account');
+    if (!created?.termsVersion || !created.termsAcceptedAt) {
+      throw AppError.validation('Failed to create account');
+    }
 
     await this.verification.issueEmailVerification(created.id, normalizedEmail);
-    return { userId: created.id, username: normalizedUsername, firstName: first, lastName: last };
+    return {
+      userId: created.id,
+      username: normalizedUsername,
+      firstName: first,
+      lastName: last,
+      termsVersion: created.termsVersion,
+      termsAcceptedAt: created.termsAcceptedAt,
+    };
   }
 
   /**

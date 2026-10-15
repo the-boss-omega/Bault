@@ -237,6 +237,8 @@ describe('registration and identity', () => {
         firstName: 'Test',
         lastName: 'Person',
         username: `u${Date.now()}`,
+        // Consent given, so the refusal below is for the reason under test (E21).
+        acceptedTermsVersion: '2026-10-draft-1',
       });
       expect(res.status, `${email} was accepted`).toBeGreaterThanOrEqual(400);
       expect(res.status).toBeLessThan(500);
@@ -251,6 +253,8 @@ describe('registration and identity', () => {
       firstName: 'Test',
       lastName: 'Person',
       username: 'red', // already seeded
+      // Consent given, so the refusal below is for the reason under test (E21).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);
@@ -264,6 +268,8 @@ describe('registration and identity', () => {
       firstName: 'Test',
       lastName: 'Person',
       username: `weak${Date.now()}`,
+      // Consent given, so the refusal below is for the reason under test (E21).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);

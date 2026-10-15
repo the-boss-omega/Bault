@@ -17,6 +17,8 @@ describe('ACC account lifecycle', () => {
       firstName: 'Lifecycle',
       lastName: 'Fixture',
       password: 'password123',
+      // A valid registration accepts the terms in force (E21, acc-consent.test.ts).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_verification');
@@ -34,6 +36,8 @@ describe('ACC account lifecycle', () => {
       firstName: 'No',
       lastName: 'Username',
       password: 'password123',
+      // Consent given, so the refusal below is for the reason under test (E21).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(400);
   });
@@ -44,6 +48,8 @@ describe('ACC account lifecycle', () => {
       email: fixtureEmail('no-name'),
       username: `n${Date.now()}`,
       password: 'password123',
+      // Consent given, so the refusal below is for the reason under test (E21).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(400);
   });
@@ -56,6 +62,8 @@ describe('ACC account lifecycle', () => {
       firstName: 'Duplicate',
       lastName: 'Username',
       password: 'password123',
+      // Consent given, so the refusal below is for the reason under test (E21).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(400);
   });
