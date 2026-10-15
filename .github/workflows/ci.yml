@@ -212,15 +212,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Known vulnerabilities in what ships (`--prod`: dev tooling does not reach a
-  # customer). Non-blocking FOR NOW, and only because the dependency updates
-  # are their own step (DIVE2 chapter 29, step 17): today this reports 7 high
-  # and 1 critical, and a check that is red on every commit teaches everyone to
-  # ignore it. Delete `continue-on-error` in the same PR that makes it pass, so
-  # from then on a new high advisory blocks the merge.
+  # customer). Blocking: the dependency updates (DIVE2 chapter 29, step 17)
+  # took it from 7 high and 1 critical to none, so from here a new high
+  # advisory stops the merge.
   # ---------------------------------------------------------------------------
   audit:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
