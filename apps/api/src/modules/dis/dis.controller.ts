@@ -19,6 +19,7 @@ import { Type } from 'class-transformer';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { ServiceRequestService } from './service.service';
 import { PhotographyService } from './photography.service';
 import { GradingService } from './grading.service';
@@ -63,7 +64,7 @@ class ShipSubmissionDto {
 }
 
 class VideoFulfillmentDto {
-  @IsString() @IsNotEmpty() objectKey!: string;
+  @IsString() @IsNotEmpty() @IsObjectKey() objectKey!: string;
   @IsInt() @IsPositive() durationSeconds!: number;
   @IsBoolean() @Equals(true) itemVerified!: boolean;
   @IsString() @IsNotEmpty() notes!: string;
@@ -127,7 +128,7 @@ class BuyoutQuoteDto {
  */
 
 class PhotographyFulfillmentDto {
-  @IsString() @IsNotEmpty() objectKey!: string;
+  @IsString() @IsNotEmpty() @IsObjectKey() objectKey!: string;
   @IsInt() @IsPositive() shotCount!: number;
   @IsString() @IsNotEmpty() lighting!: string;
   @IsBoolean() @Equals(true) itemVerified!: boolean;

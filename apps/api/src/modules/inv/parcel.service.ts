@@ -479,8 +479,12 @@ export class ParcelService {
    * Record photographs against a parcel.
    *
    * Silently ignores an empty list so every caller can pass the field through
-   * without checking it. The keys have already been through `MediaService`,
-   * which is what decides whether a thing is an image at all.
+   * without checking it.
+   *
+   * This comment used to say the keys "have already been through MediaService".
+   * Nothing made that true: any string was stored and later signed, including a
+   * key minted for an item, a key nobody uploaded, or one with a `..` segment
+   * (F453). `assertAttachable` now makes it true, in this transaction.
    */
   private async attachPhotos(
     tx: Database,
@@ -491,6 +495,7 @@ export class ParcelService {
   ): Promise<void> {
     const clean = (keys ?? []).map((k) => k.trim()).filter(Boolean);
     if (clean.length === 0) return;
+    await this.media.assertAttachable(tx, clean, { purpose: 'parcel', actorId: uploadedBy });
     await tx.insert(parcelPhoto).values(
       clean.map((objectKey) => ({ parcelId, kind, objectKey, uploadedBy })),
     );

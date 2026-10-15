@@ -1,37 +1,44 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsString, MinLength } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
+import { Roles } from '../sec/roles.decorator';
 import type { AuthUser } from '../sec/auth-context';
-import { MAX_IMAGE_BYTES, MediaService, type UploadPurpose } from './media.service';
+import { MediaService, type UploadPurpose } from './media.service';
 
 /**
- * Base64 expands by 4/3, so the string cap is the byte cap plus room for the
- * padding and a data-URL prefix. Applied here as well as on the decoded bytes so
- * an oversized payload is refused before it is decoded into memory.
+ * No `@MaxLength` on the payload any more (N17). It refused an oversized photo
+ * as "data base64 must be shorter than or equal to 13981142 characters" before
+ * the media service could say "the largest a photo can be is 10 MB". The service
+ * now measures the base64 BEFORE decoding it, so the early refusal survives and
+ * reads in megabytes; the 16 MB body cap in `main.ts` bounds the memory.
  */
-const MAX_BASE64_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 128;
-
 class UploadDto {
   @IsString() @MinLength(1) contentType!: string;
-  @IsString() @MinLength(1) @MaxLength(MAX_BASE64_LENGTH) dataBase64!: string;
+  @IsString() @MinLength(1) dataBase64!: string;
   @IsIn(['item_intake', 'parcel']) purpose!: UploadPurpose;
 }
 
 /**
  * Uploading an image — the step that did not exist.
  *
- * Any signed-in caller may put bytes in storage; a key on its own grants nothing,
- * and every route that ATTACHES a key checks who is allowed to attach it (intake
- * and the parcel bench are both staff-only). Splitting it this way keeps the
- * booking routes small and lets a bench upload three photographs while the
- * operator is still typing the description.
+ * Splitting upload from attach keeps the booking routes small and lets a bench
+ * upload three photographs while the operator is still typing the description.
+ *
+ * STAFF ONLY (E9). This was open to any signed-in account on the reasoning that
+ * "a key on its own grants nothing" — which left every collector able to put
+ * ten megabytes of anything in the private bucket, as often as they liked, at
+ * Bault's expense. Every caller in the SPA is on the warehouse console
+ * (receiving, the parcel queue, the intake bench, shelving a store order); no
+ * customer screen uploads. When one needs to, it gets its own purpose and its
+ * own rule, rather than this route opening up again.
  */
 @ApiTags('MED')
 @Controller('media')
 export class MedController {
   constructor(private readonly media: MediaService) {}
 
+  @Roles('warehouse_operator', 'admin')
   @Post('uploads')
   upload(@CurrentUser() user: AuthUser, @Body() dto: UploadDto) {
     return this.media.upload({

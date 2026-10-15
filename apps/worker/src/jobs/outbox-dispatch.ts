@@ -5,6 +5,7 @@ import { log } from '../log';
 import { reportJobFailure } from '../observability';
 import { notificationMessage } from './notification-message';
 import { defaultEmailEnabled, eventSubject } from './notification-events';
+import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
 
 /**
  * Outbox dispatch (T128, Principle XI).
@@ -216,7 +217,14 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
       }
       tried.push(claimed.id);
 
-      const counts = await deliver(client, env, claimed);
+      // A reset link is account mail, not a notification: no in-app row, no
+      // preferences, and it goes to an address that may not have confirmed
+      // itself. The token is minted and mailed on its own connection; this
+      // transaction only marks the message dispatched.
+      const counts =
+        claimed.event_type === PASSWORD_RESET_REQUESTED
+          ? await sendPasswordReset(pool, claimed.payload, emailAdapter()).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
+          : await deliver(client, env, claimed);
       await client.query(
         `UPDATE outbox_message
             SET dispatched_at = now(), attempts = attempts + 1, last_attempt_at = now()

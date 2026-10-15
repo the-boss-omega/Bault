@@ -17,6 +17,7 @@ import { Public } from '../acc/public.decorator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { HouseStoreService } from './house-store.service';
 
 class CreateHouseListingDto {
@@ -38,7 +39,7 @@ class UpdateHouseListingDto {
 class StowHouseOrderDto {
   @IsOptional() @IsString() binId?: string;
   @IsOptional() @IsBoolean() autoStow?: boolean;
-  @IsOptional() @IsArray() @ArrayMaxSize(6) @IsString({ each: true }) photoKeys?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(6) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
 /** The Bault store — see HouseStoreService. */

@@ -68,14 +68,14 @@ export class SupController {
   @AllowSuspended()
   @Get('tickets/:id')
   thread(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.support.thread(id, { id: user.id, role: user.role });
+    return this.support.thread(id, { id: user.id, role: user.role, status: user.status });
   }
 
   /** Reply. The status flips automatically depending on who spoke. */
   @AllowSuspended()
   @Post('tickets/:id/messages')
   reply(@Param('id') id: string, @Body() dto: ReplyDto, @CurrentUser() user: AuthUser) {
-    return this.support.reply(id, { id: user.id, role: user.role }, dto.body);
+    return this.support.reply(id, { id: user.id, role: user.role, status: user.status }, dto.body);
   }
 
   /* ---------------- staff ---------------- */
@@ -95,12 +95,12 @@ export class SupController {
   @Roles('warehouse_operator', 'admin')
   @Post('tickets/:id/assign')
   assign(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.support.assign(id, { id: user.id, role: user.role });
+    return this.support.assign(id, { id: user.id, role: user.role, status: user.status });
   }
 
   @Roles('warehouse_operator', 'admin')
   @Post('tickets/:id/resolve')
   resolve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.support.resolve(id, { id: user.id, role: user.role });
+    return this.support.resolve(id, { id: user.id, role: user.role, status: user.status });
   }
 }

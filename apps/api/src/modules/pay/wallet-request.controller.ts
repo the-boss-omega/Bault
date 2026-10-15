@@ -4,6 +4,7 @@ import { IsIn, IsInt, IsOptional, IsPositive, IsString, MaxLength, MinLength } f
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { WalletRequestService } from './wallet-request.service';
 import {
   FUNDING_SOURCES,
@@ -29,7 +30,7 @@ class SubmitWalletRequestDto {
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
   /** Object key of an already-uploaded document — never the document itself. */
-  @IsOptional() @IsString() @MaxLength(400) documentKey?: string;
+  @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
   @IsOptional() @IsString() @MaxLength(MAX_NOTE_LENGTH) notes?: string;
 }
 

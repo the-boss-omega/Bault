@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     notification, notification_preference, dispute,
     storage_fee_run, shipping_address,
     facility, parcel, parcel_event, arrival_disposal,
-    support_ticket, support_message,
+    support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
     membership, membership_period,

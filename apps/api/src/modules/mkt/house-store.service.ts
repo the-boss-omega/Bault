@@ -13,6 +13,7 @@ import { bin, item, itemImage } from '../cst/cst.schema';
 import { userAccount } from '../acc/acc.schema';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
+import { MediaService } from '../med/media.service';
 import { isKnownItemClass, itemClass } from '../inv/item-classes';
 import { makeItemBarcode, makeItemSerial } from '../inv/labels';
 import { transaction } from './mkt.schema';
@@ -72,6 +73,7 @@ export class HouseStoreService {
     private readonly ledger: LedgerService,
     private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
+    private readonly media: MediaService,
   ) {}
 
   /* ------------------------------------------------------------------
@@ -327,6 +329,9 @@ export class HouseStoreService {
 
       const photoKeys = (input.photoKeys ?? []).map((k) => k.trim()).filter(Boolean);
       if (photoKeys.length > 0) {
+        // Bench photographs of this copy, so the same rule as intake: a key this
+        // API minted for an item, uploaded by this operator or moments ago.
+        await this.media.assertAttachable(tx, photoKeys, { purpose: 'item_intake', actorId: operatorId });
         await tx.insert(itemImage).values(
           photoKeys.map((objectKey, index) => ({ itemId: it.id, type: 'intake' as const, version: index + 1, objectKey })),
         );

@@ -5,9 +5,15 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { hashToken } from '../../shared/tokens';
+import { OutboxService } from '../not/outbox/outbox.service';
 import { userAccount, verificationToken } from './acc.schema';
-import { VerificationService } from './verification.service';
 import { SessionService } from './session.service';
+
+/**
+ * The outbox event a reset request becomes. The worker's
+ * `password-reset-mail.ts` handles it and is matched to this string by value.
+ */
+export const PASSWORD_RESET_REQUESTED = 'password_reset_requested';
 
 /**
  * Password change & reset (T032).
@@ -28,7 +34,7 @@ import { SessionService } from './session.service';
 export class PasswordService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
-    private readonly verification: VerificationService,
+    private readonly outbox: OutboxService,
     private readonly sessions: SessionService,
   ) {}
 
@@ -61,8 +67,33 @@ export class PasswordService {
     return { otherSessionsEnded };
   }
 
+  /**
+   * Ask for a reset link — and do exactly the same thing for any address (N11).
+   *
+   * The mail used to be sent here, inside the request, and only when the address
+   * had an account. So a mail server that was down answered 500 for registered
+   * addresses and 202 for everyone else, and on a good day the time taken — a
+   * lookup, a token row and an SMTP conversation, or just the lookup — told the
+   * same story. Both were ways to ask "does this person have an account?".
+   *
+   * Now the request records that a reset was asked for, by address, and nothing
+   * else: no lookup, no token, no mail. The worker resolves the address, mints
+   * the token and sends the link after the caller has had their answer, and an
+   * address with no account is simply dropped there. The raw token never sits
+   * in the outbox — it is minted where it is mailed, and only its hash is stored,
+   * as for every other token.
+   *
+   * Not inside a transaction with a state change, because there is none: the
+   * outbox row IS the whole effect of this request.
+   */
   async requestReset(email: string): Promise<void> {
-    await this.verification.issuePasswordReset(email.trim().toLowerCase());
+    const address = email.trim().toLowerCase();
+    await this.outbox.emit(this.db, {
+      aggregateType: 'password_reset',
+      aggregateId: address,
+      eventType: PASSWORD_RESET_REQUESTED,
+      payload: { email: address },
+    });
   }
 
   async reset(rawToken: string, newPassword: string): Promise<void> {

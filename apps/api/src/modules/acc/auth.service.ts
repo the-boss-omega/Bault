@@ -1,14 +1,17 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
-import { eq, or } from 'drizzle-orm';
+import { eq, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { ErrorCode } from '../../shared/errors/error-codes';
+import { pgErrorCode } from '../../shared/errors/pg-error';
+import { OneAtATime } from '../../shared/one-at-a-time';
 import { loginAttempt, userAccount } from './acc.schema';
 import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../shared/names';
 import { VerificationService } from './verification.service';
 import { SessionService, clampUserAgent, type ClientOrigin } from './session.service';
-import { pgErrorCode } from '../../shared/errors/pg-error';
 import type { AuthUser } from '../sec/auth-context';
 
 /**
@@ -23,8 +26,34 @@ import type { AuthUser } from '../sec/auth-context';
  * identifier now, so a second routing code would be a second thing to keep
  * unique, print, and explain. Existing accounts keep the one they were given.
  */
+/**
+ * The per-identifier lockout: this many failures inside `LOCKOUT_WINDOW_MIN`
+ * shut that identifier out for `LOCKOUT_MIN`, whatever password comes next.
+ *
+ * The per-IP rate limit was the only brake, and it brakes a person, not an
+ * attacker: anybody with a second address could go on guessing at one account
+ * indefinitely. Ten is far past a forgotten password and a mistyped one.
+ */
+const LOCKOUT_FAILURES = 10;
+const LOCKOUT_WINDOW_MIN = 15;
+const LOCKOUT_MIN = 15;
+
 @Injectable()
 export class AuthService {
+  /**
+   * What an identifier that matches nobody is verified against (E13).
+   *
+   * Minted once per process by the same `argon2.hash` call registration uses,
+   * so it carries the same cost parameters as every real hash and can never
+   * drift from them — a hand-pasted constant would silently go stale the day
+   * somebody raised the cost. The password it hashes is random and thrown
+   * away, so nothing can match it.
+   */
+  private readonly dummyHash = argon2.hash(randomBytes(32).toString('hex'));
+
+  /** Sign-ins for one identifier run one at a time; see `login`. */
+  private readonly perIdentifier = new OneAtATime();
+
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly verification: VerificationService,
@@ -107,15 +136,68 @@ export class AuthService {
     // resolves to the row that was stored (Requirement: usernames normalized
     // consistently).
     const normalized = normalizeUsername(identifier);
+
+    /**
+     * One attempt at a time per identifier.
+     *
+     * The lockout below reads "how many failures so far" and then verifies. Run
+     * side by side, twenty guesses fired at once all read nine-or-fewer before
+     * any of them had written its failure, and all twenty were checked — the
+     * limit held only for an attacker polite enough to wait for each answer.
+     */
+    return this.perIdentifier.run(normalized, () => this.attempt(normalized, password, origin));
+  }
+
+  private async attempt(
+    normalized: string,
+    password: string,
+    origin: ClientOrigin,
+  ): Promise<{ user: AuthUser; rawToken: string; expiresAt: Date }> {
+    /**
+     * Ten failures in fifteen minutes shut the identifier out for fifteen.
+     *
+     * Asked BEFORE the password is looked at, so the right password is refused
+     * too while the lock stands — otherwise the lock would be a signal ("the
+     * attempt that worked") rather than a stop.
+     *
+     * Keyed on what was TYPED, not on the account it resolves to. An identifier
+     * nobody owns therefore locks exactly like a real one, with the same words,
+     * and the lockout cannot be used to ask whether an account exists. The cost
+     * is that an account's email and username are counted separately.
+     *
+     * Refusals during the lock are not recorded: they are not guesses that were
+     * checked, and an attacker hammering a locked identifier should not be able
+     * to fill the log or extend anyone's lock.
+     */
+    const secondsLeft = await this.lockedFor(normalized);
+    if (secondsLeft > 0) {
+      const minutes = Math.max(1, Math.ceil(secondsLeft / 60));
+      throw new AppError(
+        ErrorCode.RATE_LIMITED,
+        `Too many failed sign-ins for this email or username. Try again in ${minutes} minutes, or reset your password.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+        { retryAfterSeconds: secondsLeft },
+      );
+    }
+
     const [u] = await this.db
       .select()
       .from(userAccount)
       .where(or(eq(userAccount.email, normalized), eq(userAccount.username, normalized)))
       .limit(1);
 
-    // Same error whether the account is unknown or the password is wrong (no user enumeration).
-    // Recorded either way — the log says which, the response does not.
-    if (!u || !(await argon2.verify(u.passwordHash, password))) {
+    /**
+     * Same error whether the account is unknown or the password is wrong — and
+     * now the same TIME (E13).
+     *
+     * The message was always identical; the work was not. An unknown identifier
+     * skipped `argon2.verify` and came back in a few milliseconds, a known one
+     * in a couple of hundred, so a stopwatch enumerated every account. Both now
+     * pay for exactly one verification. Recorded either way — the log says
+     * which, the response does not.
+     */
+    const verified = await argon2.verify(u?.passwordHash ?? (await this.dummyHash), password);
+    if (!u || !verified) {
       await this.recordAttempt(normalized, u?.id ?? null, 'bad_credentials', origin);
       throw AppError.unauthenticated('Invalid credentials');
     }
@@ -165,6 +247,34 @@ export class AuthService {
   }
 
   /**
+   * Seconds until this identifier may try again, or 0.
+   *
+   * Locked when its last `LOCKOUT_FAILURES` failures all fall within
+   * `LOCKOUT_WINDOW_MIN` of each other and the newest of them is under
+   * `LOCKOUT_MIN` old. Because refusals during a lock write nothing, that newest
+   * failure is the one that tripped it, so the lock lasts exactly `LOCKOUT_MIN`
+   * from there. Decided by the database's clock — the one that stamped the
+   * attempts — so a skewed API host cannot shorten it.
+   */
+  private async lockedFor(normalized: string): Promise<number> {
+    const identifier = normalized.slice(0, 254); // as `recordAttempt` stores it
+    const result = await this.db.execute<{ seconds_left: number }>(sql`
+      SELECT ceil(extract(epoch FROM (max(occurred_at) + make_interval(mins => ${LOCKOUT_MIN}) - now())))::int AS seconds_left
+        FROM (
+          SELECT occurred_at FROM login_attempt
+           WHERE identifier = ${identifier}
+             AND outcome = 'bad_credentials'
+             AND occurred_at > now() - make_interval(mins => ${LOCKOUT_WINDOW_MIN + LOCKOUT_MIN})
+           ORDER BY occurred_at DESC
+           LIMIT ${LOCKOUT_FAILURES}
+        ) recent
+      HAVING count(*) >= ${LOCKOUT_FAILURES}
+         AND max(occurred_at) - min(occurred_at) <= make_interval(mins => ${LOCKOUT_WINDOW_MIN})
+         AND max(occurred_at) > now() - make_interval(mins => ${LOCKOUT_MIN})`);
+    return Math.max(0, Number(result.rows[0]?.seconds_left ?? 0));
+  }
+
+  /**
    * One row per sign-in attempt, in `login_attempt`.
    *
    * Never allowed to break sign-in: if the log cannot be written the person
@@ -193,7 +303,11 @@ export class AuthService {
   }
 }
 
-/** Postgres reports a violated UNIQUE index as SQLSTATE 23505. */
+/**
+ * Postgres reports a violated UNIQUE index as SQLSTATE 23505. Read through
+ * `pgErrorCode`, because a newer drizzle wraps the driver's error and keeps the
+ * code on its `cause`.
+ */
 function isUniqueViolation(e: unknown): boolean {
   return pgErrorCode(e) === '23505';
 }

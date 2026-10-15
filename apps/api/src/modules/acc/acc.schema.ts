@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
@@ -141,5 +142,13 @@ export const loginAttempt = pgTable(
   (t) => ({
     byTime: index('login_attempt_time_idx').on(t.occurredAt),
     byUser: index('login_attempt_user_idx').on(t.userId, t.occurredAt),
+    /**
+     * The sign-in lockout's question — the last ten failures for THIS typed
+     * identifier — asked on every attempt (migration 0034). Partial, because
+     * only failures are ever counted.
+     */
+    failuresByIdentifier: index('login_attempt_failure_idx')
+      .on(t.identifier, t.occurredAt)
+      .where(sql`${t.outcome} = 'bad_credentials'`),
   }),
 );
