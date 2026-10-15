@@ -5,6 +5,7 @@ import { ContentService } from './content.service';
 // Aliased: the controller method is named for the route, and an unaliased
 // import of the same name would make the method call itself.
 import { intakePolicy as buildIntakePolicy } from '../inv/intake-policy';
+import { accountTerms as buildAccountTerms } from './account-terms';
 
 /**
  * Published content — the show calendar, how to reach a person, where we are.
@@ -60,5 +61,20 @@ export class ContentController {
   @Get('locations')
   locations() {
     return this.content.locations();
+  }
+
+  /**
+   * The figures the Terms of Service, the balance policy and the FAQ refer to
+   * — the debt policy, the fixed fees, the terms version in force.
+   *
+   * PUBLIC for the same reason the intake policy is: the terms are accepted at
+   * sign-up, so they have to be readable, with their numbers, before there is
+   * an account. Read from the configuration and constants the charging code
+   * uses, so the document cannot quote a figure the sweep does not apply.
+   */
+  @Public()
+  @Get('account-terms')
+  accountTerms() {
+    return buildAccountTerms();
   }
 }

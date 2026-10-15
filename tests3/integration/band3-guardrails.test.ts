@@ -294,6 +294,8 @@ describe('an unconfirmed account is told so in a way the client can act on', () 
       firstName: 'Band',
       lastName: 'Three',
       password: 'correct horse battery',
+      // A valid registration accepts the terms in force (E21).
+      acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(created.status).toBe(201);
 

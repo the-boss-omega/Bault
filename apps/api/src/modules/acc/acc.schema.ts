@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 /**
@@ -65,12 +65,28 @@ export const userAccount = pgTable(
      * it suspended itself.
      */
     autoSuspendedAt: timestamp('auto_suspended_at', { withTimezone: true }),
+    /**
+     * Which version of the Terms of Service, Privacy Policy and Cookie notice
+     * this person accepted at registration, and when (migration 0033).
+     *
+     * Written once, by `AuthService.register`, from the version the sign-up
+     * page showed — and only if that is the version in force. NULL on every
+     * account created before there was anything to accept: back-filling one
+     * would invent a consent nobody gave. `user_account_terms_acceptance_complete`
+     * keeps the pair together, so a version never exists without its moment.
+     */
+    termsVersion: text('terms_version'),
+    termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => ({
     emailUnique: uniqueIndex('user_account_email_unique').on(t.email),
     usernameUnique: uniqueIndex('user_account_username_unique').on(t.username),
     intakeIdUnique: uniqueIndex('user_account_intake_id_unique').on(t.intakeId),
+    termsAcceptanceComplete: check(
+      'user_account_terms_acceptance_complete',
+      sql`(${t.termsVersion} IS NULL) = (${t.termsAcceptedAt} IS NULL)`,
+    ),
   }),
 );
 

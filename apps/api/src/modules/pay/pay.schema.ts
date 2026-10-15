@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
@@ -76,6 +76,13 @@ export const ledgerRecord = pgTable(
     interestDailyUnique: uniqueIndex('ledger_record_interest_daily_unique')
       .on(t.userId, t.referenceId)
       .where(sql`${t.type} = 'interest'`),
+    /**
+     * The ledger by DATE, across every account (migration 0033): what the
+     * accountant's month summary and CSV export read, walking (occurred_at, id)
+     * in order. `ledger_record_user_occurred_idx` (0006) serves one wallet and
+     * cannot serve "everything in October".
+     */
+    byOccurred: index('ledger_record_occurred_idx').on(t.occurredAt, t.id),
   }),
 );
 

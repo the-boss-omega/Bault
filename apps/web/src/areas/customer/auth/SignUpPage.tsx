@@ -10,6 +10,8 @@ import {
   normalizeUsername,
 } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { TERMS_VERSION } from '../help/legalContent';
+import { TermsReader } from '../help/LegalDocumentView';
 
 /**
  * Sign-up page — its own page, separate from sign-in.
@@ -18,7 +20,7 @@ import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primi
  * API emails a verification link, so the page ends on a "check your mail" panel
  * with a way back to sign-in rather than entering the app.
  *
- * Four fields, and every one of them is required by the API:
+ * Five things, and every one of them is required by the API:
  *
  *   - email;
  *   - USERNAME, captured here and nowhere else. It is permanent — there is no
@@ -26,7 +28,13 @@ import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primi
  *     even if one were added (Requirement 4.1);
  *   - FIRST NAME and LAST NAME, two explicit fields. There is no display name to
  *     type: the full name is derived from these two wherever it is shown, so
- *     there is no second copy that can drift.
+ *     there is no second copy that can drift;
+ *   - CONSENT to the Terms of Service, Privacy Policy and Cookie notice (E21).
+ *     An account used to be created without anybody agreeing to the fees, the
+ *     interest on a negative balance or the suspension rule. The box sends the
+ *     version it showed, the API refuses any other, and records which version
+ *     was accepted and when. The documents can be read right here, because a
+ *     signed-out visitor cannot open FAQ & Legal.
  *
  * The rules applied to the inputs are the same values the API enforces (see
  * `shared/names.ts`), so the button disables for exactly the input the server
@@ -38,6 +46,8 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
+  const [accepted, setAccepted] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [registered, setRegistered] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
@@ -91,6 +101,8 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
           firstName: normalizeNamePart(firstName),
           lastName: normalizeNamePart(lastName),
           password,
+          // The version the box was ticked for — never "whatever is current".
+          acceptedTermsVersion: TERMS_VERSION,
         },
       );
       setRegistered(t('auth.registerSuccess', { username: created.username }));
@@ -241,6 +253,32 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
         />
       </Field>
 
+      <div className="consent">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+            required
+            aria-describedby="signup-consent-hint"
+          />
+          <span>{t('auth.consentLabel', { version: TERMS_VERSION })}</span>
+        </label>
+        <p className="field-hint" id="signup-consent-hint">
+          {t('auth.consentHint')}{' '}
+          <button
+            className="btn--link"
+            type="button"
+            aria-expanded={showTerms}
+            aria-controls="signup-terms"
+            onClick={() => setShowTerms((v) => !v)}
+          >
+            {showTerms ? t('auth.consentHide') : t('auth.consentRead')}
+          </button>
+        </p>
+        {showTerms && <TermsReader id="signup-terms" />}
+      </div>
+
       {error && <ErrorState message={error} />}
 
       <Button
@@ -248,7 +286,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
         type="submit"
         block
         loading={busy}
-        disabled={!usernameOk || !firstOk || !lastOk || !passwordOk || !emailOk}
+        disabled={!usernameOk || !firstOk || !lastOk || !passwordOk || !emailOk || !accepted}
       >
         {t('auth.signUp')}
       </Button>

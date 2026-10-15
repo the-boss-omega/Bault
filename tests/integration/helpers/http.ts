@@ -44,6 +44,16 @@ export class Client {
    */
   put = (p: string, b?: unknown) => this.request('PUT', p, b);
   del = (p: string) => this.request('DELETE', p);
+
+  /**
+   * A GET whose body is not JSON — a CSV export, say — returned as text with
+   * the headers that describe it. `request` parses every body as JSON and
+   * would hand back `null` for exactly the responses whose content matters.
+   */
+  async getText(path: string) {
+    const res = await fetch(BASE + path, { headers: this.cookie ? { cookie: this.cookie } : {} });
+    return { status: res.status, headers: res.headers, text: await res.text() };
+  }
 }
 
 /**

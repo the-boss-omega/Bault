@@ -67,6 +67,21 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   password!: string;
+
+  /**
+   * The version of the terms the person ticked the box for (E21).
+   *
+   * REQUIRED. Bault charges fees, accrues interest on a negative balance and
+   * suspends accounts, and an account used to be created without anybody being
+   * asked to agree to any of that. A string rather than a boolean, because
+   * "agreed" is only meaningful with "to what": the service compares it with
+   * `CURRENT_TERMS_VERSION` and refuses a page that showed an older text.
+   */
+  @trimmed()
+  @IsString({ message: 'acceptedTermsVersion is required: accept the terms to create an account' })
+  @MinLength(1, { message: 'acceptedTermsVersion is required: accept the terms to create an account' })
+  @MaxLength(64)
+  acceptedTermsVersion!: string;
 }
 
 export class LoginDto {

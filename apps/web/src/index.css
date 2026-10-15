@@ -2177,6 +2177,42 @@ input[type='search'] {
   cursor: pointer;
 }
 
+/* The accountant's controls: dates and a download, wrapping on a phone. */
+.accounting-controls {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+/* Sign-up consent: the box, a line saying why it is required, and the
+   documents themselves, readable without leaving the form. The label wraps —
+   it is a sentence, not a caption — so the box aligns to its first line. */
+.consent {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.consent .check {
+  align-items: flex-start;
+}
+
+.consent .check input {
+  margin-block-start: 3px;
+}
+
+.terms-reader {
+  max-block-size: 22rem;
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.terms-reader-doc + .terms-reader-doc {
+  margin-block-start: var(--sp-5);
+}
+
 /* Money input with a leading currency affix. */
 .money-input {
   position: relative;
@@ -5798,16 +5834,37 @@ input[type='search'] {
    Legal
    ============================================================ */
 
-.legal-pending {
+/* The figures the documents point at instead of printing configuration. */
+.legal-figures {
   display: grid;
   gap: var(--sp-2);
-  list-style: none;
+  margin: 0;
 }
 
-.legal-pending li {
-  display: flex;
-  align-items: center;
+.legal-figure {
+  display: grid;
+  grid-template-columns: minmax(0, 16rem) minmax(0, 1fr);
   gap: var(--sp-3);
+}
+
+.legal-figure dt {
+  color: var(--text-muted);
+}
+
+.legal-figure dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An unreviewed draft says so above its first line, in the warning register,
+   so it cannot be read as a reviewed agreement. */
+.legal-draft {
+  display: grid;
+  gap: var(--sp-1);
+  margin-block-end: var(--sp-3);
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--text);
 }
 
 .legal-body {
