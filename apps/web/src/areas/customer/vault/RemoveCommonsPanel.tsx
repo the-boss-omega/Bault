@@ -68,6 +68,25 @@ export function RemoveCommonsPanel({
 
   const eligible = rows.filter((r) => !r.reason);
 
+  /**
+   * What will actually be removed: the ticked cards that are on screen AND
+   * still eligible.
+   *
+   * `chosen` outlives the list. The vault reloads `items` on every keystroke of
+   * its search, so a collector could tick five cards, type a search that hid
+   * three, confirm — and all five went to `remove-commons/confirm`, three of
+   * them donated or destroyed without being on screen when the button was
+   * pressed. Everything below — the count on the button, the confirmation and
+   * the request — reads this list, never `chosen`.
+   */
+  const selected = useMemo(() => {
+    const visible = new Map(eligible.map((r) => [r.it.id, r.it]));
+    return chosen.flatMap((id) => {
+      const it = visible.get(id);
+      return it ? [it] : [];
+    });
+  }, [chosen, eligible]);
+
   function toggle(id: string) {
     setChosen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -76,7 +95,7 @@ export function RemoveCommonsPanel({
     setBusy(true);
     try {
       const challenge = await api.post<{ confirmationToken: string }>('/services/remove-commons', {
-        itemIds: chosen,
+        itemIds: selected.map((it) => it.id),
         outcome,
       });
       const result = await api.post<{ count: number }>('/services/remove-commons/confirm', {
@@ -154,10 +173,10 @@ export function RemoveCommonsPanel({
             <Button
               variant="danger"
               icon={<IconAlert />}
-              disabled={busy || chosen.length === 0}
+              disabled={busy || selected.length === 0}
               onClick={() => setConfirming(true)}
             >
-              {t('cull.submit', { count: chosen.length })}
+              {t('cull.submit', { count: selected.length })}
             </Button>
             {eligible.length === 0 && <span className="field-hint">{t('cull.noneEligible')}</span>}
           </div>
@@ -168,11 +187,28 @@ export function RemoveCommonsPanel({
         <ConfirmationModal
           title={t('cull.confirmTitle')}
           body={
-            <p>
-              {outcome === 'discard'
-                ? t('cull.confirmDiscard', { count: chosen.length })
-                : t('cull.confirmDonate', { count: chosen.length })}
-            </p>
+            <>
+              <p>
+                {outcome === 'discard'
+                  ? t('cull.confirmDiscard', { count: selected.length })
+                  : t('cull.confirmDonate', { count: selected.length })}
+              </p>
+              {/* Every card by name. This cannot be undone, so the collector
+                  confirms a list they can read, not a number. */}
+              <ul className="check-list list-unbounded">
+                {selected.map((it) => (
+                  <li key={it.id}>
+                    <span>
+                      {it.description || it.typeClass}
+                      <span className="hint" dir="ltr">
+                        {' '}
+                        {it.serialNumber}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
           }
           confirmLabel={t('cull.confirmAction')}
           cancelLabel={t('ui.cancel')}
