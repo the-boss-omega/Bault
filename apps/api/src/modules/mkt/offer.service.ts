@@ -290,8 +290,16 @@ export class OfferService {
           buyerId: o.buyerId,
           sellerId: l.sellerId,
           amount,
-          /** Who to tell: a counter is addressed to the OTHER side. */
           counteredBy: side,
+          /**
+           * Who to tell: a counter is addressed to the OTHER side.
+           *
+           * Said explicitly, because the payload names both parties and the
+           * worker, given no `recipientIds`, takes the first single-recipient
+           * key it finds — `sellerId`. A seller's counter was announced to the
+           * seller, in the app and by email, and the buyer never heard of it.
+           */
+          recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
         },
       });
       return child;
