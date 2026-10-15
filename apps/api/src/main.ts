@@ -11,6 +11,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/errors/all-exceptions.filter';
 import { validationException } from './shared/errors/validation-error';
 import { StructuredLogger, requestContext } from './shared/observability/logger';
+import { jsonBodiesOnly, sameOriginWrites, writeOrigins } from './shared/csrf/cross-site';
 
 /**
  * Application entry point.
@@ -37,6 +38,14 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger('api'),
     bufferLogs: false,
+    /**
+     * No parsers of Nest's own (E8). Left on, Nest adds `urlencoded` when the app
+     * starts listening — registering `json` below did not stop it, because it
+     * only skips a parser that is already there — and a form-encoded body is
+     * what an HTML form on somebody else's site sends. The one parser this API
+     * needs is registered by hand below.
+     */
+    bodyParser: false,
   });
 
   /**
@@ -78,6 +87,20 @@ async function bootstrap(): Promise<void> {
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
   /**
+   * Another site cannot act through a visitor's browser (E8).
+   *
+   * Before the body parser, so a cross-site write is refused without its body
+   * ever being read. Writes must come from the app's own origin or one named in
+   * `CORS_ORIGINS`; a request with no `Origin` is not a browser steered by
+   * another page and passes. The payment webhook is exempt: PayPal is not a
+   * browser, and its signature is what authenticates it. See `cross-site.ts`.
+   */
+  app.use(
+    sameOriginWrites(writeOrigins(env.APP_BASE_URL, env.CORS_ORIGINS), ['/api/v1/webhooks/payment']),
+  );
+  app.use(jsonBodiesOnly());
+
+  /**
    * Room for a photograph.
    *
    * Express defaults to a 100 kB JSON body, which is fine for every route this
@@ -86,6 +109,10 @@ async function bootstrap(): Promise<void> {
    * `MAX_IMAGE_BYTES` on purpose, so an oversized upload is refused by the
    * media service with a sentence naming the limit rather than by the body
    * parser with a bare 413 and no explanation.
+   *
+   * The ONLY body parser (see `bodyParser: false` above). The payment webhook
+   * needs nothing more: it hands the parsed event back to the adapter, and
+   * PayPal's verification is a call that takes the event as JSON.
    */
   app.use(json({ limit: '16mb' }));
 
