@@ -443,19 +443,26 @@ export class AccountingService {
     );
 
     /**
-     * Every debit that sent money out of a wallet, with the payout reference
-     * its completion recorded. A cash-out writes that reference — and the fee,
-     * which the payout does not carry — into the `completed` event of its
-     * wallet request; a debit with no such event has no payout to point at.
+     * Every debit that sent money out of a wallet, with the payout it belongs to.
+     *
+     * Two shapes. A cash-out paid through the payout flow links its request to
+     * its payment (`wallet_request.payout_payment_id`) before the provider is
+     * called, and its withdrawal row is already the NET, the fee being a row of
+     * its own. One completed before that flow existed recorded the reference
+     * and the fee in its `completed` event, and its withdrawal row was the
+     * gross. A debit with neither has no payout to point at.
      */
     const withdrawals = (
       await this.db.execute<Record<string, unknown>>(sql`
         SELECT l.id::text AS ledger_id, l.user_id, u.username, l.amount::text AS amount, l.occurred_at,
                CASE WHEN l.reference_type = 'wallet_request' THEN l.reference_id END AS wallet_request_id,
-               ev.metadata ->> 'payoutRef' AS payout_ref,
-               COALESCE(ev.metadata ->> 'feeMinor', '0') AS fee_minor
+               COALESCE(pp.provider_ref, ev.metadata ->> 'payoutRef') AS payout_ref,
+               CASE WHEN pp.id IS NOT NULL THEN '0' ELSE COALESCE(ev.metadata ->> 'feeMinor', '0') END AS fee_minor
           FROM ledger_record l
           LEFT JOIN user_account u ON u.id::text = l.user_id
+          LEFT JOIN wallet_request wr
+            ON l.reference_type = 'wallet_request' AND wr.id::text = l.reference_id
+          LEFT JOIN external_payment pp ON pp.id::text = wr.payout_payment_id::text
           LEFT JOIN LATERAL (
             SELECT e.metadata
               FROM wallet_request_event e

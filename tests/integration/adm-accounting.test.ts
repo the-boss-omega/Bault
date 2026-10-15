@@ -133,22 +133,24 @@ describe('N40 monthly summary', () => {
     await fundWallet(SEED.collector2, 50_000);
     const balanceBefore = await balanceOf(golden);
     await cashOut(SEED.collector2, 20_000);
-    // Whatever the fee came to — a membership may waive it — it is what left
-    // the wallet beyond the amount paid out.
-    const fee = balanceBefore - (await balanceOf(golden)) - 20_000;
+    // A cash-out debits exactly what was asked for (F004): the net that is
+    // paid out, as `withdrawal`, and the fee as a row of its own. Whatever the
+    // fee came to — a membership may waive it — it is inside the 20,000.
+    const debited = balanceBefore - (await balanceOf(golden));
     const after = await read();
+    expect(debited).toBe(20_000);
+    const fee = total(after, 'fee', 'debit') - total(before, 'fee', 'debit');
 
     expect(after.month).toBe(month);
     expect(after.currency).toBe('USD');
 
     // Totals by ledger type and direction.
     expect(total(after, 'credit_topup', 'credit') - total(before, 'credit_topup', 'credit')).toBe(50_000);
-    expect(total(after, 'withdrawal', 'debit') - total(before, 'withdrawal', 'debit')).toBe(20_000);
-    expect(total(after, 'fee', 'debit') - total(before, 'fee', 'debit')).toBe(fee);
+    expect(total(after, 'withdrawal', 'debit') - total(before, 'withdrawal', 'debit')).toBe(20_000 - fee);
 
     // Customer money in and out is not revenue...
     expect(after.customerMoney.inMinor - before.customerMoney.inMinor).toBe(50_000);
-    expect(after.customerMoney.outMinor - before.customerMoney.outMinor).toBe(20_000);
+    expect(after.customerMoney.outMinor - before.customerMoney.outMinor).toBe(20_000 - fee);
     // ...and the cash-out fee is, on its own line.
     expect(line(after, 'cash_out_fee') - line(before, 'cash_out_fee')).toBe(fee);
     expect(after.revenue.totalMinor - before.revenue.totalMinor).toBe(fee);
@@ -160,9 +162,9 @@ describe('N40 monthly summary', () => {
     expect(after.revenue.totalMinor).toBe(net('fee') + net('service_charge') + net('interest'));
 
     // The balances Bault holds for customers moved by what came in less what
-    // went out — the fee is Bault's now, not the customer's.
+    // the cash-out took — paid out and fee together; the fee is Bault's now.
     expect(after.balancesHeld.customerTotalMinor - before.balancesHeld.customerTotalMinor).toBe(
-      50_000 - 20_000 - fee,
+      50_000 - 20_000,
     );
     expect(after.balancesHeld.customerTotalMinor).toBe(
       after.balancesHeld.owedToCustomersMinor - after.balancesHeld.owedByCustomersMinor,

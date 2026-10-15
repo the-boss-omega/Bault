@@ -128,7 +128,8 @@ describe('the payment provider’s callback', () => {
       body: JSON.stringify({ id: `evt_csrf_${Date.now()}`, type: 'topup.settled', data: {} }),
     });
     expect(res.status).toBe(201);
-    expect(res.body).toEqual({ received: true });
+    // The handler also says what it did with the event; only that it was received matters here.
+    expect(res.body).toMatchObject({ received: true });
   });
 
   it('still verifies a delivery with no Origin', async () => {

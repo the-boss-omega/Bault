@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { Client, SEED, SEED_PASSWORD, fixtureEmail, signIn } from '../../tests/integration/helpers/http';
 import { closeDb, sql } from '../../tests/integration/helpers/db';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
  * Signing in, from the side of somebody guessing (E13, N5, N10).
@@ -32,6 +33,8 @@ async function register(label: string): Promise<{ email: string; username: strin
     firstName: 'Sign',
     lastName: 'In',
     password: PASSWORD,
+    // Sign-up requires accepting the terms in force (E21).
+    acceptedTermsVersion: CURRENT_TERMS_VERSION,
   });
   expect(res.status).toBe(201);
   return { email, username };
