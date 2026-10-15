@@ -47,8 +47,8 @@ describe('every report', () => {
   });
 
   it('keeps the body of an ordinary request, which is what makes the report useful', () => {
-    const out = scrubErrorEvent(crashDuring('POST', '/api/v1/vault/items', { description: 'Charizard' }));
-    expect(out?.request?.data).toEqual({ description: 'Charizard' });
+    const out = scrubErrorEvent(crashDuring('POST', '/api/v1/vault/items', { description: 'Rayquaza VMAX' }));
+    expect(out?.request?.data).toEqual({ description: 'Rayquaza VMAX' });
   });
 
   it('passes an event with no request through untouched', () => {
