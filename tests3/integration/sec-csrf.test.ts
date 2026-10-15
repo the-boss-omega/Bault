@@ -16,14 +16,17 @@ import { BASE, SEED, SEED_PASSWORD, signIn } from '../../tests/integration/helpe
 
 const APP_ORIGIN = new URL(process.env.APP_BASE_URL ?? 'http://localhost:5173').origin;
 
+/** The API's problem envelope, or whatever a successful route returned. */
+type ProblemOr<T> = T & { error: { code: string; message: string } };
+
 async function raw(
   method: string,
   path: string,
   init: { headers?: Record<string, string>; body?: string | FormData } = {},
 ) {
   const res = await fetch(BASE + path, { method, headers: init.headers, body: init.body });
-  const body = await res.json().catch(() => null);
-  return { status: res.status, body: body as any, setCookie: res.headers.get('set-cookie') };
+  const body = (await res.json().catch(() => null)) as ProblemOr<Record<string, unknown>>;
+  return { status: res.status, body, setCookie: res.headers.get('set-cookie') };
 }
 
 const cookieOf = (client: Awaited<ReturnType<typeof signIn>>) =>
