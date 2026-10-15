@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -12,6 +12,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
+import { shipment } from '../shp/shp.schema';
 import { escrowDeal, escrowEvent } from './escrow.schema';
 import {
   ESCROW_FEE_ACTION,
@@ -592,6 +593,10 @@ export class EscrowService {
     const { buyerId, sellerId } = this.sides(deal);
     const now = new Date();
 
+    if (buyerId === null && deal.settlement === 'ship_to_buyer') {
+      await this.assertOnItsWayToBuyer(tx, deal, sellerId);
+    }
+
     // The seller is paid what was agreed. Where they have no account the
     // payout happens off-platform and is recorded rather than invented.
     if (sellerId) {
@@ -656,8 +661,8 @@ export class EscrowService {
       );
     }
 
-    // The card. Into the buyer's vault where they have one; otherwise it stays
-    // where it is and a shipment takes it out, which the buyer arranges.
+    // The card. Into the buyer's vault where they have one. An outside buyer's
+    // card has already left in a parcel — `assertOnItsWayToBuyer` above.
     if (deal.itemId && buyerId) {
       await this.custody.transferOwnership(tx, deal.itemId, buyerId, actorId, `escrow ${deal.code}`, {
         ownerId: sellerId ?? (await this.receivedFrom(tx, deal)),
@@ -687,6 +692,49 @@ export class EscrowService {
       });
     }
     return { status: 'settled' as const, paidMinor: deal.valueMinor, feeMinor: feeDue };
+  }
+
+  /**
+   * An outside buyer is paid for with a parcel, so the seller is paid only once
+   * the parcel has gone (F171).
+   *
+   * `settle` paid the seller and, because an outside buyer has no vault to
+   * move the card into, moved nothing and shipped nothing: the card stayed on
+   * the seller's shelf, theirs to withdraw, with the buyer's money already
+   * handed over. Two fixes were possible. Creating the shipment inside the
+   * settlement would need an address, a carrier and a postage payer that the
+   * deal does not carry, and would still leave a parcel the seller could
+   * cancel. Refusing to settle until the card is on its way needs none of that
+   * and cannot leave anybody short: until then the buyer's money stays held and
+   * the deal can still be returned.
+   *
+   * "On its way" means a shipment of the seller's carrying this card that is
+   * past the point its owner can call it back — picked, packed, labelled or
+   * dispatched. A parcel that is merely paid for (`rates_selected`) does not
+   * count: the seller could cancel it the moment the money landed.
+   */
+  private async assertOnItsWayToBuyer(tx: Database, deal: Deal, sellerId: string | null) {
+    const [sent] = deal.itemId && sellerId
+      ? await tx
+          .select({ id: shipment.id })
+          .from(shipment)
+          .where(
+            and(
+              eq(shipment.userId, sellerId),
+              sql`${shipment.itemIds} @> ${JSON.stringify([deal.itemId])}::jsonb`,
+              inArray(shipment.status, ['picking', 'packed', 'labeled', 'shipped', 'in_transit', 'delivered']),
+            ),
+          )
+          .limit(1)
+      : [];
+    if (!sent) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        'The buyer has no Bault vault, so the card has to be on its way to them before the seller is paid. ' +
+          'Ship it to the buyer, and confirm again once it has been dispatched.',
+        409,
+      );
+    }
   }
 
   /**
