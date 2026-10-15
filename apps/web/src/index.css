@@ -2177,6 +2177,13 @@ input[type='search'] {
   cursor: pointer;
 }
 
+/* The accountant's controls: dates and a download, wrapping on a phone. */
+.accounting-controls {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
 /* Sign-up consent: the box, a line saying why it is required, and the
    documents themselves, readable without leaving the form. The label wraps —
    it is a sentence, not a caption — so the box aligns to its first line. */
