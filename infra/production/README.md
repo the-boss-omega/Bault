@@ -66,7 +66,9 @@ cp <provider-ca.pem> /etc/bault/db-ca.crt && chmod 644 /etc/bault/db-ca.crt
 Fill in every value. In `production.env` at least: `BAULT_DOMAIN`,
 `APP_BASE_URL=https://<domain>`, `BAULT_REGISTRY`, `TRUST_PROXY` (the subnet in
 `compose.yml`, `172.30.89.0/24`), PayPal, `PAYOUT_MODE`, EasyPost, SMTP,
-`STORAGE_*`, `SENTRY_DSN`. Never `ALLOW_DESTRUCTIVE_SEED`.
+`STORAGE_*`, `SENTRY_DSN`, and `MFA_ENCRYPTION_KEY` (`openssl rand -base64 32`;
+keep a copy — losing it locks every enrolled authenticator out). Never
+`ALLOW_DESTRUCTIVE_SEED`.
 
 Check the owner's connection from the host before going further:
 
