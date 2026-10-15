@@ -39,7 +39,8 @@ import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
  * (0001_append_only.sql) block UPDATE/DELETE via per-ROW triggers, which do NOT
  * fire on TRUNCATE — so a full reset is possible here but remains impossible
  * through the running application. This is a deliberate, dev-only escape hatch;
- * never TRUNCATE in production.
+ * never TRUNCATE in production — `refuseInProduction` below enforces that, and
+ * `tsconfig.build.json` keeps this file out of the compiled image.
  *
  * The reset is what makes this script the answer to a database full of test
  * residue. The e2e suites drive the real HTTP stack against a real database, so
@@ -69,8 +70,49 @@ function one<T>(rows: T[]): T {
   return r;
 }
 
+/** The one value that lets this run under NODE_ENV=production. */
+const DESTRUCTIVE_SEED_CONFIRMATION = 'yes-i-am-sure';
+
+/**
+ * Refuse to run against production.
+ *
+ * "Never TRUNCATE in production" above was a comment and nothing else: nothing
+ * here read NODE_ENV, the script was compiled into the production image as
+ * dist/db/seed.js, and `pnpm test` ran it after every run against whatever
+ * database `.env` named. One mistaken command erased the ledger and the custody
+ * trail and left two admin accounts with the password printed in this file.
+ *
+ * A disposable database that happens to run with NODE_ENV=production (a
+ * staging rebuild) can still be seeded, by saying so in a way nobody types by
+ * accident.
+ */
+function refuseInProduction(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (process.env.ALLOW_DESTRUCTIVE_SEED === DESTRUCTIVE_SEED_CONFIRMATION) return;
+  throw new Error(
+    'Refusing to seed: NODE_ENV=production. This script TRUNCATEs every table, the ledger, the ' +
+      'custody trail and the audit log included, and creates admin accounts with a published ' +
+      'password. If this database is disposable, run it again with ' +
+      `ALLOW_DESTRUCTIVE_SEED=${DESTRUCTIVE_SEED_CONFIRMATION}.`,
+  );
+}
+
 async function main(): Promise<void> {
-  const { db, pool } = createDb();
+  // Before anything can reach a database: NODE_ENV from the process
+  // environment, which is where a container gets it.
+  refuseInProduction();
+  let handle: ReturnType<typeof createDb>;
+  try {
+    handle = createDb();
+  } finally {
+    // And again once `loadEnv` has read the repo-root `.env` into the process
+    // environment, so a NODE_ENV=production written only in that file is
+    // caught too. In `finally` because a production `.env` on a development
+    // checkout usually fails validation as well, and the refusal is the thing
+    // worth reporting. The pool connects lazily, so nothing has been sent yet.
+    refuseInProduction();
+  }
+  const { db, pool } = handle;
   /** The platform's single settlement currency (Requirement 7.1). */
   const CUR = 'USD';
 

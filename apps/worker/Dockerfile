@@ -9,8 +9,15 @@
 #
 # Built from the REPO ROOT:
 #   docker build -f apps/worker/Dockerfile -t bault-worker .
+#
+# Node 22, matching `engines` in the root package.json (the images were on 20,
+# which the engines field excludes). Pinned by digest, not just by tag: a tag
+# is moved by whoever publishes it, so the same Dockerfile built twice could
+# ship two different runtimes. To upgrade, `docker pull node:22-slim`, take the
+# digest from `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim`
+# and change BOTH FROM lines in each of the three Dockerfiles together.
 # =============================================================================
-FROM node:20-slim AS build
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build
 WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -36,12 +43,14 @@ RUN pnpm --filter @bault/config build \
 RUN pnpm install --frozen-lockfile --prod
 
 # -----------------------------------------------------------------------------
-FROM node:20-slim AS runtime
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN useradd --system --create-home --uid 10001 bault
+# Not root, and numeric, for the reasons given in apps/api/Dockerfile.
+RUN groupadd --system --gid 10001 bault \
+ && useradd --system --create-home --uid 10001 --gid 10001 bault
 
 COPY --from=build --chown=bault:bault /repo/node_modules           ./node_modules
 COPY --from=build --chown=bault:bault /repo/packages               ./packages
@@ -49,11 +58,16 @@ COPY --from=build --chown=bault:bault /repo/apps/worker/node_modules ./apps/work
 COPY --from=build --chown=bault:bault /repo/apps/worker/dist       ./apps/worker/dist
 COPY --from=build --chown=bault:bault /repo/apps/worker/package.json ./apps/worker/package.json
 
-USER bault
+USER 10001:10001
 WORKDIR /app/apps/worker
 
-# No HTTP port and therefore no HTTP healthcheck. The worker's liveness is
-# whether pg-boss is connected, which it asserts by exiting non-zero on a fatal
-# error — so the orchestrator's restart policy is the check. A heartbeat row
-# would be better and is not yet built; noted rather than faked.
+# No HTTP port and therefore no container healthcheck. A fatal pg-boss error
+# exits non-zero, and the restart policy brings the process back. Whether the
+# JOBS are running is a different question, answered through the database:
+# each job stamps its row in `worker_heartbeat` when it succeeds, and the API's
+# GET /api/v1/readyz/worker answers 503 when outbox dispatch has not succeeded
+# for five minutes. infra/production/deploy.sh waits on it after every deploy.
+#
+# Exec form, so node is PID 1 and gets SIGTERM directly: it stops taking jobs
+# and drains the running ones for up to 30s (compose.yml gives it 45).
 CMD ["node", "dist/index.js"]

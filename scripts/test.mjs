@@ -41,6 +41,7 @@
  * command separator on Windows, so neither works as a package.json one-liner.
  */
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -81,6 +82,52 @@ function run(command, args) {
 
 const skipReset =
   process.argv.includes('--no-reset') || process.env.BAULT_TEST_NO_RESET === '1';
+
+/**
+ * A variable as the seed will see it: the process environment first, then the
+ * repo-root `.env`, which is the precedence `loadEnv` gives them. Read by hand
+ * because this script runs with no dependencies; the last assignment wins, as
+ * it does in dotenv.
+ */
+function envValue(key) {
+  if (process.env[key] !== undefined) return process.env[key];
+  let text;
+  try {
+    text = readFileSync(join(repoRoot, '.env'), 'utf8');
+  } catch {
+    return undefined;
+  }
+  let value;
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.*)$`));
+    if (!m) continue;
+    const raw = m[1].trim();
+    const quoted = raw.match(/^(['"])(.*)\1$/);
+    value = quoted ? quoted[2] : raw.replace(/\s+#.*$/, '');
+  }
+  return value;
+}
+
+/**
+ * Not against production, and not half-way either.
+ *
+ * The reset TRUNCATEs every table, the ledger and the custody trail included,
+ * and it ran after every `pnpm test` against whatever database `.env` named,
+ * with nothing to stop it being production. The seed now refuses
+ * NODE_ENV=production on its own. This refuses here as well, BEFORE the first
+ * suite: the suites write real items and real ledger rows into the database
+ * they run against, so a run whose reset will be refused should never start
+ * (and any seeding before a suite would be refused the same way). A single
+ * suite can still be run on its own, `pnpm test:<suite>`.
+ */
+if (envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure') {
+  console.error(
+    'Refusing to run: NODE_ENV=production. `pnpm test` writes test data into the database and ' +
+      'then resets it with the seed, which TRUNCATEs every table, the ledger included. If this ' +
+      'database is disposable, run it again with ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure.',
+  );
+  process.exit(1);
+}
 
 let status = 0;
 for (const suite of SUITES) {

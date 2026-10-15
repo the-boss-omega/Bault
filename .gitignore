@@ -34,3 +34,8 @@ backups/
 # publicDir, so anything left in it ships in the bundle and is downloadable
 # from any deployed URL.
 _local/
+
+# Which release infra/production/deploy.sh last deployed, written into the
+# host's checkout (/opt/bault).
+/CURRENT_TAG
+/PREVIOUS_TAG

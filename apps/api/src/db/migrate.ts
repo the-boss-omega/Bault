@@ -27,6 +27,17 @@ async function main(): Promise<void> {
 
   await migrate(db, { migrationsFolder: './src/db/migrations' });
 
+  /**
+   * Read next to this file, which is `dist/db/sql` once compiled.
+   *
+   * It used to be absent there: `nest build` compiles TypeScript and copies
+   * nothing else, so in the image the drizzle migrations above applied and this
+   * line then failed with ENOENT. The database was left with every table, no
+   * append-only trigger, no guard against deleting an item and no uuid/text
+   * operators. `nest-cli.json` now copies `src/db/sql/*.sql` into `dist` as a
+   * build asset, so the compiled runner and `tsx src/db/migrate.ts` read the
+   * same file.
+   */
   const appendOnlySql = readFileSync(join(__dirname, 'sql', '0001_append_only.sql'), 'utf8');
   await pool.query(appendOnlySql);
 

@@ -92,8 +92,16 @@ async function bootstrap(): Promise<void> {
    * a JSON API and an OpenAPI explorer, not the SPA — the CSP that matters
    * belongs on whatever serves the front end, and a default one here would
    * break the explorer while protecting nothing.
+   *
+   * `strictTransportSecurity` is off because HSTS is set where TLS ends, by
+   * Caddy (infra/production/Caddyfile), for the SPA and the API alike. Left on,
+   * helmet's default (no `preload`) would ride on every API response next to
+   * Caddy's, two policies for one host, and a browser keeps whichever it saw
+   * last.
    */
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  app.use(
+    helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, strictTransportSecurity: false }),
+  );
 
   /**
    * Another site cannot act through a visitor's browser (E8).
