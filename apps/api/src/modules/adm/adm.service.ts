@@ -78,6 +78,9 @@ export class AdmService {
         role: userAccount.role,
         status: userAccount.status,
         intakeId: userAccount.intakeId,
+        // Whether the account signs in with a second factor — the Users screen
+        // offers the reset only where there is one to reset.
+        mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
       })
       .from(userAccount)
       .where(not(ilike(userAccount.email, `%@${FIXTURE_EMAIL_DOMAIN}`)))

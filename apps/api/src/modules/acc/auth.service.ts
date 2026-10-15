@@ -1,19 +1,29 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
-import { eq, or, sql } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { pgErrorCode } from '../../shared/errors/pg-error';
 import { OneAtATime } from '../../shared/one-at-a-time';
-import { loginAttempt, userAccount } from './acc.schema';
+import { userAccount } from './acc.schema';
 import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../shared/names';
 import { VerificationService } from './verification.service';
-import { SessionService, clampUserAgent, type ClientOrigin } from './session.service';
+import { SessionService, type ClientOrigin } from './session.service';
+import { LoginAttemptService } from './login-attempts.service';
+import { MfaService, codeInvalid, type SecondFactorProof } from './mfa/mfa.service';
 import type { AuthUser } from '../sec/auth-context';
 import { CURRENT_TERMS_VERSION } from './terms';
+
+/**
+ * What a right password gets: a session, or — for an account with two-factor
+ * sign-in — a challenge that the second step turns into one.
+ */
+export type LoginResult =
+  | { kind: 'session'; user: AuthUser; rawToken: string; expiresAt: Date }
+  | { kind: 'challenge'; challengeToken: string; expiresAt: Date };
 
 /**
  * Registration + login (T029, Principle IX/X).
@@ -27,17 +37,11 @@ import { CURRENT_TERMS_VERSION } from './terms';
  * identifier now, so a second routing code would be a second thing to keep
  * unique, print, and explain. Existing accounts keep the one they were given.
  */
-/**
- * The per-identifier lockout: this many failures inside `LOCKOUT_WINDOW_MIN`
- * shut that identifier out for `LOCKOUT_MIN`, whatever password comes next.
- *
- * The per-IP rate limit was the only brake, and it brakes a person, not an
- * attacker: anybody with a second address could go on guessing at one account
- * indefinitely. Ten is far past a forgotten password and a mistyped one.
+/*
+ * The per-identifier lockout — ten failures in fifteen minutes shut the typed
+ * identifier out for fifteen — lives in `LoginAttemptService` now, beside the
+ * log it reads, because wrong second-factor codes count against it too.
  */
-const LOCKOUT_FAILURES = 10;
-const LOCKOUT_WINDOW_MIN = 15;
-const LOCKOUT_MIN = 15;
 
 @Injectable()
 export class AuthService {
@@ -59,6 +63,8 @@ export class AuthService {
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly verification: VerificationService,
     private readonly sessions: SessionService,
+    private readonly attempts: LoginAttemptService,
+    private readonly mfa: MfaService,
   ) {}
 
   async register(
@@ -174,11 +180,7 @@ export class AuthService {
    * never send both. Usernames may not contain '@' (RegisterDto) and both columns
    * are unique, so a single OR lookup resolves unambiguously.
    */
-  async login(
-    identifier: string,
-    password: string,
-    origin: ClientOrigin = {},
-  ): Promise<{ user: AuthUser; rawToken: string; expiresAt: Date }> {
+  async login(identifier: string, password: string, origin: ClientOrigin = {}): Promise<LoginResult> {
     // Same normalization as registration, so a username typed in any casing
     // resolves to the row that was stored (Requirement: usernames normalized
     // consistently).
@@ -195,11 +197,7 @@ export class AuthService {
     return this.perIdentifier.run(normalized, () => this.attempt(normalized, password, origin));
   }
 
-  private async attempt(
-    normalized: string,
-    password: string,
-    origin: ClientOrigin,
-  ): Promise<{ user: AuthUser; rawToken: string; expiresAt: Date }> {
+  private async attempt(normalized: string, password: string, origin: ClientOrigin): Promise<LoginResult> {
     /**
      * Ten failures in fifteen minutes shut the identifier out for fifteen.
      *
@@ -216,16 +214,8 @@ export class AuthService {
      * checked, and an attacker hammering a locked identifier should not be able
      * to fill the log or extend anyone's lock.
      */
-    const secondsLeft = await this.lockedFor(normalized);
-    if (secondsLeft > 0) {
-      const minutes = Math.max(1, Math.ceil(secondsLeft / 60));
-      throw new AppError(
-        ErrorCode.RATE_LIMITED,
-        `Too many failed sign-ins for this email or username. Try again in ${minutes} minutes, or reset your password.`,
-        HttpStatus.TOO_MANY_REQUESTS,
-        { retryAfterSeconds: secondsLeft },
-      );
-    }
+    const secondsLeft = await this.attempts.lockedFor(normalized);
+    if (secondsLeft > 0) throw this.attempts.lockedError(secondsLeft);
 
     const [u] = await this.db
       .select()
@@ -245,7 +235,7 @@ export class AuthService {
      */
     const verified = await argon2.verify(u?.passwordHash ?? (await this.dummyHash), password);
     if (!u || !verified) {
-      await this.recordAttempt(normalized, u?.id ?? null, 'bad_credentials', origin);
+      await this.attempts.record(normalized, u?.id ?? null, 'bad_credentials', origin);
       throw AppError.unauthenticated('Invalid credentials');
     }
     /**
@@ -259,7 +249,7 @@ export class AuthService {
      * even though `POST /auth/verify-email/resend` existed the whole time.
      */
     if (u.status === 'pending') {
-      await this.recordAttempt(normalized, u.id, 'unverified', origin);
+      await this.attempts.record(normalized, u.id, 'unverified', origin);
       throw AppError.emailUnverified(
         'Your email address has not been confirmed yet. Check your inbox for the link we sent — we can send a fresh one.',
       );
@@ -284,70 +274,83 @@ export class AuthService {
      */
     if (u.status !== 'active' && u.status !== 'suspended') {
       // `closed` and anything unrecognised: the password was right, the door stays shut.
-      await this.recordAttempt(normalized, u.id, 'refused', origin);
+      await this.attempts.record(normalized, u.id, 'refused', origin);
       throw AppError.accountSuspended();
     }
 
-    const { rawToken, expiresAt } = await this.sessions.create(u.id, origin);
-    await this.recordAttempt(normalized, u.id, 'success', origin);
-    return { user: { id: u.id, role: u.role, status: u.status }, rawToken, expiresAt };
-  }
-
-  /**
-   * Seconds until this identifier may try again, or 0.
-   *
-   * Locked when its last `LOCKOUT_FAILURES` failures all fall within
-   * `LOCKOUT_WINDOW_MIN` of each other and the newest of them is under
-   * `LOCKOUT_MIN` old. Because refusals during a lock write nothing, that newest
-   * failure is the one that tripped it, so the lock lasts exactly `LOCKOUT_MIN`
-   * from there. Decided by the database's clock — the one that stamped the
-   * attempts — so a skewed API host cannot shorten it.
-   */
-  private async lockedFor(normalized: string): Promise<number> {
-    const identifier = normalized.slice(0, 254); // as `recordAttempt` stores it
-    const result = await this.db.execute<{ seconds_left: number }>(sql`
-      SELECT ceil(extract(epoch FROM (max(occurred_at) + make_interval(mins => ${LOCKOUT_MIN}) - now())))::int AS seconds_left
-        FROM (
-          SELECT occurred_at FROM login_attempt
-           WHERE identifier = ${identifier}
-             AND outcome = 'bad_credentials'
-             AND occurred_at > now() - make_interval(mins => ${LOCKOUT_WINDOW_MIN + LOCKOUT_MIN})
-           ORDER BY occurred_at DESC
-           LIMIT ${LOCKOUT_FAILURES}
-        ) recent
-      HAVING count(*) >= ${LOCKOUT_FAILURES}
-         AND max(occurred_at) - min(occurred_at) <= make_interval(mins => ${LOCKOUT_WINDOW_MIN})
-         AND max(occurred_at) > now() - make_interval(mins => ${LOCKOUT_MIN})`);
-    return Math.max(0, Number(result.rows[0]?.seconds_left ?? 0));
-  }
-
-  /**
-   * One row per sign-in attempt, in `login_attempt`.
-   *
-   * Never allowed to break sign-in: if the log cannot be written the person
-   * still gets the answer they were owed, and the failure is logged instead. A
-   * security log that can lock everybody out when the disk is full is a denial
-   * of service with good intentions.
-   */
-  private async recordAttempt(
-    identifier: string,
-    userId: string | null,
-    outcome: 'success' | 'bad_credentials' | 'unverified' | 'refused',
-    origin: ClientOrigin,
-  ): Promise<void> {
-    try {
-      await this.db.insert(loginAttempt).values({
-        identifier: identifier.slice(0, 254),
-        userId,
-        outcome,
-        ip: origin.ip ?? null,
-        userAgent: clampUserAgent(origin.userAgent),
-      });
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[auth] could not record a sign-in attempt', e);
+    /**
+     * The password was right; for an enrolled account that is half of it.
+     *
+     * No session — a challenge, good for five minutes, for this account, once.
+     * Only here, after every refusal above has had its turn, so the answer to a
+     * WRONG password is exactly what it always was and says nothing about
+     * whether the account has a second factor; only somebody who knows the
+     * password learns that. Logged as its own outcome: a right password
+     * followed by wrong codes is the pattern an administrator most needs to see.
+     */
+    if (await this.mfa.isEnabled(u.id)) {
+      const challenge = await this.mfa.issueChallenge(u.id, normalized);
+      await this.attempts.record(normalized, u.id, 'mfa_challenged', origin);
+      return { kind: 'challenge', ...challenge };
     }
+
+    const { rawToken, expiresAt } = await this.sessions.create(u.id, origin);
+    await this.attempts.record(normalized, u.id, 'success', origin);
+    return { kind: 'session', user: { id: u.id, role: u.role, status: u.status, mfaEnabled: false }, rawToken, expiresAt };
   }
+
+  /**
+   * The second step: a challenge from the first, and a code from the app or a
+   * recovery code. A session, or a refusal.
+   *
+   * Under the same one-at-a-time queue as the first step, keyed on the
+   * identifier the challenge was issued for, so a burst of guesses is counted
+   * one by one exactly like a burst of passwords. Both locks are asked first:
+   * the identifier's (wrong passwords and wrong codes) and the account's (wrong
+   * codes through any identifier or signed-in route). A wrong code is logged
+   * against both. An unknown, used, expired or burned challenge is one answer —
+   * start again with the password — and is not a guess, so it is not counted.
+   */
+  async completeSecondFactor(
+    challengeToken: string,
+    proof: SecondFactorProof,
+    origin: ClientOrigin = {},
+  ): Promise<{ user: AuthUser; rawToken: string; expiresAt: Date }> {
+    const challenge = await this.mfa.findChallenge(challengeToken);
+    if (!challenge) throw challengeExpired();
+
+    return this.perIdentifier.run(challenge.identifier, async () => {
+      const wait = Math.max(
+        await this.attempts.lockedFor(challenge.identifier),
+        await this.attempts.secondFactorLockedFor(challenge.userId),
+      );
+      if (wait > 0) throw this.attempts.lockedError(wait);
+
+      const result = await this.mfa.redeemChallenge(challenge.id, proof, origin);
+      switch (result.status) {
+        case 'ok':
+          await this.attempts.record(challenge.identifier, challenge.userId, 'success', origin);
+          return { user: result.user, rawToken: result.rawToken, expiresAt: result.expiresAt };
+        case 'invalid':
+          await this.attempts.record(challenge.identifier, challenge.userId, 'mfa_failed', origin);
+          throw codeInvalid(HttpStatus.UNAUTHORIZED);
+        case 'refused':
+          await this.attempts.record(challenge.identifier, challenge.userId, 'refused', origin);
+          throw AppError.accountSuspended();
+        default:
+          throw challengeExpired();
+      }
+    });
+  }
+}
+
+/** The second step has nothing to answer: start again with the password. */
+function challengeExpired(): AppError {
+  return new AppError(
+    ErrorCode.MFA_CHALLENGE_EXPIRED,
+    'This sign-in has expired or was already used. Enter your password again.',
+    HttpStatus.UNAUTHORIZED,
+  );
 }
 
 /**

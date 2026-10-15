@@ -1,10 +1,13 @@
-import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Header, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { parse as parseCookie } from 'cookie';
 import type { Request, Response } from 'express';
 import { loadEnv } from '@bault/config';
 import { AuthBucket } from '../../shared/throttle/auth-bucket';
+import { AppError } from '../../shared/errors/app-error';
 import { Public } from './public.decorator';
+import { AllowWithoutMfa } from './mfa/allow-without-mfa.decorator';
+import { MfaService } from './mfa/mfa.service';
 
 /**
  * The bucket for routes that check a credential.
@@ -19,7 +22,7 @@ import { Public } from './public.decorator';
  * while barely inconveniencing a script that can rotate addresses is the worst
  * of both.
  */
-const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
+export const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
 
 /**
  * The routes that send mail to an address the CALLER chose.
@@ -42,6 +45,7 @@ import {
   ChangePasswordDto,
   EmailDto,
   LoginDto,
+  LoginMfaDto,
   RegisterDto,
   ResetPasswordDto,
   TokenDto,
@@ -58,6 +62,7 @@ export class AuthController {
     private readonly verification: VerificationService,
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
+    private readonly mfa: MfaService,
   ) {}
 
   /**
@@ -99,17 +104,28 @@ export class AuthController {
     return { status: 'sent_if_pending' };
   }
 
+  /**
+   * The password step. For most accounts it opens a session, as it always did.
+   * For an account with two-factor sign-in it opens NOTHING: it answers
+   * `{ status: 'mfa_required', challengeToken, expiresAt }` and the session
+   * comes from `POST /auth/login/mfa`. `Cache-Control: no-store` because the
+   * challenge is half a credential.
+   *
+   * `mfaEnrollmentRequired` tells the app, before it renders anything, that this
+   * account's role needs a second factor it does not have yet — every route but
+   * enrolment will refuse it, so the app goes straight to the enrolment screen.
+   */
   @Public()
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('login')
   @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { user, rawToken, expiresAt } = await this.auth.login(dto.identifier, dto.password, {
-      // The real client: `main.ts` trusts the loopback proxy and nothing else,
-      // so behind the tunnel this is the visitor, not 127.0.0.1.
-      ip: req.ip ?? null,
-      userAgent: req.headers['user-agent'] ?? null,
-    });
+    const result = await this.auth.login(dto.identifier, dto.password, this.origin(req));
+    if (result.kind === 'challenge') {
+      return { status: 'mfa_required', challengeToken: result.challengeToken, expiresAt: result.expiresAt };
+    }
+    const { user, rawToken, expiresAt } = result;
     /**
      * Name the actor for the audit row.
      *
@@ -120,9 +136,38 @@ export class AuthController {
      */
     req.user = user;
     this.setSessionCookie(res, rawToken, expiresAt);
-    return { id: user.id, role: user.role };
+    return { id: user.id, role: user.role, mfaEnrollmentRequired: this.mfa.requiredFor(user.role) };
   }
 
+  /**
+   * The second sign-in step: the challenge plus a code from the authenticator
+   * app, or plus a recovery code. Public — there is no session yet — and metered
+   * by the same credential bucket as the password, because it checks a
+   * credential: without that, a stolen password would buy guesses at the code
+   * as fast as the network allowed, held back only by the lockout.
+   */
+  @Public()
+  @AuthBucket(CREDENTIAL_ROUTE)
+  @Post('login/mfa')
+  @HttpCode(200)
+  async loginMfa(@Body() dto: LoginMfaDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const hasCode = typeof dto.code === 'string' && dto.code.trim() !== '';
+    const hasRecovery = typeof dto.recoveryCode === 'string' && dto.recoveryCode.trim() !== '';
+    if (hasCode === hasRecovery) {
+      throw AppError.validation('Send either the code from your authenticator app or a recovery code — one of them.');
+    }
+    const { user, rawToken, expiresAt } = await this.auth.completeSecondFactor(
+      dto.challengeToken,
+      hasCode ? { code: dto.code! } : { recoveryCode: dto.recoveryCode! },
+      this.origin(req),
+    );
+    req.user = user; // the audit row's actor, as for the password step
+    this.setSessionCookie(res, rawToken, expiresAt);
+    return { id: user.id, role: user.role, mfaEnrollmentRequired: false };
+  }
+
+  /** Reachable before a required second factor is enrolled: a way out must always exist. */
+  @AllowWithoutMfa()
   @Post('logout')
   @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -186,6 +231,14 @@ export class AuthController {
   async revokeOtherSessions(@CurrentUser() user: AuthUser, @Req() req: Request) {
     const ended = await this.sessions.revokeAllFor(user.id, this.rawSessionToken(req));
     return { status: 'sessions_revoked', otherSessionsEnded: ended };
+  }
+
+  /**
+   * The real client: `main.ts` trusts the loopback proxy and nothing else, so
+   * behind the tunnel this is the visitor, not 127.0.0.1.
+   */
+  private origin(req: Request) {
+    return { ip: req.ip ?? null, userAgent: req.headers['user-agent'] ?? null };
   }
 
   /** The raw session cookie on this request, if there is one. */

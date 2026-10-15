@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import { AllowSuspended } from './allow-suspended.decorator';
+import { AllowWithoutMfa } from './mfa/allow-without-mfa.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './acc.dto';
@@ -52,8 +53,12 @@ export class ProfileController {
    * suspended user apart from a signed-out one, and would show them a sign-in
    * form for an account they have just signed into. It carries the status the
    * restricted shell keys off, and nothing a suspended holder should not see.
+   *
+   * Readable before a required second factor is enrolled, for the same reason:
+   * it is how the shell learns that the person in front of it must enrol.
    */
   @AllowSuspended()
+  @AllowWithoutMfa()
   @Get('profile')
   get(@CurrentUser() user: AuthUser) {
     return this.profiles.get(user.id);

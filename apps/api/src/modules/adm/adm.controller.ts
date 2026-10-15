@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { NAME_PART_MAX } from '../../shared/names';
@@ -7,6 +7,7 @@ import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ShelfYieldService } from './shelf-yield.service';
 import { AdmService } from './adm.service';
+import { MfaService } from '../acc/mfa/mfa.service';
 
 class UpdateUserDto {
   @IsOptional() @IsIn(['user', 'warehouse_operator', 'admin']) role?: 'user' | 'warehouse_operator' | 'admin';
@@ -47,6 +48,7 @@ export class AdmController {
   constructor(
     private readonly adm: AdmService,
     private readonly yield_: ShelfYieldService,
+    private readonly mfa: MfaService,
   ) {}
 
   /**
@@ -94,6 +96,18 @@ export class AdmController {
   @Patch('users/:id')
   updateUser(@CurrentUser() actor: AuthUser, @Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.adm.updateUser(actor.id, id, dto);
+  }
+
+  /**
+   * Remove ANOTHER account's second factor — for somebody who lost their phone
+   * and their recovery codes. Ends every session they hold and is audited; an
+   * administrator cannot reset their own (see `MfaService.resetFor`).
+   */
+  @Post('users/:id/mfa/reset')
+  @HttpCode(200)
+  async resetMfa(@CurrentUser() actor: AuthUser, @Param('id') id: string) {
+    const { sessionsEnded } = await this.mfa.resetFor(actor.id, id);
+    return { status: 'mfa_reset', sessionsEnded };
   }
 
   @Get('items')

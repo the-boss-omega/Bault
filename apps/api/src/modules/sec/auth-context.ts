@@ -11,6 +11,13 @@ export interface AuthUser {
   id: string;
   role: Role;
   status: AccountStatus;
+  /**
+   * Whether the account has a confirmed second factor. Set by the session
+   * guard on every request, read by `MfaEnrollmentGuard`; absent on a user
+   * object that did not come from a session, which that guard treats as "not
+   * enrolled" rather than guessing.
+   */
+  mfaEnabled?: boolean;
 }
 
 declare global {
