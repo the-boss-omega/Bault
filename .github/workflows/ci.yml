@@ -132,10 +132,13 @@ jobs:
         run: pnpm test:contract
 
       # ---- Everything below needs a migrated, seeded database and a live API --
-      - name: Migrate and seed
-        run: |
-          pnpm --filter @bault/api db:migrate
-          pnpm --filter @bault/api db:seed
+      # Each of the four suites below is seeded afresh, exactly as `pnpm test`
+      # does (scripts/test.mjs). They share the seeded accounts, and a suite
+      # that ran on what the previous one left was measuring the run order:
+      # `fin-invariants` failed after `integration` and passed on a fresh seed
+      # (finding E16).
+      - name: Migrate
+        run: pnpm --filter @bault/api db:migrate
 
       # The e2e suites drive the real HTTP stack on purpose — guards, DB
       # transactions and append-only triggers end to end. That only works if
@@ -154,19 +157,27 @@ jobs:
           echo "API did not become ready in 60s"; exit 1
 
       - name: Integration tests
-        run: pnpm test:integration
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:integration
 
       # `core` (tests3/integration) drives the live API exactly as `integration`
       # does — it is a second e2e suite, not a unit one, which is why it belongs
       # here rather than with the fast steps above.
       - name: Core tests
-        run: pnpm test:core
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:core
 
       - name: Concurrency tests (no double-sale / single owner)
-        run: pnpm test:concurrency
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:concurrency
 
       - name: Property tests (balance == sum ledger)
-        run: pnpm test:property
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:property
 
       - name: Stop the API
         if: always()
