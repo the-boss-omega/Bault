@@ -48,6 +48,7 @@ const SUITES = [
   ['--no-file-parallelism', '--project', 'core'],
   ['--no-file-parallelism', '--project', 'concurrency'],
   ['--no-file-parallelism', '--project', 'property'],
+  ['--no-file-parallelism', '--project', 'worker'],
 ];
 
 function run(command, args) {
