@@ -4,6 +4,7 @@ import { eq, or } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { pgErrorCode } from '../../shared/errors/pg-error';
 import { loginAttempt, userAccount } from './acc.schema';
 import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../shared/names';
 import { VerificationService } from './verification.service';
@@ -240,6 +241,8 @@ export class AuthService {
 }
 
 /** Postgres reports a violated UNIQUE index as SQLSTATE 23505. */
+// Through `pgErrorCode`, not `e.code`: drizzle 0.45 wraps the pg error in
+// `.cause`, and reading `.code` directly would turn a taken username into a 500.
 function isUniqueViolation(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
+  return pgErrorCode(e) === '23505';
 }
