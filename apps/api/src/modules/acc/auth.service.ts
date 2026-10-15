@@ -8,6 +8,7 @@ import { loginAttempt, userAccount } from './acc.schema';
 import { isValidUsername, normalizeNamePart, normalizeUsername } from '../../shared/names';
 import { VerificationService } from './verification.service';
 import { SessionService, clampUserAgent, type ClientOrigin } from './session.service';
+import { pgErrorCode } from '../../shared/errors/pg-error';
 import type { AuthUser } from '../sec/auth-context';
 
 /**
@@ -194,5 +195,5 @@ export class AuthService {
 
 /** Postgres reports a violated UNIQUE index as SQLSTATE 23505. */
 function isUniqueViolation(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
+  return pgErrorCode(e) === '23505';
 }

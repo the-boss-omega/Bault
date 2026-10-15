@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { pgErrorCode } from './pg-error';
 import { ErrorCode } from './error-codes';
 
 /**
@@ -125,12 +126,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 function isInvalidTextRepresentation(exception: unknown): boolean {
-  return (
-    typeof exception === 'object' &&
-    exception !== null &&
-    'code' in exception &&
-    (exception as { code?: unknown }).code === PG_INVALID_TEXT_REPRESENTATION
-  );
+  return pgErrorCode(exception) === PG_INVALID_TEXT_REPRESENTATION;
 }
 
 /** The HTTP status a connect-style middleware error carries, if it carries one. */
