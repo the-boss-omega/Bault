@@ -42,6 +42,11 @@ export interface ShipmentSummary {
   /** The catalogue key of the chosen service, and who chose it. */
   serviceKey: string | null;
   serviceMode: string;
+  /** `carrier`, `hand_delivery` or `show_pickup` — how the shipment ends. */
+  fulfilmentMethod: string;
+  /** A hand delivery's quote, once a person has priced the journey. Null until then. */
+  quoteMinor: number | null;
+  quoteNotes: string | null;
   /** Customs value the collector declared. Zero on a domestic parcel. */
   declaredValueMinor: number;
   insuredValueMinor: number;

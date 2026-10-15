@@ -628,6 +628,17 @@ export class ShipmentService {
       serviceLevel: s.serviceLevel,
       serviceKey: s.serviceKey,
       serviceMode: s.serviceMode,
+      /**
+       * How it ends, and — for a hand delivery — the price somebody worked out.
+       *
+       * The SPA's quotes panel filters on `fulfilmentMethod` and shows
+       * `quoteMinor` with an Accept button, and none of the three was in this
+       * view, so a collector who had been quoted never saw the quote and had no
+       * way to accept it.
+       */
+      fulfilmentMethod: s.fulfilmentMethod,
+      quoteMinor: s.quoteMinor,
+      quoteNotes: s.quoteNotes,
       trackingNumber: s.trackingNumber,
       estimatedDeliveryAt: s.estimatedDeliveryAt,
       rush: s.rushFlag,
