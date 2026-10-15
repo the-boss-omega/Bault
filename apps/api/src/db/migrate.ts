@@ -18,6 +18,11 @@ import { loadEnv } from '@bault/config';
 async function main(): Promise<void> {
   const env = loadEnv();
   const pool = new Pool({ connectionString: env.DIRECT_DATABASE_URL });
+  // Same as the API's pool (F063): an idle connection dropped by the server is
+  // reported, not an uncaught exception. A query that fails still fails the run.
+  pool.on('error', (err) => {
+    console.error('migration: idle database connection lost', err.message);
+  });
   const db = drizzle(pool);
 
   await migrate(db, { migrationsFolder: './src/db/migrations' });
