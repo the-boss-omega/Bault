@@ -3,6 +3,7 @@ import { loadEnv } from '@bault/config';
 import { ConsoleEmailAdapter, SmtpEmailAdapter, type EmailAdapter } from '@bault/adapters';
 import { notificationMessage } from './notification-message';
 import { defaultEmailEnabled, eventSubject } from './notification-events';
+import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
 
 /**
  * Outbox dispatch (T128, Principle XI).
@@ -114,6 +115,14 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
   let failed = 0;
 
   for (const row of rows) {
+    // A reset link is account mail, not a notification: no in-app row, no
+    // preferences, and it goes to an address that may not have confirmed itself.
+    if (row.event_type === PASSWORD_RESET_REQUESTED) {
+      await sendPasswordReset(pool, row.payload, emailAdapter());
+      await pool.query(`UPDATE outbox_message SET dispatched_at = now() WHERE id = $1`, [row.id]);
+      continue;
+    }
+
     const message = notificationMessage(row.event_type, row.payload);
     const content = JSON.stringify({ ...(row.payload ?? {}), message });
 

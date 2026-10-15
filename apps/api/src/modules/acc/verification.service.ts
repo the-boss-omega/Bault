@@ -10,7 +10,6 @@ import { generateToken, hashToken } from '../../shared/tokens';
 import { userAccount, verificationToken } from './acc.schema';
 
 const EMAIL_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const RESET_TTL_MS = 60 * 60 * 1000; // 1h
 
 /**
  * Build the absolute link that goes in an email.
@@ -125,26 +124,6 @@ export class VerificationService {
     // Silent otherwise: never reveal whether an email exists.
   }
 
-  /** Issue a password-reset token (used by PasswordService.requestReset). */
-  async issuePasswordReset(email: string): Promise<void> {
-    const [u] = await this.db
-      .select()
-      .from(userAccount)
-      .where(eq(userAccount.email, email))
-      .limit(1);
-    if (!u) return; // silent — do not leak account existence
-    const raw = generateToken();
-    await this.db.insert(verificationToken).values({
-      userId: u.id,
-      type: 'password_reset',
-      tokenHash: hashToken(raw),
-      expiresAt: new Date(Date.now() + RESET_TTL_MS),
-    });
-    await this.email.send({
-      to: email,
-      subject: 'Reset your Bault password',
-      template: 'password_reset',
-      variables: { link: emailLink('reset-password', raw) },
-    });
-  }
+  // The password-reset mail is no longer sent from here: see
+  // `PasswordService.requestReset` and the worker's `password-reset-mail.ts`.
 }

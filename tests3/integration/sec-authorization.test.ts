@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { Client, SEED, signIn, intakeFor } from '../../tests/integration/helpers/http';
+import { closeDb, sql } from '../../tests/integration/helpers/db';
+
+afterAll(closeDb);
 
 /**
  * The authorization matrix.
@@ -142,6 +145,46 @@ describe('anonymous access', () => {
     });
     // Same status either way, or the endpoint is an account-existence oracle.
     expect(unknown.status).toBe(known.status);
+  });
+
+  it('hands the reset mail to the outbox and answers every address the same way (N11)', async () => {
+    /**
+     * The reset mail used to be sent INSIDE the request, and only for an address
+     * that had an account: a failing mail server answered 500 for registered
+     * addresses and 202 for everybody else, and the time the request took — a
+     * token row and a mail delivery, or neither — told the same story. Both are
+     * account-existence oracles.
+     *
+     * Now the request does the same thing for any address: it records that a
+     * reset was asked for, and the worker resolves the address and mails it
+     * later. So the evidence is in the outbox, for both addresses.
+     *
+     * Kept next to the test above and before the flood test at the end of this
+     * file: the reset route's budget is five a minute per address.
+     */
+    const anon = new Client();
+    const unknownEmail = `reset-n11-${Date.now()}@fixture.bault.test`;
+    const known = await anon.post('/auth/password/reset-request', { email: SEED.collector });
+    const unknown = await anon.post('/auth/password/reset-request', { email: unknownEmail });
+    expect(known.status).toBe(202);
+    expect(unknown.status).toBe(known.status);
+    expect(unknown.body).toEqual(known.body);
+
+    const queued = await sql<{ email: string }>(
+      `SELECT payload->>'email' AS email FROM outbox_message
+        WHERE event_type = 'password_reset_requested' AND payload->>'email' = ANY($1::text[])`,
+      [[SEED.collector, unknownEmail]],
+    );
+    const addresses = new Set(queued.map((r) => r.email));
+    expect(addresses.has(SEED.collector)).toBe(true);
+    expect(addresses.has(unknownEmail)).toBe(true);
+
+    // Nothing in the outbox is a usable link: a reset token exists in clear only
+    // in the mail the worker sends, never in a row somebody could read.
+    const payloads = await sql<{ payload: string }>(
+      `SELECT payload::text AS payload FROM outbox_message WHERE event_type = 'password_reset_requested'`,
+    );
+    expect(payloads.some((r) => /token|reset-password/.test(r.payload))).toBe(false);
   });
 
   it('refuses a login with the right identifier and a wrong password', async () => {
