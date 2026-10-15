@@ -41,8 +41,12 @@ services:
         condition: service_healthy
 
   minio:
-    # MinIO's own registry; `minio/minio` is no longer on Docker Hub.
-    image: quay.io/minio/minio:latest
+    # Built from source (minio/Dockerfile). MinIO no longer publishes community
+    # images: `minio/minio` left Docker Hub, the quay.io image this pulled
+    # failed on every CI run, and a failed pull stops `up` before Postgres
+    # starts. The first `up` builds it, which takes a few minutes. `mc` is in
+    # the image, for making the bucket.
+    build: ./minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
