@@ -35,6 +35,15 @@ export const ErrorCode = {
    * payout and a bug in Bault all looked the same to the client and the log.
    */
   PROVIDER_UNAVAILABLE: 'provider_unavailable',
+  /**
+   * The object store failed or could not be reached (503).
+   *
+   * With no bucket, every photograph on the receiving bench answered a bare
+   * 500 — nine `receiving-bench` failures that read as nine bugs when the
+   * cause was one store that was down, and an operator told "internal error"
+   * has no reason to think trying again later would work.
+   */
+  STORAGE_UNAVAILABLE: 'storage_unavailable',
   INTERNAL: 'internal',
 } as const;
 

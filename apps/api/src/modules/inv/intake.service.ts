@@ -10,6 +10,7 @@ import { StowService } from '../cst/stow.service';
 import { bin, item, itemImage } from '../cst/cst.schema';
 import { parcel } from './parcel.schema';
 import { OutboxService } from '../not/outbox/outbox.service';
+import { MediaService } from '../med/media.service';
 import { userAccount } from '../acc/acc.schema';
 import { normalizeUsername } from '../../shared/names';
 import { makeItemBarcode, makeItemSerial, makeLotSerial } from './labels';
@@ -101,6 +102,7 @@ export class IntakeService {
     private readonly stow: StowService,
     private readonly outbox: OutboxService,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
+    private readonly media: MediaService,
   ) {}
 
   /**
@@ -272,7 +274,7 @@ export class IntakeService {
      */
     for (const [index, unit] of units.entries()) {
       try {
-        await this.assertReceivable(unit);
+        await this.assertReceivable(actorId, unit);
       } catch (e) {
         const reason = e instanceof Error ? e.message : 'could not be booked in';
         throw AppError.validation(`Unit ${index + 1} of ${units.length}: ${reason}`);
@@ -304,7 +306,7 @@ export class IntakeService {
    * vocabulary, the owner has to resolve, the parcel has to be that owner's and
    * open, and a lot has to be a class that can be one.
    */
-  private async assertReceivable(input: IntakeItemInput): Promise<void> {
+  private async assertReceivable(actorId: string, input: IntakeItemInput): Promise<void> {
     if (!isKnownItemClass(input.typeClass)) {
       throw AppError.validation(`Unknown item class "${input.typeClass}"`);
     }
@@ -314,6 +316,7 @@ export class IntakeService {
     }
     const ownerId = await this.resolveOwner(input);
     if (input.parcelId) await this.assertParcelOpenFor(input.parcelId, ownerId);
+    await this.media.assertAttachable(this.db, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
   }
 
   /**
@@ -381,6 +384,9 @@ export class IntakeService {
     };
 
     const writeAll = async (t: Database) => {
+      // Before the first copy is written, in the transaction that writes them:
+      // every copy carries the same photographs, so they are vouched for once.
+      await this.media.assertAttachable(t, cleanKeys(input.photoKeys), { purpose: 'item_intake', actorId });
       const created = [];
       for (let i = 0; i < quantity; i += 1) {
         created.push(await this.createOne(t, actorId, ownerId, effective, cls.oversized));
@@ -444,7 +450,7 @@ export class IntakeService {
      * owner's vault immediately rather than the generated placeholder it wore
      * until somebody paid for a professional shoot.
      */
-    const photoKeys = (input.photoKeys ?? []).map((k) => k.trim()).filter(Boolean);
+    const photoKeys = cleanKeys(input.photoKeys);
     if (photoKeys.length > 0) {
       await tx.insert(itemImage).values(
         photoKeys.map((objectKey, index) => ({
@@ -553,4 +559,9 @@ export class IntakeService {
     await tx.update(item).set({ lotBroken: true, updatedAt: new Date() }).where(eq(item.id, lotItemId));
     return { lotItemId, producedCount: produced.length, items: produced };
   }
+}
+
+/** Photo keys as every intake path reads them: trimmed, blanks dropped. */
+function cleanKeys(keys: readonly string[] | undefined): string[] {
+  return (keys ?? []).map((k) => k.trim()).filter(Boolean);
 }
