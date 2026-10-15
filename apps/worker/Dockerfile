@@ -61,8 +61,13 @@ COPY --from=build --chown=bault:bault /repo/apps/worker/package.json ./apps/work
 USER 10001:10001
 WORKDIR /app/apps/worker
 
-# No HTTP port and therefore no HTTP healthcheck. The worker's liveness is
-# whether pg-boss is connected, which it asserts by exiting non-zero on a fatal
-# error — so the orchestrator's restart policy is the check. A heartbeat row
-# would be better and is not yet built; noted rather than faked.
+# No HTTP port and therefore no container healthcheck. A fatal pg-boss error
+# exits non-zero, and the restart policy brings the process back. Whether the
+# JOBS are running is a different question, answered through the database:
+# each job stamps its row in `worker_heartbeat` when it succeeds, and the API's
+# GET /api/v1/readyz/worker answers 503 when outbox dispatch has not succeeded
+# for five minutes. infra/production/deploy.sh waits on it after every deploy.
+#
+# Exec form, so node is PID 1 and gets SIGTERM directly: it stops taking jobs
+# and drains the running ones for up to 30s (compose.yml gives it 45).
 CMD ["node", "dist/index.js"]
