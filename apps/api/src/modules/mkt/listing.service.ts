@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -9,6 +9,22 @@ import { CustodyService } from '../cst/custody.service';
 import { item } from '../cst/cst.schema';
 import { listing } from './mkt.schema';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
+import { escrowDeal } from '../esc/escrow.schema';
+import { shipment } from '../shp/shp.schema';
+import { ShipmentService } from '../shp/shipment.service';
+import { serviceRequest } from '../dis/dis.schema';
+
+/** Escrow statuses in which a deal still has a claim on its card. */
+const OPEN_ESCROW_STATUSES = ['proposed', 'agreed', 'funded', 'inspecting', 'awaiting_release'] as const;
+
+/**
+ * Service requests that end with the card changing hands — Bault buying it,
+ * selling it for the owner, or taking it as a gift. While one is open the card
+ * is already promised to the platform, so it cannot also be promised to a buyer.
+ * Photography, grading and the like leave the owner where they are and do not
+ * count.
+ */
+const OWNERSHIP_CHANGING_SERVICES = ['buyout', 'consignment', 'donation'] as const;
 
 /**
  * Listing management (T077, Principle VIII).
@@ -34,6 +50,7 @@ export class ListingService {
       if (it.lifecycleState !== 'stored') {
         throw new AppError(ErrorCode.CONFLICT, 'Only a stored item can be listed', 409);
       }
+      await this.assertNotCommitted(tx as Database, itemId);
 
       await this.custody.changeState(tx, itemId, 'listed', sellerId, 'listed for sale');
       const [created] = await tx
@@ -42,6 +59,55 @@ export class ListingService {
         .returning();
       return created;
     });
+  }
+
+  /**
+   * Refuse a card that is already promised somewhere else.
+   *
+   * A card in an open escrow deal, a parcel being prepared, or a buyout or
+   * consignment is still the seller's, on the shelf and not on hold — so the
+   * three checks above let it through, it could be listed and sold, and the
+   * deal, the parcel or the buyout found out at settlement or at the packing
+   * bench, after a stranger had paid. Asked here, under the item's lock, so the
+   * answer still holds when the listing is written.
+   */
+  private async assertNotCommitted(tx: Database, itemId: string): Promise<void> {
+    const committed = (to: string) =>
+      new AppError(ErrorCode.ITEM_COMMITTED, `This card is already committed to ${to}, so it cannot be listed.`, 409, {
+        itemId,
+      });
+
+    const [deal] = await tx
+      .select({ code: escrowDeal.code })
+      .from(escrowDeal)
+      .where(and(eq(escrowDeal.itemId, itemId), inArray(escrowDeal.status, [...OPEN_ESCROW_STATUSES])))
+      .limit(1);
+    if (deal) throw committed(`escrow deal ${deal.code}`);
+
+    const [parcel] = await tx
+      .select({ code: shipment.code })
+      .from(shipment)
+      .where(
+        and(
+          sql`${shipment.itemIds} @> ${JSON.stringify([itemId])}::jsonb`,
+          inArray(shipment.status, [...ShipmentService.OPEN_STATUSES]),
+        ),
+      )
+      .limit(1);
+    if (parcel) throw committed(`shipment ${parcel.code ?? ''}`.trim());
+
+    const [request] = await tx
+      .select({ code: serviceRequest.code, type: serviceRequest.type })
+      .from(serviceRequest)
+      .where(
+        and(
+          eq(serviceRequest.itemId, itemId),
+          inArray(serviceRequest.type, [...OWNERSHIP_CHANGING_SERVICES]),
+          inArray(serviceRequest.status, ['requested', 'in_progress']),
+        ),
+      )
+      .limit(1);
+    if (request) throw committed(`a ${request.type} (${request.code})`);
   }
 
   async reprice(sellerId: string, listingId: string, askingPrice: number) {

@@ -11,6 +11,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { item } from '../cst/cst.schema';
 import { transaction } from '../mkt/mkt.schema';
 import { ServiceRequestService } from './service.service';
+import { assertQuotable } from './custom-request.service';
 
 /** Fields the operator MUST fill to quote on a buyout (Requirement 5.4). */
 export interface BuyoutQuoteForm {
@@ -84,6 +85,10 @@ export class BuyoutService {
       const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'buyout') throw AppError.validation('Not a buyout request');
+      // The same guard as a custom quote: an accepted buyout has already moved
+      // the card and the money, and a fresh figure on it would offer the
+      // collector a second payment for one card.
+      assertQuotable('buyout', ((req.typeFields as Record<string, unknown>) ?? {}).stage);
 
       const updated = await this.requests.setStatus(tx, requestId, 'in_progress', {
         stage: 'quoted',

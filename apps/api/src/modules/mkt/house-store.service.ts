@@ -162,10 +162,18 @@ export class HouseStoreService {
      */
     const key = idempotencyKey?.trim() || randomUUID();
     const endpoint = `house-purchase:${listingId}`;
-    const replay = await this.idempotency.lookup(key, endpoint);
-    if (replay) return { ...(replay.body as HousePurchaseResult), replayed: true };
 
-    const result = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx): Promise<HousePurchaseResult> => {
+      /**
+       * The key is claimed before anything else, inside this transaction. The
+       * product lock below only QUEUES two requests — each then bought a copy —
+       * so a double-click carrying one key used to buy two copies and charge
+       * twice. A second request with the key now waits on this claim and replays
+       * the first one's order (F064).
+       */
+      const { replay } = await this.idempotency.claim(tx as Database, key, endpoint, buyerId);
+      if (replay) return { ...(replay.body as HousePurchaseResult), replayed: true };
+
       // The lock is what makes the last copy sell once: a second buyer blocks
       // here, then reads a stock of zero.
       const [product] = await tx
@@ -256,7 +264,7 @@ export class HouseStoreService {
         currency,
       });
 
-      return {
+      const result: HousePurchaseResult = {
         orderCode,
         itemId: created.id,
         serialNumber: created.serialNumber,
@@ -264,10 +272,9 @@ export class HouseStoreService {
         price,
         transactionId: txn.id,
       };
+      await this.idempotency.complete(tx as Database, key, endpoint, 201, result);
+      return result;
     });
-
-    await this.idempotency.save(key, endpoint, buyerId, 201, result);
-    return result;
   }
 
   /* ------------------------------------------------------------------

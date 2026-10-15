@@ -73,22 +73,25 @@ export class PurchaseService {
     inSale?: (tx: Database) => Promise<void>,
   ): Promise<PurchaseResult> {
     const endpoint = `purchase:${listingId}`;
-    const replay = await this.idempotency.lookup(idempotencyKey, endpoint);
-    if (replay) {
-      /**
-       * A repeat of a purchase that already happened, marked as such.
-       *
-       * It was returned as an ordinary 201 with the original transaction and no
-       * indication anything unusual had occurred — so a double-clicked Buy
-       * button produced two success messages and left a buyer with reasonable
-       * grounds to think they had bought two of something. Nothing was charged
-       * twice; the UI simply could not tell the difference and said the wrong
-       * thing. `POST /finance/checkout` already answers this way.
-       */
-      return { ...(replay.body as PurchaseResult), replayed: true };
-    }
 
-    const result: PurchaseResult = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx): Promise<PurchaseResult> => {
+      // The key first, so a second request carrying it waits here for this one
+      // and then replays it rather than buying again (F064).
+      const { replay } = await this.idempotency.claim(tx as Database, idempotencyKey, endpoint, buyerId);
+      if (replay) {
+        /**
+         * A repeat of a purchase that already happened, marked as such.
+         *
+         * It was returned as an ordinary 201 with the original transaction and no
+         * indication anything unusual had occurred — so a double-clicked Buy
+         * button produced two success messages and left a buyer with reasonable
+         * grounds to think they had bought two of something. Nothing was charged
+         * twice; the UI simply could not tell the difference and said the wrong
+         * thing. `POST /finance/checkout` already answers this way.
+         */
+        return { ...(replay.body as PurchaseResult), replayed: true };
+      }
+
       const [l] = await tx.select().from(listing).where(eq(listing.id, listingId)).for('update').limit(1);
       if (!l) throw AppError.notFound('Listing not found');
       if (l.status !== 'active') {
@@ -185,10 +188,9 @@ export class PurchaseService {
         payload: { itemId: l.itemId, buyerId, sellerId: l.sellerId, price },
       });
 
-      return { transactionId: txn.id, itemId: l.itemId, price, fee: feeMinor };
+      const result: PurchaseResult = { transactionId: txn.id, itemId: l.itemId, price, fee: feeMinor };
+      await this.idempotency.complete(tx as Database, idempotencyKey, endpoint, 201, result);
+      return result;
     });
-
-    await this.idempotency.save(idempotencyKey, endpoint, buyerId, 201, result);
-    return result;
   }
 }

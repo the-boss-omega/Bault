@@ -70,16 +70,21 @@ describe('property: wallet balance == Σ ledger', () => {
     await admin.post(`/admin/wallet-requests/${out.body.id}/approve`, {});
     await admin.post(`/admin/wallet-requests/${out.body.id}/complete`, {});
     /**
-     * A cash-out costs the gross AND the fee.
+     * A cash-out costs exactly the amount asked for: the fee comes out of it, as
+     * its own row, and the rest is the withdrawal. This modelled the gross PLUS
+     * the fee — the double-charged fee of F004.
      *
      * Taken from the quote endpoint rather than recomputed here, so this model
      * cannot drift from the schedule the platform actually charges — which is
      * the same reason the quote and the charge share one function on the server.
      */
     const outQuote = (await customer.get('/finance/cash-out-quote?amountMinor=3456')).body as {
+      amountMinor: number;
       feeMinor: number;
+      netMinor: number;
     };
-    expected -= 3_456 + outQuote.feeMinor;
+    expect(outQuote.netMinor + outQuote.feeMinor).toBe(3_456);
+    expected -= outQuote.amountMinor;
 
     const balance = (await customer.get('/finance/wallet')).body as { amount: number };
     const ledger = (await customer.get('/finance/ledger')).body as { amount: number; direction: string }[];

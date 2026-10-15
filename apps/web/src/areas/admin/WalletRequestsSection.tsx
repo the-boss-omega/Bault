@@ -82,6 +82,7 @@ export function WalletRequestsSection({
   const [rejecting, setRejecting] = useState<WalletRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [completing, setCompleting] = useState<WalletRequest | null>(null);
+  const [payoutReference, setPayoutReference] = useState('');
   const [busy, setBusy] = useState(false);
 
   // Filtering is server-side, so a reviewer works a real slice of the queue
@@ -136,6 +137,27 @@ export function WalletRequestsSection({
       setRejecting(null);
       setCompleting(null);
       setRejectReason('');
+      setPayoutReference('');
+    }
+  }
+
+  /**
+   * Ask the payout provider again about cash-outs still paying out — the ones
+   * whose confirmation never arrived.
+   */
+  async function reconcile() {
+    setBusy(true);
+    try {
+      const r = await api.post<{ checked: number; succeeded: number; failed: number; pending: number }>(
+        '/admin/payouts/reconcile',
+        {},
+      );
+      onMsg(t('admin.requests.reconciled', { ...r }));
+      await load();
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -149,6 +171,9 @@ export function WalletRequestsSection({
         flush
         tools={
           <>
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void reconcile()}>
+              {t('admin.requests.reconcile')}
+            </Button>
             <label className="control">
               <select
                 value={typeFilter}
@@ -296,19 +321,43 @@ export function WalletRequestsSection({
         <ConfirmationModal
           title={t('admin.requests.completeTitle')}
           body={
-            <p>
-              {t('admin.requests.completeBody', {
-                code: completing.code,
-                amount: formatUsd(completing.amount),
-                customer: completing.customerName || completing.username || completing.email || '—',
-              })}
-            </p>
+            <>
+              <p>
+                {t('admin.requests.completeBody', {
+                  code: completing.code,
+                  amount: formatUsd(completing.amount),
+                  customer: completing.customerName || completing.username || completing.email || '—',
+                })}
+              </p>
+              {/* Required by the API when cash-outs are paid by hand, refused when
+                  the provider pays: a reference here on the provider rail would
+                  mean somebody believes they already paid it. */}
+              {completing.type === 'cash_out' && (
+                <Field label={t('admin.requests.payoutReferenceLabel')} hint={t('admin.requests.payoutReferenceHint')}>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={payoutReference}
+                    onChange={(e) => setPayoutReference(e.target.value)}
+                  />
+                </Field>
+              )}
+            </>
           }
           confirmLabel={t('admin.requests.complete')}
           cancelLabel={t('ui.cancel')}
           busy={busy}
-          onConfirm={() => void act(completing, 'complete')}
-          onCancel={() => setCompleting(null)}
+          onConfirm={() =>
+            void act(
+              completing,
+              'complete',
+              payoutReference.trim() ? { payoutReference: payoutReference.trim() } : undefined,
+            )
+          }
+          onCancel={() => {
+            setCompleting(null);
+            setPayoutReference('');
+          }}
         />
       )}
     </>
@@ -408,6 +457,18 @@ function WalletRequestDrawer({
         {request.settledLedgerId && (
           <DetailRow label={t('wallet.requests.settledLedger')}>
             <code dir="ltr">{request.settledLedgerId}</code>
+          </DetailRow>
+        )}
+        {request.payout && (
+          <DetailRow label={t('admin.requests.payoutStatus')}>
+            <span dir="ltr">
+              {request.payout.status} · {formatUsd(request.payout.amount)} · {request.payout.provider}
+            </span>
+          </DetailRow>
+        )}
+        {request.payoutReference && (
+          <DetailRow label={t('admin.requests.payoutReference')}>
+            <code dir="ltr">{request.payoutReference}</code>
           </DetailRow>
         )}
       </dl>

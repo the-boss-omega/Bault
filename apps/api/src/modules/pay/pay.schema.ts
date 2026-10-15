@@ -37,6 +37,18 @@ export const ledgerType = pgEnum('ledger_type', [
    * them apart would be a statement nobody could reconcile.
    */
   'chargeback',
+  /**
+   * Giving money back (0031). A parcel cancelled before any label was bought,
+   * and a custom request declined after it was paid for, used to keep what the
+   * collector had paid because there was no type to record a refund as.
+   */
+  'shipping_refund',
+  'service_refund',
+  /**
+   * A payout the provider refused or returned. The money never left, so the
+   * debit is reversed — by this compensating credit, never by editing the debit.
+   */
+  'payout_reversal',
 ]);
 
 export const ledgerDirection = pgEnum('ledger_direction', ['debit', 'credit']);
@@ -76,6 +88,13 @@ export const externalPayment = pgTable('external_payment', {
   status: text('status').notNull(),
   amount: amountMinor().notNull(),
   currency: currency().notNull(),
+  /**
+   * What the outside world calls this payment, when that is not `providerRef`:
+   * a PayPal payout batch id, or the reference an administrator gave for a
+   * payout they made by hand. Unique per provider (0031).
+   */
+  externalRef: text('external_ref'),
+  /** The last provider event applied to this row. Unique, so one event applies once. */
   webhookEventId: text('webhook_event_id'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -111,6 +130,9 @@ export const walletRequestType = pgEnum('wallet_request_type', ['cash_in', 'cash
  *   submitted → pending_review → approved → processing → completed
  *                             ↘ rejected
  *   submitted / pending_review → cancelled   (by the requester)
+ *
+ *   approved / processing → paying → completed | payout_failed   (a cash-out
+ *   paid through the provider: debited first, settled when the provider says)
  */
 export const walletRequestStatus = pgEnum('wallet_request_status', [
   'submitted',
@@ -120,6 +142,8 @@ export const walletRequestStatus = pgEnum('wallet_request_status', [
   'processing',
   'completed',
   'cancelled',
+  'paying',
+  'payout_failed',
 ]);
 
 /**
@@ -150,6 +174,10 @@ export const walletRequest = pgTable('wallet_request', {
   notes: text('notes'),
   /** Set when the request completes; the ledger row that actually moved money. */
   settledLedgerId: text('settled_ledger_id'),
+  /** A cash-out's `external_payment` row — the money on its way out (0031). */
+  payoutPaymentId: text('payout_payment_id'),
+  /** What the payment is called outside Bault: a provider batch id, or a manual transfer's reference. */
+  payoutReference: text('payout_reference'),
   reviewedBy: text('reviewed_by'),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   rejectionReason: text('rejection_reason'),

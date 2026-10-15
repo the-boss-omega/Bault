@@ -18,6 +18,12 @@ export const ErrorCode = {
   EMAIL_UNVERIFIED: 'email_unverified',
   ITEM_ON_HOLD: 'item_on_hold',
   ITEM_NO_LONGER_AVAILABLE: 'item_no_longer_available',
+  /**
+   * The card is already promised elsewhere — in an open escrow deal, a parcel
+   * being prepared, or a buyout or consignment — so it cannot also be sold.
+   * Distinct from ITEM_ON_HOLD: nothing is wrong with the card, it is spoken for.
+   */
+  ITEM_COMMITTED: 'item_committed',
   SELF_DEALING_FORBIDDEN: 'self_dealing_forbidden',
   INSUFFICIENT_BALANCE: 'insufficient_balance',
   NEGATIVE_BALANCE_BLOCKED: 'negative_balance_blocked',

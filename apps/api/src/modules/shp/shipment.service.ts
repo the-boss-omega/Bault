@@ -891,9 +891,16 @@ export class ShipmentService {
         };
       }
 
-      if (rate.membershipCover) await this.memberships.spendShippingCover(tx, s.userId, rate.membershipCover);
+      // The cover as spent, with the cycle it came out of, so a cancellation
+      // gives it back to the right one.
+      const spentCover = rate.membershipCover
+        ? await this.memberships.spendShippingCover(tx, s.userId, rate.membershipCover)
+        : null;
       await this.chargeFor(tx, s, rate);
-      await tx.update(shipment).set({ ...common, status: 'rates_selected', paymentDueAt: null }).where(eq(shipment.id, s.id));
+      await tx
+        .update(shipment)
+        .set({ ...common, membershipCover: spentCover, status: 'rates_selected', paymentDueAt: null })
+        .where(eq(shipment.id, s.id));
       return {
         status: 'rates_selected' as const,
         carrier: rate.carrier,
@@ -993,7 +1000,7 @@ export class ShipmentService {
       const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
       // The cover the member saw when the rate was chosen, spent now that the
       // money is. If it has gone meanwhile this refuses instead of charging more.
-      if (storedCover) await this.memberships.spendShippingCover(tx, s.userId, storedCover);
+      const spentCover = storedCover ? await this.memberships.spendShippingCover(tx, s.userId, storedCover) : null;
       await this.chargeFor(tx, s, {
         carrier: s.carrier!,
         serviceLevel: s.serviceLevel!,
@@ -1016,7 +1023,7 @@ export class ShipmentService {
       });
       await tx
         .update(shipment)
-        .set({ status: 'rates_selected', paymentDueAt: null, updatedAt: new Date() })
+        .set({ status: 'rates_selected', membershipCover: spentCover, paymentDueAt: null, updatedAt: new Date() })
         .where(eq(shipment.id, s.id));
       return { status: 'rates_selected' as const, paid: s.cost };
     });
