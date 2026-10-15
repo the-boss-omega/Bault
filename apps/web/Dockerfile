@@ -45,11 +45,22 @@ RUN pnpm --filter @bault/web build
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
-# A template, not a finished file: the image's entrypoint substitutes the
-# variables below (and ONLY defined variables, so nginx's own $uri and $host are
-# left alone) into /etc/nginx/conf.d/default.conf when the container starts.
+# Templates, not finished files: the image's entrypoint substitutes the
+# variables below into /etc/nginx/conf.d/ when the container starts. The header
+# file goes to a subdirectory, conf.d/bault/, so the stock `include
+# conf.d/*.conf` at http level does not load it a second time; nginx.conf
+# includes it in every location.
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+COPY apps/web/nginx-security-headers.conf /etc/nginx/templates/bault/security-headers.conf.template
+# Sourced before the templates render (`.envsh`, and 15 sorts before 20): turns
+# STORAGE_ENDPOINT into the origin the CSP needs, or refuses to start on a value
+# that is not an origin.
+COPY --chmod=0755 apps/web/nginx-storage-origin.envsh /docker-entrypoint.d/15-bault-storage-origin.envsh
 ENV API_UPSTREAM=http://api:3000
+# Only these two are substituted. Without a filter every variable in the
+# container's environment is, and an env var that happened to share a name with
+# one of nginx's own ($uri, $host…) would be written into the config.
+ENV NGINX_ENVSUBST_FILTER='^(API_UPSTREAM|STORAGE_PUBLIC_ORIGIN)$'
 
 EXPOSE 8080
 

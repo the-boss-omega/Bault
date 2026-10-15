@@ -1,0 +1,38 @@
+#!/bin/sh
+# =============================================================================
+# Work out the object-storage origin for the CSP, before the templates render.
+#
+# Sourced (not run) by the nginx image's entrypoint, because it is an `.envsh`:
+# what it exports is still set when 20-envsubst-on-templates.sh substitutes
+# ${STORAGE_PUBLIC_ORIGIN} into nginx-security-headers.conf.
+#
+#   STORAGE_PUBLIC_ORIGIN  used as given, when the browser fetches photographs
+#                          from somewhere other than the S3 endpoint (a CDN, a
+#                          public bucket host).
+#   STORAGE_ENDPOINT       otherwise its origin is used: the S3 adapter presigns
+#                          path-style URLs (`endpoint/bucket/key`), so the
+#                          browser loads from exactly that scheme, host and port.
+#   neither                the CSP names no storage origin, and bucket images do
+#                          not load. Said out loud at start-up.
+#
+# The value is checked before it reaches the config. It lands inside a quoted
+# add_header: a `;` would open a new CSP directive (`; script-src *`) and a `"`
+# would close the header and hand the rest to nginx as configuration. An origin
+# is a scheme, a host and an optional port, and nothing else is accepted. The
+# rejected value is not echoed, since an endpoint can carry credentials.
+# =============================================================================
+
+if [ -z "${STORAGE_PUBLIC_ORIGIN:-}" ] && [ -n "${STORAGE_ENDPOINT:-}" ]; then
+  STORAGE_PUBLIC_ORIGIN=$(printf '%s' "$STORAGE_ENDPOINT" | sed -E 's|^([A-Za-z][A-Za-z0-9+.-]*://[^/?#]*).*$|\1|')
+fi
+
+if [ -n "${STORAGE_PUBLIC_ORIGIN:-}" ]; then
+  if ! printf '%s' "$STORAGE_PUBLIC_ORIGIN" | grep -Eq '^https?://([A-Za-z0-9-]+\.)*[A-Za-z0-9-]+(:[0-9]{1,5})?$'; then
+    echo "nginx-storage-origin: the storage origin (STORAGE_PUBLIC_ORIGIN, or the origin of STORAGE_ENDPOINT) is not of the form scheme://host[:port]; refusing to start" >&2
+    exit 1
+  fi
+else
+  echo "nginx-storage-origin: neither STORAGE_PUBLIC_ORIGIN nor STORAGE_ENDPOINT is set; the CSP allows no object-storage origin, so bucket images will not load" >&2
+fi
+
+export STORAGE_PUBLIC_ORIGIN="${STORAGE_PUBLIC_ORIGIN:-}"
