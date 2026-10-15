@@ -69,6 +69,8 @@ export const ErrorCode = {
   MFA_NOT_ENABLED: 'mfa_not_enabled',
   /** Turning two-factor sign-in off, for a role that must keep it (403). */
   MFA_REQUIRED_FOR_ROLE: 'mfa_required_for_role',
+  /** Requeue of an outbox message that is not parked — delivered, or still being retried. */
+  OUTBOX_NOT_PARKED: 'outbox_not_parked',
   INTERNAL: 'internal',
 } as const;
 

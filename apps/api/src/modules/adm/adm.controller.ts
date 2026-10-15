@@ -7,6 +7,7 @@ import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { ShelfYieldService } from './shelf-yield.service';
 import { AdmService } from './adm.service';
+import { OutboxAdminService } from './outbox-admin.service';
 import { MfaService } from '../acc/mfa/mfa.service';
 
 class UpdateUserDto {
@@ -49,6 +50,7 @@ export class AdmController {
     private readonly adm: AdmService,
     private readonly yield_: ShelfYieldService,
     private readonly mfa: MfaService,
+    private readonly outbox: OutboxAdminService,
   ) {}
 
   /**
@@ -108,6 +110,21 @@ export class AdmController {
   async resetMfa(@CurrentUser() actor: AuthUser, @Param('id') id: string) {
     const { sessionsEnded } = await this.mfa.resetFor(actor.id, id);
     return { status: 'mfa_reset', sessionsEnded };
+  }
+
+  // --- Parked outbox messages ---
+
+  /** Messages the dispatcher gave up on: what failed and when, never what they carry. */
+  @Get('outbox/parked')
+  parkedOutbox() {
+    return this.outbox.listParked();
+  }
+
+  /** Back in the queue, once — a second request for the same message is refused. */
+  @Post('outbox/:id/requeue')
+  @HttpCode(200)
+  requeueOutbox(@CurrentUser() actor: AuthUser, @Param('id') id: string) {
+    return this.outbox.requeue(actor.id, id);
   }
 
   @Get('items')
