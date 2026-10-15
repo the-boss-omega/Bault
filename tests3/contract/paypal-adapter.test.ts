@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PayPalPaymentAdapter } from '@bault/adapters';
+import { PayPalPaymentAdapter, PaymentProviderError } from '@bault/adapters';
 
 /**
  * The PayPal adapter — the rail the reference service actually uses.
@@ -100,7 +100,12 @@ describe('a top-up is a capture, never a charge', () => {
           id: 'ORDER1',
           status: 'COMPLETED',
           purchase_units: [
-            { payments: { captures: [{ id: 'CAP1', amount: { value: '50.00', currency_code: 'USD' } }] } },
+            // The capture's own status is what says the money was taken (F028).
+            {
+              payments: {
+                captures: [{ id: 'CAP1', status: 'COMPLETED', amount: { value: '50.00', currency_code: 'USD' } }],
+              },
+            },
           ],
         },
       },
@@ -136,7 +141,11 @@ describe('a top-up is a capture, never a charge', () => {
         id: 'ORDER2',
         status: 'COMPLETED',
         purchase_units: [
-          { payments: { captures: [{ id: 'CAP2', amount: { value: '1.00', currency_code: 'USD' } }] } },
+          {
+            payments: {
+              captures: [{ id: 'CAP2', status: 'COMPLETED', amount: { value: '1.00', currency_code: 'USD' } }],
+            },
+          },
         ],
       },
     });
@@ -157,6 +166,49 @@ describe('a top-up is a capture, never a charge', () => {
     const result = await a.createTopup({
       userId: 'u', amountMinor: 100, currency: 'USD', idempotencyKey: 'k3', paymentMethodToken: 'ORDER3',
     });
+    expect(result.status).toBe('pending');
+  });
+});
+
+describe('a capture succeeds when the CAPTURE completed, not the order (F028)', () => {
+  /**
+   * PayPal can mark an order COMPLETED while the capture inside it is still
+   * PENDING — an eCheck, a payment held for review. The adapter read the
+   * order's status, so the wallet was credited for money that had not arrived
+   * and might never.
+   */
+  const order = (orderStatus: string, captureStatus: string) => ({
+    '/capture': {
+      id: 'ORDER9',
+      status: orderStatus,
+      purchase_units: [
+        {
+          payments: {
+            captures: [{ id: 'CAP9', status: captureStatus, amount: { value: '20.00', currency_code: 'USD' } }],
+          },
+        },
+      ],
+    },
+  });
+  const take = (a: PayPalPaymentAdapter) =>
+    a.createTopup({ userId: 'u', amountMinor: 2_000, currency: 'USD', idempotencyKey: 'k9', paymentMethodToken: 'ORDER9' });
+
+  it('reports pending for a completed order whose capture is pending', async () => {
+    const result = await take(adapter(order('COMPLETED', 'PENDING')));
+    expect(result.status).toBe('pending');
+    expect(result.providerRef).toBe('CAP9');
+  });
+
+  it('reports succeeded only when the capture itself completed', async () => {
+    expect((await take(adapter(order('COMPLETED', 'COMPLETED')))).status).toBe('succeeded');
+  });
+
+  it('reports failed for a declined capture', async () => {
+    expect((await take(adapter(order('COMPLETED', 'DECLINED')))).status).toBe('failed');
+  });
+
+  it('reports pending when there is no capture at all', async () => {
+    const result = await take(adapter({ '/capture': { id: 'ORDER9', status: 'COMPLETED', purchase_units: [] } }));
     expect(result.status).toBe('pending');
   });
 });
@@ -194,6 +246,66 @@ describe('a cash-out is a payout to an email', () => {
         userId: 'u', amountMinor: 100, currency: 'USD', idempotencyKey: 'k', destinationToken: '  ',
       }),
     ).rejects.toThrow(/destination/i);
+  });
+
+  it('gives up when told to, instead of holding the caller for as long as PayPal hangs (N6)', async () => {
+    // A fetch that answers the token and then never answers the payout — unless
+    // the signal it was handed is aborted.
+    const hanging = (async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/oauth2/token')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(AUTH), json: async () => AUTH };
+      }
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    }) as unknown as typeof fetch;
+    const a = new PayPalPaymentAdapter({
+      clientId: 'id', clientSecret: 'secret', environment: 'sandbox', webhookId: 'wh', fetchImpl: hanging,
+    });
+    const started = Date.now();
+    await expect(
+      a.createPayout({
+        userId: 'u', amountMinor: 100, currency: 'USD', idempotencyKey: 'k-hang',
+        destinationToken: 'c@example.com', signal: AbortSignal.timeout(50),
+      }),
+    ).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('says when PayPal refused the payout outright, as opposed to not answering', async () => {
+    const refusing = (async (url: string | URL) => {
+      if (String(url).includes('/oauth2/token')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(AUTH), json: async () => AUTH };
+      }
+      const body = JSON.stringify({ name: 'VALIDATION_ERROR', message: 'Invalid request' });
+      return { ok: false, status: 422, text: async () => body, json: async () => JSON.parse(body) };
+    }) as unknown as typeof fetch;
+    const a = new PayPalPaymentAdapter({
+      clientId: 'id', clientSecret: 'secret', environment: 'sandbox', webhookId: 'wh', fetchImpl: refusing,
+    });
+    const err = await a
+      .createPayout({ userId: 'u', amountMinor: 100, currency: 'USD', idempotencyKey: 'k-422', destinationToken: 'x' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PaymentProviderError);
+    expect((err as PaymentProviderError).refused).toBe(true);
+  });
+
+  it('reads back what became of a payout from its batch', async () => {
+    const calls: Call[] = [];
+    const a = adapter(
+      {
+        '/v1/payments/payouts/BATCH7': {
+          batch_header: { payout_batch_id: 'BATCH7', batch_status: 'SUCCESS' },
+          items: [{ transaction_status: 'RETURNED' }],
+        },
+      },
+      calls,
+    );
+    // The batch was processed; the ITEM came back. The item is what says
+    // whether the collector got the money.
+    const result = await a.getPayout('BATCH7');
+    expect(result.status).toBe('failed');
+    expect(calls.some((c) => c.url.endsWith('/v1/payments/payouts/BATCH7'))).toBe(true);
   });
 });
 
