@@ -185,3 +185,45 @@ describe('an unused confirmation link', () => {
     expect(await statusOf(userId)).toBe('closed');
   });
 });
+
+/* ============================================================
+   N5 — staff powers need an active account
+   ============================================================ */
+
+describe('a suspended member of staff', () => {
+  it('can no longer read or answer a customer’s ticket', async () => {
+    const customer = await signIn(SEED.collector);
+    const ticket = await customer.post('/support/tickets', {
+      category: 'other',
+      subject: 'Where is my parcel?',
+      body: 'It was meant to arrive last week.',
+    });
+    expect(ticket.status).toBe(201);
+
+    // A staff account of its own, so suspending it touches no seeded login.
+    const { email } = await register('staff');
+    await sql(`UPDATE user_account SET status = 'active', role = 'warehouse_operator' WHERE email = $1`, [email]);
+    const staff = await signIn(email, PASSWORD);
+    const me = (await staff.get('/me/profile')).body as { id: string };
+    expect((await staff.get(`/support/tickets/${ticket.body.id}`)).status).toBe(200);
+
+    const admin = await signIn(SEED.admin);
+    expect((await admin.patch(`/admin/users/${me.id}`, { status: 'suspended' })).status).toBe(200);
+
+    // `@AllowSuspended` keeps these two routes open so a suspended CUSTOMER can
+    // ask for help. It was letting a suspended operator keep working the queue.
+    expect((await staff.get(`/support/tickets/${ticket.body.id}`)).status).toBe(403);
+    const reply = await staff.post(`/support/tickets/${ticket.body.id}/messages`, { body: 'Answering anyway.' });
+    expect(reply.status).toBe(403);
+
+    const thread = (await customer.get(`/support/tickets/${ticket.body.id}`)).body as {
+      messages: { authorRole: string }[];
+    };
+    expect(thread.messages.some((m) => m.authorRole === 'staff')).toBe(false);
+
+    // Their own tickets are still theirs to read: suspended staff are customers too.
+    const own = await staff.post('/support/tickets', { category: 'account', subject: 'Why?', body: 'Suspended.' });
+    expect(own.status).toBe(201);
+    expect((await staff.get(`/support/tickets/${own.body.id}`)).status).toBe(200);
+  });
+});
