@@ -26,6 +26,8 @@ import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
 import { AccountingSection } from './AccountingSection';
 import { PricingCoveragePanel } from './PricingCoveragePanel';
+import { OutboxSection, type ParkedMessage } from './OutboxSection';
+import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 
 /**
  * `GET /admin/users`.
@@ -46,6 +48,8 @@ interface AdminUser {
   role: string;
   status: string;
   intakeId: string | null;
+  /** Signs in with a second factor — and so has one an administrator can reset. */
+  mfaEnabled: boolean;
 }
 
 interface AdminItem {
@@ -84,6 +88,9 @@ const TABS = [
   'yield',
   'users',
   'signins',
+  // Beside the sign-in log: the other screen about the platform's own health
+  // rather than its customers'.
+  'outbox',
   'requests',
   // Beside the wallet requests: the other screen about money, and the one an
   // accountant's questions are answered from (N40).
@@ -100,6 +107,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   yield: 'admin.section.yield',
   users: 'admin.section.users',
   signins: 'admin.section.signins',
+  outbox: 'admin.section.outbox',
   requests: 'admin.section.requests',
   accounting: 'admin.section.accounting',
   items: 'admin.section.items',
@@ -126,6 +134,18 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const [items, setItems] = useState<AdminItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The account whose second factor is about to be reset, while the confirmation is open. */
+  const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  /**
+   * How many outbox messages are parked, on the tab itself.
+   *
+   * A parked message is a notification or a reset link somebody did not get,
+   * and it waits for a person; a tab that has to be opened to find out whether
+   * anything is waiting is a tab nobody opens. Read once when the console
+   * opens, and kept current by the section when it requeues.
+   */
+  const [parkedCount, setParkedCount] = useState<number | null>(null);
 
   // Opens on Shelf Yield, as the comment on `TABS` has always said it does. The
   // code said `users`, so the section an administrator was meant to land on was
@@ -154,7 +174,37 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
     void load();
   }, [load]);
 
-  const tabs = TABS.map((key) => ({ key, label: t(TAB_LABEL[key]) }));
+  // Apart from `load`: the count is a convenience, and a failure to read it
+  // must not take the users and items tables down with it.
+  useEffect(() => {
+    api
+      .get<ParkedMessage[]>('/admin/outbox/parked')
+      .then((list) => setParkedCount(list.length))
+      .catch(() => setParkedCount(null));
+  }, []);
+
+  async function resetMfa(target: AdminUser) {
+    setResetBusy(true);
+    try {
+      const res = await api.post<{ sessionsEnded: number }>(`/admin/users/${target.id}/mfa/reset`);
+      setMessage(t('admin.users.mfaResetDone', { email: target.email, count: res.sessionsEnded }));
+      setError(null);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setResetBusy(false);
+      setResetting(null);
+    }
+  }
+
+  const tabs = TABS.map((key) => ({
+    key,
+    label:
+      key === 'outbox' && parkedCount
+        ? t('admin.section.outboxCount', { count: parkedCount })
+        : t(TAB_LABEL[key]),
+  }));
 
   return (
     <>
@@ -195,7 +245,15 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
                   </thead>
                   <tbody>
                     {users.map((u) => (
-                      <UserRow key={u.id} user={u} onSaved={setMessage} onError={setError} />
+                      <UserRow
+                        key={u.id}
+                        user={u}
+                        onSaved={setMessage}
+                        onError={setError}
+                        // Somebody else's, and only where there is one to reset.
+                        // The API refuses one's own regardless.
+                        onResetMfa={u.mfaEnabled && u.id !== currentUserId ? () => setResetting(u) : undefined}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -203,6 +261,25 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
             )}
           </Panel>
         </TabPanel>
+      )}
+
+      {section === 'outbox' && (
+        <TabPanel tab="outbox">
+          <OutboxSection onMsg={setMessage} onError={setError} onCount={setParkedCount} />
+        </TabPanel>
+      )}
+
+      {resetting && (
+        <ConfirmationModal
+          title={t('admin.users.mfaResetTitle')}
+          body={<p>{t('admin.users.mfaResetBody', { email: resetting.email })}</p>}
+          confirmLabel={t('admin.users.mfaResetConfirm')}
+          cancelLabel={t('ui.cancel')}
+          tone="danger"
+          busy={resetBusy}
+          onConfirm={() => void resetMfa(resetting)}
+          onCancel={() => setResetting(null)}
+        />
       )}
 
       {section === 'house' && (
@@ -320,10 +397,13 @@ function UserRow({
   user,
   onSaved,
   onError,
+  onResetMfa,
 }: {
   user: AdminUser;
   onSaved: (m: string) => void;
   onError: (m: string) => void;
+  /** Present only when this administrator may reset this account's second factor. */
+  onResetMfa?: () => void;
 }) {
   const { t } = useI18n();
   const [firstName, setFirstName] = useState(user.firstName ?? '');
@@ -400,6 +480,11 @@ function UserRow({
       <td>
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
           <StatusBadge tone={ACCOUNT_STATUS_TONE[user.status] ?? 'neutral'}>{user.status}</StatusBadge>
+          {user.mfaEnabled && (
+            <span title={t('admin.users.mfaOnTitle')}>
+              <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
+            </span>
+          )}
           <select
             value={status}
             aria-label={t('admin.col.status')}
@@ -414,9 +499,21 @@ function UserRow({
         </div>
       </td>
       <td className="td-tight">
-        <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk} onClick={save}>
-          {t('admin.action.save')}
-        </Button>
+        <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
+          <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk} onClick={save}>
+            {t('admin.action.save')}
+          </Button>
+          {onResetMfa && (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={t('admin.users.mfaResetLabel', { email: user.email })}
+              onClick={onResetMfa}
+            >
+              {t('admin.users.mfaReset')}
+            </Button>
+          )}
+        </div>
       </td>
     </tr>
   );

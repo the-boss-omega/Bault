@@ -78,6 +78,9 @@ export class AdmService {
         role: userAccount.role,
         status: userAccount.status,
         intakeId: userAccount.intakeId,
+        // Whether the account signs in with a second factor — the Users screen
+        // offers the reset only where there is one to reset.
+        mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
       })
       .from(userAccount)
       .where(not(ilike(userAccount.email, `%@${FIXTURE_EMAIL_DOMAIN}`)))
@@ -442,11 +445,20 @@ export class AdmService {
       .orderBy(desc(loginAttempt.occurredAt))
       .limit(Math.min(Math.max(limit, 1), 500));
 
+    /**
+     * What counts as a failure. Not "anything but success": since sign-in grew
+     * a second step, `mfa_challenged` — the password was right and a code was
+     * asked for — precedes every successful two-step sign-in, and counting it
+     * would list every enrolled account that signs in five times a day as
+     * somebody guessing passwords. A wrong code (`mfa_failed`) is a failure.
+     */
+    const failed = sql`${loginAttempt.outcome} NOT IN ('success', 'mfa_challenged')`;
+
     const [totals] = await this.db
       .select({
         successes: sql<number>`count(*) filter (where ${loginAttempt.outcome} = 'success')::int`,
-        failures: sql<number>`count(*) filter (where ${loginAttempt.outcome} <> 'success')::int`,
-        failingAddresses: sql<number>`count(distinct ${loginAttempt.ip}) filter (where ${loginAttempt.outcome} <> 'success')::int`,
+        failures: sql<number>`count(*) filter (where ${failed})::int`,
+        failingAddresses: sql<number>`count(distinct ${loginAttempt.ip}) filter (where ${failed})::int`,
       })
       .from(loginAttempt)
       .where(gte(loginAttempt.occurredAt, since));
@@ -460,7 +472,7 @@ export class AdmService {
         lastAt: sql<Date>`max(${loginAttempt.occurredAt})`,
       })
       .from(loginAttempt)
-      .where(and(gte(loginAttempt.occurredAt, since), not(eq(loginAttempt.outcome, 'success'))))
+      .where(and(gte(loginAttempt.occurredAt, since), failed))
       .groupBy(loginAttempt.identifier)
       .having(sql`count(*) >= 5`)
       .orderBy(desc(sql`count(*)`));

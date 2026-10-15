@@ -52,6 +52,9 @@ const PROD = {
   SMTP_FROM: 'Bault <noreply@example.com>',
   APP_BASE_URL: 'https://app.example.com',
   TRUST_PROXY: 'uniquelocal',
+  // 32 bytes, base64: production requires a two-factor key and refuses the
+  // development one.
+  MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
 /**

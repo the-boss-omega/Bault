@@ -65,8 +65,11 @@ describe('SHP shipment tracking list', () => {
     expect(list.length).toBeGreaterThan(0);
     for (const row of list) {
       expect(Object.keys(row)).not.toContain('intakeId');
-      // Nor smuggled in under another name.
-      expect(JSON.stringify(row)).not.toMatch(/OW-/);
+      // Nor smuggled in under another name. The whole intake-ID shape
+      // (`generateIntakeId`: OW- and six of its letters, standing alone), not
+      // just "OW-": random item serials contain it — `SN-MV9W7KOW-4225` failed
+      // this once, with no intake ID anywhere in the row.
+      expect(JSON.stringify(row)).not.toMatch(/(^|[^A-Z0-9])OW-[A-HJ-NP-Z2-9]{6}(?![A-Z0-9])/);
     }
   });
 

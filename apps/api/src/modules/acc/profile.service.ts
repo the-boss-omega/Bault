@@ -7,6 +7,7 @@ import { fullName, isValidNamePart, normalizeNamePart } from '../../shared/names
 import { userAccount } from './acc.schema';
 import { shippingAddress } from './address.schema';
 import { toCountryCode } from '../shp/countries';
+import { MfaService } from './mfa/mfa.service';
 
 /**
  * What a user sees about themselves.
@@ -36,6 +37,15 @@ export interface ProfileView {
    */
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
+  /**
+   * Whether this account has a confirmed second factor, and whether its role
+   * requires one. The app reads both on every load: `mfaRequired && !mfaEnabled`
+   * is an account every route but enrolment refuses, and the app sends it
+   * straight to the enrolment screen rather than into a console that answers
+   * every panel with an error.
+   */
+  mfaEnabled: boolean;
+  mfaRequired: boolean;
 }
 
 export interface AddressInput {
@@ -59,7 +69,10 @@ export type AddressPatch = Partial<AddressInput>;
  */
 @Injectable()
 export class ProfileService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly mfa: MfaService,
+  ) {}
 
   async get(userId: string): Promise<ProfileView> {
     const [u] = await this.db
@@ -80,6 +93,8 @@ export class ProfileService {
       nameReviewRequired: u.nameReviewRequired,
       termsVersion: u.termsVersion,
       termsAcceptedAt: u.termsAcceptedAt,
+      mfaEnabled: await this.mfa.isEnabled(u.id),
+      mfaRequired: this.mfa.requiredFor(u.role),
     };
   }
 

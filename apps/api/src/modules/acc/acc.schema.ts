@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, text, timestamp, boolean, uniqueIndex, index, check, bigint, integer } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 /**
@@ -141,7 +141,21 @@ export const loginSession = pgTable('login_session', {
  * address that does not exist is visible too. The password is never stored, in
  * any form.
  */
-export const loginAttemptOutcome = pgEnum('login_attempt_outcome', ['success', 'bad_credentials', 'unverified', 'refused']);
+export const loginAttemptOutcome = pgEnum('login_attempt_outcome', [
+  'success',
+  'bad_credentials',
+  'unverified',
+  'refused',
+  /**
+   * The password was right and a second factor was asked for (migration 0035).
+   * Not a success — no session exists yet — and not a failure: but it does mean
+   * whoever typed it knows the password, which is what an administrator
+   * reading the log needs to see when the next row is a string of wrong codes.
+   */
+  'mfa_challenged',
+  /** A wrong or reused second-factor code. Counted by the lockout like a wrong password. */
+  'mfa_failed',
+]);
 
 export const loginAttempt = pgTable(
   'login_attempt',
@@ -160,11 +174,67 @@ export const loginAttempt = pgTable(
     byUser: index('login_attempt_user_idx').on(t.userId, t.occurredAt),
     /**
      * The sign-in lockout's question — the last ten failures for THIS typed
-     * identifier — asked on every attempt (migration 0034). Partial, because
-     * only failures are ever counted.
+     * identifier — asked on every attempt. Partial on `bad_credentials` in
+     * migration 0034; since 0035 wrong codes count too, and the index names no
+     * outcome so it serves both (see that migration for why it cannot be
+     * partial on the new value).
      */
-    failuresByIdentifier: index('login_attempt_failure_idx')
-      .on(t.identifier, t.occurredAt)
-      .where(sql`${t.outcome} = 'bad_credentials'`),
+    byIdentifier: index('login_attempt_identifier_idx').on(t.identifier, t.occurredAt),
+  }),
+);
+
+/**
+ * Two-factor sign-in (migration 0035).
+ *
+ * One TOTP authenticator per account. `secretCiphertext` is AES-256-GCM under
+ * MFA_ENCRYPTION_KEY with the account id as authenticated data (see
+ * `mfa/secret-box.ts`) — never the secret. `enabledAt` is NULL while a setup
+ * waits for its first code. `lastUsedStep` is the newest time step accepted;
+ * only a later one is, and the comparison is in the UPDATE that records it.
+ */
+export const mfaFactor = pgTable('mfa_factor', {
+  userId: text('user_id').primaryKey(),
+  secretCiphertext: text('secret_ciphertext').notNull(),
+  enabledAt: timestamp('enabled_at', { withTimezone: true }),
+  lastUsedStep: bigint('last_used_step', { mode: 'number' }),
+  createdAt: createdAt(),
+});
+
+/** Single-use recovery codes, as HMACs. `usedAt` is set once, conditionally. */
+export const mfaRecoveryCode = pgTable(
+  'mfa_recovery_code',
+  {
+    id: pkId(),
+    userId: text('user_id').notNull(),
+    codeHash: text('code_hash').notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    userHashUnique: uniqueIndex('mfa_recovery_code_user_hash_unique').on(t.userId, t.codeHash),
+  }),
+);
+
+/**
+ * What a right password earns an enrolled account: a five-minute, single-use,
+ * account-bound token for the second step. Only its hash is stored.
+ * `identifier` is what was typed at the first step — wrong codes are counted
+ * against it by the lockout.
+ */
+export const mfaChallenge = pgTable(
+  'mfa_challenge',
+  {
+    id: pkId(),
+    userId: text('user_id').notNull(),
+    identifier: text('identifier').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    failedAttempts: integer('failed_attempts').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    tokenUnique: uniqueIndex('mfa_challenge_token_unique').on(t.tokenHash),
+    byUser: index('mfa_challenge_user_idx').on(t.userId),
   }),
 );

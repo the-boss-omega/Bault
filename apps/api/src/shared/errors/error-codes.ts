@@ -50,6 +50,27 @@ export const ErrorCode = {
    * has no reason to think trying again later would work.
    */
   STORAGE_UNAVAILABLE: 'storage_unavailable',
+  /**
+   * Signed in, but this account's role requires a second factor and none is
+   * enrolled yet (403). Every route answers this except enrolment, sign-out and
+   * the profile probe, so the client can send the person to enrol rather than
+   * show them a console that refuses everything with a bare "forbidden".
+   */
+  MFA_ENROLLMENT_REQUIRED: 'mfa_enrollment_required',
+  /** A wrong, reused or malformed second-factor code or recovery code. */
+  MFA_CODE_INVALID: 'mfa_code_invalid',
+  /**
+   * The sign-in challenge is unknown, used, expired or burned by wrong codes
+   * (401). The remedy is the same in every case — enter the password again —
+   * so the cases are not told apart.
+   */
+  MFA_CHALLENGE_EXPIRED: 'mfa_challenge_expired',
+  MFA_ALREADY_ENABLED: 'mfa_already_enabled',
+  MFA_NOT_ENABLED: 'mfa_not_enabled',
+  /** Turning two-factor sign-in off, for a role that must keep it (403). */
+  MFA_REQUIRED_FOR_ROLE: 'mfa_required_for_role',
+  /** Requeue of an outbox message that is not parked — delivered, or still being retried. */
+  OUTBOX_NOT_PARKED: 'outbox_not_parked',
   INTERNAL: 'internal',
 } as const;
 

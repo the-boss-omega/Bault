@@ -7201,3 +7201,31 @@ textarea[aria-invalid='true'] {
   gap: var(--sp-3);
   margin-top: var(--sp-2);
 }
+
+/* ---- Two-factor sign-in (profile/TwoFactorPanel) ----
+   Ten recovery codes, two columns, in a box that reads as one thing to copy or
+   print. Monospace and left-to-right whatever the page direction: a code is a
+   Latin run, and a person copying it by hand must not meet it mirrored. */
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: var(--sp-2) var(--sp-8);
+  margin: 0;
+  padding: var(--sp-4) var(--sp-6);
+  list-style: decimal inside;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  direction: ltr;
+}
+
+.recovery-codes .code-inline {
+  font-size: 1.05em;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+
+/* The page a member of staff is held on until they enrol: wider than the
+   one-sentence pages that share the bare shell, because it holds a QR code. */
+.auth-forced {
+  max-width: 600px;
+}

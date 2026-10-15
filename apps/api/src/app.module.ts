@@ -31,6 +31,7 @@ import { MemModule } from './modules/mem/mem.module';
 
 // Global guards + interceptors
 import { SessionAuthGuard } from './modules/acc/session-auth.guard';
+import { MfaEnrollmentGuard } from './modules/acc/mfa/mfa-enrollment.guard';
 import { RolesGuard } from './modules/sec/roles.guard';
 import { AuditInterceptor } from './modules/sec/audit.interceptor';
 
@@ -38,7 +39,9 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
  * Root module of the modular monolith. Composition order:
  *  - global infra (DB, SEC, shared services, adapters, billing seam, outbox, health)
  *  - feature modules (ACC, CST, INV, VLT so far; MKT/PAY/PRC/SHP/DIS/ADM/NOT added later)
- *  - APP_GUARD chain: SessionAuthGuard (authenticate + block suspended) → RolesGuard (@Roles)
+ *  - APP_GUARD chain: SessionAuthGuard (authenticate + block suspended) →
+ *    MfaEnrollmentGuard (a role that requires a second factor gets nothing else
+ *    until it has one) → RolesGuard (@Roles)
  *  - APP_INTERCEPTOR: AuditInterceptor (immutable audit log of state-changing requests)
  */
 @Module({
@@ -99,6 +102,9 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
     // whether to rate-limit has already done the expensive part.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionAuthGuard },
+    // Before RolesGuard, so an administrator who has not enrolled hears
+    // "enrol first" on an admin route rather than a role check that passed.
+    { provide: APP_GUARD, useClass: MfaEnrollmentGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],

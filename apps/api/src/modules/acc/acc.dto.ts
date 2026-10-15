@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { NAME_PART_MAX, USERNAME_MAX, USERNAME_MIN } from '../../shared/names';
 
 /**
@@ -97,6 +97,57 @@ export class LoginDto {
 
   @IsString()
   password!: string;
+}
+
+/**
+ * The second sign-in step: the challenge the first step returned, and EITHER a
+ * code from the authenticator app OR one of the recovery codes — never both,
+ * never neither (checked in the controller, where the message can say which).
+ */
+export class LoginMfaDto {
+  @IsString()
+  @MaxLength(128)
+  challengeToken!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  recoveryCode?: string;
+}
+
+/** A code from the authenticator app. Spaces are allowed ("123 456") and removed. */
+export class MfaCodeDto {
+  @IsString()
+  @MaxLength(32)
+  code!: string;
+}
+
+/**
+ * Turning two-factor sign-in on: a code from the app, and the password. The
+ * password is what keeps a stolen session from enrolling the thief's phone.
+ */
+export class ConfirmMfaDto {
+  @IsString()
+  password!: string;
+
+  @IsString()
+  @MaxLength(32)
+  code!: string;
+}
+
+/** Turning two-factor sign-in off: the password and a current code, both. */
+export class DisableMfaDto {
+  @IsString()
+  password!: string;
+
+  @IsString()
+  @MaxLength(32)
+  code!: string;
 }
 
 export class TokenDto {

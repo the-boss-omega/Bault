@@ -82,6 +82,37 @@ const BaseSchema = z.object({
   SESSION_COOKIE_SECRET: z.string().optional().default(''),
   SESSION_COOKIE_NAME: z.string().default('session'),
 
+  /**
+   * The key two-factor secrets are encrypted under (AES-256-GCM): 32 bytes,
+   * base64. Generate one with `openssl rand -base64 32`.
+   *
+   * A TOTP secret is a password that never changes: whoever reads it out of a
+   * database dump can produce every code the account will ever accept. So it is
+   * stored encrypted, and the key lives here rather than beside it.
+   *
+   * Required in production, and refused there if it is the development key
+   * below. Elsewhere an unset key falls back to that development key, so a
+   * fresh checkout and CI enrol and sign in without configuring anything — the
+   * same arrangement every other development default in this file has. Rotating
+   * it makes every stored secret unreadable: each enrolled account then has to
+   * be reset by an administrator and enrol again.
+   */
+  MFA_ENCRYPTION_KEY: z.string().optional().default(''),
+
+  /**
+   * Which roles must sign in with a second factor, comma-separated role names
+   * (`admin`, `warehouse_operator`, `user`).
+   *
+   * Unset, it is `admin,warehouse_operator` in production and nobody elsewhere.
+   * Production refuses any list that leaves out either staff role: an
+   * administrator's password is the most valuable credential in the system,
+   * and the requirement must not be something a typo in an env file can turn
+   * off. Development and test default to nobody because the suites sign in as
+   * the seeded administrator and operator hundreds of times with a password
+   * alone; enforcement itself is proven by the guard's own tests.
+   */
+  MFA_REQUIRED_ROLES: z.string().optional(),
+
   // Object storage (item images)
   /**
    * Which storage adapter is wired in `AdaptersModule`.
@@ -329,6 +360,41 @@ const BaseSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
+/**
+ * The development key for two-factor secrets. Published, in the source, on
+ * purpose: it exists so a checkout works without configuration, and production
+ * refuses it by value.
+ */
+export const DEVELOPMENT_MFA_ENCRYPTION_KEY = 'YmF1bHQtZGV2ZWxvcG1lbnQtb25seS1tZmEta2V5ISE=';
+
+/** The roles an account can have — mirrored by value from the API's `Role`. */
+export const MFA_ROLES = ['user', 'warehouse_operator', 'admin'] as const;
+export type MfaRole = (typeof MFA_ROLES)[number];
+
+/** The staff roles production will not let go without a second factor. */
+const STAFF_ROLES: readonly MfaRole[] = ['admin', 'warehouse_operator'];
+
+/**
+ * True for exactly 32 bytes written as canonical base64.
+ *
+ * Node's base64 decoder skips characters it does not recognise rather than
+ * failing, so "decodes to 32 bytes" alone would accept a passphrase that
+ * happens to contain 43 base64 letters. Re-encoding and comparing is what
+ * rejects anything that is not the base64 of a key.
+ */
+function isBase64Key(value: string): boolean {
+  const bytes = Buffer.from(value, 'base64');
+  return bytes.length === 32 && bytes.toString('base64') === value;
+}
+
+/** The role names in `MFA_REQUIRED_ROLES`, as written. */
+function requiredRoleNames(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
 type BaseEnv = z.infer<typeof BaseSchema>;
 type AddIssue = (issue: { path: (string | number)[]; message: string; code?: z.ZodIssueCode }) => void;
 
@@ -387,8 +453,74 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     }
   }
 
+  // A key that is set must be a key, in every environment. A wrong one found at
+  // boot is a configuration error; found at the first enrolment it is a 500.
+  if (env.MFA_ENCRYPTION_KEY && !isBase64Key(env.MFA_ENCRYPTION_KEY)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MFA_ENCRYPTION_KEY'],
+      message: 'MFA_ENCRYPTION_KEY must be 32 random bytes, base64 — generate one with `openssl rand -base64 32`',
+    });
+  }
+
+  if (env.MFA_REQUIRED_ROLES !== undefined) {
+    const unknown = requiredRoleNames(env.MFA_REQUIRED_ROLES).filter(
+      (r) => !(MFA_ROLES as readonly string[]).includes(r),
+    );
+    if (unknown.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MFA_REQUIRED_ROLES'],
+        message: `MFA_REQUIRED_ROLES names ${unknown.join(', ')}, which ${unknown.length === 1 ? 'is not a role' : 'are not roles'}. Use ${MFA_ROLES.join(', ')}.`,
+      });
+    }
+  }
+
   // The configurations that must never reach a real deployment.
   if (env.NODE_ENV === 'production') {
+    /**
+     * Two-factor secrets with no key, or with the published one.
+     *
+     * Without a key nobody can enrol, so no administrator can satisfy the
+     * requirement below and the console is closed to everybody. With the
+     * development key every secret is encrypted under a value printed in this
+     * repository, which is the same as not encrypting it.
+     */
+    if (!env.MFA_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MFA_ENCRYPTION_KEY'],
+        message:
+          'MFA_ENCRYPTION_KEY is required in production — generate one with `openssl rand -base64 32` and keep it with the other secrets',
+      });
+    } else if (env.MFA_ENCRYPTION_KEY === DEVELOPMENT_MFA_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MFA_ENCRYPTION_KEY'],
+        message: 'MFA_ENCRYPTION_KEY is the published development key. Generate a real one with `openssl rand -base64 32`.',
+      });
+    }
+
+    /**
+     * Staff without a second factor.
+     *
+     * Unset is fine — production then requires it of both staff roles. What is
+     * refused is a list that leaves either of them out, the empty list
+     * included: that is the switch that turns two-factor sign-in off for the
+     * accounts that can move money and change who owns what.
+     */
+    if (env.MFA_REQUIRED_ROLES !== undefined) {
+      const named = requiredRoleNames(env.MFA_REQUIRED_ROLES);
+      const missing = STAFF_ROLES.filter((r) => !named.includes(r));
+      if (missing.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['MFA_REQUIRED_ROLES'],
+          message: `MFA_REQUIRED_ROLES must include ${STAFF_ROLES.join(' and ')} in production (missing: ${missing.join(', ')}). Leave it unset for the default.`,
+        });
+      }
+    }
+
     /**
      * Storage that discards what it is given.
      *
@@ -507,7 +639,27 @@ const EnvSchema = BaseSchema.superRefine((env, ctx) =>
   checkCombinations(env, (issue) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message }),
   ),
-);
+).transform((env) => ({
+  ...env,
+  /**
+   * The development key fills in only outside production. In production an
+   * empty key never gets this far — `checkCombinations` refused it above — so
+   * this cannot hand a real deployment the published key.
+   */
+  MFA_ENCRYPTION_KEY:
+    env.MFA_ENCRYPTION_KEY || (env.NODE_ENV === 'production' ? '' : DEVELOPMENT_MFA_ENCRYPTION_KEY),
+  /**
+   * The parsed list, de-duplicated. The default depends on NODE_ENV, which is
+   * why it is applied here rather than as the field's own default.
+   */
+  MFA_REQUIRED_ROLES: Object.freeze(
+    env.MFA_REQUIRED_ROLES === undefined
+      ? env.NODE_ENV === 'production'
+        ? [...STAFF_ROLES]
+        : []
+      : MFA_ROLES.filter((r) => requiredRoleNames(env.MFA_REQUIRED_ROLES ?? '').includes(r)),
+  ) as readonly MfaRole[],
+}));
 
 /**
  * Every field that DOES parse, each on its own, defaults applied. What the

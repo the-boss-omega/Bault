@@ -25,7 +25,18 @@ export interface SessionUser {
   username?: string;
   firstName?: string | null;
   lastName?: string | null;
+  /**
+   * Two-factor sign-in. The sign-in response says `mfaEnrollmentRequired`
+   * straight away; the profile then says `mfaRequired` and `mfaEnabled`. Either
+   * way, an account whose role requires a second factor it has not enrolled is
+   * refused by every route but enrolment, so the shell holds it on the
+   * enrolment screen rather than rendering a console of errors.
+   */
+  mfaEnrollmentRequired?: boolean;
+  mfaRequired?: boolean;
+  mfaEnabled?: boolean;
 }
+
 
 /**
  * The card on the landing stage.

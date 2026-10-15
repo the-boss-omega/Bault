@@ -25,9 +25,16 @@ const DEV = {
   STORAGE_SECRET_KEY: 's',
 };
 
+/**
+ * A real-looking two-factor key: 32 bytes, base64. Not the development key —
+ * production refuses that one by value.
+ */
+const MFA_KEY = Buffer.alloc(32, 7).toString('base64');
+
 /** A configuration production accepts. */
 const PROD = {
   ...DEV,
+  MFA_ENCRYPTION_KEY: MFA_KEY,
   NODE_ENV: 'production',
   STORAGE_PROVIDER: 's3',
   PAYMENT_PROVIDER: 'paypal',
@@ -90,5 +97,65 @@ describe('environment schema', () => {
     await expect(load({ ...PROD, DATABASE_URL: undefined, STORAGE_PROVIDER: 'sandbox' })).rejects.toThrow(
       /STORAGE_PROVIDER=sandbox/,
     );
+  });
+});
+
+/**
+ * Two-factor sign-in.
+ *
+ * The TOTP secrets are encrypted at rest under MFA_ENCRYPTION_KEY, and staff
+ * accounts must use a second factor in production. Both are configuration, so
+ * both are refused at boot when they are wrong — a missing key would otherwise
+ * surface as the first enrolment failing, and a production deployment that
+ * quietly stopped requiring two-factor sign-in for administrators would surface
+ * as nothing at all.
+ */
+describe('two-factor configuration', () => {
+  it('requires MFA_ENCRYPTION_KEY in production', async () => {
+    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: undefined })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
+    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: '' })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
+  });
+
+  it('refuses a key that is not exactly 32 bytes of base64, in any environment', async () => {
+    const short = Buffer.alloc(16, 7).toString('base64');
+    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: short })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
+    await expect(load({ ...DEV, MFA_ENCRYPTION_KEY: short })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
+    await expect(load({ ...DEV, MFA_ENCRYPTION_KEY: 'not base64 at all, just a passphrase!!' })).rejects.toThrow(
+      /MFA_ENCRYPTION_KEY/,
+    );
+  });
+
+  it('uses a development key outside production, and refuses that key in production', async () => {
+    const dev = await load(DEV);
+    expect(Buffer.from(dev.MFA_ENCRYPTION_KEY, 'base64')).toHaveLength(32);
+    expect((await load({ ...DEV, MFA_ENCRYPTION_KEY: MFA_KEY })).MFA_ENCRYPTION_KEY).toBe(MFA_KEY);
+    // The development key is in the source, so a production that used it
+    // would be encrypting every secret under a published key.
+    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: dev.MFA_ENCRYPTION_KEY })).rejects.toThrow(
+      /MFA_ENCRYPTION_KEY/,
+    );
+  });
+
+  it('requires a second factor of admins and operators in production, and of nobody by default elsewhere', async () => {
+    expect([...(await load(PROD)).MFA_REQUIRED_ROLES].sort()).toEqual(['admin', 'warehouse_operator']);
+    expect([...(await load(DEV)).MFA_REQUIRED_ROLES]).toEqual([]);
+    expect([...(await load({ ...DEV, NODE_ENV: 'test' })).MFA_REQUIRED_ROLES]).toEqual([]);
+    const opted = await load({ ...DEV, MFA_REQUIRED_ROLES: 'admin, warehouse_operator' });
+    expect([...opted.MFA_REQUIRED_ROLES].sort()).toEqual(['admin', 'warehouse_operator']);
+  });
+
+  it('refuses switching it off for staff in production', async () => {
+    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: '' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
+    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'admin' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
+    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'warehouse_operator' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
+    // Stricter is allowed: collectors too.
+    const all = await load({ ...PROD, MFA_REQUIRED_ROLES: 'admin,warehouse_operator,user' });
+    expect([...all.MFA_REQUIRED_ROLES].sort()).toEqual(['admin', 'user', 'warehouse_operator']);
+  });
+
+  it('refuses a role name it does not know, rather than enforcing nothing for it', async () => {
+    // `operator` is not a role. Accepting it would leave every real operator
+    // without the requirement while the configuration said otherwise.
+    await expect(load({ ...DEV, MFA_REQUIRED_ROLES: 'admin,operator' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
   });
 });
