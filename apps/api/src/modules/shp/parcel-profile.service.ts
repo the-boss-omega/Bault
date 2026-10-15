@@ -7,7 +7,14 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { item } from '../cst/cst.schema';
 import { shippingAddress } from '../acc/address.schema';
 import { itemWeightGrams } from '../inv/item-classes';
-import { DEFAULT_COUNTRY_OF_ORIGIN, DEFAULT_HS_CODE, needsCustoms } from './shipping-options';
+import type { CustomsDeclaration } from '@bault/adapters';
+import {
+  CUSTOMS_CONTENTS_TYPE,
+  CUSTOMS_NON_DELIVERY,
+  DEFAULT_COUNTRY_OF_ORIGIN,
+  DEFAULT_HS_CODE,
+  needsCustoms,
+} from './shipping-options';
 import type { Destination, ParcelProfile } from './carriers';
 import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
@@ -23,6 +30,31 @@ export interface CustomsLine {
   weightGrams: number;
   /** True when the weight is the class's typical figure, not a measured one. */
   weightEstimated: boolean;
+}
+
+/**
+ * The frozen customs lines as the declaration a carrier is sent.
+ *
+ * One line per item, quantity one, at the value the collector declared — the
+ * same lines the commercial invoice prints, so the paper in the pouch and the
+ * data the carrier holds cannot disagree. `signer` is who certifies it: the
+ * shipper of record, Bault's facility, acting for the collector.
+ */
+export function customsDeclarationFor(lines: readonly CustomsLine[], signer: string, currency = 'USD'): CustomsDeclaration {
+  return {
+    contentsType: CUSTOMS_CONTENTS_TYPE,
+    signer,
+    nonDelivery: CUSTOMS_NON_DELIVERY,
+    currency,
+    lines: lines.map((l) => ({
+      description: l.description,
+      quantity: 1,
+      valueMinor: l.valueMinor,
+      weightGrams: l.weightGrams,
+      hsCode: l.hsCode,
+      originCountry: l.countryOfOrigin,
+    })),
+  };
 }
 
 /** What a set of items adds up to, physically. */

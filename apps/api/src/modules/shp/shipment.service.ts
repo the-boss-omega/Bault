@@ -17,13 +17,14 @@ import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
-import { ParcelProfileService } from './parcel-profile.service';
+import { ParcelProfileService, customsDeclarationFor, type CustomsLine } from './parcel-profile.service';
 import { SHIPPING_BOXES } from './boxes';
 import {
   CARRIER_SERVICES,
   checkService,
   destinationOf,
   findService,
+  rateFor,
   type CarrierService,
   type ParcelProfile,
   type ServiceProblem,
@@ -291,11 +292,18 @@ export class ShipmentService {
       box,
     });
 
+    // The same lines `create` will freeze, so the carrier rates the parcel with
+    // the declaration it will travel under.
+    const customsLines = needsCustoms(destination.country)
+      ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
+      : null;
+
     const rates = await this.priceServices(
       profile,
       addOns,
       input.rush ?? false,
       await this.memberships.shippingCover(userId),
+      customsLines,
     );
 
     return {
@@ -327,6 +335,7 @@ export class ShipmentService {
     addOnKeys: string[],
     rush: boolean,
     cover: ShippingCover | null = null,
+    customsLines: readonly CustomsLine[] | null = null,
   ): Promise<QuotedRate[]> {
     const { amount: baseHandling } = await this.pricing.price('shipping');
     /**
@@ -365,12 +374,13 @@ export class ShipmentService {
       if (left !== undefined && (left === UNLIMITED || left > 0)) addOnsCovered[action] = minor;
     }
 
+    const origin = await this.originAddress();
     const carrierRates = await this.shipping.getRates({
       destination: profile.destination,
       // Where the parcel physically leaves from. A real carrier prices on the
       // origin/destination pair, so quoting without it prices a different
       // shipment than the one that gets bought.
-      origin: await this.originAddress(),
+      origin,
       items: [{ weightGrams: profile.weightGrams }],
       // The box, when one was chosen. The carrier bills dimensional weight from
       // these itself, so nothing here scales its price a second time.
@@ -378,13 +388,20 @@ export class ShipmentService {
       packagingGrams: profile.packagingGrams,
       rush,
       signatureRequired: profile.signatureRequired,
+      // Rated WITH its declaration: the label is bought against this quote, and
+      // a carrier cannot add customs to a shipment after it has been rated.
+      customs:
+        customsLines && customsLines.length > 0
+          ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault')
+          : undefined,
     });
 
     const quoted: QuotedRate[] = [];
     for (const service of CARRIER_SERVICES) {
-      const rate = carrierRates.find(
-        (r) => r.carrier === service.carrier && r.serviceLevel === service.serviceLevel,
-      );
+      // Matched through the catalogue's explicit provider names, not by
+      // comparing display names with EasyPost's service codes — which matched
+      // nothing, and left a real account with no way to ship. See `rateFor`.
+      const rate = rateFor(service, carrierRates);
       if (!rate) continue; // the adapter does not sell it to this destination
       const problems = checkService(service, profile);
       const carrierCost = service.flatCostMinor !== undefined ? service.flatCostMinor : rate.costMinor;
@@ -407,6 +424,11 @@ export class ShipmentService {
 
       quoted.push({
         ...rate,
+        // The catalogue's names, whatever the carrier calls it: these are what
+        // the collector selects by and what the shipment stores, and
+        // `findService` resolves them. The provider's own ids ride along above.
+        carrier: service.carrier,
+        serviceLevel: service.serviceLevel,
         costMinor: carrierCost,
         serviceKey: service.key,
         problems,
@@ -759,7 +781,13 @@ export class ShipmentService {
     const s = await this.loadFor(shipmentId, actor);
     const { profile } = await this.profileOf(s);
     const addOnKeys = ((s.addOns as { key: string }[]) ?? []).map((a) => a.key);
-    return this.priceServices(profile, addOnKeys, s.rushFlag, await this.memberships.shippingCover(s.userId));
+    return this.priceServices(
+      profile,
+      addOnKeys,
+      s.rushFlag,
+      await this.memberships.shippingCover(s.userId),
+      (s.customsLines as CustomsLine[] | null) ?? null,
+    );
   }
 
   /* ------------------------------------------------------------------
