@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { loadEnv } from '@bault/config';
+import { log } from '../log';
 import { negativeAccounts } from './debt';
 
 /**
@@ -21,7 +22,13 @@ import { negativeAccounts } from './debt';
  *  - Only suspensions this sweep imposed are ever lifted. `auto_suspended_at`
  *    is the marker; an administrator's suspension has no marker and survives
  *    the balance recovering, because it was a judgement about a person and not
- *    about a number.
+ *    about a number. Any status an administrator sets clears the marker (N7),
+ *    so a suspension made by hand after one of the sweep's own is not mistaken
+ *    for it.
+ *
+ *  - Both updates are single statements whose predicates re-check the status,
+ *    so running the sweep twice, or twice at once, changes nothing the second
+ *    time.
  *
  *  - A suspended holder cannot sign in, and therefore cannot raise the cash-in
  *    request that would clear their own debt. That is deliberate and matches
@@ -73,8 +80,10 @@ export async function sweepWalletSuspensions(pool: Pool): Promise<void> {
   );
   const reinstated = reinstateResult.rowCount ?? 0;
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `[job:wallet-suspension] threshold ${threshold} minor units — suspended ${suspended}, reinstated ${reinstated}`,
-  );
+  log.info('wallet suspensions swept', {
+    job: 'wallet.suspension-sweep',
+    threshold_minor: threshold,
+    suspended,
+    reinstated,
+  });
 }
