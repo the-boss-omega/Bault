@@ -92,14 +92,25 @@ function envValue(key) {
 }
 
 /**
- * The reset TRUNCATEs every table, the ledger and the custody trail included.
- * It ran after every `pnpm test` against whatever database `.env` named, with
- * nothing to stop it being production. The seed now refuses NODE_ENV=production
- * on its own; this says so here as well, in words about this script, and fails
- * the run, because a refused reset leaves the test residue behind.
+ * Not against production, and not half-way either.
+ *
+ * The reset TRUNCATEs every table, the ledger and the custody trail included,
+ * and it ran after every `pnpm test` against whatever database `.env` named,
+ * with nothing to stop it being production. The seed now refuses
+ * NODE_ENV=production on its own. This refuses here as well, BEFORE the first
+ * suite: the suites write real items and real ledger rows into the database
+ * they run against, so a run whose reset will be refused should never start
+ * (and any seeding before a suite would be refused the same way). A single
+ * suite can still be run on its own, `pnpm test:<suite>`.
  */
-const resetRefused =
-  envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure';
+if (envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure') {
+  console.error(
+    'Refusing to run: NODE_ENV=production. `pnpm test` writes test data into the database and ' +
+      'then resets it with the seed, which TRUNCATEs every table, the ledger included. If this ' +
+      'database is disposable, run it again with ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure.',
+  );
+  process.exit(1);
+}
 
 let status = 0;
 for (const suite of SUITES) {
@@ -112,13 +123,6 @@ for (const suite of SUITES) {
 
 if (skipReset) {
   console.log('\nSkipping the database reset (--no-reset).');
-} else if (resetRefused) {
-  console.error(
-    '\nRefusing to reset the database: NODE_ENV=production. The reset TRUNCATEs every table, ' +
-      'the ledger included. If this database is disposable, run `pnpm db:reset` with ' +
-      'ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure yourself.',
-  );
-  status = status || 1;
 } else {
   console.log('\nRestoring the seeded catalogue…');
   const reset = await run('pnpm', ['--filter', '@bault/api', 'db:seed']);

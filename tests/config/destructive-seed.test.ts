@@ -117,7 +117,8 @@ describe('the destructive seed', () => {
 });
 
 /**
- * `pnpm test` ends by re-seeding. Under production it must refuse that reset.
+ * `pnpm test` ends by re-seeding. Under production it must refuse that reset,
+ * and so refuse the run before the first suite writes anything.
  *
  * `npx` and `pnpm` are replaced on PATH by stubs that only record how they were
  * called, so the script's control flow is exercised without running a single
@@ -150,12 +151,12 @@ describe('scripts/test.mjs', () => {
     return { status: r.status, output: `${r.stdout}\n${r.stderr}`, log };
   }
 
-  it('refuses the final reset under NODE_ENV=production', () => {
+  it('refuses NODE_ENV=production before it runs a suite or seeds anything', () => {
     const r = runTestScript({ NODE_ENV: 'production' });
-    expect(r.log, 'the suites still ran').toContain('npx vitest run');
-    expect(r.log, 'the reset ran').not.toContain('db:seed');
-    expect(r.output).toContain('Refusing to reset the database: NODE_ENV=production');
-    expect(r.status, 'a refused reset fails the run').not.toBe(0);
+    expect(r.log, 'the seed ran').not.toContain('db:seed');
+    expect(r.log, 'a suite ran').not.toContain('vitest');
+    expect(r.output).toContain('Refusing to run: NODE_ENV=production');
+    expect(r.status).not.toBe(0);
   });
 
   it('passes the confirmation through, and resets as before outside production', () => {
