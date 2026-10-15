@@ -26,6 +26,7 @@ import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
 import { AccountingSection } from './AccountingSection';
 import { PricingCoveragePanel } from './PricingCoveragePanel';
+import { OutboxSection, type ParkedMessage } from './OutboxSection';
 import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 
 /**
@@ -87,6 +88,9 @@ const TABS = [
   'yield',
   'users',
   'signins',
+  // Beside the sign-in log: the other screen about the platform's own health
+  // rather than its customers'.
+  'outbox',
   'requests',
   // Beside the wallet requests: the other screen about money, and the one an
   // accountant's questions are answered from (N40).
@@ -103,6 +107,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   yield: 'admin.section.yield',
   users: 'admin.section.users',
   signins: 'admin.section.signins',
+  outbox: 'admin.section.outbox',
   requests: 'admin.section.requests',
   accounting: 'admin.section.accounting',
   items: 'admin.section.items',
@@ -132,6 +137,15 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   /** The account whose second factor is about to be reset, while the confirmation is open. */
   const [resetting, setResetting] = useState<AdminUser | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
+  /**
+   * How many outbox messages are parked, on the tab itself.
+   *
+   * A parked message is a notification or a reset link somebody did not get,
+   * and it waits for a person; a tab that has to be opened to find out whether
+   * anything is waiting is a tab nobody opens. Read once when the console
+   * opens, and kept current by the section when it requeues.
+   */
+  const [parkedCount, setParkedCount] = useState<number | null>(null);
 
   // Opens on Shelf Yield, as the comment on `TABS` has always said it does. The
   // code said `users`, so the section an administrator was meant to land on was
@@ -160,6 +174,15 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
     void load();
   }, [load]);
 
+  // Apart from `load`: the count is a convenience, and a failure to read it
+  // must not take the users and items tables down with it.
+  useEffect(() => {
+    api
+      .get<ParkedMessage[]>('/admin/outbox/parked')
+      .then((list) => setParkedCount(list.length))
+      .catch(() => setParkedCount(null));
+  }, []);
+
   async function resetMfa(target: AdminUser) {
     setResetBusy(true);
     try {
@@ -175,7 +198,13 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
     }
   }
 
-  const tabs = TABS.map((key) => ({ key, label: t(TAB_LABEL[key]) }));
+  const tabs = TABS.map((key) => ({
+    key,
+    label:
+      key === 'outbox' && parkedCount
+        ? t('admin.section.outboxCount', { count: parkedCount })
+        : t(TAB_LABEL[key]),
+  }));
 
   return (
     <>
@@ -231,6 +260,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
               </div>
             )}
           </Panel>
+        </TabPanel>
+      )}
+
+      {section === 'outbox' && (
+        <TabPanel tab="outbox">
+          <OutboxSection onMsg={setMessage} onError={setError} onCount={setParkedCount} />
         </TabPanel>
       )}
 
