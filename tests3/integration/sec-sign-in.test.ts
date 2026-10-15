@@ -1,6 +1,7 @@
-import { randomBytes } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { createHash, randomBytes } from 'node:crypto';
+import { afterAll, describe, expect, it } from 'vitest';
 import { Client, SEED, SEED_PASSWORD, fixtureEmail, signIn } from '../../tests/integration/helpers/http';
+import { closeDb, sql } from '../../tests/integration/helpers/db';
 
 /**
  * Signing in, from the side of somebody guessing (E13, N5, N10).
@@ -16,6 +17,8 @@ import { Client, SEED, SEED_PASSWORD, fixtureEmail, signIn } from '../../tests/i
  * tests: a suite that pointed ten wrong passwords at a seeded account would
  * lock it for every suite after it.
  */
+
+afterAll(closeDb);
 
 const PASSWORD = 'correct horse battery';
 
@@ -129,4 +132,56 @@ describe('guessing at one identifier', () => {
     // A seeded account somebody else is guessing at nothing to do with.
     await signIn(SEED.collector2, SEED_PASSWORD);
   }, 60_000);
+});
+
+/* ============================================================
+   N10 — a confirmation link confirms, and does nothing else
+   ============================================================ */
+
+describe('an unused confirmation link', () => {
+  /** A link for this account, as the email would have carried it. */
+  async function linkFor(email: string): Promise<{ userId: string; token: string }> {
+    const [row] = await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [email]);
+    const token = randomBytes(32).toString('hex');
+    await sql(
+      `INSERT INTO verification_token (user_id, type, token_hash, expires_at)
+       VALUES ($1, 'email_verification', $2, now() + interval '1 day')`,
+      [row!.id, createHash('sha256').update(token).digest('hex')],
+    );
+    return { userId: row!.id, token };
+  }
+
+  const statusOf = async (userId: string) =>
+    (await sql<{ status: string }>(`SELECT status FROM user_account WHERE id = $1`, [userId]))[0]!.status;
+
+  it('still activates a pending account', async () => {
+    const { email } = await register('verify');
+    const { userId, token } = await linkFor(email);
+    const res = await new Client().post('/auth/verify-email', { token });
+    expect(res.status).toBe(200);
+    expect(await statusOf(userId)).toBe('active');
+  });
+
+  it('does not bring a suspended account back', async () => {
+    // A link is valid for a day. An account suspended inside that day was
+    // reinstated by whoever still held the mail.
+    const { email } = await register('verifys');
+    const { userId, token } = await linkFor(email);
+    const admin = await signIn(SEED.admin);
+    expect((await admin.patch(`/admin/users/${userId}`, { status: 'suspended' })).status).toBe(200);
+
+    const res = await new Client().post('/auth/verify-email', { token });
+    expect(res.status).not.toBe(200);
+    expect(await statusOf(userId)).toBe('suspended');
+  });
+
+  it('does not reopen a closed one', async () => {
+    const { email } = await register('verifyc');
+    const { userId, token } = await linkFor(email);
+    const admin = await signIn(SEED.admin);
+    expect((await admin.patch(`/admin/users/${userId}`, { status: 'closed' })).status).toBe(200);
+
+    await new Client().post('/auth/verify-email', { token });
+    expect(await statusOf(userId)).toBe('closed');
+  });
 });

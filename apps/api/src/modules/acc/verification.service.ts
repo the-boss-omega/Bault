@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { loadEnv } from '@bault/config';
 import { EMAIL_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { EmailAdapter } from '@bault/adapters';
@@ -58,7 +58,15 @@ export class VerificationService {
     });
   }
 
-  /** Consume a valid email-verification token and activate the account. */
+  /**
+   * Consume a valid email-verification token and activate the account — if,
+   * and only if, it is still waiting to be activated (N10).
+   *
+   * This used to set `status = 'active'` unconditionally. A link stays valid for
+   * a day, so an account suspended or closed inside that day was reinstated by
+   * whoever still held the mail — the one action in the product that undid an
+   * administrator's decision without an administrator.
+   */
   async verifyEmail(rawToken: string): Promise<void> {
     const [tok] = await this.db
       .select()
@@ -77,14 +85,32 @@ export class VerificationService {
     }
 
     await this.db.transaction(async (tx) => {
-      await tx
+      // Single use under concurrency too: two clicks on one link consume it once.
+      const [consumed] = await tx
         .update(verificationToken)
         .set({ consumedAt: new Date() })
-        .where(eq(verificationToken.id, tok.id));
-      await tx
+        .where(and(eq(verificationToken.id, tok.id), isNull(verificationToken.consumedAt)))
+        .returning({ id: verificationToken.id });
+      if (!consumed) throw AppError.tokenExpired('Verification link expired or already used');
+
+      const [activated] = await tx
         .update(userAccount)
         .set({ status: 'active' })
-        .where(eq(userAccount.id, tok.userId));
+        .where(and(eq(userAccount.id, tok.userId), eq(userAccount.status, 'pending')))
+        .returning({ id: userAccount.id });
+      if (activated) return;
+
+      // Already active — a second link from a resend, say — is not an error:
+      // the address is confirmed and nothing needs to change.
+      const [u] = await tx
+        .select({ status: userAccount.status })
+        .from(userAccount)
+        .where(eq(userAccount.id, tok.userId))
+        .limit(1);
+      if (u?.status === 'active') return;
+      // Suspended or closed stays exactly that. Throwing also rolls the
+      // consumption back, which changes nothing: the link can never activate it.
+      throw AppError.accountSuspended();
     });
   }
 
