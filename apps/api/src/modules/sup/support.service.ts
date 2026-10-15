@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -255,10 +255,20 @@ export class SupportService {
   async assign(ticketId: string, actor: TicketActor) {
     if (!this.staff(actor)) throw AppError.forbidden('Only staff can take a ticket');
     await this.loadFor(ticketId, actor);
-    await this.db
+    // Only an untaken ticket (or one already ours). Unconditionally, two staff
+    // pressing Take together each were told the ticket was theirs, and the
+    // customer got two people answering the same question.
+    const [taken] = await this.db
       .update(supportTicket)
       .set({ assignedTo: actor.id, updatedAt: new Date() })
-      .where(eq(supportTicket.id, ticketId));
+      .where(
+        and(
+          eq(supportTicket.id, ticketId),
+          or(isNull(supportTicket.assignedTo), eq(supportTicket.assignedTo, actor.id)),
+        ),
+      )
+      .returning({ id: supportTicket.id });
+    if (!taken) throw new AppError(ErrorCode.CONFLICT, 'Someone else has already taken this ticket.', 409);
     return { assignedTo: actor.id };
   }
 

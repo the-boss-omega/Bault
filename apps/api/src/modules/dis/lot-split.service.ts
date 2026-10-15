@@ -74,27 +74,34 @@ export class LotSplitService {
    * was predicted when it was raised.
    */
   async complete(operatorId: string, requestId: string, form: LotSplitFulfillment) {
-    const req = await this.requests.get(requestId);
-    this.requests.assertAccepted(req);
-    if (req.type !== 'batch_split') throw AppError.validation('Not a lot-split request');
-    if (!req.itemId) throw AppError.validation('Request has no item');
     if (!form.itemVerified) throw AppError.validation('Verify the lot before splitting it');
     if (!form.notes?.trim()) throw AppError.validation('Notes are required');
 
-    // Outside the request transaction on purpose: breakLot runs its own
-    // transaction per child so a forty-card lot does not hold one lock for the
-    // whole operation.
-    const result = await this.intake.breakLot(operatorId, req.itemId);
+    /**
+     * The request, the split and the close in ONE transaction.
+     *
+     * They used to be three: the request read unlocked, the split run in
+     * transactions of its own, and the close last. A second Complete split the
+     * lot again, and a lot its owner had listed after asking for the split was
+     * split while still on sale. Now the request is locked, the lot is checked
+     * against the person who asked, and nothing commits unless all of it does.
+     */
+    return this.custody.run(async (tx) => {
+      const req = await this.requests.get(requestId, tx);
+      this.requests.assertAccepted(req);
+      if (req.type !== 'batch_split') throw AppError.validation('Not a lot-split request');
+      if (!req.itemId) throw AppError.validation('Request has no item');
 
-    return this.db.transaction(async (tx) =>
-      this.requests.completeWithFulfillment(
+      const result = await this.intake.breakLot(operatorId, req.itemId, { tx, ownerId: req.requesterId });
+
+      return this.requests.completeWithFulfillment(
         tx,
         requestId,
         operatorId,
         { ...form },
         ['itemVerified', 'notes'],
         { producedCount: result.producedCount },
-      ),
-    );
+      );
+    });
   }
 }

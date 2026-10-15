@@ -164,7 +164,7 @@ export class ConsignmentService {
   async complete(operatorId: string, requestId: string, form: ConsignmentFulfillment) {
     const saleAmountMinor = form.saleAmountMinor;
     return this.custody.run(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req); // operator must accept before completing
       if (req.type !== 'consignment') throw AppError.validation('Not a consignment request');
       if (!req.itemId) throw AppError.validation('Request has no item');
@@ -197,7 +197,7 @@ export class ConsignmentService {
       }
 
       const platformId = await this.requests.platformAccountId(tx);
-      await this.custody.transferOwnership(tx, req.itemId, platformId, operatorId, 'consignment sale');
+      await this.custody.transferOwnership(tx, req.itemId, platformId, operatorId, 'consignment sale', { ownerId });
       await this.custody.changeState(tx, req.itemId, 'consigned', operatorId, 'consigned');
 
       // Every transaction on the platform is recorded (Requirement 13.1) — this

@@ -380,6 +380,10 @@ export class WalletRequestService {
        * so the two agree unless somebody deliberately moved the schedule.
        */
       const grossFeeMinor = request.type === 'cash_out' ? cashOutFeeMinor(request.amount) : 0;
+      // The wallet before the membership period the waiver writes to, the order
+      // every other spend takes them in, so a cash-out completing while its owner
+      // pays for a parcel cannot deadlock against it.
+      await this.ledger.lockWallet(request.userId, tx as Database);
       // A membership may waive it. Only ever less than the fee quoted at
       // submission, never more — see `MembershipService.waive`.
       const waiver =

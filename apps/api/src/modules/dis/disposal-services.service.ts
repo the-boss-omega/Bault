@@ -95,7 +95,7 @@ export class DisposalServicesService {
    */
   async completeDeslab(operatorId: string, requestId: string, form: DeslabFulfillment) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'deslab') throw AppError.validation('Not a de-slab request');
       if (!req.itemId) throw AppError.validation('Request has no item');
@@ -186,9 +186,15 @@ export class DisposalServicesService {
 
       const platformId = outcome === 'donate' ? await this.requests.platformAccountId(tx) : null;
 
+      // The checks in step 1 were made when the confirmation was issued. Repeat
+      // them under the locks, all of them before anything changes, so a card
+      // sold or put on hold in between is neither destroyed nor given away.
+      await this.custody.lockItems(tx, itemIds);
+      for (const itemId of itemIds) await this.custody.lockExpecting(tx, itemId, { ownerId });
+
       for (const itemId of itemIds) {
         if (platformId) {
-          await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'remove commons — donated');
+          await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'remove commons — donated', { ownerId });
           await this.custody.changeState(tx, itemId, 'donated', ownerId, 'remove commons');
         } else {
           await this.custody.changeState(tx, itemId, 'discarded', ownerId, 'remove commons — discarded');

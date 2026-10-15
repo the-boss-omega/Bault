@@ -134,7 +134,7 @@ export class GradingService {
   async approve(adminId: string, requestId: string, approve: boolean, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Record why');
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.approvalRequired !== true) {
@@ -214,7 +214,7 @@ export class GradingService {
         throw new AppError(ErrorCode.CONFLICT, 'That submission has already shipped', 409);
       }
 
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.gradingBody !== sub.gradingBody) {
@@ -314,7 +314,7 @@ export class GradingService {
    */
   async complete(operatorId: string, requestId: string, form: GradingFulfillment) {
     return this.custody.run(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (!req.itemId) throw AppError.validation('Request has no item');
       const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
