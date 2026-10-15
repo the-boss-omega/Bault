@@ -408,6 +408,26 @@ describe('session handling', () => {
     expect(after.status).toBe(401);
   });
 
+  it('refuses the very cookie it issued, once that session has signed out (N12)', async () => {
+    /**
+     * The test above cannot tell a revoked session from a forgotten one: the
+     * logout response clears the cookie, the client stores the empty value, and
+     * the next request goes out with no token at all — so it would still pass if
+     * logout revoked nothing server-side. A stolen cookie is a copy the thief
+     * kept; this replays exactly that copy.
+     */
+    const collector = await signIn(SEED.collector);
+    const stolen = (collector as unknown as { cookie: string }).cookie;
+    expect(stolen).toMatch(/=.+/);
+
+    expect((await collector.post('/auth/logout')).status).toBe(204);
+
+    const thief = new Client();
+    (thief as unknown as { cookie: string }).cookie = stolen;
+    const res = await thief.get('/me/profile');
+    expect(res.status).toBe(401);
+  });
+
   it('refuses a forged session cookie', async () => {
     const forged = new Client();
     // Reach into the client the way an attacker reaches into a browser: set a
