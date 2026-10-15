@@ -815,18 +815,19 @@ export class ShipmentService {
     };
   }
 
+  /** A direct-overnight shipment: booked against a parcel, with no items by design. */
+  static isDirect(s: Pick<typeof shipment.$inferSelect, 'serviceKey' | 'itemIds'>): boolean {
+    return s.serviceKey === DIRECT_OVERNIGHT_KEY && ((s.itemIds as string[]) ?? []).length === 0;
+  }
+
   /**
-   * Direct overnight: a parcel that never became items.
+   * What a direct-overnight label is bought for: a parcel that never became items.
    *
    * There is nothing in the vault to build a profile from — `itemIds` is empty
    * by design, which is why `labelRequest` cannot serve it. The parcel is the
    * contents: it leaves from the forwarding site it arrived at, as one envelope
    * weighing what the scale says.
    */
-  static isDirect(s: Pick<typeof shipment.$inferSelect, 'serviceKey' | 'itemIds'>): boolean {
-    return s.serviceKey === DIRECT_OVERNIGHT_KEY && ((s.itemIds as string[]) ?? []).length === 0;
-  }
-
   async directLabelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams: number) {
     const request: RateRequest = {
       destination: destinationOf(s),

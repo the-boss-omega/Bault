@@ -4069,7 +4069,7 @@ const en: Record<MessageKey, string> = {
   'warehouse.dispatch.packIn': 'Pack in: {box}. This is the box the customer paid for.',
   'warehouse.dispatch.anyBox': 'The customer did not choose a box. Use the smallest one that fits.',
   'warehouse.dispatch.scan': 'Scan each item',
-  'warehouse.dispatch.scanHint': 'Scan the label on each card as it goes into the box. Only what is scanned is sent for checking.',
+  'warehouse.dispatch.scanHint': 'Scan the label on each item as it goes into the box. Only what is scanned is sent for checking.',
   'warehouse.dispatch.scanParcel': 'Scan the parcel',
   'warehouse.dispatch.scanParcelHint': 'Direct overnight: the contents are parcel {code}. Scan its label or the inbound tracking number on it.',
   'warehouse.dispatch.addScan': 'Add',
