@@ -172,21 +172,36 @@ describe('signing in with an address that was never confirmed', () => {
    Sign-up: two fields that gated the button and would not say why
    ============================================================ */
 
-describe('the sign-up form explains every field it blocks on', () => {
-  async function fill(user: ReturnType<typeof userEvent.setup>, over: Record<string, string> = {}) {
-    const values = {
-      Email: 'ann@example.com',
-      Username: 'annlee',
-      'First name': 'Ann',
-      'Last name': 'Lee',
-      Password: 'correct horse',
-      ...over,
-    };
-    for (const [label, value] of Object.entries(values)) {
-      if (value === '') continue;
-      await user.type(screen.getByLabelText(label, { exact: true }), value);
-    }
+/** The consent box on the sign-up form, by its accessible name. */
+const consentBox = () => screen.getByRole('checkbox', { name: /I agree to the Terms of Service/i });
+
+/**
+ * Fill the sign-up form. The terms are accepted too unless `consent` is false:
+ * since E21 a form without consent is one the API refuses, so a test about
+ * something else has to tick the box the way a person would.
+ */
+async function fillSignUp(
+  user: ReturnType<typeof userEvent.setup>,
+  over: Record<string, string> = {},
+  consent = true,
+) {
+  const values = {
+    Email: 'ann@example.com',
+    Username: 'annlee',
+    'First name': 'Ann',
+    'Last name': 'Lee',
+    Password: 'correct horse',
+    ...over,
+  };
+  for (const [label, value] of Object.entries(values)) {
+    if (value === '') continue;
+    await user.type(screen.getByLabelText(label, { exact: true }), value);
   }
+  if (consent) await user.click(consentBox());
+}
+
+describe('the sign-up form explains every field it blocks on', () => {
+  const fill = fillSignUp;
 
   it('says what is wrong with the address rather than only disabling the button', async () => {
     /**
@@ -232,6 +247,56 @@ describe('the sign-up form explains every field it blocks on', () => {
 
     release({ username: 'annlee', firstName: 'Ann', lastName: 'Lee' });
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  });
+});
+
+/* ============================================================
+   Sign-up: consent to the terms (E21)
+   ============================================================ */
+
+describe('the sign-up form asks for consent to the terms', () => {
+  /**
+   * Bault charges fees, accrues interest on a negative balance and suspends
+   * accounts, and the form created an account without asking anybody to agree
+   * to any of it. The box is required, the request carries the version that was
+   * shown, and the documents can be read on the form — a signed-out visitor
+   * cannot open FAQ & Legal, so a link there would lead nowhere.
+   */
+  it('cannot be submitted until the terms are accepted', async () => {
+    const { TERMS_VERSION } = await import('../../apps/web/src/areas/customer/help/legalContent');
+    const user = userEvent.setup();
+    post.mockResolvedValueOnce({ username: 'annlee', firstName: 'Ann', lastName: 'Lee' });
+    renderIn(<SignUpPage onGoToSignIn={() => {}} />);
+    await fillSignUp(user, {}, false);
+
+    const submit = screen.getByRole('button', { name: 'Sign up' });
+    expect(consentBox()).not.toBeChecked();
+    expect(consentBox()).toBeRequired();
+    expect(submit).toBeDisabled();
+    // And it says why, beside the box.
+    expect(screen.getByText(/the version you accept, and when, is recorded/i)).toBeInTheDocument();
+
+    await user.click(consentBox());
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith(
+      '/auth/register',
+      expect.objectContaining({ acceptedTermsVersion: TERMS_VERSION, username: 'annlee' }),
+    );
+  });
+
+  it('shows the documents on the form, each marked as an unreviewed draft', async () => {
+    const user = userEvent.setup();
+    renderIn(<SignUpPage onGoToSignIn={() => {}} />);
+    expect(screen.queryByRole('heading', { name: 'Terms of Service' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /read them/i }));
+    for (const title of ['Terms of Service', 'Privacy Policy', 'Cookie notice']) {
+      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
+    }
+    expect(screen.getAllByText('DRAFT — must be reviewed by a lawyer before launch')).toHaveLength(3);
   });
 });
 
@@ -451,8 +516,9 @@ describe('the words the product uses', () => {
     const en = MESSAGES.en as Record<string, string>;
 
     // Strings that genuinely mean a card keep the word: the payment sense, the
-    // two item classes that ARE cards, the name of a real kind of event, and the
-    // Ship My Cards copy, which is quoted verbatim and must not be edited.
+    // two item classes that ARE cards, and the name of a real kind of event.
+    // (The copied FAQ's attribution strings used to be allowed here too; the
+    // FAQ is Bault's own now and they are gone.)
     const allowed = new Set([
       'money.route.card',
       'money.routeDesc.card',
@@ -460,9 +526,6 @@ describe('the words the product uses', () => {
       'itemClass.trading_card',
       'itemClass.oversized_card',
       'consign.channel.card_show',
-      'faq.subtitle',
-      'faq.sourceNote',
-      'faq.quotedNotice',
       // The landing page quotes the trading-card intake rule by name, not intake in general.
       'landing.price.intake',
     ]);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { formatDate } from '../../../shared/money';
+import { formatDate, formatUsd } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -13,23 +14,21 @@ import {
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
-import { LEGAL_DOCUMENTS, PENDING_DOCUMENTS } from './legalContent';
+import { LEGAL_DOCUMENTS } from './legalContent';
+import { DraftBanner } from './LegalDocumentView';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
+
+/** Whether any catalogued entry is outright unavailable — see the filter. */
+const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
 
 /**
  * How each availability value is presented.
  *
- * Three values rather than the original two, because "Bault has no such
- * capability" and "Bault does most of this but not the part about lodging a
- * broker instruction" are different answers, and collapsing them into one
- * badge made the second look like the first. `partial` is warned rather than
- * greyed out: it is a thing Bault does, with a stated limit, so hiding it
- * behind the "not relevant" filter would bury a capability people have.
+ * `partial` is warned rather than greyed out: it is a thing Bault does, with a
+ * limit the answer names, so hiding it behind the "not offered" filter would
+ * bury a capability people have.
  */
-/** Whether any catalogued entry is outright unavailable — see the filter. */
-const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
-
 const AVAILABILITY_TONE: Record<FaqAvailability, 'info' | 'warning' | 'neutral'> = {
   adapted: 'info',
   partial: 'warning',
@@ -55,9 +54,10 @@ type HelpTab = (typeof TABS)[number];
  * FAQ & Legal.
  *
  * Six contextual tabs on the shared shell: Ask (the placeholder assistant),
- * Guides (Bault's own workflow walkthroughs), FAQ (the copied Ship My Cards
- * content), Shows (the card-show calendar, from real rows), Contact (how to
- * reach a person) and Legal Terms (the documents that genuinely govern Bault).
+ * Guides (Bault's own workflow walkthroughs), FAQ (Bault's answers, written
+ * from what the product does), Shows (the card-show calendar, from real rows),
+ * Contact (how to reach a person) and Legal Terms (the terms, drafts marked as
+ * drafts, and the figures they refer to).
  *
  * The tab lives in the route, so a link can open any of them; the FAQ's `q`
  * param deep-links a single answer open and the Guides' `g` param a single
@@ -265,9 +265,8 @@ function FaqPanel() {
 
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string>('all');
-  // The imported catalogue is mostly ShipMyCards workflows Bault does not have.
-  // Default to the entries that describe something Bault actually does, and let
-  // the reader opt into the full copied source set.
+  // An entry marked `unavailable` answers "does Bault do X?" with no. Those are
+  // hidden until asked for, so the list leads with what Bault does.
   const [showAll, setShowAll] = useState(false);
 
   const openId = route.params.q ?? null;
@@ -337,24 +336,15 @@ function FaqPanel() {
         </div>
 
         {/*
-          The provenance notice.
-
-          This catalogue is third-party text reproduced verbatim, and it stays
-          that way: the brand rename to Bault covered the product's own strings
-          and deliberately did NOT rewrite quoted copy. Renaming inside a
-          quotation would attribute another company's policies — and services
-          Bault's own badges say it does not offer — to Bault.
-
-          So the notice is stated as a quotation, above the entries rather than
-          below them, and carries the source link.
+          When the answers were last checked against the product, and where the
+          numbers live. The answers point at the price list and at the current
+          figures instead of repeating configured amounts, and this says so up
+          front so a reader does not go looking for a price in the prose.
         */}
         <p className="infobox faq-source">
-          {t('faq.sourceNote', { count: FAQ.source.entryCount, date: formatDate(FAQ.source.retrieved, locale) })}{' '}
-          <a href={FAQ.source.url} target="_blank" rel="noreferrer noopener" dir="ltr">
-            {FAQ.source.url}
-          </a>
+          {t('faq.reviewedNote', { count: FAQ.reviewed.entryCount, date: formatDate(FAQ.reviewed.date, locale) })}
         </p>
-        <p className="hint">{t('faq.quotedNotice')}</p>
+        <p className="hint">{t('faq.ownNotice')}</p>
       </Panel>
 
       <Panel title={t('faq.resultsTitle', { count: results.length })} flush>
@@ -440,19 +430,17 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        {/* Bault's own note comes FIRST: the copied answer below it describes
-            another company's service, and the reader needs that framing before
-            they read it as Bault policy. */}
-        <p className={`faq-note faq-note--${entry.availability}`}>
+        {/* The short answer first, then the full one. */}
+        <p className={`faq-note faq-note--${entry.availability}`} lang="en" dir="ltr">
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
 
-        {/* The copied source answer, verbatim. Held in English and LTR
-            regardless of the app locale — translating published policy text
-            would change what it says. */}
+        {/* The full answer. Written in English and not yet translated, so it
+            is marked as English and LTR whatever the app locale — a Hebrew
+            screen reader would otherwise read it in a Hebrew voice. */}
         <div className="faq-source-answer" lang="en" dir="ltr">
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
@@ -466,8 +454,8 @@ function FaqItem({
 function FaqBlockView({ block }: { block: FaqBlock }) {
   if (block.kind === 'p') return <p>{renderInline(block.text)}</p>;
   if (block.kind === 'h') {
-    // Source levels start at h4 inside an accordion; clamp so the page's own
-    // heading order is not broken by the copied content.
+    // Answers sit inside an accordion whose question is an h3; clamp so the
+    // page's own heading order is not broken by the content.
     const Tag = (block.level >= 5 ? 'h5' : 'h4') as 'h4' | 'h5';
     return <Tag>{renderInline(block.text)}</Tag>;
   }
@@ -490,10 +478,14 @@ function FaqBlockView({ block }: { block: FaqBlock }) {
 }
 
 /**
- * Render the two inline markers the extracted content carries: `**bold**` and
+ * Render the two inline markers the content carries: `**bold**` and
  * `[[label|url]]`. Deliberately not a Markdown parser and deliberately not
- * `dangerouslySetInnerHTML` — the source is third-party text, so it is rendered
- * as React nodes and can never inject markup.
+ * `dangerouslySetInnerHTML` — the text is rendered as React nodes and can never
+ * inject markup.
+ *
+ * The href is the one value that reaches the DOM as an active attribute, so its
+ * scheme is checked: an in-app route (`#/...`) opens in place, https opens in a
+ * new tab, and anything else is rendered as plain text rather than as a link.
  */
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -508,11 +500,21 @@ function renderInline(text: string): ReactNode[] {
     } else {
       const label = (match[1] ?? '').replace(/\*\*/g, '');
       const href = match[2] ?? '';
-      nodes.push(
-        <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
-          {label}
-        </a>,
-      );
+      if (href.startsWith('#/')) {
+        nodes.push(
+          <a key={key++} href={href}>
+            {label}
+          </a>,
+        );
+      } else if (href.startsWith('https://')) {
+        nodes.push(
+          <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
+            {label}
+          </a>,
+        );
+      } else {
+        nodes.push(label);
+      }
     }
     last = pattern.lastIndex;
   }
@@ -546,20 +548,7 @@ function LegalPanel() {
 
   return (
     <>
-      {/* Said plainly and first: Bault's own terms do not exist yet, so nobody
-          mistakes the licence below for an agreement with Bault. */}
-      <Panel title={t('legal.pendingTitle')} subtitle={t('legal.pendingSubtitle')}>
-        <ul className="legal-pending">
-          {PENDING_DOCUMENTS.map((key) => (
-            <li key={key}>
-              <StatusBadge tone="warning" plain>
-                {t('legal.notPublished')}
-              </StatusBadge>
-              <span>{t(key as MessageKey)}</span>
-            </li>
-          ))}
-        </ul>
-      </Panel>
+      <CurrentFiguresPanel />
 
       <Panel
         title={doc.title}
@@ -582,8 +571,10 @@ function LegalPanel() {
           </div>
         }
       >
+        {doc.draft && <DraftBanner doc={doc} />}
         <p className="hint">
           {t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}
+          {doc.version && <> · {t('legal.version', { version: doc.version })}</>}
         </p>
 
         {LEGAL_DOCUMENTS.length > 1 && (
@@ -640,5 +631,116 @@ function LegalPanel() {
         </div>
       </Panel>
     </>
+  );
+}
+
+/** `GET /content/account-terms` — see `apps/api/src/modules/not/account-terms.ts`. */
+export interface AccountTerms {
+  termsVersion: string;
+  debt: { graceDays: number; interestBpsPerDay: number; suspendBelowMinor: number };
+  cashOut: { bandMinor: number; smallBps: number; smallMinimumMinor: number; largeFixedMinor: number; largeBps: number };
+  chargebackFeeMinor: number;
+  escrow: { feeBps: number; minimumFeeMinor: number; minimumValueMinor: number };
+  shipping: {
+    restockingFeeMinor: number;
+    paymentWindowDays: number;
+    insurancePremiumBps: number;
+    insuranceMinimumPremiumMinor: number;
+    maxInsuredValueMinor: number;
+    signatureRequiredAboveMinor: number;
+  };
+  removeCommonsWindowDays: number;
+}
+
+/** Basis points as a percentage, without trailing zeros: 5 → "0.05", 150 → "1.5". */
+function bpsToPercent(bps: number): string {
+  return String(Number((bps / 100).toFixed(4)));
+}
+
+/**
+ * The figures the terms and the FAQ point at.
+ *
+ * The documents deliberately do not print configuration — the debt policy is
+ * environment configuration, and a number copied into prose goes stale the day
+ * somebody changes it. This panel is where "shown in the app" is true: it reads
+ * the same settings and constants the charging code uses.
+ */
+function CurrentFiguresPanel() {
+  const { t } = useI18n();
+  const [terms, setTerms] = useState<AccountTerms | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .get<AccountTerms>('/content/account-terms')
+      .then((value) => {
+        if (live) setTerms(value);
+      })
+      .catch(() => {
+        if (live) setFailed(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const rows: Array<[string, string]> = terms
+    ? [
+        [t('legal.figures.graceDays'), t('legal.figures.days', { days: terms.debt.graceDays })],
+        [t('legal.figures.interest'), t('legal.figures.perDay', { rate: bpsToPercent(terms.debt.interestBpsPerDay) })],
+        [t('legal.figures.suspend'), formatUsd(terms.debt.suspendBelowMinor)],
+        [
+          t('legal.figures.cashOut'),
+          t('legal.figures.cashOutValue', {
+            smallPct: bpsToPercent(terms.cashOut.smallBps),
+            min: formatUsd(terms.cashOut.smallMinimumMinor),
+            band: formatUsd(terms.cashOut.bandMinor),
+            fixed: formatUsd(terms.cashOut.largeFixedMinor),
+            largePct: bpsToPercent(terms.cashOut.largeBps),
+          }),
+        ],
+        [t('legal.figures.chargeback'), formatUsd(terms.chargebackFeeMinor)],
+        [t('legal.figures.restocking'), formatUsd(terms.shipping.restockingFeeMinor)],
+        [t('legal.figures.paymentWindow'), t('legal.figures.days', { days: terms.shipping.paymentWindowDays })],
+        [
+          t('legal.figures.insurance'),
+          t('legal.figures.insuranceValue', {
+            max: formatUsd(terms.shipping.maxInsuredValueMinor),
+            pct: bpsToPercent(terms.shipping.insurancePremiumBps),
+            min: formatUsd(terms.shipping.insuranceMinimumPremiumMinor),
+            sig: formatUsd(terms.shipping.signatureRequiredAboveMinor),
+          }),
+        ],
+        [
+          t('legal.figures.escrow'),
+          t('legal.figures.escrowValue', {
+            pct: bpsToPercent(terms.escrow.feeBps),
+            min: formatUsd(terms.escrow.minimumFeeMinor),
+            floor: formatUsd(terms.escrow.minimumValueMinor),
+          }),
+        ],
+        [t('legal.figures.termsVersion'), terms.termsVersion],
+      ]
+    : [];
+
+  return (
+    <Panel title={t('legal.figures.title')} subtitle={t('legal.figures.subtitle')}>
+      {failed ? (
+        <p className="hint">{t('legal.figures.unavailable')}</p>
+      ) : !terms ? (
+        <p className="hint">{t('legal.figures.loading')}</p>
+      ) : (
+        <dl className="legal-figures">
+          {rows.map(([label, value]) => (
+            <div key={label} className="legal-figure">
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <p className="hint">{t('legal.figures.prices')}</p>
+    </Panel>
   );
 }
