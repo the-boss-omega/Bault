@@ -24,6 +24,8 @@ import { IconBox, IconGavel, IconPlus, IconReceipt, IconUsers } from '../../shar
 import { WalletRequestsSection } from './WalletRequestsSection';
 import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
+import { AccountingSection } from './AccountingSection';
+import { PricingCoveragePanel } from './PricingCoveragePanel';
 
 /**
  * `GET /admin/users`.
@@ -78,7 +80,20 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
  * do — find a user, settle a dispute, change a price. Shelf Yield is the one
  * that tells them what to do, so it is what the section opens on.
  */
-const TABS = ['yield', 'users', 'signins', 'requests', 'items', 'house', 'pricing', 'disputes', 'storage'] as const;
+const TABS = [
+  'yield',
+  'users',
+  'signins',
+  'requests',
+  // Beside the wallet requests: the other screen about money, and the one an
+  // accountant's questions are answered from (N40).
+  'accounting',
+  'items',
+  'house',
+  'pricing',
+  'disputes',
+  'storage',
+] as const;
 type SectionKey = (typeof TABS)[number];
 
 const TAB_LABEL: Record<SectionKey, MessageKey> = {
@@ -86,6 +101,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   users: 'admin.section.users',
   signins: 'admin.section.signins',
   requests: 'admin.section.requests',
+  accounting: 'admin.section.accounting',
   items: 'admin.section.items',
   house: 'admin.section.house',
   pricing: 'admin.section.pricing',
@@ -204,6 +220,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
             onMsg={setMessage}
             onError={setError}
           />
+        </TabPanel>
+      )}
+
+      {section === 'accounting' && (
+        <TabPanel tab="accounting">
+          <AccountingSection onError={setError} />
         </TabPanel>
       )}
 
@@ -569,6 +591,8 @@ function PricingSection({
   // Both are converted to the minor units / basis points the API stores.
   const [amount, setAmount] = useState('');
   const [billingTrigger, setBillingTrigger] = useState('per_event');
+  // Bumped when a rule is added, so the coverage check re-reads what is priced.
+  const [coverageKey, setCoverageKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -601,6 +625,7 @@ function PricingSection({
       setItemClass('');
       setDescription('');
       setBillingTrigger('per_event');
+      setCoverageKey((k) => k + 1);
       await load();
     } catch (e) {
       onError((e as Error).message);
@@ -609,6 +634,10 @@ function PricingSection({
 
   return (
     <>
+      {/* First, because "is anything unpriced?" is the question to answer
+          before launch, and before adding a rule to fix it. */}
+      <PricingCoveragePanel refreshKey={coverageKey} onError={onError} />
+
       <Panel title={t('admin.pricing.newRule')} subtitle={t('admin.pricing.newRuleSubtitle')}>
         <div className="stack stack--tight">
           <div className="form-grid">

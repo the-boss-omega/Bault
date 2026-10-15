@@ -199,8 +199,17 @@ export class OfferService {
      * is the truth: nothing was agreed.
      */
     await this.assertCanCover(o.buyerId, o.amount, 'accept');
-    const result = await this.purchase.purchase(o.buyerId, o.listingId, idempotencyKey, o.amount);
-    await this.db.update(offer).set({ status: 'accepted', updatedAt: new Date() }).where(eq(offer.id, offerId));
+    // The acceptance is written inside the sale's transaction, and only if the
+    // offer is still pending: a withdrawal or counter that landed in between
+    // stops the sale instead of being overwritten by it.
+    const result = await this.purchase.purchase(o.buyerId, o.listingId, idempotencyKey, o.amount, async (tx) => {
+      const [accepted] = await tx
+        .update(offer)
+        .set({ status: 'accepted', updatedAt: new Date() })
+        .where(and(eq(offer.id, offerId), eq(offer.status, 'pending')))
+        .returning({ id: offer.id });
+      if (!accepted) throw new AppError(ErrorCode.CONFLICT, 'That offer is no longer open.', 409);
+    });
 
     return {
       status: 'accepted' as const,
@@ -222,7 +231,14 @@ export class OfferService {
    */
   async reject(actorId: string, offerId: string) {
     const { side } = await this.loadParticipating(actorId, offerId);
-    await this.db.update(offer).set({ status: 'rejected', updatedAt: new Date() }).where(eq(offer.id, offerId));
+    // Only while pending: unconditionally, a withdrawal racing an acceptance
+    // relabelled a completed sale as rejected.
+    const [rejected] = await this.db
+      .update(offer)
+      .set({ status: 'rejected', updatedAt: new Date() })
+      .where(and(eq(offer.id, offerId), eq(offer.status, 'pending')))
+      .returning({ id: offer.id });
+    if (!rejected) throw new AppError(ErrorCode.CONFLICT, 'That offer is no longer open.', 409);
     return { status: 'rejected', by: side };
   }
 
@@ -246,7 +262,12 @@ export class OfferService {
     }
 
     return this.db.transaction(async (tx) => {
-      await tx.update(offer).set({ status: 'countered', updatedAt: new Date() }).where(eq(offer.id, offerId));
+      const [countered] = await tx
+        .update(offer)
+        .set({ status: 'countered', updatedAt: new Date() })
+        .where(and(eq(offer.id, offerId), eq(offer.status, 'pending')))
+        .returning({ id: offer.id });
+      if (!countered) throw new AppError(ErrorCode.CONFLICT, 'That offer is no longer open.', 409);
       const [child] = await tx
         .insert(offer)
         .values({
@@ -269,8 +290,16 @@ export class OfferService {
           buyerId: o.buyerId,
           sellerId: l.sellerId,
           amount,
-          /** Who to tell: a counter is addressed to the OTHER side. */
           counteredBy: side,
+          /**
+           * Who to tell: a counter is addressed to the OTHER side.
+           *
+           * Said explicitly, because the payload names both parties and the
+           * worker, given no `recipientIds`, takes the first single-recipient
+           * key it finds — `sellerId`. A seller's counter was announced to the
+           * seller, in the app and by email, and the buyer never heard of it.
+           */
+          recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
         },
       });
       return child;

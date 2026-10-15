@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -104,12 +104,23 @@ export class TradeService {
       const requested = s.requestedItemIds as string[];
       const isTransfer = requested.length === 0;
 
-      // Mutual ownership transfers (each writes a custody event in this tx).
+      /**
+       * Mutual ownership transfers (each writes a custody event in this tx).
+       *
+       * Ownership was checked when the swap was PROPOSED, which can be days
+       * earlier. Each side must still own what it put in, on the shelf and not
+       * on hold, or the swap hands a third person's card to the other side.
+       * Every card is locked first, in one fixed order, so two swaps over the
+       * same cards wait for each other instead of deadlocking.
+       */
+      await this.custody.lockItems(tx, [...offered, ...requested]);
       for (const id of offered) {
-        await this.custody.transferOwnership(tx, id, s.responderId, actorId, isTransfer ? 'gift transfer' : 'swap');
+        await this.custody.transferOwnership(tx, id, s.responderId, actorId, isTransfer ? 'gift transfer' : 'swap', {
+          ownerId: s.proposerId,
+        });
       }
       for (const id of requested) {
-        await this.custody.transferOwnership(tx, id, s.proposerId, actorId, 'swap');
+        await this.custody.transferOwnership(tx, id, s.proposerId, actorId, 'swap', { ownerId: s.responderId });
       }
 
       // Billable (Principle VI): a service charge to the proposer (+ responder for a swap).
@@ -145,7 +156,15 @@ export class TradeService {
     const [s] = await this.db.select().from(swapProposal).where(eq(swapProposal.id, swapId)).limit(1);
     if (!s) throw AppError.notFound('Proposal not found');
     if (actorId !== s.proposerId && actorId !== s.responderId) throw AppError.forbidden('Not a participant');
-    await this.db.update(swapProposal).set({ status: 'rejected', updatedAt: new Date() }).where(eq(swapProposal.id, swapId));
+    // Only a pending proposal can be rejected. Unconditionally, a reject that
+    // raced an approval relabelled an executed swap as rejected after the cards
+    // had already moved.
+    const [rejected] = await this.db
+      .update(swapProposal)
+      .set({ status: 'rejected', updatedAt: new Date() })
+      .where(and(eq(swapProposal.id, swapId), eq(swapProposal.status, 'pending')))
+      .returning({ id: swapProposal.id });
+    if (!rejected) throw new AppError(ErrorCode.CONFLICT, 'Proposal not pending', 409);
     return { status: 'rejected' };
   }
 

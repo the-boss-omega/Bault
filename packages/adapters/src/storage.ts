@@ -9,6 +9,23 @@ export interface PutObjectRequest {
   contentType: string;
 }
 
+/**
+ * Whether a key is a NAME in the bucket rather than a path that moves around it.
+ *
+ * An object key is opaque to S3, but the URL it is sent in is not: the WHATWG
+ * URL parser resolves `.` and `..` segments before the request is signed, so
+ * `intake/../other-bucket/x.png` was signed — and served — as a different
+ * bucket on the same endpoint (F428). Only a WHOLE segment of `.` or `..` does
+ * that; `receipt.v2.pdf` is a name with dots in it and stays allowed.
+ *
+ * Exported so the API's DTOs refuse exactly what the adapter refuses, rather
+ * than a second, slightly different idea of a safe key.
+ */
+export function isSafeObjectKey(key: string): boolean {
+  if (typeof key !== 'string' || key.length === 0) return false;
+  return key.split('/').every((segment) => segment !== '.' && segment !== '..');
+}
+
 export interface StorageAdapter {
   putObject(req: PutObjectRequest): Promise<{ key: string }>;
   /** Time-limited signed URL so private images are readable without a public bucket. */

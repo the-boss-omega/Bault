@@ -1,0 +1,67 @@
+import { loadEnv } from '@bault/config';
+import { CURRENT_TERMS_VERSION } from '../acc/terms';
+import {
+  CASHOUT_BAND_MINOR,
+  CASHOUT_LARGE_BPS,
+  CASHOUT_LARGE_FIXED_MINOR,
+  CASHOUT_SMALL_BPS,
+  CASHOUT_SMALL_MINIMUM_MINOR,
+  CHARGEBACK_FEE_MINOR,
+} from '../pay/money-terms';
+import { ESCROW_FEE_BPS, ESCROW_MINIMUM_FEE_MINOR, ESCROW_MINIMUM_VALUE_MINOR } from '../esc/escrow-terms';
+import {
+  INSURANCE_MINIMUM_PREMIUM_MINOR,
+  INSURANCE_PREMIUM_BPS,
+  MAX_INSURED_VALUE_MINOR,
+  PAYMENT_WINDOW_DAYS,
+  RESTOCKING_FEE_MINOR,
+  SIGNATURE_REQUIRED_ABOVE_MINOR,
+} from '../shp/shipping-options';
+import { CULL_WINDOW_DAYS } from '../dis/disposal-services.service';
+
+/**
+ * The figures the legal documents and the FAQ refer to, read from where the
+ * charging code reads them.
+ *
+ * The balance policy used to print "14 days", "0.05% a day" and "-$20.00" as
+ * prose. Those three are environment variables (`WALLET_DEBT_*`), read by the
+ * daily sweeps — so changing one in production would have made a document
+ * about charging people interest quietly false. The terms now say the current
+ * figures are shown in the app, and this is what the app shows: the debt
+ * policy from the same configuration the sweeps load, and every fixed fee from
+ * the same constant the charge uses. Prices that are pricing rules are on the
+ * price list (`GET /pricing/list`) and are deliberately not repeated here.
+ */
+export function accountTerms() {
+  const env = loadEnv();
+  return {
+    termsVersion: CURRENT_TERMS_VERSION,
+    debt: {
+      graceDays: env.WALLET_DEBT_GRACE_DAYS,
+      interestBpsPerDay: env.WALLET_DEBT_INTEREST_BPS,
+      suspendBelowMinor: env.WALLET_SUSPEND_BELOW_MINOR,
+    },
+    cashOut: {
+      bandMinor: CASHOUT_BAND_MINOR,
+      smallBps: CASHOUT_SMALL_BPS,
+      smallMinimumMinor: CASHOUT_SMALL_MINIMUM_MINOR,
+      largeFixedMinor: CASHOUT_LARGE_FIXED_MINOR,
+      largeBps: CASHOUT_LARGE_BPS,
+    },
+    chargebackFeeMinor: CHARGEBACK_FEE_MINOR,
+    escrow: {
+      feeBps: ESCROW_FEE_BPS,
+      minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
+      minimumValueMinor: ESCROW_MINIMUM_VALUE_MINOR,
+    },
+    shipping: {
+      restockingFeeMinor: RESTOCKING_FEE_MINOR,
+      paymentWindowDays: PAYMENT_WINDOW_DAYS,
+      insurancePremiumBps: INSURANCE_PREMIUM_BPS,
+      insuranceMinimumPremiumMinor: INSURANCE_MINIMUM_PREMIUM_MINOR,
+      maxInsuredValueMinor: MAX_INSURED_VALUE_MINOR,
+      signatureRequiredAboveMinor: SIGNATURE_REQUIRED_ABOVE_MINOR,
+    },
+    removeCommonsWindowDays: CULL_WINDOW_DAYS,
+  };
+}

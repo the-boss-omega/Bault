@@ -224,10 +224,10 @@ export class PayController {
    */
   @Post('webhooks/payment')
   async webhook(@Req() req: Request) {
-    await this.topups.handleWebhook({
+    const { outcome } = await this.topups.handleWebhook({
       rawBody: JSON.stringify(req.body ?? {}),
       headers: req.headers as Record<string, string | undefined>,
     });
-    return { received: true };
+    return { received: true, outcome };
   }
 }

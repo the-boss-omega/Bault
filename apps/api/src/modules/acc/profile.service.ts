@@ -29,6 +29,13 @@ export interface ProfileView {
   fullName: string;
   /** True while the legacy-name migration's split is still unconfirmed. */
   nameReviewRequired: boolean;
+  /**
+   * The terms this person accepted at registration, and when. Both NULL for an
+   * account created before there was anything to accept — said plainly rather
+   * than back-filled with a consent nobody gave (migration 0033).
+   */
+  termsVersion: string | null;
+  termsAcceptedAt: Date | null;
 }
 
 export interface AddressInput {
@@ -71,6 +78,8 @@ export class ProfileService {
       lastName: u.lastName,
       fullName: fullName(u.firstName, u.lastName),
       nameReviewRequired: u.nameReviewRequired,
+      termsVersion: u.termsVersion,
+      termsAcceptedAt: u.termsAcceptedAt,
     };
   }
 

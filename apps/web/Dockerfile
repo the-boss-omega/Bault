@@ -8,8 +8,16 @@
 #
 # Built from the REPO ROOT:
 #   docker build -f apps/web/Dockerfile -t bault-web .
+#
+# Node 22, matching `engines` in the root package.json (the images were on 20,
+# which the engines field excludes). Pinned by digest, not just by tag: a tag
+# is moved by whoever publishes it, so the same Dockerfile built twice could
+# ship two different runtimes. To upgrade, `docker pull node:22-slim`, take the
+# digest from `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim`
+# and change the build FROM line in each of the three Dockerfiles together. nginx
+# below is pinned the same way.
 # =============================================================================
-FROM node:20-slim AS build
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build
 WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -34,14 +42,25 @@ COPY assets/ assets/
 RUN pnpm --filter @bault/web build
 
 # -----------------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
-# A template, not a finished file: the image's entrypoint substitutes the
-# variables below (and ONLY defined variables, so nginx's own $uri and $host are
-# left alone) into /etc/nginx/conf.d/default.conf when the container starts.
+# Templates, not finished files: the image's entrypoint substitutes the
+# variables below into /etc/nginx/conf.d/ when the container starts. The header
+# file goes to a subdirectory, conf.d/bault/, so the stock `include
+# conf.d/*.conf` at http level does not load it a second time; nginx.conf
+# includes it in every location.
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+COPY apps/web/nginx-security-headers.conf /etc/nginx/templates/bault/security-headers.conf.template
+# Sourced before the templates render (`.envsh`, and 15 sorts before 20): turns
+# STORAGE_ENDPOINT into the origin the CSP needs, or refuses to start on a value
+# that is not an origin.
+COPY --chmod=0755 apps/web/nginx-storage-origin.envsh /docker-entrypoint.d/15-bault-storage-origin.envsh
 ENV API_UPSTREAM=http://api:3000
+# Only these two are substituted. Without a filter every variable in the
+# container's environment is, and an env var that happened to share a name with
+# one of nginx's own ($uri, $host…) would be written into the config.
+ENV NGINX_ENVSUBST_FILTER='^(API_UPSTREAM|STORAGE_PUBLIC_ORIGIN)$'
 
 EXPOSE 8080
 

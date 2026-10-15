@@ -19,11 +19,12 @@ import { join, relative, sep } from 'node:path';
  *
  * WHAT IS DELIBERATELY EXEMPT:
  *
- *   - `faqContent.ts` reproduces Ship My Cards' own price list **verbatim**, and
- *     that list mentions comics and other categories. Editing a quotation to suit
- *     us would falsify it, which is worse than the thing this test guards against.
  *   - `.claude/`, `node_modules`, build output and the scratchpad are not the
  *     product.
+ *
+ * `faqContent.ts` used to be exempt, because it reproduced another company's
+ * FAQ verbatim and a quotation cannot be edited to suit us. It is Bault's own
+ * text now (E20), so it is held to the same rule as everything else.
  */
 
 const FORBIDDEN = [
@@ -48,8 +49,6 @@ const FORBIDDEN = [
 
 /** Files that legitimately contain a forbidden word, and why. */
 const EXEMPT = [
-  // Ship My Cards' own copy, reproduced verbatim and badged as quoted.
-  join('apps', 'web', 'src', 'areas', 'customer', 'help', 'faqContent.ts'),
   // This file names them in order to ban them.
   join('tests', 'web', 'rayquaza-only.test.ts'),
 ];

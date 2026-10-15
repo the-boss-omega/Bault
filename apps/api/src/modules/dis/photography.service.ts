@@ -52,7 +52,7 @@ export class PhotographyService {
    */
   async complete(operatorId: string, requestId: string, form: PhotographyFulfillment) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req); // operator must accept before completing
       if (!req.itemId) throw AppError.validation('Request has no item');
 

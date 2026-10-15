@@ -6,8 +6,7 @@ import {
   CASHOUT_LARGE_FIXED_MINOR,
   CASHOUT_SMALL_BPS,
   CASHOUT_SMALL_MINIMUM_MINOR,
-  cashOutFeeMinor,
-  cashOutNetMinor,
+  cashOutSettlement,
 } from './money-terms';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { isNegative } from '../../shared/money';
@@ -35,15 +34,16 @@ export class WalletService {
    * silently, and a collector planning a $40 withdrawal could not find out what
    * would arrive until after they had asked for it.
    *
-   * The same function the completion path uses, so the quote and the charge
-   * cannot disagree.
+   * The same function the completion path pays out and debits from, so the
+   * quote, the payout and the ledger cannot disagree: `amountMinor` is what
+   * leaves the wallet, `netMinor` is what arrives.
    */
   cashOutQuote(amountMinor: number) {
-    const feeMinor = cashOutFeeMinor(amountMinor);
+    const { feeMinor, netMinor } = cashOutSettlement(amountMinor);
     return {
       amountMinor,
       feeMinor,
-      netMinor: cashOutNetMinor(amountMinor),
+      netMinor,
       /** The schedule itself, so the SPA can show the bands, not just a number. */
       schedule: {
         bandMinor: CASHOUT_BAND_MINOR,

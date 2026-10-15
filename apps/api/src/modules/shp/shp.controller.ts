@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
@@ -139,7 +140,17 @@ class HandOverDto {
 }
 
 class DispatchDto {
-  @IsArray() @ArrayNotEmpty() @IsString({ each: true }) scannedItemIds!: string[];
+  /**
+   * What the operator scanned: each item's barcode, serial or id, exactly as
+   * read. Optional because a direct-overnight shipment has no items — it was
+   * never booked into the vault, so it could not be closed at all while this
+   * was required to be non-empty. The service still demands an exact match for
+   * every shipment that does have items.
+   */
+  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) @MaxLength(120, { each: true })
+  scannedItemIds?: string[];
+  /** For direct overnight: the parcel that was scanned, by its code or its inbound tracking number. */
+  @IsOptional() @IsString() @MaxLength(120) scannedParcel?: string;
   @IsString() carrier!: string;
   @IsInt() @Min(1) packageWeightGrams!: number;
   @IsString() fulfillmentNotes!: string;
@@ -398,6 +409,7 @@ export class ShpController {
   dispatchShipment(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: DispatchDto) {
     return this.dispatch.dispatch(user.id, id, {
       scannedItemIds: dto.scannedItemIds,
+      scannedParcel: dto.scannedParcel,
       carrier: dto.carrier,
       packageWeightGrams: dto.packageWeightGrams,
       fulfillmentNotes: dto.fulfillmentNotes,

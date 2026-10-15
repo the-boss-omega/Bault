@@ -131,6 +131,19 @@ export const DEFAULT_HS_CODE = '4911.99';
 /** Where the goods were made, as far as a customs form is concerned. */
 export const DEFAULT_COUNTRY_OF_ORIGIN = 'US';
 
+/**
+ * What the declaration says the parcel is: goods with a commercial value.
+ *
+ * Collectible cards are declared as merchandise whether they were bought here
+ * or are the collector's own coming home. "Gift" would lower the duty in some
+ * countries and would be a false statement made in the collector's name, which
+ * is the same line the invoice draws about declared values.
+ */
+export const CUSTOMS_CONTENTS_TYPE = 'merchandise' as const;
+
+/** A parcel the carrier cannot deliver comes back. These are valuable; nobody abandons them. */
+export const CUSTOMS_NON_DELIVERY = 'return' as const;
+
 export interface ShipmentOptionProblem {
   field: string;
   message: string;

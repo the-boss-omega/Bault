@@ -55,6 +55,12 @@ export interface AppliedShippingCover {
   postageMinor: number;
   rushMinor: number;
   addOns: Record<string, number>;
+  /**
+   * The membership period the cover was spent in, written when it is spent, so
+   * a cancelled parcel gives it back to the cycle it came out of and not to
+   * whichever cycle happens to be running when it is cancelled.
+   */
+  spentInPeriodId?: string;
 }
 
 export interface Entitlement {
@@ -63,6 +69,8 @@ export interface Entitlement {
   /** Remaining after this one, or `UNLIMITED`. Null when not a member. */
   remainingAfter: number | null;
   tier: string | null;
+  /** The period row the allowance was taken from, when it was. */
+  periodId?: string;
 }
 
 /**
@@ -522,7 +530,34 @@ export class MembershipService {
     if (updated.length === 0) return { covered: false, remainingAfter: 0, tier: tier.key };
 
     const left = remaining(tier, action, used + 1);
-    return { covered: true, remainingAfter: left === UNLIMITED ? UNLIMITED : left, tier: tier.key };
+    return {
+      covered: true,
+      remainingAfter: left === UNLIMITED ? UNLIMITED : left,
+      tier: tier.key,
+      periodId: updated[0]!.id,
+    };
+  }
+
+  /**
+   * Give back one counted allowance taken by `consume`, to the period it came
+   * out of.
+   *
+   * For the thing it covered not happening after all — a cash-out whose payout
+   * the provider refused. Never below zero, and a period that has already
+   * ended takes it back harmlessly: nothing reads a finished cycle's counters.
+   */
+  async restoreCounted(tx: Database, periodId: string, action: string): Promise<void> {
+    await tx
+      .update(membershipPeriod)
+      .set({
+        consumed: sql`jsonb_set(
+          coalesce(${membershipPeriod.consumed}, '{}'::jsonb),
+          ARRAY[${action}],
+          to_jsonb(greatest(coalesce((${membershipPeriod.consumed} ->> ${action})::int, 0) - 1, 0))
+        )`,
+        updatedAt: new Date(),
+      })
+      .where(eq(membershipPeriod.id, periodId));
   }
 
   /* ------------------------------------------------------------------
@@ -559,7 +594,7 @@ export class MembershipService {
     feeMinor: number,
     valueMinor = 0,
     feeAt?: (valueMinor: number) => number,
-  ): Promise<{ waivedMinor: number; tier: string | null; waivedOnMinor?: number }> {
+  ): Promise<{ waivedMinor: number; tier: string | null; waivedOnMinor?: number; periodId?: string }> {
     const none = { waivedMinor: 0, tier: null };
     if (feeMinor <= 0) return none;
     const state = await this.current(userId, tx);
@@ -597,10 +632,11 @@ export class MembershipService {
 
     const entitlement = await this.consume(tx, userId, action);
     if (!entitlement.covered) return none;
+    const periodId = entitlement.periodId;
     if (action === 'escrow_fee' && tier.escrowValueCapMinor > 0 && valueMinor > tier.escrowValueCapMinor && feeAt) {
-      return { waivedMinor: Math.min(feeMinor, feeAt(tier.escrowValueCapMinor)), tier: tier.key };
+      return { waivedMinor: Math.min(feeMinor, feeAt(tier.escrowValueCapMinor)), tier: tier.key, periodId };
     }
-    return { waivedMinor: feeMinor, tier: tier.key };
+    return { waivedMinor: feeMinor, tier: tier.key, periodId };
   }
 
   /* ------------------------------------------------------------------
@@ -646,7 +682,7 @@ export class MembershipService {
    * member agreed to a figure; a larger one needs a new agreement, which is a
    * fresh quote.
    */
-  async spendShippingCover(tx: Database, userId: string, applied: AppliedShippingCover): Promise<void> {
+  async spendShippingCover(tx: Database, userId: string, applied: AppliedShippingCover): Promise<AppliedShippingCover> {
     const stale = () =>
       new AppError(
         ErrorCode.CONFLICT,
@@ -682,6 +718,41 @@ export class MembershipService {
       const e = await this.consume(tx, userId, action);
       if (!e.covered) throw stale();
     }
+    // What was spent, and from which cycle — stored on the shipment so a
+    // cancellation can give it back (`returnShippingCover`).
+    return { ...applied, spentInPeriodId: state.period?.id };
+  }
+
+  /**
+   * Give back the cover a parcel spent, when the parcel is cancelled before any
+   * label was bought.
+   *
+   * The counters are decremented in the period the cover was spent in, never
+   * below zero. A cover recorded before the period was written down on it
+   * (shipments paid before 0031) goes back to the current cycle, which is where
+   * nearly all of them were spent.
+   */
+  async returnShippingCover(tx: Database, userId: string, applied: AppliedShippingCover): Promise<void> {
+    let periodId = applied.spentInPeriodId;
+    if (!periodId) {
+      const state = await this.current(userId, tx);
+      periodId = state?.period?.id;
+    }
+    if (!periodId) return;
+
+    const insured = applied.insuredShipment ? 1 : 0;
+    const postage = Math.max(0, applied.postageMinor ?? 0);
+    if (insured > 0 || postage > 0) {
+      await tx
+        .update(membershipPeriod)
+        .set({
+          insuredShipmentsUsed: sql`greatest(${membershipPeriod.insuredShipmentsUsed} - ${insured}, 0)`,
+          postageUsedMinor: sql`greatest(${membershipPeriod.postageUsedMinor} - ${postage}, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(membershipPeriod.id, periodId));
+    }
+    for (const action of Object.keys(applied.addOns ?? {})) await this.restoreCounted(tx, periodId, action);
   }
 
   /* ------------------------------------------------------------------

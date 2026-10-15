@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -9,6 +9,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { WalletService } from '../pay/wallet.service';
 import { item } from '../cst/cst.schema';
+import { ledgerRecord } from '../pay/pay.schema';
 import { ServiceRequestService } from './service.service';
 
 /** What a collector has to say to ask for something. */
@@ -24,6 +25,28 @@ export interface CustomQuoteForm {
   priceMinor: number;
   /** What they will actually do, in the operator's words. */
   scope: string;
+}
+
+/**
+ * The stages at which a custom request can still be priced.
+ *
+ * Once the collector has accepted a quote they have paid it, so the request is
+ * no longer something to quote: quoting it again put it back to `quoted`, and
+ * the collector's next Accept charged them twice for the same work (F027,
+ * F034). A re-quote BEFORE they answer is still allowed — an operator who
+ * mistyped a figure corrects it before anybody has agreed to it.
+ */
+export const QUOTABLE_STAGES: readonly string[] = ['awaiting_quote', 'quoted'];
+
+export function assertQuotable(kind: string, stage: unknown): void {
+  if (!QUOTABLE_STAGES.includes(String(stage ?? 'awaiting_quote'))) {
+    throw new AppError(
+      ErrorCode.CONFLICT,
+      `This ${kind} has already been accepted, so it can no longer be quoted.`,
+      409,
+      { stage },
+    );
+  }
 }
 
 /**
@@ -123,9 +146,10 @@ export class CustomRequestService {
     }
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
+      assertQuotable('request', ((req.typeFields as Record<string, unknown>) ?? {}).stage);
 
       const updated = await this.requests.setStatus(tx, requestId, 'in_progress', {
         stage: 'quoted',
@@ -150,22 +174,49 @@ export class CustomRequestService {
    *
    * A decline is a real outcome. "We cannot do that" with no reason leaves the
    * collector to guess whether to ask differently or stop asking.
+   *
+   * It can come after the collector has accepted and paid — the operator picks
+   * the card up and finds the work cannot be done after all. That used to
+   * cancel the request and keep the money (F033). Refusing the decline instead
+   * would leave a paid request with no way to close it except completing work
+   * that was never done. So a decline after payment REFUNDS, in the same
+   * transaction: everything charged against the request comes back as a
+   * `service_refund`, and the request is closed.
    */
   async declineToQuote(operatorId: string, requestId: string, reason: string) {
     const text = reason?.trim() ?? '';
     if (text.length < 5) throw AppError.validation('Say why this cannot be done.');
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
       if (req.status === 'completed' || req.status === 'cancelled') {
         throw new AppError(ErrorCode.CONFLICT, 'That request is already closed.', 409);
+      }
+
+      // The request, then the wallet: the order accepting the quote takes them in.
+      await this.ledger.lockWallet(req.requesterId, tx as Database);
+      const refundedMinor = await this.refundable(tx as Database, req.requesterId, req.id);
+      if (refundedMinor > 0) {
+        await this.ledger.record(
+          {
+            userId: req.requesterId,
+            type: 'service_refund',
+            amount: refundedMinor,
+            direction: 'credit',
+            currency: DEFAULT_CURRENCY,
+            referenceType: 'service_request',
+            referenceId: req.id,
+          },
+          tx,
+        );
       }
 
       const updated = await this.requests.setStatus(tx, requestId, 'cancelled', {
         stage: 'declined',
         declineReason: text,
         declinedBy: operatorId,
+        ...(refundedMinor > 0 ? { refundedMinor } : {}),
       });
       await this.outbox.emit(tx, {
         aggregateType: 'service_request',
@@ -178,6 +229,30 @@ export class CustomRequestService {
   }
 
   /**
+   * What has been charged against this request and not yet given back, from the
+   * ledger itself — so a refund is exactly what left the wallet for it, never a
+   * figure re-read from the quote.
+   */
+  private async refundable(tx: Database, userId: string, requestId: string): Promise<number> {
+    const [row] = await tx
+      .select({
+        net: sql<string>`coalesce(sum(case
+          when ${ledgerRecord.type} = 'fee' and ${ledgerRecord.direction} = 'debit' then ${ledgerRecord.amount}
+          when ${ledgerRecord.type} = 'service_refund' and ${ledgerRecord.direction} = 'credit' then -${ledgerRecord.amount}
+          else 0 end), 0)::text`,
+      })
+      .from(ledgerRecord)
+      .where(
+        and(
+          eq(ledgerRecord.userId, userId),
+          eq(ledgerRecord.referenceType, 'service_request'),
+          eq(ledgerRecord.referenceId, requestId),
+        ),
+      );
+    return Math.max(0, Number(row?.net ?? '0'));
+  }
+
+  /**
    * Step 3 — the collector accepts the quote, and only now is anything charged.
    *
    * The price is re-read from the request inside the transaction rather than
@@ -186,7 +261,7 @@ export class CustomRequestService {
    */
   async acceptQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== requesterId) throw AppError.notFound('Request not found');
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
 
@@ -243,7 +318,7 @@ export class CustomRequestService {
   /** Step 3b — the collector says no. Nothing was charged, so nothing unwinds. */
   async declineQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== requesterId) throw AppError.notFound('Request not found');
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
 
@@ -266,7 +341,7 @@ export class CustomRequestService {
     if (text.length < 5) throw AppError.validation('Record what was done.');
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.stage !== 'accepted') {

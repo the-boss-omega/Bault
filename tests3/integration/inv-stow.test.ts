@@ -189,6 +189,55 @@ describe('scanning', () => {
   });
 });
 
+describe('a card moved to another warehouse', () => {
+  /**
+   * N1. A warehouse transfer records the card's new home as `EXT:<warehouse>/<bin>`
+   * in `item.bin_id`, which is free text. Every read that joined that column to
+   * `bin.id` (a uuid) cast it, and one such row made `invalid input syntax for
+   * type uuid` the answer to the shelf list, the stow suggestion and an
+   * auto-stowed intake — for every operator, not just the one who moved the card.
+   */
+  it('still lists, suggests and stows after one card has left for another building', async () => {
+    const operator = await signIn(SEED.operator);
+    const ownerUsername = await usernameOf(SEED.collector);
+    const shelves = await bins(operator);
+    const card = await operator.post('/intake/items', {
+      ownerUsername,
+      typeClass: 'trading_card',
+      description: 'N1: transferred to an outside warehouse',
+      binId: shelves[0]!.barcode,
+    });
+    expect(card.status).toBe(201);
+
+    const moved = await operator.post('/services/warehouse-transfer', {
+      itemId: card.body.id,
+      destinationWarehouse: 'PSA-Costa-Mesa',
+      destinationBin: 'R12-S4',
+      itemVerified: true,
+      notes: 'Sent ahead of a grading submission.',
+    });
+    expect(moved.status).toBe(201);
+
+    const list = await operator.get('/custody/bins');
+    expect(list.status).toBe(200);
+    // The card is no longer on a Bault shelf, so no Bault shelf counts it.
+    expect((list.body as BinRow[]).length).toBe(shelves.length);
+
+    const suggested = await operator.get('/custody/bins/suggest');
+    expect(suggested.status).toBe(200);
+
+    const stowed = await operator.post('/intake/items', { ownerUsername, typeClass: 'trading_card', autoStow: true });
+    expect(stowed.status).toBe(201);
+
+    // The owner's vault joins the same column to find the shelf a card is on.
+    const collector = await signIn(SEED.collector);
+    const vault = await collector.get('/vault/items');
+    expect(vault.status).toBe(200);
+    const row = (vault.body as { id: string; binBarcode: string | null }[]).find((i) => i.id === card.body.id);
+    expect(row?.binBarcode ?? null).toBeNull();
+  });
+});
+
 describe('a shelf out of service', () => {
   it('is never directed to, and refuses an intake aimed at it', async () => {
     const operator = await signIn(SEED.operator);

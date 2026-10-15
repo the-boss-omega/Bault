@@ -11,7 +11,7 @@ const appDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(appDir, '../..');
 
 // Vite dev server + build config for the SPA.
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   // Read the repo-root .env (where API_PORT lives) and then apps/web/.env, which
   // may override it. `''` as the prefix loads unprefixed keys too; nothing from
   // here is injected into the client bundle — it only picks the proxy target.
@@ -40,8 +40,17 @@ export default defineConfig(({ mode }) => {
    * message to the server processes, and this deletes it before Vite can read it
    * as an instruction. `tests/web/no-credentials-in-bundle.test.ts` checks the
    * artefact, because a guard that looks correct is what caused this.
+   *
+   * The same goes for `NODE_ENV` in the shell, which Vite also obeys. CI sets
+   * `NODE_ENV=test` for the whole job, so its `vite build` made a development
+   * bundle with the seeded addresses and the shared password in it, and that
+   * test failed on the first run that reached it. A developer's shell
+   * with `NODE_ENV=development` exported would do the same to a build they
+   * then deployed. Vite reads `NODE_ENV` after this config has run, so a build
+   * is a production build here, whatever the environment says.
    */
   delete process.env.VITE_USER_NODE_ENV;
+  if (command === 'build') process.env.NODE_ENV = 'production';
 
   /**
    * Hosts this dev server may be reached by, beyond loopback.

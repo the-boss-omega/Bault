@@ -262,3 +262,93 @@ describe('booking a run of collectibles in at once', () => {
     expect(res.body.serialNumber).toMatch(/^LOT-/);
   });
 });
+
+/**
+ * F027, F033, F034. A quote is something to agree to, so once it has been
+ * agreed to — and paid for — it is no longer something to quote.
+ *
+ * `quote` checked only that the request had been accepted by an operator, not
+ * what stage the collector had got to. An operator pressing Send quote again on
+ * a paid request put it back to `quoted`, and the collector's next Accept
+ * charged them a second time for the same work. `declineToQuote` closed a paid
+ * request and kept the money.
+ */
+describe('a quote that has been accepted', () => {
+  const QUOTE = { priceMinor: 30_00, scope: 'Weigh it and photograph the seal before it ships.' };
+
+  async function acceptedAndPaid() {
+    const operator = await signIn(SEED.operator);
+    const owner = await signIn(SEED.collector);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Custom: accepted quote' });
+    const created = await owner.post('/services/custom', { itemId: item.id, ...ASK });
+    const id = created.body.id as string;
+    await operator.post(`/services/requests/${id}/accept`, {});
+    expect((await operator.post(`/services/custom/${id}/quote`, QUOTE)).status).toBe(201);
+    const before = (await owner.get('/finance/wallet')).body.amount as number;
+    expect((await owner.post(`/services/custom/${id}/accept-quote`, {})).status).toBe(201);
+    return { operator, owner, id, before };
+  }
+
+  it('cannot be quoted again, so it cannot be charged again', async () => {
+    const { operator, owner, id, before } = await acceptedAndPaid();
+
+    const again = await operator.post(`/services/custom/${id}/quote`, { ...QUOTE, priceMinor: 45_00 });
+    expect(again.status).toBe(409);
+
+    // And there is no second quote for the collector to accept.
+    const secondAccept = await owner.post(`/services/custom/${id}/accept-quote`, {});
+    expect(secondAccept.status).toBe(409);
+
+    // Charged once, at the figure that was agreed.
+    expect((await owner.get('/finance/wallet')).body.amount).toBe(before - QUOTE.priceMinor);
+    const detail = (await owner.get(`/services/requests/${id}`)).body as { typeFields: Record<string, unknown> };
+    expect(detail.typeFields.stage).toBe('accepted');
+  });
+
+  it('gives the money back when the work turns out to be impossible after all', async () => {
+    const { operator, owner, id, before } = await acceptedAndPaid();
+
+    const declined = await operator.post(`/services/custom/${id}/decline`, {
+      reason: 'The seal is cracked — weighing it would break it open.',
+    });
+    expect(declined.status).toBe(201);
+    expect(declined.body.status).toBe('cancelled');
+
+    // Whole again, by a refund row on the ledger rather than by forgetting the charge.
+    expect((await owner.get('/finance/wallet')).body.amount).toBe(before);
+    const ledger = (await owner.get('/finance/ledger')).body as Array<{
+      type: string;
+      amount: number;
+      direction: string;
+      referenceId: string | null;
+    }>;
+    expect(
+      ledger.some((r) => r.type === 'service_refund' && r.direction === 'credit' && r.amount === QUOTE.priceMinor && r.referenceId === id),
+    ).toBe(true);
+
+    // A decline is final: a second one refunds nothing more.
+    expect((await operator.post(`/services/custom/${id}/decline`, { reason: 'Declining it twice.' })).status).toBe(409);
+    expect((await owner.get('/finance/wallet')).body.amount).toBe(before);
+  });
+});
+
+describe('a buyout the collector has accepted', () => {
+  it('cannot be quoted again', async () => {
+    const operator = await signIn(SEED.operator);
+    const owner = await signIn(SEED.collector);
+    const item = await intakeFor(operator, SEED.collector, { description: 'Buyout: accepted' });
+    const requested = await owner.post('/services/buyout', { itemId: item.id });
+    const id = requested.body.id as string;
+    await operator.post(`/services/requests/${id}/accept`, {});
+    const quote = { offerMinor: 40_00, rationale: 'Clean edges, light whitening.', itemVerified: true };
+    expect((await operator.post(`/services/buyout/${id}/quote`, quote)).status).toBe(201);
+
+    const before = (await owner.get('/finance/wallet')).body.amount as number;
+    expect((await owner.post(`/services/buyout/${id}/accept`, {})).status).toBe(201);
+
+    const again = await operator.post(`/services/buyout/${id}/quote`, { ...quote, offerMinor: 90_00 });
+    expect(again.status).toBe(409);
+    expect((await owner.post(`/services/buyout/${id}/accept`, {})).status).toBe(409);
+    expect((await owner.get('/finance/wallet')).body.amount).toBe(before + quote.offerMinor);
+  });
+});

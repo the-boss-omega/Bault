@@ -13,8 +13,19 @@
 # on two workspace packages that must be built first:
 #
 #   docker build -f apps/api/Dockerfile -t bault-api .
+#
+# The same image runs the migrations, before a release starts serving:
+#
+#   docker run --rm --env-file … bault-api node dist/db/migrate.js
+#
+# Node 22, matching `engines` in the root package.json (the images were on 20,
+# which the engines field excludes). Pinned by digest, not just by tag: a tag
+# is moved by whoever publishes it, so the same Dockerfile built twice could
+# ship two different runtimes. To upgrade, `docker pull node:22-slim`, take the
+# digest from `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim`
+# and change BOTH FROM lines in each of the three Dockerfiles together.
 # =============================================================================
-FROM node:20-slim AS build
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build
 WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -47,15 +58,18 @@ RUN pnpm --filter @bault/config build \
 RUN pnpm install --frozen-lockfile --prod
 
 # -----------------------------------------------------------------------------
-FROM node:20-slim AS runtime
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
 
 # Not root. The process needs to read its own files and open a socket, nothing
 # else — and an image that runs as root is one container escape away from being
-# root on the host.
-RUN useradd --system --create-home --uid 10001 bault
+# root on the host. UID and GID 10001, fixed, so a volume's ownership and a
+# runtime's runAsUser can name them; `USER` below is numeric for the same
+# reason (a runtime cannot prove a NAME is not root without the image's passwd).
+RUN groupadd --system --gid 10001 bault \
+ && useradd --system --create-home --uid 10001 --gid 10001 bault
 
 COPY --from=build --chown=bault:bault /repo/node_modules              ./node_modules
 COPY --from=build --chown=bault:bault /repo/packages                  ./packages
@@ -63,11 +77,15 @@ COPY --from=build --chown=bault:bault /repo/apps/api/node_modules     ./apps/api
 COPY --from=build --chown=bault:bault /repo/apps/api/dist             ./apps/api/dist
 COPY --from=build --chown=bault:bault /repo/apps/api/package.json     ./apps/api/package.json
 # Migrations ship with the image so a release can run them against the database
-# it is about to serve, rather than depending on somebody's laptop.
+# it is about to serve, rather than depending on somebody's laptop. The drizzle
+# folder is read relative to the working directory (`./src/db/migrations`). The
+# append-only SQL is NOT copied from src any more: `migrate.js` reads it from
+# next to itself, `dist/db/sql`, where the build now puts it (nest-cli.json
+# assets). The copy that used to sit in src/db/sql was never read by anything,
+# while the runner failed with ENOENT looking for it in dist.
 COPY --from=build --chown=bault:bault /repo/apps/api/src/db/migrations ./apps/api/src/db/migrations
-COPY --from=build --chown=bault:bault /repo/apps/api/src/db/sql        ./apps/api/src/db/sql
 
-USER bault
+USER 10001:10001
 WORKDIR /app/apps/api
 EXPOSE 3000
 

@@ -18,6 +18,12 @@ export const ErrorCode = {
   EMAIL_UNVERIFIED: 'email_unverified',
   ITEM_ON_HOLD: 'item_on_hold',
   ITEM_NO_LONGER_AVAILABLE: 'item_no_longer_available',
+  /**
+   * The card is already promised elsewhere — in an open escrow deal, a parcel
+   * being prepared, or a buyout or consignment — so it cannot also be sold.
+   * Distinct from ITEM_ON_HOLD: nothing is wrong with the card, it is spoken for.
+   */
+  ITEM_COMMITTED: 'item_committed',
   SELF_DEALING_FORBIDDEN: 'self_dealing_forbidden',
   INSUFFICIENT_BALANCE: 'insufficient_balance',
   NEGATIVE_BALANCE_BLOCKED: 'negative_balance_blocked',
@@ -28,6 +34,22 @@ export const ErrorCode = {
   RATE_LIMITED: 'rate_limited',
   NOT_FOUND: 'not_found',
   CONFLICT: 'conflict',
+  /**
+   * The payment provider failed or could not be reached (502).
+   *
+   * Its errors used to surface as a bare 500, so a PayPal outage, a refused
+   * payout and a bug in Bault all looked the same to the client and the log.
+   */
+  PROVIDER_UNAVAILABLE: 'provider_unavailable',
+  /**
+   * The object store failed or could not be reached (503).
+   *
+   * With no bucket, every photograph on the receiving bench answered a bare
+   * 500 — nine `receiving-bench` failures that read as nine bugs when the
+   * cause was one store that was down, and an operator told "internal error"
+   * has no reason to think trying again later would work.
+   */
+  STORAGE_UNAVAILABLE: 'storage_unavailable',
   INTERNAL: 'internal',
 } as const;
 

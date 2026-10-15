@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -13,6 +13,7 @@ import { bin, item, itemImage } from '../cst/cst.schema';
 import { userAccount } from '../acc/acc.schema';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
+import { MediaService } from '../med/media.service';
 import { isKnownItemClass, itemClass } from '../inv/item-classes';
 import { makeItemBarcode, makeItemSerial } from '../inv/labels';
 import { transaction } from './mkt.schema';
@@ -72,6 +73,7 @@ export class HouseStoreService {
     private readonly ledger: LedgerService,
     private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
+    private readonly media: MediaService,
   ) {}
 
   /* ------------------------------------------------------------------
@@ -160,10 +162,18 @@ export class HouseStoreService {
      */
     const key = idempotencyKey?.trim() || randomUUID();
     const endpoint = `house-purchase:${listingId}`;
-    const replay = await this.idempotency.lookup(key, endpoint);
-    if (replay) return { ...(replay.body as HousePurchaseResult), replayed: true };
 
-    const result = await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx): Promise<HousePurchaseResult> => {
+      /**
+       * The key is claimed before anything else, inside this transaction. The
+       * product lock below only QUEUES two requests — each then bought a copy —
+       * so a double-click carrying one key used to buy two copies and charge
+       * twice. A second request with the key now waits on this claim and replays
+       * the first one's order (F064).
+       */
+      const { replay } = await this.idempotency.claim(tx as Database, key, endpoint, buyerId);
+      if (replay) return { ...(replay.body as HousePurchaseResult), replayed: true };
+
       // The lock is what makes the last copy sell once: a second buyer blocks
       // here, then reads a stock of zero.
       const [product] = await tx
@@ -238,7 +248,9 @@ export class HouseStoreService {
 
       await tx
         .update(houseListing)
-        .set({ stock: product.stock - 1, updatedAt: new Date() })
+        // Relative, so the `stock >= 0` CHECK refuses an oversell by itself
+        // rather than being handed an absolute figure it cannot question.
+        .set({ stock: sql`${houseListing.stock} - 1`, updatedAt: new Date() })
         .where(eq(houseListing.id, product.id));
 
       const orderCode = prefixedId(ID_PREFIX.houseOrder);
@@ -252,7 +264,7 @@ export class HouseStoreService {
         currency,
       });
 
-      return {
+      const result: HousePurchaseResult = {
         orderCode,
         itemId: created.id,
         serialNumber: created.serialNumber,
@@ -260,10 +272,9 @@ export class HouseStoreService {
         price,
         transactionId: txn.id,
       };
+      await this.idempotency.complete(tx as Database, key, endpoint, 201, result);
+      return result;
     });
-
-    await this.idempotency.save(key, endpoint, buyerId, 201, result);
-    return result;
   }
 
   /* ------------------------------------------------------------------
@@ -325,6 +336,9 @@ export class HouseStoreService {
 
       const photoKeys = (input.photoKeys ?? []).map((k) => k.trim()).filter(Boolean);
       if (photoKeys.length > 0) {
+        // Bench photographs of this copy, so the same rule as intake: a key this
+        // API minted for an item, uploaded by this operator or moments ago.
+        await this.media.assertAttachable(tx, photoKeys, { purpose: 'item_intake', actorId: operatorId });
         await tx.insert(itemImage).values(
           photoKeys.map((objectKey, index) => ({ itemId: it.id, type: 'intake' as const, version: index + 1, objectKey })),
         );

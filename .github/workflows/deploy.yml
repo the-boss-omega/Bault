@@ -1,0 +1,131 @@
+name: Deploy
+
+# Deploys a release that release.yml has already published. Manual only: a
+# deployment is a decision somebody makes and puts their name to, never a side
+# effect of a push. Rollback is the same run with the previous tag.
+#
+# APPROVAL lives in the repository settings, not in this file: Settings >
+# Environments > `staging` / `production` > Required reviewers (and, for
+# production, "Deployment branches and tags: selected tags `v*`"). The job
+# below names the environment, so it waits for that approval before it can read
+# the environment's secrets, which are what reach the server.
+#
+# Per environment (Settings > Environments > <name>):
+#   secret   DEPLOY_SSH_KEY      private key for the host's `deploy` user, used
+#                                for nothing else
+#   secret   DEPLOY_KNOWN_HOSTS  the host's line(s) for ~/.ssh/known_hosts
+#                                (`ssh-keyscan -t ed25519 <host>`, checked by hand
+#                                against the host's own fingerprint)
+#   variable DEPLOY_HOST         host name or address
+# No other secret is used, and none is passed to the server: the server reads
+# its own from /etc/bault.
+#
+# WHAT THIS EXPECTS OF infra/production/deploy.sh (written separately; this is
+# the contract):
+#   - run on the host as `deploy`, from /opt/bault, with exactly one argument,
+#     the release tag (`v1.2.3` or `v1.2.3-rc1`), which is also the image tag:
+#     ghcr.io/<owner>/bault-{api,worker,web}:<tag>
+#   - non-interactive (no TTY, no prompt) and `set -euo pipefail`: it exits
+#     non-zero on any failure and exits 0 only once the new release answers
+#     /api/v1/readyz
+#   - it does everything on the host: pulls the three images (logging in to
+#     GHCR with a read-only token kept on the host if the packages are
+#     private), takes the pre-migration backup, migrates as bault_owner,
+#     re-runs infra/production/roles.sql, swaps the containers, waits for
+#     readyz and records the tag in /opt/bault/CURRENT_TAG
+#   - /opt/bault (compose.yml, Caddyfile, backup.sh, roles.sql) must be at the
+#     same tag as the images. If deploy.sh does that checkout itself, it has
+#     to re-exec the new copy of itself afterwards: bash reads a script while
+#     it runs it, so editing the running file underneath it runs a mixture
+#   - re-running it with the same tag is safe, and running it with the previous
+#     tag is the rollback
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy (v*), as published by release.yml
+        required: true
+        type: string
+      environment:
+        description: Where to deploy
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+  packages: read
+
+# Never two deployments to one environment at once, and never cancel one
+# halfway: a migration interrupted by a newer run is worse than either.
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+
+    steps:
+      # The tag ends up in a command line on the server, so it is checked
+      # against the release pattern before it goes anywhere.
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] \
+            || { echo "::error::'$TAG' is not a release tag (v1.2.3 or v1.2.3-rc1)"; exit 1; }
+
+      # Fail here, with a clear message, rather than on the server halfway
+      # through: all three images of the release must exist.
+      - name: Check the release images exist
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for image in bault-api bault-worker bault-web; do
+            ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${TAG}"
+            docker buildx imagetools inspect "$ref" > /dev/null \
+              || { echo "::error::${ref} not found; was ${TAG} released?"; exit 1; }
+            echo "found ${ref}"
+          done
+          docker logout ghcr.io
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "::error::DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS must be set on the environment"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # StrictHostKeyChecking=yes against the pinned known_hosts: a host that
+      # does not prove it is ours never receives the command.
+      - name: Run the deployment on the host
+        env:
+          TAG: ${{ inputs.tag }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          [ -n "$DEPLOY_HOST" ] || { echo "::error::DEPLOY_HOST is not set on the environment"; exit 1; }
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -o ServerAliveInterval=30 \
+              "deploy@${DEPLOY_HOST}" \
+              "cd /opt/bault && ./infra/production/deploy.sh '${TAG}'"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

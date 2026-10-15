@@ -405,17 +405,80 @@ describe('SHP outbound shipping', () => {
       eligible: boolean;
     }>;
     const pick = rates.find((r) => r.eligible)!;
+    const beforePaying = (await collector.get('/finance/wallet')).body.amount as number;
     const selected = await collector.post(`/shipping/shipments/${s.id}/select-rate`, {
       carrier: pick.carrier,
       serviceLevel: pick.serviceLevel,
     });
     expect(selected.body.status).toBe('rates_selected');
+    const paid = selected.body.cost as number;
+    expect(paid).toBeGreaterThan(0);
+    expect((await collector.get('/finance/wallet')).body.amount).toBe(beforePaying - paid);
 
     const cancelled = await collector.post(`/shipping/shipments/${s.id}/cancel`, {
       reason: 'Changed my mind after it was queued.',
     });
     expect(cancelled.status).toBe(201);
-    expect(cancelled.body.restockingFeeMinor).toBeGreaterThan(0);
+    const fee = cancelled.body.restockingFeeMinor as number;
+    expect(fee).toBeGreaterThan(0);
+
+    /**
+     * No label was bought — that happens at dispatch — so the postage was never
+     * spent. The collector is out the restocking fee and nothing else (F018).
+     * It used to keep the whole shipping charge as well.
+     */
+    expect(cancelled.body.refundedMinor).toBe(paid);
+    expect((await collector.get('/finance/wallet')).body.amount).toBe(beforePaying - fee);
+    const ledger = (await collector.get('/finance/ledger')).body as Array<{
+      type: string;
+      amount: number;
+      direction: string;
+      referenceId: string | null;
+    }>;
+    expect(
+      ledger.some((r) => r.type === 'shipping_refund' && r.direction === 'credit' && r.amount === paid && r.referenceId === s.id),
+    ).toBe(true);
+  });
+
+  it('gives back the membership cover a cancelled parcel had spent', async () => {
+    // The operator's own account stands in for a member: a customer account
+    // would change the intake arithmetic other suites rely on for the seeded
+    // collectors, and an unverified new account cannot sign in.
+    const operator = await signIn(SEED.operator);
+    await fundWallet(SEED.operator, 20_000);
+    const joined = await operator.post('/membership/subscribe', { tier: 'folio' });
+    expect([200, 201]).toContain(joined.status);
+
+    const item = await intakeFor(operator, SEED.operator);
+    const us = await addressFor(operator, { ...US, recipient: 'Hermon Vale' });
+    const s = (await operator.post('/shipping/shipments', { itemIds: [item.id], addressId: us })).body;
+    const rates = (await operator.get(`/shipping/shipments/${s.id}/rates`)).body as Array<{
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+      membershipCover: { postageMinor: number } | null;
+    }>;
+    const covered = rates.find((r) => r.eligible && (r.membershipCover?.postageMinor ?? 0) > 0)!;
+    expect(covered).toBeTruthy();
+
+    const usedBefore = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const balanceBefore = (await operator.get('/finance/wallet')).body.amount as number;
+    const selected = await operator.post(`/shipping/shipments/${s.id}/select-rate`, {
+      carrier: covered.carrier,
+      serviceLevel: covered.serviceLevel,
+    });
+    expect(selected.body.status).toBe('rates_selected');
+    const spent = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    expect(spent).toBe(usedBefore + covered.membershipCover!.postageMinor);
+
+    const cancelled = await operator.post(`/shipping/shipments/${s.id}/cancel`, { reason: 'Not needed after all.' });
+    expect(cancelled.status).toBe(201);
+
+    // The allowance is back for the next parcel, and the money less the fee.
+    expect((await operator.get('/membership/me')).body.membership.postage.usedMinor).toBe(usedBefore);
+    expect((await operator.get('/finance/wallet')).body.amount).toBe(
+      balanceBefore - (cancelled.body.restockingFeeMinor as number),
+    );
   });
 
   /* ---------------- choosing, and paying ---------------- */
@@ -697,5 +760,36 @@ describe('SHP outbound shipping', () => {
     const shipment = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
     expect(shipment.itemIds).toHaveLength(0);
     expect(shipment.serviceKey).toBe('direct_overnight');
+
+    /**
+     * F019. And it can actually LEAVE. Dispatch demanded a scanned set equal to
+     * the shipment's items, and this shipment has none by design, so a paid
+     * overnight order sat in `rates_selected` forever. What the operator holds
+     * at the dock is the parcel, so the parcel is what they scan.
+     */
+    const form = { carrier: 'FedEx', packageWeightGrams: 180, fulfillmentNotes: 'Overnight envelope, two slabs.' };
+    const wrongParcel = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: 'PKG-NOTTHIS1',
+      ...form,
+    });
+    expect(wrongParcel.status).toBe(409);
+
+    const out = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: registered.body.code,
+      ...form,
+    });
+    expect(out.status).toBe(201);
+    expect(out.body.trackingNumber).toBeTruthy();
+
+    const gone = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
+    expect(gone.status).toBe('shipped');
+    expect(gone.trackingNumber).toBe(out.body.trackingNumber);
+
+    // It is closed, so a second scan cannot buy a second label.
+    const twice = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: registered.body.code,
+      ...form,
+    });
+    expect(twice.status).toBe(409);
   });
 });

@@ -12,9 +12,23 @@ name: CI
 # and UI test.
 #
 # Whatever signal the badge was giving, it was not "the suite passed".
+#
+# SUPPLY CHAIN. Every action is pinned to a full commit SHA, with the release it
+# came from in a comment. A tag is a pointer the action's owner (or whoever
+# takes over their account) can move, and this workflow runs with the
+# repository checked out; a SHA cannot be moved. Dependabot
+# (.github/dependabot.yml) proposes the updates, one reviewable PR at a time.
+# MinIO is pinned to a release for the same reason, and gitleaks and the
+# workflow's own downloads are checked against a recorded checksum.
 on:
   push:
   pull_request:
+
+# Read-only token for every job. Nothing here writes to the repository, opens
+# issues or pushes images (release.yml does that, with its own permissions), so
+# a compromised step gets a token that can only read.
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -57,40 +71,76 @@ jobs:
       # match the developer .env; no test depends on the limiter tripping.
       AUTH_RATE_LIMIT_PER_MINUTE: 5000
       RATE_LIMIT_PER_MINUTE: 20000
+      # github.com/minio/minio at RELEASE.2025-09-07T16-13-09Z (see Start MinIO).
+      MINIO_VERSION: v0.0.0-20250907161309-07c3a429bfed
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       # The storage contract suite round-trips real bytes through a real bucket.
       # Without this it skips — loudly, but it skips, and a skipped test defends
       # nothing.
       #
-      # A step, not a service container: `bitnami/minio` (which started itself
-      # and made the bucket from an env var) was withdrawn from Docker Hub, and
-      # the official image needs `server /data` as its command, which a service
-      # container cannot pass. It comes from MinIO's own registry (quay.io):
-      # `minio/minio` has been removed from Docker Hub too. Same image as
-      # infra/docker-compose.yml, and it ships `mc`, which makes the bucket.
+      # Built from source, not pulled. This step used to `docker run` MinIO's
+      # image, and the pull failed on every run (exit 125) — `latest` and the
+      # pinned release alike — so every step after it was skipped and nothing
+      # below this line had ever run in CI. MinIO stopped publishing community
+      # images and binaries in 2025: `minio/minio` is gone from Docker Hub,
+      # `bitnami/minio` was withdrawn, and the quay.io pull fails. The source
+      # is still published, and the Go module proxy serves every version it
+      # has ever served, checked against the checksum database on download.
+      #
+      # MINIO_VERSION is the commit of the RELEASE.2025-09-07T16-13-09Z tag,
+      # the release this step pinned before. The binary is cached under it, so
+      # only the first run pays the two-and-a-half-minute build.
+      - name: Restore the MinIO build
+        id: minio-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/minio-bin
+          key: minio-${{ runner.os }}-${{ runner.arch }}-${{ env.MINIO_VERSION }}
+
+      - if: steps.minio-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.24'
+          # On by default, and it needs a go.sum this repository does not have.
+          cache: false
+
+      - name: Build MinIO
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        run: GOBIN="$HOME/minio-bin" go install "github.com/minio/minio@${MINIO_VERSION}"
+
+      # A background process, like the API further down, rather than a service
+      # container: a service container cannot be given `server /data` as its
+      # command. The bucket is made with a signed PUT, because `mc` is not part
+      # of the server build.
       - name: Start MinIO
         run: |
-          docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin quay.io/minio/minio:latest server /data
-          for i in $(seq 1 60); do
+          mkdir -p "$RUNNER_TEMP/minio-data"
+          MINIO_ROOT_USER="$STORAGE_ACCESS_KEY" MINIO_ROOT_PASSWORD="$STORAGE_SECRET_KEY" \
+            nohup "$HOME/minio-bin/minio" server "$RUNNER_TEMP/minio-data" --address 127.0.0.1:9000 \
+            > "$RUNNER_TEMP/minio.log" 2>&1 &
+          for _ in $(seq 1 60); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 1
           done
-          curl -sf http://localhost:9000/minio/health/live || { docker logs minio; exit 1; }
-          docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
-          docker exec minio mc mb --ignore-existing local/bault-images
+          curl -sf http://localhost:9000/minio/health/live || { cat "$RUNNER_TEMP/minio.log"; exit 1; }
+          curl -sS --fail-with-body --aws-sigv4 "aws:amz:${STORAGE_REGION}:s3" \
+            --user "${STORAGE_ACCESS_KEY}:${STORAGE_SECRET_KEY}" \
+            -X PUT "http://localhost:9000/${STORAGE_BUCKET}"
 
       # No `version:` here — the action reads `packageManager` (pnpm@9.15.0)
       # from package.json, so there is one place to change it. Naming it in
       # both made the action refuse to run.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
 
       # 24, not 20: jsdom 30 (the ux/web suites' DOM) needs ^22.22.2 or ^24.15,
       # and on 20 every jsdom worker died on `markAsUncloneable is not a
       # function` from its undici. 24 is also what development runs on.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
           cache: pnpm
@@ -116,8 +166,18 @@ jobs:
       # First, because they are fast and a failure here should not wait behind a
       # database boot. `core` is NOT among them despite the name — it drives the
       # live API, so it runs with the other e2e suites further down.
+      #
+      # The SPA is built first because `no-credentials-in-bundle.test.ts` checks
+      # the BUILT bundle for seeded passwords and addresses. Without a `dist/` it
+      # used to pass without reading anything; it now fails under CI instead.
+      - name: Build the web app
+        run: pnpm --filter @bault/web build
+
       - name: Web unit tests
         run: pnpm test:web
+
+      - name: Environment schema tests
+        run: pnpm test:config
 
       - name: Component & UX tests
         run: pnpm exec vitest run --project ux
@@ -129,10 +189,13 @@ jobs:
         run: pnpm test:contract
 
       # ---- Everything below needs a migrated, seeded database and a live API --
-      - name: Migrate and seed
-        run: |
-          pnpm --filter @bault/api db:migrate
-          pnpm --filter @bault/api db:seed
+      # Each of the four suites below is seeded afresh, exactly as `pnpm test`
+      # does (scripts/test.mjs). They share the seeded accounts, and a suite
+      # that ran on what the previous one left was measuring the run order:
+      # `fin-invariants` failed after `integration` and passed on a fresh seed
+      # (finding E16).
+      - name: Migrate
+        run: pnpm --filter @bault/api db:migrate
 
       # The e2e suites drive the real HTTP stack on purpose — guards, DB
       # transactions and append-only triggers end to end. That only works if
@@ -151,20 +214,170 @@ jobs:
           echo "API did not become ready in 60s"; exit 1
 
       - name: Integration tests
-        run: pnpm test:integration
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:integration
 
       # `core` (tests3/integration) drives the live API exactly as `integration`
       # does — it is a second e2e suite, not a unit one, which is why it belongs
       # here rather than with the fast steps above.
       - name: Core tests
-        run: pnpm test:core
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:core
 
       - name: Concurrency tests (no double-sale / single owner)
-        run: pnpm test:concurrency
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:concurrency
 
       - name: Property tests (balance == sum ledger)
-        run: pnpm test:property
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:property
+
+      # The worker's jobs against the same database: each one run twice must
+      # equal one run, two at once must not double-process, SIGTERM drains.
+      # Three of its files also call the live API, which is still up here.
+      - name: Worker tests (idempotent jobs, shutdown, heartbeat)
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:worker
 
       - name: Stop the API
         if: always()
         run: kill "$(cat /tmp/api.pid)" || true
+
+  # ---------------------------------------------------------------------------
+  # Known vulnerabilities in what ships (`--prod`: dev tooling does not reach a
+  # customer). Blocking: the dependency updates (DIVE2 chapter 29, step 17)
+  # took it from 7 high and 1 critical to none, so from here a new high
+  # advisory stops the merge.
+  # ---------------------------------------------------------------------------
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          # v5 turns on the pnpm cache by itself when package.json names a
+          # package manager. Nothing is installed here, so there is no store to
+          # save, and its post step failed the job after the audit had passed.
+          package-manager-cache: false
+      # Reads the lockfile; nothing needs installing.
+      - name: pnpm audit (production dependencies, high and above)
+        run: pnpm audit --prod --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  # The migrator that production runs is the one INSIDE the API image, and
+  # nothing tested it. It applied the drizzle migrations and then died on a
+  # missing `dist/db/sql/0001_append_only.sql`, because `nest build` does not
+  # copy SQL files (finding E2) — so the first production database would have
+  # come up without its append-only triggers and nobody would have known. This
+  # job builds the image, migrates an empty database with it, and counts the
+  # guards: ten `trg_append_only_*` triggers plus `trg_no_delete_item`, and the
+  # four uuid/text operators from the same file.
+  #
+  # It stays red until the image fix (copying `db/sql` into `dist/`, DIVE2
+  # chapter 29 step 9) is merged. That is the point: it is the test for it.
+  # ---------------------------------------------------------------------------
+  migrate-image:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bault
+          POSTGRES_PASSWORD: bault
+          POSTGRES_DB: bault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bault -d bault"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # What loadEnv() requires and nothing more. NODE_ENV is overridden to
+    # `test` in the container: the image sets `production`, under which the
+    # sandbox providers below are refused at config parse — correct for a
+    # deployment, beside the point for a migration.
+    env:
+      DATABASE_URL: postgres://bault:bault@localhost:5432/bault
+      DIRECT_DATABASE_URL: postgres://bault:bault@localhost:5432/bault
+      NODE_ENV: test
+      PAYMENT_PROVIDER: sandbox
+      STORAGE_PROVIDER: sandbox
+      STORAGE_ENDPOINT: http://localhost:9000
+      STORAGE_REGION: eu-central
+      STORAGE_BUCKET: bault-images
+      STORAGE_ACCESS_KEY: ci-unused
+      STORAGE_SECRET_KEY: ci-unused
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Build the API image
+        run: docker build -f apps/api/Dockerfile -t bault-api:ci .
+
+      - name: Migrate an empty database with the image
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL -e DIRECT_DATABASE_URL -e NODE_ENV \
+            -e PAYMENT_PROVIDER -e STORAGE_PROVIDER -e STORAGE_ENDPOINT -e STORAGE_REGION \
+            -e STORAGE_BUCKET -e STORAGE_ACCESS_KEY -e STORAGE_SECRET_KEY \
+            bault-api:ci node dist/db/migrate.js
+
+      - name: The append-only guards are installed
+        run: |
+          triggers="$(psql "$DIRECT_DATABASE_URL" -At -c "
+            SELECT count(*) FROM pg_trigger
+             WHERE NOT tgisinternal
+               AND (tgname LIKE 'trg_append_only_%' OR tgname = 'trg_no_delete_item');")"
+          operators="$(psql "$DIRECT_DATABASE_URL" -At -c "
+            SELECT count(*) FROM pg_operator
+             WHERE oprname IN ('=', '<>')
+               AND (oprleft, oprright) IN (('uuid'::regtype, 'text'::regtype), ('text'::regtype, 'uuid'::regtype));")"
+          echo "guard triggers: ${triggers} (expected 11), uuid/text operators: ${operators} (expected 4)"
+          psql "$DIRECT_DATABASE_URL" -c "SELECT tgrelid::regclass AS table, tgname FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1, 2;"
+          [ "$triggers" = "11" ] && [ "$operators" = "4" ]
+
+  # ---------------------------------------------------------------------------
+  # Secrets committed anywhere in the history, on every push and pull request.
+  # The full history, not the diff: a key removed in a later commit is still in
+  # the repository and still valid until it is rotated.
+  #
+  # The gitleaks CLI from its release, checked against the published SHA-256,
+  # rather than gitleaks-action, which needs a paid licence key on an
+  # organisation account. Allow a false positive with a `.gitleaksignore` line
+  # (its fingerprint), never by turning the job off.
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          curl -fsSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP/gitleaks" gitleaks
+          rm gitleaks.tar.gz
+
+      - name: Scan the history
+        run: '"$RUNNER_TEMP/gitleaks/gitleaks" git --redact --verbose --exit-code 1 .'

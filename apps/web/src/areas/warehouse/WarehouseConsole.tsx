@@ -957,21 +957,41 @@ interface ShipmentDetail {
   code: string | null;
   status: string;
   carrier: string | null;
+  serviceKey: string | null;
   itemIds: string[];
+  /** What is printed on each item's label — what a scan is checked against. */
+  items?: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
+  /** For direct overnight, the parcel the shipment WAS: there are no items. */
+  directParcel?: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
   boxSize: string | null;
 }
 
+/** Whether a scanned string names this value — labels are matched as a person would read them. */
+const sameCode = (a: string | null | undefined, b: string) => Boolean(a) && a!.trim().toUpperCase() === b.trim().toUpperCase();
+
 /**
  * Structured shipment fulfillment (Requirement 5.3). The operator loads the
- * shipment, verifies EVERY item, and fills the required carrier / weight / notes
- * fields before the request can be closed.
+ * shipment, SCANS every item into the box, and fills the required carrier /
+ * weight / notes fields before the request can be closed.
+ *
+ * What is sent is what was scanned. This used to be a list of tick-boxes over
+ * the shipment's own item ids, and the request carried `detail.itemIds` — the
+ * server's list, handed back to it — so the server's check that the scanned
+ * set equals the shipment compared the list with itself and could not fail.
+ * The ticks decided nothing. Now every scan is matched against the labels
+ * printed on the cards, a scan that matches none of them is called out and
+ * blocks the button, and the server checks the operator's scans for itself.
+ *
+ * A direct-overnight shipment has no items — it never entered the vault — so
+ * there the operator scans the parcel instead.
  */
 function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t } = useI18n();
   const [shipmentId, setShipmentId] = useState('');
   const [detail, setDetail] = useState<ShipmentDetail | null>(null);
-  const [verified, setVerified] = useState<Record<string, boolean>>({});
+  const [scans, setScans] = useState<string[]>([]);
+  const [scanInput, setScanInput] = useState('');
   const [carrier, setCarrier] = useState('DHL');
   const [weight, setWeight] = useState('500');
   const [notes, setNotes] = useState('');
@@ -981,7 +1001,8 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
     try {
       const s = await api.get<ShipmentDetail>(`/shipping/shipments/${shipmentId}`);
       setDetail(s);
-      setVerified({});
+      setScans([]);
+      setScanInput('');
       setError(null);
       if (s.carrier) setCarrier(s.carrier);
     } catch (e) {
@@ -989,14 +1010,46 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
     }
   }
 
-  const allVerified = detail ? detail.itemIds.every((id) => verified[id]) : false;
-  const complete = allVerified && carrier !== '' && weight !== '' && notes.trim() !== '';
+  const direct = detail !== null && detail.itemIds.length === 0 && detail.serviceKey === 'direct_overnight';
+
+  /** The labels to check scans against. Falls back to the bare id when the API sent none. */
+  const expected = useMemo(
+    () =>
+      detail
+        ? detail.itemIds.map(
+            (id) => detail.items?.find((i) => i.id === id) ?? { id, serialNumber: null, barcode: null, description: null },
+          )
+        : [],
+    [detail],
+  );
+
+  const itemFor = (code: string) =>
+    expected.find((i) => sameCode(i.id, code) || sameCode(i.barcode, code) || sameCode(i.serialNumber, code));
+  const parcelMatches = (code: string) =>
+    Boolean(detail?.directParcel) &&
+    (sameCode(detail!.directParcel!.code, code) || sameCode(detail!.directParcel!.trackingNumber, code));
+
+  const scannedIds = new Set(scans.map((c) => itemFor(c)?.id).filter((id): id is string => Boolean(id)));
+  const strays = direct ? scans.filter((c) => !parcelMatches(c)) : scans.filter((c) => !itemFor(c));
+  const allScanned = direct
+    ? scans.length === 1 && strays.length === 0
+    : expected.length > 0 && expected.every((i) => scannedIds.has(i.id)) && strays.length === 0;
+  const complete = allScanned && carrier !== '' && weight !== '' && notes.trim() !== '';
+
+  function addScan() {
+    const code = scanInput.trim();
+    setScanInput('');
+    if (!code) return;
+    // One parcel per direct shipment: a new scan replaces the last.
+    if (direct) setScans([code]);
+    else setScans((prev) => (prev.some((c) => sameCode(c, code)) ? prev : [...prev, code]));
+  }
 
   async function completeShipment() {
     if (!detail || !complete) return;
     try {
       const res = await api.post<{ trackingNumber: string }>(`/shipping/shipments/${detail.id}/dispatch`, {
-        scannedItemIds: detail.itemIds,
+        ...(direct ? { scannedParcel: scans[0] } : { scannedItemIds: scans }),
         carrier,
         packageWeightGrams: Number(weight),
         fulfillmentNotes: notes,
@@ -1005,6 +1058,7 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
       setDetail(null);
       setShipmentId('');
       setNotes('');
+      setScans([]);
     } catch (e) {
       setError((e as Error).message);
       onLog(t('warehouse.log.dispatchError', { message: (e as Error).message }));
@@ -1038,25 +1092,82 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
           </p>
           {/* The collector was quoted for this box. Packing it in a bigger one
               ships a parcel that costs more than they paid. */}
-          <p className="field-hint">
-            {detail.boxSize
-              ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
-              : t('warehouse.dispatch.anyBox')}
-          </p>
+          {!direct && (
+            <p className="field-hint">
+              {detail.boxSize
+                ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
+                : t('warehouse.dispatch.anyBox')}
+            </p>
+          )}
+
+          <div className="row">
+            <Field
+              className="field--grow"
+              label={t(direct ? 'warehouse.dispatch.scanParcel' : 'warehouse.dispatch.scan')}
+              hint={
+                direct
+                  ? t('warehouse.dispatch.scanParcelHint', { code: detail.directParcel?.code ?? '—' })
+                  : t('warehouse.dispatch.scanHint')
+              }
+            >
+              <input
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                onKeyDown={(e) => {
+                  // A scanner types the label and presses Enter.
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addScan();
+                  }
+                }}
+                placeholder={direct ? 'PKG-…' : 'SN-…'}
+                dir="ltr"
+                autoComplete="off"
+              />
+            </Field>
+            <Button variant="secondary" disabled={!scanInput.trim()} onClick={addScan} style={{ alignSelf: 'end' }}>
+              {t('warehouse.dispatch.addScan')}
+            </Button>
+          </div>
 
           <div className="field">
-            <span className="field-label">{t('warehouse.itemsVerified')}</span>
+            <span className="field-label">
+              {direct
+                ? detail.directParcel?.code
+                : t('warehouse.dispatch.progress', { scanned: scannedIds.size, total: expected.length })}
+            </span>
             <ul className="check-list">
-              {detail.itemIds.map((id) => (
-                <li key={id}>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={!!verified[id]}
-                      onChange={() => setVerified((p) => ({ ...p, [id]: !p[id] }))}
-                    />
-                    <code dir="ltr">{id}</code>
-                  </label>
+              {!direct &&
+                expected.map((i) => (
+                  <li key={i.id}>
+                    <span>
+                      <code dir="ltr">{i.serialNumber ?? i.id}</code>
+                      {i.description && <span className="hint"> {i.description}</span>}
+                    </span>
+                    <StatusBadge tone={scannedIds.has(i.id) ? 'success' : 'neutral'}>
+                      {t(scannedIds.has(i.id) ? 'warehouse.dispatch.scanned' : 'warehouse.dispatch.notScanned')}
+                    </StatusBadge>
+                  </li>
+                ))}
+              {direct && scans.length === 1 && strays.length === 0 && (
+                <li>
+                  <code dir="ltr">{scans[0]}</code>
+                  <StatusBadge tone="success">{t('warehouse.dispatch.scanned')}</StatusBadge>
+                </li>
+              )}
+              {strays.map((code) => (
+                <li key={code}>
+                  <code dir="ltr">{code}</code>
+                  <StatusBadge tone="error">
+                    {t(direct ? 'warehouse.dispatch.wrongParcel' : 'warehouse.dispatch.notInShipment')}
+                  </StatusBadge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setScans((prev) => prev.filter((c) => c !== code))}
+                  >
+                    {t('warehouse.dispatch.removeScan', { code })}
+                  </Button>
                 </li>
               ))}
             </ul>

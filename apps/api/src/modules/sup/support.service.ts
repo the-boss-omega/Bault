@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -24,6 +24,8 @@ export interface OpenTicketInput {
 export interface TicketActor {
   id: string;
   role: string;
+  /** Staff powers need an ACTIVE account; see `staff`. */
+  status: string;
 }
 
 const MAX_SUBJECT = 200;
@@ -49,8 +51,23 @@ export class SupportService {
     private readonly outbox: OutboxService,
   ) {}
 
-  private staff(actor: TicketActor): boolean {
+  private hasStaffRole(actor: TicketActor): boolean {
     return actor.role === 'warehouse_operator' || actor.role === 'admin';
+  }
+
+  /**
+   * Whether this caller acts AS STAFF — the role, on an account that is active.
+   *
+   * Reading a thread and replying are `@AllowSuspended`, so a suspended
+   * customer can still ask for help. This checked the role alone, so a
+   * suspended operator or administrator holding a ticket id could still read any
+   * customer's thread and answer it as staff — claiming the ticket and mailing
+   * the customer in Bault's name — after being suspended for exactly the kind
+   * of thing that makes that dangerous (N5). Suspended staff are customers here:
+   * their own tickets, nobody else's.
+   */
+  private staff(actor: TicketActor): boolean {
+    return this.hasStaffRole(actor) && actor.status === 'active';
   }
 
   /**
@@ -63,7 +80,14 @@ export class SupportService {
   private async loadFor(ticketId: string, actor: TicketActor) {
     const [row] = await this.db.select().from(supportTicket).where(eq(supportTicket.id, ticketId)).limit(1);
     if (!row) throw AppError.notFound('Ticket not found');
-    if (!this.staff(actor) && row.userId !== actor.id) throw AppError.notFound('Ticket not found');
+    if (!this.staff(actor) && row.userId !== actor.id) {
+      // A suspended member of staff is told why, rather than shown a 404 for a
+      // ticket they could open yesterday — the id is not news to them.
+      if (this.hasStaffRole(actor)) {
+        throw AppError.forbidden('Staff access to the helpdesk needs an active account.');
+      }
+      throw AppError.notFound('Ticket not found');
+    }
     return row;
   }
 
@@ -255,10 +279,20 @@ export class SupportService {
   async assign(ticketId: string, actor: TicketActor) {
     if (!this.staff(actor)) throw AppError.forbidden('Only staff can take a ticket');
     await this.loadFor(ticketId, actor);
-    await this.db
+    // Only an untaken ticket (or one already ours). Unconditionally, two staff
+    // pressing Take together each were told the ticket was theirs, and the
+    // customer got two people answering the same question.
+    const [taken] = await this.db
       .update(supportTicket)
       .set({ assignedTo: actor.id, updatedAt: new Date() })
-      .where(eq(supportTicket.id, ticketId));
+      .where(
+        and(
+          eq(supportTicket.id, ticketId),
+          or(isNull(supportTicket.assignedTo), eq(supportTicket.assignedTo, actor.id)),
+        ),
+      )
+      .returning({ id: supportTicket.id });
+    if (!taken) throw new AppError(ErrorCode.CONFLICT, 'Someone else has already taken this ticket.', 409);
     return { assignedTo: actor.id };
   }
 

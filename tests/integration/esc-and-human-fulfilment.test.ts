@@ -264,6 +264,84 @@ describe('ESC escrow and human fulfilment', () => {
     expect(detail.buyerId).toBeNull();
   });
 
+  it('does not pay the seller of an outside buyer until the card is on its way to them', async () => {
+    /**
+     * F171. An outside buyer has no vault, so `settle` moved no ownership and
+     * created no shipment — it paid the seller and left the card on the
+     * seller's shelf, free to be withdrawn. The buyer had paid and would never
+     * receive anything. Now the deal will not settle until the card has been
+     * dispatched to them.
+     */
+    const operator = await signIn(SEED.operator);
+    const seller = await signIn(SEED.collector);
+    const VALUE = 150_000;
+
+    const deal = (
+      await seller.post('/escrow', {
+        raiserRole: 'seller',
+        counterpartyName: 'Marcus Webb',
+        counterpartyEmail: 'marcus@example.test',
+        description: '2003 EX Dragon Rayquaza ex #97/97, PSA 9',
+        valueMinor: VALUE,
+        settlement: 'ship_to_buyer',
+      })
+    ).body;
+    await operator.post(`/escrow/${deal.id}/agree`, { notes: 'Confirmed by phone.' });
+    expect((await operator.post(`/escrow/${deal.id}/fund`, { reference: `WISE-${Date.now()}` })).status).toBe(201);
+    const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    expect((await operator.post(`/escrow/${deal.id}/receive-item`, { itemId: card.id })).status).toBe(201);
+    await operator.post(`/escrow/${deal.id}/inspect`, { matches: true, notes: 'Slab and cert as described.' });
+    expect((await seller.post(`/escrow/${deal.id}/release`, {})).status).toBe(201);
+
+    const sellerBefore = await balanceOf(seller);
+    const early = await operator.post(`/escrow/${deal.id}/release`, { side: 'buyer' });
+    expect(early.status).toBe(409);
+    expect(String(early.body.error.message)).toMatch(/ship|dispatch/i);
+    expect(await balanceOf(seller)).toBe(sellerBefore);
+    expect((await seller.get(`/escrow/${deal.id}`)).body.deal.status).toBe('awaiting_release');
+
+    // The seller sends it to the buyer, and the warehouse dispatches it.
+    await fundWallet(SEED.collector, 20_000);
+    const parcel = (
+      await seller.post('/shipping/shipments', {
+        itemIds: [card.id],
+        destinationAddress: 'Marcus Webb, 400 Market St, San Francisco, CA',
+        destinationCountry: 'US',
+        destinationPostalCode: '94102',
+      })
+    ).body;
+    const rates = (await seller.get(`/shipping/shipments/${parcel.id}/rates`)).body as Array<{
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+    }>;
+    const rate = rates.find((r) => r.eligible)!;
+    expect(
+      (await seller.post(`/shipping/shipments/${parcel.id}/select-rate`, {
+        carrier: rate.carrier,
+        serviceLevel: rate.serviceLevel,
+      })).body.status,
+    ).toBe('rates_selected');
+
+    // Paid for but not yet gone: the seller could still call it back, so this
+    // is not yet enough to release the money.
+    expect((await operator.post(`/escrow/${deal.id}/release`, { side: 'buyer' })).status).toBe(409);
+
+    const dispatched = await operator.post(`/shipping/shipments/${parcel.id}/dispatch`, {
+      scannedItemIds: [card.id],
+      carrier: 'USPS',
+      packageWeightGrams: 300,
+      fulfillmentNotes: 'Slab in a rigid mailer, to the escrow buyer.',
+    });
+    expect(dispatched.status).toBe(201);
+
+    const paidBefore = await balanceOf(seller);
+    const settled = await operator.post(`/escrow/${deal.id}/release`, { side: 'buyer' });
+    expect(settled.status).toBe(201);
+    expect(settled.body.status).toBe('settled');
+    expect(await balanceOf(seller)).toBe(paidBefore + VALUE - deal.feeMinor);
+  }, 30_000);
+
   it('keeps a deal invisible to somebody who is not a party to it', async () => {
     const seller = await signIn(SEED.collector);
     const stranger = await signIn(SEED.collector3);
@@ -333,6 +411,18 @@ describe('ESC escrow and human fulfilment', () => {
       notes: '$1,000 base plus $180 travel, Newark to Boston and back the same day.',
     });
     expect(quoted.status).toBe(201);
+
+    // F060. The collector finds the quote in their shipments list — the panel
+    // that offers "Accept" reads exactly these three fields from it, and the
+    // list used to return none of them, so the quote was never shown.
+    const listed = ((await collector.get('/shipping/shipments')).body as Record<string, unknown>[]).find(
+      (s) => s.id === shipmentId,
+    );
+    expect(listed).toMatchObject({
+      fulfilmentMethod: 'hand_delivery',
+      quoteMinor: 118_000,
+      quoteNotes: '$1,000 base plus $180 travel, Newark to Boston and back the same day.',
+    });
 
     const before = await balanceOf(collector);
     const accepted = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);

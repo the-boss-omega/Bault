@@ -11,6 +11,8 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/errors/all-exceptions.filter';
 import { validationException } from './shared/errors/validation-error';
 import { StructuredLogger, requestContext } from './shared/observability/logger';
+import { initErrorReporting } from './shared/observability/error-reporting';
+import { jsonBodiesOnly, sameOriginWrites, writeOrigins } from './shared/csrf/cross-site';
 
 /**
  * Application entry point.
@@ -26,6 +28,14 @@ async function bootstrap(): Promise<void> {
   const env = loadEnv();
 
   /**
+   * Error reporting, when `SENTRY_DSN` is set — and nothing at all when it is
+   * not. First, so a failure while the application is being built is reported
+   * too. Every event is scrubbed of cookies, credential headers and the bodies
+   * of the credential routes before it leaves; see `error-reporting.ts`.
+   */
+  const reporting = initErrorReporting(env);
+
+  /**
    * Logging that an aggregator can read and a person can correlate.
    *
    * The old line here was `logger: ['error', 'warn', 'log']` with a note that
@@ -37,6 +47,14 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger('api'),
     bufferLogs: false,
+    /**
+     * No parsers of Nest's own (E8). Left on, Nest adds `urlencoded` when the app
+     * starts listening — registering `json` below did not stop it, because it
+     * only skips a parser that is already there — and a form-encoded body is
+     * what an HTML form on somebody else's site sends. The one parser this API
+     * needs is registered by hand below.
+     */
+    bodyParser: false,
   });
 
   /**
@@ -74,8 +92,30 @@ async function bootstrap(): Promise<void> {
    * a JSON API and an OpenAPI explorer, not the SPA — the CSP that matters
    * belongs on whatever serves the front end, and a default one here would
    * break the explorer while protecting nothing.
+   *
+   * `strictTransportSecurity` is off because HSTS is set where TLS ends, by
+   * Caddy (infra/production/Caddyfile), for the SPA and the API alike. Left on,
+   * helmet's default (no `preload`) would ride on every API response next to
+   * Caddy's, two policies for one host, and a browser keeps whichever it saw
+   * last.
    */
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  app.use(
+    helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, strictTransportSecurity: false }),
+  );
+
+  /**
+   * Another site cannot act through a visitor's browser (E8).
+   *
+   * Before the body parser, so a cross-site write is refused without its body
+   * ever being read. Writes must come from the app's own origin or one named in
+   * `CORS_ORIGINS`; a request with no `Origin` is not a browser steered by
+   * another page and passes. The payment webhook is exempt: PayPal is not a
+   * browser, and its signature is what authenticates it. See `cross-site.ts`.
+   */
+  app.use(
+    sameOriginWrites(writeOrigins(env.APP_BASE_URL, env.CORS_ORIGINS), ['/api/v1/webhooks/payment']),
+  );
+  app.use(jsonBodiesOnly());
 
   /**
    * Room for a photograph.
@@ -86,6 +126,10 @@ async function bootstrap(): Promise<void> {
    * `MAX_IMAGE_BYTES` on purpose, so an oversized upload is refused by the
    * media service with a sentence naming the limit rather than by the body
    * parser with a bare 413 and no explanation.
+   *
+   * The ONLY body parser (see `bodyParser: false` above). The payment webhook
+   * needs nothing more: it hands the parsed event back to the adapter, and
+   * PayPal's verification is a call that takes the event as JSON.
    */
   app.use(json({ limit: '16mb' }));
 
@@ -117,6 +161,7 @@ async function bootstrap(): Promise<void> {
 
   // Uniform problem responses for every thrown error (contracts/README.md shape).
   app.useGlobalFilters(new AllExceptionsFilter());
+  if (reporting) new StructuredLogger('api').log('error reporting enabled');
 
   /**
    * Validate & strip request DTOs globally (whitelist drops unknown fields).
@@ -168,7 +213,10 @@ async function bootstrap(): Promise<void> {
    * with `===` leaks its length and prefix to anyone patient enough to measure.
    */
   if (env.API_DOCS_PASSWORD) {
-    app.use('/docs', (req: IncomingMessage & { headers: Record<string, string | undefined> }, res: ServerResponse, next: () => void) => {
+    // All three paths. Swagger also serves the raw document at /docs-json and
+    // /docs-yaml, which a '/docs' mount does not cover: the explorer asked for a
+    // password while the full route map it renders was one URL away without one.
+    app.use(['/docs', '/docs-json', '/docs-yaml'], (req: IncomingMessage & { headers: Record<string, string | undefined> }, res: ServerResponse, next: () => void) => {
       const header = req.headers.authorization ?? '';
       const supplied = header.startsWith('Basic ')
         ? Buffer.from(header.slice(6), 'base64').toString('utf8').split(':').slice(1).join(':')

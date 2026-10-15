@@ -3,6 +3,7 @@ import { and, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { clampLimit } from '../../shared/query';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { StorageAdapter } from '@bault/adapters';
 import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
@@ -62,16 +63,32 @@ export interface VaultFilter {
   scope?: VaultScope;
 }
 
-// Terminal states: the card is still owned by the customer but has left storage.
-const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold'> = [
+/**
+ * Terminal states: the card is still owned by the customer but has left storage.
+ *
+ * `discarded` belongs here and was missing. The lifecycle gained it (a card
+ * culled through Remove commons, or reported lost by a grader) without this list
+ * learning of it, so a discarded card appeared in no tab at all — while the
+ * vault's own note promises that anything which left stays in History for good.
+ */
+const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'> = [
   'shipped',
   'donated',
   'consigned',
   'sold',
+  'discarded',
 ];
 
-// States that count as live, on-shelf stock.
-const LIVE: Array<'received' | 'stored' | 'listed'> = ['received', 'stored', 'listed'];
+/**
+ * States that count as the customer's live stock.
+ *
+ * `at_grader` is here because the card is still theirs and is coming back: it
+ * is away for weeks, not gone. It was in no list, so a card sent for grading
+ * vanished from the vault for the whole trip and its owner opened a ticket
+ * about a card Bault had lost. The tile carries the state, and no action is
+ * offered on it while it is away.
+ */
+const LIVE: Array<'received' | 'stored' | 'listed' | 'at_grader'> = ['received', 'stored', 'listed', 'at_grader'];
 
 /**
  * Customer vault (T051, Principle: personal vault view).
@@ -169,10 +186,12 @@ export class VaultService {
         createdAt: item.createdAt,
       })
       .from(item)
-      .leftJoin(bin, eq(bin.id, item.binId))
+      // As text: `bin_id` can hold an `EXT:` location for a card at another
+      // warehouse, and converting that to a uuid failed the owner's whole vault.
+      .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
-      .limit(Math.min(filter.limit ?? 50, 200));
+      .limit(clampLimit(filter.limit, { max: 200, fallback: 50 }));
   }
 
   /**
@@ -216,7 +235,7 @@ export class VaultService {
    * hides or rewrites it.
    */
   private async listHistory(userId: string, filter: VaultFilter, withReason = true) {
-    const limit = Math.min(filter.limit ?? 50, 200);
+    const limit = clampLimit(filter.limit, { max: 200, fallback: 50 });
 
     // The departure event per item: the most recent custody event that either
     // moved the card away from this customer or moved it to a terminal state.
@@ -228,10 +247,7 @@ export class VaultService {
       .from(custodyEvent)
       .where(
         and(
-          or(
-            eq(custodyEvent.prevOwnerId, userId),
-            and(eq(custodyEvent.newOwnerId, userId), inArray(custodyEvent.newState, TERMINAL)),
-          ),
+          this.departedFrom(userId),
           inArray(custodyEvent.eventType, ['ownership_transfer', 'state_change', 'dispatch']),
         ),
       )
@@ -303,19 +319,49 @@ export class VaultService {
         newState: custodyEvent.newState,
       })
       .from(custodyEvent)
-      .where(
-        and(
-          eq(custodyEvent.itemId, itemId),
-          or(
-            eq(custodyEvent.prevOwnerId, userId),
-            and(eq(custodyEvent.newOwnerId, userId), inArray(custodyEvent.newState, TERMINAL)),
-          ),
-        ),
-      )
+      .where(and(eq(custodyEvent.itemId, itemId), this.departedFrom(userId)))
       .orderBy(sql`${custodyEvent.occurredAt} desc`)
       .limit(1);
     if (!event) return null;
     return event.reason ?? event.newState ?? event.eventType;
+  }
+
+  /**
+   * The custody events that count as a card leaving this customer.
+   *
+   * Either it was transferred away from them, or it moved into a terminal state
+   * while it was theirs. The second half used to require `new_owner_id` to name
+   * the customer, and a state change never writes an owner — no code path does —
+   * so a card shipped home (or donated, consigned, discarded) without changing
+   * hands had no departure and never reached History.
+   *
+   * "While it was theirs" is answered from the trail rather than assumed: the
+   * card is theirs now, and the change came no earlier than the event that last
+   * made them its owner (intake and every transfer name the new owner). A
+   * terminal change made by a previous owner — a card bought out and then sold
+   * on — is not this customer's departure. The `new_owner_id` form is kept for
+   * any event that does name one.
+   */
+  private departedFrom(userId: string) {
+    const ownedNow = this.db
+      .select({ id: sql<string>`${item.id}::text` })
+      .from(item)
+      .where(eq(item.ownerId, userId));
+    const sinceAcquired = sql`${custodyEvent.occurredAt} >= (
+      select max(acq.occurred_at) from custody_event acq
+       where acq.item_id = ${custodyEvent.itemId} and acq.new_owner_id = ${userId})`;
+    return (
+      or(
+        eq(custodyEvent.prevOwnerId, userId),
+        and(
+          inArray(custodyEvent.newState, TERMINAL),
+          or(
+            eq(custodyEvent.newOwnerId, userId),
+            and(inArray(custodyEvent.itemId, ownedNow), sinceAcquired),
+          ),
+        ),
+      ) ?? sql`false`
+    );
   }
 
   /**

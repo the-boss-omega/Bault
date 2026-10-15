@@ -1,9 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsPositive, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsPositive, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { WalletRequestService } from './wallet-request.service';
 import {
   FUNDING_SOURCES,
@@ -29,7 +30,7 @@ class SubmitWalletRequestDto {
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
   /** Object key of an already-uploaded document — never the document itself. */
-  @IsOptional() @IsString() @MaxLength(400) documentKey?: string;
+  @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
   @IsOptional() @IsString() @MaxLength(MAX_NOTE_LENGTH) notes?: string;
 }
 
@@ -43,6 +44,21 @@ class ReviewNoteDto {
 
 class RejectDto {
   @IsString() @MinLength(1) @MaxLength(MAX_REJECTION_REASON_LENGTH) reason!: string;
+}
+
+class CompleteDto extends ReviewNoteDto {
+  /**
+   * With `PAYOUT_MODE=manual`, the reference of the payment the administrator
+   * made by hand — a PayPal transaction id, a bank transfer reference. Required
+   * for a cash-out in that mode, refused in the provider mode.
+   */
+  @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) payoutReference?: string;
+}
+
+class ReconcileDto {
+  /** Only payouts pending at least this long are asked about. */
+  @IsOptional() @IsInt() @Min(0) @Max(10_080) olderThanMinutes?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(200) limit?: number;
 }
 
 /**
@@ -138,7 +154,19 @@ export class WalletRequestController {
   /** The only endpoint in the platform that settles a wallet request. */
   @Roles('admin')
   @Post('admin/wallet-requests/:id/complete')
-  complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ReviewNoteDto) {
-    return this.requests.complete(id, user, dto.note);
+  complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CompleteDto) {
+    return this.requests.complete(id, user, { note: dto.note, payoutReference: dto.payoutReference });
+  }
+
+  /**
+   * Ask the payout provider again about cash-outs still `paying`.
+   *
+   * For a payout whose webhook never came, or whose answer was lost. Safe to run
+   * any number of times: a payout settles once.
+   */
+  @Roles('admin')
+  @Post('admin/payouts/reconcile')
+  reconcile(@CurrentUser() user: AuthUser, @Body() dto: ReconcileDto) {
+    return this.requests.reconcilePayouts(user, { olderThanMinutes: dto.olderThanMinutes, limit: dto.limit });
   }
 }

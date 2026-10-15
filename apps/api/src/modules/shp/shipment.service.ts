@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -13,17 +13,22 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
 import { facility } from '../inv/facility.schema';
+import { parcel, parcelEvent } from '../inv/parcel.schema';
+import { item } from '../cst/cst.schema';
 import { newShipmentCode } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { shipment } from './shp.schema';
 import type { AuthUser } from '../sec/auth-context';
-import { ParcelProfileService } from './parcel-profile.service';
+import { ParcelProfileService, customsDeclarationFor, type CustomsLine } from './parcel-profile.service';
 import { SHIPPING_BOXES } from './boxes';
 import {
   CARRIER_SERVICES,
+  DIRECT_OVERNIGHT_FACILITY,
+  DIRECT_OVERNIGHT_KEY,
   checkService,
   destinationOf,
   findService,
+  rateFor,
   type CarrierService,
   type ParcelProfile,
   type ServiceProblem,
@@ -61,6 +66,9 @@ export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
  * arguable in public, which "we picked the cheap one" is not.
  */
 const DAY_OF_WAITING_MINOR = 250;
+
+/** An id that can be compared with a uuid column without the query failing. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Everything a collector can say about a parcel before it is priced. */
 export interface ShipmentOptionsInput {
@@ -195,8 +203,8 @@ export class ShipmentService {
    * It matters more now than it did, because cancelling and merging only mean
    * something if being IN a shipment means something.
    */
-  async assertItemsFree(userId: string, itemIds: string[], exceptShipmentId?: string) {
-    const open = await this.db
+  async assertItemsFree(userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
+    const open = await (tx ?? this.db)
       .select({ id: shipment.id, code: shipment.code, itemIds: shipment.itemIds })
       .from(shipment)
       .where(
@@ -291,11 +299,18 @@ export class ShipmentService {
       box,
     });
 
+    // The same lines `create` will freeze, so the carrier rates the parcel with
+    // the declaration it will travel under.
+    const customsLines = needsCustoms(destination.country)
+      ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
+      : null;
+
     const rates = await this.priceServices(
       profile,
       addOns,
       input.rush ?? false,
       await this.memberships.shippingCover(userId),
+      customsLines,
     );
 
     return {
@@ -327,6 +342,7 @@ export class ShipmentService {
     addOnKeys: string[],
     rush: boolean,
     cover: ShippingCover | null = null,
+    customsLines: readonly CustomsLine[] | null = null,
   ): Promise<QuotedRate[]> {
     const { amount: baseHandling } = await this.pricing.price('shipping');
     /**
@@ -365,12 +381,13 @@ export class ShipmentService {
       if (left !== undefined && (left === UNLIMITED || left > 0)) addOnsCovered[action] = minor;
     }
 
+    const origin = await this.originAddress();
     const carrierRates = await this.shipping.getRates({
       destination: profile.destination,
       // Where the parcel physically leaves from. A real carrier prices on the
       // origin/destination pair, so quoting without it prices a different
       // shipment than the one that gets bought.
-      origin: await this.originAddress(),
+      origin,
       items: [{ weightGrams: profile.weightGrams }],
       // The box, when one was chosen. The carrier bills dimensional weight from
       // these itself, so nothing here scales its price a second time.
@@ -378,13 +395,20 @@ export class ShipmentService {
       packagingGrams: profile.packagingGrams,
       rush,
       signatureRequired: profile.signatureRequired,
+      // Rated WITH its declaration: the label is bought against this quote, and
+      // a carrier cannot add customs to a shipment after it has been rated.
+      customs:
+        customsLines && customsLines.length > 0
+          ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault')
+          : undefined,
     });
 
     const quoted: QuotedRate[] = [];
     for (const service of CARRIER_SERVICES) {
-      const rate = carrierRates.find(
-        (r) => r.carrier === service.carrier && r.serviceLevel === service.serviceLevel,
-      );
+      // Matched through the catalogue's explicit provider names, not by
+      // comparing display names with EasyPost's service codes — which matched
+      // nothing, and left a real account with no way to ship. See `rateFor`.
+      const rate = rateFor(service, carrierRates);
       if (!rate) continue; // the adapter does not sell it to this destination
       const problems = checkService(service, profile);
       const carrierCost = service.flatCostMinor !== undefined ? service.flatCostMinor : rate.costMinor;
@@ -407,6 +431,11 @@ export class ShipmentService {
 
       quoted.push({
         ...rate,
+        // The catalogue's names, whatever the carrier calls it: these are what
+        // the collector selects by and what the shipment stores, and
+        // `findService` resolves them. The provider's own ids ride along above.
+        carrier: service.carrier,
+        serviceLevel: service.serviceLevel,
         costMinor: carrierCost,
         serviceKey: service.key,
         problems,
@@ -435,17 +464,21 @@ export class ShipmentService {
    *
    * Read from the facility table rather than configured separately, so it is the
    * same address collectors are told to post to and there is one place to change
-   * it. A forwarding site stores nothing, so it can never be an origin.
+   * it. A forwarding site stores nothing, so it is never the origin of a vault
+   * shipment — the one exception is direct overnight, which never entered the
+   * vault and leaves from the forwarding site it arrived at, named by `code`.
    *
    * Left undefined when the facility still carries a placeholder street, which
    * makes the real adapter refuse with a sentence naming the problem instead of
    * quoting against a fictional origin.
    */
-  private async originAddress() {
+  private async originAddress(code?: string) {
     const [site] = await this.db
       .select()
       .from(facility)
-      .where(and(eq(facility.role, 'primary'), eq(facility.active, true)))
+      .where(
+        and(code ? eq(facility.code, code) : eq(facility.role, 'primary'), eq(facility.active, true)),
+      )
       .limit(1);
     if (!site || /placeholder|SET REAL ADDRESS/i.test(site.line1)) return undefined;
     return {
@@ -542,33 +575,40 @@ export class ShipmentService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
       : null;
 
-    const [created] = await this.db
-      .insert(shipment)
-      .values({
-        code: newShipmentCode(),
-        userId,
-        itemIds: items.map((i) => i.id),
-        destinationAddress: formatted,
-        recipientName: input.recipientName?.trim() || recipientName,
-        destinationCountry: destination.country,
-        destinationPostalCode: destination.postalCode,
-        // The street and city a carrier needs, frozen as quoted. See the column.
-        destinationDetail: { ...destination, name: input.recipientName?.trim() || destination.name },
-        serviceMode: input.serviceMode === 'simple' ? 'simple' : 'personalised',
-        rushFlag: input.rush ?? false,
-        declaredValueMinor,
-        insuredValueMinor,
-        signatureRequired,
-        addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
-        // Stored, because picking a service re-rates from the shipment row: a
-        // box that lived only in the quote would be charged as no box at all.
-        boxSize: box?.key ?? null,
-        customsLines,
-        customerNotes: input.customerNotes?.trim() || null,
-        status: 'requested',
-        currency: DEFAULT_CURRENCY,
-      })
-      .returning();
+    // The checks above, again, with the items locked: two clicks on Create
+    // used to both pass them and put the same cards on two parcels, each of
+    // which could then be paid for.
+    const [created] = await this.db.transaction(async (tx) => {
+      await this.profiles.loadShippableItems(userId, input.itemIds, tx);
+      await this.assertItemsFree(userId, items.map((i) => i.id), undefined, tx);
+      return tx
+        .insert(shipment)
+        .values({
+          code: newShipmentCode(),
+          userId,
+          itemIds: items.map((i) => i.id),
+          destinationAddress: formatted,
+          recipientName: input.recipientName?.trim() || recipientName,
+          destinationCountry: destination.country,
+          destinationPostalCode: destination.postalCode,
+          // The street and city a carrier needs, frozen as quoted. See the column.
+          destinationDetail: { ...destination, name: input.recipientName?.trim() || destination.name },
+          serviceMode: input.serviceMode === 'simple' ? 'simple' : 'personalised',
+          rushFlag: input.rush ?? false,
+          declaredValueMinor,
+          insuredValueMinor,
+          signatureRequired,
+          addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+          // Stored, because picking a service re-rates from the shipment row: a
+          // box that lived only in the quote would be charged as no box at all.
+          boxSize: box?.key ?? null,
+          customsLines,
+          customerNotes: input.customerNotes?.trim() || null,
+          status: 'requested',
+          currency: DEFAULT_CURRENCY,
+        })
+        .returning();
+    });
     if (!created) throw AppError.validation('Failed to create shipment');
     return created;
   }
@@ -592,11 +632,17 @@ export class ShipmentService {
       .where(staff ? undefined : eq(shipment.userId, actor.id))
       .orderBy(desc(shipment.createdAt));
 
+    const labels = await this.itemLabels(rows.flatMap((r) => (r.shipment.itemIds as string[]) ?? []));
+    const parcels = await this.directParcels(
+      rows.filter((r) => ShipmentService.isDirect(r.shipment)).map((r) => r.shipment.id),
+    );
     return rows.map((row) =>
-      this.toTrackingView(row.shipment, {
-        username: row.username,
-        accountName: fullName(row.firstName, row.lastName),
-      }),
+      this.toTrackingView(
+        row.shipment,
+        { username: row.username, accountName: fullName(row.firstName, row.lastName) },
+        labels,
+        parcels,
+      ),
     );
   }
 
@@ -609,7 +655,11 @@ export class ShipmentService {
   private toTrackingView(
     s: typeof shipment.$inferSelect,
     owner: { username: string | null; accountName: string },
+    labels: Map<string, { id: string; serialNumber: string; barcode: string; description: string | null }>,
+    parcels: Awaited<ReturnType<ShipmentService['directParcels']>>,
   ) {
+    const itemIds = (s.itemIds as string[]) ?? [];
+    const direct = parcels.get(s.id);
     return {
       id: s.id,
       code: s.code,
@@ -621,12 +671,34 @@ export class ShipmentService {
       serviceLevel: s.serviceLevel,
       serviceKey: s.serviceKey,
       serviceMode: s.serviceMode,
+      /**
+       * How it ends, and — for a hand delivery — the price somebody worked out.
+       *
+       * The SPA's quotes panel filters on `fulfilmentMethod` and shows
+       * `quoteMinor` with an Accept button, and none of the three was in this
+       * view, so a collector who had been quoted never saw the quote and had no
+       * way to accept it.
+       */
+      fulfilmentMethod: s.fulfilmentMethod,
+      quoteMinor: s.quoteMinor,
+      quoteNotes: s.quoteNotes,
       trackingNumber: s.trackingNumber,
       estimatedDeliveryAt: s.estimatedDeliveryAt,
       rush: s.rushFlag,
       cost: s.cost,
       currency: s.currency,
-      itemIds: (s.itemIds as string[]) ?? [],
+      itemIds,
+      /**
+       * What is printed on each item's label.
+       *
+       * The packing bench checked the operator's scans against nothing: it held
+       * only these ids, which appear on no label, and sent them back as "what was
+       * scanned" — so the server's scan check compared the shipment's list with
+       * itself. With the labels here, the bench can match a real scan to a card.
+       */
+      items: itemIds.map((id) => labels.get(id) ?? { id, serialNumber: null, barcode: null, description: null }),
+      /** A direct-overnight shipment's contents are a parcel, and this is the one. */
+      directParcel: direct ? { code: direct.code, trackingNumber: direct.trackingNumber } : null,
       destinationAddress: s.destinationAddress,
       destinationCountry: s.destinationCountry,
       destinationPostalCode: s.destinationPostalCode,
@@ -715,16 +787,24 @@ export class ShipmentService {
         ? Math.max(1, measuredWeightGrams - (packagingGrams ?? 0))
         : contentsGrams;
 
+    const origin = await this.originAddress();
+    const customsLines = (s.customsLines as CustomsLine[] | null) ?? [];
     const request: RateRequest = {
       destination: destinationOf(s),
-      origin: await this.originAddress(),
+      origin,
       items: [{ weightGrams: measuredContents }],
       rush: s.rushFlag,
       dimensionsCm: profile.dimensionsCm,
       packagingGrams,
       signatureRequired: s.signatureRequired,
+      customs: customsLines.length > 0 ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault') : undefined,
     };
-    const rate: Rate = {
+    return { rate: ShipmentService.chargedRate(s), request };
+  }
+
+  /** The rate a shipment was charged for, with the carrier's handles when it has them. */
+  private static chargedRate(s: typeof shipment.$inferSelect): Rate {
+    return {
       carrier: s.carrier ?? '',
       serviceLevel: s.serviceLevel ?? '',
       costMinor: s.cost ?? 0,
@@ -733,7 +813,75 @@ export class ShipmentService {
       providerShipmentId: s.providerShipmentId ?? undefined,
       providerRateId: s.providerRateId ?? undefined,
     };
-    return { rate, request };
+  }
+
+  /** A direct-overnight shipment: booked against a parcel, with no items by design. */
+  static isDirect(s: Pick<typeof shipment.$inferSelect, 'serviceKey' | 'itemIds'>): boolean {
+    return s.serviceKey === DIRECT_OVERNIGHT_KEY && ((s.itemIds as string[]) ?? []).length === 0;
+  }
+
+  /**
+   * What a direct-overnight label is bought for: a parcel that never became items.
+   *
+   * There is nothing in the vault to build a profile from — `itemIds` is empty
+   * by design, which is why `labelRequest` cannot serve it. The parcel is the
+   * contents: it leaves from the forwarding site it arrived at, as one envelope
+   * weighing what the scale says.
+   */
+  async directLabelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams: number) {
+    const request: RateRequest = {
+      destination: destinationOf(s),
+      origin: await this.originAddress(DIRECT_OVERNIGHT_FACILITY),
+      items: [{ weightGrams: Math.max(1, measuredWeightGrams) }],
+      // The scale weighed the envelope with the cards in it.
+      packagingGrams: 0,
+      rush: s.rushFlag,
+      signatureRequired: s.signatureRequired,
+    };
+    return { rate: ShipmentService.chargedRate(s), request };
+  }
+
+  /**
+   * The parcel each direct shipment was booked for, by shipment id.
+   *
+   * Read from the parcel's own append-only trail: booking a direct shipment
+   * writes a `direct_shipped` event naming the shipment, and that event is the
+   * link — there is no column to drift from it.
+   */
+  async directParcels(shipmentIds: readonly string[], tx?: Database) {
+    const out = new Map<string, { id: string; code: string; trackingNumber: string | null; status: string; facilityId: string }>();
+    if (shipmentIds.length === 0) return out;
+    const shipmentIdOf = sql<string>`${parcelEvent.metadata} ->> 'shipmentId'`;
+    const rows = await (tx ?? this.db)
+      .select({
+        shipmentId: shipmentIdOf,
+        id: parcel.id,
+        code: parcel.code,
+        trackingNumber: parcel.trackingNumber,
+        status: parcel.status,
+        facilityId: parcel.facilityId,
+      })
+      .from(parcelEvent)
+      .innerJoin(parcel, sql`${parcel.id}::text = ${parcelEvent.parcelId}`)
+      .where(and(eq(parcelEvent.eventType, 'direct_shipped'), inArray(shipmentIdOf, [...shipmentIds])));
+    for (const r of rows) out.set(r.shipmentId, r);
+    return out;
+  }
+
+  /**
+   * What is printed on each item's label, by id — so whoever packs a shipment
+   * can check what they scan against what the shipment holds.
+   */
+  private async itemLabels(itemIds: readonly string[]) {
+    const ids = [...new Set(itemIds)].filter((id) => UUID.test(id));
+    const out = new Map<string, { id: string; serialNumber: string; barcode: string; description: string | null }>();
+    if (ids.length === 0) return out;
+    const rows = await this.db
+      .select({ id: item.id, serialNumber: item.serialNumber, barcode: item.barcode, description: item.description })
+      .from(item)
+      .where(inArray(item.id, ids));
+    for (const r of rows) out.set(r.id, r);
+    return out;
   }
 
   /** Rates for a real shipment, with the same constraint annotations a quote has. */
@@ -741,7 +889,13 @@ export class ShipmentService {
     const s = await this.loadFor(shipmentId, actor);
     const { profile } = await this.profileOf(s);
     const addOnKeys = ((s.addOns as { key: string }[]) ?? []).map((a) => a.key);
-    return this.priceServices(profile, addOnKeys, s.rushFlag, await this.memberships.shippingCover(s.userId));
+    return this.priceServices(
+      profile,
+      addOnKeys,
+      s.rushFlag,
+      await this.memberships.shippingCover(s.userId),
+      (s.customsLines as CustomsLine[] | null) ?? null,
+    );
   }
 
   /* ------------------------------------------------------------------
@@ -750,12 +904,7 @@ export class ShipmentService {
 
   async selectRate(shipmentId: string, carrier: string, serviceLevel: string, actor: ShipmentActor) {
     const s = await this.loadFor(shipmentId, actor);
-    if (s.status !== 'requested' && s.status !== 'rates_selected' && s.status !== 'awaiting_payment') {
-      throw new AppError(ErrorCode.CONFLICT, 'Shipment already in progress', 409);
-    }
-    if (s.mergedIntoShipmentId) {
-      throw new AppError(ErrorCode.CONFLICT, 'This request was merged into another', 409);
-    }
+    ShipmentService.assertRateSelectable(s);
 
     const service = findService(carrier, serviceLevel);
     if (!service) throw AppError.validation('Unknown carrier or service');
@@ -778,6 +927,7 @@ export class ShipmentService {
    * for honestly.
    */
   async selectRecommended(shipmentId: string, actor: ShipmentActor) {
+    ShipmentService.assertRateSelectable(await this.loadFor(shipmentId, actor));
     const quoted = await this.rates(shipmentId, actor);
     const best = quoted.find((r) => r.recommended);
     if (!best) {
@@ -786,11 +936,36 @@ export class ShipmentService {
       );
     }
     const s = await this.loadFor(shipmentId, actor);
-    await this.db
-      .update(shipment)
-      .set({ serviceMode: 'simple', updatedAt: new Date() })
-      .where(eq(shipment.id, shipmentId));
-    return this.settle({ ...s, serviceMode: 'simple' }, best, findService(best.carrier, best.serviceLevel)!);
+    return this.settle({ ...s, serviceMode: 'simple' }, best, findService(best.carrier, best.serviceLevel)!, {
+      serviceMode: 'simple',
+    });
+  }
+
+  /**
+   * A rate can be chosen only before anything was charged, and only for a
+   * parcel a carrier is taking.
+   *
+   * `rates_selected` was accepted too, and `settle` charged again without
+   * crediting the first charge: choosing a different service on a paid parcel
+   * paid for it twice. And a hand-delivery or show-pickup request could be
+   * given a carrier rate, which is far cheaper than what was quoted for it.
+   */
+  private static assertRateSelectable(s: typeof shipment.$inferSelect) {
+    if (s.status !== 'requested' && s.status !== 'awaiting_payment') {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        s.status === 'rates_selected'
+          ? 'This shipment is already paid for. Cancel it to choose a different service.'
+          : 'Shipment already in progress',
+        409,
+      );
+    }
+    if (s.mergedIntoShipmentId) {
+      throw new AppError(ErrorCode.CONFLICT, 'This request was merged into another', 409);
+    }
+    if (s.fulfilmentMethod !== 'carrier') {
+      throw new AppError(ErrorCode.CONFLICT, 'This shipment is not going by carrier, so it has no carrier rate.', 409);
+    }
   }
 
   /**
@@ -807,12 +982,13 @@ export class ShipmentService {
     s: typeof shipment.$inferSelect,
     rate: QuotedRate,
     service: CarrierService,
+    extra: { serviceMode?: 'simple' } = {},
   ) {
     const now = new Date();
     const estimatedDeliveryAt = new Date(now.getTime() + rate.estimatedDays * 86_400_000);
-    const balance = await this.wallet.balance(s.userId);
 
     const common = {
+      ...extra,
       carrier: rate.carrier,
       serviceLevel: rate.serviceLevel,
       serviceKey: service.key,
@@ -828,28 +1004,50 @@ export class ShipmentService {
       updatedAt: now,
     };
 
-    if (balance.amount < rate.totalMinor) {
-      const paymentDueAt = new Date(now.getTime() + PAYMENT_WINDOW_DAYS * 86_400_000);
-      await this.db
-        .update(shipment)
-        .set({ ...common, status: 'awaiting_payment', paymentDueAt })
-        .where(eq(shipment.id, s.id));
-      return {
-        status: 'awaiting_payment' as const,
-        carrier: rate.carrier,
-        serviceLevel: rate.serviceLevel,
-        cost: rate.totalMinor,
-        currency: rate.currency,
-        shortfallMinor: rate.totalMinor - balance.amount,
-        paymentDueAt,
-        estimatedDeliveryAt,
-      };
-    }
-
+    /**
+     * One transaction, under the shipment lock and then the wallet lock.
+     *
+     * The balance used to be read before any transaction and the row written by
+     * id alone, so two clicks on a service each found the money, each charged
+     * it, and the worker's expiry sweep could cancel a parcel in the same moment
+     * it was being paid for.
+     */
     return this.db.transaction(async (tx) => {
-      if (rate.membershipCover) await this.memberships.spendShippingCover(tx, s.userId, rate.membershipCover);
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, s.id)).for('update').limit(1);
+      if (!cur) throw AppError.notFound('Shipment not found');
+      ShipmentService.assertRateSelectable(cur);
+
+      const balance = await this.ledger.balanceOf(s.userId, tx);
+      if (balance.amount < rate.totalMinor) {
+        // A held parcel keeps the deadline it was first given: choosing again
+        // does not buy another week.
+        const paymentDueAt = cur.paymentDueAt ?? new Date(now.getTime() + PAYMENT_WINDOW_DAYS * 86_400_000);
+        await tx
+          .update(shipment)
+          .set({ ...common, status: 'awaiting_payment', paymentDueAt })
+          .where(eq(shipment.id, s.id));
+        return {
+          status: 'awaiting_payment' as const,
+          carrier: rate.carrier,
+          serviceLevel: rate.serviceLevel,
+          cost: rate.totalMinor,
+          currency: rate.currency,
+          shortfallMinor: rate.totalMinor - balance.amount,
+          paymentDueAt,
+          estimatedDeliveryAt,
+        };
+      }
+
+      // The cover as spent, with the cycle it came out of, so a cancellation
+      // gives it back to the right one.
+      const spentCover = rate.membershipCover
+        ? await this.memberships.spendShippingCover(tx, s.userId, rate.membershipCover)
+        : null;
       await this.chargeFor(tx, s, rate);
-      await tx.update(shipment).set({ ...common, status: 'rates_selected', paymentDueAt: null }).where(eq(shipment.id, s.id));
+      await tx
+        .update(shipment)
+        .set({ ...common, membershipCover: spentCover, status: 'rates_selected', paymentDueAt: null })
+        .where(eq(shipment.id, s.id));
       return {
         status: 'rates_selected' as const,
         carrier: rate.carrier,
@@ -919,28 +1117,37 @@ export class ShipmentService {
    * (Principle V).
    */
   async pay(shipmentId: string, actor: ShipmentActor) {
-    const s = await this.loadFor(shipmentId, actor);
-    if (s.status !== 'awaiting_payment') {
-      throw new AppError(ErrorCode.CONFLICT, 'This shipment is not awaiting payment', 409);
-    }
-    if (!s.cost || !s.carrier || !s.serviceLevel) {
-      throw AppError.validation('This shipment has no agreed price');
-    }
-    const balance = await this.wallet.balance(s.userId);
-    if (balance.amount < s.cost) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `Short by ${formatMinor(s.cost - balance.amount)}. Top up the wallet and try again.`,
-        409,
-      );
-    }
+    await this.loadFor(shipmentId, actor);
 
-    const service = findService(s.carrier, s.serviceLevel);
-    const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
+    // Everything below under the shipment lock, then the wallet lock — see
+    // `settle`. Two Pay clicks used to charge the parcel twice.
     return this.db.transaction(async (tx) => {
+      const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!s) throw AppError.notFound('Shipment not found');
+      if (s.status !== 'awaiting_payment') {
+        throw new AppError(ErrorCode.CONFLICT, 'This shipment is not awaiting payment', 409);
+      }
+      if (!s.cost || !s.carrier || !s.serviceLevel) {
+        throw AppError.validation('This shipment has no agreed price');
+      }
+      // The items were checked when the rate was chosen, up to a week ago.
+      // Whatever has happened to them since, a parcel is not paid for unless
+      // they are still the collector's, on the shelf and not on hold.
+      await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? [], tx);
+      const balance = await this.ledger.balanceOf(s.userId, tx);
+      if (balance.amount < s.cost) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `Short by ${formatMinor(s.cost - balance.amount)}. Top up the wallet and try again.`,
+          409,
+        );
+      }
+
+      const service = findService(s.carrier, s.serviceLevel);
+      const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
       // The cover the member saw when the rate was chosen, spent now that the
       // money is. If it has gone meanwhile this refuses instead of charging more.
-      if (storedCover) await this.memberships.spendShippingCover(tx, s.userId, storedCover);
+      const spentCover = storedCover ? await this.memberships.spendShippingCover(tx, s.userId, storedCover) : null;
       await this.chargeFor(tx, s, {
         carrier: s.carrier!,
         serviceLevel: s.serviceLevel!,
@@ -963,7 +1170,7 @@ export class ShipmentService {
       });
       await tx
         .update(shipment)
-        .set({ status: 'rates_selected', paymentDueAt: null, updatedAt: new Date() })
+        .set({ status: 'rates_selected', membershipCover: spentCover, paymentDueAt: null, updatedAt: new Date() })
         .where(eq(shipment.id, s.id));
       return { status: 'rates_selected' as const, paid: s.cost };
     });
@@ -980,8 +1187,11 @@ export class ShipmentService {
 
     for (const s of rows) {
       if (!s.paymentDueAt || s.paymentDueAt.getTime() > now.getTime()) continue;
-      await this.db.transaction(async (tx) => {
-        await tx
+      const cancelled = await this.db.transaction(async (tx) => {
+        // Only if it is STILL unpaid. Unconditionally, a parcel paid for in the
+        // seconds between the read above and this write was cancelled anyway,
+        // with the charge kept and the items released.
+        const [row] = await tx
           .update(shipment)
           .set({
             status: 'cancelled',
@@ -989,15 +1199,18 @@ export class ShipmentService {
             cancelReason: `Not paid within ${PAYMENT_WINDOW_DAYS} days`,
             updatedAt: now,
           })
-          .where(eq(shipment.id, s.id));
+          .where(and(eq(shipment.id, s.id), eq(shipment.status, 'awaiting_payment')))
+          .returning({ id: shipment.id });
+        if (!row) return false;
         await this.outbox.emit(tx, {
           aggregateType: 'shipment',
           aggregateId: s.id,
           eventType: 'shipment_expired',
           payload: { userId: s.userId, shipmentCode: s.code, itemCount: ((s.itemIds as string[]) ?? []).length },
         });
+        return true;
       });
-      expired.push(s.id);
+      if (cancelled) expired.push(s.id);
     }
     // Cancelling IS the release. An item in an open shipment never left `stored`
     // — what it lost was the ability to be put on a second parcel — so moving
@@ -1016,9 +1229,11 @@ export class ShipmentService {
       .from(userAccount)
       .where(eq(userAccount.id, s.userId))
       .limit(1);
-    return this.toTrackingView(s, {
-      username: owner?.username ?? null,
-      accountName: fullName(owner?.firstName, owner?.lastName),
-    });
+    return this.toTrackingView(
+      s,
+      { username: owner?.username ?? null, accountName: fullName(owner?.firstName, owner?.lastName) },
+      await this.itemLabels((s.itemIds as string[]) ?? []),
+      ShipmentService.isDirect(s) ? await this.directParcels([s.id]) : new Map(),
+    );
   }
 }

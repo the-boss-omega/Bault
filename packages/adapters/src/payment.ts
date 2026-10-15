@@ -23,6 +23,36 @@ export interface ChargeRequest {
    * order for that exact amount.
    */
   paymentMethodToken?: string;
+  /**
+   * Gives up on the call when aborted.
+   *
+   * A payout used to be awaited with nothing bounding it, from inside a
+   * database transaction: a provider that hung held a pooled connection and
+   * the wallet lock for as long as it hung. The caller passes
+   * `AbortSignal.timeout(...)` and treats the abort as "outcome unknown".
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * A provider call that went wrong, and how wrong.
+ *
+ * `refused` is true only when the provider ANSWERED and the answer proves
+ * nothing was or will be moved — a request it rejected as invalid. Everything
+ * else (a timeout, a dropped connection, a 5xx, an expired credential) leaves
+ * the outcome unknown: the provider may have acted before the failure, so the
+ * caller must not treat it as a refusal and give money back on a guess.
+ */
+export class PaymentProviderError extends Error {
+  readonly status: number | null;
+  readonly refused: boolean;
+
+  constructor(message: string, options: { status?: number | null; refused?: boolean } = {}) {
+    super(message);
+    this.name = 'PaymentProviderError';
+    this.status = options.status ?? null;
+    this.refused = options.refused ?? false;
+  }
 }
 
 export interface ProviderResult {
@@ -62,6 +92,14 @@ export interface PaymentAdapter {
   createTopup(req: ChargeRequest): Promise<ProviderResult>;
   createPayout(req: ChargeRequest & { destinationToken: string }): Promise<ProviderResult>;
   /**
+   * Ask the provider what became of a payout it accepted.
+   *
+   * `providerRef` is the provider's own id for it, as `createPayout` returned.
+   * For reconciliation: a payout PayPal accepts is `pending`, and only this,
+   * or a webhook, says whether it later landed or came back.
+   */
+  getPayout(providerRef: string, options?: { signal?: AbortSignal }): Promise<ProviderResult>;
+  /**
    * Authenticate a webhook delivery and return the parsed event.
    *
    * ASYNC and takes the whole delivery, because real verification is a network
@@ -98,6 +136,24 @@ function toDecimal(amountMinor: number): string {
 
 function toMinor(decimal: string): number {
   return Math.round(Number.parseFloat(decimal) * 100);
+}
+
+/**
+ * What a PayPal payout ITEM's `transaction_status` means for the collector.
+ *
+ * The item, not the batch: a batch is `SUCCESS` once PayPal has processed it,
+ * which says nothing about whether this one recipient was paid — an item in a
+ * successful batch can still be UNCLAIMED and come back thirty days later.
+ * UNCLAIMED and ONHOLD are therefore still pending; only SUCCESS is money that
+ * landed, and the statuses below are money that did not.
+ */
+export function paypalPayoutItemOutcome(transactionStatus: string | undefined): ProviderResult['status'] {
+  const s = (transactionStatus ?? '').toUpperCase();
+  if (s === 'SUCCESS') return 'succeeded';
+  if (['FAILED', 'RETURNED', 'BLOCKED', 'REFUNDED', 'REVERSED', 'DENIED', 'CANCELED', 'CANCELLED'].includes(s)) {
+    return 'failed';
+  }
+  return 'pending';
 }
 
 /**
@@ -158,7 +214,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
    * capture, and a failed capture on a payment the payer already approved is the
    * worst possible moment to be clever about caching.
    */
-  private async accessToken(): Promise<string> {
+  private async accessToken(signal?: AbortSignal): Promise<string> {
     const now = Date.now();
     if (this.token && this.token.expiresAt > now) return this.token.value;
 
@@ -172,9 +228,14 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
+      signal,
     });
     if (!res.ok) {
-      throw new Error(`PayPal auth failed (${res.status}). Check the client id and secret.`);
+      // Not a refusal of any payment: nothing was asked for yet, and fixing the
+      // credential and asking again is the remedy.
+      throw new PaymentProviderError(`PayPal auth failed (${res.status}). Check the client id and secret.`, {
+        status: res.status,
+      });
     }
     const body = (await res.json()) as { access_token: string; expires_in: number };
     this.token = {
@@ -185,7 +246,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
   }
 
   private async call<T>(path: string, init: RequestInit & { idempotencyKey?: string }): Promise<T> {
-    const token = await this.accessToken();
+    const token = await this.accessToken(init.signal ?? undefined);
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -198,7 +259,12 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
     const res = await this.fetchImpl(`${this.base}${path}`, { ...init, headers });
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`PayPal ${path} failed (${res.status}): ${text.slice(0, 400)}`);
+      // 400 and 422 are PayPal validating the request and rejecting it: nothing
+      // was created. Any other failure may have happened after it acted.
+      throw new PaymentProviderError(`PayPal ${path} failed (${res.status}): ${text.slice(0, 400)}`, {
+        status: res.status,
+        refused: res.status === 400 || res.status === 422,
+      });
     }
     return (text ? JSON.parse(text) : {}) as T;
   }
@@ -223,18 +289,37 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
       id: string;
       status: string;
       purchase_units?: {
-        payments?: { captures?: { id: string; amount: { value: string; currency_code: string } }[] };
+        payments?: {
+          captures?: { id: string; status?: string; amount: { value: string; currency_code: string } }[];
+        };
       }[];
     }>(`/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
       method: 'POST',
       body: '{}',
       idempotencyKey: req.idempotencyKey,
+      signal: req.signal,
     });
 
     const capture = body.purchase_units?.[0]?.payments?.captures?.[0];
+    /**
+     * The CAPTURE's status, never the order's.
+     *
+     * PayPal marks an order COMPLETED once it has been captured, while the
+     * capture inside it can still be PENDING — an eCheck, a payment held for
+     * review — and may yet be declined. Reading the order credited a wallet
+     * for money that had not arrived and might never (F028). No capture at all
+     * is pending too: nothing has been taken yet.
+     */
+    const captureStatus = (capture?.status ?? '').toUpperCase();
+    const status: ProviderResult['status'] =
+      captureStatus === 'COMPLETED'
+        ? 'succeeded'
+        : captureStatus === 'DECLINED' || captureStatus === 'FAILED'
+          ? 'failed'
+          : 'pending';
     return {
       providerRef: capture?.id ?? body.id,
-      status: body.status === 'COMPLETED' ? 'succeeded' : 'pending',
+      status,
       // Reported so the caller can refuse a mismatch. The adapter does not
       // decide what a discrepancy means — that is a ledger decision.
       settledAmountMinor: capture ? toMinor(capture.amount.value) : undefined,
@@ -269,6 +354,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
       {
         method: 'POST',
         idempotencyKey: req.idempotencyKey,
+        signal: req.signal,
         body: JSON.stringify({
           sender_batch_header: {
             sender_batch_id: req.idempotencyKey,
@@ -292,6 +378,29 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
       providerRef: body.batch_header.payout_batch_id,
       status: status === 'SUCCESS' ? 'succeeded' : status === 'DENIED' ? 'failed' : 'pending',
     };
+  }
+
+  /**
+   * What became of a payout batch, read from its one item.
+   *
+   * Bault sends one item per batch (one cash-out, one recipient), so the item's
+   * `transaction_status` is the answer. A batch with no item yet is pending,
+   * unless PayPal denied or cancelled the batch as a whole.
+   */
+  async getPayout(providerRef: string, options: { signal?: AbortSignal } = {}): Promise<ProviderResult> {
+    const body = await this.call<{
+      batch_header: { payout_batch_id: string; batch_status: string };
+      items?: { transaction_status?: string }[];
+    }>(`/v1/payments/payouts/${encodeURIComponent(providerRef)}`, { method: 'GET', signal: options.signal });
+
+    const item = body.items?.[0];
+    const batch = (body.batch_header?.batch_status ?? '').toUpperCase();
+    const status: ProviderResult['status'] = item
+      ? paypalPayoutItemOutcome(item.transaction_status)
+      : batch === 'DENIED' || batch === 'CANCELED'
+        ? 'failed'
+        : 'pending';
+    return { providerRef: body.batch_header?.payout_batch_id ?? providerRef, status };
   }
 
   /**
@@ -378,11 +487,63 @@ export class SandboxPaymentAdapter implements PaymentAdapter {
       settledCurrency: req.currency,
     };
   }
+  /**
+   * A payout, scripted by its destination.
+   *
+   * With no instruction it settles at once, as it always has. A destination
+   * containing one of these stages the case a real provider produces and a
+   * sandbox otherwise never would, so every outcome of a cash-out can be
+   * exercised end to end against a running API:
+   *
+   *   +payout-pending   accepted, and stays pending however often it is asked
+   *   +payout-settles   accepted; asked again, it has landed
+   *   +payout-bounces   accepted; asked again, it came back
+   *   +payout-refused   refused outright
+   *   +payout-lost      paid, but the answer is lost: the first call throws, and
+   *                     a retry with the same key reports it paid
+   *   +payout-slow      settles after three seconds
+   *   +payout-hang      never answers until the caller gives up
+   *
+   * The outcome a later `getPayout` reports is carried in the reference, so it
+   * survives a restart of the API.
+   */
   async createPayout(req: ChargeRequest & { destinationToken: string }): Promise<ProviderResult> {
-    return { providerRef: `sbx_payout_${req.idempotencyKey}`, status: 'succeeded' };
+    const to = req.destinationToken ?? '';
+    const ref = (tag: string) => `sbx_payout_${tag}${req.idempotencyKey}`;
+    if (to.includes('+payout-refused')) return { providerRef: ref(''), status: 'failed' };
+    if (to.includes('+payout-pending')) return { providerRef: ref('pending_'), status: 'pending' };
+    if (to.includes('+payout-settles')) return { providerRef: ref('settles_'), status: 'pending' };
+    if (to.includes('+payout-bounces')) return { providerRef: ref('bounces_'), status: 'pending' };
+    if (to.includes('+payout-lost') && !this.answered.has(req.idempotencyKey)) {
+      this.answered.add(req.idempotencyKey);
+      throw new PaymentProviderError('sandbox: the connection dropped after the payout was sent');
+    }
+    if (to.includes('+payout-slow')) await waitOrAbort(3_000, req.signal);
+    if (to.includes('+payout-hang')) await waitOrAbort(24 * 60 * 60 * 1000, req.signal);
+    return { providerRef: ref(''), status: 'succeeded' };
   }
+  async getPayout(providerRef: string): Promise<ProviderResult> {
+    if (providerRef.startsWith('sbx_payout_settles_')) return { providerRef, status: 'succeeded' };
+    if (providerRef.startsWith('sbx_payout_bounces_')) return { providerRef, status: 'failed' };
+    if (providerRef.startsWith('sbx_payout_pending_')) return { providerRef, status: 'pending' };
+    return { providerRef, status: 'succeeded' };
+  }
+  /** Keys whose first payout call has already "lost" its answer. */
+  private readonly answered = new Set<string>();
   async verifyWebhook(delivery: WebhookDelivery): Promise<WebhookEvent> {
     const parsed = JSON.parse(delivery.rawBody) as Partial<WebhookEvent>;
     return { id: parsed.id ?? 'sbx_evt', type: parsed.type ?? 'unknown', data: parsed.data ?? {} };
   }
+}
+
+/** Resolve after `ms`, or reject as soon as `signal` aborts. */
+function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new PaymentProviderError('sandbox: the call was abandoned'));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new PaymentProviderError('sandbox: the call was abandoned'));
+    });
+  });
 }

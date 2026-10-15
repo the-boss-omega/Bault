@@ -11,6 +11,7 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { item } from '../cst/cst.schema';
 import { transaction } from '../mkt/mkt.schema';
 import { ServiceRequestService } from './service.service';
+import { assertQuotable } from './custom-request.service';
 
 /** Fields the operator MUST fill to quote on a buyout (Requirement 5.4). */
 export interface BuyoutQuoteForm {
@@ -81,9 +82,13 @@ export class BuyoutService {
     if (form.itemVerified !== true) throw AppError.validation('Verify the item before quoting');
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'buyout') throw AppError.validation('Not a buyout request');
+      // The same guard as a custom quote: an accepted buyout has already moved
+      // the card and the money, and a fresh figure on it would offer the
+      // collector a second payment for one card.
+      assertQuotable('buyout', ((req.typeFields as Record<string, unknown>) ?? {}).stage);
 
       const updated = await this.requests.setStatus(tx, requestId, 'in_progress', {
         stage: 'quoted',
@@ -114,7 +119,7 @@ export class BuyoutService {
    */
   async accept(ownerId: string, requestId: string) {
     return this.custody.run(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== ownerId) throw AppError.notFound('Request not found');
       if (req.type !== 'buyout') throw AppError.validation('Not a buyout request');
       if (!req.itemId) throw AppError.validation('Request has no item');
@@ -144,7 +149,7 @@ export class BuyoutService {
         tx,
       );
 
-      await this.custody.transferOwnership(tx, req.itemId, platformId, ownerId, 'buyout accepted');
+      await this.custody.transferOwnership(tx, req.itemId, platformId, ownerId, 'buyout accepted', { ownerId });
       await this.custody.changeState(tx, req.itemId, 'sold', ownerId, 'bought by Bault');
 
       const [txn] = await tx
@@ -175,7 +180,7 @@ export class BuyoutService {
   /** Step 3, the other way. The card stays exactly where it is. */
   async decline(ownerId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== ownerId) throw AppError.notFound('Request not found');
       if (req.type !== 'buyout') throw AppError.validation('Not a buyout request');
       const fields = (req.typeFields as Record<string, unknown>) ?? {};

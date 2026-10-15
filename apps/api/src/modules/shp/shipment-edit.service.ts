@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -11,6 +11,7 @@ import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
 import { ShipmentService, type ShipmentActor, type ShipmentOptionsInput } from './shipment.service';
+import { MembershipService, type AppliedShippingCover } from '../mem/membership.service';
 import {
   MAX_INSURED_VALUE_MINOR,
   RESTOCKING_FEE_MINOR,
@@ -42,6 +43,7 @@ export class ShipmentEditService {
     private readonly profiles: ParcelProfileService,
     private readonly ledger: LedgerService,
     private readonly outbox: OutboxService,
+    private readonly memberships: MembershipService,
   ) {}
 
   /** Loaded, owned, and still open to change. */
@@ -126,9 +128,14 @@ export class ShipmentEditService {
         recipientName: patch.recipientName?.trim() || s.recipientName,
         updatedAt: new Date(),
       })
-      .where(eq(shipment.id, shipmentId))
+      // Still `requested`: an edit checked before a rate was chosen and paid
+      // for must not land after it, or the parcel leaves holding more than was
+      // charged for.
+      .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
       .returning();
-    if (!updated) throw AppError.validation('Failed to update the shipment');
+    if (!updated) {
+      throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
+    }
     return updated;
   }
 
@@ -199,6 +206,14 @@ export class ShipmentEditService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
+      // Both still open, re-read under their locks in a fixed order, so neither
+      // was paid for or merged elsewhere since the checks above.
+      for (const id of [targetId, sourceId].sort()) {
+        const [row] = await tx.select().from(shipment).where(eq(shipment.id, id)).for('update').limit(1);
+        if (!row || row.status !== 'requested' || row.mergedIntoShipmentId) {
+          throw new AppError(ErrorCode.CONFLICT, 'One of those requests has moved on and can no longer be merged.', 409);
+        }
+      }
       await tx
         .update(shipment)
         .set({
@@ -239,35 +254,90 @@ export class ShipmentEditService {
    * picking. A request nobody has touched is free to abandon, and charging $25
    * for changing your mind thirty seconds after clicking would be indefensible.
    *
-   * The carrier cost is NOT refunded automatically. Postage that has been bought
-   * has been bought; what is refunded is the part Bault has not spent, and
-   * deciding that is a support conversation rather than a rule this can compute.
+   * What was paid for the parcel comes back (F018). This used to keep it all,
+   * on the reasoning that postage once bought has been bought — but a label is
+   * bought at dispatch, and a parcel that can still be cancelled has not been
+   * dispatched. So nothing was spent on it but the picking the fee pays for:
+   * the shipping charge is credited back as a `shipping_refund`, the membership
+   * cover it used goes back to the member's cycle, and the collector is out the
+   * restocking fee and nothing else. A parcel that somehow carries a tracking
+   * number is refunded nothing, because then a label may really have been
+   * bought.
    */
   async cancel(shipmentId: string, actor: ShipmentActor, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
     const s = await this.shipments.loadFor(shipmentId, actor);
 
     const cancellable: readonly string[] = ['requested', 'awaiting_payment', 'rates_selected'];
-    if (!cancellable.includes(s.status)) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `A shipment that is ${s.status.replace(/_/g, ' ')} cannot be cancelled — it is already being packed or has gone.`,
-        409,
-      );
-    }
-
-    // Nothing was picked and nothing was paid, so nothing is owed.
-    const feeMinor = s.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
+    const assertCancellable = (status: string) => {
+      if (!cancellable.includes(status)) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `A shipment that is ${status.replace(/_/g, ' ')} cannot be cancelled — it is already being packed or has gone.`,
+          409,
+        );
+      }
+    };
+    assertCancellable(s.status);
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
+      // Again under the lock: two Cancel clicks each charged the restocking fee,
+      // and a cancel that raced a dispatch relabelled a parcel already on its way.
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur) throw AppError.notFound('Shipment not found');
+      assertCancellable(cur.status);
+      // Nothing was picked and nothing was paid, so nothing is owed.
+      const feeMinor = cur.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
+      const paid = cur.status === 'rates_selected' && !cur.trackingNumber;
+
+      // The shipment, then the wallet, then the member's cycle: the order every
+      // other money path takes them in.
+      await this.ledger.lockWallet(s.userId, tx as Database);
+
+      /**
+       * What the collector actually paid for this parcel, from the charges
+       * themselves rather than from `cost`, so the refund is exactly what left
+       * the wallet for it — the carrier rate, a white-glove quote, a show fee.
+       */
+      let refundedMinor = 0;
+      if (paid) {
+        const [row] = await tx
+          .select({ total: sql<string>`coalesce(sum(${charge.amount}), 0)::text` })
+          .from(charge)
+          .where(
+            and(
+              eq(charge.referenceId, s.id),
+              eq(charge.actionType, 'shipping'),
+              eq(charge.status, 'settled'),
+            ),
+          );
+        refundedMinor = Number(row?.total ?? '0');
+        if (refundedMinor > 0) {
+          await this.ledger.record(
+            {
+              userId: s.userId,
+              type: 'shipping_refund',
+              amount: refundedMinor,
+              direction: 'credit',
+              currency: cur.currency ?? DEFAULT_CURRENCY,
+              referenceType: 'shipment',
+              referenceId: s.id,
+            },
+            tx,
+          );
+        }
+        const cover = (cur.membershipCover as AppliedShippingCover | null) ?? null;
+        if (cover) await this.memberships.returnShippingCover(tx as Database, s.userId, cover);
+      }
+
       if (feeMinor > 0) {
         const [c] = await tx
           .insert(charge)
           .values({
             userId: s.userId,
             actionType: 'shipping',
-            pricingRuleSnapshot: { restockingFee: feeMinor, cancelledFrom: s.status },
+            pricingRuleSnapshot: { restockingFee: feeMinor, cancelledFrom: cur.status },
             amount: feeMinor,
             currency: s.currency ?? DEFAULT_CURRENCY,
             paymentMeans: 'wallet',
@@ -310,11 +380,12 @@ export class ShipmentEditService {
           userId: s.userId,
           shipmentCode: s.code,
           restockingFeeMinor: feeMinor,
+          refundedMinor,
           itemCount: ((s.itemIds as string[]) ?? []).length,
         },
       });
 
-      return { status: 'cancelled' as const, restockingFeeMinor: feeMinor };
+      return { status: 'cancelled' as const, restockingFeeMinor: feeMinor, refundedMinor };
     });
   }
 }

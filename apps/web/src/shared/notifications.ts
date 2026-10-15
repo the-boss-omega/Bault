@@ -52,6 +52,7 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   handed_over: 'notifications.event.handed_over',
   wallet_request_submitted: 'notifications.event.wallet_request_submitted',
   wallet_request_completed: 'notifications.event.wallet_request_completed',
+  wallet_request_payout_failed: 'notifications.event.wallet_request_payout_failed',
   topup_settled: 'notifications.event.topup_settled',
   payment_reversed: 'notifications.event.payment_reversed',
 };

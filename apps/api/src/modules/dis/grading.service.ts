@@ -134,7 +134,7 @@ export class GradingService {
   async approve(adminId: string, requestId: string, approve: boolean, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Record why');
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.approvalRequired !== true) {
@@ -214,7 +214,7 @@ export class GradingService {
         throw new AppError(ErrorCode.CONFLICT, 'That submission has already shipped', 409);
       }
 
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.gradingBody !== sub.gradingBody) {
@@ -260,16 +260,26 @@ export class GradingService {
         throw new AppError(ErrorCode.CONFLICT, 'This submission has already shipped', 409);
       }
 
+      /**
+       * Only the requests still waiting for a grade travel.
+       *
+       * A grade may be recorded before the batch leaves — `complete` allows it
+       * for a card that never went anywhere — and this used to take every member
+       * regardless. The closed one was moved to `at_grader` along with the rest,
+       * and since the only way back to the shelf is completing a request that
+       * was already complete, that card stayed away and unsellable for good.
+       */
       const members = await tx
         .select()
         .from(serviceRequest)
         .where(
           and(
             eq(serviceRequest.type, 'third_party_grading'),
+            eq(serviceRequest.status, 'in_progress'),
             sql`${serviceRequest.typeFields} ->> 'submissionId' = ${submissionId}`,
           ),
         );
-      if (members.length === 0) throw AppError.validation('Nothing is in this submission yet');
+      if (members.length === 0) throw AppError.validation('Nothing in this submission is waiting to be graded');
 
       const now = new Date();
       for (const req of members) {
@@ -314,7 +324,7 @@ export class GradingService {
    */
   async complete(operatorId: string, requestId: string, form: GradingFulfillment) {
     return this.custody.run(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (!req.itemId) throw AppError.validation('Request has no item');
       const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);

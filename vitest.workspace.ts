@@ -27,6 +27,19 @@ const ADAPTERS_SRC = fileURLToPath(new URL('./packages/adapters/src/index.ts', i
 const WEB_MODULES = fileURLToPath(new URL('./apps/web/node_modules', import.meta.url));
 
 /**
+ * What the worker suite needs, for the same reason as the two above.
+ *
+ * The worker's jobs are plain functions over a `pg` Pool, so the suite calls
+ * them directly against the database rather than waiting for pg-boss to fire a
+ * cron. `pg` is a dependency of the worker, not of the root, so it is aliased to
+ * the worker's own copy — the exact driver the jobs run on. `@bault/config` and
+ * `@bault/adapters` point at their SOURCE, so a test exercises the code in the
+ * tree rather than whatever was last built into `dist`.
+ */
+const WORKER_MODULES = fileURLToPath(new URL('./apps/worker/node_modules', import.meta.url));
+const CONFIG_SRC = fileURLToPath(new URL('./packages/config/src/index.ts', import.meta.url));
+
+/**
  * Test workspace (T008 support).
  *
  * Defines the four mandated test suites as named projects so each can be run in
@@ -109,7 +122,38 @@ export default defineWorkspace([
     resolve: { alias: { '@bault/adapters': ADAPTERS_SRC } },
     test: { name: 'core-contract', include: ['tests3/contract/**/*.test.ts'] },
   },
+  /**
+   * The worker: every scheduled job, run against the database the way the
+   * scheduler runs it — and then run AGAIN, and run twice at once, because a
+   * retry after a timeout or a second worker replica is exactly how a job that
+   * bills money ends up billing it twice.
+   *
+   * Needs a migrated, seeded database. The suites that also check what the API
+   * makes of the worker's state (the worker readiness probe, an administrator
+   * changing a status) need the API running too, like `integration`.
+   */
+  {
+    resolve: {
+      alias: {
+        '@bault/adapters': ADAPTERS_SRC,
+        '@bault/config': CONFIG_SRC,
+        pg: `${WORKER_MODULES}/pg/esm/index.mjs`,
+      },
+    },
+    test: {
+      name: 'worker',
+      include: ['tests/worker/**/*.test.ts'],
+      fileParallelism: false,
+      // Two of these start and stop a real worker process.
+      testTimeout: 60_000,
+    },
+  },
   { test: { name: 'web', environment: 'node', include: ['tests/web/**/*.test.ts'] } },
+  /**
+   * The environment schema, alone: what each value parses to and which
+   * configurations production refuses. Needs nothing running.
+   */
+  { test: { name: 'config', environment: 'node', include: ['tests/config/**/*.test.ts'] } },
   /**
    * The one suite that RENDERS.
    *

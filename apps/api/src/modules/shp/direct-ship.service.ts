@@ -151,17 +151,29 @@ export class DirectShipService {
     const premium = insurancePremiumMinor(insuredValueMinor);
     const total = service.flatCostMinor! + premium;
 
-    const balance = await this.wallet.balance(userId);
-    if (balance.amount < total) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `Direct overnight is ${formatMinor(total)} and your balance is ${formatMinor(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
-        409,
-      );
-    }
-
     const now = new Date();
     return this.db.transaction(async (tx) => {
+      /**
+       * The parcel and the wallet are checked again under their locks.
+       *
+       * Both checks used to run before the transaction and the parcel was
+       * written by id alone, so two clicks on Send each found a received parcel
+       * and the money for it, and the collector paid for direct overnight twice.
+       */
+      const [locked] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
+      if (!locked || locked.ownerId !== userId) throw AppError.notFound('Parcel not found');
+      if (locked.status !== 'received' || locked.forwardedAt) {
+        throw new AppError(ErrorCode.CONFLICT, `It is already ${locked.status} — direct shipping only works before it is opened.`, 409);
+      }
+      const balance = await this.ledger.balanceOf(userId, tx);
+      if (balance.amount < total) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `Direct overnight is ${formatMinor(total)} and your balance is ${formatMinor(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
+          409,
+        );
+      }
+
       const [created] = await tx
         .insert(shipment)
         .values({

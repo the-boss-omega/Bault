@@ -123,6 +123,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   /* ---- money ---- */
   { key: 'wallet_request_submitted', category: 'money', label: 'Your wallet request is received', emailByDefault: false },
   { key: 'wallet_request_completed', category: 'money', label: 'Your wallet request is settled', emailByDefault: true },
+  { key: 'wallet_request_payout_failed', category: 'money', label: 'A cash-out could not be paid and is back in your wallet', emailByDefault: true },
   { key: 'topup_settled', category: 'money', label: 'A cash-in settles', emailByDefault: true },
   { key: 'payment_reversed', category: 'money', label: 'A payment into your wallet is reversed', emailByDefault: true },
 

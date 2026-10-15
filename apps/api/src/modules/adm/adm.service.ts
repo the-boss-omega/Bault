@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gte, ilike, not, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, not, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -7,7 +7,7 @@ import { FIXTURE_EMAIL_DOMAIN } from '../../shared/fixtures';
 import { loginAttempt, userAccount } from '../acc/acc.schema';
 import { item, custodyEvent, itemChangeHistory } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
-import { transaction } from '../mkt/mkt.schema';
+import { listing, offer, transaction } from '../mkt/mkt.schema';
 import { PricingService } from '../prc/pricing.service';
 import { LedgerService } from '../pay/ledger.service';
 import { prefixedId, ID_PREFIX } from '../../shared/ids';
@@ -117,7 +117,16 @@ export class AdmService {
 
     const set: Record<string, unknown> = {};
     if (patch.role) set.role = patch.role;
-    if (patch.status) set.status = patch.status;
+    if (patch.status) {
+      set.status = patch.status;
+      // Any status a person sets is a person's decision, so the debt sweep's
+      // marker goes with it (N7). It survived manual changes before: an
+      // administrator who reinstated a debt-suspended account and later
+      // suspended it for some other reason had that suspension lifted by the
+      // next sweep once the balance recovered, because the sweep still took it
+      // for one of its own.
+      set.autoSuspendedAt = null;
+    }
     // An admin who writes a name part has just reviewed it, so the migration's
     // review flag is cleared with it — that is the only thing that clears it here.
     for (const f of ['firstName', 'lastName'] as const) {
@@ -200,6 +209,29 @@ export class AdmService {
       if (patch.ownerId && patch.ownerId !== cur.ownerId) {
         set.ownerId = patch.ownerId;
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'ownership_transfer', prevOwnerId: cur.ownerId, newOwnerId: patch.ownerId, actorId, reason: 'admin edit' });
+
+        /**
+         * The previous owner's listing goes with the previous owner.
+         *
+         * It used to stay live: the card belonged to somebody new, and a buyer
+         * could still buy it from the old owner, who was paid for it. Taken off
+         * sale here, open offers on it closed, and the card put back on the
+         * shelf unless this same edit sets a state of its own.
+         */
+        const removed = await tx
+          .update(listing)
+          .set({ status: 'removed', updatedAt: new Date() })
+          .where(and(eq(listing.itemId, id), eq(listing.status, 'active')))
+          .returning({ id: listing.id });
+        if (removed.length > 0) {
+          await tx
+            .update(offer)
+            .set({ status: 'rejected', updatedAt: new Date() })
+            .where(and(inArray(offer.listingId, removed.map((l) => l.id)), eq(offer.status, 'pending')));
+        }
+        if (cur.lifecycleState === 'listed' && !patch.lifecycleState) {
+          patch = { ...patch, lifecycleState: 'stored' };
+        }
       }
 
       // Bin change → relocate custody event.

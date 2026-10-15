@@ -6,8 +6,15 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { pgErrorCode } from './pg-error';
 import { ErrorCode } from './error-codes';
+import {
+  reportException,
+  type ExceptionReporter,
+  type ReportedRequest,
+} from '../observability/error-reporting';
+import { currentRequestId } from '../observability/logger';
 
 /**
  * Global exception filter (T013). Renders EVERY error into the single problem
@@ -21,11 +28,26 @@ import { ErrorCode } from './error-codes';
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Exceptions');
 
+  /**
+   * Where a server-side failure is reported (step 15). It used to go to stdout
+   * and nowhere else, and nobody is paged by stdout. The reporter is a no-op
+   * unless `SENTRY_DSN` is set; it is a parameter so the filter can be tested
+   * without one.
+   */
+  constructor(private readonly report: ExceptionReporter = reportException) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const res = host.switchToHttp().getResponse<Response>();
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      // A 5xx raised on purpose is still the server failing — except from the
+      // readiness probes, whose 503 is the answer they exist to give and which
+      // the uptime monitor alerts on by itself.
+      if (status >= 500) {
+        const req = requestOf(host);
+        if (!READINESS_PROBE.test(pathOf(req))) this.report(exception, describeRequest(req));
+      }
       const body = exception.getResponse();
       const error =
         typeof body === 'object' && body !== null && 'code' in body
@@ -98,8 +120,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    // Unknown/unexpected error: log server-side, return an opaque 500.
+    // Unknown/unexpected error: log server-side, report it, return an opaque 500.
     this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+    this.report(exception, describeRequest(requestOf(host)));
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: { code: ErrorCode.INTERNAL, message: 'Internal server error', details: {} },
     });
@@ -125,12 +148,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 function isInvalidTextRepresentation(exception: unknown): boolean {
-  return (
-    typeof exception === 'object' &&
-    exception !== null &&
-    'code' in exception &&
-    (exception as { code?: unknown }).code === PG_INVALID_TEXT_REPRESENTATION
-  );
+  return pgErrorCode(exception) === PG_INVALID_TEXT_REPRESENTATION;
 }
 
 /** The HTTP status a connect-style middleware error carries, if it carries one. */
@@ -145,4 +163,39 @@ function statusOf(exception: unknown): number | null {
 function describe(exception: unknown): string {
   if (exception instanceof Error) return `${exception.name}: ${exception.message}`;
   return String(exception);
+}
+
+const READINESS_PROBE = /\/(healthz|readyz)(\/|$)/;
+
+function requestOf(host: ArgumentsHost): Request | undefined {
+  try {
+    return host.switchToHttp().getRequest<Request>();
+  } catch {
+    return undefined;
+  }
+}
+
+function pathOf(req: Request | undefined): string {
+  return (req?.originalUrl || req?.url || '').split('?')[0] ?? '';
+}
+
+/**
+ * What a report says about the request. Everything is passed — headers and body
+ * included, because a body is often the whole explanation — and the error
+ * reporter's scrubber removes cookies, credential headers and the bodies of the
+ * credential routes before anything leaves the process.
+ */
+function describeRequest(req: Request | undefined): ReportedRequest | undefined {
+  if (!req) return undefined;
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(req.headers ?? {})) {
+    if (value !== undefined) headers[name] = Array.isArray(value) ? value.join(', ') : String(value);
+  }
+  return {
+    method: req.method,
+    url: req.originalUrl || req.url,
+    headers,
+    data: req.body,
+    requestId: currentRequestId(),
+  };
 }
