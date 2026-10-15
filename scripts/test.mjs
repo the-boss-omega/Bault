@@ -31,6 +31,7 @@
  * command separator on Windows, so neither works as a package.json one-liner.
  */
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,6 +66,41 @@ function run(command, args) {
 const skipReset =
   process.argv.includes('--no-reset') || process.env.BAULT_TEST_NO_RESET === '1';
 
+/**
+ * A variable as the seed will see it: the process environment first, then the
+ * repo-root `.env`, which is the precedence `loadEnv` gives them. Read by hand
+ * because this script runs with no dependencies; the last assignment wins, as
+ * it does in dotenv.
+ */
+function envValue(key) {
+  if (process.env[key] !== undefined) return process.env[key];
+  let text;
+  try {
+    text = readFileSync(join(repoRoot, '.env'), 'utf8');
+  } catch {
+    return undefined;
+  }
+  let value;
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.*)$`));
+    if (!m) continue;
+    const raw = m[1].trim();
+    const quoted = raw.match(/^(['"])(.*)\1$/);
+    value = quoted ? quoted[2] : raw.replace(/\s+#.*$/, '');
+  }
+  return value;
+}
+
+/**
+ * The reset TRUNCATEs every table, the ledger and the custody trail included.
+ * It ran after every `pnpm test` against whatever database `.env` named, with
+ * nothing to stop it being production. The seed now refuses NODE_ENV=production
+ * on its own; this says so here as well, in words about this script, and fails
+ * the run, because a refused reset leaves the test residue behind.
+ */
+const resetRefused =
+  envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure';
+
 let status = 0;
 for (const suite of SUITES) {
   const code = await run('npx', ['vitest', 'run', ...suite]);
@@ -76,6 +112,13 @@ for (const suite of SUITES) {
 
 if (skipReset) {
   console.log('\nSkipping the database reset (--no-reset).');
+} else if (resetRefused) {
+  console.error(
+    '\nRefusing to reset the database: NODE_ENV=production. The reset TRUNCATEs every table, ' +
+      'the ledger included. If this database is disposable, run `pnpm db:reset` with ' +
+      'ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure yourself.',
+  );
+  status = status || 1;
 } else {
   console.log('\nRestoring the seeded catalogue…');
   const reset = await run('pnpm', ['--filter', '@bault/api', 'db:seed']);
