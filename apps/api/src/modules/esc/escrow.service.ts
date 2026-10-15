@@ -133,6 +133,22 @@ export class EscrowService {
     return deal;
   }
 
+  /**
+   * The deal again, under a row lock, still in a state that allows the step.
+   *
+   * Every step used to check the status on a read made before its transaction
+   * and then write by id alone. A release and a return sent together both saw
+   * `awaiting_release`: the seller was paid and the buyer refunded, for one
+   * deposit. Each step now re-reads here first, so the second of two racing
+   * steps sees what the first one did and is refused.
+   */
+  private async lockDeal(tx: Database, dealId: string, expected: readonly string[]): Promise<Deal> {
+    const [row] = await tx.select().from(escrowDeal).where(eq(escrowDeal.id, dealId)).for('update').limit(1);
+    if (!row) throw AppError.notFound('Deal not found');
+    this.assertStatus(row, expected);
+    return row;
+  }
+
   private assertStatus(deal: Deal, expected: readonly string[]) {
     if (!expected.includes(deal.status)) {
       throw new AppError(
@@ -249,6 +265,7 @@ export class EscrowService {
     }
 
     return this.db.transaction(async (tx) => {
+      const cur = await this.lockDeal(tx, dealId, ['proposed']);
       await tx
         .update(escrowDeal)
         .set({ status: 'agreed', updatedAt: new Date() })
@@ -256,7 +273,7 @@ export class EscrowService {
       await this.writeEvent(tx, {
         dealId,
         eventType: 'agreed',
-        fromStatus: deal.status,
+        fromStatus: cur.status,
         toStatus: 'agreed',
         actorId: actor.id,
         onBehalfOf: external ? deal.counterpartyEmail : null,
@@ -304,6 +321,7 @@ export class EscrowService {
         throw AppError.validation('Record the payment reference you received it under.');
       }
       return this.db.transaction(async (tx) => {
+        await this.lockDeal(tx, dealId, ['agreed']);
         await tx
           .update(escrowDeal)
           .set({
@@ -318,7 +336,7 @@ export class EscrowService {
         await this.writeEvent(tx, {
           dealId,
           eventType: 'funded',
-          fromStatus: deal.status,
+          fromStatus: 'agreed',
           toStatus: 'funded',
           actorId: actor.id,
           notes: `Received off-platform, reference ${reference.trim()}`,
@@ -332,16 +350,20 @@ export class EscrowService {
       throw AppError.forbidden('Only the buyer can fund this deal');
     }
 
-    const balance = await this.ledger.balanceOf(buyerId);
-    if (balance.amount < total) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
-        409,
-      );
-    }
-
     return this.db.transaction(async (tx) => {
+      // Under the deal lock and then the wallet lock: two funding clicks used
+      // to both pass a balance check made outside any transaction and debit
+      // the hold twice.
+      await this.lockDeal(tx, dealId, ['agreed']);
+      const balance = await this.ledger.balanceOf(buyerId, tx);
+      if (balance.amount < total) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `Short by ${formatMinor(total - balance.amount)}. The full amount has to be held before it is sent.`,
+          409,
+        );
+      }
+
       await this.ledger.record(
         {
           userId: buyerId,
@@ -366,7 +388,7 @@ export class EscrowService {
       await this.writeEvent(tx, {
         dealId,
         eventType: 'funded',
-        fromStatus: deal.status,
+        fromStatus: 'agreed',
         toStatus: 'funded',
         actorId: actor.id,
         metadata: { amountMinor: total, source: 'wallet' },
@@ -394,13 +416,33 @@ export class EscrowService {
     const deal = await this.load(dealId);
     this.assertStatus(deal, ['funded']);
 
-    const [it] = await this.db.select().from(item).where(eq(item.id, itemId)).limit(1);
-    if (!it) throw AppError.notFound('Item not found');
-    if (it.lifecycleState !== 'stored') {
-      throw new AppError(ErrorCode.CONFLICT, `That item is ${it.lifecycleState}, not stored`, 409);
-    }
-
     return this.db.transaction(async (tx) => {
+      await this.lockDeal(tx, dealId, ['funded']);
+      const [it] = await tx.select().from(item).where(eq(item.id, itemId)).for('update').limit(1);
+      if (!it) throw AppError.notFound('Item not found');
+      if (it.lifecycleState !== 'stored') {
+        throw new AppError(ErrorCode.CONFLICT, `That item is ${it.lifecycleState}, not stored`, 409);
+      }
+      if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'That item is on hold', 409);
+      // The card a seller with an account puts into the deal has to be theirs,
+      // or settling would hand somebody else's card to the buyer.
+      const { sellerId } = this.sides(deal);
+      if (sellerId && it.ownerId !== sellerId) {
+        throw new AppError(ErrorCode.CONFLICT, "That item is not the seller's", 409);
+      }
+      const [other] = await tx
+        .select({ code: escrowDeal.code })
+        .from(escrowDeal)
+        .where(
+          and(
+            eq(escrowDeal.itemId, itemId),
+            sql`${escrowDeal.id} <> ${dealId}`,
+            sql`${escrowDeal.status} in ('inspecting', 'awaiting_release')`,
+          ),
+        )
+        .limit(1);
+      if (other) throw new AppError(ErrorCode.CONFLICT, `That item is already in deal ${other.code}`, 409);
+
       await tx
         .update(escrowDeal)
         .set({ status: 'inspecting', itemId, itemReceivedAt: new Date(), updatedAt: new Date() })
@@ -408,10 +450,11 @@ export class EscrowService {
       await this.writeEvent(tx, {
         dealId,
         eventType: 'item_received',
-        fromStatus: deal.status,
+        fromStatus: 'funded',
         toStatus: 'inspecting',
         actorId: operatorId,
-        metadata: { itemId, serialNumber: it.serialNumber },
+        // Who owned the card when it came in: settlement moves it only from them.
+        metadata: { itemId, serialNumber: it.serialNumber, ownerId: it.ownerId },
       });
       return { status: 'inspecting' as const, itemId };
     });
@@ -435,6 +478,7 @@ export class EscrowService {
     this.assertStatus(deal, ['inspecting']);
 
     return this.db.transaction(async (tx) => {
+      await this.lockDeal(tx, dealId, ['inspecting']);
       await tx
         .update(escrowDeal)
         .set({
@@ -510,10 +554,17 @@ export class EscrowService {
         ? { buyerReleasedAt: now, buyerReleaseAttestedBy: attested ? actor.id : null }
         : { sellerReleasedAt: now, sellerReleaseAttestedBy: attested ? actor.id : null };
 
-    const buyerDone = releasing === 'buyer' || deal.buyerReleasedAt !== null;
-    const sellerDone = releasing === 'seller' || deal.sellerReleasedAt !== null;
+    /**
+     * The release and, when it is the second one, the settlement, in ONE
+     * transaction under the deal lock. They used to be two, each deciding on a
+     * read made outside it: both sides releasing at once each found the other
+     * already done and each settled, paying the seller twice.
+     */
+    return this.custody.run(async (tx) => {
+      const cur = await this.lockDeal(tx, dealId, ['awaiting_release']);
+      const buyerDone = releasing === 'buyer' || cur.buyerReleasedAt !== null;
+      const sellerDone = releasing === 'seller' || cur.sellerReleasedAt !== null;
 
-    await this.db.transaction(async (tx) => {
       await tx.update(escrowDeal).set({ ...patch, updatedAt: now }).where(eq(escrowDeal.id, dealId));
       await this.writeEvent(tx, {
         dealId,
@@ -521,12 +572,12 @@ export class EscrowService {
         actorId: actor.id,
         onBehalfOf: attested ? deal.counterpartyEmail : null,
       });
-    });
 
-    if (!(buyerDone && sellerDone)) {
-      return { status: 'awaiting_release' as const, buyerReleased: buyerDone, sellerReleased: sellerDone };
-    }
-    return this.settle(dealId, actor.id);
+      if (!(buyerDone && sellerDone)) {
+        return { status: 'awaiting_release' as const, buyerReleased: buyerDone, sellerReleased: sellerDone };
+      }
+      return this.settle(tx, cur, actor.id);
+    });
   }
 
   /**
@@ -536,106 +587,127 @@ export class EscrowService {
    * failed to move the card would leave one stranger paid and the other holding
    * nothing, which is precisely the outcome escrow exists to prevent.
    */
-  private async settle(dealId: string, actorId: string) {
-    return this.custody.run(async (tx) => {
-      const deal = await this.load(dealId, tx);
-      const { buyerId, sellerId } = this.sides(deal);
-      const now = new Date();
+  private async settle(tx: Database, deal: Deal, actorId: string) {
+    const dealId = deal.id;
+    const { buyerId, sellerId } = this.sides(deal);
+    const now = new Date();
 
-      // The seller is paid what was agreed. Where they have no account the
-      // payout happens off-platform and is recorded rather than invented.
-      if (sellerId) {
-        await this.ledger.record(
-          {
-            userId: sellerId,
-            type: 'escrow_release',
-            amount: deal.valueMinor,
-            direction: 'credit',
-            currency: deal.currency,
-            referenceType: 'escrow_deal',
-            referenceId: dealId,
-          },
-          tx,
-        );
-      }
-
-      // The fee falls on whoever raised the deal — they chose the service, and
-      // they are the side that is certainly a Bault account. Their membership
-      // may waive it; the fee frozen on the deal is what they agreed to, and a
-      // waiver can only take from it (`MembershipService.waive`).
-      const waiver = await this.memberships.waive(
-        tx as Database,
-        deal.raisedBy,
-        'escrow_fee',
-        deal.feeMinor,
-        deal.valueMinor,
-        escrowFeeMinor,
+    // The seller is paid what was agreed. Where they have no account the
+    // payout happens off-platform and is recorded rather than invented.
+    if (sellerId) {
+      await this.ledger.record(
+        {
+          userId: sellerId,
+          type: 'escrow_release',
+          amount: deal.valueMinor,
+          direction: 'credit',
+          currency: deal.currency,
+          referenceType: 'escrow_deal',
+          referenceId: dealId,
+        },
+        tx,
       );
-      const feeDue = deal.feeMinor - waiver.waivedMinor;
-      if (feeDue > 0) {
-        const [c] = await tx
-          .insert(charge)
-          .values({
-            userId: deal.raisedBy,
-            actionType: 'service',
-            pricingRuleSnapshot: {
-              escrowFeeBps: ESCROW_FEE_BPS,
-              valueMinor: deal.valueMinor,
-              minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
-              ...(waiver.waivedMinor > 0 ? { grossFeeMinor: deal.feeMinor, membershipWaiver: waiver } : {}),
-            },
-            amount: feeDue,
-            currency: deal.currency,
-            paymentMeans: 'wallet',
-            status: 'settled',
-            referenceId: dealId,
-          })
-          .returning({ id: charge.id });
-        if (!c) throw AppError.validation('Failed to charge the escrow fee');
-        await this.ledger.record(
-          {
-            userId: deal.raisedBy,
-            type: 'fee',
-            amount: feeDue,
-            direction: 'debit',
-            currency: deal.currency,
-            referenceType: 'charge',
-            referenceId: c.id,
+    }
+
+    // The fee falls on whoever raised the deal — they chose the service, and
+    // they are the side that is certainly a Bault account. Their membership
+    // may waive it; the fee frozen on the deal is what they agreed to, and a
+    // waiver can only take from it (`MembershipService.waive`).
+    const waiver = await this.memberships.waive(
+      tx as Database,
+      deal.raisedBy,
+      'escrow_fee',
+      deal.feeMinor,
+      deal.valueMinor,
+      escrowFeeMinor,
+    );
+    const feeDue = deal.feeMinor - waiver.waivedMinor;
+    if (feeDue > 0) {
+      const [c] = await tx
+        .insert(charge)
+        .values({
+          userId: deal.raisedBy,
+          actionType: 'service',
+          pricingRuleSnapshot: {
+            escrowFeeBps: ESCROW_FEE_BPS,
+            valueMinor: deal.valueMinor,
+            minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
+            ...(waiver.waivedMinor > 0 ? { grossFeeMinor: deal.feeMinor, membershipWaiver: waiver } : {}),
           },
-          tx,
-        );
-      }
+          amount: feeDue,
+          currency: deal.currency,
+          paymentMeans: 'wallet',
+          status: 'settled',
+          referenceId: dealId,
+        })
+        .returning({ id: charge.id });
+      if (!c) throw AppError.validation('Failed to charge the escrow fee');
+      await this.ledger.record(
+        {
+          userId: deal.raisedBy,
+          type: 'fee',
+          amount: feeDue,
+          direction: 'debit',
+          currency: deal.currency,
+          referenceType: 'charge',
+          referenceId: c.id,
+        },
+        tx,
+      );
+    }
 
-      // The card. Into the buyer's vault where they have one; otherwise it stays
-      // where it is and a shipment takes it out, which the buyer arranges.
-      if (deal.itemId && buyerId) {
-        await this.custody.transferOwnership(tx, deal.itemId, buyerId, actorId, `escrow ${deal.code}`);
-      }
-
-      await tx
-        .update(escrowDeal)
-        .set({ status: 'settled', settledAt: now, updatedAt: now })
-        .where(eq(escrowDeal.id, dealId));
-      await this.writeEvent(tx, {
-        dealId,
-        eventType: 'settled',
-        fromStatus: 'awaiting_release',
-        toStatus: 'settled',
-        actorId,
-        metadata: { valueMinor: deal.valueMinor, feeMinor: feeDue, waivedMinor: waiver.waivedMinor, settlement: deal.settlement },
+    // The card. Into the buyer's vault where they have one; otherwise it stays
+    // where it is and a shipment takes it out, which the buyer arranges.
+    if (deal.itemId && buyerId) {
+      await this.custody.transferOwnership(tx, deal.itemId, buyerId, actorId, `escrow ${deal.code}`, {
+        ownerId: sellerId ?? (await this.receivedFrom(tx, deal)),
       });
+    }
 
-      const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
-      if (recipients.length > 0) {
-        await this.outbox.emit(tx, {
-          aggregateType: 'escrow_deal',
-          aggregateId: dealId,
-          eventType: 'escrow_settled',
-          payload: { recipientIds: recipients, dealCode: deal.code, amountMinor: deal.valueMinor },
-        });
-      }
-      return { status: 'settled' as const, paidMinor: deal.valueMinor, feeMinor: feeDue };
+    await tx
+      .update(escrowDeal)
+      .set({ status: 'settled', settledAt: now, updatedAt: now })
+      .where(eq(escrowDeal.id, dealId));
+    await this.writeEvent(tx, {
+      dealId,
+      eventType: 'settled',
+      fromStatus: 'awaiting_release',
+      toStatus: 'settled',
+      actorId,
+      metadata: { valueMinor: deal.valueMinor, feeMinor: feeDue, waivedMinor: waiver.waivedMinor, settlement: deal.settlement },
     });
+
+    const recipients = [buyerId, sellerId].filter((id): id is string => Boolean(id));
+    if (recipients.length > 0) {
+      await this.outbox.emit(tx, {
+        aggregateType: 'escrow_deal',
+        aggregateId: dealId,
+        eventType: 'escrow_settled',
+        payload: { recipientIds: recipients, dealCode: deal.code, amountMinor: deal.valueMinor },
+      });
+    }
+    return { status: 'settled' as const, paidMinor: deal.valueMinor, feeMinor: feeDue };
+  }
+
+  /**
+   * Who owned the card when it was booked into the deal, for a seller with no
+   * account. Settlement moves it only from them; if it has changed hands since,
+   * it is no longer the seller's to give. A deal booked in before the owner was
+   * recorded on the event falls back to the current owner, which still checks
+   * state and hold but cannot see a change of hands.
+   */
+  private async receivedFrom(tx: Database, deal: Deal): Promise<string> {
+    const [ev] = await tx
+      .select({ metadata: escrowEvent.metadata })
+      .from(escrowEvent)
+      .where(and(eq(escrowEvent.dealId, deal.id), eq(escrowEvent.eventType, 'item_received')))
+      .orderBy(desc(escrowEvent.occurredAt))
+      .limit(1);
+    const recorded = (ev?.metadata as Record<string, unknown> | null)?.ownerId;
+    if (typeof recorded === 'string') return recorded;
+    const [it] = await tx.select({ ownerId: item.ownerId }).from(item).where(eq(item.id, deal.itemId!)).limit(1);
+    if (!it) throw AppError.notFound('Item not found');
+    return it.ownerId;
   }
 
   /**
@@ -658,7 +730,10 @@ export class EscrowService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
-      if (deal.fundingSource === 'wallet' && buyerId) {
+      // Re-read under the lock: the refund must not follow a settlement (or a
+      // second return) that committed after the read above.
+      const cur = await this.lockDeal(tx, dealId, ['funded', 'inspecting', 'awaiting_release']);
+      if (cur.fundingSource === 'wallet' && buyerId) {
         await this.ledger.record(
           {
             userId: buyerId,
@@ -679,11 +754,11 @@ export class EscrowService {
       await this.writeEvent(tx, {
         dealId,
         eventType: 'returned',
-        fromStatus: deal.status,
+        fromStatus: cur.status,
         toStatus: 'returned',
         actorId: actor.id,
         notes: reason.trim(),
-        metadata: { refundedMinor: deal.fundingSource === 'wallet' ? deal.valueMinor : 0 },
+        metadata: { refundedMinor: cur.fundingSource === 'wallet' ? cur.valueMinor : 0 },
       });
 
       const { sellerId } = this.sides(deal);
@@ -696,7 +771,7 @@ export class EscrowService {
           payload: { recipientIds: recipients, dealCode: deal.code, reason: reason.trim() },
         });
       }
-      return { status: 'returned' as const, refundedMinor: deal.fundingSource === 'wallet' ? deal.valueMinor : 0 };
+      return { status: 'returned' as const, refundedMinor: cur.fundingSource === 'wallet' ? cur.valueMinor : 0 };
     });
   }
 
@@ -707,6 +782,9 @@ export class EscrowService {
     this.assertStatus(deal, ['proposed', 'agreed']);
 
     return this.db.transaction(async (tx) => {
+      // Under the lock, so a cancel cannot land on a deal that was funded in
+      // between and strand the buyer's hold.
+      const cur = await this.lockDeal(tx, dealId, ['proposed', 'agreed']);
       await tx
         .update(escrowDeal)
         .set({ status: 'cancelled', cancelledAt: new Date(), closeReason: reason.trim(), updatedAt: new Date() })
@@ -714,7 +792,7 @@ export class EscrowService {
       await this.writeEvent(tx, {
         dealId,
         eventType: 'cancelled',
-        fromStatus: deal.status,
+        fromStatus: cur.status,
         toStatus: 'cancelled',
         actorId: actor.id,
         notes: reason.trim(),

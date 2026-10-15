@@ -204,21 +204,29 @@ export class HumanFulfilmentService {
    * being given and being accepted would not be a quote.
    */
   async acceptQuote(shipmentId: string, actor: ShipmentActor) {
-    const s = await this.shipments.loadFor(shipmentId, actor);
-    if (s.fulfilmentMethod !== 'hand_delivery') throw AppError.validation('That is not a hand-delivery request');
-    if (s.quoteMinor === null) throw new AppError(ErrorCode.CONFLICT, 'No quote yet', 409);
-    if (s.status !== 'requested') throw new AppError(ErrorCode.CONFLICT, 'Already accepted', 409);
+    await this.shipments.loadFor(shipmentId, actor);
 
-    const balance = await this.ledger.balanceOf(s.userId);
-    if (balance.amount < s.quoteMinor) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `Short by ${formatMinor(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
-        409,
-      );
-    }
-
+    /**
+     * Status, quote and balance are all read under the shipment lock and then
+     * the wallet lock. They used to be read before the transaction, so two
+     * clicks on Accept both saw `requested` and the quote was charged twice.
+     */
     return this.db.transaction(async (tx) => {
+      const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!s) throw AppError.notFound('Shipment not found');
+      if (s.fulfilmentMethod !== 'hand_delivery') throw AppError.validation('That is not a hand-delivery request');
+      if (s.quoteMinor === null) throw new AppError(ErrorCode.CONFLICT, 'No quote yet', 409);
+      if (s.status !== 'requested') throw new AppError(ErrorCode.CONFLICT, 'Already accepted', 409);
+
+      const balance = await this.ledger.balanceOf(s.userId, tx);
+      if (balance.amount < s.quoteMinor) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `Short by ${formatMinor(s.quoteMinor - balance.amount)}. Top up the wallet and accept again.`,
+          409,
+        );
+      }
+
       const [c] = await tx
         .insert(charge)
         .values({
@@ -337,12 +345,21 @@ export class HumanFulfilmentService {
     }
 
     return this.db.transaction(async (tx) => {
+      // The items again, locked, and not on another parcel: two clicks on Book
+      // used to both pass the checks above and pay the show fee twice for the
+      // same cards.
+      await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
+      await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
+
       /**
        * A membership may cover the pickup. Worked out BEFORE the balance check,
        * which used to run against the full fee outside the transaction — so a
        * member whose tier pays for the pickup could be refused for being short of
        * money they were never going to be charged.
        */
+      // Wallet first, then the membership period the waiver writes to: the same
+      // order paying for a parcel takes them in, so the two cannot deadlock.
+      await this.ledger.lockWallet(userId, tx as Database);
       const waiver = await this.memberships.waive(tx as Database, userId, 'show_pickup', show.feeMinor);
       const feeMinor = show.feeMinor - waiver.waivedMinor;
       const balance = await this.ledger.balanceOf(userId, tx as Database);
@@ -450,6 +467,16 @@ export class HumanFulfilmentService {
           scanned: [...scanned],
         });
       }
+
+      /**
+       * Every card must still be the collector's, on the shelf and not on hold.
+       *
+       * Nothing here checked. A card sold on the market after a pickup was booked
+       * was handed at the show to the person who had sold it, and a card frozen
+       * by an operator went out anyway. Locked first, all of them, in one order.
+       */
+      await this.custody.lockItems(tx, [...expected]);
+      for (const itemId of expected) await this.custody.lockExpecting(tx, itemId, { ownerId: s.userId });
 
       const now = new Date();
       const how = s.fulfilmentMethod === 'show_pickup' ? 'collected at a show' : 'hand-delivered';

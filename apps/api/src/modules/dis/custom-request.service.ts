@@ -123,7 +123,7 @@ export class CustomRequestService {
     }
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
 
@@ -156,7 +156,7 @@ export class CustomRequestService {
     if (text.length < 5) throw AppError.validation('Say why this cannot be done.');
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
       if (req.status === 'completed' || req.status === 'cancelled') {
         throw new AppError(ErrorCode.CONFLICT, 'That request is already closed.', 409);
@@ -186,7 +186,7 @@ export class CustomRequestService {
    */
   async acceptQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== requesterId) throw AppError.notFound('Request not found');
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
 
@@ -243,7 +243,7 @@ export class CustomRequestService {
   /** Step 3b — the collector says no. Nothing was charged, so nothing unwinds. */
   async declineQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== requesterId) throw AppError.notFound('Request not found');
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
 
@@ -266,7 +266,7 @@ export class CustomRequestService {
     if (text.length < 5) throw AppError.validation('Record what was done.');
 
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.stage !== 'accepted') {

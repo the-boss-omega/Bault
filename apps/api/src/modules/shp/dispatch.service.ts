@@ -45,6 +45,11 @@ export class DispatchService {
       if (s.status !== 'rates_selected') {
         throw new AppError(ErrorCode.CONFLICT, 'Shipment not ready to dispatch', 409);
       }
+      // A hand-delivery or show pickup is closed by a hand-over, never by a
+      // carrier label bought for a parcel nobody quoted.
+      if (s.fulfilmentMethod !== 'carrier') {
+        throw new AppError(ErrorCode.CONFLICT, 'This shipment is not going by carrier', 409);
+      }
       // Required fulfillment fields must be present (Requirement 5.3).
       if (!form.carrier || !form.fulfillmentNotes || !(form.packageWeightGrams > 0)) {
         throw AppError.validation('Fulfillment form is incomplete');
@@ -70,6 +75,11 @@ export class DispatchService {
        * profile that priced the shipment, with the weight the operator has just
        * read off the scale.
        */
+      // Every card is still the collector's, on the shelf and not on hold, under
+      // its lock — before a label is bought, not merely before it is recorded.
+      await this.custody.lockItems(tx, [...expected]);
+      for (const itemId of expected) await this.custody.lockExpecting(tx, itemId, { ownerId: s.userId });
+
       const { rate, request } = await this.shipments.labelRequest(s, form.packageWeightGrams);
       const label = await this.shipping.buyLabel(rate, request);
 

@@ -10,6 +10,16 @@ import { assertTransition, type LifecycleState } from './lifecycle';
 
 type Tx = Database;
 
+/** What a caller of `transferOwnership` believes is true of the item. */
+export interface TransferExpectation {
+  /** Who owns it now. Anyone else and the transfer is refused. */
+  ownerId: string;
+  /** The lifecycle states it may move from. Defaults to `stored` only. */
+  fromStates?: readonly LifecycleState[];
+  /** Whether an item on hold may move. Defaults to false. */
+  allowHold?: boolean;
+}
+
 /**
  * CST custody service (T043, Principles I–III) — THE correctness kernel.
  *
@@ -39,6 +49,75 @@ export class CustodyService {
       .limit(1);
     if (!row) throw AppError.notFound('Item not found');
     return row;
+  }
+
+  /**
+   * Lock several items at once, always in id order.
+   *
+   * Two operations that each lock the same cards in a different order (a swap
+   * of A for B and another of B for A) would otherwise deadlock. Taking every
+   * lock up front, in one global order, means one simply waits for the other.
+   */
+  async lockItems(tx: Tx, itemIds: readonly string[]) {
+    const rows = [];
+    for (const id of [...new Set(itemIds)].sort()) rows.push(await this.lockItem(tx, id));
+    return rows;
+  }
+
+  /**
+   * Lock an item and check it is still what the caller decided on: this owner,
+   * one of these states, and not on hold. For the paths that change an item
+   * without transferring it (a discard, a split) but decided to on an earlier
+   * read, exactly like `transferOwnership`.
+   */
+  async lockExpecting(tx: Tx, itemId: string, expect: TransferExpectation) {
+    const current = await this.lockItem(tx, itemId);
+    CustodyService.assertExpected(current, expect);
+    return current;
+  }
+
+  private static assertExpected(
+    current: { id: string; ownerId: string; holdFlag: boolean; lifecycleState: string; isLot: boolean; lotBroken: boolean },
+    expect: TransferExpectation,
+  ) {
+    const itemId = current.id;
+    if (current.ownerId !== expect.ownerId) {
+      throw new AppError(
+        ErrorCode.ITEM_NO_LONGER_AVAILABLE,
+        'This card has changed hands since this was arranged.',
+        409,
+        { itemId },
+      );
+    }
+    if (current.holdFlag && !expect.allowHold) {
+      throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409, { itemId });
+    }
+    const fromStates = expect.fromStates ?? ['stored'];
+    if (!fromStates.includes(current.lifecycleState as LifecycleState)) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        `This card is ${current.lifecycleState}, so this cannot go ahead now.`,
+        409,
+        { itemId, state: current.lifecycleState },
+      );
+    }
+    CustodyService.assertNotSplitLot(current);
+  }
+
+  /**
+   * A lot that has been split is a record of where its cards came from, not a
+   * thing that still exists: every card in it is now its own item. Selling,
+   * shipping or giving away the parent would hand over the same cards twice.
+   */
+  private static assertNotSplitLot(current: { id: string; isLot: boolean; lotBroken: boolean }) {
+    if (current.isLot && current.lotBroken) {
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        'This lot has been split, and its cards are separate items now.',
+        409,
+        { itemId: current.id },
+      );
+    }
   }
 
   /** Create a brand-new item and its first custody event (intake). */
@@ -143,9 +222,28 @@ export class CustodyService {
     });
   }
 
-  /** Transfer ownership (sale/swap/transfer/gift); logs an ownership_transfer event. */
-  async transferOwnership(tx: Tx, itemId: string, newOwnerId: string, actorId: string, reason: string) {
-    const current = await this.lockItem(tx, itemId);
+  /**
+   * Transfer ownership (sale/swap/transfer/gift); logs an ownership_transfer event.
+   *
+   * The caller says who it believes owns the item, and in what state, and the
+   * transfer happens only if that is still true under the row lock. Callers
+   * used to decide on a read made earlier — when a swap was proposed, when a
+   * listing was created, when a deal was raised — and this method moved the item
+   * from whoever owned it NOW. A card sold on the market after a swap was
+   * proposed was then handed by the swap to a third person; a listing left
+   * behind by an admin reassignment sold the new owner's card and paid the old
+   * one. Every path that moves ownership comes through here, so the check lives
+   * here and no caller can forget it.
+   */
+  async transferOwnership(
+    tx: Tx,
+    itemId: string,
+    newOwnerId: string,
+    actorId: string,
+    reason: string,
+    expect: TransferExpectation,
+  ) {
+    const current = await this.lockExpecting(tx, itemId, expect);
     await tx.update(item).set({ ownerId: newOwnerId, updatedAt: new Date() }).where(eq(item.id, itemId));
     await tx.insert(custodyEvent).values({
       itemId,
@@ -160,6 +258,9 @@ export class CustodyService {
   /** Change lifecycle state through a validated transition; logs a state_change event. */
   async changeState(tx: Tx, itemId: string, newState: LifecycleState, actorId: string, reason: string) {
     const current = await this.lockItem(tx, itemId);
+    // Back to the shelf is always allowed; anything else would move cards that
+    // now exist as separate items.
+    if (newState !== 'stored' && current.lifecycleState !== newState) CustodyService.assertNotSplitLot(current);
     assertTransition(current.lifecycleState as LifecycleState, newState);
     await tx.update(item).set({ lifecycleState: newState, updatedAt: new Date() }).where(eq(item.id, itemId));
     await tx.insert(custodyEvent).values({
