@@ -137,6 +137,23 @@ const BaseSchema = z.object({
   PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Bault cash-out'),
 
   /**
+   * Who sends a cash-out's money.
+   *
+   *   `provider` — completing a cash-out pays it through the payment provider
+   *                (PayPal Payouts), and the provider's answer settles it.
+   *   `manual`   — an administrator sends the money themselves, by PayPal or
+   *                bank transfer, and completing the cash-out RECORDS that: the
+   *                provider is never called, and the reference of the payment
+   *                they made is required and kept on the request.
+   *
+   * `manual` exists so Bault can launch before PayPal approves the account for
+   * Payouts. It is a deliberate operating mode, not a degraded one: every
+   * cash-out still has a debit, a payment row and an outside reference that a
+   * reconciliation can match against the statement.
+   */
+  PAYOUT_MODE: z.enum(['provider', 'manual']).default('provider'),
+
+  /**
    * Browser origins allowed to call this API with credentials.
    *
    * Comma-separated. Empty means same-origin only, which is what the Vite dev

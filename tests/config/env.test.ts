@@ -75,6 +75,15 @@ describe('environment schema', () => {
     await expect(load({ ...PROD, EXPOSE_API_DOCS: 'true' })).rejects.toThrow(/API_DOCS_PASSWORD/);
   });
 
+  it('pays cash-outs through the provider unless told to record manual payouts', async () => {
+    // Manual mode is how Bault launches before PayPal approves it for Payouts:
+    // an administrator pays by hand and records the reference.
+    expect((await load(DEV)).PAYOUT_MODE).toBe('provider');
+    expect((await load({ ...DEV, PAYOUT_MODE: 'manual' })).PAYOUT_MODE).toBe('manual');
+    expect((await load({ ...PROD, PAYOUT_MODE: 'manual' })).PAYOUT_MODE).toBe('manual');
+    await expect(load({ ...DEV, PAYOUT_MODE: 'cheque' })).rejects.toThrow(/PAYOUT_MODE/);
+  });
+
   it('reports the production refusals even when a required variable is also missing', async () => {
     const attempt = load({ ...PROD, DATABASE_URL: undefined, STORAGE_PROVIDER: 'sandbox' });
     await expect(attempt).rejects.toThrow(/DATABASE_URL/);
