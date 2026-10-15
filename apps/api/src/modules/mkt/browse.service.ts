@@ -4,6 +4,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
+import { clampLimit } from '../../shared/query';
 import type { StorageAdapter } from '@bault/adapters';
 import { listing } from './mkt.schema';
 import { item, itemImage } from '../cst/cst.schema';
@@ -82,7 +83,7 @@ export class BrowseService {
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
       .where(and(...conditions))
       .orderBy(order)
-      .limit(Math.min(limit, 200));
+      .limit(clampLimit(limit, { max: 200, fallback: 50 }));
 
     return Promise.all(
       rows.map(async (row) => ({ ...row, imageUrl: await this.newestImageUrl(row.itemId) })),

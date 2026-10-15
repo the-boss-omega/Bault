@@ -297,6 +297,38 @@ describe('quantity and size limits', () => {
     }
   });
 
+  it('refuses a listing limit that is not a positive whole number, and caps a large one (N3)', async () => {
+    /**
+     * `GET /marketplace/listings` is public. `?limit=abc` became `Number('abc')`,
+     * NaN, and `Math.min(NaN, 200)` is NaN — which drizzle drops rather than
+     * sends, so the LIMIT vanished and a guest got every active listing with a
+     * signed image URL minted for each. A negative limit went the same way.
+     */
+    const operator = await signIn(SEED.operator);
+    const seller = await signIn(SEED.collector);
+    for (let i = 0; i < 3; i += 1) {
+      const card = await intakeFor(operator, SEED.collector, { description: `N3 listing ${i}` });
+      await seller.post('/marketplace/listings', { itemId: card.id, askingPrice: 10_00 + i });
+    }
+
+    const guest = new Client();
+    for (const limit of ['abc', '-1', '0', '1.5', '1e3', ' ']) {
+      const res = await guest.get(`/marketplace/listings?limit=${encodeURIComponent(limit)}`);
+      expect(res.status, `limit=${JSON.stringify(limit)} was accepted`).toBe(400);
+    }
+
+    const two = await guest.get('/marketplace/listings?limit=2');
+    expect(two.status).toBe(200);
+    expect((two.body as unknown[]).length).toBe(2);
+
+    const huge = await guest.get('/marketplace/listings?limit=500');
+    expect(huge.status).toBe(200);
+    expect((huge.body as unknown[]).length).toBeLessThanOrEqual(200);
+
+    // No limit at all is the default page, not an error.
+    expect((await guest.get('/marketplace/listings')).status).toBe(200);
+  });
+
   it('refuses a shipment with no items at all', async () => {
     const collector = await signIn(SEED.collector);
     const address = await collector.post('/me/addresses', {

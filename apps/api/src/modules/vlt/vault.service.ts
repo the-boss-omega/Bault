@@ -3,6 +3,7 @@ import { and, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
+import { clampLimit } from '../../shared/query';
 import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { StorageAdapter } from '@bault/adapters';
 import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
@@ -190,7 +191,7 @@ export class VaultService {
       .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
-      .limit(Math.min(filter.limit ?? 50, 200));
+      .limit(clampLimit(filter.limit, { max: 200, fallback: 50 }));
   }
 
   /**
@@ -234,7 +235,7 @@ export class VaultService {
    * hides or rewrites it.
    */
   private async listHistory(userId: string, filter: VaultFilter, withReason = true) {
-    const limit = Math.min(filter.limit ?? 50, 200);
+    const limit = clampLimit(filter.limit, { max: 200, fallback: 50 });
 
     // The departure event per item: the most recent custody event that either
     // moved the card away from this customer or moved it to a terminal state.
