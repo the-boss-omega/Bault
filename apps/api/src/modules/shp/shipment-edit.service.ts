@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -126,9 +126,14 @@ export class ShipmentEditService {
         recipientName: patch.recipientName?.trim() || s.recipientName,
         updatedAt: new Date(),
       })
-      .where(eq(shipment.id, shipmentId))
+      // Still `requested`: an edit checked before a rate was chosen and paid
+      // for must not land after it, or the parcel leaves holding more than was
+      // charged for.
+      .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
       .returning();
-    if (!updated) throw AppError.validation('Failed to update the shipment');
+    if (!updated) {
+      throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
+    }
     return updated;
   }
 
@@ -199,6 +204,14 @@ export class ShipmentEditService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
+      // Both still open, re-read under their locks in a fixed order, so neither
+      // was paid for or merged elsewhere since the checks above.
+      for (const id of [targetId, sourceId].sort()) {
+        const [row] = await tx.select().from(shipment).where(eq(shipment.id, id)).for('update').limit(1);
+        if (!row || row.status !== 'requested' || row.mergedIntoShipmentId) {
+          throw new AppError(ErrorCode.CONFLICT, 'One of those requests has moved on and can no longer be merged.', 409);
+        }
+      }
       await tx
         .update(shipment)
         .set({
@@ -248,26 +261,34 @@ export class ShipmentEditService {
     const s = await this.shipments.loadFor(shipmentId, actor);
 
     const cancellable: readonly string[] = ['requested', 'awaiting_payment', 'rates_selected'];
-    if (!cancellable.includes(s.status)) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `A shipment that is ${s.status.replace(/_/g, ' ')} cannot be cancelled — it is already being packed or has gone.`,
-        409,
-      );
-    }
-
-    // Nothing was picked and nothing was paid, so nothing is owed.
-    const feeMinor = s.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
+    const assertCancellable = (status: string) => {
+      if (!cancellable.includes(status)) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `A shipment that is ${status.replace(/_/g, ' ')} cannot be cancelled — it is already being packed or has gone.`,
+          409,
+        );
+      }
+    };
+    assertCancellable(s.status);
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
+      // Again under the lock: two Cancel clicks each charged the restocking fee,
+      // and a cancel that raced a dispatch relabelled a parcel already on its way.
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur) throw AppError.notFound('Shipment not found');
+      assertCancellable(cur.status);
+      // Nothing was picked and nothing was paid, so nothing is owed.
+      const feeMinor = cur.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
+
       if (feeMinor > 0) {
         const [c] = await tx
           .insert(charge)
           .values({
             userId: s.userId,
             actionType: 'shipping',
-            pricingRuleSnapshot: { restockingFee: feeMinor, cancelledFrom: s.status },
+            pricingRuleSnapshot: { restockingFee: feeMinor, cancelledFrom: cur.status },
             amount: feeMinor,
             currency: s.currency ?? DEFAULT_CURRENCY,
             paymentMeans: 'wallet',

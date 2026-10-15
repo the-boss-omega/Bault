@@ -61,12 +61,16 @@ export class PurchaseService {
 
   /**
    * @param priceOverride set by an accepted offer (buy at the offer amount).
+   * @param inSale work that must commit or fail with the sale itself — an
+   *   accepted offer marks itself accepted here, so a sale never happens for an
+   *   offer that was withdrawn in the same moment, and vice versa.
    */
   async purchase(
     buyerId: string,
     listingId: string,
     idempotencyKey: string,
     priceOverride?: number,
+    inSale?: (tx: Database) => Promise<void>,
   ): Promise<PurchaseResult> {
     const endpoint = `purchase:${listingId}`;
     const replay = await this.idempotency.lookup(idempotencyKey, endpoint);
@@ -142,10 +146,17 @@ export class PurchaseService {
 
       // Ownership moves; the item stays on its shelf (no physical movement) and
       // returns to `stored` under the new owner.
-      await this.custody.transferOwnership(tx, l.itemId, buyerId, buyerId, `sale of listing ${listingId}`);
+      // The seller named on the listing must still own the card, and it must
+      // still be the listed card: an admin reassignment or any other transfer
+      // since the listing was made means this sale would pay the wrong person.
+      await this.custody.transferOwnership(tx, l.itemId, buyerId, buyerId, `sale of listing ${listingId}`, {
+        ownerId: l.sellerId,
+        fromStates: ['listed'],
+      });
       await this.custody.changeState(tx, l.itemId, 'stored', buyerId, 'sold');
 
       await tx.update(listing).set({ status: 'sold', updatedAt: new Date() }).where(eq(listing.id, listingId));
+      if (inSale) await inSale(tx as Database);
 
       const [txn] = await tx
         .insert(transaction)

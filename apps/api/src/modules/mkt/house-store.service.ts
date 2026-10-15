@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -238,7 +238,9 @@ export class HouseStoreService {
 
       await tx
         .update(houseListing)
-        .set({ stock: product.stock - 1, updatedAt: new Date() })
+        // Relative, so the `stock >= 0` CHECK refuses an oversell by itself
+        // rather than being handed an absolute figure it cannot question.
+        .set({ stock: sql`${houseListing.stock} - 1`, updatedAt: new Date() })
         .where(eq(houseListing.id, product.id));
 
       const orderCode = prefixedId(ID_PREFIX.houseOrder);

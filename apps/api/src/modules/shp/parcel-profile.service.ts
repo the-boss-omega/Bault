@@ -51,13 +51,17 @@ export class ParcelProfileService {
    *
    * The checks are the same ones shipment creation always ran; they live here
    * now so the edit and merge paths cannot forget one.
+   *
+   * With `tx` the rows are locked, in id order, until the transaction ends, so
+   * the caller can check nothing else has claimed them and then claim them.
    */
   async loadShippableItems(userId: string, itemIds: string[], tx?: Database) {
-    const exec = tx ?? this.db;
     const ids = [...new Set(itemIds.filter(Boolean))];
     if (ids.length === 0) throw AppError.validation('Choose at least one item');
 
-    const rows = await exec.select().from(item).where(inArray(item.id, ids));
+    const rows = tx
+      ? await tx.select().from(item).where(inArray(item.id, ids)).orderBy(item.id).for('update')
+      : await this.db.select().from(item).where(inArray(item.id, ids));
     if (rows.length !== ids.length) throw AppError.validation('One of those items does not exist');
 
     for (const it of rows) {

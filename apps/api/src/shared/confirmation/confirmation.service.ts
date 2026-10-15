@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../errors/app-error';
@@ -63,10 +63,21 @@ export class ConfirmationService {
 
     // Single-use: append-only tables use compensating rows, but confirmation tokens
     // are transient operational state (not history), so a guarded UPDATE is correct here.
-    await this.db
+    // Guarded for real: the update claims the token only if it is still unused
+    // and unexpired. It used to update by id alone, so two submissions of one
+    // token both passed the check above and both carried out the action.
+    const [claimed] = await this.db
       .update(confirmationToken)
       .set({ consumedAt: new Date() })
-      .where(eq(confirmationToken.id, row.id));
+      .where(
+        and(
+          eq(confirmationToken.id, row.id),
+          isNull(confirmationToken.consumedAt),
+          gt(confirmationToken.expiresAt, new Date()),
+        ),
+      )
+      .returning({ id: confirmationToken.id });
+    if (!claimed) throw AppError.tokenExpired('Confirmation token expired or already used');
 
     return row.payload as T;
   }

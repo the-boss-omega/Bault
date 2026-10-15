@@ -96,7 +96,7 @@ export class MediaService {
    */
   async completeVideo(operatorId: string, requestId: string, form: VideoFulfillment) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'video_review') throw AppError.validation('Not a video review request');
       if (!req.itemId) throw AppError.validation('Request has no item');
@@ -159,7 +159,7 @@ export class MediaService {
    */
   async completeInspection(operatorId: string, requestId: string, form: InspectionFulfillment) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
+      const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
       if (req.type !== 'condition_inspection') throw AppError.validation('Not an inspection request');
 

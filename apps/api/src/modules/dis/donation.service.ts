@@ -50,7 +50,7 @@ export class DonationService {
       const req = await this.requests.create(tx, { type: 'donation', requesterId: ownerId, itemId });
       if (!req) throw AppError.validation('Failed to create donation request');
 
-      await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'donation');
+      await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'donation', { ownerId });
       await this.custody.changeState(tx, itemId, 'donated', ownerId, 'donated');
 
       // A donation is an ownership-changing transaction, so it is recorded like

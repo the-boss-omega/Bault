@@ -168,8 +168,20 @@ export class ServiceRequestService {
     );
   }
 
-  async get(requestId: string) {
-    const [row] = await this.db.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).limit(1);
+  /**
+   * One request. Inside a transaction, pass `tx`: the row is then read under a
+   * lock, so the checks the caller makes on it (stage, status, who asked) still
+   * hold when it writes.
+   *
+   * Every step of every request type used to read the request outside its own
+   * transaction, with no lock, and write it back by id. Two clicks on Accept
+   * both saw `quoted`, so a buyout credited the collector twice and a custom
+   * quote charged them twice.
+   */
+  async get(requestId: string, tx?: Database) {
+    const [row] = tx
+      ? await tx.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).for('update').limit(1)
+      : await this.db.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).limit(1);
     if (!row) throw AppError.notFound('Service request not found');
     return row;
   }
@@ -275,6 +287,11 @@ export class ServiceRequestService {
 
     const [cur] = await tx.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).for('update').limit(1);
     if (!cur) throw AppError.notFound('Service request not found');
+    // A closed request stays closed: a second completion would re-run whatever
+    // the caller did before calling this (a credit, a transfer) a second time.
+    if (cur.status === 'completed' || cur.status === 'cancelled') {
+      throw new AppError(ErrorCode.CONFLICT, `That request is already ${cur.status}.`, 409);
+    }
     const merged = { ...((cur.typeFields as Record<string, unknown>) ?? {}), ...mergeFields };
     await tx
       .update(serviceRequest)
