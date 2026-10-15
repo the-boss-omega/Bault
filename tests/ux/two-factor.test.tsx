@@ -239,6 +239,31 @@ describe('a member of staff who has not enrolled', () => {
   });
 });
 
+describe('the app shell', () => {
+  it('holds an administrator who must enrol on the enrolment screen, and asks the console for nothing', async () => {
+    const { default: App } = await import('../../apps/web/src/App');
+    get.mockImplementation(async (path: string) => {
+      if (path === '/me/profile') {
+        return {
+          id: 'me', role: 'admin', status: 'active', email: 'new-admin@bault.dev', username: 'newadmin',
+          firstName: 'New', lastName: 'Admin', fullName: 'New Admin', nameReviewRequired: false,
+          mfaRequired: true, mfaEnabled: false,
+        };
+      }
+      if (path === '/auth/mfa') return { enabled: false, pending: false, required: true, recoveryCodesRemaining: 0 };
+      throw new Error(`the shell asked for ${path}`);
+    });
+    window.location.hash = '#/admin';
+    renderIn(<App />);
+
+    expect(await screen.findByRole('heading', { name: /set up two-factor sign-in to continue/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /set up two-factor sign-in/i })).toBeInTheDocument();
+    // Every one of these would have been refused with `mfa_enrollment_required`.
+    const asked = get.mock.calls.map((c) => c[0]);
+    expect(asked.filter((p) => p !== '/me/profile' && p !== '/auth/mfa')).toEqual([]);
+  });
+});
+
 /* ============================================================
    The administrator's reset
    ============================================================ */
