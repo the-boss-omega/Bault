@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, fundWallet, signIn, type Client } from './helpers/http';
+import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 
 /**
  * Section 9 — money in, money out, and knowing what it costs.
@@ -147,24 +147,36 @@ describe('PAY money in and out', () => {
     expect((await admin.post(`/admin/wallet-requests/${id}/approve`, {})).status).toBe(201);
     expect((await admin.post(`/admin/wallet-requests/${id}/complete`, {})).status).toBe(201);
 
-    // The gross AND the fee both came off. Netting them into one row would hide
-    // the fee from a statement.
-    expect(await balanceOf(collector)).toBe(before - AMOUNT - quote.feeMinor);
+    /**
+     * Exactly what was asked for came off — the fee comes out of it, it is not
+     * added on top. This asserted `AMOUNT + fee` and a withdrawal row of the
+     * full AMOUNT, which is the double-charged fee F004 found: the provider was
+     * paid the net while the ledger took the gross and the fee again.
+     */
+    expect(await balanceOf(collector)).toBe(before - AMOUNT);
 
     const ledger = (await collector.get('/finance/ledger')).body as Array<{
       type: string;
       amount: number;
       direction: string;
+      referenceId: string | null;
     }>;
-    expect(ledger.some((r) => r.type === 'withdrawal' && r.amount === AMOUNT)).toBe(true);
+    // Both numbers on the statement, not netted into one row.
+    expect(ledger.some((r) => r.type === 'withdrawal' && r.referenceId === id && r.amount === quote.netMinor)).toBe(true);
     expect(ledger.some((r) => r.type === 'fee' && r.amount === quote.feeMinor)).toBe(true);
   });
 
-  it('refuses a cash-out the balance cannot cover once the fee is counted', async () => {
+  it('refuses a cash-out the balance no longer covers', async () => {
     const admin = await signIn(SEED.admin);
     const collector = await signIn(SEED.collector2);
+    await fundWallet(SEED.collector2, 5_000);
 
-    // Ask for exactly the balance. The fee has nowhere to come from.
+    /**
+     * The fee comes out of the amount, so asking for the whole balance is fine —
+     * that used to be the case under test, refused for want of room for a fee
+     * added on top (F004). What has to be refused is a balance that has fallen
+     * between approval and completion.
+     */
     const balance = await balanceOf(collector);
     const created = await collector.post('/finance/wallet-requests', {
       type: 'cash_out',
@@ -172,15 +184,22 @@ describe('PAY money in and out', () => {
       currency: 'USD',
       destinationAccount: 'Wise ****9876',
       beneficiaryName: 'Golden Marsh',
+      reference: `drained-${Date.now()}`,
     });
     if (created.status !== 201) return; // above the platform maximum; nothing to test
-
     const id = created.body.id as string;
     await admin.post(`/admin/wallet-requests/${id}/approve`, {});
+
+    // Something else is charged to the wallet in between: an intake fee.
+    const operator = await signIn(SEED.operator);
+    await intakeFor(operator, SEED.collector2);
+    const drained = await balanceOf(collector);
+    expect(drained).toBeLessThan(balance);
+
     const completed = await admin.post(`/admin/wallet-requests/${id}/complete`, {});
     expect(completed.status).toBe(409);
     // Nothing moved.
-    expect(await balanceOf(collector)).toBe(balance);
+    expect(await balanceOf(collector)).toBe(drained);
   });
 
   /* ---------------- chargebacks ---------------- */

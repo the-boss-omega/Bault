@@ -62,9 +62,36 @@ export function cashOutFeeMinor(amountMinor: number): number {
   return Math.max(Math.ceil((amountMinor * CASHOUT_SMALL_BPS) / 10_000), CASHOUT_SMALL_MINIMUM_MINOR);
 }
 
+/**
+ * What a cash-out moves, in one place: the quote, the payout and the ledger all
+ * read it from here.
+ *
+ * The collector asks for `grossMinor`, and that — exactly that — leaves the
+ * wallet: `netMinor` as the withdrawal the provider pays out, and `feeMinor` as
+ * its own row beside it, so the statement still shows both numbers. These three
+ * used to be worked out in three places. The quote promised $193 out of $200;
+ * the provider was sent $193; and the ledger debited $200 AND a $7 fee, so every
+ * cash-out took its fee twice (F004).
+ *
+ * `waivedMinor` is what a membership waived of the fee at completion. It can
+ * only lower the fee — the collector receives more, and is still debited
+ * exactly what they asked for.
+ */
+export interface CashOutSettlement {
+  grossMinor: number;
+  feeMinor: number;
+  netMinor: number;
+}
+
+export function cashOutSettlement(amountMinor: number, waivedMinor = 0): CashOutSettlement {
+  const grossMinor = Math.max(0, amountMinor);
+  const feeMinor = Math.min(grossMinor, Math.max(0, cashOutFeeMinor(grossMinor) - Math.max(0, waivedMinor)));
+  return { grossMinor, feeMinor, netMinor: grossMinor - feeMinor };
+}
+
 /** What actually lands in the collector's account. */
 export function cashOutNetMinor(amountMinor: number): number {
-  return Math.max(0, amountMinor - cashOutFeeMinor(amountMinor));
+  return cashOutSettlement(amountMinor).netMinor;
 }
 
 /* ============================================================

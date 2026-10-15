@@ -97,6 +97,9 @@ const TYPE_META: Record<string, { label: MessageKey; icon: ReactNode }> = {
   fee: { label: 'wallet.type.fee', icon: <IconReceipt /> },
   service_charge: { label: 'wallet.type.service_charge', icon: <IconServices /> },
   withdrawal: { label: 'wallet.type.withdrawal', icon: <IconUpload /> },
+  shipping_refund: { label: 'wallet.type.shipping_refund', icon: <IconPlus /> },
+  service_refund: { label: 'wallet.type.service_refund', icon: <IconPlus /> },
+  payout_reversal: { label: 'wallet.type.payout_reversal', icon: <IconPlus /> },
 };
 
 function typeLabel(t: TranslateFn, type: string): string {

@@ -23,15 +23,25 @@ export type WalletRequestStatus =
   | 'rejected'
   | 'processing'
   | 'completed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'paying'
+  | 'payout_failed';
 
-/** In display order — this is also the order the review queue groups by. */
+/**
+ * In display order — this is also the order the review queue groups by.
+ *
+ * `paying` is a cash-out debited and sent to the payout provider, waiting for
+ * it to confirm; `payout_failed` is one the provider refused or returned, with
+ * the money put back in the wallet.
+ */
 export const WALLET_REQUEST_STATUSES: readonly WalletRequestStatus[] = [
   'submitted',
   'pending_review',
   'approved',
   'processing',
+  'paying',
   'completed',
+  'payout_failed',
   'rejected',
   'cancelled',
 ];
@@ -80,6 +90,8 @@ export interface WalletRequest {
   documentKey: string | null;
   notes: string | null;
   settledLedgerId: string | null;
+  /** What the cash-out's payment is called outside Bault: a provider batch id or a manual transfer's reference. */
+  payoutReference?: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
@@ -104,8 +116,18 @@ export interface WalletRequestEvent {
   occurredAt: string;
 }
 
+/** A cash-out's payment row: what the provider was asked to pay, and where that stands. */
+export interface WalletRequestPayout {
+  id: string;
+  provider: string;
+  status: string;
+  amount: number;
+  externalRef: string | null;
+}
+
 export interface WalletRequestDetail extends WalletRequest {
   history: WalletRequestEvent[];
+  payout?: WalletRequestPayout | null;
 }
 
 export function statusLabel(t: TranslateFn, status: string): string {
@@ -131,8 +153,10 @@ export const WALLET_REQUEST_TONE: Record<string, StatusTone> = {
   pending_review: 'warning',
   approved: 'gold',
   processing: 'info',
+  paying: 'info',
   completed: 'success',
   rejected: 'error',
+  payout_failed: 'error',
   cancelled: 'neutral',
 };
 

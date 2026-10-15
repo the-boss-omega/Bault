@@ -10,12 +10,20 @@ export const BASE = process.env.API_URL ?? 'http://localhost:3000/api/v1';
 export class Client {
   private cookie = '';
 
-  async request(method: string, path: string, body?: unknown) {
-    const res = await fetch(BASE + path, {
+  /**
+   * `base` is for the suites that start a second API with a different
+   * configuration (the manual payout mode) and must talk to that one rather
+   * than the one under `API_URL`.
+   */
+  constructor(private readonly base: string = BASE) {}
+
+  async request(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
+    const res = await fetch(this.base + path, {
       method,
       headers: {
         'Content-Type': 'application/json',
         ...(this.cookie ? { cookie: this.cookie } : {}),
+        ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -26,7 +34,8 @@ export class Client {
   }
 
   get = (p: string) => this.request('GET', p);
-  post = (p: string, b?: unknown) => this.request('POST', p, b);
+  /** `headers` carries what a body cannot, such as an `Idempotency-Key`. */
+  post = (p: string, b?: unknown, headers?: Record<string, string>) => this.request('POST', p, b, headers);
   patch = (p: string, b?: unknown) => this.request('PATCH', p, b);
   /**
    * Added because it was missing, which made the two PUT routes
@@ -85,8 +94,8 @@ export const SEED_USERNAME = {
  * Sign in a seeded account and return an authenticated client. `identifier` is
  * an email OR a username — login accepts either.
  */
-export async function signIn(identifier: string, password = SEED_PASSWORD): Promise<Client> {
-  const c = new Client();
+export async function signIn(identifier: string, password = SEED_PASSWORD, base = BASE): Promise<Client> {
+  const c = new Client(base);
   const res = await c.post('/auth/login', { identifier, password });
   if (res.status !== 200)
     throw new Error(`login failed for ${identifier}: ${JSON.stringify(res.body)}`);

@@ -19,7 +19,9 @@ export type WalletRequestStatus =
   | 'rejected'
   | 'processing'
   | 'completed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'paying'
+  | 'payout_failed';
 
 /**
  * The lifecycle, as an explicit adjacency list.
@@ -35,18 +37,39 @@ export type WalletRequestStatus =
  *
  * `completed` is the ONLY status that moves money, and it is terminal, so a
  * balance can never be changed twice by the same request.
+ *
+ * A cash-out paid through the provider takes one more step, because the money
+ * leaves Bault in two:
+ *
+ *   approved / processing ──▶ paying ──▶ completed
+ *                                  └──▶ payout_failed
+ *
+ * `paying` is entered by the transaction that writes the debit and a pending
+ * payment row, BEFORE the provider is asked; the provider's answer, its
+ * webhook or reconciliation moves it on. There is no way from `paying` to
+ * `rejected`: money that may already have left cannot be refused after the
+ * fact, and a rejection there invited paying it again by hand. A payout the
+ * provider refuses ends `payout_failed`, with the debit reversed by a
+ * compensating credit.
  */
 export const WALLET_REQUEST_TRANSITIONS: Readonly<Record<WalletRequestStatus, readonly WalletRequestStatus[]>> = {
   submitted: ['pending_review', 'approved', 'rejected', 'cancelled'],
   pending_review: ['approved', 'rejected', 'cancelled'],
-  approved: ['processing', 'completed', 'rejected'],
-  processing: ['completed', 'rejected'],
+  approved: ['processing', 'completed', 'paying', 'rejected'],
+  processing: ['completed', 'paying', 'rejected'],
+  paying: ['completed', 'payout_failed'],
   rejected: [],
   completed: [],
   cancelled: [],
+  payout_failed: [],
 };
 
-/** Statuses a request can still move out of — i.e. it is still someone's work. */
+/**
+ * Statuses a request can still move out of before anything is decided — still
+ * somebody's work, and money that has not moved. `paying` is deliberately not
+ * one: its money has already left the wallet, so it is neither a duplicate of a
+ * new request nor money "spoken for" on top of the balance.
+ */
 export const OPEN_WALLET_REQUEST_STATUSES: readonly WalletRequestStatus[] = [
   'submitted',
   'pending_review',

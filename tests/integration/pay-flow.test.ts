@@ -99,17 +99,19 @@ describe('PAY wallet requests', () => {
     await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {});
 
     /**
-     * Cashing out now carries a fee, so the balance moves by the gross AND the
-     * fee. Asserted against the QUOTE rather than a hard-coded figure: the
-     * claim worth defending is that the collector is charged exactly what they
-     * were told before they asked, and a literal here would go stale the moment
-     * the schedule moved.
+     * Cashing out carries a fee, and it comes OUT of the amount: the balance
+     * moves by exactly what was asked for, and what arrives is the quote's net.
+     * This asserted the gross plus the fee — the fee taken twice, F004.
+     * Asserted against the QUOTE rather than a hard-coded figure: the claim
+     * worth defending is that the collector is charged exactly what they were
+     * told before they asked.
      */
     const quote = (await client.get('/finance/cash-out-quote?amountMinor=5000')).body as {
+      amountMinor: number;
       feeMinor: number;
     };
     expect(quote.feeMinor).toBeGreaterThan(0);
-    expect((await client.get('/finance/wallet')).body.amount).toBe(before - 5_000 - quote.feeMinor);
+    expect((await client.get('/finance/wallet')).body.amount).toBe(before - quote.amountMinor);
 
     const ledger = (await client.get('/finance/ledger')).body as { type: string; direction: string }[];
     expect(ledger.some((r) => r.type === 'withdrawal' && r.direction === 'debit')).toBe(true);
