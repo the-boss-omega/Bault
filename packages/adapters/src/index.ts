@@ -10,3 +10,4 @@ export * from './email';
 export * from './storage';
 export * from './s3';
 export * from './select';
+export * from './error-report';
