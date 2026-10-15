@@ -116,6 +116,13 @@ jobs:
       # First, because they are fast and a failure here should not wait behind a
       # database boot. `core` is NOT among them despite the name — it drives the
       # live API, so it runs with the other e2e suites further down.
+      #
+      # The SPA is built first because `no-credentials-in-bundle.test.ts` checks
+      # the BUILT bundle for seeded passwords and addresses. Without a `dist/` it
+      # used to pass without reading anything; it now fails under CI instead.
+      - name: Build the web app
+        run: pnpm --filter @bault/web build
+
       - name: Web unit tests
         run: pnpm test:web
 
