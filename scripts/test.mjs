@@ -27,6 +27,16 @@
  * Skip the reset with `--no-reset` (or `BAULT_TEST_NO_RESET=1`) when you want to
  * inspect what a failing run actually left behind.
  *
+ * THE RESET ALSO RUNS BEFORE EACH DATABASE SUITE, not only at the end. Resetting
+ * only afterwards meant every suite started from whatever the previous one had
+ * left: `fin-invariants` failed after `integration` and passed on a fresh seed
+ * (finding E16), so a red or green result described the run order rather than
+ * the code. The four suites that drive the live API share the seeded accounts,
+ * so each gets its own fresh seed. It costs a few seconds per suite; a result
+ * that depends on the run before it proves nothing. `--no-reset` does not skip
+ * these: the run stops at the first failing suite, before the next seed, so
+ * what that suite left behind is still there to inspect.
+ *
  * Plain Node on purpose: `&&` would skip the reset on failure and `;` is not a
  * command separator on Windows, so neither works as a package.json one-liner.
  */
@@ -37,18 +47,24 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const isWindows = process.platform === 'win32';
 
-/** The suites, in the order the project runs them. */
+/**
+ * The suites, in the order the project runs them. `seed` marks the ones that
+ * drive the live API against the shared seeded accounts and so start from a
+ * fresh seed.
+ */
 const SUITES = [
-  ['--project', 'web'],
-  ['--project', 'config'],
-  ['--project', 'ux'],
-  ['--project', 'contract'],
-  ['--project', 'core-contract'],
-  ['--no-file-parallelism', '--project', 'integration'],
-  ['--no-file-parallelism', '--project', 'core'],
-  ['--no-file-parallelism', '--project', 'concurrency'],
-  ['--no-file-parallelism', '--project', 'property'],
+  { args: ['--project', 'web'] },
+  { args: ['--project', 'config'] },
+  { args: ['--project', 'ux'] },
+  { args: ['--project', 'contract'] },
+  { args: ['--project', 'core-contract'] },
+  { args: ['--no-file-parallelism', '--project', 'integration'], seed: true },
+  { args: ['--no-file-parallelism', '--project', 'core'], seed: true },
+  { args: ['--no-file-parallelism', '--project', 'concurrency'], seed: true },
+  { args: ['--no-file-parallelism', '--project', 'property'], seed: true },
 ];
+
+const seed = () => run('pnpm', ['--filter', '@bault/api', 'db:seed']);
 
 function run(command, args) {
   return new Promise((resolve) => {
@@ -67,7 +83,18 @@ const skipReset =
 
 let status = 0;
 for (const suite of SUITES) {
-  const code = await run('npx', ['vitest', 'run', ...suite]);
+  if (suite.seed) {
+    console.log(`\nSeeding a fresh catalogue for ${suite.args.at(-1)}…`);
+    const seeded = await seed();
+    if (seeded !== 0) {
+      console.error('The seed failed — the database suites cannot start from a known state.');
+      status = seeded;
+      break;
+    }
+  }
+  // `pnpm exec`, not `npx`: with node_modules missing, npx offers to download
+  // whatever vitest is current instead of failing on the one the lockfile pins.
+  const code = await run('pnpm', ['exec', 'vitest', 'run', ...suite.args]);
   if (code !== 0) {
     status = code;
     break; // the remaining suites would run against a half-broken dataset
@@ -78,7 +105,7 @@ if (skipReset) {
   console.log('\nSkipping the database reset (--no-reset).');
 } else {
   console.log('\nRestoring the seeded catalogue…');
-  const reset = await run('pnpm', ['--filter', '@bault/api', 'db:seed']);
+  const reset = await seed();
   if (reset !== 0) {
     console.error('The database reset failed — run `pnpm db:reset` before using the app.');
     status = status || reset;

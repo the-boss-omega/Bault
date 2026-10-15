@@ -24,6 +24,9 @@ coverage/
 
 # Local data volumes
 /data/
+# Database dumps from infra/ops/backup.sh (its default BACKUP_DIR). Every
+# customer's account, address and balance: never in version control.
+backups/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 

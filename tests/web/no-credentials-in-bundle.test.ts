@@ -21,8 +21,12 @@ import { join } from 'node:path';
  * So the check is on the ARTEFACT, not on the source. A guard that looks right
  * is what caused this; only the built output can say whether it worked.
  *
- * Skipped when there is no build to look at — `pnpm --filter @bault/web build`
- * makes it meaningful. CI builds the web app, so it runs there.
+ * Skipped locally when there is no build to look at — `pnpm --filter @bault/web
+ * build` makes it meaningful. In CI a missing build FAILS: this comment used to
+ * say "CI builds the web app, so it runs there", and CI did not, so the one
+ * place guaranteed to run this test always passed it without reading a byte.
+ * `ci.yml` now builds the SPA before the web suite; the failure is what stops a
+ * future edit from quietly dropping that step again.
  */
 
 const DIST = join(process.cwd(), 'apps', 'web', 'dist', 'assets');
@@ -45,9 +49,14 @@ const FORBIDDEN: { needle: string; why: string }[] = [
 describe('the built bundle', () => {
   it('carries no seeded credentials', () => {
     if (!existsSync(DIST)) {
-      // No build here. Nothing to assert, and failing would only teach people
-      // to run the suite with a stale dist/ to keep it quiet.
-      expect(true).toBe(true);
+      // No build here. Locally there is nothing to assert, and failing would
+      // only teach people to run the suite with a stale dist/ to keep it quiet.
+      // In CI (GitHub Actions sets CI=true) the build is a pipeline step, so its
+      // absence is a broken pipeline, not a pass.
+      expect(
+        !process.env.CI,
+        `no build at ${DIST}: CI must run \`pnpm --filter @bault/web build\` before this suite`,
+      ).toBe(true);
       return;
     }
 
