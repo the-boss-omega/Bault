@@ -1,11 +1,13 @@
 import { Body, Controller, Get, Header, HttpCode, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { parse as parseCookie } from 'cookie';
 import type { Request } from 'express';
+import { loadEnv } from '@bault/config';
 import { AuthBucket } from '../../../shared/throttle/auth-bucket';
 import { CurrentUser } from '../../sec/current-user.decorator';
 import type { AuthUser } from '../../sec/auth-context';
 import { CREDENTIAL_ROUTE } from '../auth.controller';
-import { DisableMfaDto, MfaCodeDto } from '../acc.dto';
+import { ConfirmMfaDto, DisableMfaDto, MfaCodeDto } from '../acc.dto';
 import { AllowWithoutMfa } from './allow-without-mfa.decorator';
 import { MfaService } from './mfa.service';
 
@@ -42,15 +44,28 @@ export class MfaController {
     return this.mfa.beginSetup(user.id);
   }
 
-  /** The recovery codes are in this response and nowhere else, ever. */
+  /**
+   * The recovery codes are in this response and nowhere else, ever.
+   *
+   * Asks for the password as well as a code, and ends the account's other
+   * sessions. A session is not proof of who is holding it: without the
+   * password, whoever had lifted a cookie could enrol a phone of their own and
+   * keep the owner out of their own account from then on.
+   */
   @AllowWithoutMfa()
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('confirm')
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
-  async confirm(@CurrentUser() user: AuthUser, @Body() dto: MfaCodeDto) {
-    const { recoveryCodes } = await this.mfa.confirmSetup(user.id, dto.code);
-    return { status: 'enabled', recoveryCodes };
+  async confirm(@CurrentUser() user: AuthUser, @Body() dto: ConfirmMfaDto, @Req() req: Request) {
+    const { recoveryCodes, otherSessionsEnded } = await this.mfa.confirmSetup(
+      user,
+      dto.password,
+      dto.code,
+      this.rawSessionToken(req),
+      this.origin(req),
+    );
+    return { status: 'enabled', recoveryCodes, otherSessionsEnded };
   }
 
   @AuthBucket(CREDENTIAL_ROUTE)
@@ -67,6 +82,12 @@ export class MfaController {
   async disable(@CurrentUser() user: AuthUser, @Body() dto: DisableMfaDto, @Req() req: Request) {
     await this.mfa.disable(user, dto.password, dto.code, this.origin(req));
     return { status: 'disabled' };
+  }
+
+  /** The session this request came in on, which enabling leaves open. */
+  private rawSessionToken(req: Request): string | undefined {
+    if (!req.headers.cookie) return undefined;
+    return parseCookie(req.headers.cookie)[loadEnv().SESSION_COOKIE_NAME];
   }
 
   private origin(req: Request) {

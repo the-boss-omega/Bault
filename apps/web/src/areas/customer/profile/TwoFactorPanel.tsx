@@ -81,9 +81,9 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
       setMode({ kind: 'setup', setup });
     });
 
-  const confirm = (code: string) =>
+  const confirm = (code: string, password: string) =>
     run(async () => {
-      const res = await api.post<{ recoveryCodes: string[] }>('/auth/mfa/confirm', { code: digits(code) });
+      const res = await api.post<{ recoveryCodes: string[] }>('/auth/mfa/confirm', { code: digits(code), password });
       setMode({ kind: 'codes', codes: res.recoveryCodes });
     });
 
@@ -160,7 +160,13 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
                 {mode.setup.secret}
               </code>
             </div>
-            <CodeForm hint={t('mfa.setup.confirmHint')} submitLabel={t('mfa.setup.turnOn')} busy={busy} onSubmit={confirm} />
+            <CodeForm
+              hint={t('mfa.setup.confirmHint')}
+              submitLabel={t('mfa.setup.turnOn')}
+              busy={busy}
+              withPassword
+              onSubmit={confirm}
+            />
           </>
         ) : (
           <>
@@ -180,28 +186,45 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
   );
 }
 
-/** A code from the app, and one action. */
+/**
+ * A code from the app, and one action. `withPassword` asks for the password as
+ * well — turning it on does, so a session on its own cannot enrol a phone.
+ */
 function CodeForm({
   hint,
   submitLabel,
   busy,
+  withPassword = false,
   onSubmit,
   onCancel,
 }: {
   hint: string;
   submitLabel: string;
   busy: boolean;
-  onSubmit: (code: string) => void;
+  withPassword?: boolean;
+  onSubmit: (code: string, password: string) => void;
   onCancel?: () => void;
 }) {
   const { t } = useI18n();
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   function submit(e: FormEvent) {
     e.preventDefault();
-    onSubmit(code);
+    onSubmit(code, password);
   }
   return (
     <form className="stack stack--tight" onSubmit={submit}>
+      {withPassword && (
+        <Field label={t('auth.password')}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            dir="ltr"
+          />
+        </Field>
+      )}
       <Field label={t('mfa.code')} hint={hint}>
         <input
           value={code}
@@ -213,7 +236,12 @@ function CodeForm({
         />
       </Field>
       <div className="row">
-        <Button variant="gold" type="submit" loading={busy} disabled={digits(code).length !== 6}>
+        <Button
+          variant="gold"
+          type="submit"
+          loading={busy}
+          disabled={digits(code).length !== 6 || (withPassword && !password)}
+        >
           {submitLabel}
         </Button>
         {onCancel && (

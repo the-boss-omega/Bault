@@ -58,12 +58,12 @@ describe('enrolling', () => {
 
     const { base32Decode } = await import('../../apps/api/src/modules/acc/mfa/totp');
     const raw = base32Decode(secret);
-    const wrong = await c.post('/auth/mfa/confirm', { code: wrongCode(raw) });
+    const wrong = await c.post('/auth/mfa/confirm', { code: wrongCode(raw), password: MFA_PASSWORD });
     expect(wrong.status).toBe(400);
     expect(wrong.body.error.code).toBe('mfa_code_invalid');
     expect((await c.get('/auth/mfa')).body.enabled).toBe(false);
 
-    const confirmed = await c.post('/auth/mfa/confirm', { code: codeAt(raw) });
+    const confirmed = await c.post('/auth/mfa/confirm', { code: codeAt(raw), password: MFA_PASSWORD });
     expect(confirmed.status).toBe(200);
     expect(confirmed.body.status).toBe('enabled');
     const codes = confirmed.body.recoveryCodes as string[];
@@ -77,8 +77,58 @@ describe('enrolling', () => {
     expect((await c.get('/me/profile')).body).toMatchObject({ mfaEnabled: true });
 
     // Confirming again, or starting over, is refused while it is on.
-    expect((await c.post('/auth/mfa/confirm', { code: codeAt(raw, 1) })).body.error.code).toBe('mfa_already_enabled');
+    expect(
+      (await c.post('/auth/mfa/confirm', { code: codeAt(raw, 1), password: MFA_PASSWORD })).body.error.code,
+    ).toBe('mfa_already_enabled');
     expect((await c.post('/auth/mfa/setup')).body.error.code).toBe('mfa_already_enabled');
+  });
+
+  it('asks for the password before turning it on, so a stolen session cannot enrol its own phone', async () => {
+    // Somebody holding only a session — a cookie lifted from a shared computer —
+    // could otherwise enrol an authenticator of THEIR choosing, and from then on
+    // the owner's password alone no longer gets the owner in. The password is
+    // the thing the session thief does not have.
+    const account = await activeAccount('mfapwd');
+    const c = await passwordOnly(account);
+    const setup = await c.post('/auth/mfa/setup');
+    const { base32Decode } = await import('../../apps/api/src/modules/acc/mfa/totp');
+    const raw = base32Decode(setup.body.secret as string);
+
+    const noPassword = await c.post('/auth/mfa/confirm', { code: codeAt(raw) });
+    expect(noPassword.status).toBe(400);
+    const wrongPassword = await c.post('/auth/mfa/confirm', { code: codeAt(raw), password: 'not the password' });
+    expect(wrongPassword.status).toBe(400);
+    expect(wrongPassword.body.error.code).toBe('mfa_code_invalid');
+    expect((await c.get('/auth/mfa')).body).toMatchObject({ enabled: false, pending: true });
+
+    const [failed] = await sql<{ n: string }>(
+      `SELECT count(*)::text AS n FROM login_attempt WHERE identifier = $1 AND outcome = 'mfa_failed'`,
+      [account.username],
+    );
+    expect(Number(failed!.n)).toBe(1);
+
+    const confirmed = await c.post('/auth/mfa/confirm', { code: codeAt(raw), password: MFA_PASSWORD });
+    expect(confirmed.status).toBe(200);
+  });
+
+  it('ends every other session of the account when it is turned on', async () => {
+    // Turning on a second factor is what somebody does when they suspect their
+    // password is known. A session opened with that password before it was
+    // turned on must not outlive the decision.
+    const account = await activeAccount('mfaend');
+    const other = await passwordOnly(account);
+    const c = await passwordOnly(account);
+    expect((await other.get('/me/profile')).status).toBe(200);
+
+    const setup = await c.post('/auth/mfa/setup');
+    const { base32Decode } = await import('../../apps/api/src/modules/acc/mfa/totp');
+    const raw = base32Decode(setup.body.secret as string);
+    const confirmed = await c.post('/auth/mfa/confirm', { code: codeAt(raw), password: MFA_PASSWORD });
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.otherSessionsEnded).toBe(1);
+
+    expect((await other.get('/me/profile')).status).toBe(401);
+    expect((await c.get('/me/profile')).status).toBe(200);
   });
 
   it('keeps the secret encrypted and the recovery codes only as keyed hashes', async () => {
@@ -181,7 +231,7 @@ describe('signing in with a second factor', () => {
     const { base32Decode } = await import('../../apps/api/src/modules/acc/mfa/totp');
     const secret = base32Decode(setup.body.secret as string);
     const code = codeAt(secret);
-    expect((await c.post('/auth/mfa/confirm', { code })).status).toBe(200);
+    expect((await c.post('/auth/mfa/confirm', { code, password: MFA_PASSWORD })).status).toBe(200);
     const res = await new Client().post('/auth/login/mfa', { challengeToken: await challenge(account), code });
     expect(res.status).toBe(401);
   });

@@ -82,7 +82,7 @@ export async function enrol(c: Client): Promise<{ secret: Buffer; recoveryCodes:
   const setup = await c.post('/auth/mfa/setup');
   expect(setup.status, JSON.stringify(setup.body)).toBe(200);
   const secret = base32Decode(setup.body.secret as string);
-  const confirmed = await c.post('/auth/mfa/confirm', { code: codeAt(secret) });
+  const confirmed = await c.post('/auth/mfa/confirm', { code: codeAt(secret), password: MFA_PASSWORD });
   expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
   return { secret, recoveryCodes: confirmed.body.recoveryCodes as string[] };
 }

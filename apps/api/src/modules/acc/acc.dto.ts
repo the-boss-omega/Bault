@@ -127,6 +127,19 @@ export class MfaCodeDto {
   code!: string;
 }
 
+/**
+ * Turning two-factor sign-in on: a code from the app, and the password. The
+ * password is what keeps a stolen session from enrolling the thief's phone.
+ */
+export class ConfirmMfaDto {
+  @IsString()
+  password!: string;
+
+  @IsString()
+  @MaxLength(32)
+  code!: string;
+}
+
 /** Turning two-factor sign-in off: the password and a current code, both. */
 export class DisableMfaDto {
   @IsString()

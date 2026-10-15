@@ -163,10 +163,14 @@ describe('the account-security screen', () => {
     expect(screen.getByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/code from your authenticator app/i), '654321');
-    post.mockResolvedValueOnce({ status: 'enabled', recoveryCodes: CODES });
+    // The password too: a session alone must not be enough to enrol a phone.
+    const turnOn = screen.getByRole('button', { name: /^turn on$/i });
+    expect(turnOn).toBeDisabled();
+    await user.type(screen.getByLabelText(/^password$/i), 'hunter22');
+    post.mockResolvedValueOnce({ status: 'enabled', recoveryCodes: CODES, otherSessionsEnded: 0 });
     get.mockResolvedValue({ enabled: true, pending: false, required: false, recoveryCodesRemaining: 10 });
-    await user.click(screen.getByRole('button', { name: /^turn on$/i }));
-    expect(post).toHaveBeenLastCalledWith('/auth/mfa/confirm', { code: '654321' });
+    await user.click(turnOn);
+    expect(post).toHaveBeenLastCalledWith('/auth/mfa/confirm', { code: '654321', password: 'hunter22' });
 
     // Every code, and a step that cannot be skipped by accident.
     expect(await screen.findByRole('heading', { name: /save your recovery codes/i })).toBeInTheDocument();

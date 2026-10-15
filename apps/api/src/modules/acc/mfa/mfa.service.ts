@@ -153,8 +153,38 @@ export class MfaService {
    *
    * The step that code belongs to is recorded as used, so the code on the screen
    * at enrolment cannot then be typed again at sign-in by whoever watched it.
+   *
+   * The password is checked first, because a session is not proof of who holds
+   * it: whoever had lifted a cookie could otherwise enrol their own phone, and
+   * from then on the owner's password alone would no longer get the owner in. A
+   * wrong one is a sign-in failure for the lockout, like on every other route
+   * that checks it. Same refusal for a wrong password and a wrong code, so this
+   * route does not tell a session thief which of the two they got right.
+   *
+   * Every OTHER session of the account ends in the same transaction. Turning on
+   * a second factor is what somebody does when they suspect the password is
+   * known, and a session opened with it before must not outlive that decision.
    */
-  async confirmSetup(userId: string, code: string): Promise<{ recoveryCodes: string[] }> {
+  async confirmSetup(
+    user: AuthUser,
+    password: string,
+    code: string,
+    currentSessionToken: string | undefined,
+    origin: ClientOrigin,
+  ): Promise<{ recoveryCodes: string[]; otherSessionsEnded: number }> {
+    const userId = user.id;
+    await this.refuseWhileLocked(userId);
+    const [u] = await this.db
+      .select({ passwordHash: userAccount.passwordHash, username: userAccount.username })
+      .from(userAccount)
+      .where(eq(userAccount.id, userId))
+      .limit(1);
+    if (!u) throw AppError.notFound('Account not found');
+    if (!(await argon2.verify(u.passwordHash, password))) {
+      await this.attempts.record(u.username, userId, 'mfa_failed', origin);
+      throw passwordOrCodeWrong();
+    }
+
     return this.db.transaction(async (tx) => {
       const [f] = await tx.select().from(mfaFactor).where(eq(mfaFactor.userId, userId)).for('update').limit(1);
       if (!f) {
@@ -163,18 +193,25 @@ export class MfaService {
       if (f.enabledAt) throw alreadyEnabled();
 
       const step = matchTotp(this.open(f), normalizeCode(code), Date.now());
-      if (step === null) throw codeInvalid(HttpStatus.BAD_REQUEST);
+      if (step === null) throw passwordOrCodeWrong();
 
       await tx
         .update(mfaFactor)
         .set({ enabledAt: new Date(), lastUsedStep: step })
         .where(and(eq(mfaFactor.userId, userId), isNull(mfaFactor.enabledAt)));
       const recoveryCodes = await this.replaceRecoveryCodes(tx as Exec, userId);
+      const otherSessionsEnded = await this.sessions.revokeAllFor(userId, currentSessionToken, tx as Exec);
       await this.audit.record(
-        { actorId: userId, action: 'mfa.enable', targetEntity: 'user_account', targetId: userId },
+        {
+          actorId: userId,
+          action: 'mfa.enable',
+          targetEntity: 'user_account',
+          targetId: userId,
+          metadata: { otherSessionsEnded },
+        },
         tx as Exec,
       );
-      return { recoveryCodes };
+      return { recoveryCodes, otherSessionsEnded };
     });
   }
 
@@ -247,7 +284,7 @@ export class MfaService {
       }));
     if (!done) {
       await this.attempts.record(u.username, user.id, 'mfa_failed', origin);
-      throw new AppError(ErrorCode.MFA_CODE_INVALID, 'The password or the code is not right.', HttpStatus.BAD_REQUEST);
+      throw passwordOrCodeWrong();
     }
   }
 
@@ -531,6 +568,11 @@ function alreadyEnabled(): AppError {
  * 400 on the signed-in routes, where a 401 would read to the app as "your
  * session has ended".
  */
+/** One refusal for a wrong password and a wrong code, so neither is confirmed on its own. */
+function passwordOrCodeWrong(): AppError {
+  return new AppError(ErrorCode.MFA_CODE_INVALID, 'The password or the code is not right.', HttpStatus.BAD_REQUEST);
+}
+
 export function codeInvalid(status: HttpStatus.UNAUTHORIZED | HttpStatus.BAD_REQUEST): AppError {
   return new AppError(ErrorCode.MFA_CODE_INVALID, 'That code is not right. Check the time on your phone and try the current one.', status);
 }
