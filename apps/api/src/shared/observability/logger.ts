@@ -51,8 +51,42 @@ export function requestContext(req: Request, res: Response, next: NextFunction):
   const requestId =
     (typeof inbound === 'string' && inbound.trim().slice(0, 200)) || randomUUID();
   res.setHeader('x-request-id', requestId);
+
+  /**
+   * One line per request, written when the response has gone: what was asked,
+   * what was answered and how long it took.
+   *
+   * There was no such line. A request only left a trace if something inside it
+   * happened to log, so "sign-in is slow" or "the shelf page is returning 500s"
+   * could only be answered by reproducing it. The path is logged WITHOUT its
+   * query string: the verification and reset links carry their token there.
+   * The probes poll every few seconds and are logged at debug, or they would
+   * be most of the log — a probe answering 503 at warn, since the monitor that
+   * polls it is what pages, and an error line every few seconds would only
+   * bury the one that matters.
+   */
+  const started = process.hrtime.bigint();
+  res.on('finish', () => {
+    const path = (req.originalUrl || req.url || '').split('?')[0] ?? '';
+    const status = res.statusCode;
+    const probe = PROBES.test(path);
+    const level: LogLevel = status >= 500 ? (probe ? 'warn' : 'error') : probe ? 'debug' : 'info';
+    accessLog().line(level, `${req.method} ${path} ${status}`, {
+      requestId,
+      method: req.method,
+      path,
+      status,
+      duration_ms: Number((Number(process.hrtime.bigint() - started) / 1e6).toFixed(1)),
+    });
+  });
+
   context.run({ requestId }, () => next());
 }
+
+const PROBES = /\/(healthz|readyz)(\/|$)/;
+
+let access: StructuredLogger | undefined;
+const accessLog = (): StructuredLogger => (access ??= new StructuredLogger('http'));
 
 /** What a log line always carries, on top of whatever the caller passed. */
 interface Line {
@@ -92,6 +126,11 @@ export class StructuredLogger implements LoggerService {
     stream.write(
       this.json ? `${JSON.stringify(line)}\n` : `${humanLine(line)}\n`,
     );
+  }
+
+  /** A line whose fields sit at the top level, for an aggregator to filter on. */
+  line(level: LogLevel, message: string, fields: Record<string, unknown>): void {
+    this.write(level, message, fields);
   }
 
   log(message: unknown, ...rest: unknown[]): void {

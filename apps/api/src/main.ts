@@ -11,6 +11,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './shared/errors/all-exceptions.filter';
 import { validationException } from './shared/errors/validation-error';
 import { StructuredLogger, requestContext } from './shared/observability/logger';
+import { initErrorReporting } from './shared/observability/error-reporting';
 
 /**
  * Application entry point.
@@ -24,6 +25,14 @@ import { StructuredLogger, requestContext } from './shared/observability/logger'
  */
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
+
+  /**
+   * Error reporting, when `SENTRY_DSN` is set — and nothing at all when it is
+   * not. First, so a failure while the application is being built is reported
+   * too. Every event is scrubbed of cookies, credential headers and the bodies
+   * of the credential routes before it leaves; see `error-reporting.ts`.
+   */
+  const reporting = initErrorReporting(env);
 
   /**
    * Logging that an aggregator can read and a person can correlate.
@@ -117,6 +126,7 @@ async function bootstrap(): Promise<void> {
 
   // Uniform problem responses for every thrown error (contracts/README.md shape).
   app.useGlobalFilters(new AllExceptionsFilter());
+  if (reporting) new StructuredLogger('api').log('error reporting enabled');
 
   /**
    * Validate & strip request DTOs globally (whitelist drops unknown fields).
