@@ -297,3 +297,112 @@ describe('the shelf list', () => {
     expect(within(table).getAllByText(/standard/i).length).toBeGreaterThan(0);
   });
 });
+
+describe('packing a shipment', () => {
+  /**
+   * The bench sent the shipment's OWN item list back as "what was scanned", so
+   * the server's check that the scanned set equals the shipment compared the
+   * list with itself and always passed — the boxes an operator ticked decided
+   * nothing about what was sent. What goes to the server now is exactly what
+   * was scanned, and the button stays shut until every card is accounted for.
+   */
+  const DETAIL = {
+    id: 'shp-1',
+    code: 'SHP-PACK0001',
+    status: 'rates_selected',
+    carrier: 'USPS',
+    serviceKey: 'usps_ground',
+    itemIds: ['i1', 'i2'],
+    items: [
+      { id: 'i1', serialNumber: 'SN-ONE-0001', barcode: 'SN-ONE-0001', description: 'Card one' },
+      { id: 'i2', serialNumber: 'SN-TWO-0002', barcode: 'SN-TWO-0002', description: 'Card two' },
+    ],
+    directParcel: null,
+    destinationAddress: 'Red Ashwood, 12 Vine St, Trenton, 08608, US',
+    boxSize: null,
+  };
+
+  function renderShipments(detail: unknown) {
+    get.mockImplementation((path: string) =>
+      path === '/shipping/shipments/shp-1' ? Promise.resolve(detail) : apiFor()(path),
+    );
+    window.location.hash = '#/warehouse/shipments';
+    return render(
+      <I18nProvider>
+        <WarehouseConsole />
+      </I18nProvider>,
+    );
+  }
+
+  async function load(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText('Shipment ID'), 'shp-1');
+    await user.click(screen.getByRole('button', { name: 'Fulfill' }));
+  }
+
+  async function scan(user: ReturnType<typeof userEvent.setup>, label: RegExp, code: string) {
+    const input = await screen.findByLabelText(label);
+    await user.type(input, `${code}{Enter}`);
+  }
+
+  it('sends what was scanned, and only once every card is', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({ status: 'shipped', trackingNumber: 'SBX-1' });
+    renderShipments(DETAIL);
+    await load(user);
+
+    await user.type(await screen.findByLabelText('Notes'), 'Rigid mailer.');
+    const complete = screen.getByRole('button', { name: 'Complete' });
+    expect(complete).toBeDisabled();
+
+    // Read off the label by hand, lower-case: still the same card.
+    await scan(user, /scan each item/i, 'sn-one-0001');
+    expect(complete).toBeDisabled();
+
+    // A card from some other parcel is called out and blocks the button…
+    await scan(user, /scan each item/i, 'SN-NOPE-9999');
+    expect(screen.getByText(/not in this shipment/i)).toBeInTheDocument();
+    await scan(user, /scan each item/i, 'SN-TWO-0002');
+    expect(complete).toBeDisabled();
+
+    // …until it is taken back out.
+    await user.click(screen.getByRole('button', { name: /remove SN-NOPE-9999/i }));
+    expect(complete).toBeEnabled();
+    await user.click(complete);
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [path, body] = post.mock.calls[0]!;
+    expect(path).toBe('/shipping/shipments/shp-1/dispatch');
+    expect(body).toMatchObject({ scannedItemIds: ['sn-one-0001', 'SN-TWO-0002'], carrier: 'USPS' });
+    // Never the shipment's own list handed back as if it had been scanned.
+    expect((body as { scannedItemIds: string[] }).scannedItemIds).not.toEqual(['i1', 'i2']);
+  });
+
+  it('closes a direct-overnight shipment by scanning its parcel', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({ status: 'shipped', trackingNumber: 'SBX-2' });
+    renderShipments({
+      ...DETAIL,
+      serviceKey: 'direct_overnight',
+      itemIds: [],
+      items: [],
+      directParcel: { code: 'PKG-DIRECT01', trackingNumber: '1Z999AA10123456784' },
+    });
+    await load(user);
+    await user.type(await screen.findByLabelText('Notes'), 'Overnight envelope.');
+    const complete = screen.getByRole('button', { name: 'Complete' });
+
+    await scan(user, /scan the parcel/i, 'PKG-SOMEONE-ELSE');
+    expect(screen.getByText(/not this shipment.s parcel/i)).toBeInTheDocument();
+    expect(complete).toBeDisabled();
+
+    // The inbound carrier's label on the box is as good as Bault's own.
+    await scan(user, /scan the parcel/i, '1Z999AA10123456784');
+    expect(complete).toBeEnabled();
+    await user.click(complete);
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [, body] = post.mock.calls[0]!;
+    expect(body).toMatchObject({ scannedParcel: '1Z999AA10123456784' });
+    expect(body).not.toHaveProperty('scannedItemIds');
+  });
+});

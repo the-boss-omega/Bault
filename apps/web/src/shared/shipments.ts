@@ -35,6 +35,10 @@ export interface ShipmentSummary {
   cost: number | null;
   currency: string | null;
   itemIds: string[];
+  /** What is printed on each item's label, in `itemIds` order. */
+  items: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
+  /** For a direct-overnight shipment, the parcel it is. Null for everything else. */
+  directParcel: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
   /** ISO country + postal code — what a carrier actually quotes against. */
   destinationCountry: string;
