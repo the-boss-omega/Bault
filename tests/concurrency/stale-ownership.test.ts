@@ -50,6 +50,27 @@ async function listAndSell(seller: Client, itemId: string, buyerEmail: string, p
   return buyer;
 }
 
+/**
+ * Move `itemId` to `toEmail` behind the seller's back, the way that is still
+ * possible for a card already promised elsewhere: an administrator reassigning
+ * it. The two cases below used to list and sell the card instead; a card in an
+ * open pickup or escrow deal can no longer be listed at all (item_committed),
+ * so that route is asserted closed and the card changes hands this way to test
+ * the re-check that settlement and hand-over still make.
+ */
+async function reassignBehindTheirBack(seller: Client, itemId: string, toEmail: string) {
+  const refused = await seller.post('/marketplace/listings', { itemId, askingPrice: 5_000 });
+  expect(refused.status).toBe(409);
+  expect(refused.body.error.code).toBe('item_committed');
+  const admin = await signIn(SEED.admin);
+  const to = await signIn(toEmail);
+  const toId = (await to.get('/me/profile')).body.id as string;
+  const patched = await admin.patch(`/admin/items/${itemId}`, { ownerId: toId });
+  expect(patched.status).toBeLessThan(300);
+  expect(await owns(to, itemId)).toBe(true);
+  return to;
+}
+
 /** Book a show pickup of one fresh card for Red, paid on the spot. */
 async function bookedPickup(description: string) {
   const operator = await signIn(SEED.operator);
@@ -156,7 +177,7 @@ describe('concurrency: stale ownership', () => {
     // N4: hand-over checked nothing about the card; one sold on the market after
     // the pickup was booked was handed at the show to the person who sold it.
     const { operator, owner, card, shipmentId } = await bookedPickup('N4 sold');
-    const buyer = await listAndSell(owner, card.id, SEED.collector2);
+    const buyer = await reassignBehindTheirBack(owner, card.id, SEED.collector2);
 
     const handed = await operator.post(`/shipping/shipments/${shipmentId}/hand-over`, HAND_OVER(card.id));
     const held = (await buyer.get(`/vault/items/${card.id}`)).body as { item: { lifecycleState: string } };
@@ -315,8 +336,9 @@ describe('concurrency: stale ownership', () => {
       (await operator.post(`/escrow/${dealId}/inspect`, { matches: true, notes: 'Slab intact, cert matches.' })).status,
     ).toBe(201);
 
-    // The card is still on the seller's shelf, so it can be listed and sold.
-    const third = await listAndSell(seller, card.id, SEED.collector3);
+    // The card is still on the seller's shelf. It can no longer be listed while
+    // the deal is open, but it can still change hands another way.
+    const third = await reassignBehindTheirBack(seller, card.id, SEED.collector3);
 
     const sellerBefore = await balanceOf(seller);
     const buyerRelease = await buyer.post(`/escrow/${dealId}/release`, {});
