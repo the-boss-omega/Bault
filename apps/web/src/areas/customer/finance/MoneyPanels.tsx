@@ -61,7 +61,16 @@ export function TopUpPanel({
   useEffect(() => {
     void (async () => {
       try {
-        setCatalogue(await api.get<RouteCatalogue>('/finance/funding-routes'));
+        const loaded = await api.get<RouteCatalogue>('/finance/funding-routes');
+        setCatalogue(loaded);
+        // Start on a route that can actually be used. The default was `card`
+        // even where the server reports it unavailable, so the first thing a
+        // collector saw was a Pay button that could only fail.
+        setRoute((current) =>
+          loaded.routes.some((r) => r.key === current && r.available)
+            ? current
+            : (loaded.routes.find((r) => r.available)?.key ?? current),
+        );
       } catch (e) {
         onError((e as Error).message);
       }
@@ -134,7 +143,7 @@ export function TopUpPanel({
 
           {/* An instant route takes the money here. A manual one cannot, and
               says so with the account details rather than a dead button. */}
-          {chosen?.instant ? (
+          {chosen?.instant && chosen.available ? (
             <>
               <MoneyField
                 label={t('money.amount')}

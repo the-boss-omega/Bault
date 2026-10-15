@@ -417,13 +417,26 @@ export class WalletRequestService {
        */
       let payoutRef: string | null = null;
       if (request.type === 'cash_out') {
-        const payout = await this.payment.createPayout({
-          userId: request.userId,
-          amountMinor: request.amount - feeMinor,
-          currency: request.currency ?? DEFAULT_CURRENCY,
-          idempotencyKey: `wallet_request:${request.id}`,
-          destinationToken: request.destinationAccount ?? '',
-        });
+        let payout;
+        try {
+          payout = await this.payment.createPayout({
+            userId: request.userId,
+            amountMinor: request.amount - feeMinor,
+            currency: request.currency ?? DEFAULT_CURRENCY,
+            idempotencyKey: `wallet_request:${request.id}`,
+            destinationToken: request.destinationAccount ?? '',
+          });
+        } catch (e) {
+          // A 502 that says what happened, not a bare 500. The batch id is this
+          // request's, so PayPal will not send a second payout for it; look the
+          // batch up in PayPal before completing again.
+          throw new AppError(
+            ErrorCode.PROVIDER_UNAVAILABLE,
+            `The payout provider did not confirm this payout, so nothing has been debited. Check PayPal for batch wallet_request:${request.id} before completing it again.`,
+            502,
+            { reason: e instanceof Error ? e.message.slice(0, 200) : 'unknown' },
+          );
+        }
         if (payout.status === 'failed') {
           throw AppError.conflict(
             ErrorCode.CONFLICT,
