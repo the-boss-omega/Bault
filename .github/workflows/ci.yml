@@ -206,6 +206,14 @@ jobs:
           pnpm --filter @bault/api db:seed
           pnpm test:property
 
+      # The worker's jobs against the same database: each one run twice must
+      # equal one run, two at once must not double-process, SIGTERM drains.
+      # Three of its files also call the live API, which is still up here.
+      - name: Worker tests (idempotent jobs, shutdown, heartbeat)
+        run: |
+          pnpm --filter @bault/api db:seed
+          pnpm test:worker
+
       - name: Stop the API
         if: always()
         run: kill "$(cat /tmp/api.pid)" || true
