@@ -28,6 +28,13 @@ export const ErrorCode = {
   RATE_LIMITED: 'rate_limited',
   NOT_FOUND: 'not_found',
   CONFLICT: 'conflict',
+  /**
+   * The payment provider failed or could not be reached (502).
+   *
+   * Its errors used to surface as a bare 500, so a PayPal outage, a refused
+   * payout and a bug in Bault all looked the same to the client and the log.
+   */
+  PROVIDER_UNAVAILABLE: 'provider_unavailable',
   INTERNAL: 'internal',
 } as const;
 
