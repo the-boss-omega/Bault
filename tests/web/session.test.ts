@@ -37,6 +37,8 @@ const PROFILE = {
   lastName: 'Cohen',
   fullName: 'Eldar Cohen',
   nameReviewRequired: false,
+  mfaEnabled: true,
+  mfaRequired: true,
 };
 
 function ok(body: unknown, delayMs = 0): () => Promise<Response> {
