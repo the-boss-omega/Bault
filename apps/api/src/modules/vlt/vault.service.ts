@@ -10,6 +10,7 @@ import { InventoryService, type TimelineEvent } from '../cst/inventory.service';
 import { bin, custodyEvent, item, itemImage } from '../cst/cst.schema';
 import { charge } from '../pay/pay.schema';
 import { pricingRule } from '../prc/prc.schema';
+import { storageCover } from '../adm/adm.schema';
 import { serviceRequest } from '../dis/dis.schema';
 import {
   OVERSIZED_STORAGE,
@@ -385,34 +386,48 @@ export class VaultService {
         receivedAt: item.receivedAt,
         oversized: item.oversized,
         lifecycleState: item.lifecycleState,
+        lotBroken: item.lotBroken,
       })
       .from(item)
       .where(and(eq(item.id, itemId), eq(item.ownerId, userId)))
       .limit(1);
     if (!it) throw AppError.notFound('Item not found in your vault');
 
-    const actionType = it.oversized ? 'storage_oversized' : 'storage';
-    const [rule] = await this.db
-      .select({ parameters: pricingRule.parameters, value: pricingRule.value })
+    /**
+     * The rule the sweep bills this item under: its own variant, or the
+     * standard rule when no oversized one is in force. With no standard rule
+     * the sweep bills nothing at all.
+     */
+    const rules = await this.db
+      .select({ actionType: pricingRule.actionType, parameters: pricingRule.parameters, value: pricingRule.value })
       .from(pricingRule)
       .where(
         and(
-          eq(pricingRule.actionType, actionType),
+          inArray(pricingRule.actionType, ['storage', 'storage_oversized']),
           sql`${pricingRule.effectiveFrom} <= now()`,
           sql`(${pricingRule.effectiveTo} is null or ${pricingRule.effectiveTo} > now())`,
         ),
       )
-      .orderBy(sql`${pricingRule.effectiveFrom} desc`)
-      .limit(1);
+      .orderBy(sql`${pricingRule.effectiveFrom} desc`);
+    const standard = rules.find((r) => r.actionType === 'storage');
+    const rule = it.oversized ? (rules.find((r) => r.actionType === 'storage_oversized') ?? standard) : standard;
 
     const params = storageParameters(
       rule?.parameters,
       it.oversized ? OVERSIZED_STORAGE : STANDARD_STORAGE,
     );
 
+    // When a membership last covered it: the sweep's clock restarts there.
+    const [cover] = await this.db
+      .select({ coveredUntil: storageCover.coveredUntil })
+      .from(storageCover)
+      .where(eq(storageCover.itemId, itemId))
+      .limit(1);
+    const coveredUntil = cover?.coveredUntil ?? null;
+
     // What was actually billed: counted, never derived.
     const billed = await this.db
-      .select({ amount: charge.amount })
+      .select({ amount: charge.amount, createdAt: charge.createdAt })
       .from(charge)
       .where(
         and(
@@ -422,6 +437,10 @@ export class VaultService {
       );
     const periodsBilled = billed.length;
     const totalChargedMinor = billed.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+    // The sweep counts only the periods billed since the last cover.
+    const billedSinceCover = coveredUntil
+      ? billed.filter((row) => row.createdAt.getTime() >= coveredUntil.getTime()).length
+      : periodsBilled;
 
     // The base the percentage applies to: the item's own intake charge.
     const [intake] = await this.db
@@ -433,6 +452,8 @@ export class VaultService {
     const intakeMinor = intake?.amount ?? rule?.value ?? 0;
 
     const received = it.receivedAt;
+    const accruing = Boolean(received) && it.lifecycleState === 'stored' && !it.lotBroken && Boolean(standard);
+    const coveredByMembership = accruing && (await this.coveredByMembership(userId, itemId));
     return {
       oversized: it.oversized,
       receivedAt: received,
@@ -444,13 +465,55 @@ export class VaultService {
       totalChargedMinor,
       periodChargeMinor: periodChargeMinor(intakeMinor, params),
       freeUntil: received ? freeUntil(received, params) : null,
-      // An item that has left storage is not accruing anything, so there is no
-      // next charge to name.
+      coveredByMembership,
+      // Nothing is accruing on an item that has left storage, on a split lot
+      // (its cards are billed instead), or with no storage rule in force; and
+      // nothing is billed while a membership covers it. Otherwise the date the
+      // sweep bills the next period.
       nextChargeAt:
-        received && it.lifecycleState === 'stored'
-          ? nextChargeAt(received, params, periodsBilled)
+        received && accruing && !coveredByMembership
+          ? nextChargeAt(received, params, billedSinceCover, coveredUntil)
           : null,
     };
+  }
+
+  /**
+   * Whether a membership covers this item tonight, decided as the sweep
+   * decides it (`COVERED` in `storage-fee.ts`): a paid-up cycle that is
+   * running, and the item among the owner's oldest stored items, as many as
+   * the tier's allowance.
+   */
+  private async coveredByMembership(userId: string, itemId: string): Promise<boolean> {
+    const result = await this.db.execute<{ covered: boolean }>(sql`
+      WITH cap AS (
+        SELECT COALESCE((pr.parameters ->> 'storedItems')::int, 0) AS stored_items
+          FROM membership m
+          JOIN LATERAL (
+            SELECT parameters
+              FROM pricing_rule
+             WHERE action_type = 'membership:' || m.tier
+               AND effective_from <= now()
+               AND (effective_to IS NULL OR effective_to > now())
+             ORDER BY effective_from DESC
+             LIMIT 1
+          ) pr ON TRUE
+         WHERE m.user_id = ${userId}::uuid
+           AND m.status IN ('active', 'cancelling')
+           AND now() >= m.current_period_start
+           AND now() <  m.current_period_end
+      ),
+      ranked AS (
+        SELECT i.id, row_number() OVER (ORDER BY i.received_at ASC, i.id ASC) AS rn
+          FROM item i
+         WHERE i.owner_id = ${userId}
+           AND i.lifecycle_state = 'stored'
+           AND NOT i.lot_broken
+           AND i.received_at IS NOT NULL
+      )
+      SELECT EXISTS (
+        SELECT 1 FROM ranked r, cap c WHERE r.id = ${itemId}::uuid AND r.rn <= c.stored_items
+      ) AS covered`);
+    return Boolean(result.rows[0]?.covered);
   }
 
   async itemCard(userId: string, itemId: string) {

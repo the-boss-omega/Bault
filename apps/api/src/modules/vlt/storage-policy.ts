@@ -79,7 +79,13 @@ export function freeUntil(receivedAt: Date | string, params: StorageParameters):
 }
 
 /**
- * When the next charge falls, given how many periods have already been billed.
+ * When the next charge falls, the way the sweep counts it.
+ *
+ * The chargeable clock starts at the end of the included period or at the
+ * last membership cover (`storage_cover.covered_until`), whichever is later,
+ * and `periodsBilled` counts the storage charges since that cover. Counted
+ * from `receivedAt` alone, an item that had been covered was dated from the
+ * day it arrived, often a date already past.
  *
  * `periodsBilled` is COUNTED from the charges the sweep wrote, not derived from
  * the clock, so if a sweep was missed, this shows the date the catch-up will
@@ -89,13 +95,19 @@ export function nextChargeAt(
   receivedAt: Date | string,
   params: StorageParameters,
   periodsBilled: number,
+  coveredUntil: Date | string | null = null,
 ): Date {
-  const start = freeUntil(receivedAt, params);
-  return new Date(start.getTime() + periodsBilled * params.periodDays * DAY_MS);
+  const included = freeUntil(receivedAt, params).getTime();
+  const cover = coveredUntil ? new Date(coveredUntil).getTime() : -Infinity;
+  return new Date(Math.max(included, cover) + periodsBilled * params.periodDays * DAY_MS);
 }
 
-/** What one period costs for an item whose intake fee was `intakeMinor`. */
+/**
+ * What one period costs for an item whose intake fee was `intakeMinor`.
+ *
+ * Never under a cent, as the sweep bills it (`GREATEST(1, ...)`): a period
+ * that rounds to nothing is still a period charged.
+ */
 export function periodChargeMinor(intakeMinor: number, params: StorageParameters): number {
-  if (intakeMinor <= 0) return 0;
-  return Math.round((intakeMinor * params.percentOfIntakeBps) / 10_000);
+  return Math.max(1, Math.round((intakeMinor * params.percentOfIntakeBps) / 10_000));
 }

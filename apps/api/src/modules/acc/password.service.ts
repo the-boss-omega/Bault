@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -104,15 +104,20 @@ export class PasswordService {
       throw AppError.tokenExpired('Reset link expired or already used');
     }
 
+    // Hashed before the transaction, so the token row is not held locked for
+    // the length of an argon2 run.
+    const passwordHash = await argon2.hash(newPassword);
     await this.db.transaction(async (tx) => {
-      await tx
+      // Single use under concurrency too: the check above is a read, and two
+      // requests with one link both passed it and both set a password. Only the
+      // request whose update consumes the token sets one.
+      const [consumed] = await tx
         .update(verificationToken)
         .set({ consumedAt: new Date() })
-        .where(eq(verificationToken.id, tok.id));
-      await tx
-        .update(userAccount)
-        .set({ passwordHash: await argon2.hash(newPassword) })
-        .where(eq(userAccount.id, tok.userId));
+        .where(and(eq(verificationToken.id, tok.id), isNull(verificationToken.consumedAt)))
+        .returning({ id: verificationToken.id });
+      if (!consumed) throw AppError.tokenExpired('Reset link expired or already used');
+      await tx.update(userAccount).set({ passwordHash }).where(eq(userAccount.id, tok.userId));
     });
 
     // A reset exempts nothing. The person doing it is holding a link from their

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, gte, inArray, isNull, lte, ne, or } from 'drizzle-orm';
 import { loadEnv } from '@bault/config';
 import { DRIZZLE } from '../../db/db.module';
@@ -60,16 +60,24 @@ export function payoutKey(requestId: string): string {
  * `.RETURNED`, `.UNCLAIMED`, ...) and per BATCH. Only a denied batch settles
  * anything at batch level: a batch marked SUCCESS has been processed, and its
  * item can still be unclaimed and come back a month later.
+ *
+ * `reversed` is the money coming BACK (`.REFUNDED`, `.REVERSED`, `.RETURNED`).
+ * Before the payout was paid that is a refusal like any other; after it was
+ * paid, it is the only word that still changes anything (`recordPayoutOutcome`).
  */
-export function payoutEventOutcome(type: string): 'succeeded' | 'pending' | 'failed' | null {
+export function payoutEventOutcome(type: string): 'succeeded' | 'pending' | 'failed' | 'reversed' | null {
   const t = (type ?? '').toUpperCase();
   if (t.startsWith('PAYMENT.PAYOUTS-ITEM.')) {
     const suffix = t.slice('PAYMENT.PAYOUTS-ITEM.'.length);
+    if (PAYOUT_CAME_BACK.has(suffix)) return 'reversed';
     return paypalPayoutItemOutcome(suffix === 'SUCCEEDED' ? 'SUCCESS' : suffix);
   }
   if (t.startsWith('PAYMENT.PAYOUTSBATCH.')) return t.endsWith('.DENIED') ? 'failed' : 'pending';
   return null;
 }
+
+/** Payout item events that mean the money came back to Bault. */
+const PAYOUT_CAME_BACK = new Set(['REFUNDED', 'REVERSED', 'RETURNED']);
 
 export interface WalletRequestFilters {
   type?: WalletRequestType;
@@ -98,6 +106,8 @@ export interface WalletRequestFilters {
  */
 @Injectable()
 export class WalletRequestService {
+  private readonly logger = new Logger(WalletRequestService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly ledger: LedgerService,
@@ -230,6 +240,25 @@ export class WalletRequestService {
   /* ---------------------------------------------------------------------------
      Reads
      ------------------------------------------------------------------------- */
+
+  /**
+   * The name on the account, as a cash-out's beneficiary when a client names
+   * none: the first and last name, or the legacy display name of an account
+   * migrated with only that. Null when there is neither.
+   */
+  async accountHolderName(userId: string): Promise<string | null> {
+    const [u] = await this.db
+      .select({
+        firstName: userAccount.firstName,
+        lastName: userAccount.lastName,
+        legacyDisplayName: userAccount.legacyDisplayName,
+      })
+      .from(userAccount)
+      .where(eq(userAccount.id, userId))
+      .limit(1);
+    if (!u) return null;
+    return fullName(u.firstName, u.lastName) || u.legacyDisplayName?.trim() || null;
+  }
 
   /** The caller's own requests, newest first. Never anyone else's. */
   listMine(userId: string) {
@@ -815,13 +844,17 @@ export class WalletRequestService {
    * Only a payment still `pending` on a request still `paying` changes: the
    * first word on a payout is the one that counts, and every later one (a
    * redelivered webhook, a reconciliation racing the provider's answer) finds
-   * it settled and does nothing. The ledger is append-only, so a refusal is
-   * undone by a compensating `payout_reversal` credit for everything the
-   * cash-out debited, never by touching the debit.
+   * it settled and does nothing, and says so in the log. The ledger is
+   * append-only, so a refusal is undone by a compensating `payout_reversal`
+   * credit for everything the cash-out debited, never by touching the debit.
+   *
+   * The one word that still counts after a payout was PAID is the money coming
+   * back (`reversed`: PayPal refunded, reversed or returned the item). That is
+   * undone exactly like a refusal, once: see `reversePaidPayout`.
    */
   async recordPayoutOutcome(
     paymentId: string,
-    outcome: { status: 'succeeded' | 'pending' | 'failed'; externalRef: string | null },
+    outcome: { status: 'succeeded' | 'pending' | 'failed' | 'reversed'; externalRef: string | null },
     context: { source: 'provider' | 'webhook' | 'reconcile'; actor?: RequestActor | null; webhookEventId?: string | null; reason?: string | null },
   ) {
     return this.db.transaction(async (tx) => {
@@ -840,12 +873,27 @@ export class WalletRequestService {
         .for('update')
         .limit(1);
       if (!payment) return null;
-      if (payment.status !== 'pending' || request.status !== 'paying') return request;
+      if (payment.status !== 'pending' || request.status !== 'paying') {
+        if (outcome.status === 'reversed' && payment.status === 'succeeded' && request.status === 'completed') {
+          return this.reversePaidPayout(tx as Database, request, payment, outcome.externalRef, context);
+        }
+        if (outcome.status !== 'pending' && outcome.status !== payment.status) {
+          // Acknowledged and changed nothing: the first word counted. Logged so
+          // a provider contradicting what was recorded is seen by somebody.
+          this.logger.warn(
+            `Payout ${paymentId} (${request.code}) is ${payment.status}; a later "${outcome.status}" from ${context.source} ` +
+              `changed nothing${context.reason ? ` (${context.reason})` : ''}`,
+          );
+        }
+        return request;
+      }
+      // Before the provider paid, money coming back is a refusal.
+      const status = outcome.status === 'reversed' ? 'failed' : outcome.status;
 
       const externalRef = outcome.externalRef ?? payment.externalRef;
       const now = new Date();
 
-      if (outcome.status === 'pending') {
+      if (status === 'pending') {
         // Nothing has happened yet, but the provider has said what it calls the
         // payout, which is what a later lookup needs.
         if (externalRef && externalRef !== payment.externalRef) {
@@ -863,7 +911,7 @@ export class WalletRequestService {
       await tx
         .update(externalPayment)
         .set({
-          status: outcome.status,
+          status,
           externalRef,
           webhookEventId: context.webhookEventId ?? payment.webhookEventId,
           updatedAt: now,
@@ -872,16 +920,11 @@ export class WalletRequestService {
 
       const actorId = context.actor?.id ?? null;
       const actorRole = context.actor?.role ?? 'system';
-      const [started] = await tx
-        .select({ metadata: walletRequestEvent.metadata })
-        .from(walletRequestEvent)
-        .where(and(eq(walletRequestEvent.requestId, request.id), eq(walletRequestEvent.toStatus, 'paying')))
-        .limit(1);
-      const meta = (started?.metadata as Record<string, unknown> | null) ?? {};
+      const meta = await this.payingMetadata(tx as Database, request.id);
       const feeMinor = Number(meta.feeMinor ?? 0);
       const netMinor = Number(meta.netMinor ?? payment.amount);
 
-      if (outcome.status === 'succeeded') {
+      if (status === 'succeeded') {
         const [updated] = await tx
           .update(walletRequest)
           .set({ status: 'completed', payoutReference: externalRef, completedAt: now, updatedAt: now })
@@ -977,6 +1020,123 @@ export class WalletRequestService {
       );
       return updated;
     });
+  }
+
+  /** What the cash-out recorded when it was sent: its fee, net and any membership waiver. */
+  private async payingMetadata(tx: Database, requestId: string): Promise<Record<string, unknown>> {
+    const [started] = await tx
+      .select({ metadata: walletRequestEvent.metadata })
+      .from(walletRequestEvent)
+      .where(and(eq(walletRequestEvent.requestId, requestId), eq(walletRequestEvent.toStatus, 'paying')))
+      .limit(1);
+    return (started?.metadata as Record<string, unknown> | null) ?? {};
+  }
+
+  /**
+   * A payout the provider paid, and then took back (refunded, reversed or
+   * returned): the money is with Bault again and not with the collector.
+   *
+   * Undone the way a refusal is, because in the end the cash-out did not
+   * happen: one `payout_reversal` credit for everything it debited (the
+   * withdrawal and the fee), the membership's free cash-out given back, the
+   * request closed as `payout_failed` and the payment marked `reversed`.
+   *
+   * Once only. The caller holds the request and the payment FOR UPDATE and has
+   * seen the payment `succeeded`; it is `reversed` when this commits, so a
+   * redelivered event, or a second one for the same item, finds nothing to do.
+   * The event's id goes on the payment, so the webhook dedupe also knows it.
+   */
+  private async reversePaidPayout(
+    tx: Database,
+    request: typeof walletRequest.$inferSelect,
+    payment: typeof externalPayment.$inferSelect,
+    externalRefIn: string | null,
+    context: { source: 'provider' | 'webhook' | 'reconcile'; actor?: RequestActor | null; webhookEventId?: string | null; reason?: string | null },
+  ) {
+    const now = new Date();
+    const externalRef = externalRefIn ?? payment.externalRef;
+    const actorId = context.actor?.id ?? null;
+    const actorRole = context.actor?.role ?? 'system';
+    const meta = await this.payingMetadata(tx, request.id);
+
+    await this.ledger.lockWallet(request.userId, tx);
+    await this.ledger.record(
+      {
+        userId: request.userId,
+        type: 'payout_reversal',
+        amount: request.amount,
+        direction: 'credit',
+        currency: request.currency ?? DEFAULT_CURRENCY,
+        referenceType: 'wallet_request',
+        referenceId: request.id,
+      },
+      tx,
+    );
+    if (typeof meta.waiverPeriodId === 'string' && Number(meta.waivedMinor ?? 0) > 0) {
+      await this.memberships.restoreCounted(tx, meta.waiverPeriodId, 'cash_out_fee');
+    }
+    await tx
+      .update(externalPayment)
+      .set({
+        status: 'reversed',
+        externalRef,
+        webhookEventId: context.webhookEventId ?? payment.webhookEventId,
+        updatedAt: now,
+      })
+      .where(eq(externalPayment.id, payment.id));
+    const [updated] = await tx
+      .update(walletRequest)
+      .set({ status: 'payout_failed', updatedAt: now })
+      .where(eq(walletRequest.id, request.id))
+      .returning();
+    if (!updated) throw AppError.validation('Failed to record the reversed payout');
+    await this.appendEvent(tx, {
+      requestId: request.id,
+      actorId,
+      actorRole,
+      fromStatus: 'completed',
+      toStatus: 'payout_failed',
+      reason: context.reason ?? 'The provider took this payout back after paying it.',
+      metadata: {
+        source: context.source,
+        paymentId: payment.id,
+        externalRef,
+        webhookEventId: context.webhookEventId ?? null,
+        reversedMinor: request.amount,
+        afterPaid: true,
+      },
+    });
+    await this.outbox.emit(tx, {
+      aggregateType: 'wallet_request',
+      aggregateId: request.id,
+      eventType: 'wallet_request_payout_failed',
+      payload: {
+        requestId: request.id,
+        code: request.code,
+        type: request.type,
+        status: 'payout_failed',
+        userId: request.userId,
+        amountMinor: request.amount,
+      },
+    });
+    await this.audit.record(
+      {
+        actorId,
+        action: 'wallet_request.payout_reversed',
+        targetEntity: 'wallet_request',
+        targetId: request.id,
+        metadata: {
+          source: context.source,
+          paymentId: payment.id,
+          webhookEventId: context.webhookEventId ?? null,
+          reversedMinor: request.amount,
+          requesterId: request.userId,
+        },
+      },
+      tx,
+    );
+    this.logger.warn(`Payout ${payment.id} (${request.code}) came back after it was paid; ${request.amount} credited back`);
+    return updated;
   }
 
   /**

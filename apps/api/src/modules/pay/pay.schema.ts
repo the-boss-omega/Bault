@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { check, pgEnum, pgTable, text, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
@@ -75,6 +75,11 @@ export const ledgerRecord = pgTable(
      * cannot serve "everything in October".
      */
     byOccurred: index('ledger_record_occurred_idx').on(t.occurredAt, t.id),
+    /**
+     * Always positive; the sign is `direction` (migration 0036). Added NOT
+     * VALID, so it binds every row written since and re-checks none before.
+     */
+    amountPositive: check('ledger_record_amount_positive', sql`${t.amount} > 0`),
   }),
 );
 

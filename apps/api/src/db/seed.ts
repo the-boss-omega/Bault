@@ -117,6 +117,9 @@ async function main(): Promise<void> {
 
   // -------------------------------------------------------------------------
   // 1. RESET — wipe all app data (see header). TRUNCATE bypasses row triggers.
+  // Every table in the schema is named here; `tests/integration/seed-reset.test.ts`
+  // compares the list with the migrated database, so a new table cannot be
+  // left out and keep rows that point at nothing.
   // -------------------------------------------------------------------------
   await pool.query(`TRUNCATE TABLE
     user_account, verification_token, login_session, login_attempt,
@@ -129,7 +132,7 @@ async function main(): Promise<void> {
     outbox_message, audit_record, idempotency_key, confirmation_token,
     notification, notification_preference, dispute,
     storage_fee_run, shipping_address,
-    facility, parcel, parcel_event, arrival_disposal,
+    facility, parcel, parcel_event, parcel_photo, arrival_disposal,
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
@@ -603,7 +606,9 @@ async function main(): Promise<void> {
   //     only. Bault is not the seller and neither collects nor remits anybody's
   //     sales tax; the figure exists so the app can show a collector what a
   //     purchase would cost at each address instead of making them work it out.
-  //     NJ is 6.625% (6625 bps) at the time of writing; DE is 0.
+  //     NJ is 6.625% at the time of writing, which is 662.5 bps; the column is
+  //     an integer, so it is held as 663, rounded half up so the guidance never
+  //     understates the tax. (It was 6625, which is 66.25%.) DE is 0.
   // -------------------------------------------------------------------------
   const njFacility = one(
     await db
@@ -617,7 +622,7 @@ async function main(): Promise<void> {
         region: 'NJ',
         postalCode: '00000',
         country: 'US',
-        salesTaxBps: 6625,
+        salesTaxBps: 663,
         active: true,
       })
       .returning({ id: facility.id }),

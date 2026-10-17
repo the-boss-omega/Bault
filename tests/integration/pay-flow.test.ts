@@ -436,6 +436,35 @@ describe('PAY legacy endpoint compatibility', () => {
     await client.post(`/finance/wallet-requests/${res.body.requestId}/cancel`, {});
   });
 
+  /**
+   * The legacy body names a destination and no beneficiary. The reviewer
+   * checks the beneficiary against the account the money goes to, so it must
+   * be a person's name, never the account number again.
+   */
+  it('names the account holder as the beneficiary of a legacy withdrawal, or the name it was given', async () => {
+    await fundWallet(SEED.collector2, 20_000);
+    const client = await signIn(SEED.collector2);
+    const profile = (await client.get('/me/profile')).body as { fullName: string };
+    const beneficiaryOf = async (requestId: string) =>
+      ((await client.get(`/finance/wallet-requests/${requestId}`)).body as { beneficiaryName: string | null })
+        .beneficiaryName;
+
+    const destinationAccount = 'IL62 0108 0000 0009 9999 999';
+    const derived = await client.post('/finance/withdrawals', { amountMinor: 3_010, destinationAccount });
+    expect(derived.status, JSON.stringify(derived.body)).toBe(201);
+    expect(await beneficiaryOf(derived.body.requestId)).toBe(profile.fullName);
+    await client.post(`/finance/wallet-requests/${derived.body.requestId}/cancel`, {});
+
+    const named = await client.post('/finance/withdrawals', {
+      amountMinor: 3_020,
+      destinationAccount,
+      beneficiaryName: 'G. Marsh Holdings',
+    });
+    expect(named.status, JSON.stringify(named.body)).toBe(201);
+    expect(await beneficiaryOf(named.body.requestId)).toBe('G. Marsh Holdings');
+    await client.post(`/finance/wallet-requests/${named.body.requestId}/cancel`, {});
+  });
+
   it('answers the retired withdrawal-confirm endpoint with a 410', async () => {
     const client = await signIn(SEED.collector2);
     const res = await client.post('/finance/withdrawals/confirm', { confirmationToken: 'anything' });

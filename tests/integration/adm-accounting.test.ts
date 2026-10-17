@@ -155,11 +155,14 @@ describe('N40 monthly summary', () => {
     expect(line(after, 'cash_out_fee') - line(before, 'cash_out_fee')).toBe(fee);
     expect(after.revenue.totalMinor - before.revenue.totalMinor).toBe(fee);
 
-    // Revenue is exactly the fee, service-charge and interest rows, net.
+    // Revenue is exactly the fee, service-charge and interest rows, net, less
+    // the cash-out fees given back with a refused or returned payout.
     const lines = after.revenue.lines as { totalMinor: number }[];
     expect(lines.reduce((a, l) => a + l.totalMinor, 0)).toBe(after.revenue.totalMinor);
     const net = (type: string) => total(after, type, 'debit') - total(after, type, 'credit');
-    expect(after.revenue.totalMinor).toBe(net('fee') + net('service_charge') + net('interest'));
+    expect(after.revenue.totalMinor).toBe(
+      net('fee') + net('service_charge') + net('interest') - after.revenue.cashOutFeesReturnedMinor,
+    );
 
     // The balances Bault holds for customers moved by what came in less what
     // the cash-out took — paid out and fee together; the fee is Bault's now.
@@ -255,5 +258,67 @@ describe('N40 reconciliation: external payments against the ledger', () => {
     expect(found, JSON.stringify(report.mismatches.slice(0, 5))).toBeDefined();
     expect(found!.ledgerId).toBeTruthy();
     expect(found!.paymentId).toBeNull();
+  });
+});
+
+/**
+ * A cash-out the provider refuses is debited and then credited back in full by
+ * a `payout_reversal` (the withdrawal and its fee). The sandbox provider
+ * refuses any payout whose destination carries `+payout-refused`.
+ */
+async function refusedCashOut(email: string, amountMinor: number): Promise<string> {
+  await fundWallet(email, amountMinor + 1_000);
+  const customer = await signIn(email);
+  const created = await customer.post('/finance/wallet-requests', {
+    type: 'cash_out',
+    amountMinor,
+    currency: 'USD',
+    destinationAccount: 'golden+payout-refused@example.test',
+    beneficiaryName: 'Golden Marsh',
+  });
+  expect(created.status).toBe(201);
+  const admin = await signIn(SEED.admin);
+  expect((await admin.post(`/admin/wallet-requests/${created.body.id}/approve`, {})).status).toBe(201);
+  expect((await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {})).status).toBe(409);
+  const detail = (await admin.get(`/admin/wallet-requests/${created.body.id}`)).body as { status: string };
+  expect(detail.status).toBe('payout_failed');
+  return created.body.id as string;
+}
+
+describe('N40 a refused payout that was credited back', () => {
+  const total = (s: Summary, type: string, direction: string) =>
+    s.byType.filter((r) => r.type === type && r.direction === direction).reduce((a, r) => a + r.totalMinor, 0);
+  const line = (s: Summary, key: string) => s.revenue.lines.find((l) => l.key === key)?.totalMinor ?? 0;
+
+  it('is neither money out nor revenue in the month it was reversed', async () => {
+    const admin = await signIn(SEED.admin);
+    const month = day(0).slice(0, 7);
+    const read = async () => (await admin.get(`/admin/accounting/summary?month=${month}`)).body;
+
+    const before = await read();
+    await refusedCashOut(SEED.collector2, 4_000);
+    const after = await read();
+
+    // The ledger rows are all there: the debit, its fee, and the credit back.
+    const fee = total(after, 'fee', 'debit') - total(before, 'fee', 'debit');
+    expect(fee).toBeGreaterThan(0);
+    expect(total(after, 'withdrawal', 'debit') - total(before, 'withdrawal', 'debit')).toBe(4_000 - fee);
+    expect(total(after, 'payout_reversal', 'credit') - total(before, 'payout_reversal', 'credit')).toBe(4_000);
+
+    // Nothing left Bault, and Bault kept no fee.
+    expect(after.customerMoney.outMinor - before.customerMoney.outMinor).toBe(0);
+    expect(line(after, 'cash_out_fee') - line(before, 'cash_out_fee')).toBe(0);
+    expect(after.revenue.totalMinor - before.revenue.totalMinor).toBe(0);
+    expect(after.customerMoney.inMinor - before.customerMoney.inMinor).toBe(5_000);
+    expect(after.balancesHeld.customerTotalMinor - before.balancesHeld.customerTotalMinor).toBe(5_000);
+  });
+
+  it('is not reported as a mismatch', async () => {
+    const admin = await signIn(SEED.admin);
+    const requestId = await refusedCashOut(SEED.collector2, 3_000);
+    const report = (await admin.get('/admin/accounting/reconciliation')).body as {
+      mismatches: { kind: string; walletRequestId: string | null }[];
+    };
+    expect(report.mismatches.filter((m) => m.walletRequestId === requestId)).toEqual([]);
   });
 });

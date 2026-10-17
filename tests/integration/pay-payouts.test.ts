@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { BASE, SEED, fundWallet, signIn, type Client } from './helpers/http';
+import { closeDb, sql } from './helpers/db';
+
+afterAll(closeDb);
 
 /**
  * A cash-out leaves Bault. These are the tests for the moment it does.
@@ -331,4 +334,76 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     // Only the bounced one came back.
     expect(await balanceOf(collector)).toBe(before + 2_600);
   }, 30_000);
+});
+
+describe('PAY a payout that comes back after it was paid', () => {
+  it('credits the cash-out back once when a paid payout is reversed, however often that is said', async () => {
+    const AMOUNT = 3_200;
+    const { collector, admin, id } = await approvedCashOut(
+      SEED.collector2,
+      AMOUNT,
+      'golden+payout-pending@example.test',
+    );
+    const before = await balanceOf(collector);
+    await admin.post(`/admin/wallet-requests/${id}/complete`, {});
+    const d = await detail(admin, id);
+    const item = { payout_batch_id: d.payout!.externalRef, payout_item: { sender_item_id: d.payout!.providerRef } };
+    const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+    const paid = { id: `WH-${stamp}-paid`, type: 'PAYMENT.PAYOUTS-ITEM.SUCCEEDED', data: { ...item, transaction_status: 'SUCCESS' } };
+    expect(await webhook(paid)).toBe(201);
+    expect((await detail(admin, id)).status).toBe('completed');
+    expect(await balanceOf(collector)).toBe(before - AMOUNT);
+
+    // The money comes back to Bault: PayPal reverses the paid item. Delivered
+    // twice, and then reported again as a refund of the same item.
+    const reversed = { id: `WH-${stamp}-rev`, type: 'PAYMENT.PAYOUTS-ITEM.REVERSED', data: { ...item, transaction_status: 'REVERSED' } };
+    expect(await webhook(reversed)).toBe(201);
+    expect(await webhook(reversed)).toBe(201);
+    expect(
+      await webhook({ id: `WH-${stamp}-refund`, type: 'PAYMENT.PAYOUTS-ITEM.REFUNDED', data: { ...item, transaction_status: 'REFUNDED' } }),
+    ).toBe(201);
+    // A late copy of the success changes nothing either.
+    expect(await webhook(paid)).toBe(201);
+
+    const after = await detail(admin, id);
+    expect(after.status).toBe('payout_failed');
+    expect(after.payout?.status).toBe('reversed');
+    expect(await balanceOf(collector)).toBe(before);
+    const reversals = (await ledgerFor(collector, id)).filter((r) => r.type === 'payout_reversal');
+    expect(reversals).toHaveLength(1);
+    expect(reversals[0]!.amount).toBe(AMOUNT);
+
+    const audited = await sql<{ n: number }>(
+      `SELECT count(*)::int AS n FROM audit_record WHERE action = 'wallet_request.payout_reversed' AND target_id = $1`,
+      [id],
+    );
+    expect(audited[0]!.n).toBe(1);
+
+    // And the accounts agree: credited back in full, so not a mismatch.
+    const report = (await admin.get('/admin/accounting/reconciliation')).body as {
+      mismatches: { walletRequestId: string | null }[];
+    };
+    expect(report.mismatches.filter((m) => m.walletRequestId === id)).toEqual([]);
+  }, 30_000);
+});
+
+/**
+ * A delivery that cannot be authenticated is refused with a 400 the provider
+ * can see, never a 500 it keeps retrying. The sandbox provider checks no
+ * signature, except that it refuses one that says `invalid`, so the API's
+ * handling of a bad signature is exercised here; the PayPal adapter's own
+ * verdict is pinned in `tests3/contract/paypal-adapter.test.ts`.
+ */
+describe('PAY a webhook that cannot be verified', () => {
+  it('is refused with a 400 naming why, and applies nothing', async () => {
+    const res = await fetch(`${BASE}/webhooks/payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paypal-transmission-sig': 'invalid' },
+      body: JSON.stringify({ id: `WH-${Date.now()}-forged`, type: 'PAYMENT.PAYOUTS-ITEM.SUCCEEDED', data: {} }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('webhook_unverified');
+  });
 });

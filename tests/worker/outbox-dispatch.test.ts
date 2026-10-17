@@ -88,3 +88,68 @@ describe('dispatching the outbox', () => {
     expect(await count(pool, `SELECT 1 FROM notification WHERE user_id = 'not-a-uuid'`)).toBe(0);
   });
 });
+
+/**
+ * Password-reset mail: the reset link is minted where it is mailed. A link is
+ * only as good as the token behind it, so what matters is how many valid
+ * tokens an account holds, however the dispatch went.
+ */
+describe('dispatching a password reset', () => {
+  const emailOf = async (pool: Pool, userId: string) =>
+    (await pool.query<{ email: string }>(`SELECT email FROM user_account WHERE id = $1`, [userId])).rows[0]!.email;
+  const validTokens = (pool: Pool, userId: string) =>
+    count(
+      pool,
+      `SELECT 1 FROM verification_token
+        WHERE user_id = $1 AND type = 'password_reset' AND consumed_at IS NULL AND expires_at > now()`,
+      [userId],
+    );
+
+  it('leaves one valid link, not two, when the dispatch that minted the first fails to commit', async () => {
+    const user = await createUser(pool);
+    const email = await emailOf(pool, user);
+    const id = await emit(pool, 'password_reset_requested', { email });
+
+    // The transaction that marks this message dispatched fails, once: what a
+    // failed COMMIT, a dropped connection or a killed worker looks like. A
+    // sequence, because its counter survives the rollback the failure causes.
+    await pool.query(`CREATE SEQUENCE IF NOT EXISTS wk_reset_dispatch_failure`);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION wk_fail_reset_dispatch_once() RETURNS trigger LANGUAGE plpgsql AS $fn$
+      BEGIN
+        IF NEW.id = '${id}'::uuid AND NEW.dispatched_at IS NOT NULL AND OLD.dispatched_at IS NULL
+           AND nextval('wk_reset_dispatch_failure') = 1 THEN
+          RAISE EXCEPTION 'simulated failure before commit';
+        END IF;
+        RETURN NEW;
+      END $fn$`);
+    await pool.query(`DROP TRIGGER IF EXISTS wk_fail_reset_dispatch ON outbox_message`);
+    await pool.query(
+      `CREATE TRIGGER wk_fail_reset_dispatch BEFORE UPDATE ON outbox_message
+         FOR EACH ROW EXECUTE FUNCTION wk_fail_reset_dispatch_once()`,
+    );
+    try {
+      await dispatchOutbox(pool);
+      // Not dispatched: the next run tries again, and mails a fresh link.
+      expect(await undispatched(pool, [id])).toBe(1);
+      await dispatchOutbox(pool);
+      expect(await undispatched(pool, [id])).toBe(0);
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS wk_fail_reset_dispatch ON outbox_message`);
+      await pool.query(`DROP FUNCTION IF EXISTS wk_fail_reset_dispatch_once()`);
+      await pool.query(`DROP SEQUENCE IF EXISTS wk_reset_dispatch_failure`);
+    }
+
+    // The first link's token went with the transaction that failed; only the
+    // link from the run that committed opens anything.
+    expect(await validTokens(pool, user)).toBe(1);
+  });
+
+  it('sends no link to a closed account', async () => {
+    const user = await createUser(pool, 'closed');
+    const id = await emit(pool, 'password_reset_requested', { email: await emailOf(pool, user) });
+    await dispatchOutbox(pool);
+    expect(await undispatched(pool, [id])).toBe(0);
+    expect(await validTokens(pool, user)).toBe(0);
+  });
+});

@@ -84,22 +84,44 @@ export class BrowseService {
     );
   }
 
+  /**
+   * One listing, for anybody: the page a listing link opens.
+   *
+   * The same fields the browse list shows, plus the listing's status and every
+   * photograph. Projected, never the whole rows: those carry the owner and
+   * seller ids, the shelf, the label barcode, the parcel the card came in, the
+   * hold flag, and the storage keys of the photographs, none of which an
+   * anonymous visitor may see.
+   *
+   * A sold or removed listing is still served, as it always has been, so an old
+   * link shows what happened to it; `status` says which.
+   */
   async detail(listingId: string) {
     const [row] = await this.db
-      .select()
+      .select({
+        id: listing.id,
+        askingPrice: listing.askingPrice,
+        currency: listing.currency,
+        status: listing.status,
+        itemId: listing.itemId,
+        serialNumber: item.serialNumber,
+        typeClass: item.typeClass,
+        conditionGrade: item.conditionGrade,
+        description: item.description,
+      })
       .from(listing)
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
-      .where(and(eq(listing.id, listingId)))
+      .where(eq(listing.id, listingId))
       .limit(1);
     if (!row) throw AppError.notFound('Listing not found');
 
     const images = await this.db
-      .select()
+      .select({ type: itemImage.type, objectKey: itemImage.objectKey })
       .from(itemImage)
-      .where(eq(itemImage.itemId, row.listing.itemId))
+      .where(eq(itemImage.itemId, row.itemId))
       .orderBy(sql`${itemImage.version} desc`);
     const signedImages = await Promise.all(
-      images.map(async (img) => ({ ...img, url: await this.storage.getSignedUrl(img.objectKey) })),
+      images.map(async (img) => ({ type: img.type, url: await this.storage.getSignedUrl(img.objectKey) })),
     );
 
     return { ...row, imageUrl: signedImages[0]?.url ?? null, images: signedImages };

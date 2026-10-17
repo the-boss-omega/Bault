@@ -56,7 +56,9 @@ export const WALLET_REQUEST_TRANSITIONS: Readonly<Record<WalletRequestStatus, re
   processing: ['completed', 'paying', 'rejected'],
   paying: ['completed', 'payout_failed'],
   rejected: [],
-  completed: [],
+  // Only the provider takes this edge: a paid payout refunded, reversed or
+  // returned, credited back (`WalletRequestService.reversePaidPayout`).
+  completed: ['payout_failed'],
   cancelled: [],
   payout_failed: [],
 };

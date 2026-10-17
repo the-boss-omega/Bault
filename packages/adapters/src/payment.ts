@@ -50,6 +50,36 @@ export class PaymentProviderError extends Error {
   }
 }
 
+/**
+ * Why a delivery could not be authenticated.
+ *
+ *   malformed  it lacks what verification needs: a transmission header, or a
+ *              body that is an event at all. Somebody else's broken request.
+ *   refused    the provider would not vouch for it: a verdict other than
+ *              SUCCESS, or the verify call itself rejected (400/422). For a
+ *              genuine delivery that is a stale webhook id, which is why the
+ *              API reports it rather than only logging it.
+ */
+export type WebhookRefusal = 'malformed' | 'refused';
+
+/**
+ * A webhook delivery that could not be authenticated: a signature the
+ * provider did not vouch for, a header missing, a body that is not an event.
+ *
+ * Its own class because the API answers it differently from every other
+ * failure here: this one is the sender's (a 400), whereas a provider that
+ * could not be asked is ours (a 5xx, so the real provider retries).
+ */
+export class WebhookVerificationError extends Error {
+  constructor(
+    message: string,
+    readonly reason: WebhookRefusal,
+  ) {
+    super(message);
+    this.name = 'WebhookVerificationError';
+  }
+}
+
 export interface ProviderResult {
   providerRef: string;
   status: 'succeeded' | 'pending' | 'failed';
@@ -402,7 +432,7 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
   async verifyWebhook(delivery: WebhookDelivery): Promise<WebhookEvent> {
     const h = (name: string): string => {
       const value = delivery.headers[name] ?? delivery.headers[name.toLowerCase()];
-      if (!value) throw new Error(`Webhook rejected: missing ${name}.`);
+      if (!value) throw new WebhookVerificationError(`Webhook rejected: missing ${name}.`, 'malformed');
       return value;
     };
 
@@ -410,12 +440,12 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
     try {
       event = JSON.parse(delivery.rawBody) as typeof event;
     } catch {
-      throw new Error('Webhook rejected: body is not JSON.');
+      throw new WebhookVerificationError('Webhook rejected: body is not JSON.', 'malformed');
     }
 
-    const verdict = await this.call<{ verification_status: string }>(
-      '/v1/notifications/verify-webhook-signature',
-      {
+    let verdict: { verification_status: string };
+    try {
+      verdict = await this.call<{ verification_status: string }>('/v1/notifications/verify-webhook-signature', {
         method: 'POST',
         body: JSON.stringify({
           transmission_id: h('paypal-transmission-id'),
@@ -426,11 +456,19 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
           webhook_id: this.config.webhookId,
           webhook_event: JSON.parse(delivery.rawBody),
         }),
-      },
-    );
+      });
+    } catch (e) {
+      // PayPal answering that the verification request itself is invalid is a
+      // verdict on the delivery's headers. Anything else (a 5xx, a timeout, a
+      // bad credential) says nothing about the delivery and stays as it is.
+      if (e instanceof PaymentProviderError && e.refused) {
+        throw new WebhookVerificationError(`Webhook rejected: PayPal refused to verify it (${e.status}).`, 'refused');
+      }
+      throw e;
+    }
 
     if (verdict.verification_status !== 'SUCCESS') {
-      throw new Error('Webhook rejected: PayPal did not verify the signature.');
+      throw new WebhookVerificationError('Webhook rejected: PayPal did not verify the signature.', 'refused');
     }
 
     return {
@@ -515,8 +553,20 @@ export class SandboxPaymentAdapter implements PaymentAdapter {
   }
   /** Keys whose first payout call has already "lost" its answer. */
   private readonly answered = new Set<string>();
+  /**
+   * Checks no signature, with one exception for tests: a delivery whose
+   * `paypal-transmission-sig` is `invalid` is refused as unverifiable, so the
+   * API's answer to a forged delivery can be exercised without PayPal.
+   */
   async verifyWebhook(delivery: WebhookDelivery): Promise<WebhookEvent> {
-    const parsed = JSON.parse(delivery.rawBody) as Partial<WebhookEvent>;
+    const sig = delivery.headers['paypal-transmission-sig'] ?? delivery.headers['PAYPAL-TRANSMISSION-SIG'];
+    if (sig === 'invalid') throw new WebhookVerificationError('Webhook rejected: sandbox signature marked invalid.', 'refused');
+    let parsed: Partial<WebhookEvent>;
+    try {
+      parsed = JSON.parse(delivery.rawBody) as Partial<WebhookEvent>;
+    } catch {
+      throw new WebhookVerificationError('Webhook rejected: body is not JSON.', 'malformed');
+    }
     return { id: parsed.id ?? 'sbx_evt', type: parsed.type ?? 'unknown', data: parsed.data ?? {} };
   }
 }

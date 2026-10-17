@@ -60,6 +60,8 @@ function withdrawal(over: Partial<WithdrawalFacts> = {}): WithdrawalFacts {
     walletRequestId: 'wr-1',
     payoutRef: 'sbx_payout_wallet_request:wr-1',
     feeMinor: 700,
+    debitedMinor: 20_000,
+    reversedMinor: 0,
     ...over,
   };
 }
@@ -169,6 +171,42 @@ describe('money out', () => {
     expect(kinds(run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal()] }))).toEqual([
       'payout_failed_but_debited',
     ]);
+  });
+
+  it('matches a refused payout whose debit was credited back in full', () => {
+    // Older shape: the fee inside the withdrawal row.
+    const r = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal({ reversedMinor: 20_000 })] });
+    expect(r.mismatches).toEqual([]);
+    expect(r.matched).toBe(1);
+
+    // Payout flow: the withdrawal is the net, the fee a row of its own, and the
+    // reversal gives back both.
+    const net = withdrawal({ amount: 19_300, feeMinor: 0, debitedMinor: 20_000, reversedMinor: 20_000 });
+    const flow = run({ payouts: [payout({ status: 'failed' })], withdrawals: [net] });
+    expect(flow.mismatches).toEqual([]);
+    expect(flow.matched).toBe(1);
+  });
+
+  it('treats a payout taken back after it was paid like a refusal', () => {
+    const net = withdrawal({ amount: 19_300, feeMinor: 0, debitedMinor: 20_000 });
+    const back = run({ payouts: [payout({ status: 'reversed' })], withdrawals: [{ ...net, reversedMinor: 20_000 }] });
+    expect(back.mismatches).toEqual([]);
+    expect(back.matched).toBe(1);
+
+    const kept = run({ payouts: [payout({ status: 'reversed' })], withdrawals: [net] });
+    expect(kinds(kept)).toEqual(['payout_failed_but_debited']);
+    expect(kept.mismatches[0]).toMatchObject({ recordedMinor: 20_000 });
+  });
+
+  it('still reports a refused payout whose debit was not credited back, or only in part', () => {
+    const none = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal()] });
+    expect(kinds(none)).toEqual(['payout_failed_but_debited']);
+    expect(none.mismatches[0]).toMatchObject({ expectedMinor: 0, recordedMinor: 20_000 });
+
+    // The withdrawal came back and the fee did not.
+    const part = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal({ reversedMinor: 19_300 })] });
+    expect(kinds(part)).toEqual(['payout_failed_but_debited']);
+    expect(part.mismatches[0]).toMatchObject({ expectedMinor: 0, recordedMinor: 700 });
   });
 
   it('lists a debited payout the provider has not confirmed as unresolved', () => {

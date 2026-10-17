@@ -32,11 +32,17 @@ import { log } from '../log';
  * close of the cycle it paid for, like a cancellation. A suspended or pending
  * one is not renewed or charged, and its cycle stays lapsed until the account
  * is active again, when the next run renews it.
+ *
+ * ONE BAD ROW STOPS NOTHING, AND IS NOT HIDDEN. A membership whose renewal
+ * throws is rolled back alone, logged at error level with its id, and the run
+ * goes on to the next. Once every row has had its turn, the run throws, naming
+ * the ones that failed, so `runScheduledJob` records a failure on the heartbeat
+ * and reports it. It used to resolve, and the heartbeat said all was well.
  */
 export async function renewMemberships(pool: Pool): Promise<void> {
   let renewed = 0;
   let ended = 0;
-  let errored = 0;
+  const failed: string[] = [];
 
   // Cancelled memberships end at the close of the cycle they paid for. Taking
   // the allowance away at the moment somebody cancels would be charging for a
@@ -181,14 +187,19 @@ export async function renewMemberships(pool: Pool): Promise<void> {
       renewed += 1;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => undefined);
-      errored += 1;
+      failed.push(id);
       log.error('membership renewal failed', { job: 'membership.renewal', membershipId: id, userId, error: err });
     } finally {
       client.release();
     }
   }
 
-  if (renewed > 0 || ended > 0 || errored > 0) {
-    log.info('memberships rolled', { job: 'membership.renewal', renewed, ended, errored });
+  if (renewed > 0 || ended > 0 || failed.length > 0) {
+    log.info('memberships rolled', { job: 'membership.renewal', renewed, ended, errored: failed.length });
+  }
+  if (failed.length > 0) {
+    throw new Error(
+      `membership renewal failed for ${failed.length} of ${due.rows.length} due: ${failed.join(', ')}`,
+    );
   }
 }

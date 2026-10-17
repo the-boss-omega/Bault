@@ -19,6 +19,8 @@ class TopupDto {
 class WithdrawRequestDto {
   @IsInt() @IsPositive() amountMinor!: number;
   @IsString() destinationAccount!: string;
+  /** Who the destination account belongs to. Optional for older clients; see the route. */
+  @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
 }
 class WithdrawConfirmDto {
   @IsString() confirmationToken!: string;
@@ -155,15 +157,22 @@ export class PayController {
   /**
    * Legacy shim: raises a cash-out request instead of issuing a confirmation
    * challenge. Returns no `confirmationToken`, because a reviewer decides.
+   *
+   * The old body names no beneficiary, and the reviewer checks the beneficiary
+   * against the account the money goes to. It is the name the client sends, or
+   * else the account holder's own name, since a cash-out pays the holder. It
+   * used to be the destination account number, which matches nothing. An
+   * account with no name on record is refused as a cash-out without one.
    */
   @Post('finance/withdrawals')
   async requestWithdrawal(@CurrentUser() user: AuthUser, @Body() dto: WithdrawRequestDto) {
+    const beneficiaryName = dto.beneficiaryName?.trim() || (await this.requests.accountHolderName(user.id));
     const created = await this.requests.submit(user.id, {
       type: 'cash_out',
       amountMinor: dto.amountMinor,
       currency: 'USD',
       destinationAccount: dto.destinationAccount,
-      beneficiaryName: dto.destinationAccount,
+      beneficiaryName,
       notes: 'Raised through the legacy /finance/withdrawals endpoint.',
     });
     return {
@@ -193,9 +202,10 @@ export class PayController {
    * headers, not one signature string, and PayPal's is a call rather than a
    * compare.
    *
-   * An unverifiable delivery throws, which the global filter renders as a 4xx:
-   * a provider that gets a 4xx retries and eventually alerts a human, whereas a
-   * 200 would silently accept a body we could not authenticate.
+   * An unverifiable delivery is refused with a 400 (`webhook_unverified`) and
+   * logged: the sender sees why, and a 200 would silently accept a body we
+   * could not authenticate. A provider that could not be asked is a 5xx, which
+   * PayPal retries.
    */
   @Post('webhooks/payment')
   async webhook(@Req() req: Request) {
