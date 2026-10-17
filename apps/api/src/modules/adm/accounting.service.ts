@@ -233,6 +233,11 @@ export class AccountingService {
    *
    * Movements between customers (a purchase and the matching sale credit, an
    * escrow hold and its release) appear in `byType` and in none of the three.
+   *
+   * A cash-out the provider refused or returned is credited back in full by a
+   * `payout_reversal` (see `WalletRequestService.recordPayoutOutcome`). Nothing
+   * left Bault and Bault kept no fee, so in the month of the reversal its
+   * withdrawal comes off money out and its fee off the cash-out fee line.
    */
   async summary(month: { month: string; start: Date; end: Date }) {
     const from = month.start.toISOString();
@@ -276,7 +281,31 @@ export class AccountingService {
            AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz
          GROUP BY 1`)
     ).rows;
+    /**
+     * Cash-outs credited back, split into the fee they carried and the payout.
+     * The fee is the cash-out fee charge on the same request, if there was one
+     * (a membership may have waived it).
+     */
+    const [returned] = (
+      await this.db.execute<{ total: string; fee: string }>(sql`
+        SELECT COALESCE(sum(l.amount), 0)::text AS total,
+               COALESCE(sum(LEAST(l.amount, COALESCE(f.amount, 0))), 0)::text AS fee
+          FROM ledger_record l
+          LEFT JOIN LATERAL (
+            SELECT sum(c.amount) AS amount
+              FROM charge c
+             WHERE c.reference_id = l.reference_id
+               AND c.pricing_rule_snapshot ->> 'cashOutFee' = 'true'
+          ) f ON TRUE
+         WHERE l.type = 'payout_reversal' AND l.direction = 'credit'
+           AND l.reference_type = 'wallet_request'
+           AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz`)
+    ).rows;
+    const returnedFeeMinor = Number(returned?.fee ?? 0);
+    const returnedPayoutMinor = Number(returned?.total ?? 0) - returnedFeeMinor;
+
     const revenueBy = new Map(revenueRows.map((r) => [r.key, Number(r.total)]));
+    revenueBy.set('cash_out_fee', (revenueBy.get('cash_out_fee') ?? 0) - returnedFeeMinor);
     const lines = REVENUE_LINES.map((key) => ({ key, totalMinor: revenueBy.get(key) ?? 0 }));
 
     /**
@@ -300,7 +329,7 @@ export class AccountingService {
     const sumOf = (type: string, direction: string) =>
       byType.filter((r) => r.type === type && r.direction === direction).reduce((a, r) => a + r.totalMinor, 0);
     const inMinor = sumOf('credit_topup', 'credit');
-    const outMinor = sumOf('withdrawal', 'debit');
+    const outMinor = sumOf('withdrawal', 'debit') - returnedPayoutMinor;
     const reversedMinor = sumOf('chargeback', 'debit');
 
     /**
@@ -346,11 +375,15 @@ export class AccountingService {
       revenue: {
         totalMinor: lines.reduce((a, l) => a + l.totalMinor, 0),
         lines,
+        /** Already taken off `cash_out_fee`: fees given back with a returned cash-out. */
+        cashOutFeesReturnedMinor: returnedFeeMinor,
         carrierCostOnShippingChargesMinor: Number(carrier?.total ?? 0),
       },
       customerMoney: {
         inMinor,
         outMinor,
+        /** Already taken off `outMinor`: cash-outs the provider refused or returned. */
+        payoutsReturnedMinor: returnedPayoutMinor,
         reversedMinor,
         netMinor: inMinor - outMinor - reversedMinor,
       },
@@ -363,7 +396,8 @@ export class AccountingService {
         platformAccountMinor: Number(held?.platform ?? 0),
       },
       note:
-        'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows. ' +
+        'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows, ' +
+        'less the cash-out fees given back when a payout was refused or returned. ' +
         'No tax has been applied or separated; which lines are taxable is for the accountant.',
     };
   }
@@ -444,13 +478,19 @@ export class AccountingService {
      * withdrawal row is the NET, the fee being a row of its own. An older one
      * recorded the reference and the fee in its `completed` event, and its
      * withdrawal row is the gross. A debit with neither has no payout to point at.
+     *
+     * `debited_minor` is everything the cash-out took (the net and its own fee
+     * row, or the gross), and `reversed_minor` what `payout_reversal` credits on
+     * the same request gave back, so a refused payout can be checked against it.
      */
     const withdrawals = (
       await this.db.execute<Record<string, unknown>>(sql`
         SELECT l.id::text AS ledger_id, l.user_id, u.username, l.amount::text AS amount, l.occurred_at,
                CASE WHEN l.reference_type = 'wallet_request' THEN l.reference_id END AS wallet_request_id,
                COALESCE(pp.provider_ref, ev.metadata ->> 'payoutRef') AS payout_ref,
-               CASE WHEN pp.id IS NOT NULL THEN '0' ELSE COALESCE(ev.metadata ->> 'feeMinor', '0') END AS fee_minor
+               CASE WHEN pp.id IS NOT NULL THEN '0' ELSE COALESCE(ev.metadata ->> 'feeMinor', '0') END AS fee_minor,
+               (l.amount + CASE WHEN pp.id IS NOT NULL THEN COALESCE(fee.amount, 0) ELSE 0 END)::text AS debited_minor,
+               COALESCE(rv.amount, 0)::text AS reversed_minor
           FROM ledger_record l
           LEFT JOIN user_account u ON u.id::text = l.user_id
           LEFT JOIN wallet_request wr
@@ -465,6 +505,19 @@ export class AccountingService {
              ORDER BY e.occurred_at DESC
              LIMIT 1
           ) ev ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT sum(c.amount) AS amount
+              FROM charge c
+             WHERE c.reference_id = wr.id::text
+               AND c.pricing_rule_snapshot ->> 'cashOutFee' = 'true'
+          ) fee ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT sum(r.amount) AS amount
+              FROM ledger_record r
+             WHERE l.reference_type = 'wallet_request'
+               AND r.type = 'payout_reversal' AND r.direction = 'credit'
+               AND r.reference_type = 'wallet_request' AND r.reference_id = l.reference_id
+          ) rv ON TRUE
          WHERE l.type = 'withdrawal' AND l.direction = 'debit' ${ledgerWindow}`)
     ).rows.map(
       (r): WithdrawalFacts => ({
@@ -476,6 +529,8 @@ export class AccountingService {
         walletRequestId: (r.wallet_request_id as string | null) ?? null,
         payoutRef: (r.payout_ref as string | null) ?? null,
         feeMinor: Number(r.fee_minor),
+        debitedMinor: Number(r.debited_minor),
+        reversedMinor: Number(r.reversed_minor),
       }),
     );
 

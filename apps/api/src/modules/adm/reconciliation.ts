@@ -16,6 +16,8 @@
  *                       somebody has to go and ask the provider about)
  *   payout              the `withdrawal` debit whose completion recorded this
  *                       payout's reference, for the payout plus its fee
+ *   payout, failed      that debit, credited back in full (withdrawal and
+ *                       fee) by `payout_reversal` rows on the same request
  *   withdrawal debit    a payout behind it: money left a wallet, so money
  *                       must have left Bault
  *
@@ -66,6 +68,13 @@ export interface WithdrawalFacts {
   payoutRef: string | null;
   /** The fee taken alongside it, which the payout does not carry. */
   feeMinor: number;
+  /**
+   * Everything the cash-out took from the wallet: the withdrawal and its fee,
+   * whether the fee is inside the row (older shape) or a row of its own.
+   */
+  debitedMinor: number;
+  /** What `payout_reversal` credits on the same request have given back. */
+  reversedMinor: number;
 }
 
 export interface OrphanLedgerFacts {
@@ -258,15 +267,22 @@ export function reconcile(input: {
         recordedMinor: p.amount,
       });
     }
-    if (p.status === 'failed') {
+    // A refused payout is settled once the cash-out has been credited back in
+    // full, which `recordPayoutOutcome` does in the same transaction that
+    // records the refusal. Only what is still debited is a mismatch.
+    const stillDebited = w.debitedMinor - w.reversedMinor;
+    if (p.status === 'failed' && stillDebited !== 0) {
       found.push({
         ...base,
         kind: 'payout_failed_but_debited',
-        detail: 'The provider reports this payout failed, and the wallet was debited anyway.',
+        detail:
+          w.reversedMinor === 0
+            ? 'The provider reports this payout failed, and the wallet was debited anyway.'
+            : 'The provider reports this payout failed, and the wallet was credited back a different amount than it was debited.',
         ledgerId: w.ledgerId,
         walletRequestId: w.walletRequestId,
         expectedMinor: 0,
-        recordedMinor: w.amount,
+        recordedMinor: stillDebited,
       });
     }
     mismatches.push(...found);
