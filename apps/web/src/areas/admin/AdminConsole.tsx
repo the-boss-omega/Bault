@@ -407,24 +407,39 @@ function UserRow({
   const [lastName, setLastName] = useState(user.lastName ?? '');
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
+  /** What the server holds, as of the list or this row's last save. */
+  const [saved, setSaved] = useState({
+    firstName: user.firstName ?? '',
+    lastName: user.lastName ?? '',
+    role: user.role,
+    status: user.status,
+  });
 
   const namesOk =
     isValidNamePart(normalizeNamePart(firstName)) &&
     (lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName)));
-  const dirty =
-    normalizeNamePart(firstName) !== (user.firstName ?? '') ||
-    normalizeNamePart(lastName) !== (user.lastName ?? '') ||
-    role !== user.role ||
-    status !== user.status;
+
+  /**
+   * Only what the administrator changed.
+   *
+   * The server reads every field it receives as a decision. Sending the status
+   * with a name correction cleared the debt sweep's marker on an account the
+   * sweep had suspended, so the suspension was never lifted.
+   */
+  const changes: Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>> = {};
+  if (normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
+  // A blank last name is left as it is, never sent as a value.
+  if (lastName.trim() && normalizeNamePart(lastName) !== saved.lastName) changes.lastName = normalizeNamePart(lastName);
+  if (role !== saved.role) changes.role = role;
+  if (status !== saved.status) changes.status = status;
+  const dirty = Object.keys(changes).length > 0;
 
   async function save() {
+    if (!dirty) return;
+    const sent = { ...changes };
     try {
-      await api.patch(`/admin/users/${user.id}`, {
-        firstName: normalizeNamePart(firstName),
-        ...(lastName.trim() ? { lastName: normalizeNamePart(lastName) } : {}),
-        role,
-        status,
-      });
+      await api.patch(`/admin/users/${user.id}`, sent);
+      setSaved((s) => ({ ...s, ...sent }));
       onSaved(t('admin.users.saved', { email: user.email }));
     } catch (e) {
       onError((e as Error).message);
@@ -476,7 +491,7 @@ function UserRow({
       </td>
       <td>
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <StatusBadge tone={ACCOUNT_STATUS_TONE[user.status] ?? 'neutral'}>{user.status}</StatusBadge>
+          <StatusBadge tone={ACCOUNT_STATUS_TONE[saved.status] ?? 'neutral'}>{saved.status}</StatusBadge>
           {user.mfaEnabled && (
             <span title={t('admin.users.mfaOnTitle')}>
               <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
@@ -497,7 +512,7 @@ function UserRow({
       </td>
       <td className="td-tight">
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk} onClick={save}>
+          <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk || !dirty} onClick={save}>
             {t('admin.action.save')}
           </Button>
           {onResetMfa && (

@@ -107,10 +107,14 @@ export class AdmService {
     if (patch.role) set.role = patch.role;
     if (patch.status) {
       set.status = patch.status;
-      // Any status a person sets is a person's decision, so the debt sweep's
-      // marker is cleared with it. Otherwise a later sweep could lift a manual
+      // A status a person CHANGES is a person's decision, so the debt sweep's
+      // marker is cleared with it; otherwise a later sweep could lift a manual
       // suspension once the balance recovered, taking it for one of its own.
-      set.autoSuspendedAt = null;
+      // A status sent unchanged is no decision: clearing the marker then made
+      // the sweep's suspension permanent, because the console sent the status
+      // with every save. Compared in the statement itself, against the row as
+      // it is when the update runs, so a sweep landing in between is not missed.
+      set.autoSuspendedAt = sql`case when ${userAccount.status}::text = ${patch.status} then ${userAccount.autoSuspendedAt} else null end`;
     }
     // An admin who writes a name part has just reviewed it, so the migration's
     // review flag is cleared with it. Nothing else here clears it.

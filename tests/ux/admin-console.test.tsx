@@ -162,3 +162,54 @@ describe('the pricing form', () => {
     expect(post.mock.calls[0]![1]).not.toHaveProperty('parameters');
   });
 });
+
+/* ============================================================
+   Users: a save sends what the administrator changed, nothing else
+   ============================================================ */
+
+const DEBTOR = {
+  id: 'u1',
+  email: 'debtor@bault.dev',
+  username: 'debtor',
+  firstName: 'Dee',
+  lastName: 'Btor',
+  nameReviewRequired: false,
+  role: 'user',
+  // Suspended by the debt sweep: the server lifts it once the balance recovers,
+  // unless somebody sets a status.
+  status: 'suspended',
+  intakeId: null,
+  mfaEnabled: false,
+};
+
+describe('saving a user row', () => {
+  it('sends only the name when only the name changed, not the status the row was showing', async () => {
+    const user = userEvent.setup();
+    consoleApi({ '/admin/users': [DEBTOR] });
+    patch.mockResolvedValue({ ...DEBTOR, firstName: 'Dana' });
+    window.location.hash = '#/admin/users';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    const first = await screen.findByRole('textbox', { name: 'First name' });
+    await user.clear(first);
+    await user.type(first, 'Dana');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    expect(patch).toHaveBeenCalledWith('/admin/users/u1', { firstName: 'Dana' });
+  });
+
+  it('sends the status when the administrator changes it', async () => {
+    const user = userEvent.setup();
+    consoleApi({ '/admin/users': [DEBTOR] });
+    patch.mockResolvedValue({ ...DEBTOR, status: 'active' });
+    window.location.hash = '#/admin/users';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Status' }), 'active');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    expect(patch).toHaveBeenCalledWith('/admin/users/u1', { status: 'active' });
+  });
+});
