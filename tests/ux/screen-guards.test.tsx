@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StrictMode } from 'react';
+import { readFileSync } from 'node:fs';
 import { render, screen } from '@testing-library/react';
 
 /**
@@ -19,6 +20,10 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
+const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
+// `import.meta.url` is not a file URL under this suite's transform, so the
+// stylesheet is found from the working directory (the repository root).
+const STYLESHEET = 'apps/web/src/index.css';
 
 function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
@@ -84,5 +89,43 @@ describe('the verification page', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.getByText(/your address is confirmed/i)).toBeInTheDocument();
     expect(screen.queryByText(/already used/i)).not.toBeInTheDocument();
+  });
+});
+
+/* ============================================================
+   The render-failure fallback
+   ============================================================ */
+
+describe('the render-failure fallback', () => {
+  let quiet: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    // React and the boundary both log the failure; it is expected here.
+    quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => quiet.mockRestore());
+
+  it('styles its buttons with classes the stylesheet defines', () => {
+    function Boom(): React.ReactElement {
+      throw new Error('boom');
+    }
+    render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+
+    const css = readFileSync(STYLESHEET, 'utf8');
+    const buttons = [
+      screen.getByRole('button', { name: /try again/i }),
+      screen.getByRole('button', { name: /reload the page/i }),
+    ];
+    for (const button of buttons) {
+      for (const cls of button.classList) {
+        const selector = new RegExp(`\\.${cls.replace(/[-]/g, '\\-')}(?![\\w-])`);
+        expect(css, `.${cls} is not defined in index.css`).toMatch(selector);
+      }
+    }
+    // The primary action looks like one.
+    expect(buttons[0]).toHaveClass('btn--gold');
   });
 });

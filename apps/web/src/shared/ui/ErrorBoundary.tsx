@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Button } from './primitives';
 
 /**
  * The thing that stands between one bad render and a white screen.
@@ -62,16 +63,12 @@ export class ErrorBoundary extends Component<Props, State> {
         </p>
         <p className="error-boundary-detail">{error.message}</p>
         <div className="error-boundary-actions">
-          <button type="button" className="btn btn-gold" onClick={this.reset}>
+          <Button variant="gold" onClick={this.reset}>
             Try again
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => window.location.reload()}
-          >
+          </Button>
+          <Button variant="secondary" onClick={() => window.location.reload()}>
             Reload the page
-          </button>
+          </Button>
         </div>
       </div>
     );
