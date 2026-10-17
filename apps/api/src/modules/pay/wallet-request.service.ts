@@ -241,6 +241,25 @@ export class WalletRequestService {
      Reads
      ------------------------------------------------------------------------- */
 
+  /**
+   * The name on the account, as a cash-out's beneficiary when a client names
+   * none: the first and last name, or the legacy display name of an account
+   * migrated with only that. Null when there is neither.
+   */
+  async accountHolderName(userId: string): Promise<string | null> {
+    const [u] = await this.db
+      .select({
+        firstName: userAccount.firstName,
+        lastName: userAccount.lastName,
+        legacyDisplayName: userAccount.legacyDisplayName,
+      })
+      .from(userAccount)
+      .where(eq(userAccount.id, userId))
+      .limit(1);
+    if (!u) return null;
+    return fullName(u.firstName, u.lastName) || u.legacyDisplayName?.trim() || null;
+  }
+
   /** The caller's own requests, newest first. Never anyone else's. */
   listMine(userId: string) {
     return this.db
