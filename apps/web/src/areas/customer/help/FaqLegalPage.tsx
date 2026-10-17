@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -645,11 +645,6 @@ export interface AccountTerms {
     signatureRequiredAboveMinor: number;
   };
   removeCommonsWindowDays: number;
-}
-
-/** Basis points as a percentage, without trailing zeros: 5 → "0.05", 150 → "1.5". */
-function bpsToPercent(bps: number): string {
-  return String(Number((bps / 100).toFixed(4)));
 }
 
 /**

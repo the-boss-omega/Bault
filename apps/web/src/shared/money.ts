@@ -42,6 +42,11 @@ export function dollarsToCents(input: string): number | null {
   return Math.round(value * 100);
 }
 
+/** Basis points as a percentage, without trailing zeros: 5 → "0.05", 150 → "1.5". */
+export function bpsToPercent(bps: number): string {
+  return String(Number((bps / 100).toFixed(4)));
+}
+
 /** Inverse of `dollarsToCents`, for pre-filling an editable amount field. */
 export function centsToDollars(minorUnits: number): string {
   return ((minorUnits ?? 0) / 100).toFixed(2);
