@@ -8,6 +8,7 @@ import { ConfirmationService } from '../../shared/confirmation/confirmation.serv
 import { CustodyService } from '../cst/custody.service';
 import { item } from '../cst/cst.schema';
 import { listing } from './mkt.schema';
+import { closeOpenOffers } from './open-offers';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { escrowDeal } from '../esc/escrow.schema';
 import { shipment } from '../shp/shp.schema';
@@ -137,6 +138,7 @@ export class ListingService {
       const [l] = await tx.select().from(listing).where(eq(listing.id, listingId)).for('update').limit(1);
       if (!l || l.status !== 'active') throw new AppError(ErrorCode.CONFLICT, 'Listing no longer active', 409);
       await tx.update(listing).set({ status: 'removed', updatedAt: new Date() }).where(eq(listing.id, listingId));
+      await closeOpenOffers(tx, listingId);
       await this.custody.changeState(tx, l.itemId, 'stored', sellerId, 'listing removed');
       return { status: 'removed' };
     });

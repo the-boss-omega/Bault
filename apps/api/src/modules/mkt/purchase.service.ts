@@ -13,6 +13,7 @@ import { PricingService } from '../prc/pricing.service';
 import { LedgerService } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { listing, transaction } from './mkt.schema';
+import { closeOpenOffers } from './open-offers';
 import { MembershipService } from '../mem/membership.service';
 
 export interface PurchaseResult {
@@ -155,6 +156,8 @@ export class PurchaseService {
 
       await tx.update(listing).set({ status: 'sold', updatedAt: new Date() }).where(eq(listing.id, listingId));
       if (inSale) await inSale(tx as Database);
+      // Every other offer on it lapses with the sale (an accepted one was marked above).
+      await closeOpenOffers(tx as Database, listingId);
 
       const [txn] = await tx
         .insert(transaction)
