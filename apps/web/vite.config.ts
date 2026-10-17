@@ -12,57 +12,32 @@ const repoRoot = resolve(appDir, '../..');
 
 // Vite dev server + build config for the SPA.
 export default defineConfig(({ mode, command }) => {
-  // Read the repo-root .env (where API_PORT lives) and then apps/web/.env, which
-  // may override it. `''` as the prefix loads unprefixed keys too; nothing from
-  // here is injected into the client bundle — it only picks the proxy target.
+  // Read the repo-root .env (where API_PORT lives), then apps/web/.env, which
+  // may override it. The empty prefix loads unprefixed keys too. Nothing from
+  // here reaches the client bundle; it only picks the proxy target.
   const fileEnv = { ...loadEnv(mode, repoRoot, ''), ...loadEnv(mode, appDir, '') };
   const api = resolveApiProxyTarget(fileEnv);
 
   /**
-   * The repo-root `.env` must not decide what KIND of bundle this is.
+   * A build is always a production build, whatever `NODE_ENV` says.
    *
-   * `loadEnv(mode, repoRoot, '')` is called with an empty prefix because that is
-   * the only way to read `API_PORT`, which has no `VITE_` on it. The side effect
-   * is not obvious and was expensive: when a loaded file defines `NODE_ENV`,
-   * Vite records it as `VITE_USER_NODE_ENV` and then decides `isProduction` from
-   * THAT rather than from the command. The root `.env` says
-   * `NODE_ENV=development`, because that is what the NestJS API and the worker
-   * need — so `vite build` was quietly producing a DEVELOPMENT bundle.
-   *
-   * It was not a cosmetic difference. A development build keeps `jsxDEV` and the
-   * file/line metadata, skips minification properly, and — the reason this was
-   * found — takes every `import.meta.env.DEV` branch. `SignInPage` pre-fills the
-   * form with a seeded account and the shared password under exactly such a
-   * branch, so the "production" bundle shipped a working administrator-adjacent
-   * credential, pre-typed into the login form, to anybody who opened it.
-   *
-   * The build's mode comes from the build command. `NODE_ENV` in a `.env` is a
-   * message to the server processes, and this deletes it before Vite can read it
-   * as an instruction. `tests/web/no-credentials-in-bundle.test.ts` checks the
-   * artefact, because a guard that looks correct is what caused this.
-   *
-   * The same goes for `NODE_ENV` in the shell, which Vite also obeys. CI sets
-   * `NODE_ENV=test` for the whole job, so its `vite build` made a development
-   * bundle with the seeded addresses and the shared password in it, and that
-   * test failed on the first run that reached it. A developer's shell
-   * with `NODE_ENV=development` exported would do the same to a build they
-   * then deployed. Vite reads `NODE_ENV` after this config has run, so a build
-   * is a production build here, whatever the environment says.
+   * The empty-prefix `loadEnv` above also loads `NODE_ENV` from the root `.env`
+   * (`development`, for the API and worker); Vite records it as
+   * `VITE_USER_NODE_ENV` and decides `isProduction` from it. Vite also obeys
+   * `NODE_ENV` in the shell, and CI sets `NODE_ENV=test`. Either would make
+   * `vite build` emit a development bundle that takes the `import.meta.env.DEV`
+   * branches, including `SignInPage`'s pre-filled seeded credentials. Vite reads
+   * `NODE_ENV` after this config runs, so it is set here.
+   * `tests/web/no-credentials-in-bundle.test.ts` checks the built artefact.
    */
   delete process.env.VITE_USER_NODE_ENV;
   if (command === 'build') process.env.NODE_ENV = 'production';
 
   /**
-   * Hosts this dev server may be reached by, beyond loopback.
-   *
-   * Read from the .env files first and the process environment second, so it
-   * behaves like `API_PORT` — set once in `.env` and forgotten — while still
-   * allowing a one-off `WEB_PUBLIC_HOST=… pnpm dev` for a temporary tunnel.
+   * Hosts this server may be reached by, beyond loopback: the union of
+   * `WEB_PUBLIC_HOST` from the .env files and from the process environment, so a
+   * one-off `WEB_PUBLIC_HOST=… pnpm preview` works even when `.env` sets one.
    */
-  // The UNION of both sources, not the first one found. With `??`, a value in
-  // `.env` silently shadowed one passed on the command line, so
-  // `WEB_PUBLIC_HOST=… pnpm preview` did nothing while the file had any value.
-  // Allowing a host is additive and explicit either way, so both are honoured.
   const publicHosts = [
     ...new Set(
       [fileEnv.WEB_PUBLIC_HOST, process.env.WEB_PUBLIC_HOST]
@@ -75,15 +50,11 @@ export default defineConfig(({ mode, command }) => {
   /**
    * A password in front of the built app, for when it is on a public tunnel.
    *
-   * A quick tunnel has no authentication of its own: the URL is the only secret,
-   * and a URL is pasted into chats, screenshots and browser history. Behind it is
-   * an API whose seeded accounts share one password, including an administrator.
+   * A quick tunnel has no authentication of its own, and behind it is an API
+   * whose seeded accounts share one password, including an administrator.
    * `WEB_PREVIEW_PASSWORD` puts a browser sign-in prompt in front of the whole
-   * site — the page, the photographs AND `/api` — so the tunnel link alone gets a
-   * stranger nothing.
-   *
-   * Preview only. The dev server is never the thing to tunnel (it serves source),
-   * and a password on it would only get in the way of the work it is for.
+   * site: the page, the photographs and `/api`. Preview only; the dev server
+   * serves source and is never the thing to tunnel.
    */
   const previewUser = (fileEnv.WEB_PREVIEW_USER ?? process.env.WEB_PREVIEW_USER ?? 'bault').trim();
   const previewPassword = (fileEnv.WEB_PREVIEW_PASSWORD ?? process.env.WEB_PREVIEW_PASSWORD ?? '').trim();
@@ -94,48 +65,31 @@ export default defineConfig(({ mode, command }) => {
 
   return {
     plugins: [react(), ...(previewPassword ? [previewBasicAuth(previewUser, previewPassword)] : [])],
-    // Card photos live in the repo-root assets/ folder, one file per item named by
-    // its serial number. Pointing publicDir there serves them at /images/<SERIAL>.jpg
-    // in dev and copies them into dist/ on build. Path is relative to this app root.
+    // Card photos and fonts live in the repo-root assets/ folder. Pointing
+    // publicDir there serves photos at /images/<SERIAL>.<ext> in dev and copies
+    // them into dist/ on build. The path is relative to this app root.
     publicDir: '../../assets',
     server: {
       port: 5173,
       /**
-       * Showing the app from somewhere that is not this laptop.
-       *
-       * Vite refuses a request whose `Host` header it does not recognise — a
-       * deliberate protection against DNS-rebinding, and the thing that makes a
-       * tunnel answer "Blocked request. This host is not allowed." rather than
-       * serving the app.
-       *
-       * `WEB_PUBLIC_HOST` opens exactly the hosts you name, comma-separated —
-       * from the repo-root `.env` like every other setting here, or inline:
-       *
-       *   WEB_PUBLIC_HOST=192.168.1.50,demo.trycloudflare.com
-       *
-       * Named hosts rather than `true`, because `true` disables the check
-       * altogether and the protection is worth keeping for the other 99% of the
-       * time. `host: true` binds 0.0.0.0 only when a public host is named, so
-       * the default stays loopback-only.
+       * Vite refuses a request whose `Host` it does not recognise, as protection
+       * against DNS rebinding. `WEB_PUBLIC_HOST` opens exactly the hosts named,
+       * comma-separated (`192.168.1.50,demo.trycloudflare.com`), which keeps the
+       * check on for everything else. `host: true` binds 0.0.0.0 only when a
+       * public host is named, so the default stays loopback-only.
        */
       ...(publicHosts.length > 0 ? { host: true, allowedHosts: publicHosts } : {}),
-      // Proxy API calls to the NestJS backend during development so the browser
-      // talks to one origin (avoids CORS entirely — no preflight, no CORS config
-      // on the API — and matches the production reverse-proxy setup).
-      //
-      // Session auth needs nothing special here: the API sets its `session`
-      // cookie with no Domain attribute and Path=/, so the browser scopes it to
-      // localhost:5173 (the origin it actually requested) and replays it on
-      // every proxied call. No cookieDomainRewrite / cookiePathRewrite required
-      // — adding either would in fact break the cookie.
+      // The browser talks to one origin, as behind the production reverse proxy,
+      // so the API needs no CORS. The API's `session` cookie has no Domain and
+      // Path=/, so the browser scopes it to this origin and replays it on every
+      // proxied call; a cookieDomainRewrite or cookiePathRewrite would break it.
       proxy: {
         '/api': {
           target: api.target,
           changeOrigin: true,
-          // Tell the API who the client really is. Without this the API saw
-          // every browser as 127.0.0.1 — this proxy — and could neither rate-limit
-          // per visitor nor record where a session was opened from. The API
-          // trusts loopback hops only, so a forged header is ignored there.
+          // Forward the client address so the API can rate-limit per visitor and
+          // record where a session was opened from. The API trusts loopback hops
+          // only, so a forged header is ignored there.
           xfwd: true,
           // TLS verification stays on except for a loopback https target, which
           // in local development means a self-signed certificate.
@@ -145,10 +99,9 @@ export default defineConfig(({ mode, command }) => {
             // including these. The API has no use for it, and a password it never
             // needed should not be in its request logs.
             proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('authorization'));
-            // Without this, a down backend answers the browser with an opaque
-            // 500 + HTML body, which the SPA cannot tell apart from a real
-            // server error. Turn it into a typed 503 the client can act on —
-            // and keep logging it loudly to the terminal (it is not hidden).
+            // A down backend would otherwise reach the browser as an opaque 500
+            // with an HTML body, indistinguishable from a real server error.
+            // Answer with a typed 503 the SPA can act on, and log it here.
             proxy.on('error', (err, req, res) => {
               const codes = collectErrorCodes(err);
               const refused = codes.includes('ECONNREFUSED');
@@ -177,32 +130,12 @@ export default defineConfig(({ mode, command }) => {
     },
 
     /**
-     * The BUILT app, served — and the one to put a tunnel in front of.
+     * The built app, served: the one to put a tunnel in front of. The dev server
+     * serves source modules (`GET /src/...tsx` answers with the transpiled file);
+     * `vite preview` serves only `dist/`.
      *
-     * `WEB_PUBLIC_HOST` above opens the dev server, which was the whole point of
-     * it, and for showing somebody a work in progress on the same LAN that is
-     * the right tool. It is the wrong one to expose to the internet, because a
-     * dev server's job is to serve modules: `GET /src/areas/.../LandingPage.tsx`
-     * answers 200 with the transpiled file, doc comments and all. Anybody with
-     * the tunnel link can read the source by guessing paths.
-     *
-     * `vite preview` serves `dist/` and nothing else. There are no `.tsx` files
-     * and no sourcemaps in there, and the comments are stripped by the minifier,
-     * so the same request answers with `index.html` via the SPA fallback.
-     *
-     * Two settings it does NOT inherit from `server` above, which is why this
-     * block exists rather than being assumed:
-     *
-     *   - `allowedHosts`. Vite checks `preview.allowedHosts` separately, so
-     *     without this a tunnel gets "Blocked request. This host is not
-     *     allowed." from the safe server while the unsafe one lets it through —
-     *     precisely the wrong way round.
-     *   - `host`, for the same reason: bound to loopback unless a public host
-     *     is named.
-     *
-     * `proxy` IS inherited, so `/api` reaches the API on one origin here exactly
-     * as it does in development, and the session cookie needs no special
-     * handling for the same reason it does not there.
+     * Preview does not inherit `allowedHosts` or `host` from `server`, so both are
+     * set here. It does inherit `proxy`, so `/api` stays on the same origin.
      */
     preview: {
       port: 4173,
@@ -229,14 +162,9 @@ function collectErrorCodes(err: Error): string[] {
 /**
  * HTTP basic auth for `vite preview`, compared in constant time.
  *
- * Registered directly in `configurePreviewServer` rather than in its returned
- * callback, which is what makes it run BEFORE Vite's own middlewares — the
- * static files and the `/api` proxy alike. A check that ran after the proxy
- * would guard the page and leave the API open behind it.
- *
- * The comparison is on equal-length buffers with `timingSafeEqual`. A string
- * `===` returns as soon as a character differs, which tells a patient caller how
- * much of the password they have right.
+ * It is registered directly in `configurePreviewServer`, outside the returned
+ * callback, so it runs before Vite's own middlewares: the static files and the
+ * `/api` proxy alike. A check after the proxy would leave the API open.
  */
 function previewBasicAuth(user: string, password: string): Plugin {
   const expected = Buffer.from(`${user}:${password}`);
