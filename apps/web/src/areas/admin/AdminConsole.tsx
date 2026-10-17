@@ -553,17 +553,39 @@ function ItemRow({
   const [ownerId, setOwnerId] = useState(item.ownerId);
   const [lifecycleState, setLifecycleState] = useState(item.lifecycleState);
   const [holdFlag, setHoldFlag] = useState(item.holdFlag);
+  /** What the server holds, as of the list or this row's last save. */
+  const [saved, setSaved] = useState({
+    description: item.description,
+    typeClass: item.typeClass,
+    conditionGrade: item.conditionGrade ?? '',
+    ownerId: item.ownerId,
+    lifecycleState: item.lifecycleState,
+    holdFlag: item.holdFlag,
+  });
+
+  /**
+   * Only what the administrator changed, as for a user row. The state the row
+   * showed, sent beside an owner change, kept a card `listed` after the server
+   * had taken its listing down; an empty grade sent unchanged wrote "" over a
+   * card with none.
+   */
+  const current = { description, typeClass, conditionGrade, ownerId, lifecycleState, holdFlag };
+  const changes: Partial<typeof current> = {};
+  for (const f of Object.keys(current) as (keyof typeof current)[]) {
+    if (current[f] !== saved[f]) Object.assign(changes, { [f]: current[f] });
+  }
+  const dirty = Object.keys(changes).length > 0;
 
   async function save() {
+    if (!dirty) return;
+    const sent = { ...changes };
     try {
-      await api.patch(`/admin/items/${item.id}`, {
-        description,
-        typeClass,
-        conditionGrade,
-        ownerId,
-        lifecycleState,
-        holdFlag,
-      });
+      const updated = await api.patch<{ lifecycleState?: string } | null>(`/admin/items/${item.id}`, sent);
+      // The server may move the state itself (an owner change takes a listed
+      // card back to `stored`), so the row shows the state it answered with.
+      const state = updated?.lifecycleState ?? sent.lifecycleState ?? saved.lifecycleState;
+      setLifecycleState(state);
+      setSaved((s) => ({ ...s, ...sent, lifecycleState: state }));
       onSaved(t('admin.items.saved', { barcode: item.barcode }));
     } catch (e) {
       onError((e as Error).message);
@@ -638,7 +660,7 @@ function ItemRow({
         <CardPhotoButton serialNumber={item.serialNumber} title={item.description || item.typeClass} />
       </td>
       <td className="td-tight">
-        <Button size="sm" variant="secondary" onClick={save}>
+        <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!dirty} onClick={save}>
           {t('admin.action.save')}
         </Button>
       </td>

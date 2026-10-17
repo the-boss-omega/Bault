@@ -213,3 +213,54 @@ describe('saving a user row', () => {
     expect(patch).toHaveBeenCalledWith('/admin/users/u1', { status: 'active' });
   });
 });
+
+/* ============================================================
+   Items: a save sends what the administrator changed, nothing else
+   ============================================================ */
+
+const LISTED_CARD = {
+  id: 'i1',
+  serialNumber: 'SN-1',
+  barcode: 'BLT-0001',
+  typeClass: 'trading_card',
+  description: 'Charizard',
+  conditionGrade: null,
+  lifecycleState: 'listed',
+  holdFlag: false,
+  binId: null,
+  ownerId: 'u1',
+  ownerEmail: DEBTOR.email,
+};
+const BUYER = { ...DEBTOR, id: 'u2', email: 'buyer@bault.dev', username: 'buyer', status: 'active' };
+
+describe('saving an item row', () => {
+  it('sends only the new owner, not the `listed` state the row was showing', async () => {
+    const user = userEvent.setup();
+    consoleApi({ '/admin/users': [DEBTOR, BUYER], '/admin/items': [LISTED_CARD] });
+    patch.mockResolvedValue({});
+    window.location.hash = '#/admin/items';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Owner' }), 'u2');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    // The server takes the card off sale and back to `stored`; a `listed` sent
+    // alongside used to keep it listed with no listing.
+    expect(patch).toHaveBeenCalledWith('/admin/items/i1', { ownerId: 'u2' });
+  });
+
+  it('sends the state when the administrator changes it', async () => {
+    const user = userEvent.setup();
+    consoleApi({ '/admin/users': [DEBTOR, BUYER], '/admin/items': [LISTED_CARD] });
+    patch.mockResolvedValue({});
+    window.location.hash = '#/admin/items';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Lifecycle' }), 'on-hold');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    expect(patch).toHaveBeenCalledWith('/admin/items/i1', { lifecycleState: 'on-hold' });
+  });
+});

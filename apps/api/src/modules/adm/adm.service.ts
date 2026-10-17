@@ -203,7 +203,7 @@ export class AdmService {
          * The previous owner's listing goes with the previous owner, so nobody
          * can buy the card from somebody who no longer owns it. Taken off sale
          * here, open offers on it closed, and the card put back on the shelf
-         * unless this same edit sets a state of its own.
+         * unless this same edit sets a state of its own other than `listed`.
          */
         const removed = await tx
           .update(listing)
@@ -216,7 +216,11 @@ export class AdmService {
             .set({ status: 'rejected', updatedAt: new Date() })
             .where(and(inArray(offer.listingId, removed.map((l) => l.id)), eq(offer.status, 'pending')));
         }
-        if (cur.lifecycleState === 'listed' && !patch.lifecycleState) {
+        // `listed` is not one of those: no listing is left to be listed under,
+        // and the new owner has not made one. The console sent the state the
+        // row showed with every save, so `listed` arrived beside the owner
+        // change and the card stayed listed with no listing.
+        if ((patch.lifecycleState ?? cur.lifecycleState) === 'listed') {
           patch = { ...patch, lifecycleState: 'stored' };
         }
       }
