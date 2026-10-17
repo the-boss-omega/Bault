@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, intakeFor, signIn, type Client } from './helpers/http';
+import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 
 /**
  * Section 5 — everything a collector can ask us to DO to a card that is already
@@ -295,6 +295,79 @@ describe('DIS services on a stored item', () => {
     const card = (await collector.get(`/vault/items/${item.id}`)).body;
     // The grade no longer describes anything, so it does not survive.
     expect(card.item.conditionGrade).not.toBe('PSA 10');
+  });
+
+  /**
+   * The confirmation is issued on one read and consumed later. A card sold in
+   * between belongs to somebody else, and cracking it on the seller's word
+   * would destroy the buyer's slab and bill the seller for it.
+   */
+  async function sellTo(sellerEmail: string, buyerEmail: string, itemId: string) {
+    const seller = await signIn(sellerEmail);
+    const listed = await seller.post('/marketplace/listings', { itemId, askingPrice: 5_000 });
+    expect(listed.status).toBe(201);
+    await fundWallet(buyerEmail, 10_000);
+    const bought = await (await signIn(buyerEmail)).post(`/marketplace/listings/${listed.body.id}/purchase`);
+    expect(bought.status).toBe(201);
+  }
+
+  const walletOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
+
+  it('refuses to crack a slab that changed hands after it was asked for, and charges nothing', async () => {
+    const { item } = await freshItem({ conditionGrade: 'PSA 9', description: 'Deslab sold mid-confirmation' });
+    const collector = await signIn(SEED.collector);
+    const challenge = (await collector.post('/services/deslab', { itemId: item.id })).body;
+    expect(challenge.confirmationToken).toBeTruthy();
+
+    await sellTo(SEED.collector, SEED.collector2, item.id);
+
+    const before = await walletOf(collector);
+    const confirmed = await collector.post('/services/deslab/confirm', {
+      confirmationToken: challenge.confirmationToken,
+    });
+    expect(confirmed.status).toBe(409);
+    expect(confirmed.body.error.code).toBe('item_no_longer_available');
+    expect(await walletOf(collector)).toBe(before);
+
+    const mine = (await collector.get('/services/mine')).body as { type: string; itemId: string }[];
+    expect(mine.some((r) => r.type === 'deslab' && r.itemId === item.id)).toBe(false);
+    const card = (await (await signIn(SEED.collector2)).get(`/vault/items/${item.id}`)).body;
+    expect(card.item.conditionGrade).toBe('PSA 9');
+  });
+
+  it('refuses to crack a slab put on hold after it was asked for', async () => {
+    const { operator, item } = await freshItem({ conditionGrade: 'BGS 9.5', description: 'Deslab held mid-confirmation' });
+    const collector = await signIn(SEED.collector);
+    const challenge = (await collector.post('/services/deslab', { itemId: item.id })).body;
+
+    expect((await operator.post(`/custody/items/${item.id}/hold`)).status).toBe(201);
+    const confirmed = await collector.post('/services/deslab/confirm', {
+      confirmationToken: challenge.confirmationToken,
+    });
+    expect(confirmed.status).toBe(409);
+    expect(confirmed.body.error.code).toBe('item_on_hold');
+  });
+
+  it('does not crack a slab that was sold after the request was accepted', async () => {
+    const { operator, item } = await freshItem({ conditionGrade: 'CGC 9', description: 'Deslab sold before the bench' });
+    const collector = await signIn(SEED.collector);
+    const challenge = (await collector.post('/services/deslab', { itemId: item.id })).body;
+    const req = (
+      await collector.post('/services/deslab/confirm', { confirmationToken: challenge.confirmationToken })
+    ).body;
+    await accepted(operator, req.id);
+
+    await sellTo(SEED.collector, SEED.collector2, item.id);
+
+    const done = await operator.post(`/services/deslab/${req.id}/complete`, {
+      itemVerified: true,
+      conditionAfter: 'Raw',
+      notes: 'Holder cut.',
+    });
+    expect(done.status).toBe(409);
+    expect(done.body.error.code).toBe('item_no_longer_available');
+    const card = (await (await signIn(SEED.collector2)).get(`/vault/items/${item.id}`)).body;
+    expect(card.item.conditionGrade).toBe('CGC 9');
   });
 
   /* ---------------- lot split, at the owner's request ---------------- */
