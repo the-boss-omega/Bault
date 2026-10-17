@@ -16,13 +16,16 @@ export type Database = NodePgDatabase<typeof schema>;
 
 export function createDb(): { pool: Pool; db: Database } {
   const env = loadEnv();
-  const pool = new Pool({
-    connectionString: env.DATABASE_URL,
-    max: env.DATABASE_POOL_MAX,
-    // Server-side, so a runaway statement is cancelled by Postgres and releases
-    // its locks, rather than merely abandoned by this process.
-    statement_timeout: env.DATABASE_STATEMENT_TIMEOUT_MS,
-  });
+  /**
+   * No session settings here. `pg` sends options such as `statement_timeout`
+   * as startup parameters, and PgBouncer closes a connection that carries one
+   * ("unsupported startup parameter"). A `SET` per connection does not work
+   * either: in transaction mode the next transaction may run on another server
+   * connection. The statement timeout is a setting of the database role
+   * (infra/production/roles.sql), or of the database in development and CI
+   * (infra/postgres/dev-settings.sql), so Postgres applies it at every login.
+   */
+  const pool = new Pool({ connectionString: env.DATABASE_URL, max: env.DATABASE_POOL_MAX });
   /**
    * A dropped idle connection is logged, not fatal.
    *

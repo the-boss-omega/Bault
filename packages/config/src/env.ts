@@ -58,12 +58,14 @@ const BaseSchema = z.object({
   DIRECT_DATABASE_URL: z.string().url(),
 
   /**
-   * Pool size per process (API and worker), and the longest any one API
-   * statement may run. A statement that never ends holds a server connection
-   * and every row lock it took, and a money path waiting on those locks waits too.
+   * Pool size per process (API and worker).
+   *
+   * The statement timeout is not configured here: it is a setting of the
+   * database role (infra/production/roles.sql), because a client cannot send
+   * it through PgBouncer (see apps/api/src/db/client.ts). An old env file that
+   * still sets DATABASE_STATEMENT_TIMEOUT_MS parses; the value is ignored.
    */
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
-  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // Sessions (ACC)
   /**

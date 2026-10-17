@@ -132,7 +132,9 @@ ALTER ROLE bault_worker LOGIN;
 -- 2. Per-role settings, applied by the server at every login.
 --
 -- statement_timeout: a runaway query is cancelled by Postgres and releases its
--- row locks, instead of holding a wallet lock until somebody notices.
+-- row locks, instead of holding a wallet lock until somebody notices. This is
+-- the only place it is set: the API cannot send it through a PgBouncer pooler,
+-- which refuses it as a startup parameter (apps/api/src/db/client.ts).
 -- idle_in_transaction_session_timeout: a transaction left open (a request that
 -- awaited something slow between BEGIN and COMMIT, a crashed handler) is ended
 -- after 10s instead of holding its locks indefinitely.

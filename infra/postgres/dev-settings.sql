@@ -1,0 +1,17 @@
+-- =============================================================================
+-- The statement timeout, for a development or CI database.
+--
+-- Production sets it per role in infra/production/roles.sql (section 2). Here
+-- one role runs everything, so it is set on the database instead. It has to be
+-- a server-side setting: the API cannot send it through PgBouncer, which
+-- refuses it as a startup parameter, and a per-connection SET does not survive
+-- transaction pooling (apps/api/src/db/client.ts).
+--
+--   psql "$DIRECT_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f infra/postgres/dev-settings.sql
+--
+-- infra/docker-compose.yml runs it when it creates the database volume; CI
+-- runs it before migrating. Run it by hand on a database created any other way.
+-- It applies to connections opened afterwards: restart the API, and PgBouncer,
+-- whose server connections keep the value they started with.
+-- =============================================================================
+SELECT format('ALTER DATABASE %I SET statement_timeout = %L', current_database(), '30s') \gexec
