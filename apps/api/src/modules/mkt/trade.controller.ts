@@ -8,12 +8,8 @@ import { MarketReadService } from './market-read.service';
 
 class ProposeSwapDto {
   /**
-   * The counterparty's USERNAME, not their internal id.
-   *
-   * The id was never something a person could obtain: usernames are the only
-   * customer-facing identifier, and asking the SPA to resolve one first meant
-   * every caller had to make two requests to do one thing. Resolution happens
-   * here instead.
+   * The counterparty's USERNAME, not their internal id. Usernames are the only
+   * customer-facing identifier, so the id is resolved here.
    */
   @IsString() responderUsername!: string;
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) offeredItemIds!: string[];

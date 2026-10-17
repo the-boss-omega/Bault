@@ -156,9 +156,8 @@ export class TradeService {
     const [s] = await this.db.select().from(swapProposal).where(eq(swapProposal.id, swapId)).limit(1);
     if (!s) throw AppError.notFound('Proposal not found');
     if (actorId !== s.proposerId && actorId !== s.responderId) throw AppError.forbidden('Not a participant');
-    // Only a pending proposal can be rejected. Unconditionally, a reject that
-    // raced an approval relabelled an executed swap as rejected after the cards
-    // had already moved.
+    // Only a pending proposal can be rejected, so a reject racing an approval
+    // cannot relabel an executed swap after the cards have moved.
     const [rejected] = await this.db
       .update(swapProposal)
       .set({ status: 'rejected', updatedAt: new Date() })
