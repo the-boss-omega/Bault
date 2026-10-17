@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { runStorageFees } from '../../apps/worker/src/jobs/storage-fee';
+import { SEED, SEED_PASSWORD, signIn, type Client } from '../integration/helpers/http';
 import { count, createItem, createMembership, createUser, storageCharges, testPool, warm } from './helpers/db';
 
 /**
@@ -163,5 +164,82 @@ describe('a lot that has been split into its cards (F006)', () => {
     ).toBe(0);
     expect(await count(pool, `SELECT 1 FROM storage_cover WHERE item_id = $1`, [lot])).toBe(0);
     expect(await count(pool, `SELECT 1 FROM storage_cover WHERE item_id = ANY($1::uuid[])`, [cards])).toBe(slots);
+  });
+});
+
+/**
+ * What the vault tells a collector about the next storage charge.
+ *
+ * The sweep is the authority; the vault only forecasts. These run the sweep
+ * and then ask the vault, so the forecast is checked against what was billed.
+ * Needs the API.
+ */
+describe('the next storage charge the vault names', () => {
+  const DAY_MS = 86_400_000;
+
+  /** A fixture collector who can sign in: the seeded password and terms. */
+  async function collectorWithLogin(): Promise<{ id: string; client: Client }> {
+    const id = await createUser(pool);
+    const { rows } = await pool.query<{ email: string }>(
+      `UPDATE user_account u
+          SET password_hash = s.password_hash, terms_version = s.terms_version, terms_accepted_at = s.terms_accepted_at
+         FROM user_account s
+        WHERE u.id = $1 AND s.email = $2
+       RETURNING u.email`,
+      [id, SEED.collector],
+    );
+    return { id, client: await signIn(rows[0]!.email, SEED_PASSWORD) };
+  }
+
+  it('dates it from the end of membership cover, and prices it as the sweep does (never under a cent)', async () => {
+    const { id: owner, client } = await collectorWithLogin();
+    const card = await createItem(pool, owner, 400);
+    // A 4-cent intake fee: 10% of it rounds to nothing, and the sweep bills a
+    // cent rather than nothing.
+    await pool.query(
+      `INSERT INTO charge (user_id, action_type, pricing_rule_snapshot, amount, currency, payment_means, status, reference_id)
+       VALUES ($1, 'intake', '{}'::jsonb, 4, 'USD', 'wallet', 'settled', $2)`,
+      [owner, card],
+    );
+    // A membership covered it until ten days ago.
+    await pool.query(`INSERT INTO storage_cover (item_id, covered_until) VALUES ($1, now() - interval '10 days')`, [
+      card,
+    ]);
+
+    // The sweep bills the one period that started when cover ended.
+    await runStorageFees(pool);
+    const billed = await pool.query<{ amount: number }>(
+      `SELECT amount::int AS amount FROM charge WHERE action_type = 'storage' AND reference_id = $1`,
+      [card],
+    );
+    expect(billed.rows).toHaveLength(1);
+    const { rows } = await pool.query<{ covered_until: Date }>(
+      `SELECT covered_until FROM storage_cover WHERE item_id = $1`,
+      [card],
+    );
+
+    const res = await client.get(`/vault/items/${card}/storage`);
+    expect(res.status).toBe(200);
+    // The next period starts one period after the one just billed, counted
+    // from the end of cover, not from the day the card arrived.
+    expect(new Date(res.body.nextChargeAt).getTime()).toBe(
+      rows[0]!.covered_until.getTime() + res.body.periodDays * DAY_MS,
+    );
+    expect(new Date(res.body.nextChargeAt).getTime()).toBeGreaterThan(Date.now());
+    expect(res.body.periodChargeMinor).toBe(billed.rows[0]!.amount);
+  });
+
+  it('names none while a membership covers the card, because the sweep bills none', async () => {
+    const { id: owner, client } = await collectorWithLogin();
+    await createMembership(pool, owner, { endsInMinutes: 60 * 24 * 10 });
+    const card = await createItem(pool, owner, 400);
+
+    await runStorageFees(pool);
+    expect(await storageCharges(pool, card)).toBe(0);
+
+    const res = await client.get(`/vault/items/${card}/storage`);
+    expect(res.status).toBe(200);
+    expect(res.body.nextChargeAt).toBeNull();
+    expect(res.body.coveredByMembership).toBe(true);
   });
 });
