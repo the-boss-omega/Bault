@@ -88,6 +88,35 @@ describe('DIS value-added services', () => {
     expect(card.item.conditionGrade).toBe('PSA 10');
   });
 
+  /**
+   * Each completion route closes ITS kind of request. Closing another kind
+   * through it would write a grade onto a card nobody sent to a grader, or
+   * close a grading request with a photograph and leave the card stranded
+   * `at_grader`, since only completing the grading request brings it back.
+   */
+  it('refuses to record a grade against a request that is not for grading', async () => {
+    const { operator, item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    const photo = (await collector.post('/services/photography', { itemId: item.id })).body;
+    await operator.post(`/services/requests/${photo.id}/accept`);
+
+    const wrong = await operator.post(`/services/grading/${photo.id}/complete`, GRADING_FORM);
+    expect(wrong.status).toBe(400);
+    expect((await collector.get(`/vault/items/${item.id}`)).body.item.conditionGrade).not.toBe('PSA 10');
+    expect((await operator.get(`/services/requests/${photo.id}`)).body.status).toBe('in_progress');
+  });
+
+  it('refuses to attach photographs to a request that is not for photography', async () => {
+    const { operator, item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    const grading = (await collector.post('/services/grading', GRADING_REQUEST(item.id))).body;
+    await operator.post(`/services/requests/${grading.id}/accept`);
+
+    const wrong = await operator.post(`/services/photography/${grading.id}/complete`, PHOTO_FORM);
+    expect(wrong.status).toBe(400);
+    expect((await operator.get(`/services/requests/${grading.id}`)).body.status).toBe('in_progress');
+  });
+
   it('operator can deny a pending request', async () => {
     const { operator, item } = await freshItem();
     const collector = await signIn(SEED.collector);

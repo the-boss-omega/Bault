@@ -54,6 +54,9 @@ export class PhotographyService {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req); // operator must accept before completing
+      // Only a photography request: closing a grading request here would leave
+      // its card `at_grader` with no way back to the shelf.
+      if (req.type !== 'professional_photography') throw AppError.validation('Not a photography request');
       if (!req.itemId) throw AppError.validation('Request has no item');
 
       const [latest] = await tx
