@@ -25,9 +25,9 @@ type State =
  * One request per link.
  *
  * The token is single-use, and StrictMode runs the effect below twice in
- * development: two requests meant the second was refused because the first had
- * spent the link, and the page said it had failed. A second run for the same
- * token waits on the first request. A failed one is dropped once it settles, so
+ * development. A second request would be refused because the first spent the
+ * link, and the page would say it failed, so a second run for the same token
+ * waits on the first request. A failed one is dropped once it settles, so
  * coming back to the page later asks again.
  */
 const verifying = new Map<string, Promise<unknown>>();

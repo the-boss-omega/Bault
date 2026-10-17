@@ -461,11 +461,10 @@ export class MfaService {
   /**
    * The factor's secret, or a refusal that says who can fix it.
    *
-   * A secret that does not open was a plain Error, so the second sign-in step
-   * answered 500 to somebody who had typed the right code. The usual cause is
-   * `MFA_ENCRYPTION_KEY` changed or lost, which nobody signing in can fix, so
-   * the operator hears about it once here, at error level, and the person is
-   * told to ask for a reset.
+   * A secret that does not open is no fault of the person signing in, and no
+   * code they type can work. The usual cause is `MFA_ENCRYPTION_KEY` changed or
+   * lost, so the operator hears about it once here, at error level, and the
+   * person is told to ask for a reset rather than shown a 500.
    */
   private open(f: Factor): Buffer {
     try {

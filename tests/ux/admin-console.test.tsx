@@ -246,7 +246,7 @@ describe('saving an item row', () => {
 
     await waitFor(() => expect(patch).toHaveBeenCalled());
     // The server takes the card off sale and back to `stored`; a `listed` sent
-    // alongside used to keep it listed with no listing.
+    // alongside would keep it listed with no listing.
     expect(patch).toHaveBeenCalledWith('/admin/items/i1', { ownerId: 'u2' });
   });
 

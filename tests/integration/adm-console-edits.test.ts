@@ -6,9 +6,8 @@ import { closeDb, sql } from './helpers/db';
 /**
  * What the admin console's Save buttons may and may not change on the server.
  *
- * The console's rows used to send every field on every save, so the server read
- * an unchanged field as a decision. These pin the server side: a field that is
- * sent but does not change does nothing beyond what it says.
+ * A console row may send a field it did not change. These pin the server side:
+ * a field that is sent but does not change does nothing beyond what it says.
  *
  * Requires a running API + a freshly seeded DB.
  */

@@ -59,10 +59,10 @@ export function TopUpPanel({
    * The idempotency key of the top-up being attempted, and what it was for.
    *
    * The server dedupes on the key, so a retry must carry the key of the attempt
-   * it retries. A new key on every press made the second press after a network
-   * error a second top-up, although the first may well have charged the card.
-   * A different amount or route is a different top-up and gets a new key, and
-   * so does the next top-up once this one has an answer.
+   * it retries: after a network error the first press may well have charged
+   * the card, and a new key would make the second press another top-up. A
+   * different amount or route is a different top-up and gets a new key, and so
+   * does the next top-up once this one has an answer.
    */
   const attempt = useRef<{ key: string; route: string; cents: number } | null>(null);
 

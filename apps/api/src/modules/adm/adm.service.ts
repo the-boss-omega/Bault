@@ -110,10 +110,10 @@ export class AdmService {
       // A status a person CHANGES is a person's decision, so the debt sweep's
       // marker is cleared with it; otherwise a later sweep could lift a manual
       // suspension once the balance recovered, taking it for one of its own.
-      // A status sent unchanged is no decision: clearing the marker then made
-      // the sweep's suspension permanent, because the console sent the status
-      // with every save. Compared in the statement itself, against the row as
-      // it is when the update runs, so a sweep landing in between is not missed.
+      // A status sent unchanged is no decision, and clearing the marker for it
+      // would make the sweep's suspension permanent. Compared in the statement
+      // itself, against the row as it is when the update runs, so a sweep
+      // landing in between is not missed.
       set.autoSuspendedAt = sql`case when ${userAccount.status}::text = ${patch.status} then ${userAccount.autoSuspendedAt} else null end`;
     }
     // An admin who writes a name part has just reviewed it, so the migration's
@@ -216,10 +216,8 @@ export class AdmService {
             .set({ status: 'rejected', updatedAt: new Date() })
             .where(and(inArray(offer.listingId, removed.map((l) => l.id)), eq(offer.status, 'pending')));
         }
-        // `listed` is not one of those: no listing is left to be listed under,
-        // and the new owner has not made one. The console sent the state the
-        // row showed with every save, so `listed` arrived beside the owner
-        // change and the card stayed listed with no listing.
+        // `listed` is not one of them, sent or kept: no listing is left to be
+        // listed under, and the new owner has not made one.
         if ((patch.lifecycleState ?? cur.lifecycleState) === 'listed') {
           patch = { ...patch, lifecycleState: 'stored' };
         }

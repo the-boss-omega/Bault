@@ -74,8 +74,7 @@ export class CstController {
    * `already_on_hold` for a card that was already frozen.
    *
    * The item is whatever the scanner produced, as for a relocation: the hold
-   * panel asks for a scan, and a scanned barcode used to be refused as a
-   * malformed id.
+   * panel asks for a scan, and the internal id is on no label.
    */
   @Roles('warehouse_operator', 'admin')
   @Post('items/:itemId/hold')

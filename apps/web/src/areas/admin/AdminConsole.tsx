@@ -422,9 +422,9 @@ function UserRow({
   /**
    * Only what the administrator changed.
    *
-   * The server reads every field it receives as a decision. Sending the status
-   * with a name correction cleared the debt sweep's marker on an account the
-   * sweep had suspended, so the suspension was never lifted.
+   * The server reads every field it receives as a decision: a status sent with
+   * a name correction would clear the debt sweep's marker on an account the
+   * sweep suspended, and the sweep would never lift it.
    */
   const changes: Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>> = {};
   if (normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
@@ -564,10 +564,8 @@ function ItemRow({
   });
 
   /**
-   * Only what the administrator changed, as for a user row. The state the row
-   * showed, sent beside an owner change, kept a card `listed` after the server
-   * had taken its listing down; an empty grade sent unchanged wrote "" over a
-   * card with none.
+   * Only what the administrator changed, as for a user row: an unchanged empty
+   * grade sent back would write "" over a card with none.
    */
   const current = { description, typeClass, conditionGrade, ownerId, lifecycleState, holdFlag };
   const changes: Partial<typeof current> = {};
@@ -694,10 +692,9 @@ const BILLING_LABEL: Record<string, MessageKey> = {
 
 /**
  * The actions a rule can be written for are the API's own catalogue, read from
- * the coverage check (`billable-actions.ts`), not a list kept here. A list kept
- * here had five entries while the check reported parcels and memberships
- * missing, and those prices could not be loaded from this screen at all.
- * These labels are only for the actions that have one; the rest show their key.
+ * the coverage check (`billable-actions.ts`) rather than listed here, so every
+ * price the check reports missing can be loaded from this screen. These labels
+ * are only for the actions that have one; the rest show their key.
  */
 const ACTION_LABEL: Record<string, MessageKey> = {
   intake: 'admin.pricing.action.intake',
