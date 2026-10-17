@@ -20,12 +20,9 @@ export class MemController {
   constructor(private readonly memberships: MembershipService) {}
 
   /**
-   * The tiers and what they cover.
-   *
-   * Public, for the same reason `GET /pricing/list` is: somebody deciding
-   * whether to subscribe has to be able to read the terms before they have an
-   * account. A membership page that requires an account to read is a page for
-   * people who have already decided.
+   * The tiers and what they cover. Public, like `GET /pricing/list`: somebody
+   * deciding whether to subscribe must be able to read the terms before they
+   * have an account.
    */
   @Public()
   @Get('tiers')
