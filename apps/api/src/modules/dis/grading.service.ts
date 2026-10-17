@@ -321,6 +321,9 @@ export class GradingService {
     return this.custody.run(async (tx) => {
       const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
+      // Only a grading request: through this route any other kind would have a
+      // grade written onto a card nobody sent to a grader.
+      if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
       if (!req.itemId) throw AppError.validation('Request has no item');
       const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
       if (!it) throw AppError.notFound('Item not found');
