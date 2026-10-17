@@ -44,6 +44,13 @@ export interface ReportedRequest {
 
 export type ExceptionReporter = (error: unknown, request?: ReportedRequest) => void;
 
+/**
+ * DI token for a reporter, for the services that report a failure they answer
+ * with a 4xx (the filter reports only 5xx). Nothing provides it in the app, so
+ * they fall back to `reportException`; a test supplies a recorder.
+ */
+export const EXCEPTION_REPORTER = Symbol('EXCEPTION_REPORTER');
+
 export const reportException: ExceptionReporter = (error, request) => {
   if (!enabled) return;
   Sentry.withScope((scope) => {

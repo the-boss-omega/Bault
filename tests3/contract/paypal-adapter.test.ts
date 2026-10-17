@@ -394,4 +394,35 @@ describe('webhooks are authenticated by asking PayPal', () => {
     await expect(down).rejects.toBeInstanceOf(PaymentProviderError);
     await expect(down).rejects.not.toMatchObject(unverifiable);
   });
+
+  /**
+   * Why it was refused decides who hears about it. A delivery missing what
+   * verification needs is somebody else's broken request; a signature PayPal
+   * would not vouch for is, for a genuine delivery, a stale PAYPAL_WEBHOOK_ID,
+   * and payout reversals arrive by webhook only.
+   */
+  it('says why: malformed for what the delivery lacks, refused for what PayPal would not vouch for', async () => {
+    const a = adapter({ '/verify-webhook-signature': { verification_status: 'FAILURE' } });
+    const { 'paypal-transmission-sig': _sig, ...unsigned } = HEADERS;
+    await expect(a.verifyWebhook({ rawBody: BODY, headers: unsigned })).rejects.toMatchObject({ reason: 'malformed' });
+    await expect(a.verifyWebhook({ rawBody: 'not json', headers: HEADERS })).rejects.toMatchObject({ reason: 'malformed' });
+    await expect(a.verifyWebhook({ rawBody: BODY, headers: HEADERS })).rejects.toMatchObject({ reason: 'refused' });
+
+    const rejecting = (status: number) =>
+      new PayPalPaymentAdapter({
+        clientId: 'id',
+        clientSecret: 'secret',
+        environment: 'sandbox',
+        webhookId: 'wh_1',
+        fetchImpl: (async (url: string | URL) =>
+          String(url).includes('/v1/oauth2/token')
+            ? { ok: true, status: 200, text: async () => JSON.stringify(AUTH), json: async () => AUTH }
+            : { ok: false, status, text: async () => 'nope', json: async () => ({}) }) as unknown as typeof fetch,
+      });
+    for (const status of [400, 422]) {
+      await expect(rejecting(status).verifyWebhook({ rawBody: BODY, headers: HEADERS }), `${status}`).rejects.toMatchObject({
+        reason: 'refused',
+      });
+    }
+  });
 });
