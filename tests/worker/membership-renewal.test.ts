@@ -1,6 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 import { renewMemberships } from '../../apps/worker/src/jobs/membership-renewal';
+import { runScheduledJob } from '../../apps/worker/src/heartbeat';
+import { JobName } from '../../apps/worker/src/jobs/registry';
+import { log } from '../../apps/worker/src/log';
 import { SEED, signIn } from '../integration/helpers/http';
 import { count, createMembership, createUser, ledger, testPool, warm } from './helpers/db';
 
@@ -180,5 +183,63 @@ describe('a member subscribing while their membership is being renewed', () => {
     );
     expect(m.rows[0]).toEqual({ tier: 'registry', live: true });
     expect(await fees(pool, membershipId)).toBe(feesBefore + 1);
+  });
+});
+
+/**
+ * One membership whose renewal throws must not stop the others, and must not
+ * be reported as a run that went well: the heartbeat is what alerts somebody.
+ */
+describe('a renewal that fails for one membership', () => {
+  it('renews the rest, logs the one that failed, and reports the run as failed', async () => {
+    const good = await createMembership(pool, await createUser(pool), { endsInMinutes: -1 });
+    const bad = await createMembership(pool, await createUser(pool), { endsInMinutes: -1 });
+
+    // Its new period cannot be written: any error inside its transaction will do.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION wk_fail_period_for() RETURNS trigger LANGUAGE plpgsql AS $fn$
+      BEGIN
+        IF NEW.membership_id::text = '${bad}' THEN
+          RAISE EXCEPTION 'simulated failure renewing one membership';
+        END IF;
+        RETURN NEW;
+      END $fn$`);
+    await pool.query(`DROP TRIGGER IF EXISTS wk_fail_period ON membership_period`);
+    await pool.query(
+      `CREATE TRIGGER wk_fail_period BEFORE INSERT ON membership_period
+         FOR EACH ROW EXECUTE FUNCTION wk_fail_period_for()`,
+    );
+    const errors = vi.spyOn(log, 'error');
+    let outcome: unknown;
+    let logged: unknown[][] = [];
+    try {
+      outcome = await runScheduledJob(pool, JobName.MEMBERSHIP_RENEWAL, () => renewMemberships(pool)).then(
+        () => 'succeeded',
+        (err: Error) => err,
+      );
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS wk_fail_period ON membership_period`);
+      await pool.query(`DROP FUNCTION IF EXISTS wk_fail_period_for()`);
+      logged = [...errors.mock.calls];
+      errors.mockRestore();
+    }
+
+    // The good one is renewed regardless.
+    expect(await periods(pool, good)).toBe(1);
+    expect(await fees(pool, good)).toBe(1);
+    expect(await periods(pool, bad)).toBe(0);
+
+    // The bad one is logged at error level by id, and the run is a failure
+    // that names it, which is what the heartbeat records.
+    expect(logged.some(([, fields]) => (fields as { membershipId?: string } | undefined)?.membershipId === bad)).toBe(true);
+    expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as Error).message).toContain(bad);
+    const { rows } = await pool.query<{ last_error: string | null; failed_recently: boolean }>(
+      `SELECT last_error, last_error_at > now() - interval '1 minute' AS failed_recently
+         FROM worker_heartbeat WHERE job_name = $1`,
+      [JobName.MEMBERSHIP_RENEWAL],
+    );
+    expect(rows[0]?.failed_recently).toBe(true);
+    expect(rows[0]?.last_error).toContain(bad);
   });
 });
