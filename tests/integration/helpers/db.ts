@@ -22,8 +22,13 @@ interface QueryResult<R> {
   rows: R[];
   rowCount: number | null;
 }
+interface PgClient {
+  query<R = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResult<R>>;
+  release(): void;
+}
 interface PgPool {
   query<R = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResult<R>>;
+  connect(): Promise<PgClient>;
   end(): Promise<void>;
 }
 
@@ -57,6 +62,51 @@ export async function sql<R = Record<string, unknown>>(text: string, values: unk
   pool ??= new Pool({ connectionString: databaseUrl(), max: 2 });
   const res = await pool.query<R>(text, values);
   return res.rows;
+}
+
+/**
+ * Hold one row `FOR UPDATE` in a transaction of its own until `release`.
+ *
+ * For the races whose losing order is too narrow to hit by firing requests
+ * together: hold the row, send the competing requests, wait until they are all
+ * queued behind the lock (`waitForLockWaiters`), then let go, and they meet the
+ * row in the order they queued. `table` is a fixed name from the test, never
+ * input.
+ */
+export async function holdRowLock(table: string, id: string): Promise<{ release: () => Promise<void> }> {
+  pool ??= new Pool({ connectionString: databaseUrl(), max: 2 });
+  const client = await pool.connect();
+  await client.query('begin');
+  await client.query(`select 1 from ${table} where id = $1 for update`, [id]);
+  let released = false;
+  return {
+    release: async () => {
+      if (released) return;
+      released = true;
+      try {
+        await client.query('rollback');
+      } finally {
+        client.release();
+      }
+    },
+  };
+}
+
+/**
+ * Wait until at least `count` other sessions on this database are waiting for a
+ * lock: the requests a test sent are then queued, in the order they arrived.
+ */
+export async function waitForLockWaiters(count: number, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const [row] = await sql<{ n: number }>(
+      `select count(*)::int as n from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock' and pid <> pg_backend_pid()`,
+    );
+    if ((row?.n ?? 0) >= count) return;
+    if (Date.now() > deadline) throw new Error(`expected ${count} sessions waiting on a lock, saw ${row?.n ?? 0}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
 }
 
 /** Close the pool, so the test file can exit. Call from `afterAll`. */

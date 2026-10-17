@@ -129,20 +129,46 @@ export class HouseStoreService {
     return created!;
   }
 
-  /** Reprice, restock, or take off sale. What was already sold is untouched either way. */
-  async update(id: string, patch: { askingPrice?: number; stock?: number; status?: 'active' | 'removed' }) {
-    const [updated] = await this.db
-      .update(houseListing)
-      .set({
-        ...(patch.askingPrice !== undefined ? { askingPrice: patch.askingPrice } : {}),
-        ...(patch.stock !== undefined ? { stock: patch.stock } : {}),
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(houseListing.id, id))
-      .returning();
-    if (!updated) throw AppError.notFound('Store listing not found');
-    return updated;
+  /**
+   * Reprice, restock, or take off sale. What was already sold is untouched either way.
+   *
+   * A stock figure is typed over the one the admin was shown, and copies sell in
+   * between. Written as it stands, it would put a copy sold meanwhile back on
+   * the shelf, and the last real copy could then be sold twice. So a stock
+   * change names the figure it was made against (`expectedStock`) and is
+   * written only if the shelf still says that, under the row lock a purchase
+   * takes; otherwise it is refused with the figure as it now stands.
+   */
+  async update(
+    id: string,
+    patch: { askingPrice?: number; stock?: number; expectedStock?: number; status?: 'active' | 'removed' },
+  ) {
+    if (patch.stock !== undefined && patch.expectedStock === undefined) {
+      throw AppError.validation('Say which stock figure this replaces (expectedStock), so a copy sold meanwhile is not put back on sale.');
+    }
+    return this.db.transaction(async (tx) => {
+      const [current] = await tx.select().from(houseListing).where(eq(houseListing.id, id)).for('update').limit(1);
+      if (!current) throw AppError.notFound('Store listing not found');
+      if (patch.stock !== undefined && current.stock !== patch.expectedStock) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `The stock has changed since you read it: ${current.stock} left now. Check the figure and save again.`,
+          409,
+          { stock: current.stock },
+        );
+      }
+      const [updated] = await tx
+        .update(houseListing)
+        .set({
+          ...(patch.askingPrice !== undefined ? { askingPrice: patch.askingPrice } : {}),
+          ...(patch.stock !== undefined ? { stock: patch.stock } : {}),
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(houseListing.id, id))
+        .returning();
+      return updated!;
+    });
   }
 
   /* ------------------------------------------------------------------
