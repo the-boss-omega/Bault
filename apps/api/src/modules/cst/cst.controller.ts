@@ -23,9 +23,8 @@ class RelocateDto {
 /**
  * A bin is a shelf in a building, and optionally the oversized kind.
  *
- * No capacity — nothing enforced it and nothing could
- * (`0018_stow_wherever_it_fits`) — and no barcode, because the shelf's serial is
- * minted rather than named (`0019_bins_get_a_serial`).
+ * There is no capacity (`0018_stow_wherever_it_fits`) and no barcode, because
+ * the shelf's serial is minted rather than named (`0019_bins_get_a_serial`).
  */
 class CreateBinDto {
   @IsString() zone!: string;
@@ -55,9 +54,7 @@ export class CstController {
    *
    * Both identifiers are whatever the scanner produced: the item by its printed
    * barcode (or serial, or id) and the destination by its shelf barcode (or
-   * id). Before this, the console's "scan item" field accepted only the internal
-   * id — a string that appears on no label in the building — so scanning the
-   * label Bault itself printed was the one thing that could not work.
+   * id). The internal id appears on no label in the building.
    */
   @Roles('warehouse_operator', 'admin')
   @Post('items/:itemId/relocate')
@@ -73,12 +70,8 @@ export class CstController {
   }
 
   /**
-   * Placing a hold is idempotent, and now SAYS whether it did anything.
-   *
-   * It answered `hold_placed` either way, so an operator who scanned a card that
-   * was already frozen was told the hold had just been placed. The data was
-   * always right; the bench was told a story about work it had not done, on the
-   * one screen whose entire job is saying what happened to a card.
+   * Placing a hold is idempotent, and the answer says whether it did anything:
+   * `already_on_hold` for a card that was already frozen.
    */
   @Roles('warehouse_operator', 'admin')
   @Post('items/:itemId/hold')

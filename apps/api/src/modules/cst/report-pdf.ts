@@ -3,7 +3,7 @@
  *
  * The platform ships no PDF library, so this builds a valid multi-page PDF by hand:
  * a Helvetica-typeset title, generation timestamp, a two-column table (label, count)
- * and a total. Kept deliberately small — enough for a clean, professional report.
+ * and a total. Kept deliberately small.
  */
 
 interface ReportRow {

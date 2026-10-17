@@ -32,8 +32,8 @@ export interface TimelineEvent {
 /**
  * Inventory reconciliation + reports (T052).
  *  - `report` aggregates item counts by the chosen cut, resolved to HUMAN-READABLE
- *    labels (bin barcode/zone, owner email) — not raw UUIDs.
- *  - `reportDocument` / `reportPdf` render the same data as a professional PDF.
+ *    labels (bin serial and zone, owner email) rather than raw UUIDs.
+ *  - `reportPdf` renders the same data as a PDF.
  *  - `itemTimeline` merges every recorded event about an item into one timeline.
  */
 @Injectable()
@@ -196,20 +196,14 @@ export class InventoryService {
   }
 
   /**
-   * INV-01: operator creates a shelf. Its serial is minted here and is not
-   * negotiable.
+   * INV-01: operator creates a shelf. Its serial is minted here and there is
+   * no barcode input: an operator who can type an identifier will type a name,
+   * which is what `0019_bins_get_a_serial` removed.
    *
-   * There is no barcode input any more. There used to be, and leaving it would
-   * have defeated the point of `0019_bins_get_a_serial`: an operator who can
-   * type an identifier will type `BIN-A-001`, and the shelf is back to having a
-   * name — with the sequence, the zone baked into the identity, and the
-   * collision on the next one, all restored by hand.
-   *
-   * No capacity is asked for either, because there is no longer such a thing —
-   * see `0018_stow_wherever_it_fits`. What IS asked for is the two things the
-   * stow assignment needs to know: which building the shelf is in, and whether
-   * it is oversized storage. The facility defaults to the primary site, which is
-   * the only one that stores anything.
+   * No capacity is asked for (`0018_stow_wherever_it_fits`). What is asked for
+   * is what the stow assignment needs: which building the shelf is in, and
+   * whether it is oversized storage. The facility defaults to a primary site,
+   * the only kind that stores anything.
    */
   async createBin(input: {
     zone: string;
