@@ -4,7 +4,7 @@ import { renewMemberships } from '../../apps/worker/src/jobs/membership-renewal'
 import { count, createMembership, createUser, testPool, warm } from './helpers/db';
 
 /**
- * Membership renewal (N15, N9).
+ * Membership renewal.
  *
  * A cycle that has run out is renewed once: one new period row, one charge for
  * the fee. Never two, however many times or however many workers run the job.
@@ -44,9 +44,9 @@ describe('renewing a cycle that has run out', () => {
     const ms: string[] = [];
     for (let i = 0; i < 10; i += 1) ms.push(await createMembership(pool, await createUser(pool), { endsInMinutes: -1 }));
     await warm(pool);
-    // Each run used to stamp its own `now()` as the new period start, so the
-    // ON CONFLICT on (membership_id, period_start) never matched and both runs
-    // opened a period and charged the fee.
+    // If each run stamped its own `now()` as the new period start, the ON
+    // CONFLICT on (membership_id, period_start) would never match and both runs
+    // would open a period and charge the fee.
     await Promise.all([renewMemberships(pool), renewMemberships(pool)]);
     for (const m of ms) {
       expect(await periods(pool, m)).toBe(1);

@@ -1,13 +1,9 @@
 /**
  * The storage-charge policy: what a collector gets free, and what happens after.
  *
- * The model this replaced was a flat per-item fee charged every day from the
- * second day onward. It was simple and it was wrong in one important way: it
- * charged rent on a $1 common from the moment it landed, so a collector who left
- * a bulk lot alone for six months paid many times what the lot was worth. The
- * reference service instead folds an included period into the intake fee and
- * then charges a PROPORTION of that fee per quarter, which keeps the storage
- * cost tied to the value of the handling the item actually needed.
+ * An included period is folded into the intake fee, and after it a PROPORTION
+ * of that fee is charged per period, so storage cost stays tied to the handling
+ * the item needed and a $1 common does not pay rent from the day it lands.
  *
  * Two parameter sets, one mechanism:
  *
@@ -23,12 +19,12 @@
  * below apply only when a rule omits them.
  *
  * WHERE THIS RULE LIVES. Billing is performed by the worker's storage-fee sweep,
- * in SQL, because it is a set operation over every stored item and belongs in the
- * database. The worker cannot import from the API tree, so this module does NOT
- * duplicate the billing calculation — it computes only what the customer-facing
- * views need to SHOW: when the included period ends, and when the next charge
- * falls. Everything about what has already been billed is READ from the charges
- * the sweep wrote, never recomputed. The sweep is the authority.
+ * in SQL, because it is a set operation over every stored item. The worker
+ * cannot import from the API tree, so this module does NOT duplicate the billing
+ * calculation. It computes only what the customer-facing views need to SHOW:
+ * when the included period ends, when the next charge falls, and what one period
+ * costs. What has already been billed is READ from the charges the sweep wrote,
+ * never recomputed. The sweep is the authority.
  */
 
 export interface StorageParameters {
@@ -49,7 +45,7 @@ export const STANDARD_STORAGE: StorageParameters = {
 export const OVERSIZED_STORAGE: StorageParameters = {
   freeDays: 90,
   periodDays: 90,
-  percentOfIntakeBps: 10_000, // 100% — the original intake fee, again
+  percentOfIntakeBps: 10_000, // 100%: the original intake fee, again
 };
 
 /**
@@ -86,7 +82,7 @@ export function freeUntil(receivedAt: Date | string, params: StorageParameters):
  * When the next charge falls, given how many periods have already been billed.
  *
  * `periodsBilled` is COUNTED from the charges the sweep wrote, not derived from
- * the clock — so if a sweep was missed, this shows the date the catch-up will
+ * the clock, so if a sweep was missed, this shows the date the catch-up will
  * cover rather than pretending it already happened.
  */
 export function nextChargeAt(

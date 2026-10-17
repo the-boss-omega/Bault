@@ -5,12 +5,11 @@ import type { Pool } from 'pg';
 import { createUser, testPool } from './helpers/db';
 
 /**
- * The ledger-invariant monitor has to be HEARD when it finds something (step 15).
+ * The ledger-invariant monitor has to be HEARD when it finds something.
  *
- * It wrote a line of plain text to stderr and nothing else. Nobody watches
- * stderr; an alert that only exists in a log nobody reads is not an alert. A
- * violation now goes out at error level in the same JSON as every other log line
- * — so a log alert can match on it — and to the error tracker.
+ * Nobody watches stderr; an alert that only exists in a log nobody reads is not
+ * an alert. A violation goes out at error level in the same JSON as every other
+ * log line, so a log alert can match on it, and to the error tracker.
  *
  * The error tracker is a local HTTP server standing in for Sentry's ingest, so
  * the suite sees exactly what the SDK would send, with no account and no network.

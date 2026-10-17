@@ -3,14 +3,14 @@ import { createHmac, randomInt } from 'node:crypto';
 /**
  * Recovery codes: the way back in when the phone is gone.
  *
- * Ten, each usable once, shown exactly once — when two-factor sign-in is
+ * Ten, each usable once, shown exactly once: when two-factor sign-in is
  * switched on, or when the set is replaced. Only a keyed hash of each is kept,
  * so nobody, an administrator with the database included, can read them back
  * later; somebody who lost them asks for a new set (which needs a current code)
  * or for an administrator to reset their two-factor sign-in.
  *
- * Twelve characters from Crockford's base32 alphabet — no I, L, O or U, the
- * letters people misread as digits or as each other — in three groups of four:
+ * Twelve characters from Crockford's base32 alphabet (no I, L, O or U, the
+ * letters people misread as digits or as each other) in three groups of four:
  * sixty bits, copied by hand without ambiguity. Typing one back is forgiving
  * in the same way: any case, with or without the dashes or spaces, and an O, I
  * or L is read as the digit it was mistaken for.

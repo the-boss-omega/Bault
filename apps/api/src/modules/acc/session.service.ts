@@ -25,7 +25,7 @@ export function clampUserAgent(ua: string | null | undefined): string | null {
 }
 
 /**
- * Session lifecycle (T031). Sessions are opaque tokens; only their hash is stored
+ * Session lifecycle. Sessions are opaque tokens; only their hash is stored
  * (Principle IX). `create` mints a session for a user; `resolve` turns a raw
  * cookie value into an AuthUser (used by SessionAuthGuard); `revoke` signs out.
  */
@@ -70,9 +70,9 @@ export class SessionService {
       .from(loginSession)
       .innerJoin(userAccount, sql`${userAccount.id}::text = ${loginSession.userId}`)
       // Read with the session, on every request, because enrolment is what
-      // `MfaEnrollmentGuard` decides on: a staff account that enrols a moment
-      // ago is let through on its very next request, and one whose second
-      // factor an administrator just reset is stopped on its next.
+      // `MfaEnrollmentGuard` decides on: a staff account that has just enrolled
+      // is let through on its very next request, and one whose second factor
+      // an administrator just reset is stopped on its next.
       .leftJoin(mfaFactor, eq(mfaFactor.userId, loginSession.userId))
       .where(and(eq(loginSession.tokenHash, hashToken(rawToken)), isNull(loginSession.revokedAt)))
       .limit(1);
@@ -92,19 +92,16 @@ export class SessionService {
    * Revoke every session this user holds.
    *
    * A password change is the moment somebody who believes their account is
-   * compromised acts on it — and until now it changed the password and nothing
-   * else, so a stolen cookie kept working afterwards. That is the exact opposite
-   * of what the person pressing the button believes they are doing.
+   * compromised acts on it, so it ends every other session: a stolen cookie
+   * must stop working.
    *
    * `exceptRawToken` keeps the caller's own session alive, so changing a
    * password from the profile page does not sign the person out of the page they
-   * are standing on. A RESET passes nothing — the person is holding a link from
-   * their inbox, not a session, and everything that exists at that moment is
-   * suspect.
+   * are standing on. A RESET passes nothing: the person is holding a link from
+   * their inbox, not a session, and every session that exists is suspect.
    *
-   * Returns how many sessions were ended, because "signed out 3 other devices"
-   * is a materially different message from "signed out 0", and the caller
-   * cannot know which without being told.
+   * Returns how many sessions were ended, so the caller can say "signed out 3
+   * other devices".
    */
   async revokeAllFor(userId: string, exceptRawToken?: string, tx?: Database): Promise<number> {
     const conditions = [eq(loginSession.userId, userId), isNull(loginSession.revokedAt)];

@@ -7,10 +7,10 @@ import { ESCROW_FEE_ACTION } from '../esc/escrow-terms';
 import { CASHOUT_FEE_ACTION, CHARGEBACK_FEE_ACTION } from '../pay/money-terms';
 
 /**
- * Every price the code charges, and what happens when its rule is missing (E6).
+ * Every price the code charges, and what happens when its rule is missing.
  *
  * No migration inserts a `pricing_rule`. The seed does, so every development
- * database is fully priced — and a production database built by migration
+ * database is fully priced, and a production database built by migration
  * alone is not. What an absent rule DOES depends on where the price is read,
  * and that varies more than anybody would guess from the outside:
  *

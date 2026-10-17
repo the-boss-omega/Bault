@@ -10,11 +10,11 @@ export default tseslint.config(
   // 2. Base JavaScript recommended rules.
   js.configs.recommended,
 
-  // 3. TypeScript recommended rules (type-aware where a tsconfig is found).
+  // 3. TypeScript recommended rules (syntax only, not type-aware).
   ...tseslint.configs.recommended,
 
-  // 4. Node-run tooling scripts (pnpm dev orchestration). Declared explicitly
-  //    instead of pulling in the `globals` package for a single directory.
+  // 4. Node-run tooling scripts. Globals are declared explicitly instead of
+  //    pulling in the `globals` package for a single directory.
   {
     files: ["scripts/**/*.mjs"],
     languageOptions: {

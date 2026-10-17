@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
 /**
- * FAQ & Legal as a reader meets it (E20, E21).
+ * FAQ & Legal as a reader meets it.
  *
  * The content suites check the text; this checks what reaches the screen: the
  * FAQ is Bault's and says so, every draft document shows its banner and its

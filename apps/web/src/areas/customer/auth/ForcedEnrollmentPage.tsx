@@ -8,10 +8,10 @@ import { AuthShell } from './AuthPage';
  * not enrolled, is held.
  *
  * The API lets them sign in and then refuses every route except enrolment,
- * sign-out and their profile (`mfa_enrollment_required`). Rendering the console
- * for them would be a screen of panels each saying "forbidden"; this is the one
- * thing they can do, said plainly, with the way out beside it. Once the
- * recovery codes are saved, `onEnrolled` lets the shell load the console.
+ * sign-out and their profile (`mfa_enrollment_required`), so the console would
+ * be a screen of "forbidden" panels. This shows the one thing they can do, with
+ * the way out beside it. Once the recovery codes are saved, `onEnrolled` lets
+ * the shell load the console.
  */
 export function ForcedEnrollmentPage({
   onEnrolled,

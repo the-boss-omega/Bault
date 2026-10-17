@@ -4,14 +4,14 @@ import type { StatusTone } from './ui/primitives';
 /**
  * The SPA's copy of the wallet-request rules and vocabulary.
  *
- * Mirrors `apps/api/src/modules/pay/wallet-request.rules.ts` by value — same
- * statuses, same limits, same funding sources — so a form can refuse an amount
- * before the round trip and can never permit one the API will reject. Matched by
+ * Mirrors `apps/api/src/modules/pay/wallet-request.rules.ts` by value (the same
+ * statuses, limits and funding sources), so a form can refuse an amount before
+ * the round trip and never permit one the API will reject. Matched by
  * `tests/web/wallet-requests.test.ts`.
  *
  * Nothing here decides anything: the API is the authority on whether a request
- * is valid and on when money moves. This module exists so the UI can be honest
- * about the rules while it types, not so it can enforce them.
+ * is valid and on when money moves. This module only lets the UI state the rules
+ * while the user types.
  */
 
 export type WalletRequestType = 'cash_in' | 'cash_out';
@@ -28,7 +28,7 @@ export type WalletRequestStatus =
   | 'payout_failed';
 
 /**
- * In display order — this is also the order the review queue groups by.
+ * In display order, which is also the order of the review queue's status filter.
  *
  * `paying` is a cash-out debited and sent to the payout provider, waiting for
  * it to confirm; `payout_failed` is one the provider refused or returned, with
@@ -180,9 +180,9 @@ export interface WalletRequestDraftInput {
 }
 
 /**
- * Validate what the form can validate. Deliberately mirrors the API's checks so
- * the user is told the rule while typing, and returns MESSAGE KEYS rather than
- * sentences so every message is translated like the rest of the interface.
+ * Validate what the form can validate. Mirrors the API's checks so the user is
+ * told the rule while typing, and returns message keys so every message is
+ * translated like the rest of the interface.
  */
 export function validateDraft(draft: WalletRequestDraftInput): DraftProblem[] {
   const problems: DraftProblem[] = [];
@@ -240,13 +240,13 @@ export function validateDraft(draft: WalletRequestDraftInput): DraftProblem[] {
 /**
  * Whether an identical request is already open.
  *
- * Identity is type + amount + currency + REFERENCE, matching the API's
- * `isDuplicateOf`. The reference is part of it because it is the only field that
- * distinguishes two genuinely different transfers of the same amount; a
- * double-click repeats it (or carries none), which is what this catches.
+ * Identity is type + amount + currency + reference, matching the API's
+ * `isDuplicateOf`. The reference is the only field that distinguishes two
+ * genuinely different transfers of the same amount; a double-click repeats it
+ * (or carries none), which is what this catches.
  *
- * The API refuses the duplicate outright — this only lets the form say so BEFORE
- * the submission rather than turning a double-click into an error banner.
+ * The API refuses the duplicate outright; this lets the form say so before the
+ * submission.
  */
 export function findOpenDuplicate(
   existing: readonly WalletRequest[],
@@ -273,8 +273,9 @@ export function findOpenDuplicate(
 }
 
 /**
- * Free-text search over the customer's own request list: code, type, status,
- * reference and amount, so the box matches what is on screen.
+ * Free-text search over a request list: code, type, status, reference,
+ * beneficiary, destination, customer and amount, so the box matches what is on
+ * screen.
  */
 export function matchesRequestSearch(request: WalletRequest, needle: string): boolean {
   const q = needle.trim().toLowerCase();

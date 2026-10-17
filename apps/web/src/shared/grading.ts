@@ -22,8 +22,8 @@ export interface GradingTier {
   requiresApproval: boolean;
   /**
    * The fee, resolved from the pricing rules at request time. `null` means no
-   * rule exists for this tier yet — the form says so rather than quoting the
-   * flat service fee the charge would fall back to.
+   * rule exists for this tier yet; the form says so instead of quoting the flat
+   * service fee the charge would fall back to.
    */
   feeMinor: number | null;
 }

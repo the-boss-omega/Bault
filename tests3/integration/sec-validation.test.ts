@@ -106,9 +106,9 @@ describe('money amounts', () => {
 describe('identifiers that do not exist or are the wrong shape', () => {
   /**
    * The uuid columns are the trap. Postgres raises `invalid input syntax for
-   * type uuid` on a non-uuid comparison and the whole query dies with a 500 —
-   * which is exactly the bug the shelf-scanning work hit. Anything taking an id
-   * from the URL has to survive a caller typing rubbish into it.
+   * type uuid` on a non-uuid comparison and the whole query dies with a 500.
+   * Anything taking an id from the URL has to survive a caller typing rubbish
+   * into it.
    */
   const RUBBISH = ['not-a-uuid', '00000000-0000-0000-0000-000000000000', '1 OR 1=1', '../../etc/passwd'];
 
@@ -237,7 +237,7 @@ describe('registration and identity', () => {
         firstName: 'Test',
         lastName: 'Person',
         username: `u${Date.now()}`,
-        // Consent given, so the refusal below is for the reason under test (E21).
+        // Consent given, so the refusal below is for the reason under test.
         acceptedTermsVersion: '2026-10-draft-1',
       });
       expect(res.status, `${email} was accepted`).toBeGreaterThanOrEqual(400);
@@ -253,7 +253,7 @@ describe('registration and identity', () => {
       firstName: 'Test',
       lastName: 'Person',
       username: 'red', // already seeded
-      // Consent given, so the refusal below is for the reason under test (E21).
+      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
@@ -268,7 +268,7 @@ describe('registration and identity', () => {
       firstName: 'Test',
       lastName: 'Person',
       username: `weak${Date.now()}`,
-      // Consent given, so the refusal below is for the reason under test (E21).
+      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
@@ -305,10 +305,10 @@ describe('quantity and size limits', () => {
 
   it('refuses a listing limit that is not a positive whole number, and caps a large one (N3)', async () => {
     /**
-     * `GET /marketplace/listings` is public. `?limit=abc` became `Number('abc')`,
-     * NaN, and `Math.min(NaN, 200)` is NaN — which drizzle drops rather than
-     * sends, so the LIMIT vanished and a guest got every active listing with a
-     * signed image URL minted for each. A negative limit went the same way.
+     * `GET /marketplace/listings` is public. `?limit=abc` read as `Number('abc')`
+     * is NaN, `Math.min(NaN, 200)` is NaN, and drizzle drops a NaN LIMIT rather
+     * than sending it, so a guest would get every active listing with a signed
+     * image URL minted for each. A negative limit goes the same way.
      */
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);

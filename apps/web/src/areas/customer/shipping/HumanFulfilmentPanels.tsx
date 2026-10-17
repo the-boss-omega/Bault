@@ -17,10 +17,9 @@ interface VaultItem {
 /**
  * Collecting at a show.
  *
- * The cheapest way out of the vault, for one reason worth saying on the screen:
- * the van was going anyway. It is not a discount, it is the absence of a
- * journey — which is also why it is capped per show and closes on the same
- * deadline the consignments use.
+ * The cheapest way out of the vault, because the van was going anyway. That is
+ * also why it is capped per show and closes on the same deadline the
+ * consignments use.
  */
 export function ShowPickupPanel({
   items,
@@ -152,10 +151,9 @@ export function ShowPickupPanel({
 /**
  * Hand delivery.
  *
- * The screen makes the round trip obvious, because the round trip IS the
+ * The screen makes the round trip obvious, because the round trip is the
  * product: nothing here has a price, and the button says "ask for a quote"
- * rather than "book". A collector who expects to be charged on submit and is
- * not would think it had failed.
+ * instead of "book", so a collector does not expect to be charged on submit.
  */
 export function WhiteGlovePanel({
   items,
@@ -293,8 +291,7 @@ export function WhiteGlovePanel({
             <span className="field-label">{t('ff.wg.deliverTo')}</span>
             <input type="datetime-local" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} />
           </label>
-          {/* Was a 4rem text box asking a collector to type a two-letter
-              country code from memory. The same select the address form uses. */}
+          {/* The same country select the address form uses. */}
           <Field label={t('ff.wg.country')} htmlFor="wg-country">
             <select id="wg-country" value={country} onChange={(e) => setCountry(e.target.value)}>
               {countries.map((c) => (
@@ -312,8 +309,7 @@ export function WhiteGlovePanel({
         </label>
 
         <div className="row">
-          {/* Deliberately "ask for a quote", not "book". Nothing is charged
-              here, and a button that said otherwise would be lying. */}
+          {/* Deliberately "ask for a quote", not "book": nothing is charged here. */}
           <Button variant="gold" disabled={busy || !ready} onClick={() => void request()}>
             {t('ff.wg.ask')}
           </Button>
@@ -343,9 +339,8 @@ export function WhiteGloveQuotes({
   onChanged: () => void;
 }) {
   const { t } = useI18n();
-  // The shared row type, not a hand-written one. This panel used to declare
-  // its own shape with three fields the API never sent, so the compiler had
-  // nothing to object to while the filter below matched nothing, ever.
+  // The shared row type, so the compiler checks the filter below against the
+  // fields the API sends.
   const [rows, setRows] = useState<ShipmentSummary[]>([]);
   const [busy, setBusy] = useState(false);
 

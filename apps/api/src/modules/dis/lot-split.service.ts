@@ -18,17 +18,12 @@ export interface LotSplitFulfillment {
 /**
  * Splitting a lot, at the OWNER's request.
  *
- * The mechanics existed and were right: `IntakeService.breakLot` receives every
- * contained card as its own item, with its own serial, barcode, bin and intake
- * charge, and marks the parent broken so nothing is double-counted.
+ * `IntakeService.breakLot` receives every contained card as its own item, with
+ * its own serial, barcode, bin and intake charge, and marks the parent broken
+ * so nothing is double-counted.
  *
- * What was missing was the door. Break Lot lived in the warehouse console and
- * was reachable only by staff, so a collector who wanted to sell, grade or ship
- * one card out of a lot had no way to ask — the vault drawer showed "Lot of 40"
- * and offered nothing.
- *
- * This is that door, and it deliberately reuses the service-request framework
- * rather than exposing break-lot directly: splitting a lot costs money (each
+ * The owner's ask goes through the service-request framework rather than
+ * exposing break-lot directly: splitting a lot costs money (each
  * child is a fresh intake), takes physical work, and therefore belongs in the
  * operator queue alongside every other request rather than firing on a click.
  */
@@ -78,13 +73,10 @@ export class LotSplitService {
     if (!form.notes?.trim()) throw AppError.validation('Notes are required');
 
     /**
-     * The request, the split and the close in ONE transaction.
-     *
-     * They used to be three: the request read unlocked, the split run in
-     * transactions of its own, and the close last. A second Complete split the
-     * lot again, and a lot its owner had listed after asking for the split was
-     * split while still on sale. Now the request is locked, the lot is checked
-     * against the person who asked, and nothing commits unless all of it does.
+     * The request, the split and the close in ONE transaction. The request is
+     * locked and the lot is checked against the person who asked, so a second
+     * Complete cannot split the lot again, a lot listed since the ask is not
+     * split while on sale, and nothing commits unless all of it does.
      */
     return this.custody.run(async (tx) => {
       const req = await this.requests.get(requestId, tx);

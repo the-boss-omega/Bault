@@ -1,19 +1,12 @@
 /**
  * Which events go out by email, and what their subject line says.
  *
- * Mirrored BY VALUE from `apps/api/src/modules/not/event-types.ts`. The worker
- * is deliberately independent of the Nest container and runs raw SQL against
- * the same database, so it cannot import the API's catalogue — the same
- * arrangement `wallet-request.rules.ts` and the item taxonomy have with the SPA.
+ * Mirrored BY VALUE from `apps/api/src/modules/not/event-types.ts`, because the
+ * worker is independent of the Nest container and cannot import the API's
+ * catalogue. Only the email default and the subject are needed here; category,
+ * label and in-app settings are the API's business.
  *
- * Only two things are needed here: the email default, and a subject. Everything
- * else about an event type — its category, its label, whether it can be turned
- * off in-app — is the API's business, because only the API renders a
- * preferences screen.
- *
- * The DEFAULT matters more than it looks. Emailing every notification would be
- * indefensible: a collector with forty cards would get mail every time a parcel
- * moved a shelf. What is on by default is money, custody of somebody's property
+ * Email is on by default only for money, custody of somebody's property
  * changing hands, and anything with a deadline attached.
  */
 const EMAIL_BY_DEFAULT = new Set([
@@ -55,22 +48,16 @@ const EMAIL_BY_DEFAULT = new Set([
 ]);
 
 /**
- * An event not in the list defaults to email OFF.
- *
- * Deliberately fail-quiet in this direction: a new emitter somebody forgot to
- * register still reaches the collector in-app, and cannot start sending mail
- * without a deliberate entry here.
+ * An event not in the list defaults to email OFF, so a new emitter still
+ * reaches the collector in-app and cannot start sending mail without an entry here.
  */
 export function defaultEmailEnabled(eventType: string): boolean {
   return EMAIL_BY_DEFAULT.has(eventType);
 }
 
 /**
- * The subject line.
- *
- * Written to be readable in a notification bar with the rest cut off, which is
- * where most of these are actually read — so the SUBJECT of the sentence comes
- * first and the pleasantries are omitted entirely.
+ * The subject line, written to be readable in a notification bar with the rest
+ * cut off: the subject of the sentence comes first and there are no pleasantries.
  */
 const SUBJECTS: Record<string, string> = {
   item_received: 'An item has been received into your vault',

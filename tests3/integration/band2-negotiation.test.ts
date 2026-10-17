@@ -9,17 +9,15 @@ import { SEED, signIn, intakeFor, fundWallet, type Client } from '../../tests/in
  *
  *   THE PARTY WHO PROPOSED A PRICE MAY NOT ALSO ACCEPT IT.
  *
- * The first attempt at closing the self-accept hole said "only the seller may
- * accept", which is the same rule ONLY for an opening offer. On a counter it
- * failed in both directions at once, and both were reproduced against the
- * running API before being fixed:
+ * "Only the seller may accept" is the same rule ONLY for an opening offer. On a
+ * counter it fails in both directions at once:
  *
- *   - a seller countered at $80 and the BUYER could not accept it (403), so a
- *     counter-offer could never conclude a sale — the only exit from a
- *     negotiation was to walk away;
- *   - the SELLER could accept their own counter, and it EXECUTED: $80 taken from
- *     the buyer's wallet and the card moved, with the buyer never having agreed
- *     to that price.
+ *   - the BUYER could not accept a seller's $80 counter, so a counter-offer
+ *     could never conclude a sale and the only exit from a negotiation would be
+ *     to walk away;
+ *   - the SELLER could accept their own counter: $80 taken from the buyer's
+ *     wallet and the card moved, with the buyer never having agreed to that
+ *     price.
  */
 
 async function listing(description: string, askingPrice: number) {
@@ -54,7 +52,7 @@ describe('a counter-offer can be concluded by the side it was sent to', () => {
   });
 
   it('refuses to let the seller accept their own counter', async () => {
-    // The hole the first fix moved rather than closed. This one MOVED A CARD.
+    // Allowed, this would MOVE A CARD at a price the buyer never agreed to.
     const { seller, item, listing: l } = await listing('Band 2: seller self-accepts counter', 100_00);
     await fundWallet(SEED.collector2, 300_00);
     const buyer = await signIn(SEED.collector2);
@@ -123,10 +121,9 @@ describe('a counter-offer can be concluded by the side it was sent to', () => {
 describe('an offer is a commitment, so it is checked when it is made', () => {
   it('refuses an offer the buyer cannot cover, naming their balance', async () => {
     /**
-     * This used to be checked only at ACCEPT, which put the failure on the wrong
-     * person entirely: the seller pressed Accept and was told "Insufficient
-     * wallet balance" — an error about somebody else's money, phrased as if it
-     * were their own.
+     * Checked only at ACCEPT, the failure would land on the wrong person: the
+     * seller presses Accept and is told "Insufficient wallet balance", an error
+     * about somebody else's money, phrased as if it were their own.
      */
     const { listing: l } = await listing('Band 2: cannot cover', 500_000_00);
     const buyer = await signIn(SEED.collector2);
@@ -140,11 +137,10 @@ describe('an offer is a commitment, so it is checked when it is made', () => {
 
   it('leaves the offer open, not "accepted", when the acceptance cannot go through', async () => {
     /**
-     * The status write happened BEFORE the purchase and outside its transaction,
-     * so a failed acceptance left the offer marked `accepted` with no sale behind
-     * it: the card never moved, the listing stayed live, and neither party could
-     * touch the offer again because it was no longer pending. A dead record that
-     * read as a completed deal.
+     * A failed acceptance must leave the offer pending. Marked `accepted` with no
+     * sale behind it, the card would never move, the listing would stay live,
+     * and neither party could touch the offer again: a dead record that reads as
+     * a completed deal.
      */
     const { seller, listing: l } = await listing('Band 2: acceptance fails', 300_00);
     await fundWallet(SEED.collector2, 200_00);
@@ -205,9 +201,10 @@ describe('one open offer per buyer per listing', () => {
 describe('the offers list says whose move it is', () => {
   it('reports side, proposer and turn on every row', async () => {
     /**
-     * The panel keyed its controls off `direction` — which side of the LISTING
-     * you are on — and so showed a buyer "waiting on the seller" with no controls
-     * at all, even when the seller's counter was sitting in front of them.
+     * Controls keyed off `direction` (which side of the LISTING you are on)
+     * would show a buyer "waiting on the seller" with no controls at all, even
+     * with the seller's counter in front of them. So every row says whose turn
+     * it is.
      */
     const { seller, listing: l } = await listing('Band 2: whose turn', 100_00);
     const buyer = await signIn(SEED.collector2);
@@ -238,10 +235,10 @@ describe('the offers list says whose move it is', () => {
 
 describe('a counter-offer is addressed to the other side', () => {
   /**
-   * N8. `offer_countered` carried both `sellerId` and `buyerId` and no
-   * `recipientIds`, and the worker takes the first single-recipient key it
-   * finds — `sellerId`. So a seller's counter was announced to the SELLER, in
-   * the app and by email, and the buyer it was meant for never heard of it.
+   * `offer_countered` names both `sellerId` and `buyerId`, and without
+   * `recipientIds` the worker takes the first single-recipient key it finds,
+   * `sellerId`. A seller's counter would then be announced to the SELLER, in
+   * the app and by email, and the buyer it is meant for would never hear of it.
    *
    * Driven through the worker's own dispatch job, against the same database the
    * API writes to, because the recipient is decided there and nowhere else.

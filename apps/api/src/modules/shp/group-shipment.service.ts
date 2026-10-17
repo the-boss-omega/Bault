@@ -17,19 +17,13 @@ import { ShipmentService, type ShipmentActor } from './shipment.service';
  * One parcel, several collectors, one payer.
  *
  * Three people at a convention with cards in the vault and one hotel address
- * between them. ShipMyCards handles it by having each collector raise a same-day
- * request to the identical address, tick the group option and name everybody in
- * the comments — which works because a human reads the comments.
- *
- * The tempting implementation is to let one shipment carry everybody's items.
- * That breaks Principle I outright: an item has exactly one owner, and a
- * shipment that moves somebody else's card is a custody event that person never
- * authorised.
+ * between them. One shipment never carries everybody's items: an item has
+ * exactly one owner (Principle I), and a shipment that moved somebody else's
+ * card would be a custody event that person never authorised.
  *
  * So each collector keeps their own shipment, with their own items, their own
- * custody events and their own history. The GROUP is what says they travel
- * together and who pays the carrier — the only two facts that actually needed
- * modelling, and the only two a warehouse operator needs at the packing bench.
+ * custody events and their own history. The GROUP says they travel together,
+ * and names the payer who alone may lock or cancel it.
  *
  * Joining is always the member's own act. A group you can be added to without
  * agreeing is a group that can send your property to an address you never saw.
@@ -220,9 +214,7 @@ export class GroupShipmentService {
   /**
    * Close the group and hand it to the warehouse.
    *
-   * Only the payer may lock it, and only they may cancel it — they are the one
-   * on the hook for the carrier, and a member locking the group would be
-   * committing somebody else's wallet.
+   * Only the payer may lock it, and only they may cancel it.
    *
    * Each member still selects and pays for their own service. What the group
    * changes is that the warehouse packs them into one box; it does not merge
@@ -280,7 +272,7 @@ export class GroupShipmentService {
         .update(shipmentGroup)
         .set({ status: 'cancelled', cancelledAt: now, notes: reason.trim(), updatedAt: now })
         .where(eq(shipmentGroup.id, groupId));
-      // Each member's own request survives untouched — cancelling the shared
+      // Each member's own request survives untouched: cancelling the shared
       // parcel is not cancelling everybody's shipment.
       await tx.update(shipment).set({ groupId: null, updatedAt: now }).where(eq(shipment.groupId, groupId));
       return { status: 'cancelled' as const };

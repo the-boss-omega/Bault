@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_USERNAME, fixtureEmail, signIn, usernameOf } from './helpers/http';
 
 /**
- * User identity after the identity pass (Requirements 3 & 4).
+ * User identity (Requirements 3 & 4).
  *
  * Three properties, each enforced at more than one layer, each checked here at
  * the layer a user actually meets — the HTTP API:
@@ -24,7 +24,7 @@ async function register(client: Client, overrides: Record<string, unknown> = {})
     firstName: 'Ada',
     lastName: 'Lovelace',
     password: 'password123',
-    // A valid registration accepts the terms in force (E21, acc-consent.test.ts).
+    // A valid registration accepts the terms in force (acc-consent.test.ts).
     acceptedTermsVersion: '2026-10-draft-1',
     ...overrides,
   });
@@ -35,7 +35,7 @@ describe('ACC username: unique, permanent, protected', () => {
     const res = await register(new Client());
     expect(res.status).toBe(201);
     expect(res.body.username).toBeTruthy();
-    // No intake ID is issued any more.
+    // No intake ID is issued.
     expect(res.body.intakeId).toBeUndefined();
   });
 
@@ -200,8 +200,8 @@ describe('ACC intake ID is retired from user-facing workflows', () => {
   it('remains visible to an administrator for troubleshooting', async () => {
     const admin = await signIn(SEED.admin);
     const users = (await admin.get('/admin/users')).body as Record<string, unknown>[];
-    // The key exists on the admin surface; most accounts now have null there,
-    // and the seeded legacy account still carries its historical OW- code.
+    // The key exists on the admin surface; most accounts have null there, and
+    // the seeded legacy account carries its OW- code.
     expect(Object.keys(users[0]!)).toContain('intakeId');
     const veteran = users.find((u) => u.username === SEED_USERNAME.collector3)!;
     expect(String(veteran.intakeId)).toMatch(/^OW-/);

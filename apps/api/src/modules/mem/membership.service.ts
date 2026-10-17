@@ -44,9 +44,8 @@ export interface ShippingCover {
  * What a tier actually paid towards a particular rate, as quoted and agreed.
  *
  * Stored on the shipment and spent at payment. Every figure is minor units the
- * MEMBER does not pay; the gross amounts stay on the rate, because the premium
- * is still a real premium and the postage is still real postage — Bault pays
- * them either way.
+ * MEMBER does not pay; the gross amounts stay on the rate, because Bault still
+ * pays the real premium and the real postage.
  */
 export interface AppliedShippingCover {
   tier: string;
@@ -76,21 +75,17 @@ export interface Entitlement {
 /**
  * Membership: subscribing, renewing, and answering "is this one included".
  *
- * The important method is the smallest one. `consume` is what every billable
- * action calls, and everything else in this file exists so that `consume` can
- * answer honestly and atomically:
+ * `consume` is what every billable action calls, and it must answer atomically
+ * and fail closed:
  *
- *   - **Atomically**, because it runs inside the caller's transaction. An intake
- *     that consumes an allowance and then fails must not have consumed it, and a
- *     member pressing the same button twice must not get two for one.
- *   - **Honestly**, because it FAILS CLOSED. Outside a paid-up cycle, with no
- *     membership, or on an action the tier does not name, the answer is "not
- *     covered" — and not covered means the ordinary price, which the collector
- *     is shown and approves, exactly as a non-member does.
+ *   - **Atomically**: it runs inside the caller's transaction, so an intake that
+ *     consumes an allowance and then fails has not consumed it, and pressing the
+ *     same button twice does not give two for one.
+ *   - **Fail closed**: outside a paid-up cycle, with no membership, or on an
+ *     action the tier does not name, the answer is "not covered", which means
+ *     the ordinary price, shown and approved as for a non-member.
  *
- * There is no code path in this file that charges somebody more than their
- * subscription because they went over. That is the point: the allowance runs
- * out, and the thing simply costs what it has always cost, after they say yes.
+ * Nothing here charges more than the subscription when an allowance runs out.
  */
 @Injectable()
 export class MembershipService {
@@ -107,11 +102,7 @@ export class MembershipService {
 
   /**
    * Every tier with its live price, for the page somebody reads before joining.
-   *
-   * Public — the same reasoning that made the price list public. Somebody
-   * deciding whether to subscribe has to be able to read what it costs and what
-   * it covers without an account, and putting either behind a session makes them
-   * unreadable to exactly the person deciding.
+   * Served publicly, like the price list.
    */
   async catalogue() {
     const tiers = await Promise.all(
@@ -155,9 +146,8 @@ export class MembershipService {
   /**
    * What a member has left this cycle, in the shape the wallet screen shows.
    *
-   * Returns null for a non-member rather than a zeroed structure — "you are not
-   * a member" and "you are a member with nothing left" are different sentences
-   * and the SPA says different things about them.
+   * Returns null for a non-member rather than a zeroed structure: "not a member"
+   * and "a member with nothing left" read differently in the SPA.
    */
   async allowances(userId: string) {
     const state = await this.current(userId);
@@ -172,7 +162,7 @@ export class MembershipService {
       tier: tier.key,
       status: state.membership.status,
       scheduledTier: state.membership.scheduledTier,
-      /** What this cycle cost — the SPA needs it to show an upgrade's credit up front. */
+      /** What this cycle cost; the SPA uses it to show an upgrade's credit up front. */
       currentFeeMinor: state.period?.feeMinor ?? 0,
       cycleLive: live,
       currentPeriodStart: state.membership.currentPeriodStart,
@@ -219,19 +209,15 @@ export class MembershipService {
   /**
    * Join a tier, or move to another one.
    *
-   * The fee for the first cycle is charged here and now, which is what makes the
-   * allowance real immediately — a member who paid two minutes ago and is told
-   * their intake is not covered yet has been sold a promise, not a service.
+   * The fee for the first cycle is charged here and now, so the allowance is
+   * usable immediately.
    *
-   * MOVING TIERS is an upgrade or a downgrade and they are not symmetrical:
+   * Moving tiers is not symmetrical:
    *
    *   - **Upgrade** takes effect at once and opens a new cycle, with the unused
-   *     remainder of the old one credited against the first charge. The member
-   *     asked for more and is paying for more from today — not twice for today.
-   *   - **Downgrade** is scheduled, not immediate. It takes effect at the end of
-   *     the cycle they have already paid for, because taking away an allowance
-   *     somebody has bought — and may have already planned around — is the one
-   *     thing a subscription must never do mid-month.
+   *     remainder of the old one credited against the first charge.
+   *   - **Downgrade** is scheduled for the end of the cycle already paid for,
+   *     because a subscription never takes away a bought allowance mid-cycle.
    */
   async subscribe(userId: string, tierKey: string) {
     if (!isTierKey(tierKey)) throw AppError.validation(`Unknown tier "${tierKey}"`);
@@ -252,15 +238,9 @@ export class MembershipService {
 
       if (live && live.tier === tierKey) {
         /**
-         * The same tier again. Three different requests, and none of them is a
-         * purchase.
-         *
-         * This used to fall through to the paid path whenever the membership was
-         * `cancelling` — so somebody who cancelled on the 2nd and changed their
-         * mind on the 3rd was charged a whole new cycle for the one they had
-         * already paid for. Now resuming a cancellation, or dropping a scheduled
-         * downgrade, simply keeps what is paid for. Only asking for the tier you
-         * are already on, with nothing pending, is refused.
+         * The same tier again is never a purchase. Resuming a cancellation, or
+         * dropping a scheduled downgrade, keeps the cycle already paid for.
+         * Asking for the current tier with nothing pending is refused.
          */
         if (live.status === 'cancelling' || live.scheduledTier) {
           await tx
@@ -280,14 +260,9 @@ export class MembershipService {
 
       if (live && tierRank(tierKey) < tierRank(live.tier)) {
         /**
-         * A downgrade is SCHEDULED, and it stays a membership.
-         *
-         * It used to set `cancelling` and hand the target tier back to the caller
-         * without storing it anywhere — so at the end of the cycle the renewal
-         * saw `cancelling` and ENDED the membership. Somebody who asked to pay
-         * less next month was not a member next month. The target now lives on
-         * the row, the status stays `active`, and renewal opens the next cycle
-         * on the cheaper tier. Nothing already paid for is taken away today.
+         * A downgrade is scheduled and the membership stays `active`: the target
+         * tier is stored on the row and renewal opens the next cycle on it.
+         * Nothing already paid for is taken away today.
          */
         await tx
           .update(membership)
@@ -305,14 +280,10 @@ export class MembershipService {
       const listed = await this.feeFor(tier, tx as Database);
 
       /**
-       * An upgrade credits what is left of the cycle already paid for.
-       *
-       * It used to charge the new tier in full and throw the rest of the old one
-       * away, so upgrading on day 29 of 30 cost the same as upgrading on day 1 —
-       * the member paid twice for the overlap. The unused fraction of what was
-       * actually charged for the current cycle comes off the first charge on the
-       * new one. The snapshot records the list price, the credit and the tier it
-       * came from, so the net figure can be explained later.
+       * An upgrade credits what is left of the cycle already paid for: the
+       * unused fraction of what was charged for the current cycle comes off the
+       * first charge on the new one, so the overlap is never paid twice. The
+       * snapshot records the list price, the credit and the previous tier.
        */
       let prorationCreditMinor = 0;
       if (live && this.isCycleLive(live, now)) {
@@ -388,8 +359,7 @@ export class MembershipService {
    * Open a cycle: write the period row, raise the charge, debit the ledger.
    *
    * The period row carries the tier and the fee that were in force, frozen, for
-   * the same reason every charge carries its pricing snapshot — a member asking
-   * what they got for July's money is asking about July's terms.
+   * the same reason every charge carries its pricing snapshot.
    */
   private async openPeriod(
     tx: Database,
@@ -445,12 +415,10 @@ export class MembershipService {
   /**
    * Stop renewing.
    *
-   * The cycle already paid for runs to its end — status `cancelling`, allowances
-   * intact. Nothing happens to a single stored item, then or ever: storage for
-   * anything over the old tier's included count simply reverts to the published
-   * terms from the end of the cycle FORWARD, never retroactively. The platform
-   * already guarantees the "never retroactively" half, because the rule in force
-   * at the moment of a charge is frozen onto that charge.
+   * The cycle already paid for runs to its end with status `cancelling` and the
+   * allowances intact. Stored items are untouched: storage over the old tier's
+   * included count reverts to the published terms from the end of the cycle
+   * forward, never retroactively, since each charge freezes its own rule.
    */
   async cancel(userId: string) {
     const [m] = await this.db.select().from(membership).where(eq(membership.userId, userId)).limit(1);
@@ -476,10 +444,8 @@ export class MembershipService {
    * and only if the thing it covered actually happened.
    *
    * The counter is incremented with a SQL `jsonb_set` against the row rather
-   * than read-modify-written in JavaScript. Two intakes committed concurrently
-   * would otherwise both read `used: 3`, both write `4`, and the member would
-   * get a free one — the same lost-update that a wallet balance derived from a
-   * stored number would have, and avoided the same way.
+   * than read-modify-written in JavaScript, so two intakes committed
+   * concurrently cannot both read `used: 3` and both write `4`.
    */
   async consume(tx: Database, userId: string, action: string): Promise<Entitlement> {
     const state = await this.current(userId, tx);
@@ -497,14 +463,9 @@ export class MembershipService {
     }
 
     /**
-     * Conditional, and CHECKED.
-     *
-     * The WHERE clause re-tests the allowance, so two actions committing at the
-     * same moment cannot both take the last one. And the row count is checked:
-     * this UPDATE used to be fire-and-forget, so when the period row could not
-     * be found (a renewal that wrote its start at a different precision did
-     * exactly that) nothing was recorded and the answer was still "covered" —
-     * an allowance that never ran out. No row updated now means not covered.
+     * Conditional, and checked. The WHERE clause re-tests the allowance, so two
+     * actions committing at the same moment cannot both take the last one. No
+     * row updated (also when the period row cannot be found) means not covered.
      */
     const allowed = tier.perCycle[action];
     const updated = await tx
@@ -542,9 +503,9 @@ export class MembershipService {
    * Give back one counted allowance taken by `consume`, to the period it came
    * out of.
    *
-   * For the thing it covered not happening after all — a cash-out whose payout
-   * the provider refused. Never below zero, and a period that has already
-   * ended takes it back harmlessly: nothing reads a finished cycle's counters.
+   * For when the thing it covered does not happen after all, such as a cash-out
+   * whose payout the provider refused. Never below zero; a period that has
+   * already ended takes it back harmlessly, since nothing reads its counters.
    */
   async restoreCounted(tx: Database, periodId: string, action: string): Promise<void> {
     await tx
@@ -568,17 +529,15 @@ export class MembershipService {
    * How much of a fee this member's tier waives, spent in the same transaction
    * as the charge it reduces.
    *
-   * Four fees never pass through `BillingService` — the marketplace commission
+   * Four fees never pass through `BillingService`: the marketplace commission
    * (a percentage, charged in the purchase), the escrow fee (frozen on the deal,
    * charged at settlement), the cash-out fee (charged at completion) and the
    * show-pickup fee (charged at booking). Each call site asks here at the moment
    * it charges.
    *
-   * THE RULE: a waiver can only LOWER a fee the member was already shown, never
-   * raise one. Every one of these was quoted at its ordinary price before the
-   * member committed, so applying the waiver at the charge is safe in one
-   * direction only — and if the allowance was taken by something else in the
-   * meantime, the answer is simply the ordinary fee they already agreed to.
+   * A waiver can only LOWER a fee the member was already shown, never raise one.
+   * Each was quoted at its ordinary price before the member committed; if the
+   * allowance was taken in the meantime, the answer is that ordinary fee.
    *
    *   marketplace_fee  value-based: waived on the first N of sale value a cycle,
    *                    proportionally when a sale straddles the limit.
@@ -646,8 +605,8 @@ export class MembershipService {
   /**
    * What this member's tier can pay towards a parcel, if anything.
    *
-   * Null for a non-member and for a lapsed cycle — failing closed, like
-   * everything else here: no cover means the ordinary price, shown first.
+   * Null for a non-member and for a lapsed cycle. This fails closed: no cover
+   * means the ordinary price, shown first.
    */
   async shippingCover(userId: string, tx?: Database): Promise<ShippingCover | null> {
     const state = await this.current(userId, tx);
@@ -675,12 +634,11 @@ export class MembershipService {
    * Spend the cover a parcel was priced with, inside the payment's transaction.
    *
    * The counters are incremented in ONE conditional UPDATE whose WHERE clause
-   * re-checks the allowance — so two parcels paid at the same moment cannot
-   * both take the last insured shipment. If the allowance has changed since the
+   * re-checks the allowance, so two parcels paid at the same moment cannot both
+   * take the last insured shipment. If the allowance has changed since the
    * member was shown the price (another parcel took it, the tier changed, the
-   * cycle rolled over), this REFUSES rather than charging the difference. The
-   * member agreed to a figure; a larger one needs a new agreement, which is a
-   * fresh quote.
+   * cycle rolled over), this REFUSES rather than charging the difference: a
+   * larger figure needs a fresh quote.
    */
   async spendShippingCover(tx: Database, userId: string, applied: AppliedShippingCover): Promise<AppliedShippingCover> {
     const stale = () =>
@@ -718,7 +676,7 @@ export class MembershipService {
       const e = await this.consume(tx, userId, action);
       if (!e.covered) throw stale();
     }
-    // What was spent, and from which cycle — stored on the shipment so a
+    // What was spent, and from which cycle. Stored on the shipment so a
     // cancellation can give it back (`returnShippingCover`).
     return { ...applied, spentInPeriodId: state.period?.id };
   }
@@ -728,9 +686,8 @@ export class MembershipService {
    * label was bought.
    *
    * The counters are decremented in the period the cover was spent in, never
-   * below zero. A cover recorded before the period was written down on it
-   * (shipments paid before 0031) goes back to the current cycle, which is where
-   * nearly all of them were spent.
+   * below zero. A cover with no `spentInPeriodId` (shipments paid before
+   * migration 0031) goes back to the current cycle.
    */
   async returnShippingCover(tx: Database, userId: string, applied: AppliedShippingCover): Promise<void> {
     let periodId = applied.spentInPeriodId;
@@ -760,11 +717,12 @@ export class MembershipService {
      ------------------------------------------------------------------ */
 
   /**
-   * Roll every membership whose cycle has run out. Driven by the worker.
+   * Roll every membership whose cycle has run out. A `cancelling` membership
+   * ends here rather than renewing.
    *
-   * A `cancelling` membership ends here rather than renewing — which is the only
-   * place a membership actually stops, so the end of a subscription is a dated
-   * event with a row behind it rather than an absence.
+   * The scheduled renewal is the worker's own SQL job (`membership-renewal.ts`),
+   * not this method. Unlike that job, this one does not claim rows or record
+   * the cycle it renews.
    */
   async renewDue(now = new Date()) {
     const due = await this.db

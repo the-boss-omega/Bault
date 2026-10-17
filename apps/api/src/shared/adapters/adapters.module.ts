@@ -11,14 +11,10 @@ import {
  * DI tokens + providers for external adapters (T020). Global so any module can
  * inject them.
  *
- * WHICH adapter is decided in `@bault/adapters` (`select.ts`), not here. The
- * factories used to live in this file, and the worker — which has no Nest
- * container — never called them: its tracking job built the shipping sandbox
- * itself, so with `SHIPPING_PROVIDER=easypost` the API bought real labels while
- * the worker asked a fake where they were (E17). Moving the choice next to the
- * adapters lets both processes make it the same way, from the same validated
- * config, with the same production refusals: a sandbox payment, shipping or
- * storage adapter still fails the boot when NODE_ENV=production.
+ * WHICH adapter is decided in `@bault/adapters` (`select.ts`), not here, so the
+ * API and the worker (which has no Nest container) choose the same way, from
+ * the same validated config, with the same production refusals: a sandbox
+ * payment, shipping or storage adapter fails the boot when NODE_ENV=production.
  */
 export const PAYMENT_ADAPTER = Symbol('PAYMENT_ADAPTER');
 export const SHIPPING_ADAPTER = Symbol('SHIPPING_ADAPTER');

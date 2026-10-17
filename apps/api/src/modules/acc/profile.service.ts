@@ -15,25 +15,25 @@ import { MfaService } from './mfa/mfa.service';
  * `intakeId` is deliberately ABSENT. The OW- code is retired from every
  * user-facing workflow: nothing asks a customer to quote one, so returning it
  * here would only invite its reuse. It still exists on the row, and admins can
- * still read it through `GET /admin/users` for troubleshooting a pre-printed
- * label — that is the one surface it survives on.
+ * read it through `GET /admin/users` for troubleshooting a pre-printed label,
+ * the one surface it survives on.
  */
 export interface ProfileView {
   id: string;
-  email: string; // a user always sees their OWN email (PII rule guards OTHER users' data)
-  username: string; // immutable, read-only (Requirement 4.1)
+  email: string; // a user always sees their OWN email
+  username: string; // immutable, read-only
   role: string;
   status: string;
   firstName: string | null;
   lastName: string | null;
-  /** Derived from the two parts above with `fullName()` — never stored. */
+  /** Derived from the two parts above with `fullName()`, never stored. */
   fullName: string;
   /** True while the legacy-name migration's split is still unconfirmed. */
   nameReviewRequired: boolean;
   /**
    * The terms this person accepted at registration, and when. Both NULL for an
-   * account created before there was anything to accept — said plainly rather
-   * than back-filled with a consent nobody gave (migration 0033).
+   * account created before there was anything to accept, rather than
+   * back-filled with a consent nobody gave.
    */
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
@@ -41,8 +41,7 @@ export interface ProfileView {
    * Whether this account has a confirmed second factor, and whether its role
    * requires one. The app reads both on every load: `mfaRequired && !mfaEnabled`
    * is an account every route but enrolment refuses, and the app sends it
-   * straight to the enrolment screen rather than into a console that answers
-   * every panel with an error.
+   * straight to the enrolment screen.
    */
   mfaEnabled: boolean;
   mfaRequired: boolean;
@@ -58,14 +57,14 @@ export interface AddressInput {
   isDefault?: boolean;
 }
 
-/** Every address field is individually editable (Requirement 4.2). */
+/** Every address field is individually editable. */
 export type AddressPatch = Partial<AddressInput>;
 
 /**
- * Own-profile read/update (T033) + saved shipping addresses (ACC-07). Returns the
- * caller's own record — including their own PII, which is legitimate. Cross-user
- * PII exposure is what the PII interceptor guards for non-admins (Principle IX).
- * Address access is strictly own-only: every query filters by the caller's id.
+ * Own-profile read/update + saved shipping addresses. Returns the caller's own
+ * record, including their own PII, which is legitimate. Address access is
+ * strictly own-only: an address is found by its id AND the caller's id before
+ * it is read, changed or deleted.
  */
 @Injectable()
 export class ProfileService {
@@ -99,9 +98,9 @@ export class ProfileService {
   }
 
   /**
-   * Only the two name parts are writable. `username` is never in the SET clause —
-   * there is no code path anywhere that updates it after registration (Req 4.1) —
-   * and there is no separate display name that could drift out of step with these.
+   * Only the two name parts are writable. `username` is never in the SET clause
+   * (no code path updates it after registration), and there is no separate
+   * display name that could drift out of step with these.
    *
    * A name the owner has just confirmed clears `nameReviewRequired`, which is the
    * only way the flag set by the legacy-name migration (0004) is ever cleared by
@@ -121,7 +120,7 @@ export class ProfileService {
   }
 
   // ---------------------------------------------------------------------------
-  // Shipping addresses (ACC-07) — own-only.
+  // Shipping addresses: own-only.
   // ---------------------------------------------------------------------------
 
   listAddresses(userId: string) {
@@ -147,7 +146,7 @@ export class ProfileService {
           line1: dto.line1,
           city: dto.city,
           // Stored as the code the carrier rules read, whatever shape it arrived
-          // in — the validator has already established it resolves to one.
+          // in; the validator has already established it resolves to one.
           country: toCountryCode(dto.country) ?? dto.country,
           postalCode: dto.postalCode,
           isDefault: dto.isDefault ?? false,
@@ -159,7 +158,7 @@ export class ProfileService {
   }
 
   /**
-   * Edit a saved address (Requirement 4.2). Own-only; promoting an address to the
+   * Edit a saved address. Own-only; promoting an address to the
    * default demotes the previous one so exactly one default survives.
    */
   async updateAddress(userId: string, id: string, patch: AddressPatch) {

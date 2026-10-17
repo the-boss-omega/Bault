@@ -1,11 +1,6 @@
 /**
  * Third-party grading service levels.
  *
- * Grading used to be one request with the grading body hard-coded to "PSA" in
- * the vault drawer. There was no tier, no declared value, no price shown before
- * ordering, and no way for a card worth $8,000 to be treated differently from a
- * common — which is the whole basis on which graders price the work.
- *
  * A grader's tiers are defined by exactly two numbers: the DECLARED VALUE they
  * will insure up to, and how long they take. Everything else follows from those,
  * including what it costs. So that is what a tier is here.

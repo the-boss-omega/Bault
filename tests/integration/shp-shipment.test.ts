@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
 /**
- * US8 / Scenario H — create a MULTI-ITEM shipment request (Requirement 5.2) →
+ * Create a MULTI-ITEM shipment request (Requirement 5.2) →
  * rates → select → scan-verified dispatch through the structured warehouse
  * fulfillment form (Requirement 5.3). Items move to `shipped` with a tracking
  * number; shipping is billed.
@@ -11,7 +11,7 @@ describe('SHP outbound shipping', () => {
   /**
    * The destination the UI builds from a saved Profile address (Req 5.1).
    *
-   * The country and postal code are their own fields now. A rate depends on
+   * The country and postal code are their own fields. A rate depends on
    * both, and a formatted single line cannot be split back into them without
    * guessing — which is how a parcel to Japan gets quoted a domestic price.
    */
@@ -100,10 +100,9 @@ describe('SHP outbound shipping', () => {
 
   it('checks the labels the operator scanned, not the ids the bench was sent', async () => {
     /**
-     * The packing bench used to post the shipment's own item ids back as "what
-     * was scanned", so this check compared the shipment with itself. A scanner
-     * reads the barcode on the label — the id is printed nowhere — so that is
-     * what the bench sends now, and what has to match.
+     * A scanner reads the barcode on the label (the id is printed nowhere), so
+     * that is what the bench sends and what has to match. Sending the
+     * shipment's own item ids back would compare the shipment with itself.
      */
     const operator = await signIn(SEED.operator);
     const [itemA, itemB] = await Promise.all([

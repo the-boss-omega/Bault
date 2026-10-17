@@ -13,8 +13,8 @@ import { MfaService } from './mfa.service';
 
 /**
  * The signed-in half of two-factor sign-in: see where it stands, enrol, replace
- * the recovery codes, turn it off. (The signed-out half — the second sign-in
- * step — is `POST /auth/login/mfa` on `AuthController`.)
+ * the recovery codes, turn it off. (The signed-out half, the second sign-in
+ * step, is `POST /auth/login/mfa` on `AuthController`.)
  *
  * Under `/auth` on purpose: the error reporter drops request bodies on `/auth`
  * routes before anything leaves for a third party, and these bodies carry codes

@@ -9,21 +9,14 @@ import { item } from '../cst/cst.schema';
 import { listing, offer, swapProposal } from './mkt.schema';
 
 /**
- * The READ side of the marketplace — the half that was missing.
- *
- * Every write here already existed and was correct: `ListingService` can reprice
- * and remove, `OfferService` can accept, reject and counter, `TradeService` runs
- * a dual-approval swap. None of it was reachable, because there was no query
- * that answered the questions a seller actually has:
+ * The READ side of the marketplace: the queries that answer the questions a
+ * seller actually has.
  *
  *   - which listings are mine?
  *   - has anybody offered on them?
  *   - what have I offered on, and did they reply?
  *   - is anybody proposing a trade with me?
  *   - who is this person I want to trade with?
- *
- * A seller was notified "you received an offer of $X" and had nowhere to go.
- * These queries are the somewhere.
  */
 @Injectable()
 export class MarketReadService {
@@ -161,15 +154,9 @@ export class MarketReadService {
    * Every offer that concerns the caller, on both sides of the table.
    *
    * `direction` says which side of the LISTING they are on. `yourTurn` says
-   * whether the ball is in their court, and those are not the same question —
-   * which is the mistake the offers panel made.
-   *
-   * The panel keyed its actions off `direction` alone: a buyer was always shown
-   * "awaiting seller" and given no controls, so a buyer who had been sent a
-   * counter-offer could not accept it, counter it, or even withdraw. A
-   * negotiation could be started but never finished from the side that was being
-   * negotiated with. Whose move it is depends on who proposed the price on the
-   * table, so that is what is computed and sent.
+   * whether the ball is in their court, and those are not the same question:
+   * whose move it is depends on who proposed the price on the table, so that is
+   * what is computed and sent.
    */
   async myOffers(userId: string) {
     const rows = await this.db

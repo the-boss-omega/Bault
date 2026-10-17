@@ -67,8 +67,8 @@ interface LedgerRow {
 }
 
 /**
- * `GET /finance/wallet/pending` — money spoken for by requests that are still
- * open. Deliberately NOT folded into the balance: none of it has moved, and a
+ * `GET /finance/wallet/pending`: money spoken for by requests that are still
+ * open. Deliberately not folded into the balance: none of it has moved, and a
  * balance that included it would be a number the ledger does not support.
  */
 interface PendingTotals {
@@ -78,12 +78,10 @@ interface PendingTotals {
 }
 
 /**
- * Wallet contextual tabs.
- *
- * `topup` and `withdrawals` are gone: money no longer moves from a form on this
- * page. `cash-in` and `cash-out` raise REQUESTS, and `requests` is the central
- * status view where those requests live out their lifecycle. Old links to the
- * two retired tabs are redirected (see `LEGACY_WALLET_TABS` in shared/routing).
+ * Wallet contextual tabs. `cash-in` and `cash-out` raise requests, and
+ * `requests` is the status view where those requests live out their lifecycle.
+ * Links to the retired `topup` and `withdrawals` tabs are redirected (see
+ * `LEGACY_TABS` in shared/routing).
  */
 const TABS = ['overview', 'transactions', 'cash-in', 'cash-out', 'requests'] as const;
 type WalletTab = (typeof TABS)[number];
@@ -109,8 +107,8 @@ function typeLabel(t: TranslateFn, type: string): string {
 
 /**
  * What a ledger row points at. The API writes a free-form `referenceType`, so
- * anything not in this map degrades to the raw value rather than leaking a
- * translation key into the UI.
+ * anything not in this map degrades to the raw value instead of a translation
+ * key.
  */
 const REF_LABEL: Record<string, MessageKey> = {
   charge: 'wallet.ref.charge',
@@ -133,10 +131,10 @@ const RANGES = [
 ];
 
 /**
- * Wallet (T072). The derived balance (Σ ledger) is the hero; every immutable
- * ledger row is the auditable money history beneath it.
+ * Wallet. The derived balance (Σ ledger) is the hero; every immutable ledger
+ * row is the auditable money history beneath it.
  *
- * Contextual tabs switch the wallet's own content only — the rail, header and
+ * Contextual tabs switch the wallet's own content only; the rail, header and
  * shell stay mounted. Money is entered and read in dollars everywhere; the cents
  * the API expects are produced at the edge, in `dollarsToCents`.
  */
@@ -230,8 +228,8 @@ export function WalletPage() {
         onSelect={(key) => goTab(key)}
         actions={
           <>
-            {/* Both actions open a REQUEST form. There is deliberately no control
-                anywhere on this page that adds or removes funds directly. */}
+            {/* Both actions open a request form. There is deliberately no control
+                on this page that adds or removes funds directly. */}
             <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
               {t('wallet.action.cashIn')}
             </Button>
@@ -410,7 +408,7 @@ function OverviewTab({
         />
       </div>
 
-      {/* Money that has been REQUESTED but has not moved. Shown apart from the
+      {/* Money that has been requested but has not moved. Shown apart from the
           balance and the flows above, never added into them: the balance is the
           sum of the ledger, and none of these amounts is in the ledger yet. */}
       {pending && pending.count > 0 && (
@@ -562,15 +560,11 @@ function TransactionsTab({
 /**
  * The balance the wallet stood at once each entry had landed, by entry id.
  *
- * Computed ONCE, over the whole ledger, and looked up per row. It used to be
- * walked inside the table over whatever rows the table was handed — the six
- * newest on the overview, or the filtered list on the Transactions tab — so the
- * overview's top row disagreed with the balance in the header as soon as there
- * were more than six movements, and filtering by type produced negative
- * "balances" the wallet had never held. A row's balance is a fact about the
- * ledger, not about which rows happen to be on screen.
+ * Computed once, over the whole ledger, and looked up per row. A row's balance
+ * is a fact about the ledger, so walking only the rows on screen (the newest
+ * six, or a filtered list) would give wrong figures.
  *
- * `GET /finance/ledger` returns the WHOLE ledger, newest first (LedgerService
+ * `GET /finance/ledger` returns the whole ledger, newest first (LedgerService
  * .list has no limit), so the walk runs from the oldest entry and the newest
  * entry's figure is exactly the balance the header shows. If that endpoint ever
  * pages, this has to come from the server instead.
@@ -600,7 +594,7 @@ function TransactionTable({
   emptyAction,
 }: {
   rows: readonly LedgerRow[];
-  /** From {@link runningBalances}, over the whole ledger — never over `rows`. */
+  /** From {@link runningBalances}, over the whole ledger, never over `rows`. */
   balanceAfter: ReadonlyMap<string, number>;
   loading: boolean;
   locale: string;
@@ -680,16 +674,9 @@ function TransactionTable({
                   </Amount>
                 </td>
                 {/*
-                  THE RUNNING BALANCE.
-
-                  A ledger without one is a list of movements, and the question
-                  anybody actually brings to it — "what did I have after that?" —
-                  cannot be answered by reading it. It was never here.
-
-                  Looked up from the walk over the whole ledger (see
-                  `runningBalances`), never recomputed over the rows on screen:
-                  a running balance over a truncated or filtered list is a wrong
-                  number in the one place a wrong number is unforgivable.
+                  The running balance, looked up from the walk over the whole
+                  ledger (see `runningBalances`), never recomputed over the rows
+                  on screen.
                 */}
                 <td data-label={t('wallet.col.balance')} className="td-end num">
                   <Amount>{formatUsd(balanceAfter.get(row.id) ?? 0)}</Amount>
@@ -721,8 +708,8 @@ function TransactionDrawer({
   const credit = row.direction === 'credit';
 
   /**
-   * The receipt is generated from the ledger row itself — the row IS the record
-   * of truth, and no receipt endpoint exists to proxy.
+   * The receipt is generated from the ledger row itself: the row is the record
+   * of truth, and there is no receipt endpoint.
    */
   function downloadReceipt() {
     const lines = [
@@ -798,7 +785,7 @@ function TransactionDrawer({
 }
 
 /* ============================================================
-   Requests — the central status view
+   Requests: the central status view
    ============================================================ */
 
 /**
@@ -806,8 +793,8 @@ function TransactionDrawer({
  *
  * This is where a request lives after submission: it appears here immediately,
  * with its current status, its creation and last-update timestamps, and a way
- * into its full detail and audit history. Nothing here moves money — the amounts
- * shown are what was REQUESTED, and only a `completed` row has a matching ledger
+ * into its full detail and audit history. Nothing here moves money: the amounts
+ * shown are what was requested, and only a `completed` row has a matching ledger
  * entry behind it.
  */
 function RequestsTab({
@@ -920,8 +907,8 @@ function RequestsTab({
    ============================================================ */
 
 /**
- * One request in full, with its immutable audit history and — while it is still
- * undecided — the one action its owner has: cancelling it.
+ * One request in full, with its immutable audit history and, while it is still
+ * undecided, the one action its owner has: cancelling it.
  *
  * Fetched by id rather than taken from the list, because the drawer shows the
  * history the list does not carry, and because a request opened from a bookmarked
@@ -1032,8 +1019,8 @@ function RequestDrawer({
               {detail.rejectionReason && (
                 <DetailRow label={t('wallet.requests.rejectionReason')}>{detail.rejectionReason}</DetailRow>
               )}
-              {/* Present only on a completed request — and it is the proof that
-                  the balance moved because this request completed. */}
+              {/* Present only on a completed request: the proof that the balance
+                  moved because this request completed. */}
               {detail.settledLedgerId && (
                 <DetailRow label={t('wallet.requests.settledLedger')}>
                   <code dir="ltr">{detail.settledLedgerId}</code>
@@ -1089,7 +1076,3 @@ function RequestDrawer({
     </>
   );
 }
-
-/* `SimpleHistoryTable` was the ledger-row summary under the retired top-up and
-   withdrawal forms. Both are gone: cash in and cash out are requests now, and
-   the Requests tab lists requests rather than ledger rows. */

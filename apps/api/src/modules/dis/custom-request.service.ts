@@ -30,11 +30,10 @@ export interface CustomQuoteForm {
 /**
  * The stages at which a custom request can still be priced.
  *
- * Once the collector has accepted a quote they have paid it, so the request is
- * no longer something to quote: quoting it again put it back to `quoted`, and
- * the collector's next Accept charged them twice for the same work (F027,
- * F034). A re-quote BEFORE they answer is still allowed — an operator who
- * mistyped a figure corrects it before anybody has agreed to it.
+ * Once the collector has accepted a quote they have paid it, so quoting again
+ * would put it back to `quoted` and their next Accept would charge them twice
+ * for the same work. A re-quote BEFORE they answer is allowed, so an operator
+ * who mistyped a figure can correct it before anybody has agreed to it.
  */
 export const QUOTABLE_STAGES: readonly string[] = ['awaiting_quote', 'quoted'];
 
@@ -50,21 +49,15 @@ export function assertQuotable(kind: string, stage: unknown): void {
 }
 
 /**
- * "Can you also…" — the request the service list does not have a button for.
+ * "Can you also…": the request the service list does not have a button for,
+ * such as sleeving four cards before they ship, weighing a box, or checking a
+ * seal is intact.
  *
- * The vault offers nine services and every one is a fixed thing Bault decided to
- * sell. A collector who wants anything else — sleeve four cards before they
- * ship, weigh a box, check a seal is intact, put two specific items in one
- * parcel — had exactly one route: a support TICKET. A ticket is a conversation.
- * It has no price, no operator queue, no completion, and no link to the
- * collectible it is about, so work agreed in a thread had to be re-entered by
- * hand as something else, or it quietly did not happen.
- *
- * A custom request is an ordinary service request. Same queue, same fulfilment
- * form, same appearance in the item's timeline. One thing about it is different,
- * and it is the thing that makes it work: **nobody knows what it costs until
- * somebody reads it.** So it is quoted before it is billed, which is the shape
- * `buyout` already established:
+ * Unlike a support ticket, it has a price, an operator queue, a completion and
+ * a link to the collectible it is about. It is an ordinary service request:
+ * same queue, same fulfilment form, same appearance in the item's timeline. The
+ * one difference is that **nobody knows what it costs until somebody reads
+ * it**, so it is quoted before it is billed, the same shape as `buyout`:
  *
  *   1. the collector describes what they want — FREE, and billed nothing;
  *   2. an operator quotes a price and a scope, or declines with a reason;
@@ -175,13 +168,12 @@ export class CustomRequestService {
    * A decline is a real outcome. "We cannot do that" with no reason leaves the
    * collector to guess whether to ask differently or stop asking.
    *
-   * It can come after the collector has accepted and paid — the operator picks
-   * the card up and finds the work cannot be done after all. That used to
-   * cancel the request and keep the money (F033). Refusing the decline instead
-   * would leave a paid request with no way to close it except completing work
-   * that was never done. So a decline after payment REFUNDS, in the same
-   * transaction: everything charged against the request comes back as a
-   * `service_refund`, and the request is closed.
+   * It can come after the collector has accepted and paid, when the operator
+   * picks the card up and finds the work cannot be done after all. Refusing the
+   * decline then would leave a paid request with no way to close it except
+   * completing work that was never done, so a decline after payment REFUNDS, in
+   * the same transaction: everything charged against the request comes back as
+   * a `service_refund`, and the request is closed.
    */
   async declineToQuote(operatorId: string, requestId: string, reason: string) {
     const text = reason?.trim() ?? '';

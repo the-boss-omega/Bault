@@ -49,12 +49,13 @@ const TRANSFER_REQUIRED: readonly (keyof TransferFulfillment)[] = [
 ];
 
 /**
- * Consignment sale + warehouse transfer (T099, Principles I/V/VI) — Opus-tier.
+ * Consignment sale + warehouse transfer (T099, Principles I/V/VI).
  *
- * Consignment: the owner requests an external-channel sale (eBay/event; billable).
- * An operator marks it complete with the achieved sale amount → in one
- * transaction the owner is credited NET of the marketplace fee (gross credit +
- * fee debit on the ledger), the item's ownership moves to the platform custodian,
+ * Consignment: the owner requests a sale down one of the channels in
+ * `consignment-channels.ts` (billable). An operator marks it complete with the
+ * achieved sale amount → in one transaction the owner is credited NET of
+ * Bault's channel fee (gross credit + fee debit on the ledger), the item's
+ * ownership moves to the platform custodian,
  * and it enters the terminal `consigned` state. Warehouse transfer just relocates
  * an item to another warehouse via a billable request + custody event.
  */
@@ -72,9 +73,8 @@ export class ConsignmentService {
    * Consign an item down a chosen channel, at a price the owner sets.
    *
    * Everything that can be refused is refused HERE, before the billable service
-   * request exists. A seller who is going to be told "graded cards only" or
-   * "that show is full" should hear it before they are charged a service fee,
-   * not after an operator picks the request up two days later.
+   * request exists, so a seller hears "graded cards only" or "that show is
+   * full" before they are charged a service fee.
    */
   async request(
     ownerId: string,
@@ -172,7 +172,7 @@ export class ConsignmentService {
       const currency = DEFAULT_CURRENCY;
 
       /**
-       * Bault's cut depends on the channel — that is most of what choosing one
+       * Bault's cut depends on the channel; that is most of what choosing one
        * means. The rule is looked up by the channel's own action type and falls
        * back to the flat marketplace fee when no channel-specific rule has been
        * configured, so a new channel is never silently free.

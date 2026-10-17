@@ -7,7 +7,7 @@ import { z } from 'zod';
  * Load the nearest `.env` by walking up from the current working directory. In
  * this monorepo the apps run from `apps/<name>` but `.env` lives at the repo root,
  * so a plain `dotenv.config()` (which looks in cwd) would miss it. CI sets env
- * vars directly, so a missing file is fine — process.env already has the values.
+ * vars directly, so a missing file is fine: process.env already has the values.
  */
 function loadDotenvFromRoot(): void {
   let dir = process.cwd();
@@ -28,7 +28,7 @@ function loadDotenvFromRoot(): void {
  * A boolean read from an environment variable, which is always a STRING.
  *
  * `z.coerce.boolean()` is wrong here: it applies JavaScript truthiness, so the
- * literal "false" — the exact value an operator writes to turn something off —
+ * literal "false", the exact value an operator writes to turn something off,
  * coerces to `true`. Only the affirmative spellings below count as true.
  */
 function booleanFromEnv(fallback: boolean) {
@@ -40,15 +40,14 @@ function booleanFromEnv(fallback: boolean) {
 }
 
 /**
- * Environment schema + loader (T007).
+ * Environment schema and loader.
  *
- * WHY a schema: reading `process.env.FOO` scattered across the code makes missing
- * or malformed config a runtime surprise. Here we declare EVERY variable once,
- * validate it at startup, and export a fully-typed, frozen object. If a required
- * var is missing the process refuses to boot with a clear message — fail fast.
+ * Every variable is declared once, validated at startup, and exported as a
+ * fully-typed, frozen object. If a required variable is missing the process
+ * refuses to boot with a clear message.
  *
- * Secrets themselves are NEVER hard-coded: this only reads them from the
- * environment (Constitution Principle IX). `.env.example` documents the shape.
+ * Secrets are NEVER hard-coded: this only reads them from the environment.
+ * `.env.example` documents the shape.
  */
 const BaseSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -59,12 +58,9 @@ const BaseSchema = z.object({
   DIRECT_DATABASE_URL: z.string().url(),
 
   /**
-   * Pool size and the longest any one statement may run, per API process.
-   *
-   * Neither was set, so every process opened `pg`'s default of ten connections
-   * and a runaway query could hold one forever. Through PgBouncer the pool is
-   * cheap, but a statement that never ends still holds a server connection and
-   * every row lock it took, and a money path waiting on those locks waits too.
+   * Pool size per process (API and worker), and the longest any one API
+   * statement may run. A statement that never ends holds a server connection
+   * and every row lock it took, and a money path waiting on those locks waits too.
    */
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
@@ -73,11 +69,9 @@ const BaseSchema = z.object({
   /**
    * Not used, and accepted only so existing env files still parse.
    *
-   * It was required and documented as what "signs session cookies", and nothing
-   * read it: a session is a random opaque token whose hash is looked up in
-   * `login_session`, so there is nothing to sign. Requiring it bought the belief
-   * that cookies were signed. Rotating it does NOT sign anybody out; revoking
-   * sessions does (`SessionService.revokeAll`).
+   * A session is a random opaque token whose hash is looked up in
+   * `login_session`, so there is nothing to sign. Rotating this does NOT sign
+   * anybody out; revoking sessions does (`SessionService.revokeAllFor`).
    */
   SESSION_COOKIE_SECRET: z.string().optional().default(''),
   SESSION_COOKIE_NAME: z.string().default('session'),
@@ -92,10 +86,9 @@ const BaseSchema = z.object({
    *
    * Required in production, and refused there if it is the development key
    * below. Elsewhere an unset key falls back to that development key, so a
-   * fresh checkout and CI enrol and sign in without configuring anything — the
-   * same arrangement every other development default in this file has. Rotating
-   * it makes every stored secret unreadable: each enrolled account then has to
-   * be reset by an administrator and enrol again.
+   * fresh checkout and CI enrol and sign in without configuring anything.
+   * Rotating it makes every stored secret unreadable: each enrolled account then
+   * has to be reset by an administrator and enrol again.
    */
   MFA_ENCRYPTION_KEY: z.string().optional().default(''),
 
@@ -115,17 +108,15 @@ const BaseSchema = z.object({
 
   // Object storage (item images)
   /**
-   * Which storage adapter is wired in `AdaptersModule`.
+   * Which storage adapter `createStorageAdapter` (`@bault/adapters`) builds.
    *
-   *   `s3`      — a real S3-compatible bucket (MinIO locally, any S3 API in
-   *               production). The five STORAGE_* values below configure it.
-   *   `sandbox` — an in-memory fake that ACCEPTS bytes AND THROWS THEM AWAY.
+   *   `s3`      a real S3-compatible bucket (MinIO locally, any S3 API in
+   *             production). The five STORAGE_* values below configure it.
+   *   `sandbox` an in-memory fake that ACCEPTS bytes AND THROWS THEM AWAY.
    *
-   * The sandbox is refused in production, for the same reason the payment
-   * sandbox is: every photograph an operator takes of a customer's card, and
-   * every picture of a damaged arrival, is silently discarded while the database
-   * records a key that will never resolve. That is data loss wearing the costume
-   * of a working feature.
+   * The sandbox is refused in production: every photograph an operator takes of
+   * a customer's card, and every picture of a damaged arrival, would be
+   * discarded while the database records a key that will never resolve.
    */
   STORAGE_PROVIDER: z.enum(['s3', 'sandbox']).default('sandbox'),
   STORAGE_ENDPOINT: z.string().url(),
@@ -137,17 +128,14 @@ const BaseSchema = z.object({
   /**
    * Which payment rail takes and returns money.
    *
-   *   `paypal`  — the rail the reference service uses. Real API, real webhook
-   *               signatures, real capture semantics. Point it at PayPal's own
-   *               sandbox with `PAYPAL_ENVIRONMENT=sandbox` to exercise the
-   *               entire product end to end with fake money and no bank account.
-   *   `sandbox` — an in-memory fake that settles everything and verifies
-   *               nothing. Development only; the adapter factory REFUSES to
-   *               construct it when NODE_ENV=production.
+   *   `paypal`  Real API, real webhook signatures, real capture semantics.
+   *             Point it at PayPal's own sandbox with `PAYPAL_ENVIRONMENT=sandbox`
+   *             to exercise the entire product end to end with fake money.
+   *   `sandbox` an in-memory fake that settles everything and verifies nothing.
+   *             Development only; refused when NODE_ENV=production.
    *
-   * There is no default, and that is deliberate. The previous default was
-   * `stripe`, which nothing implemented and nothing read, so the configuration
-   * said one thing while an in-memory fake settled fake money underneath it.
+   * There is deliberately no default, so every deployment names the rail that
+   * moves its money.
    */
   PAYMENT_PROVIDER: z.enum(['paypal', 'sandbox']),
 
@@ -155,27 +143,26 @@ const BaseSchema = z.object({
    * Which PayPal to talk to.
    *
    * `sandbox` is a first-class, production-safe configuration: the code path is
-   * identical to live, so nothing about the integration is left untested by
-   * running it. What differs is that the money is not real — which the product
-   * states out loud rather than hiding.
+   * identical to live. What differs is that the money is not real, which the
+   * product states rather than hiding.
    */
   PAYPAL_ENVIRONMENT: z.enum(['sandbox', 'live']).default('sandbox'),
   PAYPAL_CLIENT_ID: z.string().optional().default(''),
   PAYPAL_CLIENT_SECRET: z.string().optional().default(''),
   /** Issued by PayPal per webhook endpoint. Without it nothing can be verified. */
   PAYPAL_WEBHOOK_ID: z.string().optional().default(''),
-  /** Where a cash-out is sent from, shown on the payout. */
+  /** Not read: the PayPal adapter writes a fixed subject on every payout. */
   PAYPAL_PAYOUT_NOTE: z.string().optional().default('Your Bault cash-out'),
 
   /**
    * Who sends a cash-out's money.
    *
-   *   `provider` — completing a cash-out pays it through the payment provider
-   *                (PayPal Payouts), and the provider's answer settles it.
-   *   `manual`   — an administrator sends the money themselves, by PayPal or
-   *                bank transfer, and completing the cash-out RECORDS that: the
-   *                provider is never called, and the reference of the payment
-   *                they made is required and kept on the request.
+   *   `provider` completing a cash-out pays it through the payment provider
+   *              (PayPal Payouts), and the provider's answer settles it.
+   *   `manual`   an administrator sends the money themselves, by PayPal or
+   *              bank transfer, and completing the cash-out RECORDS that: the
+   *              provider is never called, and the reference of the payment
+   *              they made is required and kept on the request.
    *
    * `manual` exists so Bault can launch before PayPal approves the account for
    * Payouts. It is a deliberate operating mode, not a degraded one: every
@@ -189,8 +176,8 @@ const BaseSchema = z.object({
    *
    * Comma-separated. Empty means same-origin only, which is what the Vite dev
    * proxy gives locally. A production deployment serving the SPA from a
-   * different host has to name it here; the alternative — a permissive default —
-   * is a session-riding hole.
+   * different host has to name it here; a permissive default would be a
+   * session-riding hole.
    */
   CORS_ORIGINS: z.string().optional().default(''),
 
@@ -199,22 +186,17 @@ const BaseSchema = z.object({
   /**
    * The much tighter budget for credential and mail-sending routes: sign-in,
    * registration, password reset, verification resend.
-   */
-  /**
-   * Ten was too tight. Collectors behind one office NAT, or one mobile carrier's
-   * egress, share an IP — and a shared IP hitting a ten-per-minute sign-in
-   * budget locks out real people while barely inconveniencing a script that can
-   * rotate addresses. Thirty is the compromise; the routes that actually send
-   * mail to a stranger carry their own, much tighter bucket instead.
+   *
+   * Collectors behind one office NAT or one mobile carrier's egress share an IP,
+   * so a very low sign-in budget locks out real people while barely slowing a
+   * script that rotates addresses. The routes that send mail to a stranger carry
+   * their own, much tighter bucket.
    */
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
 
   /**
    * Serve the OpenAPI explorer. Off by default; see the production check below.
-   *
-   * Read with `booleanFromEnv`, not `z.coerce.boolean()`: the coercion turned the
-   * string "false" into true, so writing EXPOSE_API_DOCS=false switched the
-   * explorer ON.
+   * Read with `booleanFromEnv`, so EXPOSE_API_DOCS=false means off.
    */
   EXPOSE_API_DOCS: booleanFromEnv(false),
   API_DOCS_PASSWORD: z.string().optional().default(''),
@@ -227,7 +209,7 @@ const BaseSchema = z.object({
    * image's nginx in another container it is WRONG: every request would come
    * from the nginx container's address, so the rate limiter would see one
    * client and the sign-in log would record one IP for everybody. Set it to
-   * the proxy's subnet there (`uniquelocal`, or an explicit CIDR) — never to
+   * the proxy's subnet there (`uniquelocal`, or an explicit CIDR), never to
    * `true`, which believes whatever `X-Forwarded-For` a caller types.
    */
   TRUST_PROXY: z
@@ -236,19 +218,17 @@ const BaseSchema = z.object({
     .refine((v) => v !== 'true', { message: 'TRUST_PROXY=true trusts a forged X-Forwarded-For; name the proxy instead' }),
 
   /**
-   * Which shipping adapter is wired in `AdaptersModule`.
+   * Which shipping adapter `createShippingAdapter` (`@bault/adapters`) builds.
    *
-   *   `easypost` — real carriers (USPS, UPS, FedEx, DHL), real rates, real
-   *                labels. An `EZTK…` key is EasyPost's TEST mode: every code
-   *                path identical to live, no money spent, no real label. That
-   *                is a production-safe way to exercise the integration.
-   *   `sandbox`  — invented prices, a fake tracking number and a label URL that
-   *                resolves to nothing.
+   *   `easypost` real carriers (USPS, UPS, FedEx, DHL), real rates, real
+   *              labels. An `EZTK…` key is EasyPost's TEST mode: every code
+   *              path identical to live, no money spent, no real label. That
+   *              is a production-safe way to exercise the integration.
+   *   `sandbox`  invented prices, a fake tracking number and a label URL that
+   *              resolves to nothing.
    *
-   * The sandbox is refused in production. A collector charged for a label that
-   * cannot be printed is the worst failure this module has, and it used to be
-   * the only thing on offer: `SHIPPING_PROVIDER` defaulted to "shipstation" and
-   * was read by NOTHING, so naming a provider changed nothing at all.
+   * The sandbox is refused in production: a collector charged for a label that
+   * cannot be printed is the worst failure shipping has.
    */
   SHIPPING_PROVIDER: z.enum(['easypost', 'sandbox']).default('sandbox'),
   /** `EZTK…` for test mode, `EZAK…` for production. */
@@ -257,15 +237,15 @@ const BaseSchema = z.object({
   EASYPOST_BASE_URL: z.string().optional().default(''),
 
   /**
-   * Which email adapter is wired in `AdaptersModule`:
-   *   `console` — development sink; the message (including the link) is logged
-   *               to stdout and nothing leaves the process.
-   *   `smtp`    — real delivery over SMTP. Works with any SMTP server; the
-   *               documented setup in `.env.example` is a Gmail app password.
+   * Which email adapter `createEmailAdapter` (`@bault/adapters`) builds:
+   *   `console` development sink; the message (including the link) is logged
+   *             to stdout and nothing leaves the process.
+   *   `smtp`    real delivery over SMTP. Works with any SMTP server; the
+   *             documented setup in `.env.example` is a Gmail app password.
    *
-   * The four SMTP_* credentials below are only required when this is `smtp`;
-   * the refinement under the schema enforces exactly that, so a development
-   * checkout still boots with no mail configuration at all.
+   * SMTP_HOST, SMTP_USER, SMTP_PASSWORD and SMTP_FROM are required only when
+   * this is `smtp` (see `checkCombinations`), so a development checkout boots
+   * with no mail configuration at all.
    */
   EMAIL_PROVIDER: z.enum(['console', 'smtp']).default('console'),
   EMAIL_API_KEY: z.string().optional().default(''),
@@ -280,11 +260,9 @@ const BaseSchema = z.object({
   SMTP_SECURE: booleanFromEnv(false),
   SMTP_USER: z.string().optional().default(''),
   /**
-   * Whitespace is stripped rather than trusted. Google displays an app password
-   * as four space-separated groups ("abcd efgh ijkl mnop") and Gmail's SMTP
-   * server rejects it in that form — so pasting exactly what the screen shows
-   * produces an authentication failure with no hint as to why. Removing the
-   * spaces here makes the displayed value and the working value the same thing.
+   * Whitespace is stripped. Google displays an app password as four
+   * space-separated groups ("abcd efgh ijkl mnop") and Gmail's SMTP server
+   * rejects it in that form, so pasting what the screen shows must still work.
    */
   SMTP_PASSWORD: z
     .string()
@@ -297,18 +275,17 @@ const BaseSchema = z.object({
   /**
    * Public origin of the SPA, used to build the absolute links inside emails.
    * Verification and reset links are hash routes (`<base>/#/verify-email?...`),
-   * so this is the origin only — no path, no trailing slash needed.
+   * so this is the origin only: no path, no trailing slash needed.
    */
   APP_BASE_URL: z.string().url().default('http://localhost:5173'),
 
   /**
-   * Wallet debt policy (PAY).
+   * Wallet debt policy, as configuration rather than constants in a job.
    *
    * A negative balance is tolerated for `WALLET_DEBT_GRACE_DAYS` before interest
    * starts accruing, and an account whose balance falls below
-   * `WALLET_SUSPEND_BELOW_MINOR` is suspended by the daily sweep until the debt
-   * is cleared. Both are minor units / whole days so the policy is a
-   * configuration decision rather than a constant buried in a job.
+   * `WALLET_SUSPEND_BELOW_MINOR` (minor units) is suspended by the daily sweep
+   * until its balance is back at or above it.
    */
   WALLET_DEBT_GRACE_DAYS: z.coerce.number().int().nonnegative().default(14),
   WALLET_SUSPEND_BELOW_MINOR: z.coerce.number().int().nonpositive().default(-2000),
@@ -318,14 +295,9 @@ const BaseSchema = z.object({
   /**
    * Where a collector actually SENDS money for a manual top-up.
    *
-   * `bank_transfer` was one of five strings on a form and no account details
-   * were published anywhere, so choosing it told Bault how the money would
-   * arrive and told the customer nothing about how to send it.
-   *
-   * Configuration rather than source, for the same reason the support details
-   * are: bank particulars written into a repository are the wrong bank in every
-   * deployment but one, and are the last thing that should sit in version
-   * control. An unset route is shown as unavailable — never as a placeholder
+   * Configuration rather than source: bank particulars in a repository are the
+   * wrong bank in every deployment but one, and do not belong in version
+   * control. An unset route is shown as unavailable, never as a placeholder
    * somebody might wire money to.
    */
   BANK_ACCOUNT_NAME: z.string().optional().default(''),
@@ -343,7 +315,7 @@ const BaseSchema = z.object({
    * All optional, and all read from the environment rather than written into
    * source, because a phone number in a source file is a phone number that is
    * wrong in every deployment but one. Where a variable is empty the app says
-   * the channel is not published — it never prints a plausible placeholder
+   * the channel is not published; it never prints a plausible placeholder
    * somebody might dial. The helpdesk works regardless of any of this.
    *
    * `SUPPORT_TEAM` names the people who answer, as `Name|Role;Name|Role`. The
@@ -355,7 +327,7 @@ const BaseSchema = z.object({
   SUPPORT_HOURS: z.string().optional().default(''),
   SUPPORT_TEAM: z.string().optional().default(''),
 
-  // Observability (T022)
+  // Observability
   SENTRY_DSN: z.string().optional().default(''),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
@@ -367,7 +339,7 @@ const BaseSchema = z.object({
  */
 export const DEVELOPMENT_MFA_ENCRYPTION_KEY = 'YmF1bHQtZGV2ZWxvcG1lbnQtb25seS1tZmEta2V5ISE=';
 
-/** The roles an account can have — mirrored by value from the API's `Role`. */
+/** The roles an account can have, mirrored by value from the API's `Role`. */
 export const MFA_ROLES = ['user', 'warehouse_operator', 'admin'] as const;
 export type MfaRole = (typeof MFA_ROLES)[number];
 
@@ -402,10 +374,7 @@ type AddIssue = (issue: { path: (string | number)[]; message: string; code?: z.Z
  * The rules about combinations of values, and the production refusals.
  *
  * Kept apart from the schema so `loadEnv` can run them even when a variable is
- * missing. As a zod refinement they ran only after every field had parsed, so a
- * production boot missing one required variable reported that one and said
- * nothing about `STORAGE_PROVIDER=sandbox` or the open API explorer: the
- * operator fixed the one thing named, booted again, and met the next.
+ * missing, and one failed boot names every problem at once.
  */
 function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
   const ctx = { addIssue };
@@ -419,9 +388,9 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     }
   };
 
-  // SMTP credentials are conditionally required: demanding them unconditionally
-  // would stop a fresh checkout booting, and defaulting them to something would
-  // hand the operator a mail path that silently fails.
+  // Provider credentials are required only for the provider chosen: demanding
+  // them unconditionally would stop a fresh checkout booting, and defaulting
+  // them would hand the operator a path that silently fails.
   if (env.SHIPPING_PROVIDER === 'easypost') {
     require('EASYPOST_API_KEY', "SHIPPING_PROVIDER=easypost");
   }
@@ -504,7 +473,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     /**
      * Staff without a second factor.
      *
-     * Unset is fine — production then requires it of both staff roles. What is
+     * Unset is fine: production then requires it of both staff roles. What is
      * refused is a list that leaves either of them out, the empty list
      * included: that is the switch that turns two-factor sign-in off for the
      * accounts that can move money and change who owns what.
@@ -524,12 +493,9 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     /**
      * Storage that discards what it is given.
      *
-     * `SandboxStorageAdapter.putObject` returns the key and writes nothing. In
-     * production that means every intake photograph and every arrival-condition
-     * photograph is lost the moment it is uploaded, while `item_image` and
-     * `parcel_photo` rows are written pointing at keys that resolve to nothing —
-     * so the loss is invisible until somebody opens a damage claim and finds the
-     * evidence gone.
+     * `SandboxStorageAdapter.putObject` returns the key and writes nothing, so
+     * every intake and arrival-condition photograph would be lost while
+     * `item_image` and `parcel_photo` rows point at keys that resolve to nothing.
      */
     if (env.STORAGE_PROVIDER === 'sandbox') {
       ctx.addIssue({
@@ -546,9 +512,8 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
      *
      * The sandbox quotes invented prices and `buyLabel` returns a tracking
      * number beginning `SBX` with a label key that resolves to nothing. In
-     * production that means taking a collector's money for a service that
-     * cannot be performed — and the shipment still transitions to `shipped`, so
-     * nothing in the product says otherwise.
+     * production that would take a collector's money for a service that cannot
+     * be performed, while the shipment still moves to `shipped`.
      */
     if (env.SHIPPING_PROVIDER === 'sandbox') {
       ctx.addIssue({
@@ -565,10 +530,8 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
      * Mail that goes to a log file.
      *
      * `EMAIL_PROVIDER=console` is the right default for a fresh checkout and a
-     * catastrophe in production: account verification and password reset are
-     * then completable only by somebody who can read the server log, which means
-     * no customer can complete either one — and the ones who try have had their
-     * reset token printed to stdout.
+     * catastrophe in production: no customer could complete verification or a
+     * password reset, and the reset tokens would be printed to stdout.
      */
     if (env.EMAIL_PROVIDER === 'console') {
       ctx.addIssue({
@@ -643,7 +606,7 @@ const EnvSchema = BaseSchema.superRefine((env, ctx) =>
   ...env,
   /**
    * The development key fills in only outside production. In production an
-   * empty key never gets this far — `checkCombinations` refused it above — so
+   * empty key never gets this far (`checkCombinations` refused it above), so
    * this cannot hand a real deployment the published key.
    */
   MFA_ENCRYPTION_KEY:

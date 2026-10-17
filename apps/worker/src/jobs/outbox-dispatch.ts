@@ -8,55 +8,38 @@ import { defaultEmailEnabled, eventSubject } from './notification-events';
 import { PASSWORD_RESET_REQUESTED, sendPasswordReset } from './password-reset-mail';
 
 /**
- * Outbox dispatch (T128, Principle XI).
+ * Outbox dispatch.
  *
  * Turns undelivered outbox_message rows into notifications. Recipients come from
  * the event payload: an explicit `recipientIds` array when an event concerns
  * several people (a swap notifies both sides), otherwise the first of the
- * single-recipient conventions used by emitters (ownerId / userId / sellerId /
- * buyerId / responderId / donorId). The outbox row is marked dispatched
- * REGARDLESS, so a message with no resolvable recipient (or an opted-out one) is
- * consumed, not retried forever.
+ * single-recipient keys in SINGLE_RECIPIENT_KEYS. The outbox row is marked
+ * dispatched REGARDLESS, so a message with no resolvable recipient (or an
+ * opted-out one) is consumed, not retried forever.
  *
- * TWO CHANNELS now. In-app is unchanged and cannot fail — writing the row is the
- * delivery. Email is best-effort and is deliberately built so that nothing about
- * it can break the thing it accompanies:
+ * Two channels. In-app cannot fail: writing the row is the delivery. Email is
+ * best-effort and cannot break the notification it accompanies:
  *
- *   - the in-app row is written FIRST and independently, so a dead mail server
- *     cannot cost somebody their notification;
- *   - a failed send is recorded as a `failed` row rather than swallowed, because
- *     a mail that bounced has to be visible as a mail that bounced;
- *   - only an ACTIVE account is mailed. A `pending` account has not confirmed
- *     its address — mailing it would be sending somebody else's vault activity
- *     to an address nobody has proved they own.
+ *   - the in-app row is written FIRST, and a failed send is caught, so a dead
+ *     mail server cannot cost somebody their notification;
+ *   - a failed send is recorded as a `failed` row rather than swallowed, so a
+ *     bounce stays visible;
+ *   - only an ACTIVE account is mailed. A `pending` account has not proved it
+ *     owns its address.
  *
- * The stored content always carries a rendered, human-readable `message`
- * (Requirement 6.1) next to the original payload fields, and BOTH channels send
- * that same sentence.
+ * The stored content carries a rendered `message` next to the original payload
+ * fields, and BOTH channels send that same sentence.
  *
- * ONE MESSAGE AT A TIME, EACH IN ITS OWN TRANSACTION (step 10, N29).
- *
- * This used to read every undispatched row up front and work through the list
- * with autocommitted writes. Two things went wrong with that:
- *
- *   - Two dispatchers — a second replica, or a run still going when the next
- *     minute's started — read the same list and notified everybody twice.
- *   - One message that threw escaped the loop. Nothing behind it was
- *     dispatched, and the next minute's run hit the same row first: the outbox
- *     stopped for everybody, while the in-app rows already written for the bad
- *     message were written again on every retry.
- *
- * Now each message is CLAIMED with `FOR UPDATE SKIP LOCKED` — a second
- * dispatcher skips it rather than waiting for it — and its notifications and its
- * `dispatched_at` commit together or not at all. A message that throws is rolled
- * back alone, keeps its error and an attempt count, and the run moves on. After
- * `MAX_ATTEMPTS` it is left undispatched, with its error, for a person to look
- * at, rather than retried every minute forever.
+ * ONE MESSAGE AT A TIME, EACH IN ITS OWN TRANSACTION. Each message is CLAIMED
+ * with `FOR UPDATE SKIP LOCKED`, so a second dispatcher skips it rather than
+ * notifying everybody twice, and its notifications and its `dispatched_at`
+ * commit together or not at all. A message that throws is rolled back alone,
+ * keeps its error and an attempt count, and the run moves on. After
+ * `MAX_ATTEMPTS` it is left undispatched, with its error, for a person to look at.
  *
  * Email is sent inside the claim. If the process dies between the send and the
- * commit, the message is dispatched again and the mail goes twice; the
- * alternative — committing first — would lose it. At least once is the right
- * side to fail on for a notification.
+ * commit, the mail goes twice; committing first would lose it instead. At least
+ * once is the right side to fail on for a notification.
  */
 const SINGLE_RECIPIENT_KEYS = ['ownerId', 'userId', 'sellerId', 'buyerId', 'responderId', 'donorId'];
 
@@ -75,12 +58,8 @@ function recipientsOf(payload: Record<string, unknown> | null): string[] {
 }
 
 /**
- * The mail adapter, built once per process — chosen the same way the API
- * chooses it (`@bault/adapters`).
- *
- * `console` is the development sink and is a perfectly good answer: it proves
- * the pipeline end to end and puts the body in the log, which is what a
- * developer without a mail server actually wants.
+ * The mail adapter, built once per process and chosen the same way the API
+ * chooses it (`@bault/adapters`). In development `console` puts the body in the log.
  */
 let mailer: EmailAdapter | undefined;
 function emailAdapter(): EmailAdapter {
@@ -129,8 +108,8 @@ async function deliver(db: PoolClient, env: Env, row: OutboxRow) {
   const content = JSON.stringify({ ...(row.payload ?? {}), message });
 
   for (const recipientId of recipientsOf(row.payload)) {
-    // In-app first, and on its own. Nothing about email can cost somebody the
-    // notification it was meant to accompany.
+    // In-app first. Nothing about email can cost somebody the notification it
+    // was meant to accompany.
     if (await channelEnabled(db, recipientId, row.event_type, 'in_app')) {
       await db.query(
         `INSERT INTO notification (user_id, event_type, content, channel, status)
@@ -169,8 +148,7 @@ async function deliver(db: PoolClient, env: Env, row: OutboxRow) {
       );
       counts.mailed += 1;
     } catch (err) {
-      // Recorded, not swallowed. A bounce that leaves no trace is worse than
-      // no email at all, because nobody can tell it happened.
+      // Recorded, not swallowed, so a bounce leaves a trace.
       await db.query(
         `INSERT INTO notification (user_id, event_type, content, channel, status, failure_reason)
          VALUES ($1, $2, $3, 'email', 'failed', $4)`,
@@ -197,8 +175,7 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
     try {
       await client.query('BEGIN');
       // Oldest first, skipping anything another dispatcher holds and anything
-      // this run already tried — a message that failed waits for the next run
-      // rather than being hammered in a loop.
+      // this run already tried, so a message that failed waits for the next run.
       const { rows } = await client.query<OutboxRow>(
         `SELECT id, event_type, payload
            FROM outbox_message
@@ -260,7 +237,7 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
 
 /**
  * Keep what went wrong on the message itself, outside the transaction that was
- * rolled back, so it survives — and say so loudly once it has used its last try.
+ * rolled back, so it survives. Reported once it has used its last try.
  */
 async function recordFailure(pool: Pool, row: OutboxRow, err: unknown): Promise<void> {
   const message = (err instanceof Error ? err.message : String(err)).slice(0, 1_000);

@@ -3,16 +3,14 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
- * The receiving bench as an operator works it.
+ * The receiving bench as an operator works it. The screen has to fit the work:
  *
- * Three defects, all the same shape — the product described the work instead of
- * fitting it:
- *
- *   1. Parcels and intake were TWO TABS for one piece of work. "Book contents"
- *      switched tabs, and the box was closed out on the far side.
- *   2. Arrivals were booked in ONE AT A TIME, so the facility and carrier were
- *      re-entered for every box a courier dropped.
- *   3. NOTHING could be photographed — no route in the API accepted image bytes.
+ *   1. Parcels and intake are ONE piece of work, so they share one bench and
+ *      "Book contents" points it at the box without switching tabs.
+ *   2. A box holds different units, each booked in with its own class,
+ *      condition and photographs.
+ *   3. Every unit can be photographed at the bench, and labelled before it goes
+ *      to its shelf.
  */
 
 const get = vi.fn();
@@ -100,9 +98,9 @@ beforeEach(() => {
 describe('one bench, not two tabs', () => {
   it('shows receiving, the queue and the intake bench on the same screen', async () => {
     /**
-     * The split cut one piece of work in half. An operator emptying a box moved
-     * between two tabs to do it, and the count of what had come out was visible
-     * on one of them at a time.
+     * Split across two tabs, an operator emptying a box would move between them
+     * to do it, and the count of what had come out would be visible on one of
+     * them at a time.
      */
     renderConsole();
 
@@ -128,9 +126,8 @@ describe('one bench, not two tabs', () => {
   });
 
   it('keeps shelf work off the receiving bench', async () => {
-    // Relocate, hold, break-lot and disposal act on cards ALREADY on a shelf.
-    // They were on the intake tab only because that is where the scan fields
-    // happened to live, which made the bench a page of five unrelated forms.
+    // Relocate, hold, break-lot and disposal act on cards ALREADY on a shelf,
+    // so they live with the inventory rather than on the receiving bench.
     renderConsole();
     await waitFor(() => expect(panel(/receive bench/i)).toBeInTheDocument());
     expect(screen.queryByText(/move something that is already/i)).toBeNull();
@@ -148,9 +145,8 @@ describe('booking in a box of different units', () => {
    * and a graded Gold Star, each needing its own class, condition, serial and
    * photographs.
    *
-   * `quantity` used to stand in for this and could not: it books N copies of ONE
-   * description, which is right for a run of identical commons and wrong for
-   * everything else.
+   * `quantity` cannot stand in for this: it books N copies of ONE description,
+   * which is right for a run of identical commons and wrong for everything else.
    */
   it('has no quantity stepper', async () => {
     renderConsole();
@@ -199,7 +195,7 @@ describe('booking in a box of different units', () => {
     expect(sent.map((u) => u.typeClass)).toEqual(['trading_card', 'graded_slab']);
     // The shared answers are copied onto every unit rather than asked twice.
     expect(sent.every((u) => u.ownerUsername === 'red' && u.autoStow === true)).toBe(true);
-    // And nothing sends a quantity any more.
+    // And nothing sends a quantity.
     expect(sent.every((u) => u.quantity === undefined)).toBe(true);
   });
 
@@ -359,7 +355,7 @@ describe('photographs', () => {
     renderConsole();
 
     const bench = await waitFor(() => panel(/receive bench/i));
-    // The bench offers the control at all — it did not exist.
+    // The bench offers the control at all.
     expect(within(bench).getAllByText(/item photos/i).length).toBeGreaterThan(0);
 
     post.mockResolvedValue({ objectKey: 'intake/2026/09/xyz.png' });
@@ -422,11 +418,10 @@ describe('the labels an intake produces', () => {
 
 describe('when there is nowhere to put it', () => {
   /**
-   * The directed stow refuses for exactly two reasons — no shelving of the kind
-   * this run needs, or none in this building — and both of them used to end the
-   * run. The operator stood at an open box reading "create one before stowing
-   * this", with the form that does it on another tab: leave the bench, lose the
-   * units already typed into it, come back and start the box again.
+   * The directed stow refuses for exactly two reasons: no shelving of the kind
+   * this run needs, or none in this building. Neither may end the run. With the
+   * shelf form on another tab, the operator would leave the bench, lose the
+   * units already typed into it, and come back to start the box again.
    */
   it('offers the shelf form at the refusal, and asks again once one exists', async () => {
     const user = userEvent.setup();

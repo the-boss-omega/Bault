@@ -24,13 +24,11 @@ export function createDb(): { pool: Pool; db: Database } {
     statement_timeout: env.DATABASE_STATEMENT_TIMEOUT_MS,
   });
   /**
-   * A dropped idle connection is logged, not fatal (F063).
+   * A dropped idle connection is logged, not fatal.
    *
    * When Postgres or PgBouncer restarts, every idle client in the pool gets an
    * error and the pool re-emits it as `error`. With no listener an EventEmitter
-   * THROWS, from inside a socket callback — an uncaught exception, and the API
-   * exited on a routine database restart. Verified by terminating the pool's
-   * backends: the process died with "Unhandled 'error' event". The pool has
+   * THROWS, from inside a socket callback, and the process exits. The pool has
    * already discarded the broken client by the time this fires and opens a new
    * one on the next query, so there is nothing to do here but say so.
    */

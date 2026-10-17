@@ -1,28 +1,21 @@
 /**
  * Bault's FAQ, written from what the product does.
  *
- * This file used to be another company's FAQ, copied verbatim — their
- * addresses, their phone number, the account they take payments into, their
- * prices — with a note from Bault above each answer saying what was different.
- * A customer opening Help read thirty answers in somebody else's voice about
- * somebody else's service. It was replaced, not edited (E20 / F058).
- *
- * THE RULE FOR EVERY ANSWER: each sentence states something the code does, and
- * names where to see it. Where a figure is CONFIGURATION — a pricing rule, an
- * environment variable, a facility row — the answer says where the app shows it
- * and does not print a number, because a number copied into prose goes stale
- * the day somebody changes the configuration and nobody updates the FAQ. The
- * only figures written out are constants in the code that charges them, and
+ * The rule for every answer: each sentence states something the code does, and
+ * names where to see it. Where a figure is configuration (a pricing rule, an
+ * environment variable, a facility row) the answer says where the app shows it
+ * and does not print a number, because a number copied into prose goes stale.
+ * The only figures written out are constants in the code that charges them, and
  * `tests/web/faq-legal.test.ts` checks every dollar amount and percentage here
  * against those constants.
  *
- * The data shape is the one `FaqLegalPage.tsx` renders, kept on purpose:
+ * The data shape is the one `FaqLegalPage.tsx` renders:
  *
  *   `baultNote`     the short answer, shown first.
  *   `blocks`        the full answer.
- *   `availability`  `adapted`  — Bault does this;
- *                   `partial`  — Bault does this, with a limit the answer names;
- *                   `unavailable` — Bault does not offer it (none today).
+ *   `availability`  `adapted`: Bault does this;
+ *                   `partial`: Bault does this, with a limit the answer names;
+ *                   `unavailable`: Bault does not offer it (no entry uses it).
  *   `sourceIndex`   the entry's position, 0-based. The name is historical.
  *
  * Inline markers inside `text`: `**bold**` and `[[label|url]]`. A url is either

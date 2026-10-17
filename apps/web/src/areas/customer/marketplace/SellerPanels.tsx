@@ -21,17 +21,16 @@ import { IconMarketplace, IconTag } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
 
 /* ============================================================
-   My listings — reprice and delist
+   My listings: reprice and delist
    ============================================================ */
 
 /**
  * A seller's own listings.
  *
- * Repricing and delisting were both implemented server-side from the beginning
- * and reachable from nowhere. Delisting is two-step confirmed by the API
- * (`requestRemove` issues a challenge, `confirmRemove` consumes it) because it
- * is irreversible, and this panel runs both halves behind one confirmation
- * dialog rather than exposing the token to the user.
+ * Delisting is two-step confirmed by the API (`requestRemove` issues a
+ * challenge, `confirmRemove` consumes it) because it is irreversible, and this
+ * panel runs both halves behind one confirmation dialog instead of exposing the
+ * token to the user.
  */
 export function MyListingsPanel({
   onChanged,
@@ -104,7 +103,7 @@ export function MyListingsPanel({
         {rows === null ? (
           <SkeletonTable rows={3} columns={5} />
         ) : rows.length === 0 ? (
-          /* Listing a card is done from the Sell tab, which this did not say. */
+          /* The empty state points to the Sell tab, where a card is listed. */
           <EmptyState
             title={t('market.mine.empty')}
             text={t('market.mine.emptyText')}
@@ -174,10 +173,9 @@ export function MyListingsPanel({
                       {formatDate(row.publishedAt, locale)}
                     </td>
                     <td className="td-tight">
-                      {/* Only an ACTIVE listing can be repriced or delisted — the
+                      {/* Only an active listing can be repriced or delisted; the
                           API refuses either on a sold or removed one, so the
-                          controls are simply absent rather than offered and
-                          rejected. */}
+                          controls are absent there. */}
                       {row.status === 'active' && (
                         <div className="actions">
                           {editing === row.id ? (
@@ -239,22 +237,19 @@ export function MyListingsPanel({
 }
 
 /* ============================================================
-   Offers — the panel that was entirely missing
+   Offers
    ============================================================ */
 
 /**
  * Every offer the collector is party to, on both sides.
  *
- * WHOSE TURN IT IS decides what is offered, and that is not the same as which
- * side of the listing you are on. This panel used to branch on `direction`: a
- * buyer saw "awaiting seller" and no controls whatsoever, so a buyer who had
- * been sent a counter-offer had no way to accept it, counter it, or even take
- * their own offer off the table — a negotiation could be started but never
- * finished by the person being negotiated with.
+ * Whose turn it is decides what is offered, and that is not the same as which
+ * side of the listing you are on, so this panel branches on `yourTurn` and not
+ * on `direction`.
  *
  * `yourTurn` comes from the API, which knows which side proposed the price
  * currently on the table. When it is your turn: accept, counter or decline.
- * When it is not: withdraw, which is a real action and was missing entirely.
+ * When it is not: withdraw, or change your own price.
  */
 export function OffersPanel({
   onChanged,
@@ -294,9 +289,8 @@ export function OffersPanel({
       await api.post(`/marketplace/offers/${offer.id}/respond`, body);
       setCountering(null);
       await load();
-      // "Rejected" is the seller declining. When it is your OWN price you are
-      // taking off the table, the same call is a withdrawal, and telling
-      // somebody they rejected their own offer is a small nonsense.
+      // "Rejected" is the seller declining. When it is your own price you are
+      // taking off the table, the same call is a withdrawal, and is worded so.
       await onChanged(
         t(
           action === 'accept'
@@ -342,10 +336,8 @@ export function OffersPanel({
                 <tr key={row.id}>
                   <td data-label={t('market.mine.col.item')} className="dt-primary">
                     <span className="dt-cell">
-                      {/* An offer is about an OBJECT, and the row showed none of
-                          it — two lines of catalogue string and no photograph on
-                          the one screen where somebody is deciding what a thing
-                          is worth. */}
+                      {/* An offer is about an object, so the row shows its
+                          photograph. */}
                       <span className="dt-thumb">
                         <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
                       </span>
@@ -366,7 +358,7 @@ export function OffersPanel({
                     )}
                     {/* A pending offer is either waiting on you or waiting on
                         them, and which one it is decides whether you need to do
-                        anything today. The table said neither. */}
+                        anything today. */}
                     {row.status === 'pending' && row.listingStatus === 'active' && (
                       <span className="dt-sub">
                         {t(row.yourTurn ? 'market.offers.turnYours' : 'market.offers.turnTheirs')}
@@ -375,8 +367,7 @@ export function OffersPanel({
                   </td>
                   {/*
                     The two figures a person is comparing, adjacent and aligned:
-                    what was offered, and what is being asked. They used to be
-                    380px apart in different columns, one of them 12px grey.
+                    what was offered, and what is being asked.
                   */}
                   <td data-label={t('market.offers.col.offer')} className="num">
                     <Amount size="lead">{formatUsd(row.amount)}</Amount>
@@ -393,7 +384,7 @@ export function OffersPanel({
                     <span className="date">{formatDate(row.createdAt, locale)}</span>
                   </td>
                   <td className="td-tight">
-                    {/* Only a PENDING offer on a still-active listing can be
+                    {/* Only a pending offer on a still-active listing can be
                         responded to, and only by the side it is waiting on. */}
                     {row.status === 'pending' && row.listingStatus === 'active' && (
                       <OfferActions
@@ -479,10 +470,9 @@ function OfferActions({
   }
 
   /**
-   * Waiting on the other side. The one thing you can still do is take the price
-   * back off the table — for a buyer that is withdrawing an offer, for a seller
-   * withdrawing a counter. Both are the same call; only the wording differs,
-   * because "reject my own offer" is not a sentence anybody would write.
+   * Waiting on the other side. You can still take the price back off the table
+   * (for a buyer, withdrawing an offer; for a seller, withdrawing a counter) or
+   * change it. Withdrawing is the same call for both; only the wording differs.
    */
   if (!offer.yourTurn) {
     return (
@@ -491,12 +481,9 @@ function OfferActions({
           {t(offer.side === 'buyer' ? 'market.offers.awaitingSeller' : 'market.offers.awaitingBuyer')}
         </span>
         {/*
-          Changing your mind about your own price is one action, not three.
-          Only one open offer per buyer per listing is allowed, so raising a bid
-          used to mean withdrawing, going back to Browse, finding the listing
-          again and offering afresh. A counter on your own offer replaces it in
-          place, which is the same call the other side makes and needs no new
-          endpoint.
+          Changing your own price is one action. Only one open offer per buyer
+          per listing is allowed, so a counter on your own offer replaces it in
+          place, the same call the other side makes.
         */}
         <Button size="sm" variant="secondary" disabled={busy} onClick={onCounterStart}>
           {t('market.offers.change')}
@@ -509,13 +496,11 @@ function OfferActions({
   }
 
   /*
-    It is your turn. Accept, counter, decline — in that order of weight, in a
-    row rather than a vertical stack of three differently-shaped buttons in a
-    90px column.
+    It is your turn: accept, counter, decline, in that order of weight, in a row.
 
-    When it is NOT your turn the Accept control is not rendered at all (see
-    above): a party may not accept a price they proposed, and the way to say
-    that is for the action not to exist, not for it to be greyed out.
+    When it is not your turn the Accept control is not rendered at all (see
+    above): a party may not accept a price they proposed, so the action does
+    not exist there.
   */
   return (
     <div className="actions actions--row">
@@ -539,10 +524,9 @@ function OfferActions({
 /**
  * Proposals in both directions.
  *
- * The whole dual-approval engine existed and was unreachable: propose, approve,
- * reject, atomic mutual ownership transfer, billing to both sides, an
- * irreversible transaction row, and a notification to each participant. What was
- * missing was a list and two buttons.
+ * The API runs the dual-approval engine: propose, approve, reject, atomic mutual
+ * ownership transfer, billing to both sides, an irreversible transaction row,
+ * and a notification to each participant. This is the list and its two buttons.
  */
 export function SwapsPanel({
   onChanged,
@@ -607,7 +591,7 @@ export function SwapsPanel({
             <tbody>
               {rows.map((row) => {
                 const incoming = row.direction === 'incoming';
-                // "They get" / "you get" is written from the READER's side, so
+                // "They get" / "you get" is written from the reader's side, so
                 // the two columns swap depending on who proposed.
                 const theyGet = incoming ? row.requestedItems : row.offeredItems;
                 const youGet = incoming ? row.offeredItems : row.requestedItems;

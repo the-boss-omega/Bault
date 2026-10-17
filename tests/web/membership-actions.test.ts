@@ -4,10 +4,10 @@ import { tierAction, type MembershipTier, type MyMembership } from '../../apps/w
 /**
  * What a tier's button does, and what it costs today.
  *
- * One button, four meanings — and two of them used to be priced wrong by the
- * API: re-joining your own tier during a cancellation charged a whole new cycle,
- * and an upgrade charged the new tier in full with nothing back for the old one.
- * The confirm sentence is built from this, so it has to say what the server does.
+ * One button, four meanings. Re-joining your own tier during a cancellation is
+ * "keep", never a new cycle, and an upgrade credits what is left of the old
+ * tier. The confirm sentence is built from this, so it has to say what the
+ * server does.
  */
 const ORDER = ['folio', 'registry', 'trust'];
 const tier = (key: string, priceMinor: number) => ({ key, priceMinor }) as MembershipTier;

@@ -21,19 +21,12 @@ import {
 } from './shipping-options';
 
 /**
- * Changing a shipment after it has been requested.
+ * Changing a shipment after it has been requested: edit, merge and cancel.
  *
- * Everything here answers the same complaint from the audit:
- *
- * > Once `POST /shipping/shipments` returns, the item set is frozen. There is no
- * > PATCH, no merge, no cancel [...] A mistake is permanent.
- *
- * The rule that makes all three safe is the same one ShipMyCards uses: the
- * window is open exactly while the request still reads `requested`. That is not
- * an arbitrary cutoff — it is the point before which nobody has walked to a
- * shelf. Once a rate is selected the parcel has been paid for and an operator
- * may be holding it, so changing the contents underneath them is not an edit,
- * it is a different parcel.
+ * Edits and merges are open exactly while the request still reads `requested`,
+ * the point before which nobody has walked to a shelf. Once a rate is selected
+ * the parcel has been paid for and an operator may be holding it, so changing
+ * the contents underneath them would make it a different parcel.
  */
 @Injectable()
 export class ShipmentEditService {
@@ -98,8 +91,8 @@ export class ShipmentEditService {
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
     const measurements = this.profiles.measure(items);
-    // Undefined keeps the box; null clears it. The contents are re-checked either
-    // way, because adding a sealed box to a parcel can outgrow the mailer.
+    // Undefined keeps the box; null lets `boxFor` pick one. The contents are
+    // re-checked either way, because adding a sealed box can outgrow the mailer.
     const boxSize = patch.boxSize === undefined ? s.boxSize : patch.boxSize;
     const { box, problems: boxProblems } = this.profiles.boxFor(boxSize, items, measurements);
     if (boxProblems.length > 0) {
@@ -143,8 +136,8 @@ export class ShipmentEditService {
    * Fold one request into another.
    *
    * Both must belong to the same collector, both must still be `requested`, and
-   * both must be going to the same place — merging two parcels bound for
-   * different addresses is not a merge, it is losing one of them.
+   * both must be going to the same place: merging two parcels bound for
+   * different addresses would lose one of them.
    *
    * The absorbed request is not deleted. It keeps its code and points at its
    * new home, because a collector who wrote down SHP-1234 is entitled to find
@@ -191,9 +184,9 @@ export class ShipmentEditService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor)
       : null;
 
-    // Two parcels in one box need the bigger of the two boxes — and if even that
-    // cannot hold the combined contents, nobody has chosen a box that works, so
-    // the choice goes back to the warehouse rather than being priced on a lie.
+    // Two parcels in one box need the bigger of the two boxes. If even that
+    // cannot hold the combined contents, the box is cleared and `boxFor` picks
+    // one that fits when the shipment is rated.
     const volume = (key: string | null) => {
       const d = shippingBox(key)?.dimensionsCm;
       return d ? d.length * d.width * d.height : 0;
@@ -249,20 +242,17 @@ export class ShipmentEditService {
   /**
    * Call it off.
    *
-   * The restocking fee is charged only when work has actually been done — which
+   * The restocking fee is charged only when work has actually been done, which
    * here means a rate was selected and paid for, so the parcel was queued for
-   * picking. A request nobody has touched is free to abandon, and charging $25
-   * for changing your mind thirty seconds after clicking would be indefensible.
+   * picking. A request nobody has touched is free to abandon.
    *
-   * What was paid for the parcel comes back (F018). This used to keep it all,
-   * on the reasoning that postage once bought has been bought — but a label is
-   * bought at dispatch, and a parcel that can still be cancelled has not been
-   * dispatched. So nothing was spent on it but the picking the fee pays for:
-   * the shipping charge is credited back as a `shipping_refund`, the membership
-   * cover it used goes back to the member's cycle, and the collector is out the
-   * restocking fee and nothing else. A parcel that somehow carries a tracking
-   * number is refunded nothing, because then a label may really have been
-   * bought.
+   * What was paid for the parcel comes back. A label is bought at dispatch, and
+   * a parcel that can still be cancelled has not been dispatched, so nothing was
+   * spent on it but the picking the fee pays for: the shipping charge is
+   * credited back as a `shipping_refund`, the membership cover it used goes back
+   * to the member's cycle, and the collector is out the restocking fee and
+   * nothing else. A parcel that somehow carries a tracking number is refunded
+   * nothing, because then a label may really have been bought.
    */
   async cancel(shipmentId: string, actor: ShipmentActor, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
@@ -282,8 +272,8 @@ export class ShipmentEditService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
-      // Again under the lock: two Cancel clicks each charged the restocking fee,
-      // and a cancel that raced a dispatch relabelled a parcel already on its way.
+      // Checked again under the lock, so two Cancel clicks cannot both charge the
+      // restocking fee and a cancel cannot race a dispatch.
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       assertCancellable(cur.status);
@@ -298,7 +288,7 @@ export class ShipmentEditService {
       /**
        * What the collector actually paid for this parcel, from the charges
        * themselves rather than from `cost`, so the refund is exactly what left
-       * the wallet for it — the carrier rate, a white-glove quote, a show fee.
+       * the wallet for it: the carrier rate, a white-glove quote, a show fee.
        */
       let refundedMinor = 0;
       if (paid) {

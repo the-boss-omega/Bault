@@ -5,9 +5,9 @@ import type { MessageKey, TranslateFn } from './i18n';
  *
  * The shapes mirror `apps/api/src/modules/shp/carriers.ts` and
  * `shipping-options.ts` by value, because the SPA cannot import from the API
- * tree. The catalogue itself is FETCHED from `GET /shipping/services` rather
- * than duplicated — a carrier's weight ceiling changing should not need a
- * client deploy — so only the translatable labels live here.
+ * tree. The catalogue itself is fetched from `GET /shipping/services`, so a
+ * changed carrier limit needs no client deploy; only the translatable labels
+ * live here.
  */
 
 export interface CarrierServiceInfo {
@@ -77,8 +77,7 @@ export interface QuotedRate {
   addOnsMinor: number;
   /**
    * What the member's tier paid towards this rate. `totalMinor` is already net
-   * of it; this is here so the card can SAY so rather than show a smaller number
-   * with no explanation.
+   * of it; this lets the card explain the smaller number.
    */
   membershipCover?: {
     tier: string;
@@ -119,7 +118,7 @@ const SERVICE_KEY: Record<string, MessageKey> = {
 /**
  * A service's name. Falls back to the carrier and service level the server
  * sent, so a service added on the server reads correctly before it is
- * translated — never a raw key.
+ * translated.
  */
 export function serviceLabel(
   t: TranslateFn,
@@ -154,7 +153,7 @@ export function formatBoxDimensions(box: BoxInfo): string {
  *
  * The server sends both a machine-readable `rule` and an English message. The
  * rule is preferred so the reason is translated; the message stands in for a
- * rule this build does not know about, which is better than showing nothing.
+ * rule this build does not know about.
  */
 const RULE_KEY: Record<string, MessageKey> = {
   scope: 'ship.rule.scope',

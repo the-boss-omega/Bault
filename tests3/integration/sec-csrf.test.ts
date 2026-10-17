@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { BASE, SEED, SEED_PASSWORD, signIn } from '../../tests/integration/helpers/http';
 
 /**
- * Cross-site requests (E8).
+ * Cross-site requests.
  *
- * The API decoded `application/x-www-form-urlencoded` bodies as well as JSON,
- * so a plain HTML form on any site reached it: `POST /auth/login` from a
- * stranger's page signed the visitor's browser into the stranger's account
- * (login CSRF), and `SameSite=Lax` does nothing about that, nor about a page on
- * another subdomain of the same site. Nothing looked at `Origin` at all.
+ * A plain HTML form on any site can post a body that is not JSON. If the API
+ * read it, `POST /auth/login` from a stranger's page would sign the visitor's
+ * browser into the stranger's account (login CSRF), and `SameSite=Lax` does
+ * nothing about that, nor about a page on another subdomain of the same site.
+ * So the API refuses non-JSON bodies and checks `Origin`.
  *
  * Raw `fetch` here rather than the suite's `Client`, because the whole point is
  * the headers a browser would send and that client does not.
@@ -52,8 +52,8 @@ describe('a body that is not JSON', () => {
 
   it('cannot reach a route that needs no body, which no DTO would have caught', async () => {
     // `enctype="text/plain"` is the third thing a form can send. A route with no
-    // body to validate ran on it regardless — here, signing the person out of
-    // every other device.
+    // body to validate would run on it regardless: here, signing the person out
+    // of every other device.
     const collector = await signIn(SEED.collector);
     const res = await raw('POST', '/auth/sessions/revoke-others', {
       headers: { 'content-type': 'text/plain', cookie: cookieOf(collector) },

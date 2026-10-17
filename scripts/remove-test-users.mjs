@@ -4,16 +4,11 @@
  *
  * WHY THIS EXISTS
  * ---------------
- * The e2e suites register real accounts against a real database. Until now they
- * minted them at `bault.dev` — the same domain as the seeded personas — using
- * the pattern `t<epoch-ms>@bault.dev`, one per run of
- * `tests/integration/acc-lifecycle.test.ts`. Those rows accumulated in
- * Management > Users looking exactly like customers.
- *
- * The suites now register in a reserved fixture domain instead (see
- * `apps/api/src/shared/fixtures.ts`), and `AdmService.listUsers` filters that
- * domain out, so no new residue is created. This script clears what earlier runs
- * already left behind.
+ * The e2e suites register real accounts in a reserved fixture domain (see
+ * `apps/api/src/shared/fixtures.ts`), which `AdmService.listUsers` filters out.
+ * Older databases still hold accounts an earlier test helper made at
+ * `bault.dev`, the seeded personas' domain, as `t<epoch-ms>@bault.dev`. They
+ * look exactly like customers in Management > Users; this script clears them.
  *
  * SAFETY
  * ------
@@ -27,9 +22,9 @@
  *     substring "test", so a real customer at `test.family@…` is untouched.
  *   - The five seeded personas (eldar, hermon, red, golden, platform) are named
  *     in an explicit keep-list and can never be selected, whatever they match.
- *   - An account is skipped if it owns items, has ledger records, charges,
- *     transactions, shipments or service requests. A test registration owns
- *     nothing; anything that does is not one, whatever its address looks like.
+ *   - An account is skipped if it has items, ledger records, charges,
+ *     shipments, service requests or shipping addresses. A test registration
+ *     owns nothing; anything that does is not one, whatever its address looks like.
  *
  * USAGE
  *   node scripts/remove-test-users.mjs            # dry run, prints candidates
@@ -74,7 +69,7 @@ function databaseUrl() {
     const line = env.split(/\r?\n/).find((l) => /^\s*DATABASE_URL\s*=/.test(l));
     if (line) return line.replace(/^\s*DATABASE_URL\s*=\s*/, '').replace(/^["']|["']$/g, '').trim();
   } catch {
-    /* no .env — fall through to the error below */
+    /* no .env; fall through to the error below */
   }
   throw new Error('DATABASE_URL is not set and no .env was found. Set it and retry.');
 }
@@ -105,7 +100,7 @@ async function main() {
           if (hit.length > 0) activity.push(table);
         } catch (e) {
           // A table or column that does not exist in this schema version is not
-          // evidence of safety — refuse the row rather than assume.
+          // evidence of safety: refuse the row rather than assume.
           activity.push(`${table}(unverifiable: ${e.message})`);
         }
       }

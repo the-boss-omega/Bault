@@ -5,8 +5,8 @@ import type { StatusTone } from './ui/primitives';
  * Shipment shapes and search, shared by the tracking list and its drawer.
  *
  * Kept out of the page component so the search rule is directly testable (see
- * `tests/web/shipment-search.test.ts`) — the list is the only way a user finds a
- * shipment now, so "search finds it" is a correctness property, not a nicety.
+ * `tests/web/shipment-tracking.test.ts`). The list is the only way a user finds
+ * a shipment, so the search has to find it.
  */
 
 /** One row of `GET /shipping/shipments`. */
@@ -19,7 +19,7 @@ export interface ShipmentSummary {
   id: string;
   code: string | null;
   status: string;
-  /** The owner's permanent username — the customer-facing identifier. */
+  /** The owner's permanent username, the customer-facing identifier. */
   username: string | null;
   /** The owner's name, derived by the API from their two name fields. */
   customerName: string | null;
@@ -40,13 +40,13 @@ export interface ShipmentSummary {
   /** For a direct-overnight shipment, the parcel it is. Null for everything else. */
   directParcel: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
-  /** ISO country + postal code — what a carrier actually quotes against. */
+  /** ISO country and postal code: what a carrier quotes against. */
   destinationCountry: string;
   destinationPostalCode: string;
   /** The catalogue key of the chosen service, and who chose it. */
   serviceKey: string | null;
   serviceMode: string;
-  /** `carrier`, `hand_delivery` or `show_pickup` — how the shipment ends. */
+  /** `carrier`, `hand_delivery` or `show_pickup`: how the shipment ends. */
   fulfilmentMethod: string;
   /** A hand delivery's quote, once a person has priced the journey. Null until then. */
   quoteMinor: number | null;
@@ -59,7 +59,7 @@ export interface ShipmentSummary {
   addOns: { key: string }[];
   /** The box it was priced in, or null when the warehouse picks. */
   boxSize: string | null;
-  /** The CUSTOMER's notes, not the operator's fulfilment notes. */
+  /** The customer's notes. The operator's fulfilment notes are elsewhere. */
   customerNotes: string | null;
   groupId: string | null;
   /** When an unpaid shipment's items go back on the shelf. */
@@ -74,7 +74,7 @@ export interface ShipmentSummary {
   fulfilledAt: string | null;
 }
 
-/** Status → badge tone. Unknown statuses fall back to neutral, never to a lie. */
+/** Status → badge tone. Unknown statuses fall back to neutral. */
 export const SHIPMENT_TONE: Record<string, StatusTone> = {
   requested: 'warning',
   awaiting_payment: 'error',
@@ -96,10 +96,9 @@ export function shipmentStatusLabel(t: TranslateFn, status: string): string {
 /**
  * Free-text search across a shipment row.
  *
- * The fields searched are exactly the ones the requirement names — permanent
- * username, customer name, carrier tracking number, status and creation date —
- * plus the shipment code and carrier, because both are on screen and a search
- * box that ignores a visible column reads as broken.
+ * The fields searched are the ones the requirement names (permanent username,
+ * customer name, carrier tracking number, status and creation date), plus the
+ * recipient name, shipment code and carrier, because they are on screen too.
  *
  * The creation date is matched on its ISO prefix (`2026-08-05`), which is what a
  * user types when they mean a day, and it is locale-independent.
@@ -122,7 +121,7 @@ export function matchesShipmentSearch(shipment: ShipmentSummary, needle: string)
     .includes(q);
 }
 
-/** Statuses that mean the parcel has not left yet — used to group the list. */
+/** Statuses that mean the parcel has not left yet. */
 export const PREPARING_STATUSES: readonly string[] = [
   'requested',
   'awaiting_payment',

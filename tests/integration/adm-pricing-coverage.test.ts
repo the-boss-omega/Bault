@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 
 /**
- * Is every price loaded? (E6)
+ * Is every price loaded?
  *
  * No migration inserts a single `pricing_rule`. The seed does, so every
  * development database is priced — and a production database built by

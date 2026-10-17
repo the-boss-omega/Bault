@@ -1,25 +1,24 @@
 /**
  * Resolves the address the Vite dev server forwards `/api/*` to.
  *
- * Kept in its own module (instead of inline in vite.config.ts) so the resolution
- * rules are unit-testable — a wrong proxy target is exactly the kind of silent
- * misconfiguration that only shows up as an ECONNREFUSED in the browser.
+ * Kept in its own module so the resolution rules are unit-testable: a wrong
+ * proxy target otherwise only shows up as an ECONNREFUSED in the browser.
  *
  * Precedence, highest first:
- *   1. VITE_API_PROXY_TARGET — explicit full URL, e.g. http://127.0.0.1:3000
- *   2. API_PORT              — the port the Nest API actually binds (root .env)
- *   3. the built-in default  — http://127.0.0.1:3000
+ *   1. VITE_API_PROXY_TARGET: explicit full URL, e.g. http://127.0.0.1:3000
+ *   2. API_PORT: the port the Nest API binds (root .env)
+ *   3. the built-in default, http://127.0.0.1:3000
  *
  * `127.0.0.1` rather than `localhost` on purpose: on Windows `localhost`
  * resolves to BOTH ::1 and 127.0.0.1, so Node tries each in turn and a refused
  * connection surfaces as an opaque `AggregateError [ECONNREFUSED]` naming
  * neither address. Pinning IPv4 makes the failure (and the fix) unambiguous.
  *
- * This affects the DEV SERVER ONLY. Production builds emit same-origin `/api/v1`
- * requests that the reverse proxy in front of the SPA routes to the API.
+ * Used by `vite dev` and `vite preview` only. In production the SPA's
+ * same-origin `/api/v1` requests are routed by nginx (nginx.conf).
  */
 
-/** Port the API binds when API_PORT is unset — mirrors the default in @bault/config. */
+/** Port the API binds when API_PORT is unset; mirrors the default in @bault/config. */
 export const DEFAULT_API_PORT = 3000;
 
 /** Loopback host used for the built-in default target (IPv4, see module doc). */
@@ -30,7 +29,7 @@ export type ApiProxyTargetSource = 'VITE_API_PROXY_TARGET' | 'API_PORT' | 'defau
 export interface ApiProxyTarget {
   /** Absolute origin, e.g. `http://127.0.0.1:3000`. */
   target: string;
-  /** Which input produced it — surfaced in the dev-server banner. */
+  /** Which input produced it, shown in the dev-server banner. */
   source: ApiProxyTargetSource;
   /** Parsed form, so callers can branch on protocol/hostname without re-parsing. */
   url: URL;
@@ -49,10 +48,7 @@ function fail(message: string): never {
   );
 }
 
-/**
- * Resolve (and validate) the dev proxy target. Throws a readable error rather
- * than silently proxying somewhere wrong — a bad value must fail at startup.
- */
+/** Resolve and validate the proxy target. A bad value throws a readable error at startup. */
 export function resolveApiProxyTarget(env: Record<string, string | undefined> = {}): ApiProxyTarget {
   const explicit = env.VITE_API_PROXY_TARGET?.trim();
 

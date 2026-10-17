@@ -2,12 +2,8 @@ import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
 /**
- * The SPA's vocabulary for the seller side of the marketplace.
- *
- * All of this describes machinery that already existed and had no UI: offers
- * could be accepted, rejected and countered; listings could be repriced and
- * delisted; swaps and gift transfers ran a full dual-approval execution. A
- * seller was notified "you received an offer of $X" and had nowhere to go.
+ * The SPA's vocabulary for the seller side of the marketplace: listings, offers
+ * and counter-offers, swaps and gift transfers, and consignment channels.
  */
 
 export const LISTING_TONE: Record<string, StatusTone> = {
@@ -93,20 +89,16 @@ export interface MyOffer {
   typeClass: string;
   description: string;
   buyerUsername: string | null;
-  /** Which side of the LISTING the caller is on — the API computes it. */
+  /** Which side of the listing the caller is on, computed by the API. */
   direction: 'incoming' | 'outgoing';
   /** The caller's own side, named rather than inferred from `direction`. */
   side: 'buyer' | 'seller';
   /** Which side named the price currently on the table. */
   proposedBy: 'buyer' | 'seller';
   /**
-   * Whether the ball is in the caller's court.
-   *
-   * This panel used to key its controls off `direction`, which is a different
-   * question: it showed a buyer "awaiting seller" and no controls at all, so a
-   * buyer who had been sent a counter-offer could not accept it, counter it, or
-   * withdraw. Whose move it is depends on who proposed the price, not on who is
-   * selling.
+   * Whether the ball is in the caller's court. The offer controls key off this,
+   * because whose move it is depends on who proposed the price, which
+   * `direction` does not say.
    */
   yourTurn: boolean;
 }

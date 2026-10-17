@@ -9,14 +9,13 @@ import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primi
  * Step two of password recovery: the page the emailed link opens.
  *
  * The token arrives in the hash route (`#/reset-password?token=…`) and is never
- * shown, never editable and never stored — it goes straight from the URL into
- * the one request that consumes it. It is single-use and expires in an hour,
- * both enforced server-side, so this page's job is only to collect a new
- * password and report the outcome honestly.
+ * shown, edited or stored: it goes straight from the URL into the one request
+ * that consumes it. It is single-use and expires in an hour, both enforced
+ * server-side, so this page only collects a new password and reports the
+ * outcome.
  *
- * A missing token is its own state rather than a form that cannot succeed: the
- * usual cause is a mail client that truncated the link, and telling the reader
- * that is more useful than letting them type a password into a dead form.
+ * A missing token is its own state instead of a form that cannot succeed: the
+ * usual cause is a mail client that truncated the link.
  */
 export function ResetPasswordPage({ token }: { token: string | null }) {
   const t = useT();

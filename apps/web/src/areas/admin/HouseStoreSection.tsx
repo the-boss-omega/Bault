@@ -25,8 +25,8 @@ interface HouseListingRow {
  * copies are left.
  *
  * The description is not marketing copy. It becomes the item record of every copy
- * sold, word for word, so it is asked for in the vault's catalogue shape — year,
- * set, card, number — and the photo is a catalogue scan named by its file stem.
+ * sold, word for word, so it is asked for in the vault's catalogue shape (year,
+ * set, card, number), and the photo is a catalogue scan named by its file stem.
  */
 export function HouseStoreSection({
   onMsg,

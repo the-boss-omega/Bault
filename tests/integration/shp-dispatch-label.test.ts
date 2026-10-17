@@ -10,18 +10,18 @@ import { ShipmentService } from '../../apps/api/src/modules/shp/shipment.service
 import { DispatchService } from '../../apps/api/src/modules/shp/dispatch.service';
 
 /**
- * F049 — buying a label is a call to somebody else's computer, and it costs
- * money that cannot be rolled back.
+ * Buying a label is a call to somebody else's computer, and it costs money that
+ * cannot be rolled back.
  *
- * Dispatch used to buy the label INSIDE the transaction that held the shipment
- * and every card in it `FOR UPDATE`, with no timeout. Two consequences, both
- * driven here:
+ * So dispatch buys the label OUTSIDE the transaction that holds the shipment and
+ * every card in it `FOR UPDATE`, with a timeout. Both reasons are driven here:
  *
- *   - the rows stayed locked for as long as the carrier took to answer, so any
- *     other work on those cards queued behind a network call;
- *   - anything that failed AFTER the purchase — a card that changed state, a
- *     failed commit — rolled back the tracking number while the label stayed
- *     bought, and a retry bought a second one.
+ *   - rows locked across the purchase would stay locked for as long as the
+ *     carrier took to answer, so other work on those cards would queue behind a
+ *     network call;
+ *   - anything that fails AFTER the purchase (a card that changed state, a
+ *     failed commit) must not roll back the tracking number while the label
+ *     stays bought, or a retry would buy a second one.
  *
  * The carrier here is a fake, because the only way to make a purchase succeed
  * and then fail what follows is to control the carrier. Everything else is the

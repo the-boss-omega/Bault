@@ -29,7 +29,7 @@ class SubmitWalletRequestDto {
   @IsOptional() @IsString() @MaxLength(140) destinationAccount?: string;
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
-  /** Object key of an already-uploaded document — never the document itself. */
+  /** Object key of an already-uploaded document, never the document itself. */
   @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
   @IsOptional() @IsString() @MaxLength(MAX_NOTE_LENGTH) notes?: string;
 }
@@ -49,7 +49,7 @@ class RejectDto {
 class CompleteDto extends ReviewNoteDto {
   /**
    * With `PAYOUT_MODE=manual`, the reference of the payment the administrator
-   * made by hand — a PayPal transaction id, a bank transfer reference. Required
+   * made by hand (a PayPal transaction id, a bank transfer reference). Required
    * for a cash-out in that mode, refused in the provider mode.
    */
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) payoutReference?: string;
@@ -66,8 +66,8 @@ class ReconcileDto {
  *
  * `/finance/wallet-requests*` is the customer surface: submit, list your own,
  * open one, cancel your own. `/admin/wallet-requests*` is the review surface and
- * carries `@Roles('admin')` — the guard is the enforcement, and the service
- * re-checks separation of duties so an admin still cannot decide their own.
+ * carries `@Roles('admin')`; the service re-checks separation of duties so an
+ * admin still cannot decide their own.
  */
 @ApiTags('PAY')
 @Controller()
@@ -151,7 +151,10 @@ export class WalletRequestController {
     return this.requests.markProcessing(id, user, dto.note);
   }
 
-  /** The only endpoint in the platform that settles a wallet request. */
+  /**
+   * Completes an approved request and moves its money. A provider payout then
+   * settles by webhook or by `admin/payouts/reconcile`.
+   */
   @Roles('admin')
   @Post('admin/wallet-requests/:id/complete')
   complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CompleteDto) {

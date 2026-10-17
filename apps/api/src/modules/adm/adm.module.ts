@@ -8,9 +8,8 @@ import { OutboxAdminService } from './outbox-admin.service';
 import { AccModule } from '../acc/acc.module';
 
 /**
- * ADM module (administration). Manage users + cards, disputes (ADM-04), and
- * storage-fee runs (VLT-04). Dashboard banners were removed (Requirement 1.2).
- * The accountant's exports live here too (N40): read-only, admin-only.
+ * ADM module (administration). Manage users + cards, disputes, and storage-fee
+ * runs. The accountant's exports live here too: read-only, admin-only.
  */
 @Module({
   // AccModule for `MfaService`: an administrator resets another account's

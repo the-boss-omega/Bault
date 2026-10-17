@@ -266,11 +266,10 @@ describe('ESC escrow and human fulfilment', () => {
 
   it('does not pay the seller of an outside buyer until the card is on its way to them', async () => {
     /**
-     * F171. An outside buyer has no vault, so `settle` moved no ownership and
-     * created no shipment — it paid the seller and left the card on the
-     * seller's shelf, free to be withdrawn. The buyer had paid and would never
-     * receive anything. Now the deal will not settle until the card has been
-     * dispatched to them.
+     * An outside buyer has no vault, so settling moves no ownership. Paying the
+     * seller then would leave the card on the seller's shelf, free to be
+     * withdrawn, and the buyer would never receive anything. The deal will not
+     * settle until the card has been dispatched to them.
      */
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);
@@ -412,9 +411,8 @@ describe('ESC escrow and human fulfilment', () => {
     });
     expect(quoted.status).toBe(201);
 
-    // F060. The collector finds the quote in their shipments list — the panel
-    // that offers "Accept" reads exactly these three fields from it, and the
-    // list used to return none of them, so the quote was never shown.
+    // The collector finds the quote in their shipments list: the panel that
+    // offers "Accept" reads exactly these three fields from it.
     const listed = ((await collector.get('/shipping/shipments')).body as Record<string, unknown>[]).find(
       (s) => s.id === shipmentId,
     );

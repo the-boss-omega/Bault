@@ -35,19 +35,14 @@ export const ErrorCode = {
   NOT_FOUND: 'not_found',
   CONFLICT: 'conflict',
   /**
-   * The payment provider failed or could not be reached (502).
-   *
-   * Its errors used to surface as a bare 500, so a PayPal outage, a refused
-   * payout and a bug in Bault all looked the same to the client and the log.
+   * The payment provider failed or could not be reached (502). Its own code so
+   * a PayPal outage or a refused payout is told apart from a bug in Bault.
    */
   PROVIDER_UNAVAILABLE: 'provider_unavailable',
   /**
-   * The object store failed or could not be reached (503).
-   *
-   * With no bucket, every photograph on the receiving bench answered a bare
-   * 500 — nine `receiving-bench` failures that read as nine bugs when the
-   * cause was one store that was down, and an operator told "internal error"
-   * has no reason to think trying again later would work.
+   * The object store failed or could not be reached (503). Its own code so an
+   * operator can tell a store outage, which trying again later fixes, from an
+   * internal error.
    */
   STORAGE_UNAVAILABLE: 'storage_unavailable',
   /**

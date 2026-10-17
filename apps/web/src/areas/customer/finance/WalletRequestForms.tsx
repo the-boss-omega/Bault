@@ -19,19 +19,18 @@ import { IconArrowDown, IconUpload } from '../../../shared/ui/icons';
 /**
  * The cash-in / cash-out request form.
  *
- * ONE component for both directions: the lifecycle, the validation and the
+ * One component for both directions: the lifecycle, the validation and the
  * submission are identical, and only the field set differs (a cash-in names
- * where money comes FROM, a cash-out names where it goes TO). Splitting them
- * would mean maintaining the same rules twice.
+ * where money comes from, a cash-out names where it goes to).
  *
  * The form states plainly, before and after submission, that submitting does not
- * move money. That is the single most important thing a person can misunderstand
- * here, so it is on screen rather than implied by the word "request".
+ * move money. That is the most important thing a person can misunderstand here,
+ * so it is on screen instead of implied by the word "request".
  *
  * Client-side validation mirrors the API's (see `shared/walletRequests.ts`) and
- * is a courtesy, not a gate: every rule is enforced again server-side, including
- * the balance check, which is re-run at completion time because a balance can
- * fall between submitting and approving.
+ * is a courtesy: every rule is enforced again server-side, including the balance
+ * check, which is re-run at completion because a balance can fall between
+ * submitting and approving.
  */
 export function WalletRequestForm({
   type,
@@ -57,7 +56,7 @@ export function WalletRequestForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  /** True once the user has tried to submit — errors stay quiet until then. */
+  /** True once the user has tried to submit; errors stay quiet until then. */
   const [submitted, setSubmitted] = useState(false);
 
   const cents = dollarsToCents(amount);
@@ -156,9 +155,7 @@ export function WalletRequestForm({
         </p>
       </div>
 
-      {/* What actually lands, before asking. Cashing out was free and no figure
-          was quoted anywhere — which reads as generous and is really the
-          collector finding out afterwards. */}
+      {/* What actually lands, shown before asking. */}
       {type === 'cash_out' && <CashOutQuotePanel amount={amount} />}
 
       {type === 'cash_in' ? (
@@ -229,7 +226,7 @@ export function WalletRequestForm({
         />
       </Field>
 
-      {/* Caught here so a double-click reads as an explanation rather than as a
+      {/* Caught here so a double-click reads as an explanation instead of a
           server error, and so the user can find the request already in flight. */}
       {duplicate && <ErrorState message={t('wallet.request.error.duplicate', { code: duplicate.code })} />}
       {error && <ErrorState message={error} />}

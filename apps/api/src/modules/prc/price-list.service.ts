@@ -7,14 +7,9 @@ import { pricingRule } from './prc.schema';
 /**
  * The price list, written for a collector rather than for an administrator.
  *
- * `GET /pricing/rules` existed and returned every rule ever created — including
- * superseded ones — in the shape the admin console edits. Nothing in the
- * customer-facing product called it, which meant a collector could not find out
- * what anything cost until it had been charged to them. For a platform whose
- * entire economics are per-item fees, that is a straightforward omission.
- *
- * Three things make this different from the admin list, and each one is the
- * reason it could not simply be exposed as it stood:
+ * `GET /pricing/rules` returns every rule ever created, superseded ones
+ * included, in the shape the admin console edits. Three things make this list
+ * different:
  *
  *  - **Only what is in force.** A superseded rule is history, and showing it
  *    beside the current one turns a price list into a puzzle.
@@ -24,7 +19,7 @@ import { pricingRule } from './prc.schema';
  *    one question.
  *  - **The prefixed families collapsed.** `grading_fee:psa_express` and
  *    `consignment_fee:card_show` are variants of one thing, and a flat list of
- *    thirty action types reads as a database dump because it is one.
+ *    every action type reads as a database dump because it is one.
  */
 
 /** The groups a reader actually thinks in. */

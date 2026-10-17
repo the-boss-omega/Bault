@@ -1,19 +1,18 @@
 /**
- * Reading a sign-in log as a person, not as a parser.
+ * Reading a sign-in log as a person.
  *
- * The API stores what the client sent — the raw `User-Agent` and the socket
- * address — because a log that rewrites its evidence is not evidence. This file
- * turns those into the two things an administrator actually asks: *what was it*
- * ("Chrome on Windows") and *where from* (an address without the IPv6-mapping
- * prefix the network stack puts in front of every IPv4 one).
+ * The API stores what the client sent, the raw `User-Agent` and the socket
+ * address, because a log that rewrites its evidence is not evidence. This file
+ * turns those into what an administrator asks: what was it ("Chrome · Windows")
+ * and where from (an address without the IPv6-mapping prefix).
  *
  * Pure functions, so `tests/web/sign-ins.test.ts` can pin them without a
  * browser.
  */
 
 /**
- * `mfa_challenged` is a right password that was asked for a code — not a
- * failure, and not yet a sign-in. `mfa_failed` is a wrong code.
+ * `mfa_challenged` is a right password that was asked for a code: neither a
+ * failure nor yet a sign-in. `mfa_failed` is a wrong code.
  */
 export type SignInOutcome = 'success' | 'bad_credentials' | 'unverified' | 'refused' | 'mfa_challenged' | 'mfa_failed';
 
@@ -49,20 +48,20 @@ export function displayIp(ip: string | null | undefined): string {
   return ip.startsWith('::ffff:') ? ip.slice('::ffff:'.length) : ip;
 }
 
-/** True for the machine itself — a sign-in that never crossed a network. */
+/** True for the machine itself: a sign-in that never crossed a network. */
 export function isLocalAddress(ip: string | null | undefined): boolean {
   const v = displayIp(ip);
   return v === '127.0.0.1' || v === '::1' || v === 'localhost';
 }
 
 /**
- * "Chrome on Windows", or the first part of whatever was sent.
+ * "Chrome · Windows", or the first part of whatever was sent.
  *
  * Order matters, because user agents lie cumulatively: Edge says it is Chrome,
  * Chrome says it is Safari, and every one of them says it is Mozilla. So the
- * most specific token is tested first. Anything unrecognised — a script, a
- * command-line tool — is shown as-is and shortened, because an administrator
- * seeing `curl/8.10.1` in a sign-in log has learned something important.
+ * most specific token is tested first. Anything unrecognised (a script, a
+ * command-line tool) is shown as sent, cut to 40 characters, because `curl/8.10.1`
+ * in a sign-in log tells an administrator something.
  */
 export function describeDevice(ua: string | null | undefined): string {
   if (!ua) return '—';

@@ -3,11 +3,10 @@
  * Download the product's typefaces into `assets/fonts/` and write the
  * `@font-face` block that points at them.
  *
- * WHY a script rather than checked-in copies alone: the files themselves ARE
- * checked in — a build must never depend on a font CDN being up — but where they
- * came from, at which version, and with which unicode-ranges, is exactly the
- * kind of thing that rots into folklore. Running this regenerates both the
- * binaries and `apps/web/src/fonts.css` from one source of truth.
+ * The files themselves ARE checked in, because a build must never depend on a
+ * font CDN being up. This script records where they came from and with which
+ * unicode-ranges: running it regenerates both the binaries and
+ * `apps/web/src/fonts.css` from one source of truth.
  *
  * Only the subsets Bault actually renders are kept: `latin` (the Latin UI and
  * every catalogue string), `latin-ext` (European collector names and set titles)
@@ -33,16 +32,15 @@ const UA =
 const KEEP = new Set(['latin', 'latin-ext', 'hebrew']);
 
 /**
- * The five faces, and the job each one has. `slug` becomes the filename stem, so
- * a file on disk names its own family and weight without a lookup.
+ * The four families, and the job each one has. `slug` becomes the filename
+ * stem, so a file on disk names its own family and weight without a lookup.
  */
 const FAMILIES = [
   { slug: 'plex-sans', query: 'IBM+Plex+Sans:wght@400;500;600', family: 'IBM Plex Sans' },
   /**
-   * Hebrew only. Plex Sans Hebrew also ships a Latin subset — the same Latin
-   * design — but IBM Plex Sans is declared first and covers those codepoints, so
-   * the browser would never fetch the duplicate. Downloading it anyway would put
-   * 46 kB in the repo that no page can ever request.
+   * Hebrew only. Plex Sans Hebrew also ships a Latin subset (the same Latin
+   * design), but IBM Plex Sans is declared first and covers those codepoints, so
+   * the browser would never fetch the duplicate.
    */
   {
     slug: 'plex-sans-hebrew',
@@ -54,22 +52,18 @@ const FAMILIES = [
   /**
    * The display face, for BOTH scripts.
    *
-   * The brief asked for Frank Ruhl Libre in Hebrew paired with a Latin serif of
-   * similar contrast, and for the pair to be confirmed as one voice before
-   * adoption. The strongest way to pass that test is not to pair at all: Frank
-   * Ruhl Libre is a Hebrew family WITH a Latin companion drawn for it, so the
-   * two scripts share a skeleton, an axis of contrast and a vertical rhythm by
-   * construction rather than by luck. Source Serif 4 was the alternative and is
-   * not fetched: it would have added 436 kB to assert a resemblance this family
-   * gets for free. The specimen check is in docs/design/type-specimen.html.
+   * Frank Ruhl Libre is a Hebrew family WITH a Latin companion drawn for it, so
+   * the two scripts share a skeleton, an axis of contrast and a vertical rhythm
+   * by construction, with no second Latin serif to pair. The specimen check is
+   * in docs/design/type-specimen.html.
    */
   { slug: 'frank-ruhl', query: 'Frank+Ruhl+Libre:wght@500;700', family: 'Frank Ruhl Libre' },
 ];
 
 /**
  * Google's CSS is a flat run of `/* subset *\/ @font-face { … }` blocks. Parsed
- * with a regex rather than a CSS parser because the shape is fixed and adding a
- * parser dependency to fetch five fonts is not a trade worth making.
+ * with a regex rather than a CSS parser because the shape is fixed and a parser
+ * dependency to fetch four families is not worth it.
  */
 function parseFaces(css) {
   const faces = [];
@@ -99,8 +93,8 @@ async function main() {
     if (faces.length === 0) throw new Error(`${fam.family}: no kept subsets`);
 
     for (const face of faces) {
-      // A variable-weight file (Source Serif) reports a range like "400 600";
-      // it is one file per subset, so the stem drops the weight entirely.
+      // A variable-weight file reports a range like "400 600"; it is one file
+      // per subset, so the stem drops the weight entirely.
       const variable = face.weight.includes(' ');
       const stem = variable
         ? `${fam.slug}-${face.subset}`

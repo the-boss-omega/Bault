@@ -65,11 +65,9 @@ export class ListingService {
    * Refuse a card that is already promised somewhere else.
    *
    * A card in an open escrow deal, a parcel being prepared, or a buyout or
-   * consignment is still the seller's, on the shelf and not on hold — so the
-   * three checks above let it through, it could be listed and sold, and the
-   * deal, the parcel or the buyout found out at settlement or at the packing
-   * bench, after a stranger had paid. Asked here, under the item's lock, so the
-   * answer still holds when the listing is written.
+   * consignment is still the seller's, on the shelf and not on hold, so the
+   * three checks above would let it through. Asked here, under the item's lock,
+   * so the answer still holds when the listing is written.
    */
   private async assertNotCommitted(tx: Database, itemId: string): Promise<void> {
     const committed = (to: string) =>

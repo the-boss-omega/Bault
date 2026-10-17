@@ -149,15 +149,14 @@ describe('anonymous access', () => {
 
   it('hands the reset mail to the outbox and answers every address the same way (N11)', async () => {
     /**
-     * The reset mail used to be sent INSIDE the request, and only for an address
-     * that had an account: a failing mail server answered 500 for registered
-     * addresses and 202 for everybody else, and the time the request took — a
-     * token row and a mail delivery, or neither — told the same story. Both are
-     * account-existence oracles.
+     * A reset mail sent INSIDE the request, only for an address that has an
+     * account, is an account-existence oracle twice over: a failing mail server
+     * answers 500 for registered addresses and 202 for everybody else, and the
+     * time the request takes tells the same story.
      *
-     * Now the request does the same thing for any address: it records that a
+     * So the request does the same thing for any address: it records that a
      * reset was asked for, and the worker resolves the address and mails it
-     * later. So the evidence is in the outbox, for both addresses.
+     * later. The evidence is in the outbox, for both addresses.
      *
      * Kept next to the test above and before the flood test at the end of this
      * file: the reset route's budget is five a minute per address.
@@ -443,11 +442,10 @@ describe('rate limiting', () => {
    * The mail cannon, closed.
    *
    * `POST /auth/password/reset-request` lets an unauthenticated stranger make
-   * Bault send email to any address they name, and it was completely unmetered.
-   * Its bucket is deliberately hard-coded rather than configurable — there is no
-   * deployment where a higher number is the right answer — so this test does not
-   * depend on the local `.env`, which raises the sign-in budget so the suite can
-   * run at all.
+   * Bault send email to any address they name, so it is metered. Its bucket is
+   * deliberately hard-coded rather than configurable, since no deployment needs
+   * a higher number, so this test does not depend on the local `.env`, which
+   * raises the sign-in budget so the suite can run at all.
    */
   it('stops an unauthenticated caller from using password reset as a mail cannon', async () => {
     const anon = new Client();
@@ -462,8 +460,8 @@ describe('rate limiting', () => {
     expect(statuses, `no request was throttled: ${statuses.join(',')}`).toContain(429);
 
     // …and a throttled caller is told what happened, in the documented error
-    // shape. It used to come back as an opaque `internal`, which reads as a
-    // server fault and tells a client nothing about backing off.
+    // shape. An opaque `internal` would read as a server fault and tell a client
+    // nothing about backing off.
     const throttled = await anon.post('/auth/password/reset-request', {
       email: 'flood-last@fixture.bault.test',
     });

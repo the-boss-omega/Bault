@@ -4,25 +4,20 @@ import type { StatusTone } from './ui/primitives';
 /**
  * The SPA's vocabulary for the helpdesk.
  *
- * Ticket status answers one question — whose turn is it — so the labels are
- * phrased from the reader's side rather than as internal states. A customer
- * seeing "awaiting_customer" learns nothing; "Waiting for you" is the same fact
- * expressed as the thing they need to do.
+ * Ticket status answers one question, whose turn it is, so the labels are
+ * phrased from the reader's side ("Waiting for you") instead of as internal
+ * states.
  */
 export type TicketStatus = 'open' | 'awaiting_customer' | 'resolved';
 
 /**
- * The tone follows "whose turn is it", which is the only question the status
- * answers — and under the previous palette it read backwards. `info` was a teal
- * a shade off the success green, so an OPEN ticket (nobody has looked at this
- * yet) wore what a reader takes for the "done" colour.
+ * The tone follows whose turn it is:
  *
- *   open               frost  — somebody else holds it; there is nothing to do
- *   awaiting_customer  amber  — it is waiting on YOU
- *   resolved           custody green — closed
+ *   open               frost: somebody else holds it; there is nothing to do
+ *   awaiting_customer  amber: it is waiting on the customer
+ *   resolved           custody green: closed
  *
- * Frost is the same tone a frozen item takes, and for the same reason: a state
- * where the next move belongs to somebody else.
+ * Frost is the tone a frozen item takes too: the next move belongs to somebody else.
  */
 export const TICKET_TONE: Record<string, StatusTone> = {
   open: 'info',
@@ -38,11 +33,9 @@ const STATUS_KEY: Record<string, MessageKey> = {
 };
 
 /**
- * Staff-facing labels for the same statuses.
- *
- * Kept separate because "whose turn is it" reverses depending on who is reading:
- * a ticket that is "waiting for you" to a customer is "waiting for them" to the
- * person working the queue, and one shared string would be wrong for one of them.
+ * Staff-facing labels for the same statuses. Kept separate because whose turn
+ * it is reverses with the reader: "waiting for you" to a customer is "waiting
+ * for them" to the person working the queue.
  */
 const STAFF_STATUS_KEY: Record<string, MessageKey> = {
   open: 'support.staffStatus.open',

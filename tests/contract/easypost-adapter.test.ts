@@ -277,7 +277,7 @@ describe('the EasyPost adapter', () => {
     expect((await adapter().getTracking('x')).status).toBe('exception');
   });
 
-  /* ---- customs (F069) ---- */
+  /* ---- customs ---- */
 
   const TOKYO = { name: 'Red Ashwood', street1: '1-1 Chiyoda', city: 'Tokyo', postalCode: '100-0001', country: 'JP' };
   const TORONTO = { name: 'Red Ashwood', street1: '100 Queen St W', city: 'Toronto', region: 'ON', postalCode: 'M5H 2N2', country: 'CA' };
@@ -335,7 +335,7 @@ describe('the EasyPost adapter', () => {
     ).rejects.toThrow(/EEI filing in AES/);
   });
 
-  /* ---- buying safely (F049) ---- */
+  /* ---- buying safely ---- */
 
   const BOUGHT = {
     id: 'shp_abc123',
@@ -417,9 +417,8 @@ describe('the EasyPost adapter', () => {
 
 describe('the sandbox shipping adapter', () => {
   /**
-   * Stated as a fact rather than a complaint: it is a fine development stand-in
-   * AND it cannot post a parcel. Both halves matter — the second is why the env
-   * schema and `AdaptersModule` refuse it in production.
+   * A fine development stand-in that cannot post a parcel, which is why the env
+   * schema and the adapter factory refuse it in production.
    */
   it('sells a label that cannot be printed', async () => {
     const label = await new SandboxShippingAdapter().buyLabel(

@@ -3,21 +3,13 @@ import { log } from '../log';
 import { renewMemberships } from './membership-renewal';
 
 /**
- * Automatic storage billing (Requirement 12.1).
+ * Automatic storage billing.
  *
- * There is no manual "charge storage" action anywhere in the platform
- * (Requirement 12.2) — this scheduled sweep is the only producer of storage
- * charges.
+ * There is no manual "charge storage" action anywhere in the platform; this
+ * scheduled sweep is the only producer of storage charges.
  *
- * WHAT CHANGED, AND WHY
- *
- * This used to charge a flat per-item fee every day for every item stored more
- * than one day. It was simple and it was wrong in one important way: it charged
- * rent on a $1 common from the moment it landed, so a collector who left a bulk
- * lot alone for six months paid many times what the lot was worth.
- *
- * Storage is now an INCLUDED PERIOD folded into the intake fee, followed by
- * chargeable periods priced as a PROPORTION of that same intake fee — so what it
+ * Storage is an INCLUDED PERIOD folded into the intake fee, followed by
+ * chargeable periods priced as a PROPORTION of that same intake fee, so what it
  * costs to keep something is tied to the value of the handling it needed:
  *
  *   standard    180 days included, then 10% of the item's own intake fee / 90 days
@@ -25,67 +17,46 @@ import { renewMemberships } from './membership-renewal';
  *
  * Both parameter sets live in the `parameters` blob of their pricing rule
  * (`storage` and `storage_oversized`), so they are admin-editable data rather
- * than constants in this file (Principle VI).
+ * than constants in this file.
  *
- * IDEMPOTENCE, PROPERLY
- *
- * The old guard was "at most one sweep per calendar day", which protected
- * against a double run but silently UNDER-billed whenever a day was missed: the
- * skipped day's fee was simply never charged.
- *
- * The guard is now period accounting. For each item the sweep works out how many
+ * IDEMPOTENCE IS PERIOD ACCOUNTING. For each item the sweep works out how many
  * periods have elapsed and subtracts how many storage charges already exist
  * against it; it bills the difference. Running twice in one day bills nothing the
- * second time, because the count already matches. Missing a week bills the
- * catch-up when it next runs. The ledger, not the clock, is the record of what
- * has been charged.
+ * second time, and missing a week bills the catch-up when it next runs. The
+ * ledger, not the clock, is the record of what has been charged.
  *
- * WHY THIS IS SQL
+ * The count and the inserts are only safe together under a lock: under READ
+ * COMMITTED two overlapping sweeps (a retry after a lease expired, a second
+ * replica) would each bill the same difference. The sweep takes a
+ * transaction-scoped advisory lock first, so a second sweep waits for the first
+ * to commit and then finds nothing left to bill. This is the only producer of
+ * storage charges, so one lock covers every path that writes them.
  *
- * It is a set operation over every stored item, and the correctness of the guard
- * depends on counting existing charges and inserting in the same statement. Doing
- * it in application code would mean a read-then-write race that the period count
- * is specifically designed to avoid. The API's `storage-policy.ts` deliberately
- * does NOT duplicate this calculation — it reads what this sweep wrote.
+ * This is SQL because it is a set operation over every stored item. The API's
+ * `storage-policy.ts` does NOT duplicate this calculation; it reads what this
+ * sweep wrote.
  *
- * ...EXCEPT THAT ONE STATEMENT IS NOT A LOCK (F070). Under READ COMMITTED, two
- * sweeps that overlap — a retry after the job's lease expired while the first
- * was still running, or a second worker replica — each count the charges that
- * were committed before either began, and each bills the difference: every
- * period twice. The sweep now takes a transaction-scoped advisory lock first, so
- * a second sweep waits for the first to commit and then finds nothing left to
- * bill. It is the only producer of storage charges (Requirement 12.2), so one
- * lock covers every path that writes them.
+ * MEMBERSHIP COVER PAUSES THE CLOCK. An item inside a member's allowance is
+ * skipped, and the sweep stamps `storage_cover.covered_until` on it. An
+ * uncovered item's periods run from the later of its included window and that
+ * stamp, so when cover ends at most one period is billed (the one starting then)
+ * and the clock runs on from there.
  *
- * MEMBERSHIP COVER PAUSES THE CLOCK (F009, F021). An item inside a member's
- * allowance is skipped, and periods used to be counted from `received_at`
- * regardless — so the night cover ended, every period the item had spent covered
- * counted as elapsed and unbilled, and the member was charged for all of them at
- * once: rent for exactly the months the subscription promised were free. The
- * sweep now stamps `storage_cover.covered_until` on every item it finds covered,
- * and an uncovered item's periods run from the later of its included window and
- * that stamp. When cover ends, at most one period is billed — the one starting
- * then — and the clock runs on from there.
- *
- * And memberships are renewed FIRST. A cycle that ran out after the hourly
- * renewal's last run and before this sweep was, for those minutes, no cover at
- * all, and the member's whole allowance was billed storage for a night.
+ * Memberships are renewed FIRST, so a cycle that ran out since the hourly
+ * renewal's last run still covers the member's items tonight.
  */
 const SWEEP_LOCK = 'job:storage-fee';
 
 /**
- * Which items a membership covers tonight — shared by the statement that stamps
+ * Which items a membership covers tonight. Shared by the statement that stamps
  * them and the one that bills everything else, which run in one transaction and
  * so see the same `now()`.
  *
- * Only a cycle that is actually paid up and running counts: a lapsed or ended
- * membership covers nothing, which is the safe direction. The allowance is read
- * out of the tier's own pricing rule, because this process has no access to the
- * API's modules. Of a member's items, the OLDEST are covered first. Oldest
- * rather than newest is the only ordering that is stable — with newest-first,
- * booking one card in would move an older card out of cover and start billing
- * storage on something that had been free for months, which is exactly the
- * surprise a subscription is sold to stop.
+ * Only a cycle that is paid up and running counts; a lapsed or ended membership
+ * covers nothing. The allowance is read from the tier's own pricing rule,
+ * because this process cannot use the API's modules. Of a member's items the
+ * OLDEST are covered first, the only stable ordering: with newest-first, booking
+ * one card in would move an older card out of cover and start billing it.
  */
 const COVERED = `
   member_cap AS (
@@ -198,16 +169,15 @@ export async function runStorageFees(pool: Pool): Promise<void> {
     );
 
     /**
-     * One row per (item, period) that is due and not yet billed.
+     * One row per item with periods that are due and not yet billed.
      *
-     * `intake_minor` is the item's own intake charge — the base the percentage
-     * applies to. An item with no intake charge (seeded or hand-created before
-     * billing existed) falls back to the rule's flat `value`, so it is still
-     * billed something rather than being stored free forever by accident.
+     * `intake_minor` is the item's own intake charge, the base the percentage
+     * applies to. An item with no intake charge (seeded or hand-created) falls
+     * back to the rule's flat `value`, so it is never stored free by accident.
      *
      * `periods_billed` counts the storage charges already raised against the
-     * item since its clock last started — its included window, or the end of
-     * its last membership cover. That count IS the idempotence guard.
+     * item since its last membership cover (or ever, if it was never covered).
+     * That count IS the idempotence guard.
      */
     const due = await client.query<{
       item_id: string;
@@ -320,9 +290,8 @@ export async function runStorageFees(pool: Pool): Promise<void> {
         effectiveFrom: variant.effectiveFrom,
       };
 
-      // One charge row per PERIOD, not one lump for the catch-up. A collector
-      // reading their ledger should see "3 storage periods" as three lines they
-      // can count, and each carries the snapshot of the rule it was billed under.
+      // One charge row per PERIOD, not one lump for the catch-up, so a collector
+      // can count them in their ledger. Each carries the snapshot of its rule.
       for (let i = 0; i < periods; i += 1) {
         const inserted = await client.query<{ id: string }>(
           `INSERT INTO charge (user_id, action_type, pricing_rule_snapshot, amount, currency, payment_means, status, reference_id)

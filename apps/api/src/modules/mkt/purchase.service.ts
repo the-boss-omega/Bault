@@ -24,14 +24,14 @@ export interface PurchaseResult {
    * True when this call returned an earlier purchase rather than making one.
    *
    * Absent on a first purchase, so a client can branch on it. Matches the flag
-   * `POST /finance/checkout` already returns — one convention for "you have
-   * already done this", rather than two behaviours for the same situation.
+   * `POST /finance/checkout` returns, so "you have already done this" has one
+   * convention.
    */
   replayed?: boolean;
 }
 
 /**
- * Atomic direct purchase (T079, Principles V & VIII) — THE crown jewel.
+ * Atomic direct purchase (T079, Principles V & VIII).
  *
  * Everything below happens in ONE database transaction with row-level locks, so
  * it is all-or-nothing and immune to double-sale:
@@ -76,18 +76,13 @@ export class PurchaseService {
 
     return this.db.transaction(async (tx): Promise<PurchaseResult> => {
       // The key first, so a second request carrying it waits here for this one
-      // and then replays it rather than buying again (F064).
+      // and then replays it rather than buying again.
       const { replay } = await this.idempotency.claim(tx as Database, idempotencyKey, endpoint, buyerId);
       if (replay) {
         /**
-         * A repeat of a purchase that already happened, marked as such.
-         *
-         * It was returned as an ordinary 201 with the original transaction and no
-         * indication anything unusual had occurred — so a double-clicked Buy
-         * button produced two success messages and left a buyer with reasonable
-         * grounds to think they had bought two of something. Nothing was charged
-         * twice; the UI simply could not tell the difference and said the wrong
-         * thing. `POST /finance/checkout` already answers this way.
+         * A repeat of a purchase that already happened, marked as such so a
+         * double-clicked Buy does not read as two purchases. Nothing is charged
+         * twice.
          */
         return { ...(replay.body as PurchaseResult), replayed: true };
       }

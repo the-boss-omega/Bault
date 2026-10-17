@@ -4,8 +4,8 @@ import { legacyRedirect } from '../../apps/web/src/shared/routing';
 /**
  * Retired routes.
  *
- * Services stopped being a section of its own, so `#/services` and `#/shipping`
- * are dead URLs that users still hold in bookmarks and in the persisted
+ * Services is not a section of its own, so `#/services` and `#/shipping` are
+ * dead URLs that users still hold in bookmarks and in the persisted
  * last-visited section. They must land somewhere useful rather than falling back
  * to the role's landing page.
  */
@@ -21,13 +21,10 @@ describe('legacy route redirects', () => {
 
   it('sends both halves of the old inbound workflow to the receiving bench', () => {
     /**
-     * `parcels` and `intake` were two tabs describing one piece of work: a box is
-     * received, opened, and its contents are booked in. "Book contents" on the
-     * parcel bench SWITCHED TABS to a form on another screen, and the box was
-     * closed out over there — so an operator crossed a tab boundary twice to work
-     * through one box. They are one `receiving` tab now, and an operator's
-     * bookmark for either half should reach the bench rather than falling back to
-     * the section's landing tab.
+     * `parcels` and `intake` are one `receiving` tab, because a box is received,
+     * opened and its contents booked in as one piece of work. An operator's
+     * bookmark for either half should reach the bench rather than falling back
+     * to the section's landing tab.
      */
     expect(legacyRedirect(route('warehouse', 'parcels'))).toEqual({
       section: 'warehouse',

@@ -1,19 +1,16 @@
 /**
  * Dependency-free Code 128 barcode renderer.
  *
- * The API already MINTS barcode payloads — `makeItemSerial()` produces a random
- * `SN-<base36 time>-<4 digits>` item label, `makeBinSerial()` produces `BIN-…`,
- * and lots get `LOT-…` (see apps/api/src/modules/inv/labels.ts). Those are just
- * STRINGS, though: nothing in the platform ever drew the scannable bars. This
- * module closes that gap by encoding a payload into real Code 128 and emitting an
- * SVG, so a warehouse operator can print a label a keyboard-wedge scanner reads
- * straight back into the relocate / dispatch flows.
+ * The API mints the barcode payloads: `makeItemSerial()` produces
+ * `SN-<base36 time>-<4 digits>`, `makeBinSerial()` produces `BIN-…`, and lots get
+ * `LOT-…` (see apps/api/src/modules/inv/labels.ts). This module encodes a payload
+ * as Code 128 and emits an SVG, so a warehouse operator can print a label a
+ * keyboard-wedge scanner reads straight back into the relocate and dispatch flows.
  *
  * Code Set B is used throughout. It covers every printable ASCII character
- * (32–126), which is a superset of everything the platform mints (upper-case
- * letters, digits and dashes). Code C would pack digit pairs more densely, but
- * set B keeps the encoder small enough to be obviously correct — and label real
- * estate is not scarce here.
+ * (32–126), a superset of everything the platform mints (upper-case letters,
+ * digits and dashes). Code C would pack digit pairs more densely, but set B keeps
+ * the encoder small enough to be obviously correct, and label space is not scarce.
  *
  * SVG (rather than canvas/PNG) is deliberate: bar edges stay crisp at any print
  * DPI, which is what makes the difference between a label that scans first time
@@ -26,7 +23,7 @@
  * Each string is a run-length encoding of the symbol: digits alternate
  * bar,space,bar,space,bar,space, and each digit is that run's width in modules.
  * Values 0–102 are data, 103/104/105 are START A/B/C, and 106 is STOP (13
- * modules — the only 7-run pattern, because it carries the terminating bar).
+ * modules, the only 7-run pattern, because it carries the terminating bar).
  */
 const PATTERNS = [
   '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213',

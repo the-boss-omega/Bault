@@ -4,12 +4,11 @@ import { Client, SEED, signIn, intakeFor, fundWallet } from '../../tests/integra
 /**
  * Shelf Yield — the operator half of the engine behind Break-Even Watch.
  *
- * The assertion that matters most is about REVENUE ATTRIBUTION, because it is
- * the thing that was broken before this existed and the thing a yield number is
- * worthless without. A sale writes no `charge` row: the commission lives only as
- * a `ledger_record` of type `fee` pointing at a listing. A yield computed from
- * charges alone reports zero revenue for every card that actually sold — scoring
- * the most profitable shelves in the building as the deadest.
+ * The assertion that matters most is about REVENUE ATTRIBUTION, because a yield
+ * number is worthless without it. A sale writes no `charge` row: the commission
+ * lives only as a `ledger_record` of type `fee` pointing at a listing. A yield
+ * computed from charges alone reports zero revenue for every card that actually
+ * sold, scoring the most profitable shelves in the building as the deadest.
  */
 
 interface ShelfRow {
@@ -78,8 +77,8 @@ describe('revenue attribution', () => {
     const after = (await admin.get('/admin/shelf-yield')).body as ShelfYield;
 
     // The intake fee alone would be a few hundred cents. A 5% commission on
-    // $400 is $20, so the jump has to be far larger than an intake — which is
-    // exactly what a charges-only computation would have missed.
+    // $400 is $20, so the jump has to be far larger than an intake, which is
+    // exactly what a charges-only computation would miss.
     const gained = after.totals.revenueMinor - before.totals.revenueMinor;
     expect(gained, 'the commission was not attributed to any shelf').toBeGreaterThan(1_000);
   });

@@ -59,8 +59,8 @@ export class MktController {
       const n = Number(raw);
       return raw !== undefined && raw !== '' && Number.isFinite(n) && n >= 0 ? n : undefined;
     };
-    // Validated here, not coerced: `Number('abc')` reached the query as NaN and
-    // the LIMIT disappeared with it. See `pageLimit`.
+    // Validated here, not coerced, so a non-number cannot drop the LIMIT. See
+    // `pageLimit`.
     return this.browse.list(pageLimit(limit, { max: BROWSE_MAX, fallback: BROWSE_DEFAULT }), {
       q,
       type,
@@ -74,7 +74,7 @@ export class MktController {
   /**
    * The caller's OWN listings, with the count of offers still awaiting them.
    *
-   * Declared before `listings/:id` so "mine" is never captured as an id — the
+   * Declared before `listings/:id` so "mine" is never captured as an id: the
    * route table is ordered, and a literal segment that sits after a parameter
    * is unreachable.
    */
@@ -90,8 +90,8 @@ export class MktController {
   }
 
   /**
-   * Resolve a username to the id the swap and transfer endpoints take.
-   * Answers with an id and a name only — never a profile.
+   * Resolve a username to a collector's id and name. Answers with an id and a
+   * name only, never a profile.
    */
   @Get('collectors/:username')
   collector(@CurrentUser() user: AuthUser, @Param('username') username: string) {
@@ -99,11 +99,7 @@ export class MktController {
   }
 
   /**
-   * A collector's public storefront. Public on purpose: it is the page a seller
-   * shares, and one that needs an account to open is not a storefront.
-   */
-  /**
-   * One of another collector's items, by serial — the only way to name what a
+   * One of another collector's items, by serial: the only way to name what a
    * swap asks for. Requiring the serial IS the privacy control.
    */
   @Get('collectors/:username/items/:serial')
@@ -115,6 +111,10 @@ export class MktController {
     return this.read.tradableItem(username, serial, user.id);
   }
 
+  /**
+   * A collector's public storefront. Public on purpose: it is the page a seller
+   * shares, and one that needs an account to open is not a storefront.
+   */
   @Public()
   @Get('sellers/:username')
   storefront(@Param('username') username: string) {

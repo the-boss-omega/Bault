@@ -56,12 +56,8 @@ export function sum(items: Money[], currency: string): Money {
 /**
  * A minor-unit amount as a person reads it: `4137` → `$41.37`.
  *
- * Every message in this product that quoted an amount built the string at the
- * call site, and twelve of the sixteen sites dropped the currency symbol — so a
- * shipment refusal said "Short by 45.00", a top-up limit said "The smallest
- * top-up is 10.00", and the four that did print a `$` made the other twelve look
- * like a different product. The figure is the actionable part of those
- * sentences; it should not be the part that is formatted by accident.
+ * Messages that quote an amount format it here, so every figure carries its
+ * currency symbol the same way.
  *
  * Deliberately not `Intl.NumberFormat`: these strings are assembled on the
  * server, which has no reader locale, and the SPA translates the SENTENCE while

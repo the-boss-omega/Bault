@@ -7,10 +7,9 @@ import { Button } from '../../../shared/ui/primitives';
 /**
  * Ask somebody to look at the card and write down what they see.
  *
- * The areas are chosen rather than fixed, because asking for all five when you
- * only care about the corners costs an operator's time and the collector's
- * money. The list itself comes from the server — it is a closed vocabulary, and
- * the report is only worth having because two of them are comparable.
+ * The areas are chosen, so an operator spends time only on what the collector
+ * cares about. The list comes from the server: it is a closed vocabulary, which
+ * is what makes two reports comparable.
  */
 export function InspectionForm({
   item,

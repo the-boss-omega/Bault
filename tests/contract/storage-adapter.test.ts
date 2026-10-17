@@ -4,16 +4,12 @@ import { S3StorageAdapter, SandboxStorageAdapter } from '@bault/adapters';
 /**
  * The storage adapter contract.
  *
- * This suite exists because the platform shipped with only one implementation —
- * `SandboxStorageAdapter`, which returns the key and WRITES NOTHING — bound
- * unconditionally in `AdaptersModule`. Every intake photograph and every
- * arrival-condition photograph was accepted, acknowledged and discarded, while
- * `item_image` and `parcel_photo` rows recorded keys that resolved to nothing.
- *
- * So the contract is stated as the thing the sandbox cannot do: bytes put in
- * come back out. The sandbox is tested for what it actually promises, and is
- * explicitly asserted NOT to satisfy the round trip — because the day somebody
- * "simplifies" the wiring back to it, this is what says so.
+ * `SandboxStorageAdapter` returns the key and WRITES NOTHING. Wired in place of
+ * a real store, every intake and arrival-condition photograph would be accepted
+ * and discarded while `item_image` and `parcel_photo` rows recorded keys that
+ * resolve to nothing. So the contract is stated as the thing the sandbox cannot
+ * do: bytes put in come back out. The sandbox is tested for what it promises,
+ * and asserted NOT to satisfy the round trip.
  */
 
 const CONFIG = {
@@ -28,9 +24,8 @@ const CONFIG = {
  * Whether there is a bucket to talk to.
  *
  * The S3 round trip needs the object store up (`docker compose -f
- * infra/docker-compose.yml up -d minio`). Skipping is right rather than failing:
- * a developer with no MinIO should not see a red suite for a dependency the
- * other suites do not need — but the skip is LOUD, so nobody mistakes it for a
+ * infra/docker-compose.yml up -d minio`). Without it these cases skip, since no
+ * other suite needs MinIO, and the skip is LOUD so nobody mistakes it for a
  * pass.
  */
 let storeIsUp = false;
@@ -128,10 +123,10 @@ describe('the storage contract', () => {
   });
 
   /**
-   * F428. `encodeSegment` leaves dots alone, and the WHATWG URL parser resolves
-   * a `..` segment before the request is signed — so `intake/../other/x.png`
-   * became a signed link into a DIFFERENT BUCKET on the same endpoint. Needs no
-   * object store: the refusal has to happen before any request is built.
+   * `encodeSegment` leaves dots alone, and the WHATWG URL parser resolves a `..`
+   * segment before the request is signed, so `intake/../other/x.png` would be a
+   * signed link into a DIFFERENT BUCKET on the same endpoint. Needs no object
+   * store: the refusal has to happen before any request is built.
    */
   it('refuses a key with a dot segment instead of signing a path out of the bucket', async () => {
     const s3 = new S3StorageAdapter({ ...CONFIG, endpoint: 'http://127.0.0.1:9' });
@@ -156,10 +151,8 @@ describe('the storage contract', () => {
 
 describe('the sandbox adapter', () => {
   /**
-   * Stated as a fact about the sandbox rather than a complaint: it is a
-   * perfectly good development sink AND it cannot satisfy the contract above.
-   * Both halves matter — the second is why the env schema and `AdaptersModule`
-   * refuse it in production.
+   * A good development sink that cannot satisfy the contract above, which is
+   * why the env schema and the adapter factory refuse it in production.
    */
   it('accepts bytes and keeps none of them', async () => {
     const sandbox = new SandboxStorageAdapter();

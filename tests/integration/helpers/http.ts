@@ -37,11 +37,7 @@ export class Client {
   /** `headers` carries what a body cannot, such as an `Idempotency-Key`. */
   post = (p: string, b?: unknown, headers?: Record<string, string>) => this.request('POST', p, b, headers);
   patch = (p: string, b?: unknown) => this.request('PATCH', p, b);
-  /**
-   * Added because it was missing, which made the two PUT routes
-   * (`/notifications/preferences` and `.../channel`) structurally untestable —
-   * no suite could reach them, so nothing did.
-   */
+  /** For the two PUT routes, `/notifications/preferences` and `.../channel`. */
   put = (p: string, b?: unknown) => this.request('PUT', p, b);
   del = (p: string) => this.request('DELETE', p);
 
@@ -59,11 +55,11 @@ export class Client {
 /**
  * Where accounts created BY TESTS live.
  *
- * These suites register real accounts against a real database. Minting them at
- * `bault.dev` — the seeded personas' domain — left them sitting in the
- * product-facing Management > Users table, indistinguishable from customers.
- * `.test` is reserved by RFC 2606, so this domain can never be a real address,
- * and `AdmService.listUsers` filters it out by exact domain match.
+ * These suites register real accounts against a real database. At `bault.dev`,
+ * the seeded personas' domain, they would sit in the product-facing
+ * Management > Users table, indistinguishable from customers. `.test` is
+ * reserved by RFC 2606, so this domain can never be a real address, and
+ * `AdmService.listUsers` filters it out by exact domain match.
  *
  * Mirrors `FIXTURE_EMAIL_DOMAIN` in `apps/api/src/shared/fixtures.ts`; matched
  * by value so the test tree and the API stay independent.
@@ -81,10 +77,10 @@ export const SEED = {
   collector: 'red@bault.dev',
   collector2: 'golden@bault.dev',
   /**
-   * A third collector, seeded as a PRE-IDENTITY-PASS account: it carries a legacy
-   * OW- intake ID, its migrated name is flagged for review, and its original
-   * single display name is kept read-only. Tests use it both as an ordinary
-   * third party and to prove the migrated-account paths still work.
+   * A third collector, seeded as a migrated account: it carries a legacy OW-
+   * intake ID, its migrated name is flagged for review, and its original single
+   * display name is kept read-only. Tests use it both as an ordinary third party
+   * and to prove the migrated-account paths work.
    */
   collector3: 'veteran@bault.dev',
   operator: 'hermon@bault.dev',
@@ -114,11 +110,9 @@ export async function signIn(identifier: string, password = SEED_PASSWORD, base 
 
 /**
  * The account's permanent USERNAME — the customer-facing identifier every
- * workflow names an account by.
- *
- * This replaced `intakeIdOf`. The OW- intake code is retired from user-facing
- * APIs and `/me/profile` no longer returns one, so a test that needs to name an
- * owner asks for the username exactly as an operator would.
+ * workflow names an account by. `/me/profile` returns no OW- intake code, so a
+ * test that needs to name an owner asks for the username exactly as an operator
+ * would.
  */
 export async function usernameOf(email: string): Promise<string> {
   const c = await signIn(email);
@@ -130,12 +124,8 @@ export async function usernameOf(email: string): Promise<string> {
 /**
  * Put money in a wallet the only way the platform allows: raise a cash-in
  * REQUEST as the customer, then have an administrator approve and complete it.
- *
- * Tests used to call `POST /finance/wallet/topups` and have the balance move on
- * the spot. That capability no longer exists for anyone — submitting a request
- * changes nothing, and only a completed request writes a ledger row — so a test
- * that needs a funded wallet has to walk the real approval path. That the helper
- * is this long is the point: there is no shortcut, including for tests.
+ * Submitting a request changes nothing, and only a completed request writes a
+ * ledger row. There is no shortcut, including for tests.
  *
  * `customerEmail` must not be the admin's own account: separation of duties bars
  * an administrator from deciding a request they raised themselves.
@@ -189,7 +179,7 @@ export async function intakeFor(
   ownerEmail: string,
   overrides: Record<string, unknown> = {},
 ) {
-  // Routed by USERNAME, exactly as the warehouse intake form does it now.
+  // Routed by USERNAME, exactly as the warehouse intake form does it.
   const [ownerUsername, bins] = await Promise.all([usernameOf(ownerEmail), binIds(operator)]);
   const res = await operator.post('/intake/items', {
     ownerUsername,

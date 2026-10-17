@@ -21,12 +21,9 @@ import {
  * Notifications are WRITTEN by the worker's outbox dispatch job; the API only
  * reads them (own feed) and manages preferences.
  *
- * The preferences half changed shape with email. It used to be one boolean per
- * event type, and `getPreferences` returned only the rows a user had already
- * changed — so a preferences screen could show what you had turned off and had
- * no way to show what you could turn off. It now serves the whole matrix,
- * defaults filled in, which is the only form a settings screen can actually
- * render.
+ * Preferences are served as the whole matrix, every event type on every
+ * channel with defaults filled in, so a settings screen can show what can be
+ * turned off as well as what has been.
  */
 @Injectable()
 export class NotificationService {
@@ -47,7 +44,7 @@ export class NotificationService {
    *
    * The raw rows are still returned alongside it, because they are the only
    * evidence of what the user actually decided as opposed to what they were
-   * given — and a settings screen that cannot tell those apart cannot offer
+   * given, and a settings screen that cannot tell those apart cannot offer
    * "reset to defaults".
    */
   async getPreferences(userId: string) {
@@ -124,9 +121,9 @@ export class NotificationService {
    * Turn a whole channel off in one action.
    *
    * The one thing somebody reaching this screen in irritation actually wants is
-   * "stop emailing me", and making them tick twenty-eight boxes to say it is a
-   * dark pattern. Mandatory in-app events are left alone — the master switch
-   * cannot be used to route around them.
+   * "stop emailing me", and making them tick a box per event type to say it is
+   * a dark pattern. Mandatory in-app events are left alone, so the master
+   * switch cannot be used to route around them.
    */
   async setChannel(userId: string, channel: string, enabled: boolean) {
     if (!isKnownChannel(channel)) throw AppError.validation(`Unknown channel "${channel}"`);

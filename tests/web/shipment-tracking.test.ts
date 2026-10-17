@@ -9,8 +9,8 @@ import { legacyRedirect } from '../../apps/web/src/shared/routing';
 /**
  * Shipment tracking search.
  *
- * The tracking tab stopped being a lookup and became a list, so search is now
- * the ONLY way a user narrows it down. That makes "search finds the shipment"
+ * The tracking tab is a list, so search is the ONLY way a user narrows it
+ * down. That makes "search finds the shipment"
  * a correctness property rather than a convenience, and it is pinned here.
  */
 function shipment(overrides: Partial<ShipmentSummary> = {}): ShipmentSummary {

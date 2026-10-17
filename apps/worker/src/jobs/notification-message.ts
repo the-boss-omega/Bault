@@ -1,12 +1,10 @@
 /**
- * Human-readable notification text (Requirement 6.1).
+ * Human-readable notification text.
  *
- * Notifications used to be stored as the raw domain-event payload, which the UI
- * could only render as a tuple of opaque strings. Every event type now maps to a
- * proper sentence built from its payload, written here — at dispatch time — into
- * `content.message` alongside the original fields (which stay available for
- * deep-links). Unknown event types degrade to a readable title-cased sentence
- * rather than a JSON dump.
+ * Every event type maps to a sentence built from its payload. Outbox dispatch
+ * writes it into `content.message` alongside the original fields, which stay
+ * available for deep-links. An unknown event type becomes a sentence made from
+ * its name, never a JSON dump.
  */
 
 type Payload = Record<string, unknown>;
@@ -21,7 +19,7 @@ function num(payload: Payload, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Integer minor units → `$1,234.56`. Every amount on the platform is USD (Req 7.1). */
+/** Integer minor units → `$1,234.56`. Every amount on the platform is USD. */
 function usd(minorUnits: number): string {
   return `$${(minorUnits / 100).toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -130,9 +128,8 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'item_donated':
       return `Item ${ref(p, 'barcode', 'itemId')} was donated and has left your vault.`;
     case 'grading_shipped': {
-      // The sentence has to carry the CONSEQUENCE, not just the fact. A card at
-      // a grader cannot be sold, swapped or shipped, and somebody who lists it
-      // the next morning and finds it refused deserved to be told here.
+      // The sentence carries the CONSEQUENCE as well as the fact: a card at a
+      // grader cannot be sold, swapped or shipped.
       const grader = str(p, 'gradingBody') ?? 'the grader';
       const tracking = str(p, 'trackingNumber');
       const tail = tracking ? ` Tracking number ${tracking}.` : '';
@@ -252,7 +249,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'transfer_completed':
       return `Your item transfer was completed and ownership has changed.`;
     default: {
-      // Unknown event: still a sentence, never a raw payload dump.
       return `${titleCase(eventType)}.`;
     }
   }

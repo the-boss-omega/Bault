@@ -10,17 +10,15 @@ import { MFA_POLICY, type MfaPolicy } from './mfa-policy';
 /**
  * A role that requires a second factor gets nothing until it has one.
  *
- * Runs after `SessionAuthGuard`, which puts the user — with `mfaEnabled`, read
- * from the database on every request — on the request. An account whose role
+ * Runs after `SessionAuthGuard`, which puts the user on the request with
+ * `mfaEnabled` read from the database on every request. An account whose role
  * is in `MFA_REQUIRED_ROLES` and that has not enrolled is refused on every
  * route except those marked `@AllowWithoutMfa()`: enrolment, sign-out and the
  * profile probe.
  *
- * Sign-in itself is not refused, and that is deliberate. An administrator who
- * could not sign in until enrolled could never enrol; one who can sign in and
- * then do nothing else is pointed at the one thing left to do. The refusal is
- * its own error code so the app can send them there rather than render a
- * console where every panel says "forbidden".
+ * Sign-in itself is not refused: an administrator who could not sign in until
+ * enrolled could never enrol. The refusal has its own error code so the app
+ * can send them to the enrolment screen.
  *
  * Fails closed: a user object without the flag is treated as not enrolled.
  */

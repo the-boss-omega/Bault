@@ -30,21 +30,13 @@ export function makeItemBarcode(serial: string): string {
 }
 
 /**
- * A shelf's SERIAL — its identity, and the string on its label.
+ * A shelf's SERIAL: its identity, and the string on its label.
  *
- * It used to be `BIN-<zone>-<nnn>`, built by counting the shelves already in
- * that zone. That was a name, not an identifier, and it had a name's problems:
- * the count raced between two operators building out the same zone, it was only
- * stable as long as no bin ever went away, it told anybody holding it how much
- * shelving the building has, and it baked the zone into the identity of the
- * shelf — so moving a shelf between zones either renamed it, invalidating the
- * label stuck to it, or left it lying about where it was.
- *
- * A serial from the shared alphabet has none of that. It is drawn at random from
- * characters chosen so a person reading a label cannot confuse 0 with O or 1
- * with I, it means nothing beyond "this shelf", and the zone goes back to being
- * what it always should have been on its own: a changeable label for a part of
- * the building. See `0019_bins_get_a_serial`.
+ * Drawn at random from the shared alphabet (no 0/O or 1/I to confuse), so it
+ * means nothing beyond "this shelf": it is not a count that two operators can
+ * race on, it does not reveal how much shelving the building has, and it does
+ * not change when the shelf moves zone. The zone stays a separate, changeable
+ * label. See `0019_bins_get_a_serial`.
  */
 export function makeBinSerial(): string {
   return prefixedId(ID_PREFIX.bin);

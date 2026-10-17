@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
 
 /**
- * US1 / Scenario A — account lifecycle (T024).
+ * Account lifecycle: register, verify, sign in, change password, sign out.
  * Requires a running API + seeded DB.
  */
 describe('ACC account lifecycle', () => {
@@ -17,13 +17,13 @@ describe('ACC account lifecycle', () => {
       firstName: 'Lifecycle',
       lastName: 'Fixture',
       password: 'password123',
-      // A valid registration accepts the terms in force (E21, acc-consent.test.ts).
+      // A valid registration accepts the terms in force (acc-consent.test.ts).
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_verification');
-    // The customer-facing identifier is the username; intake IDs are retired and
-    // new accounts never get one.
+    // The customer-facing identifier is the username; new accounts get no
+    // intake ID.
     expect(res.body.username).toBe(`t${stamp}`);
     expect(res.body.firstName).toBe('Lifecycle');
     expect(res.body.lastName).toBe('Fixture');
@@ -36,7 +36,7 @@ describe('ACC account lifecycle', () => {
       firstName: 'No',
       lastName: 'Username',
       password: 'password123',
-      // Consent given, so the refusal below is for the reason under test (E21).
+      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(400);
@@ -48,7 +48,7 @@ describe('ACC account lifecycle', () => {
       email: fixtureEmail('no-name'),
       username: `n${Date.now()}`,
       password: 'password123',
-      // Consent given, so the refusal below is for the reason under test (E21).
+      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(400);
@@ -62,7 +62,7 @@ describe('ACC account lifecycle', () => {
       firstName: 'Duplicate',
       lastName: 'Username',
       password: 'password123',
-      // Consent given, so the refusal below is for the reason under test (E21).
+      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(res.status).toBe(400);

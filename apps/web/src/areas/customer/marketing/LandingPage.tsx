@@ -10,39 +10,26 @@ import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
 
 /**
- * The front door, and the first one this product has ever had.
+ * The front door: what Bault is and what it will cost, for somebody arriving
+ * for the first time. It is built from the same parts as the rest of the
+ * product:
  *
- * `AuthShell` says it in its own comment: THERE IS NO MARKETING SITE. The whole
- * application sat behind authentication, and the only anonymous surface was a
- * sign-in form with a photograph beside it. That form is a good shop window and
- * a bad front door: it answers "get me back in", and it does not answer the
- * question somebody arriving for the first time is actually asking, which is
- * what this is and what it will cost.
+ *   - The pitch is a real item: the same photograph, `Serial`, custody line and
+ *     custody green the signed-in product uses, on the same dark photography
+ *     stage. The serial and the caption are imported from `AuthPage`, so there is
+ *     one definition of the card on the stage.
+ *   - The prices are fetched, never written. `GET /pricing/list` is public so
+ *     somebody without an account can read what it costs, and it returns the
+ *     rules the billing engine charges from. When the request fails the figures
+ *     are omitted and the page says so, never a placeholder that could be read
+ *     as "free".
+ *   - The wording is translated, the figures are not. A rule's `description` is
+ *     stored in English, so the label for each featured rule is a catalogue key
+ *     here and the number comes from the server, the same split
+ *     `servicePrices.ts` makes for the service buttons.
  *
- * So this page is that answer, and it is built out of the same argument the rest
- * of the product makes rather than out of a separate marketing voice:
- *
- *   - THE PITCH IS A REAL ITEM. The same photograph, the same `Serial`, the same
- *     custody line and the same custody green the signed-in product uses, on the
- *     same dark photography stage. A landing page that promises a different
- *     product than the one behind it is a lie told twice, so the serial and the
- *     caption are imported from `AuthPage` rather than retyped — there is one
- *     definition of the card on the stage, and it cannot drift.
- *   - THE PRICES ARE FETCHED, NEVER WRITTEN. `GET /pricing/list` is public
- *     precisely so somebody without an account can read what it costs, and it
- *     returns the rules the billing engine charges from. Hard-coding "from $5"
- *     into a landing page would be the one figure in the product that no rule
- *     backs. When the request fails the figures are OMITTED and the page says
- *     so — never a placeholder that could be read as "free".
- *   - THE WORDING IS TRANSLATED, THE FIGURES ARE NOT. A rule's `description`
- *     comes out of the database in English; printing it on the Hebrew page would
- *     put an English sentence in the middle of a Hebrew table. The label for each
- *     featured rule is a catalogue key here and the NUMBER comes from the server,
- *     which is the same split `servicePrices.ts` makes for the service buttons.
- *
- * It is `marketing` density — the generous end of the same scale the vault and
- * the warehouse sit on — and it introduces no component the product did not
- * already have. A section is a heading and a rule, not a floating card.
+ * It uses `marketing` density, the generous end of the same scale the vault and
+ * the warehouse sit on, and no component the product does not already have.
  */
 
 /** The rules worth putting on a front page, in the order somebody meets them. */
@@ -72,9 +59,8 @@ interface PriceList {
  * A rule in the units it is actually stated in.
  *
  * A percentage rule stores basis points and a fixed one stores cents, so running
- * both through `formatUsd` turns 5% into "$5.00" — the exact error a price label
- * exists to prevent. Zero is formatted rather than suppressed: the handling rule
- * really is $0.00, and that is a fact worth printing, not an absence to hide.
+ * both through `formatUsd` would turn 5% into "$5.00". Zero is formatted, not
+ * suppressed: a $0.00 rule is a fact worth printing.
  */
 function priceOf(entry: PriceEntry): string {
   return entry.model === 'percentage'
@@ -100,13 +86,10 @@ export function LandingPage() {
       .then((list) => {
         if (!live) return;
         /**
-         * One entry per action — and for intake, the CARD rule specifically.
-         *
-         * Intake is priced per class now, so the list carries a dozen `intake`
-         * rules. Keyed by action alone, whichever came last would have been shown
-         * as "the" intake price: a sealed case's $20 on the front page of a
-         * service most people use for single cards. The single-card rule is the
-         * honest headline; the full list is one click away in Help.
+         * One entry per action, and for intake the `trading_card` rule
+         * specifically. Intake is priced per class, so the list carries a dozen
+         * `intake` rules; the single-card rule is the headline, and the full
+         * list is one click away in Help.
          */
         const byAction = new Map<string, PriceEntry>();
         for (const group of list.groups ?? []) {
@@ -119,7 +102,7 @@ export function LandingPage() {
         setPrices(byAction);
       })
       .catch(() => {
-        // A price that cannot be fetched is omitted, not guessed.
+        // A price that cannot be fetched is omitted.
         if (live) setPricesFailed(true);
       });
     return () => {
@@ -136,10 +119,9 @@ export function LandingPage() {
    * Storage is the one featured rule whose figure is not its `value`.
    *
    * `value` on the storage rule is a fallback base for an item with no intake
-   * charge to take a proportion of; the real terms live in `parameters`, and the
-   * worker's sweep reads them. Printing the $1.00 would be quoting a number
-   * nobody is ever charged, so the terms are phrased from the parameters and
-   * omitted entirely when they are not there.
+   * charge to take a proportion of; the real terms live in `parameters`, which
+   * the worker's sweep reads. So the terms are phrased from the parameters, and
+   * omitted when they are not there.
    */
   const storageTerms =
     freeDays !== null && periodDays !== null && percentBps !== null
@@ -250,10 +232,9 @@ export function LandingPage() {
         {pricesFailed ? (
           <p className="hint">{t('landing.prices.unavailable')}</p>
         ) : (
-          /* `.dt-wrap` is the product's own scroller for a register that
-             outgrows its column. Two columns will not, on any screen this page
-             is read on — but a table is the one element allowed to be wider
-             than the page, and only inside this. */
+          /* `.dt-wrap` is the product's own scroller for a table that outgrows
+             its column; a table is only allowed to be wider than the page
+             inside it. */
           <div className="dt-wrap">
             <table className="data-table landing-price-table">
               <thead>
@@ -278,7 +259,7 @@ export function LandingPage() {
                       </th>
                       <td className="num">
                         {/* Until the list arrives, and if it never does, the cell
-                          is empty rather than holding a figure nobody quoted. */}
+                          is empty instead of holding a figure nobody quoted. */}
                         {entry !== undefined && !isStorage && (
                           <span className="amount">{priceOf(entry)}</span>
                         )}

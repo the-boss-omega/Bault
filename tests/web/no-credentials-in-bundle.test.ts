@@ -5,28 +5,21 @@ import { join } from 'node:path';
 /**
  * Nothing in the shipped bundle is a credential.
  *
- * This exists because the obvious guard did not work. `SignInPage` has always
- * wrapped its demo-account line in `import.meta.env.DEV`, which is correct and
- * which everybody reading it assumed was enough. It is not: the guard removes
- * the JSX, and the SENTENCE lived in the i18n catalogue — one object literal
- * that ships whole. So a deployed build contained
+ * An `import.meta.env.DEV` guard in a component removes the JSX, but a string
+ * in the i18n catalogue (one object literal that ships whole) stays in the
+ * build. A line such as
  *
  *     Demo users (password ...): … eldar@bault.dev (manager)
  *
- * in plain text, and anyone who opened devtools could search for "password",
- * find the shared one and the administrator's address, and sign in as an
- * administrator. It was found by grepping `dist/` before putting the app behind
- * a public tunnel, which is not a thing anybody should have to remember to do.
+ * would then be readable in devtools by anyone, giving away the shared password
+ * and the administrator's address. A guard that looks right in the source can
+ * still fail, so the check is on the ARTEFACT: only the built output can say
+ * whether it worked.
  *
- * So the check is on the ARTEFACT, not on the source. A guard that looks right
- * is what caused this; only the built output can say whether it worked.
- *
- * Skipped locally when there is no build to look at — `pnpm --filter @bault/web
- * build` makes it meaningful. In CI a missing build FAILS: this comment used to
- * say "CI builds the web app, so it runs there", and CI did not, so the one
- * place guaranteed to run this test always passed it without reading a byte.
- * `ci.yml` now builds the SPA before the web suite; the failure is what stops a
- * future edit from quietly dropping that step again.
+ * Skipped locally when there is no build to look at; `pnpm --filter @bault/web
+ * build` makes it meaningful. In CI a missing build FAILS: `ci.yml` builds the
+ * SPA before the web suite, and the failure is what stops an edit from quietly
+ * dropping that step.
  */
 
 const DIST = join(process.cwd(), 'apps', 'web', 'dist', 'assets');

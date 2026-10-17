@@ -6,9 +6,9 @@ import userEvent from '@testing-library/user-event';
  * Parked outbox messages in the admin console.
  *
  * The dispatcher gives up on a message after five failures and leaves it for a
- * person; until now no person could see it or do anything about it. These pin
- * what the screen shows, that the requeue button asks for exactly that message,
- * and that the console says how many are waiting before anybody opens the tab.
+ * person. These pin what the screen shows, that the requeue button asks for
+ * exactly that message, and that the console says how many are waiting before
+ * anybody opens the tab.
  */
 
 const post = vi.fn();
@@ -32,8 +32,8 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   isUnreachable: () => false,
 }));
 
-// The new screen is imported where it is used, so the console's own case
-// fails on what it asserts rather than on a missing module.
+// The screen is imported where it is used, so a missing module fails only the
+// cases that need it and the console's own case fails on what it asserts.
 // (`@vite-ignore` with the path in a variable: Vite otherwise resolves a dynamic
 // import while transforming the file, which fails the whole file just the same.)
 const sectionPath = '../../apps/web/src/areas/admin/OutboxSection';

@@ -3,8 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
- * The accountant's buttons and the pricing-coverage check, in the admin console
- * (N40, E6). The figures are the API's; what is checked here is that each
+ * The accountant's buttons and the pricing-coverage check, in the admin console.
+ * The figures are the API's; what is checked here is that each
  * button asks for the right report and that what comes back is shown.
  */
 

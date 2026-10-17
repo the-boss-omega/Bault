@@ -4,18 +4,15 @@ import type { Request } from 'express';
 import { map, type Observable } from 'rxjs';
 
 /**
- * Field-level PII protection (T014, Principle IX).
+ * Field-level PII protection (Principle IX).
  *
  * Two pieces:
  *   1. `@Pii()` marks a DTO property as personal data (email, address, ...).
- *   2. `PiiInterceptor` strips those fields from responses UNLESS the caller is an
- *      admin. Apply it to cross-user endpoints (e.g. the admin support view / any
- *      listing that includes other users' data).
+ *   2. `PiiInterceptor` strips those fields from responses unless the caller is an
+ *      admin. It is meant for cross-user endpoints (any listing that includes
+ *      other users' data), never for a user's own profile.
  *
- * NOTE: a user always sees their OWN profile in full — that endpoint returns the
- * user's own record and simply does not apply this interceptor. The interceptor
- * guards OTHER users' PII from non-admins. Responses must be class instances for
- * the field registry lookup to match (see profile.dto / support DTOs).
+ * Responses must be class instances: the field registry is keyed by constructor.
  */
 const PII_FIELDS = new Map<object, Set<string>>();
 

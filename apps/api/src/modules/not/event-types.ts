@@ -1,18 +1,15 @@
 /**
  * Every event a collector can be told about, and where it is sent.
  *
- * There was no such list. Events were emitted by name from twenty different
- * services, rendered by a `switch` in the worker, and filtered by preference
- * rows keyed on a free-text `event_type` — so the preferences screen could only
- * show event types a user had ALREADY changed, and there was no way to answer
- * "what can I turn off?" without reading the source.
+ * One list, so the preferences screen can show every event type and answer
+ * "what can I turn off?" without anybody reading the source.
  *
- * The list is also what makes email possible. Turning every notification into an
- * email would be indefensible: a collector with forty cards would get an email
- * every time a parcel moved a shelf. What matters when you are NOT looking at
- * the app is a small, specific subset — money, custody, and anything with a
- * deadline attached — and that judgement has to live somewhere it can be read
- * and argued with rather than being implicit in a job.
+ * It also decides what is emailed. Turning every notification into an email
+ * would be indefensible: a collector with forty cards would get an email every
+ * time a parcel moved a shelf. What matters when you are NOT looking at the app
+ * is a small, specific subset (money, custody, and anything with a deadline
+ * attached), and that judgement lives here, where it can be read and argued
+ * with.
  *
  * A user can override any of it in either direction. These are the defaults for
  * somebody who has never opened the preferences screen, which is most people.
@@ -26,7 +23,7 @@ export function isKnownChannel(value: string): value is NotificationChannel {
   return (NOTIFICATION_CHANNELS as readonly string[]).includes(value);
 }
 
-/** Broad groupings, so the preferences screen is not one list of thirty rows. */
+/** Broad groupings, so the preferences screen is not one long list. */
 export const EVENT_CATEGORIES = ['custody', 'marketplace', 'shipping', 'money', 'support'] as const;
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 

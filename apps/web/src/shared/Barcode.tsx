@@ -4,21 +4,19 @@ import { useT } from './i18n';
 import { IconPrint } from './ui/icons';
 
 /**
- * Scannable Code 128 barcode + a button that hands the label to the operating
+ * Scannable Code 128 barcode, and a button that hands the label to the operating
  * system's print dialog.
  *
  * Rendering: the encoder returns SVG markup, injected with
- * `dangerouslySetInnerHTML`. That is safe here because the markup is produced
- * entirely by our own encoder — every payload character is validated against
- * Code 128B and the caption is XML-escaped, so no caller-supplied string reaches
- * the DOM unescaped.
+ * `dangerouslySetInnerHTML`. That is safe because the markup is produced entirely
+ * by our own encoder: every payload character is validated against Code 128B and
+ * the caption is XML-escaped, so no caller-supplied string reaches the DOM
+ * unescaped.
  *
- * Printing: `printBarcode` writes a minimal, self-contained label document into a
- * hidden same-origin iframe and calls `print()` on it, which is what opens the
- * computer's print dialog / printer software with the barcode image. An iframe
- * rather than `window.open` avoids popup blockers, and INLINE SVG rather than an
- * `<img src="data:…">` avoids the classic blank-page race where the dialog opens
- * before the image has decoded.
+ * Printing: `printBarcodes` writes a self-contained label document into a hidden
+ * same-origin iframe and calls `print()` on it. An iframe avoids popup blockers,
+ * and inline SVG avoids the blank-page race where the dialog opens before an
+ * `<img src="data:…">` has decoded.
  */
 export function Barcode({ value, options }: { value: string; options?: BarcodeOptions }) {
   const t = useT();
@@ -27,7 +25,7 @@ export function Barcode({ value, options }: { value: string; options?: BarcodeOp
     try {
       return barcodeSvg(value, options);
     } catch {
-      return null; // an unencodable payload degrades to plain text, never a crash
+      return null; // an unencodable payload degrades to plain text
     }
   }, [value, options]);
 
@@ -51,24 +49,19 @@ export interface PrintableLabel {
  * Open the print dialog with a one-label document.
  *
  * The iframe is removed after the dialog closes. `onafterprint` fires in every
- * modern browser, but a timeout backstop guarantees cleanup even where it does
- * not (older Safari), so repeated printing never leaks iframes into the DOM.
+ * modern browser, and a timeout backstop cleans up where it does not (older
+ * Safari), so repeated printing never leaks iframes into the DOM.
  */
 export function printBarcode(value: string, caption?: string): void {
   printBarcodes([{ value, caption }]);
 }
 
 /**
- * Print a whole run in ONE dialog, one label per page.
+ * Print a whole run in one dialog, one label per page, so a box of units booked
+ * in at the bench needs one confirmation.
  *
- * `printBarcode` handled a single label, which was right when the bench booked in
- * one unit at a time. It books in a box now, and twelve units meant twelve trips
- * to the print dialog — twelve confirmations, and no way for an operator who
- * missed one to tell which.
- *
- * `page-break-after` on every label but the last is what makes a run of twelve
- * come out as twelve label-stock pages rather than twelve barcodes crammed onto
- * one sheet. The last one is exempt so a single-label print does not eject a
+ * `page-break-after` on every label but the last puts each label on its own
+ * label-stock page. The last is exempt so a single-label print does not eject a
  * blank page after it.
  */
 export function printBarcodes(labels: readonly PrintableLabel[]): void {
@@ -79,7 +72,7 @@ export function printBarcodes(labels: readonly PrintableLabel[]): void {
       try {
         return { ...label, svg: barcodeSvg(label.value, { moduleWidth: 3, height: 90, showText: true }) };
       } catch {
-        return null; // an unencodable payload is skipped, never printed blank
+        return null; // an unencodable payload is skipped instead of printed blank
       }
     })
     .filter((l): l is PrintableLabel & { svg: string } => l !== null);
@@ -124,8 +117,6 @@ export function printBarcodes(labels: readonly PrintableLabel[]): void {
       `.label { text-align: center; page-break-after: always; break-after: page;` +
       ` display: flex; flex-direction: column; align-items: center;` +
       ` justify-content: center; min-height: 100vh; }` +
-      // The last label does not eject a page after it, so printing one label
-      // does not push a blank sheet out behind it.
       `.label.last { page-break-after: auto; break-after: auto; }` +
       `.label svg { display: block; margin: 0 auto; }` +
       `.label .caption { margin-top: 6px; font-size: 12px; }` +

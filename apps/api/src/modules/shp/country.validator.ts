@@ -5,10 +5,8 @@ import { shippingCountries, toCountryCode } from './countries';
  * A country field that holds a code a carrier rule can read.
  *
  * Written as a decorator rather than an `@IsIn([...])` so the refusal can say
- * something useful. `@IsIn` would answer "country must be one of the following
- * values: US, AU, AT, BE, …" — thirty-three codes, which is a data dump rather
- * than an instruction, and it would not tell somebody who typed "Israel" that
- * they were one letter-pair away from being right.
+ * something useful: `@IsIn` would list every code, which is a data dump rather
+ * than an instruction.
  *
  * A full country NAME is accepted and normalised, because a person who typed
  * "United States" has said something unambiguous; only a value that names no

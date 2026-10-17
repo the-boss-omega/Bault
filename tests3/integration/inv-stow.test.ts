@@ -191,11 +191,11 @@ describe('scanning', () => {
 
 describe('a card moved to another warehouse', () => {
   /**
-   * N1. A warehouse transfer records the card's new home as `EXT:<warehouse>/<bin>`
-   * in `item.bin_id`, which is free text. Every read that joined that column to
-   * `bin.id` (a uuid) cast it, and one such row made `invalid input syntax for
-   * type uuid` the answer to the shelf list, the stow suggestion and an
-   * auto-stowed intake — for every operator, not just the one who moved the card.
+   * A warehouse transfer records the card's new home as `EXT:<warehouse>/<bin>`
+   * in `item.bin_id`, which is free text. A read that joined that column to
+   * `bin.id` (a uuid) by casting it would make `invalid input syntax for type
+   * uuid` the answer to the shelf list, the stow suggestion and an auto-stowed
+   * intake, for every operator, not just the one who moved the card.
    */
   it('still lists, suggests and stows after one card has left for another building', async () => {
     const operator = await signIn(SEED.operator);

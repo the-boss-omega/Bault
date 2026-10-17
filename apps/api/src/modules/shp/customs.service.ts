@@ -13,12 +13,9 @@ import { destinationGuidance } from './destinations';
 import type { CustomsLine } from './parcel-profile.service';
 
 /**
- * The commercial invoice.
- *
- * A parcel crossing a border without one is a parcel sitting in a bonded
- * warehouse while somebody emails about it, and Bault produced no customs
- * paperwork of any kind — no declared value, no description, no HS code, no
- * country of origin, no shipper details.
+ * The commercial invoice: declared value, description, HS code, country of
+ * origin and shipper details. A parcel crossing a border without one sits in a
+ * bonded warehouse while somebody emails about it.
  *
  * Two things about this are deliberate and worth stating, because they are
  * policy rather than formatting.
@@ -62,7 +59,7 @@ export class CustomsService {
       .where(eq(userAccount.id, s.userId))
       .limit(1);
 
-    // Shipped from wherever the goods are stored — the primary facility. The
+    // Shipped from wherever the goods are stored: the primary facility. The
     // shipper of record is Bault, acting for the collector, which is why both
     // appear on the document.
     const [origin] = await this.db
@@ -100,7 +97,7 @@ export class CustomsService {
       carrier: s.carrier,
       serviceLevel: s.serviceLevel,
       trackingNumber: s.trackingNumber,
-      /** Collectible trading cards — printed matter, other. */
+      /** Collectible trading cards: printed matter, other. */
       defaultHsCode: DEFAULT_HS_CODE,
       lines,
       totals: {
@@ -121,7 +118,7 @@ export class CustomsService {
     };
   }
 
-  /** Whether this shipment needs paperwork at all — used to show the tab or not. */
+  /** Whether this shipment needs paperwork at all, so the SPA can show the tab or not. */
   async required(shipmentId: string, actor: ShipmentActor) {
     const s = await this.shipments.loadFor(shipmentId, actor);
     return {
@@ -144,14 +141,14 @@ export class CustomsService {
    * Everything a collector needs to know BEFORE the parcel leaves, in one call.
    *
    * The invoice above answers "what did you declare". This answers the question
-   * that comes first and had nowhere to be asked: "am I about to send this
-   * somewhere it will get stuck, and what will it cost the person receiving it".
+   * that comes first: "am I about to send this somewhere it will get stuck, and
+   * what will it cost the person receiving it".
    *
    * Three things it deliberately does and does not do.
    *
    * It REPORTS rather than blocks. A missing declared value or an estimated
    * weight is surfaced as a warning the collector can act on, not an error that
-   * refuses the shipment — Bault is not in a position to know that an estimate
+   * refuses the shipment: Bault is not in a position to know that an estimate
    * is wrong, only that it is an estimate, and refusing on that basis would
    * ground parcels nobody had a problem with.
    *

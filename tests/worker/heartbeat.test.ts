@@ -4,14 +4,13 @@ import { BASE } from '../integration/helpers/http';
 import { testPool } from './helpers/db';
 
 /**
- * The worker's heartbeat, and the probe that reads it (step 10).
+ * The worker's heartbeat, and the probe that reads it.
  *
- * There was no way to tell from outside that the worker had stopped. The API
- * kept answering, `/readyz` kept saying the database was up, and outbox
- * messages, storage billing and interest silently stopped happening. Every job
- * now stamps `worker_heartbeat` when it succeeds, and `/readyz/worker` answers
- * 503 once outbox dispatch — the job that runs every minute — has not succeeded
- * for five minutes.
+ * A stopped worker is invisible from outside: the API keeps answering and
+ * `/readyz` keeps saying the database is up, while outbox messages, storage
+ * billing and interest silently stop. Every job stamps `worker_heartbeat` when
+ * it succeeds, and `/readyz/worker` answers 503 once outbox dispatch (the job
+ * that runs every minute) has not succeeded for five minutes.
  *
  * Needs the API running.
  */

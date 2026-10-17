@@ -1,8 +1,8 @@
 /**
  * The version of the legal terms a new account agrees to.
  *
- * One string covers the three documents shown together at sign-up — the Terms
- * of Service, the Privacy Policy and the Cookie notice — because they are
+ * One string covers the three documents shown together at sign-up (the Terms
+ * of Service, the Privacy Policy and the Cookie notice), because they are
  * accepted together, by one checkbox, and a dispute later needs to know exactly
  * which text was on the screen.
  *

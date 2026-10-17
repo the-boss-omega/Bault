@@ -2,11 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_USERNAME, signIn, intakeFor } from '../../tests/integration/helpers/http';
 
 /**
- * The guardrails the end-to-end audit found missing.
+ * Guardrails a person driving the product runs into.
  *
- * Each of these was reached by driving the product rather than by reading it,
- * and every one of them SUCCEEDED when it should have refused — which is why no
- * happy-path test had ever noticed.
+ * Each guards against a request that SUCCEEDS when it should refuse, which no
+ * happy-path test can notice.
  */
 
 /* ============================================================
@@ -16,12 +15,11 @@ import { Client, SEED, SEED_USERNAME, signIn, intakeFor } from '../../tests/inte
 describe('an administrator cannot revoke their own access', () => {
   it('refuses to suspend the account making the request', async () => {
     /**
-     * `PATCH /admin/users/:id` with your own id and `status: 'suspended'`
-     * returned 200, and the very next admin request answered
-     * `account_suspended`. Every route on the console is behind the admin role
-     * AND the suspension guard, so the one person who could lift it was the
-     * person who could no longer make a request. Nothing in the product could
-     * undo it — it needed a hand on the database.
+     * Every route on the console is behind the admin role AND the suspension
+     * guard. An administrator who suspended their own account would get
+     * `account_suspended` on their very next request, and the one person who
+     * could lift it could no longer make a request. Nothing in the product could
+     * undo it.
      */
     const admin = await signIn(SEED.admin);
     const me = (await admin.get('/me/profile')).body as { id: string };
@@ -71,12 +69,11 @@ describe('an administrator cannot revoke their own access', () => {
 describe('a service already asked for is not offered again', () => {
   it('refuses a second open request of the same kind, naming the first', async () => {
     /**
-     * Every service is billed the moment the request is created, and nothing
-     * stopped the same one being created twice: a double-clicked "Professional
-     * photography" produced SR-TLJ3EFY5 *and* SR-UVXY72FU — two charges, and two
-     * identical jobs in the operator queue for one card. Nothing in the product
-     * said the first request existed, either: the drawer offered the button again
-     * as though nothing had been asked for.
+     * Every service is billed the moment the request is created, so a
+     * double-clicked "Professional photography" must not create two: two
+     * charges, and two identical jobs in the operator queue for one card. The
+     * refusal names the first request, so the drawer can say it exists instead
+     * of offering the button again.
      */
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
@@ -143,18 +140,17 @@ describe('an address names its country by code', () => {
     // exist — and every row is a code a rule in `carriers.ts` will match.
     expect(rows.every((r) => /^[A-Z]{2}$/.test(r.code))).toBe(true);
     expect(rows.filter((r) => r.domestic).map((r) => r.code)).toEqual(['US']);
-    // Israel is on ePacket's contracted list; it is the case the bug was found on.
+    // Israel is on ePacket's contracted list, so its code is the one that matters.
     expect(rows.find((r) => r.code === 'IL')?.name).toBe('Israel');
   });
 
   it('refuses a country that names no destination', async () => {
     /**
-     * `country` was `@IsString()` and the form pre-filled it with the word
-     * "Israel". Every rule in `carriers.ts` reads this field as an ISO code, so
-     * an address saved with the default was routed as international and then
-     * refused by the one international service Israel IS contracted for — `IL` is
-     * on ePacket's list and "Israel" is not. The collector lost the cheapest
-     * service they qualified for, and the refusal blamed the carrier.
+     * Every rule in `carriers.ts` reads `country` as an ISO code. An address
+     * stored as the word "Israel" would be routed as international and then
+     * refused by the one international service Israel IS contracted for (`IL` is
+     * on ePacket's list and "Israel" is not), losing the collector the cheapest
+     * service they qualify for, with the refusal blaming the carrier.
      */
     const collector = await signIn(SEED.collector);
     const res = await collector.post('/me/addresses', {
@@ -257,8 +253,8 @@ describe('a validation failure is written for the person reading it', () => {
   it('reports the wrong TYPE when a value was actually sent', async () => {
     /**
      * `quantity: "lots"` breaks the integer rule and both range rules, and
-     * reading them all back gave "must not be greater than 100. must not be less
-     * than 1." about a word.
+     * reading them all back would give "must not be greater than 100. must not
+     * be less than 1." about a word.
      */
     const operator = await signIn(SEED.operator);
     const res = await operator.post('/intake/items', {
@@ -280,10 +276,9 @@ describe('a validation failure is written for the person reading it', () => {
 describe('an unconfirmed account is told so in a way the client can act on', () => {
   it('answers with its own code, not a generic 403', async () => {
     /**
-     * The sign-in page could not tell this refusal from any other, so it printed
-     * the sentence and offered "Forgot password" — which does not help — and
-     * "Sign up", which reports the address as already registered. A closed loop
-     * for anybody who lost the confirmation mail.
+     * The sign-in page has to tell this refusal from any other. "Forgot
+     * password" does not help, and "Sign up" reports the address as already
+     * registered: a closed loop for anybody who lost the confirmation mail.
      */
     const anon = new Client();
     const email = `band3-${Date.now()}@fixture.bault.test`;
@@ -294,7 +289,7 @@ describe('an unconfirmed account is told so in a way the client can act on', () 
       firstName: 'Band',
       lastName: 'Three',
       password: 'correct horse battery',
-      // A valid registration accepts the terms in force (E21).
+      // A valid registration accepts the terms in force.
       acceptedTermsVersion: '2026-10-draft-1',
     });
     expect(created.status).toBe(201);
@@ -322,8 +317,7 @@ describe('an unconfirmed account is told so in a way the client can act on', () 
 
 describe('an amount in a message carries its currency', () => {
   it('states the smallest top-up with a currency symbol', async () => {
-    // Twelve of the sixteen sites that quoted an amount dropped the symbol, so a
-    // refusal read "The smallest top-up is 10.00".
+    // Without the symbol a refusal would read "The smallest top-up is 10.00".
     const collector = await signIn(SEED.collector);
     const res = await collector.post('/finance/checkout', {
       amountMinor: 1,
@@ -341,10 +335,9 @@ describe('an amount in a message carries its currency', () => {
 
 describe('the marketplace can be narrowed and ordered', () => {
   /**
-   * Browse offered a free-text box over the description and the type class and
-   * nothing else: no way to see only graded slabs, no price range, and one fixed
-   * order (newest first) with no control over it. Somebody looking for a slab
-   * under $200 had to read the whole shelf.
+   * Somebody looking for a graded slab under $200 should not have to read the
+   * whole shelf: browse filters by type class and price range as well as text,
+   * and the order can be chosen.
    */
   const rows = async (query: string) => {
     const anon = new Client();
@@ -407,17 +400,10 @@ describe('the marketplace can be narrowed and ordered', () => {
 describe('placing a hold is idempotent and says so', () => {
   it('reports the second scan as a no-op rather than as work done', async () => {
     /**
-     * Both routes answered `hold_placed` / `hold_released` either way, so an
-     * operator who scanned a card that was already frozen was told the hold had
-     * just been placed. The DATA was always right — `setHold` returns early and
-     * writes no second custody event — but the bench was told a story about work
-     * it had not done, on the screen whose entire job is saying what happened to
-     * a card.
-     *
-     * There was also no way to do this at all from the product: the customer's
-     * vault has a Hold scope telling the owner "a held card stays here until the
-     * warehouse releases it", and the warehouse console had no hold control
-     * anywhere. The endpoints were reachable only by calling them by hand.
+     * `setHold` returns early on a card already frozen and writes no second
+     * custody event, and the answer has to say so. An operator who scans a held
+     * card must not be told the hold was just placed, on the screen whose entire
+     * job is saying what happened to a card.
      */
     const operator = await signIn(SEED.operator);
     const item = await intakeFor(operator, SEED.collector, { description: 'Band 3: hold' });

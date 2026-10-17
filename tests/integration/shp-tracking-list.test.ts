@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SEED, SEED_USERNAME, fundWallet, intakeFor, signIn, usernameOf } from './helpers/http';
 
 /**
- * Shipment Tracking, after it stopped being a lookup (Requirement 2).
+ * Shipment Tracking, the list of a collector's shipments (Requirement 2).
  *
  * The property under test is that a shipment REACHES the tracking list by being
  * created, and by nothing else: there is no "add to tracking" call, and no point
@@ -22,8 +22,8 @@ describe('SHP shipment tracking list', () => {
       itemIds: [item.id],
       destinationAddress: `${recipientName}, 1 Test St, Testville 08608, US`,
       // A carrier prices on the country and the postal code; a formatted line
-      // cannot be split back into them without guessing, so free text now has
-      // to carry both explicitly.
+      // cannot be split back into them without guessing, so free text has to
+      // carry both explicitly.
       destinationCountry: 'US',
       destinationPostalCode: '08608',
       recipientName,
@@ -67,8 +67,7 @@ describe('SHP shipment tracking list', () => {
       expect(Object.keys(row)).not.toContain('intakeId');
       // Nor smuggled in under another name. The whole intake-ID shape
       // (`generateIntakeId`: OW- and six of its letters, standing alone), not
-      // just "OW-": random item serials contain it — `SN-MV9W7KOW-4225` failed
-      // this once, with no intake ID anywhere in the row.
+      // just "OW-": random item serials such as `SN-MV9W7KOW-4225` contain it.
       expect(JSON.stringify(row)).not.toMatch(/(^|[^A-Z0-9])OW-[A-HJ-NP-Z2-9]{6}(?![A-Z0-9])/);
     }
   });

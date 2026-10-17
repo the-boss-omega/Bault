@@ -7,14 +7,14 @@ import {
 } from '../../apps/api/src/modules/adm/reconciliation';
 
 /**
- * The reconciliation rules, one fact pattern at a time (N40).
+ * The reconciliation rules, one fact pattern at a time.
  *
  * The integration suite proves the report against a live database, but the
- * live API cannot be made to produce most of the faults it exists to find —
- * a payment the provider took with no credit behind it, a credit minted for a
- * payment that failed — because the code paths that would produce them are
- * the ones the P0 fixes closed. So the rules are pinned here, on the pure
- * function the service feeds, where every pattern can be written down.
+ * live API cannot be made to produce most of the faults it exists to find (a
+ * payment the provider took with no credit behind it, a credit minted for a
+ * payment that failed), because the code refuses to create them. So the rules
+ * are pinned here, on the pure function the service feeds, where every pattern
+ * can be written down.
  */
 
 const AT = '2026-10-15T12:00:00.000Z';

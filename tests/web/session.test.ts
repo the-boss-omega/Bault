@@ -3,9 +3,8 @@ import { ApiError } from '../../apps/web/src/shared/api';
 import { loadProfile, resetProfileRequest } from '../../apps/web/src/shared/session';
 
 /**
- * The Vite log reported the failed profile call twice — `(x2)` — because React
- * StrictMode runs the boot effect twice in development. The fix is here, not in
- * StrictMode: concurrent callers share one request.
+ * React StrictMode runs the boot effect twice in development, which would send
+ * the profile call twice. Concurrent callers share one request, so it goes once.
  */
 const realFetch = globalThis.fetch;
 let calls: string[];

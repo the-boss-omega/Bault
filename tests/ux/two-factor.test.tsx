@@ -40,8 +40,8 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 }));
 
 const { SignInPage } = await import('../../apps/web/src/areas/customer/auth/SignInPage');
-// New screens, imported where they are used so the cases about the screens that
-// already existed fail on what they assert, not on a missing module.
+// These screens are imported where they are used, so a missing module fails
+// only the cases that need it and the rest fail on what they assert.
 // (`@vite-ignore` with the path in a variable: Vite otherwise resolves a dynamic
 // import while transforming the file, which fails the whole file just the same.)
 const lazy = <T,>(path: string) => import(/* @vite-ignore */ path) as Promise<T>;

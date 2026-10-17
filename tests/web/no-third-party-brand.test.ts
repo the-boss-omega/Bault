@@ -3,15 +3,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 /**
- * No other company's name anywhere in the SPA's source (E20 / F058).
+ * No other company's name anywhere in the SPA's source.
  *
- * The FAQ was another company's — ShipMyCards' — copied verbatim, with its
- * addresses, phone number, payment account and a personal referral link, and
- * the i18n catalogue carried three strings attributing it. A brand check on
- * the message catalogue alone had an allowance for exactly those strings, so it
- * could never have caught the thing it existed for.
- *
- * This check has no allowance. It reads every file under `apps/web/src`, of
+ * The name checked is ShipMyCards, whose FAQ text (addresses, phone number,
+ * payment account, a referral link) must never reach Bault's customers. A brand
+ * check with an allowance cannot catch the thing it exists for, so this one has
+ * none. It reads every file under `apps/web/src`, of
  * every type, so the name cannot come back in a comment, a fixture, a style
  * sheet or a string table. Case and spacing do not matter: "ShipMyCards",
  * "shipmycards.com" and "Ship My Cards" are all the same company.

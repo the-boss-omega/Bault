@@ -4,23 +4,22 @@
  * Errors surface the uniform `{ error: { code, message } }` body from the API.
  *
  * Every failure is raised as an `ApiError` carrying a `kind`, so callers can tell
- * "the backend is not reachable" apart from "you are not signed in" instead of
- * collapsing both into a generic message. There is deliberately NO automatic
- * retry: a refused connection retried in a loop just hammers a dead port and
- * hides the problem — the UI offers an explicit retry action instead.
+ * "the backend is not reachable" apart from "you are not signed in". There is
+ * deliberately no automatic retry: a refused connection retried in a loop
+ * hammers a dead port and hides the problem. The UI offers an explicit retry.
  */
 const BASE = '/api/v1';
 
 export type ApiErrorKind =
   /** The API could not be reached at all (dev proxy down, server not started, offline). */
   | 'unreachable'
-  /** 401 — no valid session. */
+  /** 401: no valid session. */
   | 'unauthenticated'
-  /** 403 — signed in, but not allowed. */
+  /** 403: signed in, but not allowed. */
   | 'forbidden'
-  /** 404 — route or resource missing. */
+  /** 404: route or resource missing. */
   | 'not_found'
-  /** 5xx — the backend itself failed. */
+  /** 5xx: the backend itself failed. */
   | 'server'
   /** Any other 4xx (validation, conflict, …). */
   | 'client';
@@ -48,7 +47,7 @@ export function isUnreachable(error: unknown): boolean {
 
 /**
  * i18n key describing a failure, or `null` when the API's own message is the
- * better thing to show (validation errors, conflicts — those are specific).
+ * better thing to show (validation errors and conflicts are specific).
  * Returned as a plain string so this module stays free of the i18n catalogue;
  * the value is a real `MessageKey`, checked by TypeScript at every call site.
  */
@@ -91,9 +90,8 @@ function kindForStatus(status: number, code: string | undefined): ApiErrorKind {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
-    // `...options` first, so a caller's headers are MERGED into the JSON content
-    // type rather than replacing the whole object — spread last, passing any
-    // header silently dropped `Content-Type`.
+    // `...options` first, so a caller's headers merge into the JSON content type
+    // instead of replacing the whole headers object.
     res = await fetch(BASE + path, {
       credentials: 'include',
       ...options,
@@ -113,7 +111,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     const envelope = (body as { error?: { code?: string; message?: string } } | null)?.error;
     const code = envelope?.code;
-    // `||` not `??`: fetch reports an absent reason phrase as '' , not null.
+    // `||` not `??`: fetch reports an absent reason phrase as '', not null.
     const message = envelope?.message || res.statusText || `HTTP ${res.status}`;
     throw new ApiError(kindForStatus(res.status, code), res.status, message, code);
   }
@@ -126,16 +124,7 @@ export const api = {
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined, headers }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
-  /**
-   * Added because it was missing, and its absence had consequences.
-   *
-   * Two routes take PUT (`/notifications/preferences` and `.../channel`), so the
-   * notifications page hand-rolled its own `fetch` — which threw a plain `Error`
-   * rather than an `ApiError`. Every caller that branches on `kind` or `code`
-   * (offline vs signed-out vs refused) was therefore blind on exactly those two
-   * calls, and a preference toggle made while the API was down reported the
-   * browser's network message instead of "Bault is not reachable".
-   */
+  /** For the PUT routes (`/notifications/preferences` and `.../channel`). */
   put: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
   del: <T = unknown>(path: string) => request<T>(path, { method: 'DELETE' }),

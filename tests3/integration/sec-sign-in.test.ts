@@ -5,13 +5,14 @@ import { closeDb, sql } from '../../tests/integration/helpers/db';
 import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
- * Signing in, from the side of somebody guessing (E13, N5, N10).
+ * Signing in, from the side of somebody guessing.
  *
- * An identifier that matched no account skipped `argon2.verify` and was refused
- * in a few milliseconds, against a couple of hundred for a real one — so the
- * time it took to say "invalid credentials" said which accounts exist. And a
- * single account could be guessed at for as long as the per-IP rate limit
- * allowed, by anyone with more than one address.
+ * An identifier that matches no account must still cost an `argon2.verify`;
+ * refused in a few milliseconds against a couple of hundred for a real one, the
+ * time it takes to say "invalid credentials" would say which accounts exist.
+ * And a single account is locked after repeated failures, so it cannot be
+ * guessed at for as long as a per-IP rate limit allows by anyone with more than
+ * one address.
  *
  * Every account these tests guess against is a fixture registered here, or an
  * identifier nobody owns. The lockout is real and is not switched off for
@@ -33,7 +34,7 @@ async function register(label: string): Promise<{ email: string; username: strin
     firstName: 'Sign',
     lastName: 'In',
     password: PASSWORD,
-    // Sign-up requires accepting the terms in force (E21).
+    // Sign-up requires accepting the terms in force.
     acceptedTermsVersion: CURRENT_TERMS_VERSION,
   });
   expect(res.status).toBe(201);
@@ -51,7 +52,7 @@ async function attempt(identifier: string, password: string) {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
 /* ============================================================
-   E13 — the time a refusal takes says nothing
+   The time a refusal takes says nothing
    ============================================================ */
 
 describe('how long a wrong sign-in takes', () => {
@@ -138,7 +139,7 @@ describe('guessing at one identifier', () => {
 });
 
 /* ============================================================
-   N10 — a confirmation link confirms, and does nothing else
+   A confirmation link confirms, and does nothing else
    ============================================================ */
 
 describe('an unused confirmation link', () => {
@@ -166,8 +167,8 @@ describe('an unused confirmation link', () => {
   });
 
   it('does not bring a suspended account back', async () => {
-    // A link is valid for a day. An account suspended inside that day was
-    // reinstated by whoever still held the mail.
+    // A link is valid for a day. An account suspended inside that day must not
+    // be reinstated by whoever still holds the mail.
     const { email } = await register('verifys');
     const { userId, token } = await linkFor(email);
     const admin = await signIn(SEED.admin);
@@ -190,7 +191,7 @@ describe('an unused confirmation link', () => {
 });
 
 /* ============================================================
-   N5 — staff powers need an active account
+   Staff powers need an active account
    ============================================================ */
 
 describe('a suspended member of staff', () => {
@@ -214,7 +215,7 @@ describe('a suspended member of staff', () => {
     expect((await admin.patch(`/admin/users/${me.id}`, { status: 'suspended' })).status).toBe(200);
 
     // `@AllowSuspended` keeps these two routes open so a suspended CUSTOMER can
-    // ask for help. It was letting a suspended operator keep working the queue.
+    // ask for help. It must not let a suspended operator keep working the queue.
     expect((await staff.get(`/support/tickets/${ticket.body.id}`)).status).toBe(403);
     const reply = await staff.post(`/support/tickets/${ticket.body.id}/messages`, { body: 'Answering anyway.' });
     expect(reply.status).toBe(403);

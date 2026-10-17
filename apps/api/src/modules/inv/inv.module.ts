@@ -10,13 +10,13 @@ import { DisposalController } from './disposal.controller';
 import { ParcelController } from './parcel.controller';
 
 /**
- * INV module — everything about goods ARRIVING.
+ * INV module: everything about goods ARRIVING.
  *
- * It now owns both ends of that: the facilities parcels are sent to and the
- * parcels themselves, then the intake that turns a parcel's contents into vault
- * items, plus corrections, batch splits, and the record of arrivals that were
- * never accepted. Depends on the global CST kernel (custody), the billing port
- * and the outbox — all injected.
+ * It owns the facilities parcels are sent to and the parcels themselves, the
+ * intake that turns a parcel's contents into vault items, corrections, batch
+ * splits, and the record of arrivals that were never accepted. Depends on the
+ * global CST kernel (custody), the billing port, the outbox and media, all
+ * injected.
  */
 @Module({
   controllers: [InvController, DisposalController, ParcelController],

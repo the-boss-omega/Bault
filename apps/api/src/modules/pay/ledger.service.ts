@@ -33,20 +33,19 @@ export interface LedgerEntry {
 }
 
 /**
- * Ledger service (T059/T066, Principles II & IV).
+ * Ledger service (Principles II & IV).
  *
- * `record` appends one immutable ledger row (INSERT only — the append-only DB
+ * `record` appends one immutable ledger row (INSERT only: the append-only DB
  * triggers forbid edits). `balanceOf` DERIVES the wallet balance as
  * sum(credits) − sum(debits); there is no stored balance to drift. Both take an
  * optional `tx` so a ledger write commits atomically with the operation causing it.
  *
  * A balance read inside a transaction LOCKS the wallet until that transaction
- * ends. Without it, two purchases by one buyer each read the same balance,
- * each found it sufficient, and both debited it — five parallel purchases
- * against a balance that covered one all succeeded. There is no balance row to
- * lock and no constraint that could refuse the overdraft (the balance is a
- * SUM), so the lock is per user and lives in Postgres: the second check waits
- * for the first spend to commit and then reads the balance it left behind.
+ * ends, so two spends by one user cannot both pass a check against the same
+ * balance. There is no balance row to lock and no constraint can refuse an
+ * overdraft (the balance is a SUM), so the lock is a per-user Postgres advisory
+ * lock: the second check waits for the first spend to commit and then reads
+ * the balance it left behind.
  */
 @Injectable()
 export class LedgerService {

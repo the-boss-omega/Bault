@@ -30,16 +30,15 @@ type Mode =
  * Two-factor sign-in on the account-security screen: enrol, see how many
  * recovery codes are left, replace them, turn it off.
  *
- * Enrolment is three steps and none is skipped. The secret is shown two ways —
- * a QR code to scan and the key to type — then a code from the app proves it
+ * Enrolment is three steps and none is skipped. The secret is shown two ways (a
+ * QR code to scan and the key to type), then a code from the app proves it
  * arrived, and only then is it on. The recovery codes come back with that
- * confirmation and are shown ONCE: the API keeps no copy it can read, so this
+ * confirmation and are shown once: the API keeps no copy it can read, so this
  * screen makes saving them a step of its own, with "Done" held until the person
- * says they have. Leaving the screen any other way loses them, which is why the
- * acknowledgement is not optional.
+ * says they have.
  *
- * Turning it off is not offered to a role that requires it — the API would
- * refuse it, and a button that always fails is worse than an explanation.
+ * Turning it off is not offered to a role that requires it: the API would
+ * refuse it, so the panel explains instead.
  */
 export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
   const { t } = useI18n();
@@ -188,7 +187,7 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
 
 /**
  * A code from the app, and one action. `withPassword` asks for the password as
- * well — turning it on does, so a session on its own cannot enrol a phone.
+ * well; turning it on does, so a session on its own cannot enrol a phone.
  */
 function CodeForm({
   hint,

@@ -17,18 +17,12 @@ interface CullItem {
 }
 
 /**
- * The bulk cull — cards worth less than the storage they are about to accrue.
+ * The bulk cull: cards worth less than the storage they are about to accrue,
+ * removed in one action instead of one donation at a time.
  *
- * A collector who sends in a shoebox gets back a vault containing forty commons
- * they never wanted individually catalogued, and every one of them starts
- * costing storage the day the included period ends. Culling them one at a time
- * through the donation flow is forty confirmations.
- *
- * Two things about this are deliberate. It is FREE, because charging somebody to
- * stop charging them is indefensible. And it is limited to a window after
- * arrival, which is why the ineligible cards are still LISTED here, greyed, with
- * the reason on them — a card that quietly vanished from this list would read as
- * a bug, where "the window closed for this one" reads as the rule it is.
+ * It is free, because charging somebody to stop charging them is indefensible.
+ * It is limited to a window after arrival, so the ineligible cards are still
+ * listed here, greyed, with the reason on them, instead of quietly vanishing.
  */
 export function RemoveCommonsPanel({
   items,
@@ -69,15 +63,13 @@ export function RemoveCommonsPanel({
   const eligible = rows.filter((r) => !r.reason);
 
   /**
-   * What will actually be removed: the ticked cards that are on screen AND
+   * What will actually be removed: the ticked cards that are on screen and
    * still eligible.
    *
-   * `chosen` outlives the list. The vault reloads `items` on every keystroke of
-   * its search, so a collector could tick five cards, type a search that hid
-   * three, confirm — and all five went to `remove-commons/confirm`, three of
-   * them donated or destroyed without being on screen when the button was
-   * pressed. Everything below — the count on the button, the confirmation and
-   * the request — reads this list, never `chosen`.
+   * `chosen` outlives the list: the vault reloads `items` on every keystroke of
+   * its search, so a ticked card can be hidden by a search. Everything below
+   * (the count on the button, the confirmation and the request) reads this list,
+   * never `chosen`, so nothing off screen is removed.
    */
   const selected = useMemo(() => {
     const visible = new Map(eligible.map((r) => [r.it.id, r.it]));

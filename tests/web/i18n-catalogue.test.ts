@@ -12,9 +12,9 @@ import { DEFAULT_LOCALE, LOCALES, MESSAGE_KEYS, hasMessage, t } from '../../apps
  *     was left as the Hebrew string, or an English string that silently dropped a
  *     `{placeholder}` the caller passes.
  *
- *  2. BRAND. No user-facing string may say "ShipMyCards" — with no exceptions
- *     now that the FAQ is Bault's own (E20); `no-third-party-brand.test.ts`
- *     extends the same rule to every file under `apps/web/src`.
+ *  2. BRAND. No user-facing string may say "ShipMyCards", with no exceptions;
+ *     `no-third-party-brand.test.ts` extends the same rule to every file under
+ *     `apps/web/src`.
  */
 
 describe('message catalogues', () => {
@@ -86,13 +86,7 @@ describe('retired keys are really gone', () => {
 });
 
 describe('brand', () => {
-  /**
-   * There used to be an allowance here: three FAQ strings that attributed the
-   * FAQ to the company it had been copied from, and a test requiring them to
-   * KEEP naming it. That allowance was the finding (E20) wearing a test — the
-   * FAQ was another company's text — and it went with the copied FAQ. Every
-   * catalogued string now says Bault or nothing.
-   */
+  /** No allowance: every catalogued string says Bault or nothing. */
   it('says Bault, never ShipMyCards, in every catalogued string', () => {
     expect(MESSAGE_KEYS.length).toBeGreaterThan(100); // the whole catalogue, not a sample
 

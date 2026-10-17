@@ -1,17 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Bault — database backup and restore.
+# Bault: database backup and restore.
 #
-# `infra/ops/` was an empty directory, and the only trace of a backup strategy
-# anywhere in the repository was a comment in docker-compose.yml setting
-# `wal_level=replica` "to enable point-in-time recovery later (T132)". Later did
-# not arrive. This database is the sole record of who owns what, and it had no
-# backup, no restore procedure, no retention policy and no test of any of them.
-#
-# This script is the base layer: a consistent, compressed, verified logical dump.
-# It is NOT point-in-time recovery — see the note at the bottom for what else is
-# needed and why this is not a substitute. The restore drill, for both this and
-# the provider's PITR, is infra/ops/RESTORE.md.
+# This database is the sole record of who owns what. This script is the base
+# layer: a consistent, compressed, verified logical dump. It is NOT
+# point-in-time recovery; see the note at the bottom for what else is needed and
+# why this is not a substitute. The restore drill, for both this and the
+# provider's PITR, is infra/ops/RESTORE.md.
 #
 #   ./infra/ops/backup.sh dump [--age-recipient <age1...>]... [--upload <dest>]
 #   ./infra/ops/backup.sh verify <file> [--age-identity <keyfile>]
@@ -19,7 +14,7 @@
 #
 # Environment:
 #   DIRECT_DATABASE_URL  dump: the database to dump, as bault_owner (NOT the
-#                        PgBouncer port — pg_dump needs a real session, and
+#                        PgBouncer port: pg_dump needs a real session, and
 #                        transaction pooling breaks it). verify: the SERVER to
 #                        restore a scratch copy into, as a role with CREATEDB;
 #                        point it at a restore server, never at production.
@@ -78,10 +73,9 @@ cleanup() {
 trap cleanup EXIT
 
 # -----------------------------------------------------------------------------
-# url_with_db <url> <database> — the same server and credentials, another
-# database. The old `${url%/*}/name` dropped everything after the database name,
-# including `?sslmode=require`, so the scratch connection silently went out
-# unencrypted.
+# url_with_db <url> <database>: the same server and credentials, another
+# database. The query string is kept, so `?sslmode=require` still applies to the
+# scratch connection.
 # -----------------------------------------------------------------------------
 url_with_db() {
   local url="$1" db="$2"
@@ -111,7 +105,7 @@ check_checksum() {
   echo "${file}: OK"
 }
 
-# plaintext_of <file> <identity> — sets PLAIN to a readable dump. An `.age` file
+# plaintext_of <file> <identity>: sets PLAIN to a readable dump. An `.age` file
 # is decrypted into a private temporary file that is removed on exit. (Sets a
 # variable rather than printing a path: called as `$(...)` it would run in a
 # subshell, and the clean-up of the temporary file would be lost with it.)
@@ -132,14 +126,14 @@ plaintext_of() {
 }
 
 # -----------------------------------------------------------------------------
-# dump — a consistent snapshot, compressed, with its own checksum.
+# dump: a consistent snapshot, compressed, with its own checksum.
 #
 # `--format=custom` rather than plain SQL: it is compressed, it restores in
 # parallel, and `pg_restore --list` can read its table of contents without
 # restoring anything, which is what `verify` uses as a cheap first check.
 #
 # A dump is taken in a single transaction by default, so it is consistent across
-# every table — which for an append-only ledger is the whole point. A backup that
+# every table, which for an append-only ledger is the whole point. A backup that
 # caught `ledger_record` mid-write and `charge` after it would restore a wallet
 # balance that does not match its own ledger.
 # -----------------------------------------------------------------------------
@@ -233,15 +227,14 @@ cmd_dump() {
 }
 
 # -----------------------------------------------------------------------------
-# verify — because an untested backup is a rumour.
+# verify: because an untested backup is a rumour.
 #
 # Restores into a scratch database and counts the rows that matter. This is the
-# step people skip, and it is the one that catches the backup that has been
-# running successfully for eight months against a database it cannot restore.
+# step that catches a backup job that succeeds every night against a database
+# it cannot restore.
 #
-# It FAILS (exit 1) when an invariant is violated. It used to print the
-# violation count and then "verified" with exit 0, so a cron job or a CI step
-# running it reported success on a backup it had just found broken.
+# It FAILS (exit 1) when an invariant is violated, so a cron job or a CI step
+# running it reports a broken backup as a failure.
 # -----------------------------------------------------------------------------
 cmd_verify() {
   local file="" identity="${AGE_IDENTITY:-}"
@@ -287,7 +280,7 @@ cmd_verify() {
     UNION ALL SELECT 'parcel',        count(*) FROM parcel;"
 
   # Structural invariants, checked against the BACKUP rather than the live
-  # database — row counts alone would not show a restore that dropped the join
+  # database: row counts alone would not show a restore that dropped the join
   # targets and kept the rows pointing at them.
   #
   # (There is deliberately no "stored balance matches the ledger" check: a wallet
@@ -296,11 +289,11 @@ cmd_verify() {
   # trail still point at rows that exist.)
   #
   # The reference columns are text and the keys uuid, so every join compares
-  # TEXT. Joining `uuid = text` casts the text to uuid, and a moved-out item's
-  # `bin_id` reads `EXT:<warehouse>/<bin>` (finding N1): the cast threw, and
-  # under `set -e` the check died on a perfectly good backup. Comparing text
-  # cannot throw, so a malformed reference is counted as a violation instead.
-  # `EXT:` locations are not bins of ours and are reported, not counted.
+  # TEXT. Joining `uuid = text` would cast the text to uuid, and a moved-out
+  # item's `bin_id` reads `EXT:<warehouse>/<bin>`, so the cast would throw on a
+  # good backup. Comparing text cannot throw, so a malformed reference is
+  # counted as a violation instead. `EXT:` locations are not bins of ours and
+  # are reported, not counted.
   #
   # The last check is the guards themselves: a restore that came back without
   # the append-only triggers would be a database that lets history be edited,
@@ -360,7 +353,7 @@ cmd_verify() {
 }
 
 # -----------------------------------------------------------------------------
-# restore — into an explicitly named target, never a default.
+# restore: into an explicitly named target, never a default.
 #
 # The target URL is required rather than defaulted to DIRECT_DATABASE_URL, so
 # restoring over production is something somebody types, not something they omit.
@@ -412,7 +405,7 @@ case "${1:-}" in
 esac
 
 # =============================================================================
-# WHAT THIS IS NOT — read before relying on it.
+# WHAT THIS IS NOT: read before relying on it.
 #
 # This is a nightly logical backup. Its recovery point is "the last dump", so
 # the worst case is losing a day of custody events and ledger rows. For a system
@@ -422,10 +415,10 @@ esac
 # Point-in-time recovery needs WAL archiving, which needs three things this
 # script cannot provide:
 #   1. `archive_mode = on` and an `archive_command` shipping WAL segments off the
-#      machine (docker-compose.yml already sets wal_level=replica, which is the
+#      machine (the dev docker-compose.yml sets wal_level=replica, which is the
 #      prerequisite and not the feature);
 #   2. somewhere durable and OFF-HOST to ship them to, with its own retention;
-#   3. a restore drill that is actually performed on a schedule — `verify` above
+#   3. a restore drill that is actually performed on a schedule: `verify` above
 #      is the mechanism, and a calendar entry is the other half.
 #
 # On a managed Postgres the provider does 1 and 2 (turn PITR on, seven days at

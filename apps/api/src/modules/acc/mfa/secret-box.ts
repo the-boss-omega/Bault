@@ -3,18 +3,14 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:cr
 /**
  * Two-factor secrets at rest: AES-256-GCM under `MFA_ENCRYPTION_KEY`.
  *
- * A TOTP secret is a password that never changes and that the account owner
- * never types. Stored in clear, one database dump — a backup copied somewhere
- * it should not be, a read-only replica somebody was given — would let its
- * holder produce every code every enrolled account will ever accept, for as
- * long as nobody noticed. So the column holds ciphertext and the key lives in
- * the environment, which the dump does not contain.
+ * A TOTP secret is a password that never changes. Stored in clear, one leaked
+ * database dump would let its holder produce every code every enrolled account
+ * will ever accept. So the column holds ciphertext and the key lives in the
+ * environment, which the dump does not contain.
  *
- * The account id is bound in as additional authenticated data. Somebody who can
- * write the table but not read the key can still copy a ciphertext from one row
- * to another; with the id bound, the copy no longer decrypts on its new row, so
- * "enrol on my own account, then paste my secret onto the administrator's" is
- * not a way in.
+ * The account id is bound in as additional authenticated data, so a ciphertext
+ * copied from one row to another no longer decrypts: "enrol on my own account,
+ * then paste my secret onto the administrator's" is not a way in.
  *
  * Format: `v1.<iv>.<tag>.<ciphertext>`, each part base64url. The version is
  * there so a later change of scheme can read old rows instead of guessing.

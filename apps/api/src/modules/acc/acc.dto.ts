@@ -6,11 +6,9 @@ import { NAME_PART_MAX, USERNAME_MAX, USERNAME_MIN } from '../../shared/names';
  * Trim before validating.
  *
  * The global ValidationPipe runs with `transform: true`, so these run first.
- * Without them the character rules below reject a value for whitespace the
- * service was going to strip anyway: `AuthService.register` documents that
- * "Red", " red " and "RED" are one account, and that was only true for two of
- * the three — the spaced one was refused at the DTO before normalization could
- * happen. Trimming here makes the documented behaviour the actual behaviour.
+ * Without them the character rules below would reject a value for whitespace
+ * the service strips anyway: `AuthService.register` treats "Red", " red " and
+ * "RED" as one account, and the spaced one must reach it.
  *
  * Only the OUTER whitespace is touched. Internal spacing is a name's own
  * business and is collapsed later by `normalizeNamePart`.
@@ -28,7 +26,7 @@ export class RegisterDto {
   email!: string;
 
   /**
-   * Chosen once, here, and never changeable afterwards (Requirement 4.1). There is
+   * Chosen once, here, and never changeable afterwards. There is
    * deliberately no `username` field on UpdateProfileDto or any admin patch DTO,
    * and `user_account_username_immutable` rejects the write at the database too.
    */
@@ -69,13 +67,13 @@ export class RegisterDto {
   password!: string;
 
   /**
-   * The version of the terms the person ticked the box for (E21).
+   * The version of the terms the person ticked the box for.
    *
-   * REQUIRED. Bault charges fees, accrues interest on a negative balance and
-   * suspends accounts, and an account used to be created without anybody being
-   * asked to agree to any of that. A string rather than a boolean, because
-   * "agreed" is only meaningful with "to what": the service compares it with
-   * `CURRENT_TERMS_VERSION` and refuses a page that showed an older text.
+   * REQUIRED: Bault charges fees, accrues interest on a negative balance and
+   * suspends accounts, and nobody may get an account without agreeing to that.
+   * A string rather than a boolean, because "agreed" is only meaningful with
+   * "to what": the service compares it with `CURRENT_TERMS_VERSION` and refuses
+   * a page that showed an older text.
    */
   @trimmed()
   @IsString({ message: 'acceptedTermsVersion is required: accept the terms to create an account' })
@@ -86,7 +84,7 @@ export class RegisterDto {
 
 export class LoginDto {
   /**
-   * Email OR username — either one identifies the account on its own. Usernames
+   * Email OR username: either one identifies the account on its own. Usernames
    * cannot contain '@' (see RegisterDto), so the two namespaces never collide.
    */
   @trimmed()
@@ -101,7 +99,7 @@ export class LoginDto {
 
 /**
  * The second sign-in step: the challenge the first step returned, and EITHER a
- * code from the authenticator app OR one of the recovery codes — never both,
+ * code from the authenticator app OR one of the recovery codes; never both,
  * never neither (checked in the controller, where the message can say which).
  */
 export class LoginMfaDto {
@@ -180,9 +178,9 @@ export class ChangePasswordDto {
 
 /**
  * The person's name is the only editable identity field. `username` is
- * intentionally absent — it is immutable once set at registration (Requirement
- * 4.1) — and there is no `displayName`: a full name is DERIVED from these two
- * columns, never stored a second time where it could drift.
+ * intentionally absent (it is immutable once set at registration), and there is
+ * no `displayName`: a full name is DERIVED from these two columns, never stored
+ * a second time where it could drift.
  */
 export class UpdateProfileDto {
   @trimmed()

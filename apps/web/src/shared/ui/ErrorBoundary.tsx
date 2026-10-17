@@ -4,26 +4,19 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
  * The thing that stands between one bad render and a white screen.
  *
  * React unmounts the entire tree when a render throws and nothing catches it.
- * This app had no boundary anywhere, so a single undefined property in one
- * panel — a card with no photo, a malformed date, a field the API stopped
- * sending — took the whole console down to a blank page with no message, no
- * recovery, and nothing in front of the operator to say what happened or what to
- * do. On a warehouse bench, mid-intake, that is indistinguishable from the
- * machine being broken.
+ * This shows a message and a way to recover instead.
  *
  * A class component because that is the only way to catch a render error in
  * React; there is no hook for it.
  *
- * WHAT IT DELIBERATELY DOES NOT DO: it does not swallow the error. The failure
- * is re-thrown to the console and, once a reporter is wired, to that — because a
- * boundary that hides a crash from developers while showing a tidy message to
- * users is worse than the white screen it replaced.
+ * It does not swallow the error: the failure is logged to the console and
+ * passed to `onError` when one is given.
  */
 interface Props {
   children: ReactNode;
-  /** Named in the fallback so a person can say WHICH part failed. */
+  /** Named in the fallback so a person can say which part failed. */
   area?: string;
-  /** Report hook — wire to Sentry (or whatever) when one exists. */
+  /** Report hook for an error reporter. */
   onError?: (error: Error, info: ErrorInfo) => void;
 }
 
@@ -53,16 +46,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children;
 
     /**
-     * Two actions, because there are two different situations.
+     * "Try again" re-renders the subtree, which helps when the failure came from
+     * data that has since changed. "Reload" throws the whole page state away,
+     * which helps when the component's props are the problem.
      *
-     * "Try again" re-renders the subtree — which is the right move when the
-     * failure came from data that has since changed, and costs nothing when it
-     * does not. "Reload" throws the whole page state away, which is what
-     * actually helps when the component's props are the problem.
-     *
-     * No stack trace on screen. It is in the console for whoever can read it,
-     * and on a bench it would be noise between the operator and the button they
-     * need.
+     * No stack trace on screen; it is in the console.
      */
     return (
       <div className="error-boundary" role="alert">

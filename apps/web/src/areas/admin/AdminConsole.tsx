@@ -32,10 +32,9 @@ import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 /**
  * `GET /admin/users`.
  *
- * `intakeId` survives HERE and only here. It is retired from every customer
- * workflow, but a manager troubleshooting a parcel that arrived with an old
- * pre-printed OW- label needs to be able to look it up — so it stays on the
- * administrative surface and nowhere else, and is read-only.
+ * `intakeId` appears here and only here, read-only. No customer workflow uses
+ * it, but a manager troubleshooting a parcel that arrived with an old
+ * pre-printed OW- label needs to be able to look it up.
  */
 interface AdminUser {
   id: string;
@@ -48,7 +47,7 @@ interface AdminUser {
   role: string;
   status: string;
   intakeId: string | null;
-  /** Signs in with a second factor — and so has one an administrator can reset. */
+  /** Signs in with a second factor, and so has one an administrator can reset. */
   mfaEnabled: boolean;
 }
 
@@ -78,10 +77,10 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
 };
 
 /**
- * `yield` sits FIRST, before the management tables.
+ * `yield` sits first, before the management tables.
  *
  * The others are opened by an administrator who already knows what they came to
- * do — find a user, settle a dispute, change a price. Shelf Yield is the one
+ * do (find a user, settle a dispute, change a price). Shelf Yield is the one
  * that tells them what to do, so it is what the section opens on.
  */
 const TABS = [
@@ -93,7 +92,7 @@ const TABS = [
   'outbox',
   'requests',
   // Beside the wallet requests: the other screen about money, and the one an
-  // accountant's questions are answered from (N40).
+  // accountant's questions are answered from.
   'accounting',
   'items',
   'house',
@@ -121,7 +120,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
  * Management console (the admin area, presented as "Management" in the UI while
  * keeping the `admin` route key and permissions internally).
  *
- * Sub-sections are contextual tabs on the shared shell — users and items are
+ * Sub-sections are contextual tabs on the shared shell: users and items are
  * inline-editable tables, pricing rules and disputes are managed here, and
  * storage-fee billing is read-only because it is fully automatic (Req 12.2).
  */
@@ -141,15 +140,13 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
    * How many outbox messages are parked, on the tab itself.
    *
    * A parked message is a notification or a reset link somebody did not get,
-   * and it waits for a person; a tab that has to be opened to find out whether
-   * anything is waiting is a tab nobody opens. Read once when the console
-   * opens, and kept current by the section when it requeues.
+   * and it waits for a person, so the count shows without opening the tab. Read
+   * once when the console opens, and kept current by the section when it
+   * requeues.
    */
   const [parkedCount, setParkedCount] = useState<number | null>(null);
 
-  // Opens on Shelf Yield, as the comment on `TABS` has always said it does. The
-  // code said `users`, so the section an administrator was meant to land on was
-  // one click away instead of in front of them.
+  // Opens on Shelf Yield; see the comment on `TABS`.
   const section: SectionKey = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as SectionKey)
     : 'yield';
@@ -290,8 +287,8 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 
       {section === 'requests' && (
         <TabPanel tab="requests">
-          {/* `currentUserId` is what lets the queue mark the reviewer's OWN
-              requests as undecidable by them. The API enforces it regardless. */}
+          {/* `currentUserId` lets the queue mark the reviewer's own requests as
+              undecidable by them. The API enforces it regardless. */}
           <WalletRequestsSection
             currentUserId={currentUserId}
             onMsg={setMessage}
@@ -385,12 +382,11 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 /**
  * One editable user row.
  *
- * The username column is TEXT, not an input: a username is permanent, the API
+ * The username column is text, not an input: a username is permanent, the API
  * has no field to change it, and the database trigger installed by migration
- * 0004 rejects the write outright. Presenting it as an input would advertise an
- * edit that cannot happen.
+ * 0004 rejects the write outright.
  *
- * The name is two inputs, and saving them clears the migration's review flag —
+ * The name is two inputs, and saving them clears the migration's review flag:
  * an admin who edits a flagged name has, by doing so, reviewed it.
  */
 function UserRow({
@@ -977,7 +973,7 @@ function DisputesSection({
           <EmptyState title={t('admin.disputes.noTransactions')} icon={<IconGavel />} />
         ) : (
           <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-            {/* A dispute must reference an ACTUAL recorded transaction — pick one. */}
+            {/* A dispute must reference an actual recorded transaction, picked here. */}
             <label className="field">
               <span className="field-label">{t('admin.disputes.col.transaction')}</span>
               <select value={transactionId} onChange={(e) => setTransactionId(e.target.value)} dir="ltr">
@@ -1113,7 +1109,7 @@ function DisputeRow({
 }
 
 /* ============================================================
-   Storage-fee runs (VLT-04) — read-only; billing is fully automatic
+   Storage-fee runs (VLT-04): read-only; billing is fully automatic
    ============================================================ */
 
 interface FeeRun {
@@ -1144,8 +1140,8 @@ function StorageFeesSection({ onError }: { onError: (m: string) => void }) {
 
   return (
     <>
-      {/* Billing is fully automatic: a daily worker job charges every account with
-          items stored for more than one day. There is no manual charge trigger. */}
+      {/* Billing is fully automatic: the worker's storage sweep bills each item's
+          elapsed periods after its included period. There is no manual trigger. */}
       <p className="infobox">{t('admin.storage.autoNotice')}</p>
 
       <Panel title={t('admin.storage.previousRuns', { count: runs?.length ?? 0 })} flush>

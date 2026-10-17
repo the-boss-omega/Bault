@@ -3,8 +3,8 @@ import { ApiError, api, apiErrorKey, isUnreachable } from '../../apps/web/src/sh
 
 /**
  * The SPA must be able to tell "the backend is not there" apart from "the
- * backend says you are not signed in". Collapsing the two is what turned a dead
- * API into a sign-in screen — a silent, misleading sign-out.
+ * backend says you are not signed in". Collapsing the two turns a dead API into
+ * a sign-in screen: a silent, misleading sign-out.
  */
 const realFetch = globalThis.fetch;
 

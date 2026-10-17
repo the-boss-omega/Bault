@@ -20,8 +20,8 @@ type Shipment = typeof shipment.$inferSelect;
 /**
  * How long a label purchase may take before dispatch stops waiting.
  *
- * Stopping waiting is not the same as the purchase not happening — see
- * `buy`. It only means the operator is told, rather than left looking at a
+ * Stopping waiting is not the same as the purchase not happening (see
+ * `buy`). It only means the operator is told, rather than left looking at a
  * spinner while a connection stays open to a carrier that has gone quiet.
  */
 export const LABEL_PURCHASE_TIMEOUT_MS = 30_000;
@@ -30,7 +30,7 @@ export const LABEL_PURCHASE_TIMEOUT_MS = 30_000;
  * How long a purchase in flight keeps its claim on the shipment.
  *
  * Longer than the timeout, so a claim can only be taken over once the attempt
- * that made it has certainly given up — the one way left for a stale claim to
+ * that made it has certainly given up; the one way left for a stale claim to
  * exist is a process that died mid-purchase.
  */
 const LABEL_PURCHASE_LEASE_MS = LABEL_PURCHASE_TIMEOUT_MS + 15_000;
@@ -38,9 +38,9 @@ const LABEL_PURCHASE_LEASE_MS = LABEL_PURCHASE_TIMEOUT_MS + 15_000;
 /** Where a label purchase stands, recorded on the shipment's fulfilment record. */
 interface LabelPurchase {
   /**
-   * `buying` — an attempt is talking to the carrier now.
-   * `unknown` — an attempt ended without an answer: the label may exist.
-   * `bought` — the tracking number is on the shipment.
+   * `buying`: an attempt is talking to the carrier now.
+   * `unknown`: an attempt ended without an answer, so the label may exist.
+   * `bought`: the tracking number is on the shipment.
    */
   state: 'buying' | 'unknown' | 'bought';
   /** The purchase's idempotency key. The shipment's own id: one label per shipment. */
@@ -64,20 +64,18 @@ interface DispatchForm {
 }
 
 /**
- * Scan-verified dispatch (T106, Principles III & VI) — Opus-tier.
+ * Scan-verified dispatch (T106, Principles III & VI).
  *
  * The operator scans every item they pack; the scanned set MUST match the
  * shipment's items exactly (no missing/extra pieces). A direct-overnight
- * shipment has no items — the parcel never entered the vault — so there the
+ * shipment has no items (the parcel never entered the vault), so there the
  * operator scans the parcel instead.
  *
  * THREE STEPS, because buying a label is a call to somebody else's computer
- * that spends money no rollback can return. It used to happen inside the one
- * transaction that held the shipment and every card in it `FOR UPDATE`, with no
- * timeout: the rows stayed locked for as long as the carrier took to answer,
- * and anything that failed after the purchase — a card that had changed state,
- * a failed commit — rolled back the tracking number while the label stayed
- * bought. A retry then bought a second one.
+ * that spends money no rollback can return. It must not hold the shipment and
+ * its cards `FOR UPDATE` while the carrier answers, and a failure after the
+ * purchase must not roll back the tracking number while the label stays bought
+ * (a retry would then buy a second one).
  *
  *   1. Under the locks: check the scan, check every card is still the
  *      collector's, on the shelf and not on hold, and record that a purchase is
@@ -108,7 +106,7 @@ export class DispatchService {
     // 1. Under the locks: verify, and claim the shipment for this purchase.
     const { s, verified } = await this.claim(operatorId, shipmentId, form);
 
-    // 2. With no locks held: buy — unless an earlier attempt already did.
+    // 2. With no locks held: buy, unless an earlier attempt already did.
     const label = s.trackingNumber ? null : await this.buy(s, form);
 
     // 3. Under the locks again: keep the label, then hand the parcel over.
@@ -175,7 +173,7 @@ export class DispatchService {
   /**
    * The scan, checked against what the shipment holds.
    *
-   * Items: every one, by whatever its label says — barcode, serial or id — and
+   * Items: every one, by whatever its label says (barcode, serial or id), and
    * set-equal, no piece missing and none extra. Then each card is locked and
    * checked to still be the collector's, on the shelf and not on hold: before
    * a label is bought, not merely before it is recorded.
@@ -230,7 +228,7 @@ export class DispatchService {
    *
    * A label carries the barcode, and a person reads the serial off it; the id is
    * on no label at all. A scan that matches no item stays as it was, so it can
-   * only make the set disagree — it is never quietly dropped.
+   * only make the set disagree; it is never quietly dropped.
    */
   private async resolveScans(tx: Database, scans: readonly string[]): Promise<Set<string>> {
     const out = new Set<string>();
@@ -260,11 +258,11 @@ export class DispatchService {
   /**
    * Buy the label, and say plainly what is known when that fails.
    *
-   * A refusal — the carrier answered no — means nothing was bought: the claim
+   * A refusal (the carrier answered no) means nothing was bought: the claim
    * is released and the shipment is ready to dispatch again. Any other failure
    * (a timeout, a dropped connection, a 5xx) leaves the outcome UNKNOWN: the
    * label may exist. The shipment keeps its claim, cannot be cancelled, and
-   * dispatching again repeats the same purchase under the same key — which the
+   * dispatching again repeats the same purchase under the same key, which the
    * adapter answers with the label it already sold, if it sold one.
    */
   private async buy(s: Shipment, form: DispatchForm): Promise<LabelResult> {
@@ -300,7 +298,7 @@ export class DispatchService {
    * sells only a rate it quoted, so the parcel is rated now and the overnight
    * service's own rate is the one bought. Its handles are written to the
    * shipment BEFORE the purchase, so a retry buys against the same carrier
-   * shipment — whose single label the adapter returns — instead of rating, and
+   * shipment (whose single label the adapter returns) instead of rating, and
    * paying for, a new one.
    */
   private async directRate(s: Shipment, charged: Rate, request: Parameters<ShippingAdapter['getRates']>[0], signal: AbortSignal) {
@@ -357,7 +355,7 @@ export class DispatchService {
    * hand-off itself runs in a savepoint inside the same transaction. If a card
    * changed hands, went on hold or left the shelf while the label was being
    * bought, the hand-off is rolled back to the savepoint and the transaction
-   * still commits — so the only record of a label somebody paid for is never
+   * still commits, so the only record of a label somebody paid for is never
    * taken back with it, and dispatching again finishes the job without buying
    * anything.
    */

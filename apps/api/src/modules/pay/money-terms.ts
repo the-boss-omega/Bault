@@ -1,22 +1,9 @@
 /**
- * What moving money costs, and the routes it can move along.
+ * What moving money costs, and the routes it can move along:
  *
- * Three things lived nowhere before this module.
- *
- * A CASH-OUT FEE. Cashing out was free and no figure was quoted anywhere, which
- * reads as generous and is really an omission: paying somebody out costs a
- * provider fee that Bault was absorbing silently, and a collector planning a
- * $40 withdrawal deserves to know what lands in their account before they ask
- * for it rather than after.
- *
- * THE FUNDING ROUTES. `bank_transfer` was one of five strings on a form, and no
- * account details were published anywhere for a customer to actually pay into —
- * so choosing it told Bault how the money would arrive and told the customer
- * nothing about how to send it.
- *
- * A CHARGEBACK FEE. A card top-up can be reversed by the cardholder weeks after
- * the goods have shipped. Bault had no way to record that, no fee for it, and
- * no policy naming it.
+ *   - the CASH-OUT FEE, quoted so a collector knows what lands before asking;
+ *   - the FUNDING ROUTES, and whether each settles by itself;
+ *   - the CHARGEBACK FEE, for a card top-up the cardholder reverses later.
  *
  * Pure data and predicates: it talks to nothing, so all of it is directly
  * testable, and the SPA mirrors the shape while fetching the figures.
@@ -27,12 +14,10 @@
    ============================================================ */
 
 /**
- * The fee schedule, mirroring the reference service.
- *
- * Two bands with a deliberate kink at $100. Below it a flat percentage with a
- * floor, because the provider's own minimum dominates a small payout; above it
- * a fixed component plus a much smaller percentage, because the work does not
- * scale with the amount and a flat 6% on $5,000 would be indefensible.
+ * The fee schedule: two bands with a kink at $100. Below it a flat percentage
+ * with a floor, because the provider's own minimum dominates a small payout;
+ * above it a fixed component plus a much smaller percentage, because the work
+ * does not scale with the amount.
  */
 export const CASHOUT_BAND_MINOR = 10_000; // $100
 
@@ -44,15 +29,16 @@ export const CASHOUT_SMALL_MINIMUM_MINOR = 99; // $0.99
 export const CASHOUT_LARGE_FIXED_MINOR = 500; // $5.00
 export const CASHOUT_LARGE_BPS = 100; // 1.00%
 
-/** The pricing-rule action carrying a configured override. */
+/**
+ * The pricing-rule action for the cash-out fee. The fee is charged from the
+ * schedule above; a rule under this action is only shown on the price list.
+ */
 export const CASHOUT_FEE_ACTION = 'cash_out_fee';
 
 /**
  * What comes off a cash-out of this size.
  *
- * Rounded UP, so Bault never quotes a fee lower than the one it takes. A cent
- * in the platform's favour on a rounding boundary is defensible; a cent the
- * other way means the quote was wrong.
+ * Rounded UP, so Bault never quotes a fee lower than the one it takes.
  */
 export function cashOutFeeMinor(amountMinor: number): number {
   if (amountMinor <= 0) return 0;
@@ -66,15 +52,12 @@ export function cashOutFeeMinor(amountMinor: number): number {
  * What a cash-out moves, in one place: the quote, the payout and the ledger all
  * read it from here.
  *
- * The collector asks for `grossMinor`, and that — exactly that — leaves the
- * wallet: `netMinor` as the withdrawal the provider pays out, and `feeMinor` as
- * its own row beside it, so the statement still shows both numbers. These three
- * used to be worked out in three places. The quote promised $193 out of $200;
- * the provider was sent $193; and the ledger debited $200 AND a $7 fee, so every
- * cash-out took its fee twice (F004).
+ * The collector asks for `grossMinor`, and exactly that leaves the wallet:
+ * `netMinor` as the withdrawal the provider pays out, and `feeMinor` as its own
+ * row beside it, so the statement shows both and the fee is never taken twice.
  *
  * `waivedMinor` is what a membership waived of the fee at completion. It can
- * only lower the fee — the collector receives more, and is still debited
+ * only lower the fee: the collector receives more, and is still debited
  * exactly what they asked for.
  */
 export interface CashOutSettlement {
@@ -101,11 +84,9 @@ export function cashOutNetMinor(amountMinor: number): number {
 /**
  * What a reversed card payment costs the account it was credited to.
  *
- * Not a punishment: the provider charges Bault a fee for handling the dispute
- * regardless of who wins it, and the account that received the money is the one
- * that caused it. Recording it as a fee on the ledger — rather than quietly
- * absorbing it — is also what makes the reversal visible to the collector at
- * all, which matters when the first they hear of it is a negative balance.
+ * The provider charges Bault a fee for handling the dispute whoever wins it,
+ * and the account that received the money caused it. Recording it on the
+ * ledger also makes the reversal visible to the collector.
  */
 export const CHARGEBACK_FEE_MINOR = 2_500; // $25
 export const CHARGEBACK_FEE_ACTION = 'chargeback_fee';
@@ -115,18 +96,12 @@ export const CHARGEBACK_FEE_ACTION = 'chargeback_fee';
    ============================================================ */
 
 /**
- * How a top-up can be made, and — the part that matters — whether it settles by
- * itself.
+ * How a top-up can be made, and whether it settles by itself.
  *
- * This is the distinction the product was missing. A card or PayPal Goods &
- * Services payment is confirmed by the provider, so nothing needs a human: the
- * balance can move the moment the payment settles. A bank transfer or a PayPal
- * Friends & Family payment is confirmed by nothing, so a person has to look at
- * a statement and say "yes, that arrived" — which is exactly what the wallet
- * request workflow is for.
- *
- * Treating those two as the same thing is what made every top-up wait on a
- * reviewer, including the ones a provider had already guaranteed.
+ * A card or PayPal Goods & Services payment is confirmed by the provider, so
+ * the balance can move the moment the payment settles. A bank transfer or a
+ * PayPal Friends & Family payment is confirmed by nothing, so a person has to
+ * see it arrive, which is what the wallet request workflow is for.
  */
 export interface FundingRoute {
   key: string;
