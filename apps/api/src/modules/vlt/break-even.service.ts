@@ -114,6 +114,7 @@ export class BreakEvenService {
         description: item.description,
         typeClass: item.typeClass,
         receivedAt: item.receivedAt,
+        lotBroken: item.lotBroken,
       })
       .from(item)
       .where(and(eq(item.ownerId, userId), inArray(item.lifecycleState, ['stored', 'listed', 'on-hold'])));
@@ -162,7 +163,8 @@ export class BreakEvenService {
       const monthsHeld = it.receivedAt
         ? Math.max(1, Math.round((Date.now() - new Date(it.receivedAt).getTime()) / (30 * 86_400_000)))
         : 1;
-      const perMonth = acc.storagePeriods > 0 ? acc.storage / monthsHeld : 0;
+      // A split lot accrues nothing more: its cards are billed instead.
+      const perMonth = acc.storagePeriods > 0 && !it.lotBroken ? acc.storage / monthsHeld : 0;
       const projectedYearMinor = Math.round(perMonth * 12);
 
       const comp = comparables.get(it.typeClass);

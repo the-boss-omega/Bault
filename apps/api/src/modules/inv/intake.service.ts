@@ -524,6 +524,8 @@ export class IntakeService {
       produced.push(child);
     }
     // Mark the lot broken (it stays in the ledger as the origin of the children).
+    // It stays `stored` on its bin, so the storage sweep and every count of
+    // shelf stock skip it on `lot_broken`.
     await tx.update(item).set({ lotBroken: true, updatedAt: new Date() }).where(eq(item.id, lotItemId));
     return { lotItemId, producedCount: produced.length, items: produced };
   }

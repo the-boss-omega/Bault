@@ -79,6 +79,45 @@ describe('INV intake & custody', () => {
     expect(second.status).toBe(400);
   });
 
+  /**
+   * The split lot stays `stored` on its shelf as the record its cards came
+   * from. Nothing that counts what is on a shelf, or what is still costing its
+   * owner storage, may count it as well as the cards.
+   */
+  it('stops counting a split lot as shelf stock or as storage that accrues (F006)', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const collector = await signIn(SEED.collector);
+    const lot = await intakeFor(operator, SEED.collector, { typeClass: 'sealed_box', isLot: true, lotSize: 3 });
+    const binCount = async () =>
+      ((await operator.get('/custody/bins')).body as { id: string; itemCount: number }[]).find((b) => b.id === lot.binId)!
+        .itemCount;
+    const yieldCount = async () =>
+      ((await admin.get('/admin/shelf-yield')).body.shelves as { binId: string; itemCount: number }[]).find(
+        (s) => s.binId === lot.binId,
+      )?.itemCount ?? 0;
+    const shelfBefore = await binCount();
+    const yieldBefore = await yieldCount();
+
+    const broken = await operator.post(`/intake/items/${lot.id}/break-lot`);
+    expect(broken.status).toBe(201);
+
+    // Three cards arrived on the shelf and the lot did not: it is the same goods.
+    expect(await binCount()).toBe(shelfBefore - 1 + 3);
+    expect(await yieldCount()).toBe(yieldBefore - 1 + 3);
+
+    // Nothing more will be charged on the lot, so no next charge is named.
+    const storage = await collector.get(`/vault/items/${lot.id}/storage`);
+    expect(storage.status).toBe(200);
+    expect(storage.body.nextChargeAt).toBeNull();
+
+    // Break-Even Watch still lists it, as the vault does, with nothing more to pay.
+    const watch = (await collector.get('/vault/break-even')).body as {
+      items: { itemId: string; projectedYearMinor: number }[];
+    };
+    expect(watch.items.find((i) => i.itemId === lot.id)?.projectedYearMinor).toBe(0);
+  });
+
   it('records a correction in change history and relocates with source + destination', async () => {
     const operator = await signIn(SEED.operator);
     const item = await intakeFor(operator, SEED.collector, { typeClass: 'small_collectible' });

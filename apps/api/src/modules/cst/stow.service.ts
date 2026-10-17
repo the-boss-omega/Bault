@@ -115,11 +115,14 @@ export class StowService {
      * building. Converting that to a uuid would fail the whole query (and with
      * it the stow suggestion); compared as text, an external location simply
      * matches none of these shelves.
+     *
+     * A split lot keeps its bin as the record of where its cards came from, and
+     * its cards are on the shelf as items of their own, so it is not counted.
      */
     const counts = this.db
       .select({ binId: item.binId, n: sql<number>`count(*)::int`.as('n') })
       .from(item)
-      .where(sql`${item.binId} is not null`)
+      .where(sql`${item.binId} is not null and not ${item.lotBroken}`)
       .groupBy(item.binId)
       .as('counts');
 

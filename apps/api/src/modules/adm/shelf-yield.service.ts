@@ -52,6 +52,13 @@ export interface CustomerYieldRow {
   deadItemCount: number;
 }
 
+/**
+ * What occupies a shelf: anything still on it, less a split lot, which keeps its
+ * bin as the record its cards came from while the cards sit there as items of
+ * their own.
+ */
+const SHELVED: Array<'stored' | 'listed' | 'on-hold'> = ['stored', 'listed', 'on-hold'];
+
 const MS_PER_DAY = 86_400_000;
 const DAYS_PER_MONTH = 30;
 
@@ -158,7 +165,7 @@ export class ShelfYieldService {
         receivedAt: item.receivedAt,
       })
       .from(item)
-      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, ['stored', 'listed', 'on-hold'])));
+      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, SHELVED), eq(item.lotBroken, false)));
 
     const ids = shelved.map((s) => s.itemId);
     const [revenue, slotDays, bins] = await Promise.all([
@@ -282,7 +289,7 @@ export class ShelfYieldService {
       })
       .from(item)
       .innerJoin(userAccount, eq(userAccount.id, item.ownerId))
-      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, ['stored', 'listed', 'on-hold'])));
+      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, SHELVED), eq(item.lotBroken, false)));
 
     const real = shelved.filter((s) => !s.email.toLowerCase().endsWith('@fixture.bault.test'));
     const ids = real.map((s) => s.itemId);
