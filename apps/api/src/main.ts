@@ -98,13 +98,16 @@ async function bootstrap(): Promise<void> {
    * Another site cannot act through a visitor's browser.
    *
    * Before the body parser, so a cross-site write is refused without its body
-   * ever being read. Writes must come from the app's own origin or one named in
-   * `CORS_ORIGINS`; a request with no `Origin` is not a browser steered by
-   * another page and passes. The payment webhook is exempt: PayPal is not a
-   * browser, and its signature is what authenticates it. See `cross-site.ts`.
+   * ever being read. Writes must come from the app's own origin, one named in
+   * `CORS_ORIGINS`, or in development the preview server; a request with no
+   * `Origin` is not a browser steered by another page and passes. The payment
+   * webhook is exempt: PayPal is not a browser, and its signature is what
+   * authenticates it. See `cross-site.ts`.
    */
   app.use(
-    sameOriginWrites(writeOrigins(env.APP_BASE_URL, env.CORS_ORIGINS), ['/api/v1/webhooks/payment']),
+    sameOriginWrites(writeOrigins(env.APP_BASE_URL, env.CORS_ORIGINS, env.NODE_ENV), [
+      '/api/v1/webhooks/payment',
+    ]),
   );
   app.use(jsonBodiesOnly());
 

@@ -58,13 +58,27 @@ export function jsonBodiesOnly() {
 }
 
 /**
- * The origins a browser may write from: the app itself, and whatever
- * `CORS_ORIGINS` names. Normalised through `URL` so a trailing slash or a
- * default port in the configuration cannot make the comparison miss.
+ * `vite preview` (apps/web/vite.config.ts), which serves the built app on
+ * its own origin. `pnpm tunnel` puts it behind its link and names that link in
+ * `CORS_ORIGINS` for the API it starts.
  */
-export function writeOrigins(appBaseUrl: string, corsOrigins: string): Set<string> {
+const DEVELOPMENT_ORIGINS = ['http://localhost:4173', 'http://127.0.0.1:4173'];
+
+/**
+ * The origins a browser may write from: the app itself, whatever
+ * `CORS_ORIGINS` names, and in development the preview server. Production and
+ * test get the configured list and nothing else. Normalised through `URL` so a
+ * trailing slash or a default port in the configuration cannot make the
+ * comparison miss.
+ */
+export function writeOrigins(
+  appBaseUrl: string,
+  corsOrigins: string,
+  nodeEnv: string,
+): Set<string> {
   const out = new Set<string>();
-  for (const raw of [appBaseUrl, ...corsOrigins.split(',')]) {
+  const extra = nodeEnv === 'development' ? DEVELOPMENT_ORIGINS : [];
+  for (const raw of [appBaseUrl, ...corsOrigins.split(','), ...extra]) {
     const value = raw.trim();
     if (!value) continue;
     try {
