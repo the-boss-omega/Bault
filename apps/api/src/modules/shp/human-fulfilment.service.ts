@@ -112,28 +112,35 @@ export class HumanFulfilmentService {
     });
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
-    const [created] = await this.db
-      .insert(shipment)
-      .values({
-        code: newShipmentCode(),
-        userId,
-        itemIds: items.map((i) => i.id),
-        fulfilmentMethod: 'hand_delivery',
-        destinationAddress: input.deliveryAddress.trim(),
-        destinationCountry: input.destinationCountry.trim().toUpperCase(),
-        // A hand delivery has no postal routing: a person is walking to a door.
-        destinationPostalCode: '',
-        recipientName: input.recipientName?.trim() || null,
-        pickupAddress: input.pickupAddress.trim(),
-        pickupFrom: new Date(input.pickupFrom),
-        pickupTo: new Date(input.pickupTo),
-        deliverFrom: new Date(input.deliverFrom),
-        deliverTo: new Date(input.deliverTo),
-        customerNotes: input.customerNotes?.trim() || null,
-        currency: DEFAULT_CURRENCY,
-        status: 'requested',
-      })
-      .returning();
+    // The items again, locked, and not on another open parcel, as creating a
+    // shipment checks them: two requests for the same card cannot both find it
+    // free and both put it on a parcel.
+    const [created] = await this.db.transaction(async (tx) => {
+      await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
+      await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
+      return tx
+        .insert(shipment)
+        .values({
+          code: newShipmentCode(),
+          userId,
+          itemIds: items.map((i) => i.id),
+          fulfilmentMethod: 'hand_delivery',
+          destinationAddress: input.deliveryAddress.trim(),
+          destinationCountry: input.destinationCountry.trim().toUpperCase(),
+          // A hand delivery has no postal routing: a person is walking to a door.
+          destinationPostalCode: '',
+          recipientName: input.recipientName?.trim() || null,
+          pickupAddress: input.pickupAddress.trim(),
+          pickupFrom: new Date(input.pickupFrom),
+          pickupTo: new Date(input.pickupTo),
+          deliverFrom: new Date(input.deliverFrom),
+          deliverTo: new Date(input.deliverTo),
+          customerNotes: input.customerNotes?.trim() || null,
+          currency: DEFAULT_CURRENCY,
+          status: 'requested',
+        })
+        .returning();
+    });
     if (!created) throw AppError.validation('Failed to raise the request');
 
     await this.db.transaction(async (tx) => {
