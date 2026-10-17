@@ -66,6 +66,13 @@ export const ErrorCode = {
   MFA_REQUIRED_FOR_ROLE: 'mfa_required_for_role',
   /** The stored two-factor secret cannot be opened, for example after a key change (409). */
   MFA_FACTOR_UNREADABLE: 'mfa_factor_unreadable',
+  /**
+   * A webhook delivery whose signature the provider did not vouch for, or that
+   * is missing what verification needs (400). Its own code so a forged or
+   * misconfigured delivery is told apart from the provider being unreachable,
+   * which stays a 5xx and is retried.
+   */
+  WEBHOOK_UNVERIFIED: 'webhook_unverified',
   /** Requeue of an outbox message that is not parked — delivered, or still being retried. */
   OUTBOX_NOT_PARKED: 'outbox_not_parked',
   INTERNAL: 'internal',

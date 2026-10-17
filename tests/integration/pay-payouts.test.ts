@@ -387,3 +387,23 @@ describe('PAY a payout that comes back after it was paid', () => {
     expect(report.mismatches.filter((m) => m.walletRequestId === id)).toEqual([]);
   }, 30_000);
 });
+
+/**
+ * A delivery that cannot be authenticated is refused with a 400 the provider
+ * can see, never a 500 it keeps retrying. The sandbox provider checks no
+ * signature, except that it refuses one that says `invalid`, so the API's
+ * handling of a bad signature is exercised here; the PayPal adapter's own
+ * verdict is pinned in `tests3/contract/paypal-adapter.test.ts`.
+ */
+describe('PAY a webhook that cannot be verified', () => {
+  it('is refused with a 400 naming why, and applies nothing', async () => {
+    const res = await fetch(`${BASE}/webhooks/payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paypal-transmission-sig': 'invalid' },
+      body: JSON.stringify({ id: `WH-${Date.now()}-forged`, type: 'PAYMENT.PAYOUTS-ITEM.SUCCEEDED', data: {} }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('webhook_unverified');
+  });
+});

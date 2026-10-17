@@ -1,8 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
-import type { WebhookDelivery } from '@bault/adapters';
+import { WebhookVerificationError, type WebhookDelivery, type WebhookEvent } from '@bault/adapters';
+import { AppError } from '../../shared/errors/app-error';
+import { ErrorCode } from '../../shared/errors/error-codes';
 import { PAYMENT_ADAPTER } from '../../shared/adapters/adapters.module';
 import type { PaymentAdapter } from '@bault/adapters';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
@@ -19,6 +21,8 @@ import { WalletRequestService } from './wallet-request.service';
  */
 @Injectable()
 export class TopupService {
+  private readonly logger = new Logger(TopupService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
@@ -76,8 +80,21 @@ export class TopupService {
    */
   async handleWebhook(delivery: WebhookDelivery): Promise<{ outcome: string }> {
     // Throws on anything it cannot authenticate. Nothing below this line runs
-    // for a delivery the provider did not vouch for.
-    const event = await this.payment.verifyWebhook(delivery);
+    // for a delivery the provider did not vouch for. That refusal is a 400 the
+    // sender can see; the adapter's plain Error made it a 500, which PayPal
+    // keeps retrying. Any other failure (PayPal unreachable) stays a 5xx.
+    let event: WebhookEvent;
+    try {
+      event = await this.payment.verifyWebhook(delivery);
+    } catch (e) {
+      if (!(e instanceof WebhookVerificationError)) throw e;
+      this.logger.warn(`Payment webhook refused: ${e.message}`);
+      throw new AppError(
+        ErrorCode.WEBHOOK_UNVERIFIED,
+        'This delivery could not be verified as coming from the payment provider.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     if (!event.id) return { outcome: 'ignored' };
     const [existing] = await this.db
       .select({ id: externalPayment.id })
