@@ -224,14 +224,16 @@ export class MembershipService {
     const tier = membershipTier(tierKey)!;
 
     return this.db.transaction(async (tx) => {
-      await this.wallet.assertNotBlocked(userId, tx as Database);
-
+      // The membership row, then the wallet: the order the renewal job takes
+      // them in. Taking the wallet first let a subscribe and a renewal of the
+      // same member each hold one and wait for the other.
       const [existing] = await tx
         .select()
         .from(membership)
         .where(eq(membership.userId, userId))
         .for('update')
         .limit(1);
+      await this.wallet.assertNotBlocked(userId, tx as Database);
 
       const now = new Date();
       const live = existing && existing.status !== 'ended' ? existing : null;
