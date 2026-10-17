@@ -6,6 +6,7 @@ import { loadEnv } from '@bault/config';
 import { AppError } from '../../shared/errors/app-error';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { ALLOW_SUSPENDED_KEY } from './allow-suspended.decorator';
+import { ALLOW_ANY_STATUS_KEY } from './allow-any-status.decorator';
 import { SessionService } from './session.service';
 
 /**
@@ -20,8 +21,9 @@ import { SessionService } from './session.service';
  *
  * ONE EXCEPTION, at step 2. A route marked `@AllowSuspended()` (the helpdesk and
  * the profile probe) is reachable by a SUSPENDED account, so a holder suspended
- * automatically for debt can still ask for help. `closed` is never let through:
- * that state is terminal.
+ * automatically for debt can still ask for help. `closed` is never let through
+ * there: that state is terminal. Signing out (`@AllowAnyStatus()`) is reachable
+ * by every status, because it only ends the session it is given.
  *
  * Runs before MfaEnrollmentGuard and RolesGuard.
  */
@@ -44,15 +46,23 @@ export class SessionAuthGuard implements CanActivate {
       ctx.getClass(),
     ]);
 
+    const allowAnyStatus = this.reflector.getAllAndOverride<boolean>(ALLOW_ANY_STATUS_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
+
     const req = ctx.switchToHttp().getRequest<Request>();
     const raw = this.readSessionCookie(req);
 
     if (raw) {
       const user = await this.sessions.resolve(raw);
       if (user) {
-        // `suspended` may pass on an explicitly-marked route; `closed` never does.
+        // `suspended` may pass on an explicitly-marked route; `closed` only to
+        // sign out.
         const permitted =
-          user.status === 'active' || (allowSuspended === true && user.status === 'suspended');
+          user.status === 'active' ||
+          allowAnyStatus === true ||
+          (allowSuspended === true && user.status === 'suspended');
         if (!permitted) throw AppError.accountSuspended();
         req.user = user;
       }

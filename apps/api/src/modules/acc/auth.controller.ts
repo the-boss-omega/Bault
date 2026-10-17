@@ -6,6 +6,7 @@ import { loadEnv } from '@bault/config';
 import { AuthBucket } from '../../shared/throttle/auth-bucket';
 import { AppError } from '../../shared/errors/app-error';
 import { Public } from './public.decorator';
+import { AllowAnyStatus } from './allow-any-status.decorator';
 import { AllowWithoutMfa } from './mfa/allow-without-mfa.decorator';
 import { MfaService } from './mfa/mfa.service';
 
@@ -161,8 +162,13 @@ export class AuthController {
     return { id: user.id, role: user.role, mfaEnrollmentRequired: false };
   }
 
-  /** Reachable before a required second factor is enrolled: a way out must always exist. */
+  /**
+   * Reachable before a required second factor is enrolled, and by an account
+   * of any status: a way out must always exist, and ending a session grants
+   * nothing.
+   */
   @AllowWithoutMfa()
+  @AllowAnyStatus()
   @Post('logout')
   @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
