@@ -35,10 +35,18 @@ export const ErrorCode = {
   NOT_FOUND: 'not_found',
   CONFLICT: 'conflict',
   /**
-   * The payment provider failed or could not be reached (502). Its own code so
-   * a PayPal outage or a refused payout is told apart from a bug in Bault.
+   * A provider (payment or shipping) failed, could not be reached, or refused
+   * Bault's own credentials (502). Its own code so a PayPal or carrier outage,
+   * or a refused payout, is told apart from a bug in Bault, and so a provider's
+   * 401 never reaches the SPA as a signed-out session.
    */
   PROVIDER_UNAVAILABLE: 'provider_unavailable',
+  /**
+   * A provider refused what the customer entered, such as an address a carrier
+   * cannot rate (400). The message carries the provider's reason, because it
+   * is the customer who can fix it.
+   */
+  PROVIDER_REJECTED: 'provider_rejected',
   /**
    * The object store failed or could not be reached (503). Its own code so an
    * operator can tell a store outage, which trying again later fixes, from an

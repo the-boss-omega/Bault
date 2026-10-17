@@ -62,11 +62,18 @@ const EEL_PFC_CANADA = 'NOEEI 30.36';
 /** The exemption citation for a low-value export anywhere else (15 CFR 30.37(a)). */
 const EEL_PFC_LOW_VALUE = 'NOEEI 30.37(a)';
 
-/** An HTTP error from EasyPost, carrying the status so a caller can tell a refusal from an outage. */
+/**
+ * An HTTP error from EasyPost, carrying the status so a caller can tell a refusal from an outage.
+ *
+ * `status` is EASYPOST's answer to Bault, not an answer for Bault's caller: a
+ * 401 here is Bault's key refused. `detail` is EasyPost's own sentence about
+ * what it rejected, without the status and path the message adds.
+ */
 export class EasyPostError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly detail?: string,
   ) {
     super(message);
     this.name = 'EasyPostError';
@@ -140,7 +147,7 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
       } catch {
         /* keep the raw body */
       }
-      throw new EasyPostError(`EasyPost ${res.status} on ${path}: ${detail}`, res.status);
+      throw new EasyPostError(`EasyPost ${res.status} on ${path}: ${detail}`, res.status, detail);
     }
     return JSON.parse(text) as T;
   }
