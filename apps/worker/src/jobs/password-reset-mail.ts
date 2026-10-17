@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 import { loadEnv } from '@bault/config';
 import type { EmailAdapter } from '@bault/adapters';
 import { log } from '../log';
@@ -15,6 +15,17 @@ import { log } from '../log';
  * the message and only its hash is stored. A link in the outbox payload would
  * leave a working reset link in a table.
  *
+ * ON THE DISPATCHER'S TRANSACTION. `db` is the connection that claimed the
+ * outbox message, and the token is written in the same transaction that marks
+ * it dispatched. Minted on a connection of its own, a token outlived a dispatch
+ * that failed to commit, the message was sent again, and the account held two
+ * working reset links. Now a failed dispatch takes its token with it, and the
+ * link already mailed opens nothing.
+ *
+ * Only an account that can still use a password is sent one: active,
+ * suspended (it may sign in, to reach the helpdesk) or pending (it may verify
+ * and then sign in). A closed account is never mailed.
+ *
  * Mirrored BY VALUE from the API (the worker does not import it): the event
  * name from `PasswordService`, the token shape from `shared/tokens.ts`, and the
  * link format from `VerificationService`. The one-hour life is set only here.
@@ -24,22 +35,24 @@ export const PASSWORD_RESET_REQUESTED = 'password_reset_requested';
 const RESET_TTL_MINUTES = 60;
 
 export async function sendPasswordReset(
-  pool: Pool,
+  db: PoolClient,
   payload: Record<string, unknown> | null,
   mailer: EmailAdapter,
 ): Promise<void> {
   const email = typeof payload?.email === 'string' ? payload.email : '';
   if (!email) return;
 
-  const { rows } = await pool.query<{ id: string }>(`SELECT id FROM user_account WHERE email = $1 LIMIT 1`, [
-    email,
-  ]);
-  // Nobody by that address. The caller was told "sent if it exists" either way.
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT id FROM user_account WHERE email = $1 AND status IN ('active', 'suspended', 'pending') LIMIT 1`,
+    [email],
+  );
+  // Nobody by that address, or nobody who could use a password. The caller was
+  // told "sent if it exists" either way.
   const user = rows[0];
   if (!user) return;
 
   const raw = randomBytes(32).toString('hex');
-  await pool.query(
+  await db.query(
     `INSERT INTO verification_token (user_id, type, token_hash, expires_at)
      VALUES ($1, 'password_reset', $2, now() + make_interval(mins => $3))`,
     [user.id, createHash('sha256').update(raw).digest('hex'), RESET_TTL_MINUTES],
