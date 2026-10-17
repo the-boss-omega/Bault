@@ -15,12 +15,12 @@ import { base32Encode } from '../../apps/api/src/modules/acc/mfa/totp';
 /**
  * Two-factor sign-in (TOTP), end to end, on fresh accounts.
  *
- * Bault was protected by a password alone, including the administrator who can
- * reassign ownership of every card in the vault and approve every cash-out. A
- * password is phished, reused and guessed; these pin the second factor that
- * now stands behind it — how an account enrols, how sign-in asks for the code,
- * and every way the second step could be got around: replaying a code, racing
- * two submissions of one code, reusing a challenge, guessing past the lockout.
+ * A password is phished, reused and guessed, and an administrator can reassign
+ * ownership of every card in the vault and approve every cash-out. These pin the
+ * second factor that stands behind the password: how an account enrols, how
+ * sign-in asks for the code, and every way the second step could be got around:
+ * replaying a code, racing two submissions of one code, reusing a challenge,
+ * guessing past the lockout.
  *
  * None of this depends on which roles the API under test REQUIRES to enrol —
  * any account may enrol, and an enrolled account is challenged whatever its

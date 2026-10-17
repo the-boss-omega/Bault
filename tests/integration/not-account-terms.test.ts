@@ -2,14 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, signIn } from './helpers/http';
 
 /**
- * The figures the legal documents and the FAQ point at (E21).
+ * The figures the legal documents and the FAQ point at.
  *
- * The balance policy used to state "14 days", "0.05% a day" and "-$20.00" as
- * prose, while the numbers the daily sweeps actually use are environment
- * variables. Changing `WALLET_DEBT_INTEREST_BPS` would have made a document
- * about charging people interest false without anybody noticing. The documents
- * now say the current figures are shown in the app, and this is where the app
- * gets them: from the same configuration and constants the charging code reads.
+ * The numbers the daily sweeps use are environment variables, so a document
+ * that stated them as prose would go false, unnoticed, the moment
+ * `WALLET_DEBT_INTEREST_BPS` changed. The documents say the current figures are
+ * shown in the app, and this is where the app gets them: from the same
+ * configuration and constants the charging code reads.
  *
  * Requires a running API.
  */

@@ -4,16 +4,12 @@ import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http
 /**
  * Section 8 — outbound shipping.
  *
- * The old flow's shape was right and almost everything inside it was synthetic:
- * two invented prices that were the same two prices for every parcel Bault had
- * ever quoted, because the rate request hard-coded the destination and assumed
- * 500 g per item.
- *
- * So the tests worth having are the ones that would still pass against the old
- * stub if the change were cosmetic: a quote that MOVES when the parcel gets
- * heavier or the destination gets further, a service that refuses a parcel it
- * cannot legally carry, an insurance figure that forces a signature, and a
- * request that can be changed, merged and called off after it exists.
+ * A quote has to come from the parcel itself: what it weighs, what box it goes
+ * in and where it is going. So the tests worth having are the ones a stub with
+ * fixed prices would fail: a quote that MOVES when the parcel gets heavier or
+ * the destination gets further, a service that refuses a parcel it cannot
+ * legally carry, an insurance figure that forces a signature, and a request that
+ * can be changed, merged and called off after it exists.
  *
  * Requires a running API + a freshly seeded DB.
  */
@@ -59,7 +55,7 @@ describe('SHP outbound shipping', () => {
 
     const services = res.body.services as Array<Record<string, unknown>>;
     expect(services.length).toBeGreaterThan(3);
-    // The limits ARE the product — a line-up without them is the old stub.
+    // The limits ARE the product: a line-up without them is a stub.
     for (const s of services) {
       expect(typeof s.maxWeightGrams).toBe('number');
       expect(typeof s.maxInsuredValueMinor).toBe('number');
@@ -423,9 +419,8 @@ describe('SHP outbound shipping', () => {
     expect(fee).toBeGreaterThan(0);
 
     /**
-     * No label was bought — that happens at dispatch — so the postage was never
-     * spent. The collector is out the restocking fee and nothing else (F018).
-     * It used to keep the whole shipping charge as well.
+     * No label was bought (that happens at dispatch), so the postage was never
+     * spent. The collector is out the restocking fee and nothing else.
      */
     expect(cancelled.body.refundedMinor).toBe(paid);
     expect((await collector.get('/finance/wallet')).body.amount).toBe(beforePaying - fee);
@@ -551,8 +546,8 @@ describe('SHP outbound shipping', () => {
       carrier: pick.carrier,
       serviceLevel: pick.serviceLevel,
     });
-    // Held, not charged. The old behaviour drove the wallet negative, which
-    // blocked every other service the collector had.
+    // Held, not charged: charging would drive the wallet negative, which blocks
+    // every other service the collector has.
     expect(selected.body.status).toBe('awaiting_payment');
     expect(selected.body.shortfallMinor).toBe(pick.totalMinor - before.amount);
     expect(selected.body.paymentDueAt).toBeTruthy();
@@ -762,10 +757,9 @@ describe('SHP outbound shipping', () => {
     expect(shipment.serviceKey).toBe('direct_overnight');
 
     /**
-     * F019. And it can actually LEAVE. Dispatch demanded a scanned set equal to
-     * the shipment's items, and this shipment has none by design, so a paid
-     * overnight order sat in `rates_selected` forever. What the operator holds
-     * at the dock is the parcel, so the parcel is what they scan.
+     * And it can actually LEAVE. This shipment has no items by design, so
+     * dispatch cannot ask for a scanned set equal to them. What the operator
+     * holds at the dock is the parcel, so the parcel is what they scan.
      */
     const form = { carrier: 'FedEx', packageWeightGrams: 180, fulfillmentNotes: 'Overnight envelope, two slabs.' };
     const wrongParcel = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {

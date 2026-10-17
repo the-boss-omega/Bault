@@ -4,12 +4,11 @@ import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http
 /**
  * Where a card is in the vault, for every state a card can be in.
  *
- * The vault answers three questions — what do I hold, what is frozen, what has
- * left — and every lifecycle state has to land in exactly one of them. Two did
- * not land anywhere (`at_grader`, `discarded`), and one kind of departure, a
- * card shipped home, never reached History at all: the query looked for an
- * owner on the state change, and no state change records one. A card that is
- * missing from every tab reads to its owner as a card Bault lost.
+ * The vault answers three questions (what do I hold, what is frozen, what has
+ * left), and every lifecycle state has to land in exactly one of them,
+ * `at_grader` and `discarded` included. A card shipped home has to reach
+ * History even though no state change records an owner. A card that is missing
+ * from every tab reads to its owner as a card Bault lost.
  *
  * Requires a running API + a freshly seeded DB.
  */

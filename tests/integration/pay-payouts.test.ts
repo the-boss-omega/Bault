@@ -4,19 +4,17 @@ import { BASE, SEED, fundWallet, signIn, type Client } from './helpers/http';
 /**
  * A cash-out leaves Bault. These are the tests for the moment it does.
  *
- * Completing a cash-out used to call the payout provider from inside the
- * database transaction that debits the wallet, with no timeout, and to call
- * whatever came back a success. Four ways that lost money:
+ * Four ways a payout can lose money, each pinned here:
  *
- *   - the provider was paid the amount less the fee while the ledger debited the
- *     amount AND the fee, so the fee was taken twice (F004);
- *   - any failure after the provider paid rolled back the debit but not the
- *     money, so cash left with no debit behind it (F172);
- *   - a hung provider held a pool connection and the wallet lock for as long as
- *     it hung (N6);
- *   - a payout PayPal had only ACCEPTED was recorded as completed, and nothing
- *     ever looked at it again — a payout that later failed left the collector
- *     debited for money that never arrived (F029, F040).
+ *   - the provider is paid the amount less the fee, so the ledger must debit
+ *     the amount once (net plus fee), never the amount AND the fee;
+ *   - a failure after the provider paid must not roll back the debit, or cash
+ *     leaves with no debit behind it;
+ *   - the provider is called outside the transaction that debits the wallet, so
+ *     a hung provider holds neither a pool connection nor the wallet lock;
+ *   - a payout PayPal has only ACCEPTED stays pending until it settles or
+ *     bounces, so one that later fails does not leave the collector debited for
+ *     money that never arrived.
  *
  * The sandbox provider takes instructions from the destination, so each case
  * here can be staged without a real provider: `+payout-slow`, `+payout-lost`,
@@ -160,8 +158,7 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
 
     // And nothing is locked: another movement on the same wallet goes through
-    // while the provider is still on the line. Before, it waited behind the
-    // provider call, because the wallet lock was held across it.
+    // while the provider is still on the line.
     await fundWallet(SEED.collector2, 1_234);
     expect(payoutDone).toBe(false);
 

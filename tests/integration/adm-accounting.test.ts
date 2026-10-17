@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { SEED, SEED_USERNAME, fundWallet, signIn, type Client } from './helpers/http';
 
 /**
- * The exports an accountant needs (N40).
+ * The exports an accountant needs.
  *
  * `ledger_record` is a single-entry wallet ledger: a fee comes off a customer
- * and is credited to no account of Bault's, so Bault's revenue existed only as
- * a sum nobody could run, and there was no way to compare the ledger with the
- * money that actually moved through PayPal. No tax logic is attempted here —
- * that is an accountant's call — only the three reports one needs to make it:
+ * and is credited to no account of Bault's, so Bault's revenue is a sum these
+ * reports have to run, and the ledger has to be compared with the money that
+ * moved through PayPal. No tax logic is attempted here (that is an accountant's
+ * call), only the three reports one needs to make it:
  *
  *   - every ledger row in a range, as CSV;
  *   - a month's totals, with Bault's revenue kept apart from customer money in
@@ -133,7 +133,7 @@ describe('N40 monthly summary', () => {
     await fundWallet(SEED.collector2, 50_000);
     const balanceBefore = await balanceOf(golden);
     await cashOut(SEED.collector2, 20_000);
-    // A cash-out debits exactly what was asked for (F004): the net that is
+    // A cash-out debits exactly what was asked for: the net that is
     // paid out, as `withdrawal`, and the fee as a row of its own. Whatever the
     // fee came to — a membership may waive it — it is inside the 20,000.
     const debited = balanceBefore - (await balanceOf(golden));
@@ -240,10 +240,10 @@ describe('N40 reconciliation: external payments against the ledger', () => {
   });
 
   it('reports money that left a wallet with no payout behind it', async () => {
-    // The seed carries one: Golden's $1,000 withdrawal from before cash-out was
-    // a reviewed request, written to the ledger by a path that never recorded a
-    // payment at any provider. On a live system that is precisely the row an
-    // accountant must be shown — a debit nobody can match to money that moved.
+    // The seed carries one: Golden's $1,000 withdrawal, written to the ledger
+    // with no payment recorded at any provider. On a live system that is
+    // precisely the row an accountant must be shown: a debit nobody can match to
+    // money that moved.
     const admin = await signIn(SEED.admin);
     const report = await reconcile(admin);
     const found = report.mismatches.find(

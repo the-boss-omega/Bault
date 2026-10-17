@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SEED, binIds, signIn, usernameOf } from './helpers/http';
 
 /**
- * US2 — batch split produces one tracked item + custody event per item (T038).
+ * Batch split produces one tracked item + custody event per item.
  */
 describe('INV batch split', () => {
   it('opens a batch and splits it into individually tracked items', async () => {

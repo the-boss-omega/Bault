@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { SEED, intakeFor, signIn } from './helpers/http';
 
 /**
- * US6 — swaps require dual consent; gift transfers require recipient approval (T087).
+ * Swaps require dual consent; gift transfers require recipient approval.
  */
 describe('MKT swaps & transfers', () => {
   async function parties() {
     const proposer = await signIn(SEED.collector);
     const responder = await signIn(SEED.collector2);
-    // Swaps and transfers are addressed by USERNAME now, not by internal id:
+    // Swaps and transfers are addressed by USERNAME, not by internal id:
     // a collector can obtain the former and has no way to see the latter.
     const responderUsername = (await responder.get('/me/profile')).body.username as string;
     return { proposer, responder, responderUsername };

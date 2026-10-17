@@ -45,14 +45,9 @@ describe('NOT notification feed', () => {
     const c = await signIn(SEED.collector);
 
     /**
-     * The endpoint returns the whole MATRIX now, not the handful of rows the
-     * user had already changed.
-     *
-     * That is a deliberate shape change and it is the point of the pass: the old
-     * array could tell a settings screen what somebody had turned off and had no
-     * way to tell it what could be turned off. The claim under test is unchanged
-     * — a default is on, an explicit opt-out is honoured — and `rows` still
-     * carries the raw evidence of what was actually chosen.
+     * The endpoint returns the whole MATRIX, so a settings screen learns what
+     * can be turned off as well as what somebody has turned off. `rows` carries
+     * the raw evidence of what was actually chosen.
      */
     type Matrix = {
       events: Array<{ eventType: string; channels: Array<{ channel: string; enabled: boolean }> }>;
@@ -79,7 +74,7 @@ describe('NOT notification feed', () => {
   });
 });
 
-/** Preferences use PUT, which the shared test Client does not expose. */
+/** Set one preference with a PUT; true when the API accepted it. */
 async function fetchPreference(
   c: { request: (m: string, p: string, b?: unknown) => Promise<{ status: number }> },
   eventType: string,

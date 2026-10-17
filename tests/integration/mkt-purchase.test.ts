@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
 /**
- * US3 / Scenario C — atomic purchase, price freeze, no self-dealing (T074).
+ * Atomic purchase, price freeze, no self-dealing.
  */
 describe('MKT direct purchase', () => {
   it('purchases atomically: buyer debited, seller credited net fee, ownership moved', async () => {

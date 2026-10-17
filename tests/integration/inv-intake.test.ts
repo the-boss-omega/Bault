@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { SEED, binIds, intakeFor, signIn, usernameOf } from './helpers/http';
 
 /**
- * US2 / Scenario B — intake creates item + custody + charge; correction keeps
- * history; relocate logs custody AND a transfer-ledger row (T037, Req 10.3/10.4).
+ * Intake creates item + custody + charge; correction keeps history; relocate
+ * logs custody AND a transfer-ledger row (Req 10.3/10.4).
  * Requires a running API + seeded DB.
  */
 describe('INV intake & custody', () => {
@@ -36,10 +36,10 @@ describe('INV intake & custody', () => {
   });
 
   /**
-   * Every item still ends up on a shelf (Requirement 10.3). What changed is who
-   * chooses it: an intake may name a bin, or ask for one with `autoStow`, but
-   * one that does neither has nowhere to put the goods and is refused. The
-   * directed-stow half of that is covered in `inv-stow.test.ts`.
+   * Every item ends up on a shelf (Requirement 10.3). An intake may name a bin,
+   * or ask for one with `autoStow`; one that does neither has nowhere to put the
+   * goods and is refused. The directed-stow half of that is covered in
+   * `tests3/integration/inv-stow.test.ts`.
    */
   it('rejects an intake that neither names a bin nor asks for one', async () => {
     const operator = await signIn(SEED.operator);
