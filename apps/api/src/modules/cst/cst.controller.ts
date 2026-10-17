@@ -153,7 +153,7 @@ export class CstController {
   }
 
   /**
-   * Where should this go? — the directed-stow answer.
+   * Where should this go? The directed-stow answer.
    *
    * The operator does not choose a shelf from a list of every shelf in the
    * company; they ask where there is room and are sent somewhere. `facilityCode`

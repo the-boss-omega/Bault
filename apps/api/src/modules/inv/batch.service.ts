@@ -25,7 +25,7 @@ export interface SplitItemInput {
  *
  * A batch-type arrival opens a batch linked to an owner. Splitting produces one
  * INDIVIDUALLY TRACKED item per entry, each with its own `batch_split` custody
- * event — all in one transaction. Each resulting item is a billable intake.
+ * event, all in one transaction. Each resulting item is a billable intake.
  */
 @Injectable()
 export class BatchService {

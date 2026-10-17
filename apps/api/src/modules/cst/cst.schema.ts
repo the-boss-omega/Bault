@@ -15,7 +15,7 @@ import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
  *
  * Item is NEVER deleted and always has exactly one owner (Principle I). Every
  * change to owner / bin / lifecycle_state writes a CustodyEvent in the SAME
- * transaction (Principle III). CustodyEvent is APPEND-ONLY (Principle II) —
+ * transaction (Principle III). CustodyEvent is APPEND-ONLY (Principle II),
  * enforced at the DB level in 0001_append_only.sql.
  */
 
@@ -211,7 +211,7 @@ export const itemChangeHistory = pgTable('item_change_history', {
 /**
  * Dedicated bin/shelf transfer ledger (Requirement 10.4). Every relocation records
  * BOTH the source (old) bin and the destination (new) bin, appended here in the same
- * transaction as the item update — a purpose-built audit trail for physical moves.
+ * transaction as the item update: a purpose-built audit trail for physical moves.
  */
 export const binTransfer = pgTable('bin_transfer', {
   id: pkId(),

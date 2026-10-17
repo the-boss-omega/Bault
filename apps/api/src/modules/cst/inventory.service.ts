@@ -285,7 +285,7 @@ export class InventoryService {
     return row;
   }
 
-  /** Every bin with what is on it — the console's locations list. */
+  /** Every bin with what is on it: the console's locations list. */
   listBins() {
     return this.stow.listWithCounts();
   }

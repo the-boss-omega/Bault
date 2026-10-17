@@ -256,7 +256,7 @@ export class VaultService {
       or(
         // Still owned, but no longer in storage.
         and(eq(item.ownerId, userId), inArray(item.lifecycleState, TERMINAL)),
-        // Previously owned — ownership has since moved on.
+        // Previously owned: ownership has since moved on.
         sql`${item.ownerId} <> ${userId}`,
       ) ?? sql`true`,
     ];

@@ -5,8 +5,8 @@ import { ErrorCode } from '../../shared/errors/error-codes';
  * Item lifecycle state machine (T044, Principle I).
  *
  * Only the transitions listed here are legal; any other is rejected. Terminal
- * states (shipped/donated/consigned) have no outgoing edges — the record still
- * persists forever (items are never deleted).
+ * states (shipped/donated/consigned/discarded) have no outgoing edges, and the
+ * record still persists forever (items are never deleted).
  */
 export type LifecycleState =
   | 'received'
@@ -30,7 +30,7 @@ const TRANSITIONS: Record<LifecycleState, LifecycleState[]> = {
   donated: [],
   consigned: [],
   /**
-   * Away at a grader. It comes back to the shelf, or — rarely — the grader
+   * Away at a grader. It comes back to the shelf, or (rarely) the grader
    * reports it lost or destroyed, which is recorded as a discard rather than
    * pretending it returned.
    */

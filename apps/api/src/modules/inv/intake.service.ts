@@ -397,7 +397,7 @@ export class IntakeService {
       binId: input.binId,
       sourceParcelId: input.parcelId,
       // The storage terms are settled here, at receipt, from the class the
-      // operator booked it under — never re-derived afterwards.
+      // operator booked it under, and never re-derived afterwards.
       oversized,
       weightGrams: input.weightGrams,
       isLot: input.isLot,

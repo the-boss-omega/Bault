@@ -21,7 +21,7 @@ export interface TransferExpectation {
 }
 
 /**
- * CST custody service (T043, Principles I–III) — THE correctness kernel.
+ * CST custody service (T043, Principles I–III): THE correctness kernel.
  *
  * Every mutation of an item's owner, bin, or lifecycle state goes through this
  * service, and each one writes a custody_event in the SAME transaction as the
@@ -134,7 +134,7 @@ export class CustodyService {
       sourceBatchId?: string;
       /** The inbound parcel this item was unpacked from, when there was one. */
       sourceParcelId?: string;
-      /** Fixes the storage terms at receipt — see `item.oversized`. */
+      /** Fixes the storage terms at receipt (see `item.oversized`). */
       oversized?: boolean;
       /** What it weighed on the bench, if anybody put it on one. */
       weightGrams?: number;
@@ -146,7 +146,7 @@ export class CustodyService {
       /**
        * `stored` (the default) for something documented on the bench and put on a
        * shelf in the same gesture. `received` for something that is on the record
-       * and not yet on a shelf — a card sold from the Bault store, owned from the
+       * and not yet on a shelf: a card sold from the Bault store, owned from the
        * moment it is paid for and shelved when an operator gets to it.
        */
       lifecycleState?: 'stored' | 'received';

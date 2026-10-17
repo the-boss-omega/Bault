@@ -44,7 +44,7 @@ class ReceiveParcelDto {
   @IsOptional() @IsString() @MaxLength(120) trackingNumber?: string;
   @IsOptional() @IsBoolean() internationalOrigin?: boolean;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
-  /** Keys from `POST /media/uploads` — never image bytes on this route. */
+  /** Keys from `POST /media/uploads`, never image bytes on this route. */
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
@@ -66,7 +66,7 @@ class OpenParcelDto {
   @IsIn(['sound', 'packaging_damaged', 'contents_damaged'])
   condition!: 'sound' | 'packaging_damaged' | 'contents_damaged';
   @IsString() @MinLength(1) @MaxLength(1000) conditionNotes!: string;
-  /** What the arrival check actually saw — evidence, not a sentence about it. */
+  /** What the arrival check actually saw: evidence, not a sentence about it. */
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 

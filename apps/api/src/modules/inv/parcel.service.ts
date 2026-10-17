@@ -68,7 +68,7 @@ export interface RegisterParcelInput {
 
 export interface ReceiveParcelInput {
   facilityCode: string;
-  /** The username written on the label. May resolve to nothing — see `receive`. */
+  /** The username written on the label. May resolve to nothing (see `receive`). */
   addressedTo?: string;
   carrier?: string;
   trackingNumber?: string;

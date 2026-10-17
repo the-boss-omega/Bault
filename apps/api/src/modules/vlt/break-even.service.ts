@@ -34,7 +34,7 @@ export interface BreakEvenRow {
   receivedAt: string | null;
   /** Storage actually billed against this item so far. Counted, never derived. */
   storageSpentMinor: number;
-  /** Everything ever charged for this item — intake, storage, services. */
+  /** Everything ever charged for this item: intake, storage, services. */
   totalSpentMinor: number;
   /** What the next twelve months of storage will cost at the current rate. */
   projectedYearMinor: number;

@@ -125,7 +125,7 @@ export class DisposalService {
       .orderBy(desc(arrivalDisposal.occurredAt));
   }
 
-  /** Every disposal, with the collector named — the warehouse/admin view. */
+  /** Every disposal, with the collector named: the warehouse/admin view. */
   listAll() {
     return this.db
       .select({
