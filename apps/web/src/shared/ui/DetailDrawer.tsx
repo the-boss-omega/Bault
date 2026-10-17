@@ -9,16 +9,11 @@ const FOCUSABLE =
 /**
  * Which overlay Escape belongs to.
  *
- * Both overlays listened on `document` in the capture phase, and capture
- * handlers fire in registration order — so the DRAWER, which mounts first, saw
- * Escape first and called `stopPropagation()`. Pressing Escape on the "donate
- * this card, this cannot be undone" confirmation therefore closed the entire
- * drawer and took the confirmation with it, losing the reader's place on a card
- * they were part-way through deciding about.
- *
- * The topmost overlay is the one a person means, so the stack decides and the
- * others stand down. Module-level because it describes the page rather than any
- * component, and there is exactly one page.
+ * Both overlays listen on `document` in the capture phase, and capture handlers
+ * fire in registration order, so a drawer would see Escape before a
+ * confirmation opened on top of it. The topmost overlay is the one a person
+ * means, so this stack decides and the others stand down. Module-level because
+ * it describes the page, not any one component.
  */
 const overlays: symbol[] = [];
 
@@ -33,12 +28,8 @@ function pushOverlay(token: symbol): () => void {
 const isTopOverlay = (token: symbol) => overlays[overlays.length - 1] === token;
 
 /**
- * Keep Tab inside `container`.
- *
- * Shared by both overlays, because a modal guarding an irreversible action needs
- * it at least as much as a drawer does and only the drawer had it: Tab from the
- * confirmation's last button moved focus into the page behind, where Enter would
- * act on whatever it happened to land on.
+ * Keep Tab inside `container`. Shared by both overlays, so Tab from a
+ * confirmation's last button cannot move focus into the page behind it.
  */
 function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
   if (event.key !== 'Tab' || !container) return;
@@ -68,18 +59,16 @@ function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
  * focus while open, closes on Escape or an outside click, and returns focus to
  * the element that opened it.
  *
- * `dirty` guards a drawer with unsaved input — an outside click is then ignored
- * so an in-progress top-up or withdrawal can't be lost by a stray click.
+ * `dirty` guards a drawer with unsaved input: an outside click is then ignored,
+ * so a stray click cannot lose an in-progress form.
  *
- * `wide` opens it as a SHEET rather than a column. Most records here are a list
- * of facts and 440px is right for them; an ITEM is not — it has a photograph, an
- * identity, a set of services with prices and a custody register, and asking all
- * of that to queue up in one narrow column is what made the item view the least
- * legible screen in the product.
+ * `wide` opens it as a sheet instead of a column. Most records here are a list
+ * of facts and fit `--drawer-w`; an item has a photograph, an identity, services
+ * with prices and a custody register, and needs the room.
  *
- * `lead` replaces the title with something the caller composes: for an item that
- * is the identity line — serial, then status — because a four-line catalogue
- * string is a description, not a name.
+ * `lead` replaces the title with something the caller composes: for an item,
+ * the identity line (serial, then status), because a four-line catalogue string
+ * is a description and makes a poor name.
  */
 export function DetailDrawer({
   title,
@@ -182,7 +171,7 @@ export function DetailDrawer({
 }
 
 /**
- * Modal confirmation for an irreversible step (withdrawal confirm, donation).
+ * Modal confirmation for an irreversible step (a donation, a cash-out, a sale).
  * Same focus rules as the drawer; deliberately small and centred.
  */
 export function ConfirmationModal({
@@ -216,7 +205,7 @@ export function ConfirmationModal({
     function onKey(event: KeyboardEvent) {
       if (!isTopOverlay(token)) return;
       if (event.key === 'Escape') {
-        // Stopped here so a drawer underneath does not ALSO close.
+        // Stopped here so a drawer underneath does not also close.
         event.stopPropagation();
         onCancel();
         return;
@@ -250,11 +239,8 @@ export function ConfirmationModal({
         </div>
         <div>{body}</div>
         {/*
-          The `Button` primitive, not hand-rolled `<button className="btn">`.
-          These two were the only buttons in the product that opted out of it,
-          and they were the ones guarding the irreversible actions — so the
-          control that most needed a spinner and `aria-busy` had neither, and its
-          Cancel stayed live while the confirmed action was already running.
+          The `Button` primitive gives the confirm control a spinner and
+          `aria-busy` while busy; Cancel is disabled while the action runs.
         */}
         <div className="modal-actions">
           <Button variant="secondary" disabled={busy} onClick={onCancel}>

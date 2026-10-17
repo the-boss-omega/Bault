@@ -6,16 +6,15 @@ import { useT } from './i18n';
  * assets/images folder, named by the item's serial number (SN-DR97-0001.png).
  * Vite serves that folder as publicDir, so they resolve at /images/<SERIAL>.<ext>.
  *
- * This is deliberately separate from the API's item_image / signed-URL pipeline:
- * those are the per-item intake and photography scans stored in object storage,
- * whereas these are the catalogue photos shipped with the app.
+ * These are the catalogue photos shipped with the app. The API's item_image /
+ * signed-URL pipeline is separate: those are intake and photography scans in
+ * object storage.
  */
 
 /**
- * Extensions tried in order. Reference scans arrive in whatever format the source
- * supplies — the current catalogue is PNG, earlier photos were JPEG — so the
- * filename convention fixes the *stem* (the serial number) and lets the extension
- * vary, rather than forcing a lossy re-encode of every new photo.
+ * Extensions tried in order. The filename convention fixes the stem (the serial
+ * number) and lets the extension vary, so a photo keeps the format its source
+ * supplied.
  */
 const PHOTO_EXTENSIONS = ['png', 'jpg'] as const;
 
@@ -26,7 +25,7 @@ export function cardPhotoUrl(serialNumber: string, attempt = 0): string {
 
 /**
  * Walks the candidate extensions on load failure and reports exhaustion, so a
- * genuinely missing photo still degrades to the placeholder rather than looping.
+ * missing photo degrades to the placeholder instead of looping.
  */
 function useCardPhotoSource(serialNumber: string) {
   const [attempt, setAttempt] = useState(0);
@@ -38,10 +37,7 @@ function useCardPhotoSource(serialNumber: string) {
   };
 }
 
-/**
- * Camera button that opens the item's photo in a lightbox. Rendered on every card
- * surface (vault, marketplace, admin table).
- */
+/** Camera button that opens the item's photo in a lightbox. Used in the admin tables. */
 export function CardPhotoButton({ serialNumber, title }: { serialNumber: string; title: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -65,10 +61,9 @@ export function CardPhotoButton({ serialNumber, title }: { serialNumber: string;
 }
 
 /**
- * Real image thumbnail for an item tile (replaces the bare camera emoji). Shows the
- * item's catalogue photo; clicking it opens the same lightbox. If the item has no
- * photo on disk the thumbnail degrades to a camera-emoji placeholder rather than a
- * broken-image icon, but the click-to-enlarge affordance is preserved.
+ * Image thumbnail for an item tile. Shows the item's catalogue photo; clicking it
+ * opens the same lightbox. With no photo on disk it shows a short "no photo" text
+ * instead of a broken-image icon, and still opens the lightbox.
  */
 export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; title: string }) {
   const t = useT();
@@ -85,9 +80,7 @@ export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; 
         onClick={() => setOpen(true)}
       >
         {photo.exhausted ? (
-          /* A stated absence, not a camera emoji. An emoji renders in whatever
-             the platform's colour font decides, which is the one thing on this
-             screen nobody chose. */
+          /* Text instead of an emoji, which would render in the platform's colour font. */
           <span className="photo-thumb-empty">{t('photo.none')}</span>
         ) : (
           <img
@@ -116,8 +109,7 @@ function CardPhotoModal({
   onClose: () => void;
 }) {
   const t = useT();
-  // An item with no file on disk should degrade to a message rather than a broken
-  // image icon — not every item in the vault has a catalogue photo.
+  // Not every item has a catalogue photo; a missing one shows a message.
   const photo = useCardPhotoSource(serialNumber);
 
   // Esc closes the lightbox; freeze background scrolling while it is open.

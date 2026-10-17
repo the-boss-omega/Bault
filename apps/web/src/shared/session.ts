@@ -10,10 +10,9 @@ export interface SessionProfile {
   id: string;
   role: string;
   /**
-   * `active` or `suspended`. A suspended account CAN now sign in — it just
-   * cannot do anything except use the helpdesk, which is what lets somebody
-   * locked out for debt ask to be let back in. The shell keys its restricted
-   * view off this, so it has to travel with the profile.
+   * `active` or `suspended`. A suspended account can sign in but can only use
+   * the helpdesk, so somebody locked out for debt can ask to be let back in.
+   * The shell keys its restricted view off this.
    */
   status: string;
   email: string;
@@ -22,9 +21,8 @@ export interface SessionProfile {
   firstName: string | null;
   lastName: string | null;
   /**
-   * Derived by the API from the two parts above and sent for convenience. The
-   * SPA still derives its own with `fullName()` wherever it renders a name, so
-   * a stale or missing value can never put a wrong name on screen.
+   * Derived by the API from the two parts above. The SPA derives its own with
+   * `fullName()` wherever it renders a name, so a stale value never shows.
    */
   fullName: string;
   /** True while a migrated legacy name is still awaiting confirmation. */
@@ -32,17 +30,11 @@ export interface SessionProfile {
 }
 
 /**
- * In-flight request, shared by every concurrent caller.
+ * In-flight request, shared by every concurrent caller, so StrictMode's double
+ * effect run in development sends one `/me/profile` request, not two.
  *
- * React StrictMode runs effects twice in development on purpose (to surface
- * effects that are not idempotent), which previously fired TWO `/me/profile`
- * requests on every boot — the `(x2)` in the Vite proxy log. Collapsing
- * overlapping calls onto one promise fixes the duplicate at its source, without
- * disabling StrictMode and without a mount-guard ref that would also swallow a
- * legitimate second load.
- *
- * Only *concurrent* calls share: once the request settles the slot is cleared,
- * so a later retry (or a reload after sign-in) really does hit the network.
+ * Only concurrent calls share: once the request settles the slot is cleared,
+ * so a later retry (or a reload after sign-in) hits the network.
  */
 let inFlight: Promise<SessionProfile> | null = null;
 
@@ -52,7 +44,7 @@ export function loadProfile(): Promise<SessionProfile> {
   const pending = api.get<SessionProfile>('/me/profile');
   inFlight = pending;
   // Clear the slot once settled. The extra `.catch` keeps this bookkeeping
-  // chain from becoming an unhandled rejection — the caller handles the error.
+  // chain from becoming an unhandled rejection; the caller handles the error.
   void pending
     .finally(() => {
       if (inFlight === pending) inFlight = null;
@@ -62,7 +54,7 @@ export function loadProfile(): Promise<SessionProfile> {
   return pending;
 }
 
-/** Drop any shared in-flight request (used by tests and after sign-out). */
+/** Drop any shared in-flight request (used by tests, and on sign-in, enrolment and sign-out). */
 export function resetProfileRequest(): void {
   inFlight = null;
 }

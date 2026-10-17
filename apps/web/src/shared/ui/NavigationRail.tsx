@@ -19,34 +19,26 @@ export interface NavDestination {
 /**
  * The fixed Bault navigation rail.
  *
- * TWO STATES ONLY: collapsed at 76px, and temporarily expanded to 232px while
- * the pointer is over it or keyboard focus is inside it. There is no pin, no
- * lock, and no persisted "stay open" preference — the rail was pinnable and is
- * not any more, and nothing was added in its place.
+ * Two states only (see `navRailState`): collapsed at `--rail-w`, and
+ * temporarily expanded to `--rail-w-open` while the pointer is over it or
+ * keyboard focus is inside it. There is no pin and no persisted preference.
  *
  *   - choosing a destination collapses the rail immediately, even though the
  *     pointer is still over it and focus is still on the item just activated;
- *   - moving the pointer off the rail collapses it immediately, with no grace
- *     period — the old 220 ms delay is what left it hanging open;
+ *   - moving the pointer off the rail collapses it immediately;
  *   - Tab/Shift-Tab into the rail expands it, so a keyboard user reads the same
  *     labels a pointer user does, and Tabbing on after activating brings them
  *     back.
  *
- * The expanded rail floats OVER the workspace and the shell reserves only the
- * collapsed width permanently (`.workspace { margin-inline-start: var(--rail-w) }`),
- * so expanding and collapsing never shifts the page.
+ * The expanded rail floats over the workspace and the shell reserves only the
+ * collapsed width (`.workspace { margin-inline-start: var(--rail-w) }`), so
+ * expanding and collapsing never shifts the page.
  *
  * The active destination is marked the way every other state in this product is
- * marked: a 2px custody-green rule on the item's leading edge, its icon at full
- * colour and its label at full weight. `aria-current="page"` carries the same
- * fact to assistive technology, and the mark is present in BOTH rail states, so
- * a collapsed rail still says plainly where you are.
- *
- * It used to be a separate element — a translucent bronze plate with a machined
- * gold notch and a turned rivet — absolutely positioned, measured with a
- * `ResizeObserver` on every expand, collapse and window resize, and animated
- * between rows. Five decorative decisions and a layout read per frame to say
- * "you are here", which a border now says with none.
+ * marked: a 2px custody-green rule on the item's leading edge, its icon in
+ * custody colour and its label at full weight. `aria-current="page"` carries the
+ * same fact to assistive technology, and the mark is present in both rail
+ * states, so a collapsed rail still says where you are.
  */
 export function NavigationRail({
   destinations,
@@ -89,7 +81,7 @@ export function NavigationRail({
         onMouseEnter={mobile ? undefined : () => dispatch({ type: 'pointerEnter' })}
         onMouseLeave={mobile ? undefined : () => dispatch({ type: 'pointerLeave' })}
         // Real movement is the only pointer signal that reopens a rail closed by
-        // a selection — see `navRailState`. Dispatched only when it would change
+        // a selection (see `navRailState`). Dispatched only when it would change
         // something, so an idle sweep of the pointer costs no re-renders.
         onMouseMove={
           mobile || (state.hovering && !state.dismissed)
@@ -102,7 +94,7 @@ export function NavigationRail({
             ? undefined
             : (event) => {
                 // React's onBlur bubbles, so it also fires when focus moves
-                // BETWEEN two rail items. Only a move out of the rail entirely
+                // between two rail items. Only a move out of the rail entirely
                 // counts as focus leaving.
                 if (!event.currentTarget.contains(event.relatedTarget as Node)) {
                   dispatch({ type: 'focusLeave' });
@@ -141,10 +133,7 @@ export function NavigationRail({
   );
 }
 
-/**
- * One block of rail items. No measurement, no observer, no positioned element —
- * the active row marks itself.
- */
+/** One block of rail items. The active row marks itself. */
 function RailGroup({
   destinations,
   active,

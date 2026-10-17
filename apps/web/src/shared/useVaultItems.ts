@@ -11,10 +11,9 @@ export interface VaultItem {
 }
 
 /**
- * Loads the signed-in customer's vault items so the UI can offer a PICKER instead
- * of a free-text id field. Passing a real item UUID (not a typed barcode/name) is
- * what prevents the "invalid input syntax for type uuid" 500s on services/shipping.
- * `storedOnly` filters to items that are eligible for services/shipping/listing.
+ * Loads the signed-in customer's vault items for an item picker, so forms send a
+ * real item UUID rather than a typed barcode or name. `storedOnly` keeps only
+ * items eligible for services, shipping and listing.
  */
 export function useVaultItems(storedOnly = false) {
   const [items, setItems] = useState<VaultItem[]>([]);

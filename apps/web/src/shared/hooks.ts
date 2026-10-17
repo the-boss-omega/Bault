@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 
-/** Reactive media query, used to switch the rail into its mobile drawer mode. */
+/** Reactive media query. */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia(query).matches,
