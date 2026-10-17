@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
  * Time-based one-time passwords (RFC 6238 over RFC 4226), HMAC-SHA1, 30-second
- * steps, six digits — the parameters every authenticator app defaults to, and
+ * steps, six digits: the parameters every authenticator app defaults to, and
  * the only ones this server accepts.
  *
  * Written against `node:crypto` rather than taken from a package. The whole
@@ -26,7 +26,7 @@ export function generateTotpSecret(): Buffer {
   return randomBytes(TOTP_SECRET_BYTES);
 }
 
-/** RFC 4648 base32, upper case, unpadded — what authenticator apps expect to be typed. */
+/** RFC 4648 base32, upper case, unpadded: what authenticator apps expect to be typed. */
 export function base32Encode(data: Buffer): string {
   let out = '';
   let bits = 0;
@@ -44,8 +44,8 @@ export function base32Encode(data: Buffer): string {
 }
 
 /**
- * Base32 back to bytes, forgiving what a person does when copying it by hand —
- * lower case, spaces, the padding some apps show — and nothing else.
+ * Base32 back to bytes, forgiving what a person does when copying it by hand
+ * (lower case, spaces, the padding some apps show) and nothing else.
  */
 export function base32Decode(input: string): Buffer {
   const clean = input.replace(/[\s=]/g, '').toUpperCase();
@@ -94,7 +94,7 @@ export function totp(secret: Buffer, nowMs: number, digits = TOTP_DIGITS): strin
  *
  * Returning the STEP rather than a yes/no is what replay protection needs: the
  * caller records the step it accepted and refuses any later code for that step
- * or an earlier one. A code is only ever six ASCII digits — anything else is
+ * or an earlier one. A code is only ever six ASCII digits; anything else is
  * refused before any HMAC is computed, so a stray space or a full-width digit
  * cannot be the reason two inputs compare differently.
  */

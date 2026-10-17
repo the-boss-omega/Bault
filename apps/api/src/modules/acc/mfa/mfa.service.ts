@@ -45,8 +45,8 @@ type Factor = typeof mfaFactor.$inferSelect;
  * Two-factor sign-in (TOTP): enrolment, the second sign-in step, recovery
  * codes, turning it off, and an administrator's reset.
  *
- * Every state change that spends something — a code's time step, a recovery
- * code, a challenge — is a conditional UPDATE inside the transaction that acts
+ * Every state change that spends something (a code's time step, a recovery
+ * code, a challenge) is a conditional UPDATE inside the transaction that acts
  * on it, so two requests carrying the same thing cannot both succeed: the
  * second one's UPDATE waits for the first to commit, re-reads the row, and no
  * longer matches. The in-process queue in `AuthService` already serialises one
@@ -106,7 +106,7 @@ export class MfaService {
    * Start enrolment: a fresh secret, as a provisioning URI, as text to type and
    * as a QR code to scan.
    *
-   * Nothing is enabled yet. The secret is stored — encrypted — so the
+   * Nothing is enabled yet. The secret is stored, encrypted, so the
    * confirmation can check a code against it, and a second setup replaces a
    * pending one; but an ENABLED factor is never overwritten here, by the
    * condition on the upsert itself rather than by a read beforehand that two
@@ -148,8 +148,8 @@ export class MfaService {
   }
 
   /**
-   * Finish enrolment with a code from the app — the only proof that the secret
-   * reached it — and hand out the recovery codes, once.
+   * Finish enrolment with a code from the app (the only proof that the secret
+   * reached it) and hand out the recovery codes, once.
    *
    * The step that code belongs to is recorded as used, so the code on the screen
    * at enrolment cannot then be typed again at sign-in by whoever watched it.
@@ -157,8 +157,8 @@ export class MfaService {
    * The password is checked first, because a session is not proof of who holds
    * it: whoever had lifted a cookie could otherwise enrol their own phone, and
    * from then on the owner's password alone would no longer get the owner in. A
-   * wrong one is a sign-in failure for the lockout, like on every other route
-   * that checks it. Same refusal for a wrong password and a wrong code, so this
+   * wrong password is a failure for the lockout, like on every other route that
+   * checks it. Same refusal for a wrong password and a wrong code, so this
    * route does not tell a session thief which of the two they got right.
    *
    * Every OTHER session of the account ends in the same transaction. Turning on
@@ -289,14 +289,14 @@ export class MfaService {
   }
 
   /**
-   * An administrator removes ANOTHER account's second factor — the way back for
+   * An administrator removes ANOTHER account's second factor: the way back for
    * somebody who lost their phone and their recovery codes.
    *
    * Never one's own: an administrator who could reset their own would make the
    * second factor a formality for exactly the accounts that matter most, and
    * the request would be reviewed by nobody. Every session the account holds
-   * ends in the same transaction: whoever is signed in as them now — possibly
-   * the person whose phone was taken — must sign in again, with the password
+   * ends in the same transaction: whoever is signed in as them now (possibly
+   * the person whose phone was taken) must sign in again, with the password
    * alone, and enrol afresh. Audited in that transaction too.
    */
   async resetFor(actorId: string, targetId: string): Promise<{ sessionsEnded: number }> {
@@ -391,7 +391,7 @@ export class MfaService {
   /**
    * Answer a challenge. One transaction: the challenge row is locked, the code
    * or recovery code is spent by its conditional UPDATE, the challenge is
-   * consumed and the session opened — all, or (on a wrong code) only the
+   * consumed and the session opened. All of that, or (on a wrong code) only the
    * challenge's failure count, which is committed rather than rolled back so
    * the five-guess limit holds.
    */
@@ -473,7 +473,7 @@ export class MfaService {
 
   /**
    * Accept a TOTP code once. The step it belongs to must be LATER than the last
-   * one accepted, and that comparison is in the UPDATE that records it — so a
+   * one accepted, and that comparison is in the UPDATE that records it, so a
    * replay fails, and of two submissions of one code at the same moment the
    * second waits for the first's row lock, re-reads `last_used_step`, and fails.
    */
@@ -494,7 +494,7 @@ export class MfaService {
     return spent.length === 1;
   }
 
-  /** Accept a recovery code once — `used_at` is set only where it was still empty. */
+  /** Accept a recovery code once: `used_at` is set only where it was still empty. */
   private async spendRecoveryCode(exec: Exec, userId: string, raw: string): Promise<boolean> {
     const normal = normalizeRecoveryCode(raw);
     if (!normal) return false;
@@ -512,7 +512,7 @@ export class MfaService {
     return used.length === 1;
   }
 
-  /** The old set goes, a new one is stored as HMACs, and the plain codes are returned — the only time they exist. */
+  /** The old set goes, a new one is stored as HMACs, and the plain codes are returned: the only time they exist. */
   private async replaceRecoveryCodes(exec: Exec, userId: string): Promise<string[]> {
     await exec.delete(mfaRecoveryCode).where(eq(mfaRecoveryCode.userId, userId));
     const codes = generateRecoveryCodes();
@@ -563,16 +563,16 @@ function alreadyEnabled(): AppError {
   );
 }
 
-/**
- * A wrong code. 401 at the sign-in step, where it is an authentication failure;
- * 400 on the signed-in routes, where a 401 would read to the app as "your
- * session has ended".
- */
 /** One refusal for a wrong password and a wrong code, so neither is confirmed on its own. */
 function passwordOrCodeWrong(): AppError {
   return new AppError(ErrorCode.MFA_CODE_INVALID, 'The password or the code is not right.', HttpStatus.BAD_REQUEST);
 }
 
+/**
+ * A wrong code. 401 at the sign-in step, where it is an authentication failure;
+ * 400 on the signed-in routes, where a 401 would read to the app as "your
+ * session has ended".
+ */
 export function codeInvalid(status: HttpStatus.UNAUTHORIZED | HttpStatus.BAD_REQUEST): AppError {
   return new AppError(ErrorCode.MFA_CODE_INVALID, 'That code is not right. Check the time on your phone and try the current one.', status);
 }

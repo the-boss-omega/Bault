@@ -2,7 +2,7 @@ import { pgTable, text, boolean } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 /**
- * Saved shipping addresses (ACC-07). Owned by the user; managed only through
+ * Saved shipping addresses. Owned by the user; managed only through
  * /me/addresses (own-only access enforced in ProfileService).
  */
 export const shippingAddress = pgTable('shipping_address', {

@@ -18,41 +18,36 @@ import type { AuthUser } from '../sec/auth-context';
 import { CURRENT_TERMS_VERSION } from './terms';
 
 /**
- * What a right password gets: a session, or — for an account with two-factor
- * sign-in — a challenge that the second step turns into one.
+ * What a right password gets: a session or, for an account with two-factor
+ * sign-in, a challenge that the second step turns into one.
  */
 export type LoginResult =
   | { kind: 'session'; user: AuthUser; rawToken: string; expiresAt: Date }
   | { kind: 'challenge'; challengeToken: string; expiresAt: Date };
 
 /**
- * Registration + login (T029, Principle IX/X).
+ * Registration + login (Principle IX/X).
  *
  * Registration: hash the password with argon2, record the caller's chosen
- * USERNAME (immutable from this point on — Requirement 4.1) plus their first and
- * last name, create the account in `pending` status, and email a verification
- * link. Login: verify credentials, block non-active accounts, mint a session.
+ * USERNAME (immutable from this point on) plus their first and last name,
+ * create the account in `pending` status, and email a verification link.
+ * Login: verify credentials, refuse accounts that may not sign in, then mint a
+ * session or a second-factor challenge.
  *
- * No intake ID is allocated any more. The username IS the customer-facing
- * identifier now, so a second routing code would be a second thing to keep
- * unique, print, and explain. Existing accounts keep the one they were given.
- */
-/*
- * The per-identifier lockout — ten failures in fifteen minutes shut the typed
- * identifier out for fifteen — lives in `LoginAttemptService` now, beside the
- * log it reads, because wrong second-factor codes count against it too.
+ * No intake ID is allocated: the username IS the customer-facing identifier, so
+ * a second routing code would be one more thing to keep unique, print and
+ * explain. Older accounts keep the one they were given.
  */
 
 @Injectable()
 export class AuthService {
   /**
-   * What an identifier that matches nobody is verified against (E13).
+   * What an identifier that matches nobody is verified against.
    *
    * Minted once per process by the same `argon2.hash` call registration uses,
    * so it carries the same cost parameters as every real hash and can never
-   * drift from them — a hand-pasted constant would silently go stale the day
-   * somebody raised the cost. The password it hashes is random and thrown
-   * away, so nothing can match it.
+   * drift from them. The password it hashes is random and thrown away, so
+   * nothing can match it.
    */
   private readonly dummyHash = argon2.hash(randomBytes(32).toString('hex'));
 
@@ -85,13 +80,10 @@ export class AuthService {
     /**
      * Consent first, before anything is looked up or hashed.
      *
-     * An account used to be created without anybody being asked to agree to the
-     * fees, the interest on a negative balance or the suspension rule — there
-     * was nothing to agree to. Now there is, and agreeing to an OLDER text is
-     * not agreeing to this one: a sign-up page left open across a change of
-     * terms sends the version it showed, and recording that as consent to the
-     * current version would be recording something that did not happen. The
-     * page is told which version is in force so it can show it and ask again.
+     * Agreeing to an OLDER text is not agreeing to this one: a sign-up page left
+     * open across a change of terms sends the version it showed, so anything but
+     * the current version is refused. The page is told which version is in
+     * force so it can show it and ask again.
      */
     const version = acceptedTermsVersion?.trim() ?? '';
     if (version !== CURRENT_TERMS_VERSION) {
@@ -131,7 +123,7 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(password);
 
-    // This is the ONLY write of `username` anywhere in the platform (Req 4.1).
+    // This is the ONLY write of `username` anywhere in the platform.
     // The pre-check above is a friendly error; the unique index is the guarantee,
     // so a concurrent duplicate still fails rather than slipping through.
     let created: { id: string; termsVersion: string | null; termsAcceptedAt: Date | null } | undefined;
@@ -176,23 +168,21 @@ export class AuthService {
   }
 
   /**
-   * `identifier` is EITHER the email or the username — one is enough, callers
+   * `identifier` is EITHER the email or the username; one is enough, callers
    * never send both. Usernames may not contain '@' (RegisterDto) and both columns
    * are unique, so a single OR lookup resolves unambiguously.
    */
   async login(identifier: string, password: string, origin: ClientOrigin = {}): Promise<LoginResult> {
     // Same normalization as registration, so a username typed in any casing
-    // resolves to the row that was stored (Requirement: usernames normalized
-    // consistently).
+    // resolves to the row that was stored.
     const normalized = normalizeUsername(identifier);
 
     /**
      * One attempt at a time per identifier.
      *
-     * The lockout below reads "how many failures so far" and then verifies. Run
-     * side by side, twenty guesses fired at once all read nine-or-fewer before
-     * any of them had written its failure, and all twenty were checked — the
-     * limit held only for an attacker polite enough to wait for each answer.
+     * The lockout reads "how many failures so far" and then verifies, so
+     * guesses fired at once would all read the same count before any of them
+     * wrote its failure. Queued per identifier, a burst is counted one by one.
      */
     return this.perIdentifier.run(normalized, () => this.attempt(normalized, password, origin));
   }
@@ -202,7 +192,7 @@ export class AuthService {
      * Ten failures in fifteen minutes shut the identifier out for fifteen.
      *
      * Asked BEFORE the password is looked at, so the right password is refused
-     * too while the lock stands — otherwise the lock would be a signal ("the
+     * too while the lock stands; otherwise the lock would be a signal ("the
      * attempt that worked") rather than a stop.
      *
      * Keyed on what was TYPED, not on the account it resolves to. An identifier
@@ -224,13 +214,9 @@ export class AuthService {
       .limit(1);
 
     /**
-     * Same error whether the account is unknown or the password is wrong — and
-     * now the same TIME (E13).
-     *
-     * The message was always identical; the work was not. An unknown identifier
-     * skipped `argon2.verify` and came back in a few milliseconds, a known one
-     * in a couple of hundred, so a stopwatch enumerated every account. Both now
-     * pay for exactly one verification. Recorded either way — the log says
+     * Same error, and the same TIME, whether the account is unknown or the
+     * password is wrong: both pay for exactly one argon2 verification, so a
+     * stopwatch cannot enumerate accounts. Recorded either way; the log says
      * which, the response does not.
      */
     const verified = await argon2.verify(u?.passwordHash ?? (await this.dummyHash), password);
@@ -239,14 +225,9 @@ export class AuthService {
       throw AppError.unauthenticated('Invalid credentials');
     }
     /**
-     * The password was right. The address was never confirmed.
-     *
-     * This is the one refusal at sign-in that the person can resolve themselves,
-     * and the sign-in page had nothing to offer them: it printed the sentence
-     * and left them with "Forgot password", which does not help, and "Sign up",
-     * which reports the address as already registered. Somebody who signed up a
-     * week ago and lost the mail could not get in by any route in the product,
-     * even though `POST /auth/verify-email/resend` existed the whole time.
+     * The password was right; the address was never confirmed. This is the one
+     * sign-in refusal the person can resolve themselves, so it has its own error
+     * and the page can offer a fresh link (`POST /auth/verify-email/resend`).
      */
     if (u.status === 'pending') {
       await this.attempts.record(normalized, u.id, 'unverified', origin);
@@ -255,20 +236,14 @@ export class AuthService {
       );
     }
     /**
-     * A SUSPENDED account may still authenticate. That is a change, and a
-     * deliberate one.
+     * A SUSPENDED account may still authenticate, deliberately. The debt sweep
+     * suspends automatically, and a holder who could not sign in could not ask
+     * how to clear the debt.
      *
-     * Suspension used to refuse sign-in outright, which was coherent while it
-     * was only ever an administrator's decision. It stopped being coherent when
-     * the debt sweep began imposing it automatically: a holder suspended for
-     * owing $20 cannot sign in, therefore cannot cash in, therefore cannot clear
-     * the debt that suspended them. The lock had no key on the inside.
-     *
-     * Authentication now succeeds and AUTHORIZATION does the work instead:
-     * `SessionAuthGuard` refuses every route except those marked
-     * `@AllowSuspended()`, which is the helpdesk and the profile probe the shell
-     * needs to render at all. The account is still entirely unusable — it can
-     * only explain itself and read the answer.
+     * AUTHORIZATION does the work instead: `SessionAuthGuard` refuses every
+     * route except those marked `@AllowSuspended()`, which is the helpdesk and
+     * the profile probe the shell needs to render at all. The account can only
+     * explain itself and read the answer.
      *
      * `closed` remains a hard refusal: that state is terminal.
      */
@@ -281,12 +256,12 @@ export class AuthService {
     /**
      * The password was right; for an enrolled account that is half of it.
      *
-     * No session — a challenge, good for five minutes, for this account, once.
+     * No session: a challenge, good for five minutes, for this account, once.
      * Only here, after every refusal above has had its turn, so the answer to a
-     * WRONG password is exactly what it always was and says nothing about
-     * whether the account has a second factor; only somebody who knows the
-     * password learns that. Logged as its own outcome: a right password
-     * followed by wrong codes is the pattern an administrator most needs to see.
+     * WRONG password says nothing about whether the account has a second
+     * factor; only somebody who knows the password learns that. Logged as its
+     * own outcome: a right password followed by wrong codes is the pattern an
+     * administrator most needs to see.
      */
     if (await this.mfa.isEnabled(u.id)) {
       const challenge = await this.mfa.issueChallenge(u.id, normalized);
@@ -308,8 +283,8 @@ export class AuthService {
    * one by one exactly like a burst of passwords. Both locks are asked first:
    * the identifier's (wrong passwords and wrong codes) and the account's (wrong
    * codes through any identifier or signed-in route). A wrong code is logged
-   * against both. An unknown, used, expired or burned challenge is one answer —
-   * start again with the password — and is not a guess, so it is not counted.
+   * against both. An unknown, used, expired or burned challenge is one answer
+   * (start again with the password) and is not a guess, so it is not counted.
    */
   async completeSecondFactor(
     challengeToken: string,

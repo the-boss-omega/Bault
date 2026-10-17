@@ -16,19 +16,15 @@ import { SessionService } from './session.service';
 export const PASSWORD_RESET_REQUESTED = 'password_reset_requested';
 
 /**
- * Password change & reset (T032).
+ * Password change & reset.
  *  - change: verify the CURRENT password, then set the new one (effective immediately).
- *  - requestReset: issue a single-use, time-limited emailed link (via VerificationService).
+ *  - requestReset: record the request; the worker mails a single-use, time-limited link.
  *  - reset: consume that link and set a new password.
  *
- * BOTH PATHS NOW END EVERY OTHER SESSION, and that is the point of them.
- *
- * Changing a password used to write a new hash and touch nothing else. A session
- * is an opaque cookie with a seven-day life, checked against its own table — so
- * somebody who had stolen one kept full access to the account AFTER the owner
- * noticed and changed their password, which is the single moment the owner
- * believes they have locked the attacker out. The new password was not a
- * revocation of anything; it only changed what the next sign-in would need.
+ * BOTH PATHS END EVERY OTHER SESSION. A session is an opaque cookie with a
+ * seven-day life, checked against its own table, so without that a stolen one
+ * would keep working after the owner changed their password, the moment they
+ * believe they have locked the attacker out.
  */
 @Injectable()
 export class PasswordService {
@@ -68,20 +64,15 @@ export class PasswordService {
   }
 
   /**
-   * Ask for a reset link — and do exactly the same thing for any address (N11).
+   * Ask for a reset link, and do exactly the same thing for any address.
    *
-   * The mail used to be sent here, inside the request, and only when the address
-   * had an account. So a mail server that was down answered 500 for registered
-   * addresses and 202 for everyone else, and on a good day the time taken — a
-   * lookup, a token row and an SMTP conversation, or just the lookup — told the
-   * same story. Both were ways to ask "does this person have an account?".
-   *
-   * Now the request records that a reset was asked for, by address, and nothing
-   * else: no lookup, no token, no mail. The worker resolves the address, mints
-   * the token and sends the link after the caller has had their answer, and an
-   * address with no account is simply dropped there. The raw token never sits
-   * in the outbox — it is minted where it is mailed, and only its hash is stored,
-   * as for every other token.
+   * The request records that a reset was asked for, by address, and nothing
+   * else: no lookup, no token, no mail. So neither the status code nor the time
+   * taken can tell a caller whether the address has an account. The worker
+   * resolves the address, mints the token and sends the link after the caller
+   * has had their answer, and an address with no account is dropped there. The
+   * raw token never sits in the outbox: it is minted where it is mailed, and
+   * only its hash is stored, as for every other token.
    *
    * Not inside a transaction with a state change, because there is none: the
    * outbox row IS the whole effect of this request.
@@ -125,9 +116,8 @@ export class PasswordService {
     });
 
     // A reset exempts nothing. The person doing it is holding a link from their
-    // inbox, not a session, so there is no session of theirs worth keeping — and
-    // if the reason they are here is that somebody else has one, keeping any of
-    // them is the whole failure.
+    // inbox, not a session, and if they are here because somebody else has one,
+    // keeping any session would defeat the reset.
     await this.sessions.revokeAllFor(tok.userId);
   }
 }
