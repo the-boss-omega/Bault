@@ -582,19 +582,13 @@ function alreadyEnabled(): AppError {
 }
 
 /**
- * `mfa_factor_unreadable`. It belongs in `ErrorCode` (`shared/errors`), which
- * this module does not own; once it is added there, this cast goes.
- */
-const MFA_FACTOR_UNREADABLE = 'mfa_factor_unreadable' as string as ErrorCode;
-
-/**
  * The stored secret cannot be read on our side (409). An enrolled factor needs
  * an administrator's reset; a setup nobody confirmed is replaced by starting
  * it again.
  */
 function factorUnreadable(enabled: boolean): AppError {
   return AppError.conflict(
-    MFA_FACTOR_UNREADABLE,
+    ErrorCode.MFA_FACTOR_UNREADABLE,
     enabled
       ? 'Your two-factor sign-in cannot be checked: its secret can no longer be read on our side, so no code will work. Ask an administrator to reset two-factor sign-in for your account, then sign in with your password and set it up again.'
       : 'This two-factor setup can no longer be read on our side. Start the setup again; that replaces it.',
