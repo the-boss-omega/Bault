@@ -187,6 +187,17 @@ describe('money out', () => {
     expect(flow.matched).toBe(1);
   });
 
+  it('treats a payout taken back after it was paid like a refusal', () => {
+    const net = withdrawal({ amount: 19_300, feeMinor: 0, debitedMinor: 20_000 });
+    const back = run({ payouts: [payout({ status: 'reversed' })], withdrawals: [{ ...net, reversedMinor: 20_000 }] });
+    expect(back.mismatches).toEqual([]);
+    expect(back.matched).toBe(1);
+
+    const kept = run({ payouts: [payout({ status: 'reversed' })], withdrawals: [net] });
+    expect(kinds(kept)).toEqual(['payout_failed_but_debited']);
+    expect(kept.mismatches[0]).toMatchObject({ recordedMinor: 20_000 });
+  });
+
   it('still reports a refused payout whose debit was not credited back, or only in part', () => {
     const none = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal()] });
     expect(kinds(none)).toEqual(['payout_failed_but_debited']);
