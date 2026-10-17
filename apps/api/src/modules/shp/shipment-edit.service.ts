@@ -6,7 +6,7 @@ import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
-import { charge } from '../pay/pay.schema';
+import { charge, ledgerRecord } from '../pay/pay.schema';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
@@ -289,6 +289,8 @@ export class ShipmentEditService {
        * What the collector actually paid for this parcel, from the charges
        * themselves rather than from `cost`, so the refund is exactly what left
        * the wallet for it: the carrier rate, a white-glove quote, a show fee.
+       * Less whatever was already given back on it: a cheaper rate chosen after
+       * the carrier refused a label refunds its difference at that moment.
        */
       let refundedMinor = 0;
       if (paid) {
@@ -302,7 +304,18 @@ export class ShipmentEditService {
               eq(charge.status, 'settled'),
             ),
           );
-        refundedMinor = Number(row?.total ?? '0');
+        const [back] = await tx
+          .select({ total: sql<string>`coalesce(sum(${ledgerRecord.amount}), 0)::text` })
+          .from(ledgerRecord)
+          .where(
+            and(
+              eq(ledgerRecord.userId, s.userId),
+              eq(ledgerRecord.type, 'shipping_refund'),
+              eq(ledgerRecord.referenceType, 'shipment'),
+              eq(ledgerRecord.referenceId, s.id),
+            ),
+          );
+        refundedMinor = Math.max(0, Number(row?.total ?? '0') - Number(back?.total ?? '0'));
         if (refundedMinor > 0) {
           await this.ledger.record(
             {
