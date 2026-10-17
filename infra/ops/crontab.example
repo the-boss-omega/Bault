@@ -16,11 +16,18 @@
 #   BACKUP_DIR=/var/backups/bault
 #   BACKUP_RETAIN_DAYS=14
 #   BACKUP_AGE_RECIPIENT=age1...            # the PUBLIC key; the private one is not on this host
-#   BACKUP_UPLOAD=s3://<backup-bucket>/nightly
-#   BACKUP_S3_ENDPOINT=https://<region>.your-objectstorage.com   # omit on AWS
-#   AWS_ACCESS_KEY_ID=...                   # a key for the backup bucket only, PutObject only
-#   AWS_SECRET_ACCESS_KEY=...
-#   AWS_DEFAULT_REGION=<region>
+#   BACKUP_UPLOAD=rclone:backup:<backup-bucket>/nightly
+#   RCLONE_CONFIG_BACKUP_TYPE=s3            # the remote `backup`, defined here, no rclone.conf
+#   RCLONE_CONFIG_BACKUP_PROVIDER=Other     # AWS on AWS
+#   RCLONE_CONFIG_BACKUP_ENDPOINT=https://<region>.your-objectstorage.com   # omit on AWS
+#   RCLONE_CONFIG_BACKUP_REGION=<region>
+#   RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID=...  # a key for the backup bucket only, PutObject only
+#   RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY=...
+#
+# rclone is what infra/production/bootstrap.sh installs. `BACKUP_UPLOAD=s3://…`
+# with AWS_* variables and BACKUP_S3_ENDPOINT also works, but needs the aws cli,
+# which Ubuntu 24.04 does not package; without the tool the job fails before
+# it dumps anything.
 #
 # The backup bucket is in a different account from the database and from the
 # image bucket, with versioning (or object lock) on and a lifecycle rule for
