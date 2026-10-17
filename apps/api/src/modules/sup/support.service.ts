@@ -56,15 +56,12 @@ export class SupportService {
   }
 
   /**
-   * Whether this caller acts AS STAFF — the role, on an account that is active.
+   * Whether this caller acts AS STAFF: the role, on an account that is active.
    *
    * Reading a thread and replying are `@AllowSuspended`, so a suspended
-   * customer can still ask for help. This checked the role alone, so a
-   * suspended operator or administrator holding a ticket id could still read any
-   * customer's thread and answer it as staff — claiming the ticket and mailing
-   * the customer in Bault's name — after being suspended for exactly the kind
-   * of thing that makes that dangerous (N5). Suspended staff are customers here:
-   * their own tickets, nobody else's.
+   * customer can still ask for help. A suspended operator or administrator must
+   * not read any customer's thread or answer it in Bault's name, so suspended
+   * staff are customers here: their own tickets, nobody else's.
    */
   private staff(actor: TicketActor): boolean {
     return this.hasStaffRole(actor) && actor.status === 'active';
@@ -82,7 +79,7 @@ export class SupportService {
     if (!row) throw AppError.notFound('Ticket not found');
     if (!this.staff(actor) && row.userId !== actor.id) {
       // A suspended member of staff is told why, rather than shown a 404 for a
-      // ticket they could open yesterday — the id is not news to them.
+      // ticket they could open yesterday: the id is not news to them.
       if (this.hasStaffRole(actor)) {
         throw AppError.forbidden('Staff access to the helpdesk needs an active account.');
       }
@@ -279,9 +276,8 @@ export class SupportService {
   async assign(ticketId: string, actor: TicketActor) {
     if (!this.staff(actor)) throw AppError.forbidden('Only staff can take a ticket');
     await this.loadFor(ticketId, actor);
-    // Only an untaken ticket (or one already ours). Unconditionally, two staff
-    // pressing Take together each were told the ticket was theirs, and the
-    // customer got two people answering the same question.
+    // Only an untaken ticket (or one already ours), so two staff pressing Take
+    // together cannot both be told the ticket is theirs.
     const [taken] = await this.db
       .update(supportTicket)
       .set({ assignedTo: actor.id, updatedAt: new Date() })

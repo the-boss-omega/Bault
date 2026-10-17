@@ -9,11 +9,9 @@ import { NOTIFICATION_CHANNELS } from './event-types';
 class SetPreferenceDto {
   @IsString() eventType!: string;
   /**
-   * Which channel this switch governs.
-   *
-   * Defaulted rather than required, so a client written against the one-boolean
-   * shape still targets the in-app channel it meant instead of failing
-   * validation on a field it has never heard of.
+   * Which channel this switch governs. Defaulted to `in_app` rather than
+   * required, so a client that sends no channel still targets the in-app
+   * channel instead of failing validation.
    */
   @IsIn([...NOTIFICATION_CHANNELS]) channel: string = 'in_app';
   @IsBoolean() enabled!: boolean;
@@ -46,7 +44,7 @@ export class NotificationController {
     return this.notifications.setPreference(user.id, dto.eventType, dto.channel, dto.enabled);
   }
 
-  /** "Stop emailing me", in one action rather than twenty-eight. */
+  /** "Stop emailing me", in one action rather than one per event type. */
   @Put('preferences/channel')
   setChannel(@CurrentUser() user: AuthUser, @Body() dto: SetChannelDto) {
     return this.notifications.setChannel(user.id, dto.channel, dto.enabled);

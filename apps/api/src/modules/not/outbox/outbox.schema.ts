@@ -18,9 +18,9 @@ export const outboxMessage = pgTable('outbox_message', {
   dispatchedAt: timestamp('dispatched_at', { withTimezone: true }), // null until worker sends it
   /**
    * How many times dispatch has failed on this message, and why, last time
-   * (migration 0032, N29). A message that throws no longer stops every message
-   * behind it; it fails alone, is retried a bounded number of times, and then
-   * waits here — undispatched, with its error — for a person to look at it.
+   * (migration 0032). A message that throws fails alone, without stopping the
+   * messages behind it; it is retried a bounded number of times, and then waits
+   * here, undispatched and with its error, for a person to look at it.
    */
   attempts: integer('attempts').notNull().default(0),
   lastError: text('last_error'),

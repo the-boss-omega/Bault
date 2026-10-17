@@ -8,7 +8,7 @@ import { pricingRule } from './prc.schema';
 import { billableActions, coverage } from './billable-actions';
 
 /**
- * Is every price loaded? (E6) — admin only.
+ * Is every price loaded? Admin only.
  *
  * No migration inserts a pricing rule, so a database built for production by
  * migration alone cannot price an intake, and a handful of actions quietly

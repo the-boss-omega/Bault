@@ -10,15 +10,7 @@ import { STORAGE_ADAPTER } from '../../shared/adapters/adapters.module';
 import { mediaUpload } from './med.schema';
 
 /**
- * Putting bytes into object storage — the step the platform did not have.
- *
- * `StorageAdapter.putObject` has existed since T020 and `item_image` has existed
- * since custody was built, and NOTHING in the API ever accepted an image. The
- * photography service records an object key for a photo shoot without ever
- * receiving the photograph; the only pictures in the product are the catalogue
- * files shipped in `assets/images` and served statically by Vite. So an operator
- * unpacking a box could not photograph what came out of it, and a parcel that
- * arrived crushed was described in a sentence with no evidence attached.
+ * Putting bytes into object storage.
  *
  * TWO STEPS, DELIBERATELY. Bytes are uploaded here and the caller then references
  * the returned KEY when it creates the thing the image belongs to. That is the
@@ -32,12 +24,8 @@ import { mediaUpload } from './med.schema';
  * use it buys a third of the payload back in exchange for a second body-parsing
  * path and its own error shape. The size cap is applied to the DECODED bytes.
  *
- * THE TWO STEPS USED TO FORGET EACH OTHER. The key was handed back and nothing
- * remembered it, so the attaching routes stored whatever string they were sent:
- * a key minted for a parcel on a card, a colleague's photograph of a different
- * card from last week, a key nobody had ever uploaded. Every upload is now
- * recorded in `media_upload`, and `assertAttachable` checks a key against that
- * record before any route writes it onto an item or a parcel.
+ * Every upload is recorded in `media_upload`, and `assertAttachable` checks a
+ * key against that record before a route writes it onto an item or a parcel.
  */
 
 /** What a browser will actually produce from a camera or a file picker. */
@@ -54,8 +42,8 @@ const ALLOWED_TYPES: Record<string, string> = {
  *
  * A phone photograph is 2–5 MB. Ten leaves room for one without inviting an
  * upload of something that is not a photograph at all, and the request body cap
- * in `main.ts` is set above this so the refusal comes from here — with a sentence
- * naming the limit — rather than from Express with a bare 413.
+ * in `main.ts` is set above this so the refusal comes from here, with a sentence
+ * naming the limit, rather than from Express with a bare 413.
  */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -83,11 +71,10 @@ const MB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 /**
  * What the bytes actually are, from their first few.
  *
- * The declared `contentType` was the only check there was, and it is whatever
- * the client typed: a text file, a PDF or a script labelled `image/png` went
- * into the bucket as a PNG and came back out of a signed URL as one. These are
- * the published signatures of the four formats a phone or a browser produces,
- * and anything else — including other images — is refused.
+ * The declared `contentType` is whatever the client typed, so a text file, a
+ * PDF or a script labelled `image/png` would otherwise be stored and served as
+ * a PNG. These are the published signatures of the four formats a phone or a
+ * browser produces, and anything else, including other images, is refused.
  */
 export function sniffImageType(body: Buffer): string | null {
   const ascii = (from: number, to: number) => body.subarray(from, to).toString('latin1');
@@ -148,13 +135,9 @@ export class MediaService {
       : input.dataBase64;
 
     /**
-     * The size, BEFORE anything is decoded (N17).
-     *
-     * The DTO used to cap the string with `@MaxLength`, which did refuse early —
-     * as "data base64 must be shorter than or equal to 13981142 characters", a
-     * sentence about base64 that nobody holding a photograph can act on. The
-     * arithmetic below costs nothing and says it in megabytes. The body parser's
-     * 16 MB cap in `main.ts` is still what bounds the memory.
+     * The size, BEFORE anything is decoded. The arithmetic below costs nothing
+     * and refuses an oversized photo in megabytes. The body parser's 16 MB cap
+     * in `main.ts` is what bounds the memory.
      */
     const estimated = decodedLength(payload);
     if (estimated > MAX_IMAGE_BYTES) {
@@ -191,12 +174,12 @@ export class MediaService {
     ].join('/');
 
     /**
-     * A store that is down is a 503 that says so (E10).
+     * A store that is down is a 503 that says so.
      *
-     * The adapter throws a plain `Error` — a refused connection, a signature the
-     * bucket rejected — and that reached the client as `internal`, identical to
-     * a bug. The underlying reason goes to the log, where the person who can fix
-     * the bucket will look; the operator is told the one thing they can act on.
+     * The adapter throws a plain `Error` (a refused connection, a signature the
+     * bucket rejected). The underlying reason goes to the log, where the person
+     * who can fix the bucket will look; the operator is told the one thing they
+     * can act on.
      */
     try {
       await this.storage.putObject({ key, body, contentType });
@@ -222,7 +205,7 @@ export class MediaService {
   }
 
   /**
-   * Refuse to record a photograph this API cannot vouch for (F453).
+   * Refuse to record a photograph this API cannot vouch for.
    *
    * Three questions, answered from `media_upload`:
    *

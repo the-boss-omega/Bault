@@ -2,27 +2,21 @@ import { pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-co
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
 
 /**
- * SUP — the helpdesk.
+ * SUP: the helpdesk.
  *
- * Bault had no way for a person to ask a question. No contact form, no address
- * published anywhere in the app, no inbox. That was survivable while everything
- * the platform did was self-service, and stopped being survivable the moment two
- * workflows started *depending* on a human conversation:
+ * Two workflows *depend* on a human conversation:
  *
  *   - cash-in and cash-out are reviewed by a person, so a request sitting in
- *     `pending_review` had no channel to ask about;
- *   - an account suspended for debt cannot sign in, cannot cash in, and so
- *     cannot clear the debt that suspended it. Recovery requires asking somebody.
- *
- * Both of those were recorded as honest limitations in Parts 13 and 15. This
- * closes them.
+ *     `pending_review` needs a channel to ask about;
+ *   - an account suspended for debt cannot cash in, and so cannot clear the
+ *     debt that suspended it. Recovery requires asking somebody.
  */
 
 /**
  * Ticket status answers exactly one question: WHOSE TURN IS IT?
  *
  * That is what a support queue is actually about, and it is why there is no
- * separate "in progress" — a ticket a staff member is thinking about is still
+ * separate "in progress": a ticket a staff member is thinking about is still
  * one the customer is waiting on, and pretending otherwise lets work sit in a
  * status that looks handled.
  *
@@ -107,8 +101,8 @@ export const supportTicket = pgTable(
  * property, or why their account was locked. A version of it that can be edited
  * afterwards is not a record of anything.
  *
- * There is deliberately no `internal` flag in this first version. Staff-only
- * notes are a real helpdesk need, but every message here is visible to both
+ * There is deliberately no `internal` flag. Staff-only notes are a real
+ * helpdesk need, but every message here is visible to both
  * sides, which means there is no filter to get wrong and no way for a private
  * note to reach the customer through a missed `where` clause. See the honest
  * limitations in DIVE1 Part 17.

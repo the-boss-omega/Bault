@@ -8,10 +8,11 @@ import { intakePolicy as buildIntakePolicy } from '../inv/intake-policy';
 import { accountTerms as buildAccountTerms } from './account-terms';
 
 /**
- * Published content — the show calendar, how to reach a person, where we are.
+ * Published content: the show calendar, how to reach a person, where we are,
+ * the intake policy and the figures the terms refer to.
  *
- * All three are PUBLIC. A collector deciding whether to use Bault at all needs
- * to see the shows, the support channels and the facility cities before they
+ * Every route here is PUBLIC. A collector deciding whether to use Bault at all
+ * needs to see the shows, the support channels and the facility cities before they
  * have an account, and putting any of it behind a session would make the
  * support page unreachable to exactly the person most likely to need it.
  *
@@ -40,10 +41,9 @@ export class ContentController {
   /**
    * What Bault accepts and refuses at intake.
    *
-   * PUBLIC, and that is the point of it: the whole failure this closes is a
-   * collector posting a box without knowing the rule, and somebody deciding
-   * whether to use Bault at all needs to read what it will and will not take
-   * before they have an account to read it with.
+   * PUBLIC, because a collector has to know the rule before posting a box, and
+   * somebody deciding whether to use Bault at all needs to read what it will
+   * and will not take before they have an account to read it with.
    *
    * Derived at request time from the modules the intake path validates against,
    * so the published policy cannot drift from the enforced one — see
