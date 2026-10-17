@@ -25,6 +25,25 @@ export interface ReportableRequest {
 
 export interface ReportableEvent {
   request?: ReportableRequest;
+  message?: string;
+  exception?: { values?: { value?: string }[] };
+  breadcrumbs?: { message?: string }[];
+}
+
+/**
+ * The parameters of a failed query, wherever an event carries its message.
+ *
+ * drizzle-orm's query error reads `Failed query: <sql>\nparams: <values>`,
+ * and the values are what the query was about: an email, a name, an address,
+ * a token hash. The exception filter reports such an error without them; this
+ * catches the copies the SDK makes by itself, in the exception's message and
+ * in a console breadcrumb of a logged stack. The SQL, which has placeholders,
+ * and the stack frames after it are kept.
+ */
+const QUERY_PARAMS = /(Failed query: [\s\S]*?\nparams: )[\s\S]*?(?=\n\s+at |$)/g;
+
+function withoutQueryParams<T extends string | undefined>(text: T): T {
+  return (typeof text === 'string' ? text.replace(QUERY_PARAMS, '$1[redacted]') : text) as T;
 }
 
 /**
@@ -65,7 +84,8 @@ function withoutQuery(url: string): string {
   return at === -1 ? url : url.slice(0, at);
 }
 
-export function scrubErrorEvent<E extends ReportableEvent>(event: E): E {
+export function scrubErrorEvent<E extends ReportableEvent>(input: E): E {
+  const event = withoutQueryValues(input);
   const request = event.request;
   if (!request) return event;
 
@@ -85,4 +105,19 @@ export function scrubErrorEvent<E extends ReportableEvent>(event: E): E {
   }
 
   return { ...event, request: clean } as E;
+}
+
+function withoutQueryValues<E extends ReportableEvent>(event: E): E {
+  const out: E = { ...event };
+  if (typeof event.message === 'string') out.message = withoutQueryParams(event.message);
+  if (event.exception?.values) {
+    out.exception = {
+      ...event.exception,
+      values: event.exception.values.map((v) => ({ ...v, value: withoutQueryParams(v.value) })),
+    };
+  }
+  if (event.breadcrumbs) {
+    out.breadcrumbs = event.breadcrumbs.map((b) => ({ ...b, message: withoutQueryParams(b.message) }));
+  }
+  return out;
 }
