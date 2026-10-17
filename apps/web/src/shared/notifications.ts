@@ -28,6 +28,8 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   swap_completed: 'notifications.event.swap_completed',
   transfer_completed: 'notifications.event.transfer_completed',
   shipment_cancelled: 'notifications.event.shipment_cancelled',
+  shipment_delivered: 'notifications.event.shipment_delivered',
+  shipment_exception: 'notifications.event.shipment_exception',
   shipment_expired: 'notifications.event.shipment_expired',
   custom_request_raised: 'notifications.event.custom_request_raised',
   custom_request_quoted: 'notifications.event.custom_request_quoted',
