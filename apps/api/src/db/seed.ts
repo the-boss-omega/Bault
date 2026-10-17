@@ -42,13 +42,13 @@ import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
  * never TRUNCATE in production — `refuseInProduction` below enforces that, and
  * `tsconfig.build.json` keeps this file out of the compiled image.
  *
- * The reset is what makes this script the answer to a database full of test
- * residue. The e2e suites drive the real HTTP stack against a real database, so
- * every intake they perform creates a real item, with a real custody trail, in a
- * real collector's vault — 112 of them after one full run — and none of it can
- * be deleted afterwards through any supported path, because an item is never
- * deleted (Principle I) and its trail is append-only. Re-seeding is the only
- * way back to the catalogue, which is why `pnpm test` now ends by running it.
+ * The reset is also how a database full of test residue is cleared. The e2e
+ * suites drive the real HTTP stack against a real database, so every intake
+ * they perform creates a real item with a real custody trail, and none of it
+ * can be deleted through any supported path, because an item is never deleted
+ * (Principle I) and its trail is append-only. Re-seeding is the only way back
+ * to the catalogue, which is why `pnpm test` re-seeds before the suites that
+ * drive the live API.
  *
  * The dataset below is consistent by construction: every item has an intake
  * custody event + transfer-ledger row + image + intake charge; ownership changes
@@ -74,13 +74,9 @@ function one<T>(rows: T[]): T {
 const DESTRUCTIVE_SEED_CONFIRMATION = 'yes-i-am-sure';
 
 /**
- * Refuse to run against production.
- *
- * "Never TRUNCATE in production" above was a comment and nothing else: nothing
- * here read NODE_ENV, the script was compiled into the production image as
- * dist/db/seed.js, and `pnpm test` ran it after every run against whatever
- * database `.env` named. One mistaken command erased the ledger and the custody
- * trail and left two admin accounts with the password printed in this file.
+ * Refuse to run against production. One mistaken run would erase the ledger
+ * and the custody trail and leave admin accounts with the password printed in
+ * this file.
  *
  * A disposable database that happens to run with NODE_ENV=production (a
  * staging rebuild) can still be seeded, by saying so in a way nobody types by
@@ -142,13 +138,10 @@ async function main(): Promise<void> {
     RESTART IDENTITY`);
 
   /**
-   * The background job queue is app data too, and the reset was leaving it
-   * behind.
+   * The background job queue is app data too.
    *
-   * pg-boss keeps its own schema, so nothing above touches it, and after a test
-   * run it held a hundred and fifty rows of history for work done on rows that
-   * no longer exist. Worse than untidy: the outbox dispatcher's queued jobs
-   * would wake up against a table that had just been truncated underneath them.
+   * pg-boss keeps its own schema, so the TRUNCATE above does not touch it, and
+   * its queued jobs would otherwise wake up against rows that no longer exist.
    *
    * Only the two HISTORY tables are cleared. `queue`, `schedule`, `subscription`
    * and `version` are pg-boss's own configuration and its schema version —
@@ -259,10 +252,8 @@ async function main(): Promise<void> {
      *
      * Its published fee list charges by what arrived, not a flat rate: $1 for
      * a single card, $5 for a lot, an oversized card, a box, a comic, $10 for a
-     * large collection, $20 for a sealed case or a helmet. A flat $5 charged a
-     * single card five times what the service Bault is modelled on charges —
-     * and because storage is a percentage of the intake fee, overcharged its
-     * storage by the same factor for as long as it sat on the shelf.
+     * large collection, $20 for a sealed case or a helmet. Storage is a
+     * percentage of the intake fee, so these figures set storage prices too.
      *
      * The catch-all rule above stays: it prices `other` and anything added to
      * the taxonomy before it has a rule of its own, at the middle of the range
@@ -456,9 +447,9 @@ async function main(): Promise<void> {
     },
     {
       /**
-       * Rush is BAULT moving the parcel to the front of the packing queue. It
-       * used to be handed to the carrier, which doubled the carrier rate and
-       * shortened the carrier estimate — attributing Bault's own speed to FedEx.
+       * Rush is BAULT moving the parcel to the front of the packing queue. It is
+       * priced as a handling charge and leaves the carrier's rate and estimate
+       * alone.
        */
       actionType: 'shipping_rush',
       model: 'fixed' as const,
@@ -774,8 +765,8 @@ async function main(): Promise<void> {
   // 6. ITEMS + full history for each.
   // -------------------------------------------------------------------------
 
-  // The vault holds eight of the ten catalogued Rayquaza cards, four owned by Red
-  // and four by Golden. Each `serialNumber` is also the filename of that card's
+  // This section seeds eight of the ten catalogued Rayquaza cards, four owned by
+  // Red and four by Golden. Each `serialNumber` is also the filename of that card's
   // catalogue photograph under assets/images (SN-DR97-0001.png), so the serial is
   // the single key joining the database row to the picture on screen.
   //
@@ -981,13 +972,11 @@ async function main(): Promise<void> {
     },
   ]);
 
-  // NOT SEEDED, ON PURPOSE — the remaining two cards of the ten are left out of the
-  // database so the warehouse intake flow can be exercised end to end against real
-  // items. Their photographs are already on disk, so booking one in with the serial
-  // below immediately shows the correct picture in the vault:
+  // The ninth card, SN-EVS194-0009, is seeded in section 12 as a donated card.
+  // The tenth is NOT SEEDED, ON PURPOSE, so the warehouse intake flow can be
+  // exercised end to end against a real item. Its photograph is already on disk,
+  // so booking it in with this serial immediately shows the correct picture:
   //
-  //   SN-EVS194-0009  2021 Pokémon SWSH Evolving Skies — Rayquaza V (Alternate Full Art)
-  //                   #194/203 · Rare Ultra · art by Ryuta Fuse · swsh7-194
   //   SN-EVS218-0010  2021 Pokémon SWSH Evolving Skies — Rayquaza VMAX (Alternate Art
   //                   secret) #218/203 · Rare Rainbow · art by Anesaki Dynamic · swsh7-218
 
@@ -1270,16 +1259,11 @@ async function main(): Promise<void> {
   // -------------------------------------------------------------------------
   // 12. THE STATES A SCREEN HAS TO DRAW.
   //
-  //     Everything above seeds the happy path: items on shelves, a sale that
-  //     completed, money that moved. That is enough to prove the system works
-  //     and not nearly enough to DESIGN it, because the states a product is
-  //     judged on are the ones it was never photographed in — a frozen card, a
-  //     card that has left, a box nobody can attribute, an account locked out of
-  //     everything except the one screen that can unlock it.
-  //
-  //     None of these is decoration. Each is a real row in the real table the
-  //     real screen reads, seeded so those screens can be built against data
-  //     instead of against imagination.
+  //     Everything above seeds the happy path. This section seeds the harder
+  //     states a screen has to draw: a frozen card, a card that has left, a box
+  //     nobody can attribute, an account locked out of everything except the one
+  //     screen that can unlock it. Each is a real row in the real table the real
+  //     screen reads.
   // -------------------------------------------------------------------------
 
   /**
@@ -1289,27 +1273,7 @@ async function main(): Promise<void> {
    * platform custodian for the youth-league raffle. It exists so the vault's
    * History scope has something in it for the collector the demo signs in as.
    *
-   * It is a donation rather than a shipment for a reason worth writing down.
-   * `VaultService.listHistory` finds a departed card two ways — the customer is
-   * the PREVIOUS OWNER of an ownership transfer, or a custody event names them
-   * as `new_owner_id` on a change into a terminal state. Nothing in the
-   * application ever writes the second shape: `CustodyService.changeState` does
-   * not set `new_owner_id`, and no code path writes a `dispatch` event at all.
-   * A card the customer still owns but has shipped home is therefore invisible
-   * in History — including Golden's SN-SV146-0006, seeded long before this pass.
-   *
-   * That is an API bug, and the seed is not the place to hide it. Writing a
-   * `new_owner_id` onto a state change here would make this one row appear while
-   * every row the running product creates stayed missing, which is worse than
-   * the bug. So Red's departure is modelled as the thing that genuinely works,
-   * the bug is reported in docs/design/01-audit.md, and the second branch stays
-   * empty until somebody fixes the query.
-   *
-   * The query is fixed now (audit N2): a terminal state change on a card the
-   * customer owns, made since they acquired it, counts as its departure, so
-   * Golden's SN-SV146-0006 is in her History with nothing written here for it.
-   *
-   * The tenth card (SN-EVS218-0010) is still deliberately unseeded, so the
+   * The tenth card (SN-EVS218-0010) is deliberately unseeded, so the
    * warehouse intake bench keeps a real, photographed item to book in.
    */
   const rayAltArt = await mkItem({
@@ -1362,11 +1326,10 @@ async function main(): Promise<void> {
   /**
    * (j) A collector locked out of everything except the helpdesk.
    *
-   * The hardest state in this product to get right, and the only one with no
-   * data at all. Dana owes for storage, the debt sweep suspended the account,
-   * and the API answers 403 to every route except the ticket ones — so the ONE
-   * screen that can get her out of it is the one screen she can reach. Sign in
-   * with dana@bault.dev / 11111111 to see it.
+   * Dana owes for storage, the debt sweep suspended the account, and the API
+   * answers 403 to every route except the helpdesk and the profile probe, so
+   * the ONE screen that can get her out of it is the one screen she can reach.
+   * Sign in with dana@bault.dev / 11111111 to see it.
    */
   const danaAcc = await mkUser('dana@bault.dev', 'dana', 'user', 'Dana', 'Okonkwo');
   const dana = danaAcc.id;
