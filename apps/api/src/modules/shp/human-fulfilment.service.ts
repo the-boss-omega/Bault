@@ -29,23 +29,15 @@ import { MembershipService } from '../mem/membership.service';
 /**
  * The two ways out of the vault that are a person rather than a parcel.
  *
- * Every route out used to be a carrier: a shipment had to resolve to a rate,
- * dispatch bought a label and stamped a tracking number, and there was no
- * fulfilment method that was not a package. Two of the reference service's
- * outbound routes are a human being.
- *
  * WHITE GLOVE is somebody driving the card there and putting it in a hand. It
- * cannot be priced from a rate card, because the cost of getting a person from
- * New Jersey to a hotel in Boston on a Tuesday is not something a lookup knows —
- * so it is a QUOTE: the collector says where, when and where to, Bault works out
- * the journey and comes back with a figure, and the collector accepts or does
- * not. That round trip is the feature, not an inconvenience around it.
+ * cannot be priced from a rate card, so it is a QUOTE: the collector says where,
+ * when and where to, Bault works out the journey and comes back with a figure,
+ * and the collector accepts or does not.
  *
  * SHOW PICKUP is the cards travelling to a show Bault is already attending, and
- * the collector walking up and taking them. It is cheap for one reason worth
- * stating plainly: the van was going anyway. It is not a discount, it is the
- * absence of a journey — which is also why it is capped per show and gated on
- * the same deadline the consignments use. It is the same van.
+ * the collector walking up and taking them. It is cheap because the van is going
+ * anyway, which is also why it is capped per show and gated on the same
+ * deadline the consignments use: it is the same van.
  *
  * Both end the same way, and differently from a parcel: there is no carrier scan
  * to close them, so they are closed by a person putting a name to having taken
@@ -208,8 +200,8 @@ export class HumanFulfilmentService {
 
     /**
      * Status, quote and balance are all read under the shipment lock and then
-     * the wallet lock. They used to be read before the transaction, so two
-     * clicks on Accept both saw `requested` and the quote was charged twice.
+     * the wallet lock, so two clicks on Accept cannot both see `requested` and
+     * charge the quote twice.
      */
     return this.db.transaction(async (tx) => {
       const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
@@ -345,18 +337,13 @@ export class HumanFulfilmentService {
     }
 
     return this.db.transaction(async (tx) => {
-      // The items again, locked, and not on another parcel: two clicks on Book
-      // used to both pass the checks above and pay the show fee twice for the
-      // same cards.
+      // The items again, locked, and not on another parcel, so two clicks on
+      // Book cannot both pay the show fee for the same cards.
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
       await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
 
-      /**
-       * A membership may cover the pickup. Worked out BEFORE the balance check,
-       * which used to run against the full fee outside the transaction — so a
-       * member whose tier pays for the pickup could be refused for being short of
-       * money they were never going to be charged.
-       */
+      // A membership may cover the pickup, so the waiver is worked out BEFORE
+      // the balance check, which runs against what will actually be charged.
       // Wallet first, then the membership period the waiver writes to: the same
       // order paying for a parcel takes them in, so the two cannot deadlock.
       await this.ledger.lockWallet(userId, tx as Database);
@@ -437,7 +424,7 @@ export class HumanFulfilmentService {
    * This is what closes a shipment that has no tracking number. A parcel is
    * closed by a carrier scan; these two are closed by a person putting a name to
    * having received the cards, and by the same scan-verification a dispatch
-   * uses — an operator handing over a box at a show still has to confirm that
+   * uses: an operator handing over a box at a show still has to confirm that
    * what is in the box is what the request says.
    */
   async handOver(
@@ -469,11 +456,9 @@ export class HumanFulfilmentService {
       }
 
       /**
-       * Every card must still be the collector's, on the shelf and not on hold.
-       *
-       * Nothing here checked. A card sold on the market after a pickup was booked
-       * was handed at the show to the person who had sold it, and a card frozen
-       * by an operator went out anyway. Locked first, all of them, in one order.
+       * Every card must still be the collector's, on the shelf and not on hold:
+       * a card sold on the market after the booking, or frozen by an operator,
+       * must not be handed over. Locked first, all of them, in one order.
        */
       await this.custody.lockItems(tx, [...expected]);
       for (const itemId of expected) await this.custody.lockExpecting(tx, itemId, { ownerId: s.userId });

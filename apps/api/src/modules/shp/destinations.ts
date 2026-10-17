@@ -1,34 +1,23 @@
 /**
  * What a collector needs to know about sending a card across a particular
- * border.
+ * border: what happens to the parcel once it lands, beyond the invoice.
  *
- * The parity audit's one genuinely unattempted item was destination-specific
- * customs guidance: Bault produces a correct commercial invoice for every
- * international shipment and then says nothing at all about what happens to the
- * parcel once it lands. A collector in Melbourne gets the paperwork and no
- * answer to "so what will this cost me, and what do I have to do".
+ * **Bault must not invent customs facts.** Duty thresholds move, GST rules
+ * change, and a confident figure made up here is a number somebody will plan
+ * around. So every destination-specific claim carries the URL of the authority
+ * that issues it, and anything Bault has not verified is absent rather than
+ * approximated. Each destination states three things and no more:
  *
- * The hard part is not the data. It is that **Bault must not invent customs
- * facts.** Duty thresholds move, GST rules change, and a platform that publishes
- * a confident figure it made up has told somebody a number they will plan
- * around. That is the same failure mode the FAQ module was built to avoid, so
- * this module holds itself to the same rule with one addition: every
- * destination-specific claim carries the URL of the authority that issues it,
- * and anything Bault has not verified is absent rather than approximated.
- *
- * So each destination states three things and no more:
- *
- *   1. WHAT BAULT DOES — knowable from the code, and the same everywhere.
- *   2. WHO PAYS — the recipient of record, always, which is a Bault policy
+ *   1. WHAT BAULT DOES: knowable from the code, and the same everywhere.
+ *   2. WHO PAYS: the recipient of record, always, which is a Bault policy
  *      rather than a foreign rule and can therefore be stated flatly.
- *   3. WHERE THE RULES LIVE — a link to the destination's own customs
- *      authority, named, so the collector reads the current thresholds from the
- *      body that sets them instead of from a cache of them here.
+ *   3. WHERE THE RULES LIVE: a link to the destination's own customs
+ *      authority, so the collector reads the current thresholds from the body
+ *      that sets them.
  *
- * `notes` carries only mechanics Bault has confirmed and can act on. Where a
- * destination has a known handling quirk Bault does NOT handle, it is listed in
- * `notHandled` and named as an absence, because a collector planning around a
- * capability Bault lacks is exactly who this page exists for.
+ * `notes` carries only mechanics Bault has confirmed and can act on. A known
+ * requirement at a destination that Bault does NOT handle is listed in
+ * `notHandled` and named as an absence.
  */
 
 export interface DestinationGuidance {
@@ -46,10 +35,9 @@ export interface DestinationGuidance {
 /**
  * The destinations Bault has written guidance for.
  *
- * Short on purpose. A list of every country with a plausible-sounding paragraph
- * each would look far more complete and be worth far less — the value here is
- * that a named entry has been checked, so an unnamed one falling back to the
- * generic guidance is an honest signal rather than a gap being papered over.
+ * Short on purpose: a named entry has been checked, so an unnamed one falling
+ * back to the generic guidance is an honest signal rather than a gap papered
+ * over with a plausible-sounding paragraph.
  */
 export const DESTINATIONS: readonly DestinationGuidance[] = [
   {
@@ -131,8 +119,7 @@ export const UNIVERSAL_CUSTOMS_NOTES: readonly string[] = [
  *
  * A country with no entry is not an error and does not return nothing: it gets
  * the universal notes with `specific: null`, which the UI renders as "we have
- * not written guidance for this destination yet" — an honest absence rather
- * than a generic paragraph pretending to be advice.
+ * not written specific guidance for this destination yet".
  */
 export function destinationGuidance(country: string | null | undefined): {
   universal: readonly string[];

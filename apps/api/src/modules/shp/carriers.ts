@@ -1,26 +1,19 @@
 /**
  * The carrier line-up, and the limits that actually decide what you can use.
  *
- * Bault had a rate list and no constraints. `SandboxShippingAdapter` returned
- * "DHL Standard", "DHL Express" and "USPS Standard" at fixed invented prices,
- * regardless of where the parcel was going, what it weighed or what was in it —
- * and the rate request hard-coded the destination as country `IL`, postal code
- * `00000`, with every item assumed to be 500 g.
- *
- * That is a shape, not a shipping product. A real carrier line-up is defined by
- * what each service REFUSES:
+ * A carrier line-up is defined by what each service REFUSES:
  *
  *   - ePacket goes only to countries the carrier has a contract with, caps out
  *     at 4 lb, will not carry more than $400 of declared customs value, and will
  *     not insure past $500;
- *   - ePost carries more weight and more insurance but is slower;
- *   - FedEx International prices on DIMENSIONAL weight, which is why a light
- *     parcel in a big box costs what a heavy one does;
+ *   - ePost carries more weight and more insurance than ePacket;
+ *   - FedEx prices on DIMENSIONAL weight, which is why a light parcel in a big
+ *     box costs what a heavy one does;
  *   - domestic services do not cross a border at all.
  *
  * Those limits are the product. A collector choosing "the cheap one" for a
  * $3,000 slab going to Germany needs to be told, before they pay, that the cheap
- * one will not insure it — not after a claim is refused.
+ * one will not insure it, not after a claim is refused.
  *
  * This module is pure data plus predicates. It talks to nothing, so all of it is
  * directly testable, and `apps/web/src/shared/carriers.ts` mirrors the SHAPE by
@@ -29,16 +22,13 @@
 
 import { DIM_DIVISOR, type BillingIncrement, type Rate } from '@bault/adapters';
 
-/** Where the parcel is going. Country is ISO 3166-1 alpha-2. */
 /**
- * Where a parcel is going.
+ * Where a parcel is going. Country is ISO 3166-1 alpha-2.
  *
- * `country` + `postalCode` were once the whole of it, which was enough for the
- * sandbox's crude distance band and is NOT enough for a real carrier — EasyPost
- * rates on the origin/destination pair and needs a street. The extra fields are
- * optional so a free-text destination still quotes (and is refused by the real
- * adapter with a sentence naming what is missing) rather than failing at the
- * type level.
+ * A real carrier (EasyPost) rates on the origin/destination pair and needs a
+ * street. The fields beyond country and postal code are optional so a free-text
+ * destination still quotes (and is refused by the real adapter with a sentence
+ * naming what is missing) rather than failing at the type level.
  */
 export interface Destination {
   country: string;
@@ -53,10 +43,9 @@ export interface Destination {
  * Where a stored shipment is going, as a carrier needs it.
  *
  * The snapshot when there is one; otherwise the country/postcode pair, which is
- * all a shipment created before the snapshot existed ever recorded. A carrier
- * that needs a street will refuse the fallback with a sentence naming what is
- * missing, which is the right failure — quoting against a guessed street would
- * be worse.
+ * all an older shipment recorded. A carrier that needs a street will refuse the
+ * fallback with a sentence naming what is missing, which is the right failure:
+ * quoting against a guessed street would be worse.
  */
 export function destinationOf(s: {
   destinationDetail: unknown;
@@ -83,7 +72,7 @@ export interface CarrierService {
   /** Domestic services never cross a border; international ones always do. */
   scope: 'domestic' | 'international';
   /**
-   * The countries this service reaches. Empty means "anywhere in scope" —
+   * The countries this service reaches. Empty means "anywhere in scope";
    * ePacket is the one that carries a real contracted list.
    */
   countries: readonly string[];
@@ -117,14 +106,12 @@ export interface CarrierService {
    *
    * ePacket is the one with a real figure here: 24 inches on the longest side
    * and 36 inches for length + width + height. A large or extra-large Bault box
-   * exceeds the second one before anything is put in it, which is a refusal the
-   * catalogue could not previously express — so the cheapest international
-   * service was being offered for parcels it would have rejected at the counter.
+   * exceeds the second one before anything is put in it.
    */
   maxDimensionSumCm: number;
   /**
    * A flat price that ignores weight and distance entirely. Only the
-   * direct-overnight service has one — see {@link DIRECT_OVERNIGHT_KEY}.
+   * direct-overnight service has one (see {@link DIRECT_OVERNIGHT_KEY}).
    */
   flatCostMinor?: number;
   /** A hard cap on how many items may travel on this service. */
@@ -136,11 +123,10 @@ export interface CarrierService {
    * that ARE this service, in order of preference.
    *
    * The catalogue names services for people ("Ground Advantage", "2Day") and
-   * EasyPost names them for carriers (`GroundAdvantage`, `FEDEX_2_DAY`), and a
-   * rate was matched to the catalogue by comparing the two strings exactly — so
-   * with `SHIPPING_PROVIDER=easypost` nothing matched and a collector was
-   * offered no way to ship at all. Absent means EasyPost sells no service Bault
-   * has confirmed to be this one, and it is simply not offered there.
+   * EasyPost names them for carriers (`GroundAdvantage`, `FEDEX_2_DAY`), so
+   * `rateFor` matches EasyPost rates through these codes. Absent means EasyPost
+   * sells no service Bault has confirmed to be this one, and it is simply not
+   * offered there.
    */
   easypost?: { carrier: string; services: readonly string[] };
 }
@@ -149,9 +135,9 @@ export interface CarrierService {
 export const DOMESTIC_COUNTRY = 'US';
 
 /**
- * The countries ePacket is contracted to. Not a policy Bault sets — it is the
- * carrier's list, and shipping to anywhere else on this service is simply not a
- * thing that can be bought.
+ * The countries ePacket is contracted to. Not a policy Bault sets: it is the
+ * carrier's list, and shipping to anywhere else on this service cannot be
+ * bought.
  */
 const EPACKET_COUNTRIES = [
   'AU', 'AT', 'BE', 'BR', 'CA', 'CH', 'CN', 'CZ', 'DE', 'DK',
@@ -223,8 +209,8 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     /**
      * No EasyPost mapping. ePacket is a postal product sold through
      * consolidators, and which EasyPost carrier account and service code (if
-     * any) is this exact product has not been confirmed against a live account
-     * — so under EasyPost it is not offered rather than offered as a guess.
+     * any) is this exact product has not been confirmed against a live account,
+     * so under EasyPost it is not offered rather than offered as a guess.
      */
     key: 'epacket',
     carrier: 'ePacket',
@@ -325,7 +311,7 @@ export function carrierService(key: string): CarrierService | undefined {
  * Two ways to match, and both are exact. A rate named the way the catalogue
  * names the service is the sandbox's, which speaks the catalogue's language. A
  * rate named the way EasyPost names it is matched through the service's
- * `easypost` codes, in preference order — so FedEx International Priority is
+ * `easypost` codes, in preference order, so FedEx International Priority is
  * found under either of the names FedEx has used for it. Nothing is matched by
  * resemblance: "Express" is not "Priority", whatever a fuzzy comparison thinks.
  */
@@ -384,9 +370,8 @@ export interface ServiceProblem {
    * The limit that was exceeded, already formatted ("$500.00", "4.0 lb", "5").
    *
    * Sent separately so the SPA can translate the SENTENCE while keeping the
-   * number — a Hebrew reader being handed "ePacket International insures up to
-   * $500.00" in English loses the phrasing, and being handed a translated
-   * sentence with no figure in it loses the only actionable part.
+   * number: an untranslated sentence loses the phrasing for a Hebrew reader, and
+   * a translated one with no figure in it loses the only actionable part.
    */
   limit?: string;
 }
@@ -407,7 +392,7 @@ function lb(grams: number): string {
 /**
  * Every reason this service cannot carry this parcel.
  *
- * All of them, not the first — somebody whose parcel is both too heavy and too
+ * All of them, not the first: somebody whose parcel is both too heavy and too
  * valuable for ePacket should learn both facts at once rather than fixing one
  * and being refused again.
  */
@@ -469,16 +454,14 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
   /**
    * The box is too big for this service, whatever is in it.
    *
-   * ePacket is the one that carries real figures — 24 inches on the longest
-   * side, 36 inches for the three sides added together — and a large Bault box
-   * breaks the second one empty. The catalogue could not express this before, so
-   * the cheapest international service was offered for parcels a counter would
-   * have handed straight back.
+   * ePacket is the one that carries real figures (24 inches on the longest
+   * side, 36 inches for the three sides added together), and a large Bault box
+   * breaks the second one empty.
    *
-   * Only checked when a box is known. With no dimensions there is nothing to
-   * measure, and refusing on a number nobody supplied would be worse than
-   * quoting optimistically — which is itself an argument for `chooseBox` always
-   * producing one.
+   * Only checked when a box is known. `boxFor` predicts one whenever any box
+   * fits the contents; with no dimensions there is nothing to measure, and
+   * refusing on a number nobody supplied would be worse than quoting
+   * optimistically.
    */
   if (parcel.dimensionsCm) {
     const { length, width, height } = parcel.dimensionsCm;

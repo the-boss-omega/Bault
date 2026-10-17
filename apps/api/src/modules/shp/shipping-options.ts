@@ -1,11 +1,7 @@
 /**
- * Everything a collector can put ON a shipment, and the rules between them.
- *
- * A Bault shipment carried items, an address, a recipient, a rush flag and a
- * carrier. Nothing about what the parcel was WORTH, whether anybody would cover
- * it if it vanished, or whether a human had to be there to receive it — which,
- * for a vault whose customers are by definition the people with valuable cards,
- * is the most conspicuous absence in the outbound half of the product.
+ * Everything a collector can put ON a shipment beyond its items and address:
+ * what the parcel is WORTH, whether it is insured, whether somebody must sign
+ * for it, and the add-ons.
  *
  * The rules here are the interesting part, because they constrain each other:
  * insuring past a threshold FORCES a signature (an insurer will not cover a
@@ -24,7 +20,7 @@ export const MAX_INSURED_VALUE_MINOR = 500_000; // $5,000
 /**
  * Above this, the carrier must collect a signature.
  *
- * Not a Bault preference — it is the condition on which the cover is written. A
+ * Not a Bault preference: it is the condition on which the cover is written. A
  * parcel worth more than this left on a doorstep is not insured, so offering the
  * combination would be selling somebody a policy that would not pay.
  */
@@ -94,10 +90,9 @@ export function addOnFeeAction(key: string): string {
 /**
  * What cancelling costs once a request exists.
  *
- * It is not a penalty for changing your mind — it is the double verification and
- * the packing that were already done. Which is exactly why it is charged only
- * once a rate has been selected: a request nobody has touched yet costs nothing
- * to abandon, and charging for that would be charging for nothing.
+ * It pays for the double verification and the packing that were already done,
+ * which is why it is charged only once a rate has been selected: a request
+ * nobody has touched yet costs nothing to abandon.
  */
 export const RESTOCKING_FEE_MINOR = 2_500; // $25
 
@@ -121,8 +116,8 @@ export function needsCustoms(destinationCountry: string): boolean {
 /**
  * The HS heading for collectible trading cards.
  *
- * Printed matter, other — which is what a customs broker will tell you, and what
- * every collectibles forwarder declares. It is carried on the commercial invoice
+ * Printed matter, other: what a customs broker will tell you, and what every
+ * collectibles forwarder declares. It is carried on the commercial invoice
  * because a parcel that arrives without one is a parcel sitting in a bonded
  * warehouse while somebody emails about it.
  */
@@ -152,9 +147,8 @@ export interface ShipmentOptionProblem {
 /**
  * Check the options against each other, before anything is priced.
  *
- * This is the courtesy layer that mirrors the server's own rules, and it is the
- * server's own rules — both the create and the edit path call it, so there is
- * exactly one place that decides whether a combination is legal.
+ * Quote, create and edit all call this, so there is exactly one place that
+ * decides whether a combination is legal.
  */
 export function checkOptions(opts: {
   insuredValueMinor: number;
