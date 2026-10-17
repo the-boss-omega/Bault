@@ -33,6 +33,8 @@ class CreateHouseListingDto {
 class UpdateHouseListingDto {
   @IsOptional() @IsInt() @IsPositive() askingPrice?: number;
   @IsOptional() @IsInt() @Min(0) stock?: number;
+  /** The stock figure `stock` was typed over. Required with `stock`. */
+  @IsOptional() @IsInt() @Min(0) expectedStock?: number;
   @IsOptional() @IsIn(['active', 'removed']) status?: 'active' | 'removed';
 }
 
