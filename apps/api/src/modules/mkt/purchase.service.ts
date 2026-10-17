@@ -41,7 +41,8 @@ export interface PurchaseResult {
  *   2. lock the item FOR UPDATE,
  *   3. reject self-purchase and on-hold items,
  *   4. resolve the marketplace fee from PRC and SNAPSHOT it (price freeze),
- *   5. require the buyer to have the funds,
+ *   5. lock both wallets in id order and require the buyer to have the funds,
+ *      then spend the seller's commission waiver,
  *   6. move money on the ledger: buyer −price; seller +price then −fee (net),
  *   7. transfer ownership (custody event) and return the item to the vault,
  *   8. mark the listing sold and write the irreversible Transaction,
@@ -112,6 +113,23 @@ export class PurchaseService {
       );
 
       /**
+       * Both wallets, in one order, before the seller's membership period: the
+       * rows, then the wallets, then the periods, the order every money path
+       * takes them in (`LedgerService.lockWallet`). The waiver used to write
+       * the seller's period before the buyer's wallet was taken, which closed a
+       * cycle with the members' own payments (wallet, then period) when two
+       * collectors bought from each other, and Postgres aborted one sale.
+       * Sorted by id, two sales between the same pair queue rather than cross.
+       */
+      for (const userId of [buyerId, l.sellerId].sort()) await this.ledger.lockWallet(userId, tx as Database);
+
+      // Buyer must have the funds (a sale is not a "defined service" that can go negative).
+      const buyerBalance = await this.ledger.balanceOf(buyerId, tx);
+      if (buyerBalance.amount < price) {
+        throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
+      }
+
+      /**
        * The seller's membership may waive the commission on this sale, in part
        * or whole. Spent here, inside the sale's own transaction, so the waiver
        * and the sale commit or fail together. It can only lower the fee the
@@ -119,12 +137,6 @@ export class PurchaseService {
        */
       const waiver = await this.memberships.waive(tx as Database, l.sellerId, 'marketplace_fee', fee.amount, price);
       const feeMinor = fee.amount - waiver.waivedMinor;
-
-      // Buyer must have the funds (a sale is not a "defined service" that can go negative).
-      const buyerBalance = await this.ledger.balanceOf(buyerId, tx);
-      if (buyerBalance.amount < price) {
-        throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
-      }
 
       // Money moves on the immutable ledger. Seller is credited gross then debited
       // the fee, so the ledger transparently shows gross + fee = net.
