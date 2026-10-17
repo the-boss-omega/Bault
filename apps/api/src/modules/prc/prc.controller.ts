@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsInt, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
 import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -17,7 +17,13 @@ class CreateRuleDto {
   @IsOptional() @IsString() itemClass?: string;
   @IsString() description!: string;
   @IsIn(['fixed', 'percentage']) model!: 'fixed' | 'percentage';
-  @IsInt() value!: number;
+  /**
+   * Minor units for a fixed rule, basis points for a percentage one. Never
+   * negative: a negative price would credit the customer it was meant to
+   * charge. Zero is a free action. A percentage is capped at 100% in
+   * `PricingService.createRule`.
+   */
+  @IsInt() @Min(0) value!: number;
   @IsIn(['per_event', 'daily', 'weekly', 'monthly'])
   billingTrigger!: 'per_event' | 'daily' | 'weekly' | 'monthly';
   @IsOptional() @IsObject() parameters?: Record<string, unknown>;
