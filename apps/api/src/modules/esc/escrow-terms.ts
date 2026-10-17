@@ -1,9 +1,9 @@
 /**
  * What escrow costs, and the rules that decide whether a deal can be raised.
  *
- * Pure data and predicates, like every other vocabulary module here — it talks
- * to nothing, so all of it is directly testable, and the SPA mirrors the shape
- * while fetching the actual figures from `GET /escrow/terms`.
+ * Pure data and predicates: it talks to nothing, so all of it is directly
+ * testable, and the SPA mirrors the shape while fetching the actual figures
+ * from `GET /escrow/terms`.
  */
 import { formatMinor } from '../../shared/money';
 
@@ -14,16 +14,15 @@ export const ESCROW_FEE_BPS = 100; // 1.00%
 export const ESCROW_MINIMUM_FEE_MINOR = 2_500; // $25
 
 /**
- * The floor under a deal.
- *
- * Escrow is a person receiving a card, examining it against a description,
- * holding it while two strangers make up their minds, and then either vaulting
- * or shipping it. Below this the fee cannot cover that work, and pretending
- * otherwise would mean either doing it badly or losing money on every deal.
+ * The floor under a deal. Escrow is a person receiving, examining, holding and
+ * then vaulting or shipping a card; below this the fee cannot cover that work.
  */
 export const ESCROW_MINIMUM_VALUE_MINOR = 50_000; // $500
 
-/** The pricing-rule action carrying the escrow fee, when one is configured. */
+/**
+ * The pricing-rule action for the escrow fee. The fee is charged from the
+ * constants above; a rule under this action is only reported on the terms.
+ */
 export const ESCROW_FEE_ACTION = 'escrow_fee';
 
 export function escrowFeeMinor(valueMinor: number): number {
@@ -40,8 +39,7 @@ export interface EscrowProblem {
  * Whether this deal can be raised at all.
  *
  * Checked before anything is created, because every one of these is something
- * the raiser can still fix — and a deal that gets as far as somebody posting a
- * card before being refused has cost them a postage label.
+ * the raiser can still fix before anybody posts a card.
  */
 export function checkDeal(input: {
   valueMinor: number;
@@ -83,11 +81,9 @@ export function checkDeal(input: {
   }
 
   /**
-   * A card cannot be placed into a vault that does not exist.
-   *
-   * This is the one rule that surprises people, so it is refused at submission
-   * with the reason rather than discovered at settlement — an external buyer's
-   * card has to be shipped to them, because there is nowhere else for it to go.
+   * A card cannot be placed into a vault that does not exist: an external
+   * buyer's card has to be shipped to them. Refused at submission with the
+   * reason rather than discovered at settlement.
    */
   if (input.settlement === 'buyer_vault') {
     const buyerIsExternal = input.raiserRole === 'seller' && !hasAccount;
@@ -105,10 +101,8 @@ export function checkDeal(input: {
 /**
  * Who pays the fee.
  *
- * The party who RAISED the deal, because they chose the service — and because
- * they are the one who is certainly a Bault account, which the other side may
- * not be. Stated as a function rather than left implicit so the answer is in
- * one place and can be quoted in the UI before anybody commits.
+ * The party who RAISED the deal, because they chose the service and are
+ * certainly a Bault account, which the other side may not be.
  */
 export function feePayer(deal: { raisedBy: string }): string {
   return deal.raisedBy;
