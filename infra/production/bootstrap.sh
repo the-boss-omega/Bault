@@ -121,6 +121,8 @@ chmod 0600 "$keys"
 # -----------------------------------------------------------------------------
 step "firewall: 80, 443 open; 22 from ${ADMIN_IP} only"
 # -----------------------------------------------------------------------------
+# SSH from one address is also why .github/workflows/deploy.yml cannot run from
+# a GitHub-hosted runner: deploy by hand from ADMIN_IP (README, section 5).
 # Docker publishes ports with its own iptables rules, which ufw never sees.
 # Only Caddy publishes anything (compose.yml), and only 80 and 443; a port
 # published by anything else is open to the internet whatever ufw says.

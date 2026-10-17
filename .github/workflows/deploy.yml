@@ -1,8 +1,17 @@
-name: Deploy
+name: Deploy (optional)
 
 # Deploys a release that release.yml has already published. Manual only: a
 # deployment is a decision somebody makes and puts their name to, never a side
 # effect of a push. Rollback is the same run with the previous tag.
+#
+# OPTIONAL. The supported way to deploy is deploy.sh run by hand on the host,
+# over SSH from ADMIN_IP (infra/production/README.md, section 5). The host's
+# firewall admits SSH from ADMIN_IP only (bootstrap.sh), and a GitHub-hosted
+# runner connects from addresses that change, so from `ubuntu-latest` this
+# job cannot reach the host. It checks that first and stops with the reason.
+# Opening SSH to GitHub's address ranges is not the fix: that is most of the
+# internet's cloud. The job works unchanged on a self-hosted runner on a
+# machine the firewall admits: set `runs-on` to that runner's label.
 #
 # APPROVAL lives in the repository settings, not in this file: Settings >
 # Environments > `staging` / `production` > Required reviewers (and, for
@@ -78,6 +87,20 @@ jobs:
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] \
             || { echo "::error::'$TAG' is not a release tag (v1.2.3 or v1.2.3-rc1)"; exit 1; }
 
+      # Before anything else touches the host: can this runner reach its SSH
+      # port at all? A firewall that drops the connection would otherwise
+      # leave ssh waiting two minutes for an opaque "Connection timed out".
+      - name: Check the host is reachable from this runner
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          [ -n "$DEPLOY_HOST" ] || { echo "::error::DEPLOY_HOST is not set on the environment"; exit 1; }
+          if ! timeout 15 bash -c 'exec 3<>"/dev/tcp/$1/22"' _ "$DEPLOY_HOST" 2>/dev/null; then
+            echo "::error::Cannot reach ${DEPLOY_HOST}:22 from this runner. The host's firewall admits SSH from ADMIN_IP only (infra/production/bootstrap.sh), and GitHub-hosted runners are not ADMIN_IP. Deploy by hand from ADMIN_IP: ssh deploy@${DEPLOY_HOST}, then cd /opt/bault && ./infra/production/deploy.sh <tag> (infra/production/README.md, section 5). To use this workflow, run it on a self-hosted runner the firewall admits."
+            exit 1
+          fi
+          echo "reached ${DEPLOY_HOST}:22"
+
       # Fail here, with a clear message, rather than on the server halfway
       # through: all three images of the release must exist.
       - name: Check the release images exist
@@ -118,6 +141,7 @@ jobs:
           [ -n "$DEPLOY_HOST" ] || { echo "::error::DEPLOY_HOST is not set on the environment"; exit 1; }
           ssh -i ~/.ssh/deploy_key \
               -o IdentitiesOnly=yes \
+              -o ConnectTimeout=15 \
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -o ServerAliveInterval=30 \

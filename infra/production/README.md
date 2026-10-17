@@ -105,17 +105,27 @@ psql "$(grep ^DATABASE_URL= /etc/bault/api.env | cut -d= -f2-)" -c 'show stateme
 
 ## 5. Deploy (every release, as deploy)
 
+By hand, over SSH from `ADMIN_IP`. This is the supported path:
+
 ```sh
 cd /opt/bault && git fetch --tags && git checkout <tag>
 ./infra/production/deploy.sh <tag>
 ```
 
-`.github/workflows/deploy.yml` runs the second line over SSH; keep the
-checkout on the same tag. The script pulls the images, dumps the database
-(as the owner, into `/var/backups/bault`, or as `/etc/bault/backup.env` says),
-migrates, re-applies `roles.sql`, starts the stack, and exits 0 only when
-`/api/v1/readyz` answers through Caddy and the new worker has dispatched the
-outbox (`/api/v1/readyz/worker`). It prints how to roll back, success or not.
+`.github/workflows/deploy.yml` runs the second line over SSH, and is optional.
+The firewall admits SSH from `ADMIN_IP` only, and GitHub-hosted runners connect
+from addresses that change, so from them the workflow cannot reach the host; it
+checks that first and stops with this explanation. Do not widen the SSH rule
+for it. To use the workflow, register a self-hosted runner on a machine at
+`ADMIN_IP` (or behind the VPN it names) and set the job's `runs-on` to its
+label.
+
+Either way, keep the checkout on the same tag. The script pulls the images,
+dumps the database (as the owner, into `/var/backups/bault`, or as
+`/etc/bault/backup.env` says), migrates, re-applies `roles.sql`, starts the
+stack, and exits 0 only when `/api/v1/readyz` answers through Caddy and the
+new worker has dispatched the outbox (`/api/v1/readyz/worker`). It prints how
+to roll back, success or not.
 
 Check from outside:
 
