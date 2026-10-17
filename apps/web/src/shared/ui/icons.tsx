@@ -494,9 +494,9 @@ export function IconGavel(p: IconProps) {
 /* ---------- Decorative brand art ---------- */
 
 /**
- * Stylised vault door for the wallet hero: pure geometry, no photography.
- * It is drawn in `currentColor` at low opacity so it sinks into the card and
- * never competes with the balance figure.
+ * Stylised vault door for the wallet hero: pure geometry, no photography, drawn
+ * in `currentColor` at low opacity. The stylesheet hides `.hero-art`, so it is
+ * not shown at present.
  */
 export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
   return (
