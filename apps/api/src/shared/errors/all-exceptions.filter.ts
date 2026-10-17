@@ -78,7 +78,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // This also turns a 22P02 caused by our own code into a 400; the log line
     // below still records every one of them.
     if (isInvalidTextRepresentation(exception)) {
-      this.logger.warn(`Malformed identifier rejected: ${describe(exception)}`);
+      this.logger.warn(`Malformed identifier rejected: ${describe(withoutQueryValues(exception))}`);
       res.status(HttpStatus.BAD_REQUEST).json({
         error: {
           code: ErrorCode.VALIDATION_FAILED,
@@ -139,8 +139,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     // Unknown/unexpected error: log server-side, report it, return an opaque 500.
-    this.logger.error(exception instanceof Error ? exception.stack : String(exception));
-    this.report(exception, describeRequest(requestOf(host)));
+    // A failed query is logged and reported without the values it was run with.
+    const safe = withoutQueryValues(exception);
+    this.logger.error(safe instanceof Error ? safe.stack : String(safe));
+    this.report(safe, describeRequest(requestOf(host)));
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: { code: ErrorCode.INTERNAL, message: 'Internal server error', details: {} },
     });
@@ -190,6 +192,63 @@ function providerFailure(
   }
   if (exception instanceof PaymentProviderError || exception.name === 'PaymentProviderError') {
     return { kind: 'payment', rejectedInput: false, reason: exception.message };
+  }
+  return null;
+}
+
+/**
+ * A failed query, in a form that may leave the process.
+ *
+ * drizzle-orm 0.45 wraps every failed query in a `DrizzleQueryError` whose
+ * message is the SQL followed by its PARAMETERS, and the parameters are
+ * whatever the query was about: an email, a name, an address, a token hash.
+ * Logged or reported as it stands, that is personal data in the log and in a
+ * third party's error tracker. This keeps what diagnoses the failure: the
+ * SQLSTATE, the constraint, table and column the database names, and the SQL
+ * text, which carries placeholders rather than values (a quoted literal in it
+ * is blanked too), on an error of its own with the original stack frames. The
+ * pg error is not kept as its cause, because its own message can quote the
+ * value (`invalid input syntax for type uuid: "…"`).
+ *
+ * Anything else is returned as it is. Recognised by shape rather than by
+ * class: the error's name is a plain `Error`, and the test suites load drizzle
+ * from more than one copy.
+ */
+function withoutQueryValues(exception: unknown): unknown {
+  const query = queryErrorOf(exception);
+  if (!query) return exception;
+  const db = databaseErrorOf(exception);
+  const named = [
+    db?.constraint ? `constraint ${db.constraint}` : null,
+    db?.table ? `table ${db.table}` : null,
+    db?.column ? `column ${db.column}` : null,
+  ].filter(Boolean);
+  const sqlText = query.query.replace(/'(?:[^']|'')*'/g, "'…'").slice(0, 500);
+  const safe = new Error(
+    `Query failed, SQLSTATE ${pgErrorCode(exception) ?? 'unknown'}${named.length > 0 ? ` (${named.join(', ')})` : ''}: ${sqlText}`,
+  );
+  safe.name = 'DatabaseQueryError';
+  const frames = (query.stack ?? '').split('\n').filter((line) => /^\s+at /.test(line));
+  safe.stack = [`${safe.name}: ${safe.message}`, ...frames].join('\n');
+  return safe;
+}
+
+function queryErrorOf(exception: unknown): { query: string; stack?: string } | null {
+  if (!(exception instanceof Error)) return null;
+  const e = exception as Error & { query?: unknown; params?: unknown };
+  return typeof e.query === 'string' && Array.isArray(e.params) ? { query: e.query, stack: e.stack } : null;
+}
+
+/** The pg error behind a failed query: what it names, never what it quotes. */
+function databaseErrorOf(exception: unknown): { constraint?: string; table?: string; column?: string } | null {
+  let current = (exception as { cause?: unknown })?.cause;
+  for (let depth = 0; depth < 5 && typeof current === 'object' && current !== null; depth += 1) {
+    const e = current as { code?: unknown; constraint?: unknown; table?: unknown; column?: unknown; cause?: unknown };
+    if (typeof e.code === 'string') {
+      const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+      return { constraint: text(e.constraint), table: text(e.table), column: text(e.column) };
+    }
+    current = e.cause;
   }
   return null;
 }

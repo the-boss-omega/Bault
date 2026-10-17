@@ -13,8 +13,10 @@ import type { Env } from '@bault/config';
  * need the SDK loaded before everything else in the process and is a separate
  * decision with its own cost. What is reported is attached explicitly by the
  * exception filter, and EVERY event passes through `scrubErrorEvent` on its way
- * out, which removes cookies, credential headers and the body of anything under
- * `/auth` or `/me/password`.
+ * out, which removes cookies, credential headers, the body of anything under
+ * `/auth` or `/me/password`, and the parameter values of a failed query from
+ * the messages and breadcrumbs (the filter already reports a failed query
+ * without them).
  */
 let enabled = false;
 

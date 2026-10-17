@@ -57,6 +57,23 @@ describe('every report', () => {
   });
 });
 
+describe('a failed query', () => {
+  // drizzle-orm's query error: the SQL, then the values it was run with.
+  const failed = 'Failed query: select * from user_account where email = $1 and last_name = $2\nparams: ann@example.test,Ashwood';
+
+  it('loses the values from the exception, the message and a logged stack, and keeps the SQL', () => {
+    const out = scrubErrorEvent({
+      message: failed,
+      exception: { values: [{ value: failed }] },
+      breadcrumbs: [{ message: `${failed}\n    at NodePgPreparedQuery.queryWithCache (session.cjs:66:15)` }],
+    } as Event & Record<string, unknown>) as Record<string, unknown>;
+    expect(leaks(out as Event, 'ann@example.test', 'Ashwood')).toEqual([]);
+    const text = JSON.stringify(out);
+    expect(text).toContain('where email = $1 and last_name = $2');
+    expect(text).toContain('queryWithCache');
+  });
+});
+
 describe('a crash on a credential route', () => {
   it('drops the body of a sign-in', () => {
     const out = scrubErrorEvent(
