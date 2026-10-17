@@ -117,6 +117,9 @@ async function main(): Promise<void> {
 
   // -------------------------------------------------------------------------
   // 1. RESET — wipe all app data (see header). TRUNCATE bypasses row triggers.
+  // Every table in the schema is named here; `tests/integration/seed-reset.test.ts`
+  // compares the list with the migrated database, so a new table cannot be
+  // left out and keep rows that point at nothing.
   // -------------------------------------------------------------------------
   await pool.query(`TRUNCATE TABLE
     user_account, verification_token, login_session, login_attempt,
@@ -129,7 +132,7 @@ async function main(): Promise<void> {
     outbox_message, audit_record, idempotency_key, confirmation_token,
     notification, notification_preference, dispute,
     storage_fee_run, shipping_address,
-    facility, parcel, parcel_event, arrival_disposal,
+    facility, parcel, parcel_event, parcel_photo, arrival_disposal,
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
