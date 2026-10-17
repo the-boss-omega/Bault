@@ -131,6 +131,11 @@ export interface SmtpConfig {
   port: number;
   /** true = implicit TLS (465); false = STARTTLS upgrade (587). */
   secure: boolean;
+  /**
+   * Refuse to continue in clear when the server offers no STARTTLS. False only
+   * for a local mail catcher in development (`createEmailAdapter` decides).
+   */
+  requireTls: boolean;
   user: string;
   password: string;
   /** Envelope sender, e.g. `Bault <noreply@example.com>`. */
@@ -155,10 +160,18 @@ export class SmtpEmailAdapter implements EmailAdapter {
   private readonly transport: Transporter;
 
   constructor(private readonly config: SmtpConfig) {
+    /**
+     * `requireTLS`: on 587 the session starts in clear, and nodemailer upgrades
+     * only if the server offers STARTTLS. Without it, a server that does not
+     * offer it, or anybody on the path who strips the offer, receives the
+     * password and every reset link in clear. With it, nodemailer stops before
+     * AUTH. On 465 (`secure`) TLS starts with the first byte.
+     */
     this.transport = createTransport({
       host: config.host,
       port: config.port,
       secure: config.secure,
+      requireTLS: config.requireTls,
       auth: { user: config.user, pass: config.password },
     });
   }
