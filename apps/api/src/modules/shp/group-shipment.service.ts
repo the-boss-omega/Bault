@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -114,12 +114,30 @@ export class GroupShipmentService {
       throw AppError.validation('Your request is going somewhere else. A shared parcel has one destination.');
     }
 
-    await this.db
-      .update(shipment)
-      .set({ groupId: group.id, updatedAt: new Date() })
-      .where(eq(shipment.id, shipmentId));
+    await this.db.transaction(async (tx) => {
+      // The group still forming, read under a share lock that a lock or a
+      // cancellation must wait for: a member who joins as the group is locked
+      // either joins before it (and is told) or is refused, never added after.
+      await this.assertForming(tx, group.id, 'That group has already been closed to new members');
+      const [joined] = await tx
+        .update(shipment)
+        .set({ groupId: group.id, updatedAt: new Date() })
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested'), isNull(shipment.groupId)))
+        .returning({ id: shipment.id });
+      if (!joined) throw new AppError(ErrorCode.CONFLICT, 'That request has moved on and cannot join a group', 409);
+    });
 
     return this.describe(group.id);
+  }
+
+  private async assertForming(tx: Database, groupId: string, message: string) {
+    const [row] = await tx
+      .select({ status: shipmentGroup.status })
+      .from(shipmentGroup)
+      .where(eq(shipmentGroup.id, groupId))
+      .for('share')
+      .limit(1);
+    if (row?.status !== 'forming') throw new AppError(ErrorCode.CONFLICT, message, 409);
   }
 
   /** Step back out, while the group is still forming. */
@@ -140,10 +158,15 @@ export class GroupShipmentService {
       );
     }
 
-    await this.db
-      .update(shipment)
-      .set({ groupId: null, updatedAt: new Date() })
-      .where(eq(shipment.id, shipmentId));
+    const groupId = s.groupId;
+    await this.db.transaction(async (tx) => {
+      // As for joining: not out of a group that was locked meanwhile.
+      await this.assertForming(tx, groupId, 'That group has been locked — ask support to unpick it');
+      await tx
+        .update(shipment)
+        .set({ groupId: null, updatedAt: new Date() })
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.groupId, groupId)));
+    });
     return { status: 'left' as const };
   }
 
@@ -234,12 +257,24 @@ export class GroupShipmentService {
 
     const now = new Date();
     return this.db.transaction(async (tx) => {
-      await tx
+      // Only from `forming`: the read above is not the write. A second click on
+      // Lock, or a cancellation that landed in between, finds it changed, and
+      // nobody is told twice or told about a parcel the payer called off.
+      const [locked] = await tx
         .update(shipmentGroup)
         .set({ status: 'locked', lockedAt: now, updatedAt: now })
-        .where(eq(shipmentGroup.id, groupId));
+        .where(and(eq(shipmentGroup.id, groupId), eq(shipmentGroup.status, 'forming')))
+        .returning({ id: shipmentGroup.id });
+      if (!locked) throw new AppError(ErrorCode.CONFLICT, 'That group is no longer open to locking', 409);
 
-      for (const m of members) {
+      // The members as they stand now the group row is held: one who left in
+      // between is not told, and a group emptied meanwhile does not lock.
+      const current = await tx.select().from(shipment).where(eq(shipment.groupId, groupId));
+      if (current.length < 2) {
+        throw AppError.validation('A shared parcel needs at least two people in it.');
+      }
+
+      for (const m of current) {
         await this.outbox.emit(tx, {
           aggregateType: 'shipment',
           aggregateId: m.id,
@@ -247,12 +282,12 @@ export class GroupShipmentService {
           payload: {
             userId: m.userId,
             groupCode: group.code,
-            memberCount: members.length,
+            memberCount: current.length,
             destination: group.destinationAddress,
           },
         });
       }
-      return { status: 'locked' as const, memberCount: members.length };
+      return { status: 'locked' as const, memberCount: current.length };
     });
   }
 
