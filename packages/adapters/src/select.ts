@@ -33,11 +33,12 @@ export type ShippingSelection = Runtime & {
   EASYPOST_BASE_URL: string;
 };
 
-export type EmailSelection = {
+export type EmailSelection = Runtime & {
   EMAIL_PROVIDER: 'console' | 'smtp';
   SMTP_HOST: string;
   SMTP_PORT: number;
   SMTP_SECURE: boolean;
+  SMTP_REQUIRE_TLS: boolean;
   SMTP_USER: string;
   SMTP_PASSWORD: string;
   SMTP_FROM: string;
@@ -130,6 +131,10 @@ export function createShippingAdapter(env: ShippingSelection): ShippingAdapter {
  * The console sink is the default so a fresh checkout runs with no mail
  * configuration; verification and reset links are then read from the server
  * log. Production's refusal of the console sink lives in the env schema.
+ *
+ * SMTP requires TLS. Only development may turn that off
+ * (`SMTP_REQUIRE_TLS=false`), for a local mail catcher; anywhere else the
+ * setting is ignored here and refused by the env schema.
  */
 export function createEmailAdapter(env: EmailSelection): EmailAdapter {
   if (env.EMAIL_PROVIDER !== 'smtp') return new ConsoleEmailAdapter();
@@ -137,6 +142,7 @@ export function createEmailAdapter(env: EmailSelection): EmailAdapter {
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
+    requireTls: env.NODE_ENV !== 'development' || env.SMTP_REQUIRE_TLS !== false,
     user: env.SMTP_USER,
     password: env.SMTP_PASSWORD,
     from: env.SMTP_FROM,

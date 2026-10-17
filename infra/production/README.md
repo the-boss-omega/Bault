@@ -34,9 +34,9 @@ scp infra/production/bootstrap.sh root@<server>:
 ssh root@<server> bash bootstrap.sh <ADMIN_IP>
 ```
 
-Docker, ufw, age and the PostgreSQL 16 client are installed; `deploy` gets your
-key; the firewall allows 80, 443 and SSH from `ADMIN_IP` only; SSH takes keys
-only. Re-running it is safe. A database on another major version:
+Docker, ufw, age, rclone (the backup upload) and the PostgreSQL 16 client are
+installed; `deploy` gets your key; the firewall allows 80, 443 and SSH from
+`ADMIN_IP` only; SSH takes keys only. Re-running it is safe. A database on another major version:
 `sudo PG_MAJOR=17 bash bootstrap.sh <ADMIN_IP>`.
 
 Docker publishes container ports with its own iptables rules, which ufw does
@@ -91,19 +91,41 @@ psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 -f infra/production/roles.sql
 unset BAULT_APP_PASSWORD BAULT_WORKER_PASSWORD
 ```
 
+`roles.sql` also gives `bault_app` and `bault_worker` their statement timeout
+(30s) and idle-in-transaction timeout (10s). Postgres applies them at every
+login, so they hold through a pooler. The API does not send them itself:
+PgBouncer refuses a connection that carries them as startup parameters. A
+pooler's server connections keep the settings they started with, so restart
+the pooler (or its pool) if it connected before this first run. Check through
+the API's own URL:
+
+```sh
+psql "$(grep ^DATABASE_URL= /etc/bault/api.env | cut -d= -f2-)" -c 'show statement_timeout'   # 30s
+```
+
 ## 5. Deploy (every release, as deploy)
+
+By hand, over SSH from `ADMIN_IP`. This is the supported path:
 
 ```sh
 cd /opt/bault && git fetch --tags && git checkout <tag>
 ./infra/production/deploy.sh <tag>
 ```
 
-`.github/workflows/deploy.yml` runs the second line over SSH; keep the
-checkout on the same tag. The script pulls the images, dumps the database
-(as the owner, into `/var/backups/bault`, or as `/etc/bault/backup.env` says),
-migrates, re-applies `roles.sql`, starts the stack, and exits 0 only when
-`/api/v1/readyz` answers through Caddy and the new worker has dispatched the
-outbox (`/api/v1/readyz/worker`). It prints how to roll back, success or not.
+`.github/workflows/deploy.yml` runs the second line over SSH, and is optional.
+The firewall admits SSH from `ADMIN_IP` only, and GitHub-hosted runners connect
+from addresses that change, so from them the workflow cannot reach the host; it
+checks that first and stops with this explanation. Do not widen the SSH rule
+for it. To use the workflow, register a self-hosted runner on a machine at
+`ADMIN_IP` (or behind the VPN it names) and set the job's `runs-on` to its
+label.
+
+Either way, keep the checkout on the same tag. The script pulls the images,
+dumps the database (as the owner, into `/var/backups/bault`, or as
+`/etc/bault/backup.env` says), migrates, re-applies `roles.sql`, starts the
+stack, and exits 0 only when `/api/v1/readyz` answers through Caddy and the
+new worker has dispatched the outbox (`/api/v1/readyz/worker`). It prints how
+to roll back, success or not.
 
 Check from outside:
 

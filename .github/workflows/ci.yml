@@ -60,6 +60,8 @@ jobs:
       AUTH_RATE_LIMIT_PER_MINUTE: 5000
       RATE_LIMIT_PER_MINUTE: 20000
       # github.com/minio/minio at RELEASE.2025-09-07T16-13-09Z (see Start MinIO).
+      # Updated by hand: Dependabot cannot see a version in an env value. Keep
+      # infra/minio/Dockerfile on the same release.
       MINIO_VERSION: v0.0.0-20250907161309-07c3a429bfed
 
     steps:
@@ -172,6 +174,12 @@ jobs:
       # Each suite below is seeded afresh, exactly as `pnpm test` does
       # (scripts/test.mjs). They share the seeded accounts, so a suite run on
       # what the previous one left would be measuring the run order.
+      #
+      # First the statement timeout, which production sets on its roles
+      # (roles.sql). The API does not send it: PgBouncer refuses it.
+      - name: Database settings
+        run: psql "$DIRECT_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f infra/postgres/dev-settings.sql
+
       - name: Migrate
         run: pnpm --filter @bault/api db:migrate
 
@@ -331,6 +339,9 @@ jobs:
   # ---------------------------------------------------------------------------
   secret-scan:
     runs-on: ubuntu-latest
+    # Updated by hand, both together: Dependabot cannot see a version or a
+    # checksum in an env value. The checksum is the linux_x64 tarball's line in
+    # the release's gitleaks_<version>_checksums.txt.
     env:
       GITLEAKS_VERSION: 8.30.1
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb

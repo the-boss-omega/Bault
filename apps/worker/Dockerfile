@@ -60,11 +60,15 @@ COPY --from=build --chown=bault:bault /repo/apps/worker/package.json ./apps/work
 USER 10001:10001
 WORKDIR /app/apps/worker
 
-# No HTTP port and so no container healthcheck. A fatal pg-boss error exits
-# non-zero and the restart policy brings the process back. Whether the jobs run
-# is answered through the database: each job stamps `worker_heartbeat` on
-# success, and GET /api/v1/readyz/worker answers 503 when outbox dispatch has not
-# succeeded for five minutes. infra/production/deploy.sh waits on it.
+# No HTTP port and so no container healthcheck. A failure while starting (the
+# database unreachable, a queue not created) exits non-zero and the restart
+# policy brings the process back. After start-up a pg-boss error is only logged
+# (`boss.on('error')` in src/index.ts) and the process stays up while pg-boss
+# retries, so a worker that is running but doing nothing is not restarted.
+# Whether the jobs run is answered through the database: each job stamps
+# `worker_heartbeat` on success, and GET /api/v1/readyz/worker answers 503 when
+# outbox dispatch has not succeeded for five minutes. infra/production/deploy.sh
+# waits on it.
 #
 # Exec form, so node is PID 1 and gets SIGTERM directly: it stops taking jobs
 # and drains the running ones for up to 30s (compose.yml gives it 45).

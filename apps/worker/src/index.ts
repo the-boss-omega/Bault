@@ -20,9 +20,11 @@ import { purgeExpiredSessions } from './jobs/session-cleanup';
  *
  * pg-boss stores its queue state in the SAME PostgreSQL as ownership, custody
  * and money (no Redis). Jobs run raw SQL through a shared `pg` Pool so the
- * worker stays self-contained. It uses the DIRECT connection (5432) because
- * pg-boss needs LISTEN/NOTIFY, which transaction-pooling PgBouncer does not pass
- * through.
+ * worker stays self-contained. It uses the DIRECT connection (5432), as
+ * infra/production/worker.env.example configures it. pg-boss 10 does not
+ * LISTEN: it polls for work (every two seconds by default), and its advisory
+ * locks are transaction-scoped, so a transaction-mode pooler would not break
+ * it either.
  *
  * Every job runs through `runScheduledJob`, which stamps `worker_heartbeat`, the
  * row `GET /api/v1/readyz/worker` reads to say whether this process is alive.

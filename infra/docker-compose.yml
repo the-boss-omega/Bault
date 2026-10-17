@@ -20,6 +20,9 @@ services:
       - "5432:5432" # direct connection: migrations (drizzle-kit) + pg-boss worker
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Run once, when the volume is created: the statement timeout, which the
+      # API cannot send through PgBouncer (see the file).
+      - ./postgres/dev-settings.sql:/docker-entrypoint-initdb.d/dev-settings.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bault -d bault"]
       interval: 5s

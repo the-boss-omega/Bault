@@ -14,7 +14,7 @@
 #
 # What it does:
 #   - installs Docker Engine + the compose plugin (Docker's own apt repository),
-#     ufw, age, and the PostgreSQL client that infra/ops/backup.sh and
+#     ufw, age, rclone, and the PostgreSQL client that infra/ops/backup.sh and
 #     roles.sql run on the host (PG_MAJOR, default 16 — match the database
 #     server's major version)
 #   - creates the `deploy` user (member of `docker`) and the directories
@@ -35,6 +35,9 @@ set -euo pipefail
 ADMIN_IP="${1:-}"
 KEY_FILE="${2:-}"
 PG_MAJOR="${PG_MAJOR:-16}"
+# Ubuntu 24.04's rclone. The upstream version is pinned; the distribution's
+# security updates to it still apply. Another release names its own.
+RCLONE_VERSION="${RCLONE_VERSION:-1.60.1+dfsg-*}"
 DEPLOY_USER=deploy
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -51,7 +54,7 @@ step() { printf '\n==> %s\n' "$*"; }
 export DEBIAN_FRONTEND=noninteractive
 
 # -----------------------------------------------------------------------------
-step "packages: Docker, ufw, PostgreSQL ${PG_MAJOR} client"
+step "packages: Docker, ufw, age, rclone, PostgreSQL ${PG_MAJOR} client"
 # -----------------------------------------------------------------------------
 apt-get update -q
 apt-get install -y -q ca-certificates curl gnupg git ufw
@@ -77,8 +80,12 @@ fi
 
 apt-get update -q
 # age: infra/ops/backup.sh encrypts dumps with it when given a recipient.
+# rclone: backup.sh uploads with it (BACKUP_UPLOAD=rclone:…). Without it a
+# configured upload fails the whole nightly backup before the dump starts. The
+# aws cli that `s3://` uses is not in Ubuntu 24.04's archive, so the documented
+# set-up is rclone (infra/ops/crontab.example).
 apt-get install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
-  "postgresql-client-${PG_MAJOR}" age
+  "postgresql-client-${PG_MAJOR}" age "rclone=${RCLONE_VERSION}"
 systemctl enable --now docker
 
 # -----------------------------------------------------------------------------
@@ -121,6 +128,8 @@ chmod 0600 "$keys"
 # -----------------------------------------------------------------------------
 step "firewall: 80, 443 open; 22 from ${ADMIN_IP} only"
 # -----------------------------------------------------------------------------
+# SSH from one address is also why .github/workflows/deploy.yml cannot run from
+# a GitHub-hosted runner: deploy by hand from ADMIN_IP (README, section 5).
 # Docker publishes ports with its own iptables rules, which ufw never sees.
 # Only Caddy publishes anything (compose.yml), and only 80 and 443; a port
 # published by anything else is open to the internet whatever ufw says.

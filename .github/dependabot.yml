@@ -18,12 +18,13 @@ updates:
       npm-minor-and-patch:
         update-types: [minor, patch]
 
-  # FROM lines in the three images.
+  # FROM lines in the three images, and in the local MinIO build.
   - package-ecosystem: docker
     directories:
       - /apps/api
       - /apps/worker
       - /apps/web
+      - /infra/minio
     schedule:
       interval: weekly
       day: monday
@@ -35,6 +36,22 @@ updates:
       # decision, not an update.
       - dependency-name: node
         update-types: [version-update:semver-major]
+
+  # `image:` lines in the production compose file: Caddy's tag and digest. Our
+  # own three images are named by ${BAULT_TAG}, which a deployment chooses;
+  # Dependabot skips a reference it cannot resolve.
+  - package-ecosystem: docker-compose
+    directory: /infra/production
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      compose-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Not here, because Dependabot cannot see them: the MinIO version and the
+  # gitleaks version and checksum in ci.yml, and the MinIO and mc versions in
+  # infra/minio/Dockerfile. They are updated by hand; each says so.
 
   # The actions in .github/workflows. Dependabot rewrites the SHA and the
   # version comment together.

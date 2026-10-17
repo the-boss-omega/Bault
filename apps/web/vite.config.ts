@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import type { Plugin } from 'vite';
@@ -29,9 +30,24 @@ export default defineConfig(({ mode, command }) => {
    * branches, including `SignInPage`'s pre-filled seeded credentials. Vite reads
    * `NODE_ENV` after this config runs, so it is set here.
    * `tests/web/no-credentials-in-bundle.test.ts` checks the built artefact.
+   *
+   * What this cannot override is apps/web's own env files: Vite reads them
+   * again after this config, and with no `NODE_ENV` in the shell a
+   * `NODE_ENV=development` there switches the build back to development
+   * (`resolveConfig`, Vite 6.4). So a build refuses to start with one.
    */
   delete process.env.VITE_USER_NODE_ENV;
-  if (command === 'build') process.env.NODE_ENV = 'production';
+  if (command === 'build') {
+    const asked = nodeEnvInEnvFiles(appDir, mode);
+    if (asked?.value === 'development') {
+      throw new Error(
+        `apps/web/${asked.file} sets NODE_ENV=development, which would make this build a ` +
+          'development bundle (pre-filled seeded credentials included). Remove that line: ' +
+          'the dev server needs no NODE_ENV, and a build is always production.',
+      );
+    }
+    process.env.NODE_ENV = 'production';
+  }
 
   /**
    * Hosts this server may be reached by, beyond loopback: the union of
@@ -134,8 +150,10 @@ export default defineConfig(({ mode, command }) => {
      * serves source modules (`GET /src/...tsx` answers with the transpiled file);
      * `vite preview` serves only `dist/`.
      *
-     * Preview does not inherit `allowedHosts` or `host` from `server`, so both are
-     * set here. It does inherit `proxy`, so `/api` stays on the same origin.
+     * Preview falls back to `server`'s `host`, `allowedHosts` and `proxy` when
+     * it sets none of its own (Vite's `resolvePreviewOptions`), but not to its
+     * port. The two host settings are repeated here so what the preview exposes
+     * reads in one place; `proxy` is inherited, so `/api` stays on the same origin.
      */
     preview: {
       port: 4173,
@@ -143,6 +161,28 @@ export default defineConfig(({ mode, command }) => {
     },
   };
 });
+
+/**
+ * `NODE_ENV` as the env files in `dir` set it for `mode`, read the way Vite
+ * reads them: `.env`, `.env.local`, `.env.<mode>`, `.env.<mode>.local`, the
+ * last assignment winning. Returns the file it came from too.
+ */
+function nodeEnvInEnvFiles(dir: string, mode: string): { value: string; file: string } | undefined {
+  let found: { value: string; file: string } | undefined;
+  for (const file of ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]) {
+    const path = join(dir, file);
+    if (!existsSync(path)) continue;
+    for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+      const m = /^\s*(?:export\s+)?NODE_ENV\s*(?:=|:\s)\s*(.*)$/.exec(line);
+      if (!m) continue;
+      const raw = m[1]!.trim();
+      // A quoted value ends at its closing quote; an unquoted one at a comment.
+      const quoted = /^(['"`])(.*?)\1/.exec(raw);
+      found = { value: quoted ? quoted[2]! : raw.replace(/\s+#.*$/, ''), file };
+    }
+  }
+  return found;
+}
 
 /** Node reports a dual-stack (IPv6 + IPv4) connect failure as an AggregateError. */
 function collectErrorCodes(err: Error): string[] {

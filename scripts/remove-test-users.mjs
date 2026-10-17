@@ -25,6 +25,9 @@
  *   - An account is skipped if it has items, ledger records, charges,
  *     shipments, service requests or shipping addresses. A test registration
  *     owns nothing; anything that does is not one, whatever its address looks like.
+ *   - It refuses NODE_ENV=production, from the environment or `.env`, before it
+ *     connects, as the seed and `pnpm test` do. A disposable database run with
+ *     NODE_ENV=production is let through by ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure.
  *
  * USAGE
  *   node scripts/remove-test-users.mjs            # dry run, prints candidates
@@ -32,12 +35,16 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import pg from 'pg';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..');
+
+// `pg` from the API package, as tests/integration/helpers/db.ts does: the root
+// manifest has no database driver, so a bare `import 'pg'` does not resolve.
+const pg = createRequire(resolve(repoRoot, 'apps/api/package.json'))('pg');
 
 /** The exact shape the old test helper produced, anchored at both ends. */
 const LEGACY_FIXTURE = /^t\d{10,19}@bault\.dev$/i;
@@ -61,27 +68,41 @@ const ACTIVITY = [
   ['shipping_address', 'user_id'],
 ];
 
-function databaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  // Fall back to the repo .env, which is where the local URL normally lives.
+/** The process environment first, then the repo `.env`; the last assignment there wins. */
+function envValue(key) {
+  if (process.env[key] !== undefined) return process.env[key];
+  let value;
   try {
-    const env = readFileSync(resolve(repoRoot, '.env'), 'utf8');
-    const line = env.split(/\r?\n/).find((l) => /^\s*DATABASE_URL\s*=/.test(l));
-    if (line) return line.replace(/^\s*DATABASE_URL\s*=\s*/, '').replace(/^["']|["']$/g, '').trim();
+    for (const line of readFileSync(resolve(repoRoot, '.env'), 'utf8').split(/\r?\n/)) {
+      const m = line.match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.*)$`));
+      if (m) value = m[1].trim().replace(/^["']|["']$/g, '');
+    }
   } catch {
-    /* no .env; fall through to the error below */
+    /* no .env */
   }
+  return value;
+}
+
+function databaseUrl() {
+  const url = envValue('DATABASE_URL');
+  if (url) return url;
   throw new Error('DATABASE_URL is not set and no .env was found. Set it and retry.');
 }
 
 async function main() {
+  if (envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure') {
+    throw new Error(
+      'Refusing to run: NODE_ENV=production. This script deletes accounts. If this database is ' +
+        'disposable, run it again with ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure.',
+    );
+  }
   const apply = process.argv.includes('--apply');
   const client = new pg.Client({ connectionString: databaseUrl() });
   await client.connect();
 
   try {
     const { rows } = await client.query(
-      'SELECT id, email, username, display_name, role, status, created_at FROM user_account ORDER BY created_at',
+      'SELECT id, email, username, role, status, created_at FROM user_account ORDER BY created_at',
     );
 
     const candidates = [];

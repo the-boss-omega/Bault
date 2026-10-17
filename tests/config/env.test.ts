@@ -62,7 +62,12 @@ describe('environment schema', () => {
     const env = await load(PROD);
     expect(env.NODE_ENV).toBe('production');
     expect(env.DATABASE_POOL_MAX).toBe(10);
-    expect(env.DATABASE_STATEMENT_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it('still parses an env file that sets the retired statement timeout', async () => {
+    // The timeout is a database role setting now (apps/api/src/db/client.ts).
+    const env = await load({ ...PROD, DATABASE_STATEMENT_TIMEOUT_MS: '30000' });
+    expect(env).not.toHaveProperty('DATABASE_STATEMENT_TIMEOUT_MS');
   });
 
   it('no longer requires the unused session secret', async () => {
@@ -75,7 +80,37 @@ describe('environment schema', () => {
   });
 
   it('refuses a non-https app origin in production', async () => {
-    await expect(load({ ...PROD, APP_BASE_URL: 'http://app.example.com' })).rejects.toThrow(/APP_BASE_URL/);
+    await expect(load({ ...PROD, APP_BASE_URL: 'http://app.example.com' })).rejects.toThrow(
+      /APP_BASE_URL/,
+    );
+  });
+
+  it('requires SMTP over TLS except for a local catcher in development', async () => {
+    expect((await load(PROD)).SMTP_REQUIRE_TLS).toBe(true);
+    await expect(load({ ...PROD, SMTP_REQUIRE_TLS: 'false' })).rejects.toThrow(/SMTP_REQUIRE_TLS/);
+    await expect(
+      load({
+        ...DEV,
+        NODE_ENV: 'test',
+        EMAIL_PROVIDER: 'smtp',
+        SMTP_HOST: 'h',
+        SMTP_USER: 'u',
+        SMTP_PASSWORD: 'p',
+        SMTP_FROM: 'f',
+        SMTP_REQUIRE_TLS: 'false',
+      }),
+    ).rejects.toThrow(/SMTP_REQUIRE_TLS/);
+    const catcher = {
+      EMAIL_PROVIDER: 'smtp',
+      SMTP_HOST: 'localhost',
+      SMTP_PORT: '1025',
+      SMTP_USER: 'u',
+      SMTP_PASSWORD: 'p',
+      SMTP_FROM: 'f',
+    };
+    expect((await load({ ...DEV, ...catcher, SMTP_REQUIRE_TLS: 'false' })).SMTP_REQUIRE_TLS).toBe(
+      false,
+    );
   });
 
   it('refuses an open API explorer in production', async () => {
@@ -94,9 +129,9 @@ describe('environment schema', () => {
   it('reports the production refusals even when a required variable is also missing', async () => {
     const attempt = load({ ...PROD, DATABASE_URL: undefined, STORAGE_PROVIDER: 'sandbox' });
     await expect(attempt).rejects.toThrow(/DATABASE_URL/);
-    await expect(load({ ...PROD, DATABASE_URL: undefined, STORAGE_PROVIDER: 'sandbox' })).rejects.toThrow(
-      /STORAGE_PROVIDER=sandbox/,
-    );
+    await expect(
+      load({ ...PROD, DATABASE_URL: undefined, STORAGE_PROVIDER: 'sandbox' }),
+    ).rejects.toThrow(/STORAGE_PROVIDER=sandbox/);
   });
 });
 
@@ -112,17 +147,21 @@ describe('environment schema', () => {
  */
 describe('two-factor configuration', () => {
   it('requires MFA_ENCRYPTION_KEY in production', async () => {
-    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: undefined })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
+    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: undefined })).rejects.toThrow(
+      /MFA_ENCRYPTION_KEY/,
+    );
     await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: '' })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
   });
 
   it('refuses a key that is not exactly 32 bytes of base64, in any environment', async () => {
     const short = Buffer.alloc(16, 7).toString('base64');
-    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: short })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
-    await expect(load({ ...DEV, MFA_ENCRYPTION_KEY: short })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
-    await expect(load({ ...DEV, MFA_ENCRYPTION_KEY: 'not base64 at all, just a passphrase!!' })).rejects.toThrow(
+    await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: short })).rejects.toThrow(
       /MFA_ENCRYPTION_KEY/,
     );
+    await expect(load({ ...DEV, MFA_ENCRYPTION_KEY: short })).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
+    await expect(
+      load({ ...DEV, MFA_ENCRYPTION_KEY: 'not base64 at all, just a passphrase!!' }),
+    ).rejects.toThrow(/MFA_ENCRYPTION_KEY/);
   });
 
   it('uses a development key outside production, and refuses that key in production', async () => {
@@ -137,7 +176,10 @@ describe('two-factor configuration', () => {
   });
 
   it('requires a second factor of admins and operators in production, and of nobody by default elsewhere', async () => {
-    expect([...(await load(PROD)).MFA_REQUIRED_ROLES].sort()).toEqual(['admin', 'warehouse_operator']);
+    expect([...(await load(PROD)).MFA_REQUIRED_ROLES].sort()).toEqual([
+      'admin',
+      'warehouse_operator',
+    ]);
     expect([...(await load(DEV)).MFA_REQUIRED_ROLES]).toEqual([]);
     expect([...(await load({ ...DEV, NODE_ENV: 'test' })).MFA_REQUIRED_ROLES]).toEqual([]);
     const opted = await load({ ...DEV, MFA_REQUIRED_ROLES: 'admin, warehouse_operator' });
@@ -146,8 +188,12 @@ describe('two-factor configuration', () => {
 
   it('refuses switching it off for staff in production', async () => {
     await expect(load({ ...PROD, MFA_REQUIRED_ROLES: '' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
-    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'admin' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
-    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'warehouse_operator' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
+    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'admin' })).rejects.toThrow(
+      /MFA_REQUIRED_ROLES/,
+    );
+    await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'warehouse_operator' })).rejects.toThrow(
+      /MFA_REQUIRED_ROLES/,
+    );
     // Stricter is allowed: collectors too.
     const all = await load({ ...PROD, MFA_REQUIRED_ROLES: 'admin,warehouse_operator,user' });
     expect([...all.MFA_REQUIRED_ROLES].sort()).toEqual(['admin', 'user', 'warehouse_operator']);
@@ -156,6 +202,8 @@ describe('two-factor configuration', () => {
   it('refuses a role name it does not know, rather than enforcing nothing for it', async () => {
     // `operator` is not a role. Accepting it would leave every real operator
     // without the requirement while the configuration said otherwise.
-    await expect(load({ ...DEV, MFA_REQUIRED_ROLES: 'admin,operator' })).rejects.toThrow(/MFA_REQUIRED_ROLES/);
+    await expect(load({ ...DEV, MFA_REQUIRED_ROLES: 'admin,operator' })).rejects.toThrow(
+      /MFA_REQUIRED_ROLES/,
+    );
   });
 });

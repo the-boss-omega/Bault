@@ -58,12 +58,14 @@ const BaseSchema = z.object({
   DIRECT_DATABASE_URL: z.string().url(),
 
   /**
-   * Pool size per process (API and worker), and the longest any one API
-   * statement may run. A statement that never ends holds a server connection
-   * and every row lock it took, and a money path waiting on those locks waits too.
+   * Pool size per process (API and worker).
+   *
+   * The statement timeout is not configured here: it is a setting of the
+   * database role (infra/production/roles.sql), because a client cannot send
+   * it through PgBouncer (see apps/api/src/db/client.ts). An old env file that
+   * still sets DATABASE_STATEMENT_TIMEOUT_MS parses; the value is ignored.
    */
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
-  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // Sessions (ACC)
   /**
@@ -258,6 +260,12 @@ const BaseSchema = z.object({
    * rather than `z.coerce.boolean()`, which maps the string "false" to TRUE.
    */
   SMTP_SECURE: booleanFromEnv(false),
+  /**
+   * On 587, refuse to go on in clear when the server does not offer STARTTLS.
+   * `false` is for a local mail catcher (Mailpit, MailHog) in development, and
+   * is refused anywhere else (`checkCombinations`).
+   */
+  SMTP_REQUIRE_TLS: booleanFromEnv(true),
   SMTP_USER: z.string().optional().default(''),
   /**
    * Whitespace is stripped. Google displays an app password as four
@@ -410,6 +418,15 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
   if (env.EMAIL_PROVIDER === 'smtp') {
     for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const) {
       require(key, 'EMAIL_PROVIDER=smtp');
+    }
+    // Plaintext SMTP sends the password and every reset link in clear.
+    if (env.SMTP_REQUIRE_TLS === false && env.NODE_ENV !== 'development') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SMTP_REQUIRE_TLS'],
+        message:
+          'SMTP_REQUIRE_TLS=false is for a local mail catcher in development only; anywhere else SMTP must use TLS',
+      });
     }
   }
 
