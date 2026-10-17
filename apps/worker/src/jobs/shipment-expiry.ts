@@ -5,26 +5,19 @@ import { log } from '../log';
  * Release the items of shipments nobody paid for.
  *
  * A collector selects a service, cannot cover it, and the shipment is held in
- * `awaiting_payment` for a week. If the money never arrives, the request has to
- * end — otherwise the parcel sits open forever, its cards cannot be put on
- * another shipment, and the collector is left with a request they cannot cancel
- * because they have forgotten it exists.
+ * `awaiting_payment` until `payment_due_at`. If the money never arrives, the
+ * request ends so its cards can be put on another shipment.
  *
- * Nothing physical is undone, which is the reason this is safe to run
- * unattended: an item in an open shipment never left `stored` and never left its
- * bin. What being in an open shipment costs it is the ability to be sent
- * somewhere else, and cancelling the shipment is exactly what hands that back.
+ * Nothing physical is undone, which is why this is safe to run unattended: an
+ * item in an open shipment never left `stored` or its bin. Cancelling only hands
+ * back its ability to be sent somewhere else. The outbox row it writes is what
+ * tells the collector.
  *
- * Raw SQL rather than the API's service, like every other worker job — the
- * worker is deliberately independent of the Nest container, and the outbox row
- * it writes is what tells the collector.
- *
- * `SKIP LOCKED`: a second run — a retry, another replica — passes over the
- * shipments the first is releasing instead of queueing behind them, and a
- * shipment the API is paying for at this very moment is left for the next run
- * rather than cancelled out from under the payment. Each row is updated in the
- * transaction that locked it, and the `status = 'awaiting_payment'` predicate
- * means a run never releases a shipment twice.
+ * `SKIP LOCKED`: a second run passes over the shipments the first is releasing
+ * instead of queueing behind them, and a shipment the API is paying for right
+ * now is left for the next run rather than cancelled out from under the payment.
+ * Each row is updated in the transaction that locked it, and the
+ * `status = 'awaiting_payment'` predicate means a shipment is never released twice.
  */
 export async function expireUnpaidShipments(pool: Pool): Promise<void> {
   const client = await pool.connect();

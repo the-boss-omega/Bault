@@ -1,18 +1,14 @@
 #!/usr/bin/env node
 /**
- * `pnpm tunnel` — show the running app to somebody who is not on this machine,
+ * `pnpm tunnel`: show the running app to somebody who is not on this machine,
  * safely, in one command.
  *
- * Doing this by hand took five steps and every one of them had a way to go
- * wrong that looked like success:
+ * Done by hand, each step has a way to go wrong that looks like success:
  *
- *   - tunnelling `pnpm dev` instead of the build serves the SOURCE — every
- *     `/src/**\/*.tsx` answers with the file (DIVE1 Part 43);
- *   - a `vite build` run with the root `.env` in reach produced a DEVELOPMENT
- *     bundle with a working password pre-typed into the sign-in form
- *     (Part 45, fixed in `vite.config.ts`);
+ *   - tunnelling `pnpm dev` instead of the build serves the SOURCE: every
+ *     `/src/**\/*.tsx` answers with the file;
  *   - a quick tunnel has no password of its own, and behind it sits an API whose
- *     seeded accounts — the administrator included — share one;
+ *     seeded accounts, the administrator included, share one;
  *   - the local `.env` raises the sign-in rate limit for the test suite, so the
  *     brute-force protection a stranger would meet is effectively off.
  *
@@ -20,9 +16,9 @@
  *
  *   1. checks the API is up (the preview proxies `/api` to it);
  *   2. warns, loudly, if the sign-in rate limit is above the production default;
- *   3. builds the web app — always, so the tunnel never serves a stale bundle;
+ *   3. builds the web app, always, so the tunnel never serves a stale bundle;
  *   4. starts `vite preview` with a password in front of EVERYTHING, `/api`
- *      included — generated fresh unless `WEB_PREVIEW_PASSWORD` is set;
+ *      included, generated fresh unless `WEB_PREVIEW_PASSWORD` is set;
  *   5. starts a Cloudflare quick tunnel and prints the link AND the password.
  *
  * Ctrl+C stops both. The link dies with them, which is also the kill switch.
@@ -137,7 +133,7 @@ preview.on('exit', (code) => {
   shutdown(code ?? 1);
 });
 
-// Wait for the preview to answer — with a 401, which is the point.
+// Wait for the preview to answer with a 401, which is the point.
 const deadline = Date.now() + 30_000;
 for (;;) {
   try {

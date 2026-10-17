@@ -1,7 +1,7 @@
 import { createTransport, type Transporter } from 'nodemailer';
 
 /**
- * Transactional email adapter (T020). Verification links + event notifications.
+ * Transactional email adapter: verification and reset links, and event notifications.
  */
 export interface EmailMessage {
   to: string;
@@ -21,9 +21,9 @@ export interface EmailAdapter {
 /**
  * The rendered body of one message, in both parts a mail client may read.
  *
- * Both are always produced. A text-only client — and every spam filter — reads
- * `text`, and a link that exists only inside an anchor tag is invisible to
- * both, so the URL is written out in full in the plain part too.
+ * Both are always produced. A text-only client, and every spam filter, reads
+ * `text`, where a link inside an anchor tag is invisible, so the URL is written
+ * out in full in the plain part too.
  */
 export interface RenderedEmail {
   text: string;
@@ -40,12 +40,9 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * A message body built around a single call to action.
- *
- * Every transactional mail Bault sends has exactly this shape: a sentence of
- * context, one link, and a line saying what happens if it is ignored. Keeping
- * it as one function means a new template cannot accidentally arrive without a
- * plain-text part or with an unescaped URL.
+ * A message body built around a single call to action: a sentence of context,
+ * one link, and a line saying what happens if it is ignored. One function, so a
+ * new template cannot arrive without a plain-text part or with an unescaped URL.
  */
 function actionEmail(input: {
   heading: string;
@@ -71,9 +68,8 @@ function actionEmail(input: {
 /**
  * Render a message body from its template name and variables.
  *
- * An unknown template does NOT throw: a mail that fails to render would abort
- * the registration or reset that triggered it, which is a far worse outcome
- * than a plainly-formatted message. It degrades to the variables it was given.
+ * An unknown template does NOT throw, because a mail that fails to render would
+ * abort whatever triggered it. It degrades to the variables it was given.
  */
 export function renderEmail(template: string, variables: Record<string, string>): RenderedEmail {
   const link = variables.link ?? '';
@@ -96,12 +92,8 @@ export function renderEmail(template: string, variables: Record<string, string>)
       });
     case 'notification_event':
       /**
-       * One domain event, as a mail.
-       *
-       * The body is the SAME sentence the in-app feed shows — composed once by
-       * the worker and passed through here. Two channels telling somebody two
-       * differently-worded versions of one event is how a support conversation
-       * starts with "which one is right?".
+       * One domain event, as a mail. The body is the SAME sentence the in-app
+       * feed shows, composed once by the worker and passed through here.
        */
       return actionEmail({
         heading: variables.heading ?? 'An update on your vault',
@@ -149,16 +141,15 @@ export interface SmtpConfig {
  * Real SMTP delivery.
  *
  * Works with any SMTP server; the configuration documented in `.env.example` is
- * Gmail with an app password, which is the cheapest way to get genuine delivery
- * in development without standing up a provider account.
+ * Gmail with an app password, for genuine delivery in development.
  *
- * The credentials arrive through the constructor rather than being read from
- * `process.env` here, so this package stays free of the config schema and the
- * adapter is directly testable with a fake transport.
+ * The credentials arrive through the constructor rather than from `process.env`,
+ * so this package stays free of the config schema and the adapter is testable
+ * with a fake transport.
  *
  * `verify()` is deliberately NOT called at construction: the API must boot
  * whether or not the mail server is reachable, and a failure surfaces on the
- * first send with the provider's own error rather than as a dead process.
+ * first send with the provider's own error.
  */
 export class SmtpEmailAdapter implements EmailAdapter {
   private readonly transport: Transporter;

@@ -1,6 +1,6 @@
 # Dependency updates, weekly, as pull requests that go through CI like any other.
 #
-# Every workflow action is pinned to a commit SHA and every image to a tag, which
+# Every workflow action is pinned to a commit SHA and every image to a digest, which
 # is what makes them safe and also what freezes them: nothing moves unless
 # somebody moves it. This is the somebody. Minor and patch updates are grouped
 # so a week's worth arrives as one PR per ecosystem; a major version is its own

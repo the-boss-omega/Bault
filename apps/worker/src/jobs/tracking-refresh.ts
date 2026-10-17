@@ -4,33 +4,25 @@ import { createShippingAdapter, type ShippingAdapter, type TrackingStatus } from
 import { log } from '../log';
 
 /**
- * Shipment tracking refresh (T107). Polls the carrier (via the shipping adapter)
- * for every shipment that is out and updates its status. Runs in the worker so the
- * customer's tracking view stays current without a synchronous request. (A real
- * deployment may also receive carrier webhooks; polling is the fallback.)
+ * Shipment tracking refresh. Polls the carrier through the shipping adapter for
+ * every shipment that is out and updates its status, so the customer's tracking
+ * view stays current without a synchronous request.
  *
- * THE CARRIER THE DEPLOYMENT IS CONFIGURED FOR (E17, F039). This built
- * `new SandboxShippingAdapter()` itself, whatever `SHIPPING_PROVIDER` said, and
- * the sandbox answers `in_transit` for every parcel forever: in production with
- * EasyPost, no shipment would ever have reached `delivered`. The adapter is now
- * chosen by the same factory the API uses, from the same config, with the same
- * refusal of the sandbox in production.
+ * The adapter is chosen by the same factory the API uses, from the same config,
+ * with the same refusal of the sandbox in production. The sandbox answers
+ * `in_transit` for every parcel forever.
  *
- * ONE PARCEL AT A TIME (F050). A carrier error on one tracking number escaped
- * the loop and nothing after it was refreshed, every half hour, for as long as
- * that one kept failing. Each parcel is now its own attempt. The carrier is
- * asked OUTSIDE any transaction — a row lock is not held across a network call —
- * and the answer is then written under `FOR UPDATE SKIP LOCKED`, only if the
- * shipment is still in a status this job is allowed to move. A parcel an
- * operator has just marked delivered by hand is not dragged back to
- * `in_transit` by an answer that was already on its way.
+ * ONE PARCEL AT A TIME. A carrier error on one tracking number is logged and the
+ * loop moves on. The carrier is asked OUTSIDE any transaction, so no row lock is
+ * held across a network call, and the answer is then written under
+ * `FOR UPDATE SKIP LOCKED`, only if the shipment is still in a status this job
+ * may move. A parcel an operator has just marked delivered by hand is not
+ * dragged back to `in_transit` by an answer already on its way.
  *
- * A status the carrier reports that maps to nothing (`unknown`) changes nothing,
- * where it used to be written as `in_transit`.
+ * A carrier status that maps to nothing (`unknown`) changes nothing.
  *
  * Bounded per run, least recently refreshed first, so a backlog is worked
- * through over successive runs instead of in one unbounded burst of carrier
- * calls.
+ * through over successive runs instead of one unbounded burst of carrier calls.
  */
 const PER_RUN = 200;
 const MOVABLE = ['shipped', 'in_transit'];

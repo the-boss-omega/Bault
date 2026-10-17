@@ -11,30 +11,22 @@ import type {
 import { DEFAULT_PACKAGING_GRAMS, LabelNotPurchasedError } from './shipping';
 
 /**
- * EasyPost — real carriers, real rates, real labels.
- *
- * The platform shipped with `SandboxShippingAdapter` bound unconditionally. It
- * invents prices (the file says so), `buyLabel` returns `SBX<timestamp>` and a
- * label key that resolves to nothing, and `getTracking` answers `in_transit` for
- * every input forever. So a collector could be charged for a shipment that could
- * not physically happen, and the tracking worker polled a function that never
- * changed its mind.
+ * EasyPost: real carriers, real rates, real labels.
  *
  * WHY EASYPOST. It rates across USPS, UPS, FedEx and DHL from one account, it
  * has a genuine test mode (keys prefixed `EZTK`) where every code path is
- * identical to live, and it is pay-per-label with no monthly minimum — which
+ * identical to live, and it is pay-per-label with no monthly minimum, which
  * matches a vault shipping tens of parcels a day rather than thousands.
  *
- * NO SDK. `@easypost/api` is a dependency for three HTTP calls against a stable,
- * documented REST API. Written directly, this adapter is auditable in one sitting
- * and adds nothing to the install.
+ * NO SDK. `@easypost/api` would be a dependency for four HTTP calls against a
+ * stable, documented REST API. Written directly, this adapter is auditable in
+ * one sitting and adds nothing to the install.
  *
- * THE SHAPE OF THE API, and why the interface had to change. EasyPost does not
- * quote a price you can later buy by name. You create a SHIPMENT, it returns
- * RATES with ids, and you buy one of those rates against that shipment. So `Rate`
- * now carries `providerShipmentId` / `providerRateId`, and `buyLabel` purchases
- * the exact quote the collector was shown rather than re-rating at label time and
- * charging a different number.
+ * THE SHAPE OF THE API. EasyPost does not quote a price you can later buy by
+ * name. You create a SHIPMENT, it returns RATES with ids, and you buy one of
+ * those rates against that shipment. So `Rate` carries `providerShipmentId` /
+ * `providerRateId`, and `buyLabel` purchases the exact quote the collector was
+ * shown rather than re-rating at label time and charging a different number.
  */
 
 const TEST_HOST = 'https://api.easypost.com/v2';
@@ -55,7 +47,7 @@ const toDecimal = (minor: number): string => (minor / 100).toFixed(2);
  * How long one call may take when the caller set no bound of its own.
  *
  * `fetch` has no timeout, so a carrier that accepted the connection and never
- * answered held the request — and whatever the caller was holding — forever.
+ * answered would hold the request, and whatever the caller holds, forever.
  */
 const DEFAULT_TIMEOUT_MS = 20_000;
 
@@ -122,14 +114,13 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
 
   /**
    * EasyPost authenticates with the API key as the HTTP Basic USERNAME and an
-   * empty password — not a bearer token, which is the thing everybody gets wrong
-   * first.
+   * empty password, not a bearer token.
    */
   private async call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      // Bounded always. The caller's signal when it has one — dispatch sets its
-      // own for a purchase — and a default otherwise, so no call can hang.
+      // Bounded always: the caller's signal when it has one (dispatch sets its
+      // own for a purchase), and a default otherwise, so no call can hang.
       signal: init.signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
       headers: {
         authorization: `Basic ${Buffer.from(`${this.config.apiKey}:`).toString('base64')}`,
@@ -140,9 +131,8 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
 
     const text = await res.text();
     if (!res.ok) {
-      // EasyPost's error body names the field it rejected. Passing it through is
-      // the difference between "shipping failed" and "the destination is missing
-      // a street", which is the one an operator can act on.
+      // EasyPost's error body names the field it rejected, which is what an
+      // operator can act on.
       let detail = text.slice(0, 500);
       try {
         const parsed = JSON.parse(text) as { error?: { message?: string; errors?: unknown[] } };
@@ -158,10 +148,9 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
   /**
    * An address a carrier will accept.
    *
-   * Refused loudly when a street is missing, rather than sent and allowed to
-   * produce a quote that changes at label time. `country` and `postalCode` alone
-   * are enough for the sandbox's crude distance band and are NOT enough for a
-   * real rate.
+   * Refused loudly when a street or city is missing, rather than sent and allowed
+   * to produce a quote that changes at label time. `country` and `postalCode`
+   * alone are enough for the sandbox's distance band and NOT for a real rate.
    */
   private address(addr: ShipAddress | undefined, role: 'origin' | 'destination') {
     if (!addr) {
@@ -194,17 +183,16 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
   /**
    * The customs declaration as EasyPost's `customs_info` object.
    *
-   * The shipment froze per-item customs lines at creation and they were never
-   * sent: an international parcel was rated and bought with no customs
-   * information at all, which a carrier refuses or holds at the border. So an
-   * international request without a declaration is refused here, loudly, the
-   * same way a missing street is — and a domestic one sends nothing.
+   * A carrier refuses an international parcel with no customs information, or
+   * holds it at the border. So an international request without a declaration
+   * is refused here, loudly, the same way a missing street is, and a domestic
+   * one sends nothing.
    *
    * The EEL/PFC is the US export filing citation every international label
    * carries. A parcel to Canada is exempt from EEI (`NOEEI 30.36`); elsewhere a
    * parcel is exempt while no Schedule B line is worth more than $2,500
    * (`NOEEI 30.37(a)`). Above that an EEI must be filed in AES and its ITN put
-   * on the label — Bault files none, so such a parcel is refused rather than
+   * on the label. Bault files none, so such a parcel is refused rather than
    * labelled with an exemption it does not have.
    */
   private customsInfo(
@@ -260,10 +248,9 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
   /**
    * Price the parcel with every carrier the account has enabled.
    *
-   * Packaging weight is added here for the same reason the sandbox added it: a
-   * parcel is the cards plus the box, and quoting the contents alone
-   * under-declares every shipment — which with a real carrier means a billing
-   * adjustment after the fact rather than a wrong number on a screen.
+   * Packaging weight is added, as in the sandbox: a parcel is the cards plus the
+   * box, and quoting the contents alone under-declares every shipment, which
+   * with a real carrier means a billing adjustment after the fact.
    */
   async getRates(req: RateRequest, opts: ShippingCallOptions = {}): Promise<Rate[]> {
     const contentsGrams = req.items.reduce((sum, i) => sum + Math.max(0, i.weightGrams), 0);
@@ -293,8 +280,8 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
           ...(customs ? { customs_info: customs } : {}),
           options: {
             // The carrier collects a signature. Priced by the carrier, so it
-            // must be set at RATE time, not at purchase — set it later and the
-            // price the collector was shown is not the price that is charged.
+            // must be set at RATE time, or the price the collector was shown is
+            // not the price that is charged.
             ...(req.signatureRequired ? { delivery_confirmation: 'SIGNATURE' } : {}),
           },
         },
@@ -319,7 +306,7 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
         currency: r.currency,
         // `delivery_days` is the carrier's promise and is often null on
         // economy services; `est_delivery_days` is EasyPost's estimate. Zero
-        // rather than a guess when neither is given — the caller renders "—".
+        // rather than a guess when neither is given; the caller renders "—".
         estimatedDays: r.delivery_days ?? r.est_delivery_days ?? 0,
         providerShipmentId: shipment.id,
         providerRateId: r.id,
@@ -328,24 +315,23 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
   }
 
   /**
-   * Buy the exact rate that was quoted — once.
+   * Buy the exact rate that was quoted, once.
    *
-   * This is the step that spends money, so it refuses to improvise: without the
-   * provider's own ids it throws rather than re-rating, because re-rating would
-   * charge a price nobody was shown and would silently succeed while doing it.
+   * This is the step that spends money, so without the provider's own ids it
+   * throws rather than re-rating, because re-rating would charge a price nobody
+   * was shown.
    *
-   * IDEMPOTENT BY THE SHIPMENT. EasyPost takes no idempotency key on a purchase;
-   * what it has instead is that one shipment carries at most one label. So the
-   * shipment is read first, and if it already has postage the label it has is
-   * returned — no second purchase. That is what makes a retry safe after a
-   * timeout, when the first purchase may or may not have gone through and only
-   * EasyPost knows which. The caller's `idempotencyKey` is therefore not sent;
-   * the shipment id is the key.
+   * IDEMPOTENT BY THE SHIPMENT. EasyPost takes no idempotency key on a purchase,
+   * but one shipment carries at most one label. So the shipment is read first,
+   * and if it already has postage that label is returned with no second
+   * purchase. That makes a retry safe after a timeout, when only EasyPost knows
+   * whether the first purchase went through. The caller's `idempotencyKey` is
+   * therefore not sent; the shipment id is the key.
    *
    * A refusal (4xx on the purchase itself) is reported as
    * `LabelNotPurchasedError`, the one failure after which the caller can be
-   * sure nothing was bought. Anything else — a timeout, a 5xx, a dropped
-   * connection — leaves the outcome unknown and is thrown as it is.
+   * sure nothing was bought. Anything else (a timeout, a 5xx, a dropped
+   * connection) leaves the outcome unknown and is thrown as it is.
    */
   async buyLabel(rate: Rate, _req: RateRequest, opts: ShippingCallOptions = {}): Promise<LabelResult> {
     if (!rate.providerShipmentId || !rate.providerRateId) {
@@ -386,9 +372,8 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
   private labelOf(bought: EasyPostShipment, rate: Rate): LabelResult {
     return {
       trackingNumber: bought.tracking_code!,
-      // The carrier's own hosted label URL. It is stored as the object key so
-      // the existing label pipeline keeps working unchanged; mirroring the PDF
-      // into Bault's own bucket is the obvious next step and is not this change.
+      // The carrier's own hosted label URL, stored as the object key. The PDF is
+      // not mirrored into Bault's own bucket.
       labelObjectKey: bought.postage_label?.label_url ?? '',
       costMinor: bought.selected_rate ? toMinor(bought.selected_rate.rate) : rate.costMinor,
       currency: bought.selected_rate?.currency ?? rate.currency,
@@ -400,9 +385,7 @@ export class EasyPostShippingAdapter implements ShippingAdapter {
    *
    * EasyPost's statuses are mapped down to the four this platform models. An
    * unrecognised status becomes `unknown` rather than being guessed into
-   * `in_transit` — a parcel whose state nobody can read is not a parcel in
-   * transit, and pretending otherwise is how a lost shipment stays "on its way"
-   * for three weeks.
+   * `in_transit`, so a lost shipment does not stay "on its way" for weeks.
    */
   async getTracking(trackingNumber: string): Promise<TrackingStatus> {
     const tracker = await this.call<{ status?: string }>('/trackers', {

@@ -3,16 +3,15 @@ import { loadEnv, type Env } from '@bault/config';
 import { scrubErrorEvent } from '@bault/adapters';
 
 /**
- * Error reporting for the worker (step 15), the same way the API does it.
+ * Error reporting for the worker, the same way the API does it.
  *
- * With `SENTRY_DSN` set, a job that fails and a ledger invariant that breaks are
- * reported; without it nothing here starts or sends anything. Errors only — no
- * tracing — and every event passes through the same scrubber the API installs,
- * so the two processes cannot differ on what leaves the platform.
+ * With `SENTRY_DSN` set, a failed job and a broken ledger invariant are
+ * reported; without it nothing here starts or sends anything. Errors only, no
+ * tracing. Every event passes through the same scrubber the API installs, so
+ * the two processes cannot differ on what leaves the platform.
  *
- * The worker's own unexpected crashes (an uncaught exception, an unhandled
- * rejection) are reported by the SDK's default integrations, which then let the
- * process exit as Node would have.
+ * Uncaught exceptions and unhandled rejections are reported by the SDK's
+ * default integrations, which then let the process exit as Node would have.
  */
 let enabled = false;
 
@@ -37,10 +36,7 @@ export function reportJobFailure(job: string, error: unknown): void {
   Sentry.captureException(error, { tags: { job } });
 }
 
-/**
- * Something is wrong that is not an exception — a broken invariant. Sent at
- * error level with the numbers that describe it.
- */
+/** Something is wrong that is not an exception, such as a broken invariant. Sent at error level. */
 export function reportAlert(message: string, fields: Record<string, unknown>, job?: string): void {
   if (!enabled) return;
   Sentry.captureMessage(message, { level: 'error', extra: fields, ...(job ? { tags: { job } } : {}) });

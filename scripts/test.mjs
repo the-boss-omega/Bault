@@ -1,39 +1,25 @@
 #!/usr/bin/env node
 /**
- * `pnpm test` — run every suite, then put the database back the way it was.
+ * `pnpm test`: run every suite, then put the database back the way it was.
  *
- * WHY this exists: the e2e suites drive the real HTTP stack against the real,
- * seeded database, on purpose — that is what makes them worth having. The cost
- * is that every intake they perform creates a REAL item, in a real collector's
- * vault, with a real append-only custody trail. One full run leaves 112 of them:
- * blank descriptions, `SN-…` serials, no photographs, sitting alongside the
- * eight genuine Rayquaza cards in the seeded catalogue, in every shelf count and
- * in the inventory report.
+ * The e2e suites drive the real HTTP stack against the real, seeded database,
+ * on purpose. The cost is that every intake they perform creates a REAL item in
+ * a collector's vault, with a real append-only custody trail, which then shows
+ * in every shelf count and in the inventory report.
  *
- * They cannot be cleaned up afterwards by deleting them. An item is never
- * deleted (Principle I), and its custody events, bin transfers and change
- * history live on append-only tables that DB triggers protect — a targeted
- * DELETE would either be refused or leave those rows pointing at nothing. The
- * only way back to the catalogue is the seed's TRUNCATE-based reset, which is
- * explicitly the dev-only escape hatch for exactly this.
+ * Those items cannot be deleted afterwards. An item is never deleted, and its
+ * custody events, bin transfers and change history live on append-only tables
+ * that DB triggers protect. The only way back to the catalogue is the seed's
+ * TRUNCATE-based reset, the dev-only escape hatch for exactly this.
  *
- * So the reset is not left to the developer to remember, in the same spirit as
- * `dev.mjs` not leaving the API/web start order to memory. It runs whether the
- * suites passed or failed — a failed run leaves MORE residue than a green one,
- * not less, so making the cleanup conditional on success would be backwards —
- * and this script exits with the suites' own status, so CI still fails when they
- * fail.
+ * So the reset runs whether the suites passed or failed (a failed run leaves
+ * MORE residue, not less), and this script exits with the suites' own status,
+ * so CI still fails when they fail. Skip the reset with `--no-reset` (or
+ * `BAULT_TEST_NO_RESET=1`) to inspect what a failing run left behind.
  *
- * Skip the reset with `--no-reset` (or `BAULT_TEST_NO_RESET=1`) when you want to
- * inspect what a failing run actually left behind.
- *
- * THE RESET ALSO RUNS BEFORE EACH DATABASE SUITE, not only at the end. Resetting
- * only afterwards meant every suite started from whatever the previous one had
- * left: `fin-invariants` failed after `integration` and passed on a fresh seed
- * (finding E16), so a red or green result described the run order rather than
- * the code. The four suites that drive the live API share the seeded accounts,
- * so each gets its own fresh seed. It costs a few seconds per suite; a result
- * that depends on the run before it proves nothing. `--no-reset` does not skip
+ * THE RESET ALSO RUNS BEFORE EACH DATABASE SUITE. The database suites share the
+ * seeded accounts, so each starts from a fresh seed; otherwise a result would
+ * describe the run order rather than the code. `--no-reset` does not skip
  * these: the run stops at the first failing suite, before the next seed, so
  * what that suite left behind is still there to inspect.
  *
@@ -111,14 +97,11 @@ function envValue(key) {
 /**
  * Not against production, and not half-way either.
  *
- * The reset TRUNCATEs every table, the ledger and the custody trail included,
- * and it ran after every `pnpm test` against whatever database `.env` named,
- * with nothing to stop it being production. The seed now refuses
- * NODE_ENV=production on its own. This refuses here as well, BEFORE the first
- * suite: the suites write real items and real ledger rows into the database
- * they run against, so a run whose reset will be refused should never start
- * (and any seeding before a suite would be refused the same way). A single
- * suite can still be run on its own, `pnpm test:<suite>`.
+ * The reset TRUNCATEs every table, the ledger and the custody trail included.
+ * The seed refuses NODE_ENV=production on its own; this refuses as well, BEFORE
+ * the first suite, because the suites write real items and ledger rows into
+ * the database they run against, so a run whose reset will be refused should
+ * never start. A single suite can still be run on its own, `pnpm test:<suite>`.
  */
 if (envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure') {
   console.error(

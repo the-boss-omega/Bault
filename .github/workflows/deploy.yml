@@ -20,23 +20,21 @@ name: Deploy
 # No other secret is used, and none is passed to the server: the server reads
 # its own from /etc/bault.
 #
-# WHAT THIS EXPECTS OF infra/production/deploy.sh (written separately; this is
-# the contract):
+# WHAT THIS RELIES ON in infra/production/deploy.sh (the contract):
 #   - run on the host as `deploy`, from /opt/bault, with exactly one argument,
 #     the release tag (`v1.2.3` or `v1.2.3-rc1`), which is also the image tag:
 #     ghcr.io/<owner>/bault-{api,worker,web}:<tag>
 #   - non-interactive (no TTY, no prompt) and `set -euo pipefail`: it exits
 #     non-zero on any failure and exits 0 only once the new release answers
-#     /api/v1/readyz
-#   - it does everything on the host: pulls the three images (logging in to
-#     GHCR with a read-only token kept on the host if the packages are
-#     private), takes the pre-migration backup, migrates as bault_owner,
-#     re-runs infra/production/roles.sql, swaps the containers, waits for
-#     readyz and records the tag in /opt/bault/CURRENT_TAG
+#     /api/v1/readyz and /api/v1/readyz/worker
+#   - it does everything on the host: pulls the three images (with the host's
+#     own docker login, a read-only token, if the packages are private), takes
+#     the pre-migration backup, migrates as bault_owner, re-runs
+#     infra/production/roles.sql, swaps the containers, waits for both probes
+#     and records the tag in /opt/bault/CURRENT_TAG
 #   - /opt/bault (compose.yml, Caddyfile, backup.sh, roles.sql) must be at the
-#     same tag as the images. If deploy.sh does that checkout itself, it has
-#     to re-exec the new copy of itself afterwards: bash reads a script while
-#     it runs it, so editing the running file underneath it runs a mixture
+#     same tag as the images. deploy.sh does not check it out; it warns when
+#     the checkout is at another tag
 #   - re-running it with the same tag is safe, and running it with the previous
 #     tag is the rollback
 on:

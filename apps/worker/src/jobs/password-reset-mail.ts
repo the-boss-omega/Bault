@@ -5,23 +5,19 @@ import type { EmailAdapter } from '@bault/adapters';
 import { log } from '../log';
 
 /**
- * Password-reset mail, sent from the outbox (N11).
+ * Password-reset mail, sent from the outbox.
  *
- * `POST /auth/password/reset-request` used to look the address up, mint a token
- * and send the mail inside the request, and only for an address with an
- * account — so a dead mail server answered 500 for registered addresses and 202
- * for the rest, and the time taken said the same thing. The API now writes one
- * outbox row for ANY address and answers at once; everything that depends on
- * whether the account exists happens here, after the caller has gone.
+ * `POST /auth/password/reset-request` writes one outbox row for ANY address and
+ * answers at once, so neither its status nor its timing says whether an account
+ * exists. Everything that depends on that happens here, after the caller has gone.
  *
  * The token is minted HERE, where it is mailed, so its raw value exists only in
- * the message and only its hash is stored — the rule every other token in the
- * product follows. Writing the link into the outbox payload instead would have
- * left a working reset link in a table.
+ * the message and only its hash is stored. A link in the outbox payload would
+ * leave a working reset link in a table.
  *
  * Mirrored BY VALUE from the API (the worker does not import it): the event
- * name from `PasswordService`, the token shape from `shared/tokens.ts`, the
- * one-hour life and the link format from `VerificationService`.
+ * name from `PasswordService`, the token shape from `shared/tokens.ts`, and the
+ * link format from `VerificationService`. The one-hour life is set only here.
  */
 export const PASSWORD_RESET_REQUESTED = 'password_reset_requested';
 
@@ -58,9 +54,9 @@ export async function sendPasswordReset(
       variables: { link: `${base}/#/reset-password?token=${encodeURIComponent(raw)}` },
     });
   } catch (err) {
-    // Logged rather than retried: the token is already minted, the person can
-    // ask again from the same page, and a retry loop against a dead server
-    // would mail them a stack of links when it comes back.
+    // Logged rather than retried: the person can ask again from the same page,
+    // and retries against a dead server would mail a stack of links when it
+    // comes back.
     log.error('password reset mail failed', { job: 'outbox.dispatch', error: (err as Error).message });
   }
 }

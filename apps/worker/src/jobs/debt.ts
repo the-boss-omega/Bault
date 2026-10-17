@@ -1,20 +1,17 @@
 import type { Pool } from 'pg';
 
 /**
- * Shared debt arithmetic for the two jobs that act on a negative wallet.
- *
- * Both interest accrual and the suspension sweep need the same two facts about
- * an indebted account — how much it owes, and how long it has owed it — so the
- * query that derives them lives here rather than being written twice and
- * drifting. A balance is never stored (Principle IV), so both are derived from
- * the append-only ledger every time.
+ * Shared debt arithmetic for the two jobs that act on a negative wallet:
+ * interest accrual and the suspension sweep. A balance is never stored, so how
+ * much an account owes and how long it has owed it are derived from the
+ * append-only ledger every time.
  */
 
 export interface DebtPosition {
   userId: string;
   /** Current balance in minor units. Always negative for a returned row. */
   balanceMinor: number;
-  /** Debt in minor units — the positive magnitude of the balance. */
+  /** Debt in minor units: the positive magnitude of the balance. */
   debtMinor: number;
   /** When the balance most recently crossed from non-negative into negative. */
   negativeSince: Date;
@@ -26,15 +23,11 @@ export interface DebtPosition {
  * Every account whose balance is negative right now, with the moment its
  * CURRENT run of debt began.
  *
- * "When did this go negative" is not a column and cannot be one: the balance is
- * a fold over the ledger, so the answer is found by replaying that fold in
- * order and taking the last row where the running total crossed from ≥ 0 into
- * < 0. Taking the FIRST such crossing would be wrong for an account that has
- * been negative, recovered, and gone negative again — it would date the debt
- * from a balance the customer already cleared, and charge interest on it.
+ * The balance is a fold over the ledger, so this replays it in order and takes
+ * the LAST row where the running total crossed from >= 0 into < 0. The first
+ * crossing would date a debt from a balance the customer already cleared.
  *
- * Accounts that are currently solvent are filtered out before the crossing is
- * joined, so a long ledger history costs nothing for the accounts that are fine.
+ * Only accounts that are negative now are joined to their crossing.
  */
 export async function negativeAccounts(pool: Pool): Promise<DebtPosition[]> {
   const { rows } = await pool.query<{ user_id: string; balance: string; since: Date }>(

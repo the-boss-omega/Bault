@@ -3,19 +3,18 @@
 #
 # The worker runs the jobs that are not optional: outbox dispatch every minute,
 # the daily storage-fee sweep, interest accrual, the wallet debt suspension, the
-# hourly ledger-invariant check, tracking refresh and shipment expiry. An API
-# deployed without this is a platform that never bills storage and never sends a
-# notification.
+# hourly ledger-invariant check, tracking refresh, shipment expiry, membership
+# renewal and session cleanup. Without it the platform never bills storage and
+# never sends a notification.
 #
 # Built from the REPO ROOT:
 #   docker build -f apps/worker/Dockerfile -t bault-worker .
 #
-# Node 22, matching `engines` in the root package.json (the images were on 20,
-# which the engines field excludes). Pinned by digest, not just by tag: a tag
-# is moved by whoever publishes it, so the same Dockerfile built twice could
-# ship two different runtimes. To upgrade, `docker pull node:22-slim`, take the
-# digest from `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim`
-# and change BOTH FROM lines in each of the three Dockerfiles together.
+# Node 22, matching `engines` in the root package.json. Pinned by digest because
+# a tag can be moved by whoever publishes it. To upgrade, `docker pull
+# node:22-slim`, take the digest from
+# `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim` and change
+# BOTH FROM lines in the api, web and worker Dockerfiles together.
 # =============================================================================
 FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build
 WORKDIR /repo
@@ -61,12 +60,11 @@ COPY --from=build --chown=bault:bault /repo/apps/worker/package.json ./apps/work
 USER 10001:10001
 WORKDIR /app/apps/worker
 
-# No HTTP port and therefore no container healthcheck. A fatal pg-boss error
-# exits non-zero, and the restart policy brings the process back. Whether the
-# JOBS are running is a different question, answered through the database:
-# each job stamps its row in `worker_heartbeat` when it succeeds, and the API's
-# GET /api/v1/readyz/worker answers 503 when outbox dispatch has not succeeded
-# for five minutes. infra/production/deploy.sh waits on it after every deploy.
+# No HTTP port and so no container healthcheck. A fatal pg-boss error exits
+# non-zero and the restart policy brings the process back. Whether the jobs run
+# is answered through the database: each job stamps `worker_heartbeat` on
+# success, and GET /api/v1/readyz/worker answers 503 when outbox dispatch has not
+# succeeded for five minutes. infra/production/deploy.sh waits on it.
 #
 # Exec form, so node is PID 1 and gets SIGTERM directly: it stops taking jobs
 # and drains the running ones for up to 30s (compose.yml gives it 45).

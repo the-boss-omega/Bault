@@ -1,7 +1,7 @@
 /**
- * External-provider adapter interfaces + sandbox implementations (T020).
- * Keeping providers behind interfaces makes any provider replaceable without
- * touching the core, and keeps the platform the sole system of record (Principle XIII).
+ * External-provider adapter interfaces and sandbox implementations. Providers
+ * sit behind interfaces so any of them can be replaced without touching the
+ * core, and the platform stays the sole system of record.
  */
 export * from './payment';
 export * from './shipping';
