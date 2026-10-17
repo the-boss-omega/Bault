@@ -100,7 +100,7 @@ describe('a top-up is a capture, never a charge', () => {
           id: 'ORDER1',
           status: 'COMPLETED',
           purchase_units: [
-            // The capture's own status is what says the money was taken (F028).
+            // The capture's own status is what says the money was taken.
             {
               payments: {
                 captures: [{ id: 'CAP1', status: 'COMPLETED', amount: { value: '50.00', currency_code: 'USD' } }],
@@ -173,9 +173,8 @@ describe('a top-up is a capture, never a charge', () => {
 describe('a capture succeeds when the CAPTURE completed, not the order (F028)', () => {
   /**
    * PayPal can mark an order COMPLETED while the capture inside it is still
-   * PENDING — an eCheck, a payment held for review. The adapter read the
-   * order's status, so the wallet was credited for money that had not arrived
-   * and might never.
+   * PENDING (an eCheck, a payment held for review). Reading the order's status
+   * would credit the wallet for money that has not arrived and might never.
    */
   const order = (orderStatus: string, captureStatus: string) => ({
     '/capture': {

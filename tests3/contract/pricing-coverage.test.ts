@@ -8,7 +8,7 @@ import {
 } from '../../apps/api/src/modules/prc/billable-actions';
 
 /**
- * The pricing-coverage catalogue (E6), without a database.
+ * The pricing-coverage catalogue, without a database.
  *
  * Two things are pinned here. What each kind of missing rule is REPORTED as —
  * the integration suite only ever sees the seeded database, where nothing is

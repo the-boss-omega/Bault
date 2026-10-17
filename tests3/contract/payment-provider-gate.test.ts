@@ -5,21 +5,15 @@ import { SandboxPaymentAdapter } from '@bault/adapters';
  * The sandbox payment adapter, and the boot gate that must stand between it and
  * production.
  *
- * This suite exists because of something found by probing the running API rather
- * than by reading it: `POST /finance/checkout` with
- * `paymentMethodToken: "pm_totally_fake"` settled a $5,000 top-up and moved a
- * real balance. Not a simulation — the wallet went from $4,167 to $9,167.
- *
- * The cause was not a bug in the payment code. It is that `SandboxPaymentAdapter`
- * is honest about being a sandbox — it settles everything and verifies nothing —
- * and it was bound unconditionally, while `PAYMENT_PROVIDER` in the environment
- * said `stripe` and was read by nobody. Deployed as it stood, any account could
- * mint unlimited store credit, spend it on other collectors' cards, and cash it
- * out to a bank account.
+ * `SandboxPaymentAdapter` is honest about being a sandbox: it settles everything
+ * and verifies nothing. Bound in production, `POST /finance/checkout` with any
+ * token (`pm_totally_fake` will do) would move a real balance, and any account
+ * could mint unlimited store credit, spend it on other collectors' cards, and
+ * cash it out to a bank account.
  *
  * These are unit-level assertions on purpose. The dangerous behaviour lives in
  * the adapter itself, and the guarantee wanted is about the adapter's own
- * contract — that it never pretends to be safe — plus the config rule that keeps
+ * contract (that it never pretends to be safe) plus the config rule that keeps
  * it away from production.
  */
 
@@ -51,13 +45,13 @@ describe('the sandbox payment adapter is unsafe by design, and says so', () => {
 });
 
 /**
- * The gate itself.
+ * The gate itself, as a decision table.
  *
- * `createPaymentAdapter` in `apps/api/src/shared/adapters/adapters.module.ts`
- * refuses two configurations outright rather than degrading to something that
- * takes fake money. It is asserted here by rule rather than by importing the
- * factory, because the factory reads process-wide validated config and the
- * property under test is the DECISION TABLE, not the wiring.
+ * The env schema and `createPaymentAdapter` (`packages/adapters/src/select.ts`)
+ * refuse the sandbox in production and any provider without an implementation,
+ * rather than degrading to something that takes fake money. This block states
+ * that rule as a table; `tests/contract/adapter-selection.test.ts` drives the
+ * factory itself.
  */
 describe('the production configuration rule', () => {
   const decide = (provider: string, nodeEnv: string): 'paypal' | 'sandbox' | 'refuse' => {
@@ -78,8 +72,7 @@ describe('the production configuration rule', () => {
 
   it('refuses a named provider that has no implementation, rather than falling back', () => {
     // The fallback is the whole danger: `PAYMENT_PROVIDER=stripe` with no Stripe
-    // adapter must not quietly run the sandbox, which is exactly what the
-    // repository was configured to do.
+    // adapter must not quietly run the sandbox.
     for (const env of ['development', 'test', 'production']) {
       expect(decide('stripe', env)).toBe('refuse');
       expect(decide('adyen', env)).toBe('refuse');
