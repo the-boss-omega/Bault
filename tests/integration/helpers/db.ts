@@ -93,6 +93,33 @@ export async function holdRowLock(table: string, id: string): Promise<{ release:
 }
 
 /**
+ * A transaction of the test's own, standing in for another session that holds
+ * locks while the API works: `query` runs inside it, `rollback` ends it.
+ */
+export async function openTransaction(): Promise<{
+  query: <R = Record<string, unknown>>(text: string, values?: unknown[]) => Promise<R[]>;
+  rollback: () => Promise<void>;
+}> {
+  pool ??= new Pool({ connectionString: databaseUrl(), max: 4 });
+  const client = await pool.connect();
+  await client.query('begin');
+  let ended = false;
+  return {
+    query: async <R = Record<string, unknown>>(text: string, values: unknown[] = []) =>
+      (await client.query<R>(text, values)).rows,
+    rollback: async () => {
+      if (ended) return;
+      ended = true;
+      try {
+        await client.query('rollback');
+      } finally {
+        client.release();
+      }
+    },
+  };
+}
+
+/**
  * Wait until at least `count` other sessions on this database are waiting for a
  * lock: the requests a test sent are then queued, in the order they arrived.
  */
