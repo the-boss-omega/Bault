@@ -29,16 +29,32 @@ export function sealSecret(key: Buffer, plaintext: Buffer, accountId: string): s
   return [VERSION, iv.toString('base64url'), tag.toString('base64url'), body.toString('base64url')].join('.');
 }
 
-/** Throws if the value was altered, belongs to another account, or was sealed under another key. */
+/**
+ * A sealed secret that does not open: altered, copied from another account, or
+ * sealed under another key. Its own class so a caller can tell it from a bug.
+ * Every case is the same to whoever holds the account (no code they type can
+ * work), and the usual cause is `MFA_ENCRYPTION_KEY` changed or lost.
+ */
+export class UnreadableSecretError extends Error {
+  override readonly name = 'UnreadableSecretError';
+}
+
+/** Throws `UnreadableSecretError` if the value was altered, belongs to another account, or was sealed under another key. */
 export function openSecret(key: Buffer, sealed: string, accountId: string): Buffer {
   const [version, iv, tag, body] = sealed.split('.');
-  if (version !== VERSION || !iv || !tag || body === undefined) throw new Error('Unrecognised sealed secret');
-  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'), {
-    authTagLength: TAG_BYTES,
-  });
-  decipher.setAAD(Buffer.from(accountId, 'utf8'));
-  decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-  return Buffer.concat([decipher.update(Buffer.from(body, 'base64url')), decipher.final()]);
+  if (version !== VERSION || !iv || !tag || body === undefined) throw new UnreadableSecretError('Unrecognised sealed secret');
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'), {
+      authTagLength: TAG_BYTES,
+    });
+    decipher.setAAD(Buffer.from(accountId, 'utf8'));
+    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+    return Buffer.concat([decipher.update(Buffer.from(body, 'base64url')), decipher.final()]);
+  } catch (e) {
+    // Node says "Unsupported state or unable to authenticate data" for a wrong
+    // key, a wrong account and a changed byte alike; GCM cannot tell them apart.
+    throw new UnreadableSecretError(`Sealed secret does not open: ${(e as Error).message}`);
+  }
 }
 
 /**

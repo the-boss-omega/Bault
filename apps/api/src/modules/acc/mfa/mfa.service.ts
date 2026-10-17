@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { and, count, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { toString as qrToString } from 'qrcode';
@@ -15,7 +15,7 @@ import { LoginAttemptService } from '../login-attempts.service';
 import { SessionService, type ClientOrigin } from '../session.service';
 import { MFA_POLICY, type MfaPolicy } from './mfa-policy';
 import { generateRecoveryCodes, hashRecoveryCode, normalizeRecoveryCode } from './recovery-codes';
-import { deriveSubkey, keyFromBase64, openSecret, sealSecret } from './secret-box';
+import { UnreadableSecretError, deriveSubkey, keyFromBase64, openSecret, sealSecret } from './secret-box';
 import { base32Encode, generateTotpSecret, matchTotp, otpauthUri } from './totp';
 
 /** How long the second sign-in step stays open after a right password. */
@@ -56,6 +56,7 @@ type Factor = typeof mfaFactor.$inferSelect;
 export class MfaService {
   private readonly key: Buffer;
   private readonly recoveryKey: Buffer;
+  private readonly logger = new Logger('MfaService');
 
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
@@ -457,8 +458,26 @@ export class MfaService {
 
   // ---------------------------------------------------------------------------
 
+  /**
+   * The factor's secret, or a refusal that says who can fix it.
+   *
+   * A secret that does not open was a plain Error, so the second sign-in step
+   * answered 500 to somebody who had typed the right code. The usual cause is
+   * `MFA_ENCRYPTION_KEY` changed or lost, which nobody signing in can fix, so
+   * the operator hears about it once here, at error level, and the person is
+   * told to ask for a reset.
+   */
   private open(f: Factor): Buffer {
-    return openSecret(this.key, f.secretCiphertext, f.userId);
+    try {
+      return openSecret(this.key, f.secretCiphertext, f.userId);
+    } catch (e) {
+      if (!(e instanceof UnreadableSecretError)) throw e;
+      this.logger.error(
+        `Two-factor secret of account ${f.userId} does not open (${e.message}). ` +
+          'If MFA_ENCRYPTION_KEY was changed or lost, restore it; otherwise an administrator resets two-factor sign-in for the account.',
+      );
+      throw factorUnreadable(Boolean(f.enabledAt));
+    }
   }
 
   private async enabledFactor(exec: Exec, userId: string): Promise<Factor> {
@@ -560,6 +579,26 @@ function alreadyEnabled(): AppError {
   return AppError.conflict(
     ErrorCode.MFA_ALREADY_ENABLED,
     'Two-factor sign-in is already on for this account. Turn it off first to set up a different authenticator.',
+  );
+}
+
+/**
+ * `mfa_factor_unreadable`. It belongs in `ErrorCode` (`shared/errors`), which
+ * this module does not own; once it is added there, this cast goes.
+ */
+const MFA_FACTOR_UNREADABLE = 'mfa_factor_unreadable' as string as ErrorCode;
+
+/**
+ * The stored secret cannot be read on our side (409). An enrolled factor needs
+ * an administrator's reset; a setup nobody confirmed is replaced by starting
+ * it again.
+ */
+function factorUnreadable(enabled: boolean): AppError {
+  return AppError.conflict(
+    MFA_FACTOR_UNREADABLE,
+    enabled
+      ? 'Your two-factor sign-in cannot be checked: its secret can no longer be read on our side, so no code will work. Ask an administrator to reset two-factor sign-in for your account, then sign in with your password and set it up again.'
+      : 'This two-factor setup can no longer be read on our side. Start the setup again; that replaces it.',
   );
 }
 
