@@ -363,6 +363,31 @@ export class HumanFulfilmentService {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
       await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
 
+      // The show, locked, and its places counted again under that lock: two
+      // collectors who both saw one place left queue here, and the second
+      // finds the van full. The rows, then the wallet, then the period.
+      const [locked] = await tx
+        .select()
+        .from(consignmentEvent)
+        .where(eq(consignmentEvent.id, show.id))
+        .for('update')
+        .limit(1);
+      if (!locked || !locked.active || !locked.pickupEnabled) {
+        throw AppError.validation('That show does not take pickups');
+      }
+      if (locked.requestDeadline.getTime() <= Date.now()) {
+        throw new AppError(ErrorCode.CONFLICT, 'That show has closed to new requests — the van is packed before the doors open.', 409);
+      }
+      if (locked.pickupCapacity > 0) {
+        const [taken] = await tx
+          .select({ booked: sql<number>`count(*)::int` })
+          .from(shipment)
+          .where(and(eq(shipment.pickupEventId, show.id), sql`${shipment.status} not in ('cancelled')`));
+        if ((taken?.booked ?? 0) >= locked.pickupCapacity) {
+          throw new AppError(ErrorCode.CONFLICT, 'That show is full for pickups', 409);
+        }
+      }
+
       // A membership may cover the pickup, so the waiver is worked out BEFORE
       // the balance check, which runs against what will actually be charged.
       // Wallet first, then the membership period the waiver writes to: the same
