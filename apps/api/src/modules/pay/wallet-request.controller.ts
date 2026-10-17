@@ -1,6 +1,18 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsPositive, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -12,6 +24,7 @@ import {
   MAX_REFERENCE_LENGTH,
   MAX_REJECTION_REASON_LENGTH,
   SUPPORTED_CURRENCIES,
+  WALLET_REQUEST_TRANSITIONS,
   type WalletRequestStatus,
   type WalletRequestType,
 } from './wallet-request.rules';
@@ -53,6 +66,28 @@ class CompleteDto extends ReviewNoteDto {
    * for a cash-out in that mode, refused in the provider mode.
    */
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) payoutReference?: string;
+}
+
+/**
+ * A date the review queue can filter on: a day (`2026-10-15`, as the date
+ * inputs send it) or a moment (`2026-10-15T09:30:00Z`). The pattern keeps out
+ * the ISO forms `new Date()` cannot read (week and ordinal dates); strict
+ * ISO 8601 keeps out days that do not exist (`2026-02-30`).
+ */
+const QUEUE_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+const queueDate = (field: string) => ({ message: `${field} has to be a date, written YYYY-MM-DD or as an ISO 8601 time.` });
+
+/**
+ * The review queue's filters, checked here so a bad one is a 400 that names
+ * it. An unreadable date used to reach `new Date()` and fail inside the query
+ * as a 500.
+ */
+class ReviewQueueQuery {
+  @IsOptional() @IsIn(['cash_in', 'cash_out']) type?: WalletRequestType;
+  @IsOptional() @IsIn(Object.keys(WALLET_REQUEST_TRANSITIONS)) status?: WalletRequestStatus;
+  @IsOptional() @IsString() @MaxLength(64) userId?: string;
+  @IsOptional() @Matches(QUEUE_DATE, queueDate('from')) @IsISO8601({ strict: true }, queueDate('from')) from?: string;
+  @IsOptional() @Matches(QUEUE_DATE, queueDate('to')) @IsISO8601({ strict: true }, queueDate('to')) to?: string;
 }
 
 class ReconcileDto {
@@ -110,15 +145,8 @@ export class WalletRequestController {
 
   @Roles('admin')
   @Get('admin/wallet-requests')
-  queue(
-    @CurrentUser() user: AuthUser,
-    @Query('type') type?: WalletRequestType,
-    @Query('status') status?: WalletRequestStatus,
-    @Query('userId') userId?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.requests.listForReview(user, { type, status, userId, from, to });
+  queue(@CurrentUser() user: AuthUser, @Query() q: ReviewQueueQuery) {
+    return this.requests.listForReview(user, { type: q.type, status: q.status, userId: q.userId, from: q.from, to: q.to });
   }
 
   @Roles('admin')
