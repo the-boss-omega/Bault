@@ -91,6 +91,18 @@ psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 -f infra/production/roles.sql
 unset BAULT_APP_PASSWORD BAULT_WORKER_PASSWORD
 ```
 
+`roles.sql` also gives `bault_app` and `bault_worker` their statement timeout
+(30s) and idle-in-transaction timeout (10s). Postgres applies them at every
+login, so they hold through a pooler. The API does not send them itself:
+PgBouncer refuses a connection that carries them as startup parameters. A
+pooler's server connections keep the settings they started with, so restart
+the pooler (or its pool) if it connected before this first run. Check through
+the API's own URL:
+
+```sh
+psql "$(grep ^DATABASE_URL= /etc/bault/api.env | cut -d= -f2-)" -c 'show statement_timeout'   # 30s
+```
+
 ## 5. Deploy (every release, as deploy)
 
 ```sh

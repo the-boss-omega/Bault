@@ -62,7 +62,12 @@ describe('environment schema', () => {
     const env = await load(PROD);
     expect(env.NODE_ENV).toBe('production');
     expect(env.DATABASE_POOL_MAX).toBe(10);
-    expect(env.DATABASE_STATEMENT_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it('still parses an env file that sets the retired statement timeout', async () => {
+    // The timeout is a database role setting now (apps/api/src/db/client.ts).
+    const env = await load({ ...PROD, DATABASE_STATEMENT_TIMEOUT_MS: '30000' });
+    expect(env).not.toHaveProperty('DATABASE_STATEMENT_TIMEOUT_MS');
   });
 
   it('no longer requires the unused session secret', async () => {

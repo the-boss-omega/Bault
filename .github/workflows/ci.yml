@@ -172,6 +172,12 @@ jobs:
       # Each suite below is seeded afresh, exactly as `pnpm test` does
       # (scripts/test.mjs). They share the seeded accounts, so a suite run on
       # what the previous one left would be measuring the run order.
+      #
+      # First the statement timeout, which production sets on its roles
+      # (roles.sql). The API does not send it: PgBouncer refuses it.
+      - name: Database settings
+        run: psql "$DIRECT_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f infra/postgres/dev-settings.sql
+
       - name: Migrate
         run: pnpm --filter @bault/api db:migrate
 
