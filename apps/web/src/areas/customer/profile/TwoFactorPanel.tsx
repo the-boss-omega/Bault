@@ -45,14 +45,21 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
   const [status, setStatus] = useState<MfaStatus | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Why the status could not be read, apart from `error`: this one comes with a
+   * way to read it again, since without the status the panel has nothing else
+   * to offer.
+   */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setStatus(await api.get<MfaStatus>('/auth/mfa'));
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
     }
   }, []);
 
@@ -114,6 +121,7 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
     <Panel title={t('mfa.title')} subtitle={t('mfa.panel.subtitle')}>
       <div className="stack stack--tight" style={{ maxWidth: 560 }}>
         {note && <SuccessNote>{note}</SuccessNote>}
+        {loadError && <ErrorState message={loadError} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
         {error && <ErrorState message={error} />}
 
         {mode.kind === 'codes' ? (

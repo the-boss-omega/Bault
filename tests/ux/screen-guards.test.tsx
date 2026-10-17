@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StrictMode } from 'react';
 import { readFileSync } from 'node:fs';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 /**
  * Three screens that each had one way to show the wrong thing: the e-mail
@@ -21,6 +22,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
 const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
+const { TwoFactorPanel } = await import('../../apps/web/src/areas/customer/profile/TwoFactorPanel');
 // `import.meta.url` is not a file URL under this suite's transform, so the
 // stylesheet is found from the working directory (the repository root).
 const STYLESHEET = 'apps/web/src/index.css';
@@ -127,5 +129,26 @@ describe('the render-failure fallback', () => {
     }
     // The primary action looks like one.
     expect(buttons[0]).toHaveClass('btn--gold');
+  });
+});
+
+/* ============================================================
+   The two-factor panel, when its first read fails
+   ============================================================ */
+
+describe('the two-factor panel', () => {
+  it('offers to try again when the status cannot be read, and shows it once it can', async () => {
+    const user = userEvent.setup();
+    get
+      .mockRejectedValueOnce(new Error('The server could not be reached.'))
+      .mockResolvedValue({ enabled: false, pending: false, required: false, recoveryCodesRemaining: 0 });
+    renderIn(<TwoFactorPanel />);
+
+    expect(await screen.findByText(/could not be reached/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByRole('button', { name: /set up two-factor sign-in/i })).toBeInTheDocument();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/could not be reached/i)).not.toBeInTheDocument();
   });
 });
