@@ -46,6 +46,11 @@ export class PricingService {
     // A rule must explicitly define what it is (description), how much (value),
     // its scope (actionType + itemClass), and how/when it is billed (Req 14.1).
     if (!input.description?.trim()) throw AppError.validation('A rule description is required');
+    // A percentage is basis points of a base amount (a sale price, a
+    // shipment's value); over 10,000 it would take more than the whole base.
+    if (input.model === 'percentage' && input.value > 10_000) {
+      throw AppError.validation('A percentage rule is at most 10000 basis points (100%)', { field: 'value' });
+    }
     const [row] = await this.db
       .insert(pricingRule)
       .values({

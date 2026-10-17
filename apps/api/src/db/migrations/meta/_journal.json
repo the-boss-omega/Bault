@@ -253,6 +253,13 @@
       "when": 1785075100000,
       "tag": "0035_a_second_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1785075200000,
+      "tag": "0036_a_ledger_amount_is_never_zero",
+      "breakpoints": true
     }
   ]
 }
