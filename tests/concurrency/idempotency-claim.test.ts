@@ -2,18 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, signIn, type Client } from '../integration/helpers/http';
 
 /**
- * One idempotency key, two requests at the same moment (F064).
+ * One idempotency key, two requests at the same moment.
  *
- * The key protected only a RETRY: it was looked up before the purchase's
- * transaction and saved after it committed, with nothing claiming it in
- * between. A double-click whose two requests arrived together both missed the
- * lookup, both ran, and a store product with copies in stock sold two of them
- * to one buyer and charged twice — the product lock only put the two in a
- * queue.
- *
- * The key is now claimed by the insert that starts the purchase's own
- * transaction, against a unique index. The second request waits on that claim
- * and then replays what the first one recorded. It never runs.
+ * A double-click sends both requests together. A key that is only looked up
+ * before the purchase would let both run and charge twice, so the key is
+ * claimed by an insert against a unique index at the start of the purchase's
+ * own transaction. The second request waits on that claim and then replays what
+ * the first one recorded. It never runs.
  *
  * Requires a running API + a freshly seeded DB.
  */
