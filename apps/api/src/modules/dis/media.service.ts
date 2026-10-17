@@ -43,10 +43,9 @@ const SEVERITIES = ['clean', 'minor', 'notable'] as const;
 /**
  * The two services that answer "what does this card actually look like".
  *
- * A collector buying sight-unseen has one question the platform could not
- * answer: is it as described. Professional photography went partway — it
- * attached better images — but a still photograph does not show gloss, and a
- * photograph of the front says nothing about a soft corner.
+ * A collector buying sight-unseen has one question: is it as described. A
+ * still photograph does not show gloss, and a photograph of the front says
+ * nothing about a soft corner.
  *
  *  - VIDEO REVIEW turns the card under a light on camera, which is the only way
  *    to see surface and gloss.
@@ -92,7 +91,7 @@ export class MediaService {
 
   /**
    * Attach the video. It becomes a new media version on the item, exactly as a
-   * professional photograph does — the only difference is the `type`.
+   * professional photograph does; the only difference is the `type`.
    */
   async completeVideo(operatorId: string, requestId: string, form: VideoFulfillment) {
     return this.db.transaction(async (tx) => {

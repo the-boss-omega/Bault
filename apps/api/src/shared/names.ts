@@ -7,9 +7,9 @@
  *    used everywhere a shipment, an intake or an audit line has to say *whose*
  *    it is. It is normalized once (trimmed + lower-cased) on the way in, so
  *    "Red", " red " and "RED" can never become three different accounts;
- *  - the **person name**, which is now two explicit columns, `first_name` and
+ *  - the **person name**, which is two explicit columns, `first_name` and
  *    `last_name`. There is deliberately no third, independently editable
- *    "display name" column that could drift out of step with them — anywhere the
+ *    "display name" column that could drift out of step with them; anywhere the
  *    UI needs a full name it derives one with `fullName()`.
  *
  * The API and the SPA each keep their own copy of these rules (the SPA's lives

@@ -37,9 +37,10 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
 
 /**
  * Root module of the modular monolith. Composition order:
- *  - global infra (DB, SEC, shared services, adapters, billing seam, outbox, health)
- *  - feature modules (ACC, CST, INV, VLT so far; MKT/PAY/PRC/SHP/DIS/ADM/NOT added later)
- *  - APP_GUARD chain: SessionAuthGuard (authenticate + block suspended) →
+ *  - global infra (DB, SEC, shared services, adapters, outbox, health)
+ *  - global kernels PRC and PAY (pricing, ledger/wallet, the billing port)
+ *  - feature modules
+ *  - APP_GUARD chain: ThrottlerGuard → SessionAuthGuard (authenticate + block suspended) →
  *    MfaEnrollmentGuard (a role that requires a second factor gets nothing else
  *    until it has one) → RolesGuard (@Roles)
  *  - APP_INTERCEPTOR: AuditInterceptor (immutable audit log of state-changing requests)
@@ -47,13 +48,7 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
 @Module({
   imports: [
     /**
-     * Rate limiting, which did not exist at all.
-     *
-     * `POST /auth/login` was unmetered, so a password could be attacked as fast
-     * as the network allowed, and registration and password-reset were unmetered
-     * mail cannons pointed at whatever address the caller named.
-     *
-     * Two budgets rather than one. The generous `default` keeps an operator
+     * Rate limiting, in two budgets. The generous `default` keeps an operator
      * working a bench from being throttled while scanning items in; the `auth`
      * bucket is deliberately small because every route in it either checks a
      * credential or sends mail to a stranger. Both come from config, because the
@@ -78,8 +73,8 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
     AdaptersModule,
     NotModule,
     ObservabilityModule,
-    // Global kernels — PRC/PAY provide pricing, ledger/wallet, and the real
-    // BILLING_PORT (replacing the Phase-4 no-op) used by INV/MKT.
+    // Global kernels: PRC/PAY provide pricing, ledger/wallet, and the
+    // BILLING_PORT used by INV/DIS/MKT.
     PrcModule,
     PayModule,
     AccModule,

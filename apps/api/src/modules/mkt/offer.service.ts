@@ -18,18 +18,13 @@ type Side = 'buyer' | 'seller';
  * Offers & negotiation (T084, Principle VIII).
  *
  * A buyer offers on someone else's active listing. Either side may then counter,
- * reject or accept — subject to the one rule that makes a negotiation a
+ * reject or accept, subject to the one rule that makes a negotiation a
  * negotiation:
  *
  *   THE PARTY WHO PROPOSED A PRICE MAY NOT ALSO ACCEPT IT.
  *
- * That rule replaced "only the seller may accept", which was right for the
- * opening offer and wrong for every counter. It failed in both directions at
- * once: a buyer could not accept the counter they had been sent (so a
- * negotiation could never conclude), while the seller could accept their own
- * counter and have it execute — money taken from the buyer's wallet at a price
- * the buyer had never agreed to. Being on the selling side of a listing is not
- * what entitles you to agree to a price; not having named it is.
+ * Either side may counter, so the right to accept follows who named the price,
+ * whichever side of the listing they are on.
  */
 @Injectable()
 export class OfferService {
@@ -51,8 +46,7 @@ export class OfferService {
      * Offering MORE than the seller is asking is a typo, not a strategy.
      *
      * The listing has a price and a Buy button that honours it, so an offer
-     * above it can only cost the offerer money for nothing. One probe put
-     * $9,999 on a $75 card and it was accepted without comment.
+     * above it can only cost the offerer money for nothing.
      */
     if (amount > l.askingPrice) {
       throw AppError.validation(
@@ -99,8 +93,7 @@ export class OfferService {
    * report WHICH participant they are.
    *
    * Participation decides who may look at an offer and who may end it. It does
-   * NOT decide who may agree to one — see `assertNotProposer`. Conflating the
-   * two is what let a buyer accept their own offer.
+   * NOT decide who may agree to one; see `assertNotProposer`.
    */
   private async loadParticipating(actorId: string, offerId: string) {
     const [o] = await this.db.select().from(offer).where(eq(offer.id, offerId)).limit(1);
@@ -133,7 +126,7 @@ export class OfferService {
    * Both directions matter. Without the first half a buyer accepts their own
    * offer and takes the card at their own price; without the second a seller
    * accepts their own counter and charges the buyer a price they never agreed
-   * to. Both were reachable, and both moved a real card in a probe.
+   * to.
    */
   private static assertNotProposer(side: Side, proposedBy: Side, amount: number): void {
     if (side !== proposedBy) return;
@@ -162,12 +155,11 @@ export class OfferService {
 
   /**
    * An offer is a commitment to pay, so it is checked against the wallet when it
-   * is made — not only when it is accepted.
+   * is made, and again when it is accepted.
    *
-   * Checking only at accept put the failure on the wrong person: the SELLER
-   * pressed Accept and was told "Insufficient wallet balance", an error about
-   * somebody else's money phrased as if it were theirs. `context` keeps the
-   * two readings apart for the two people who can trigger it.
+   * At accept the person pressing the button may be the SELLER, and the
+   * shortfall is somebody else's money. `context` words the refusal for
+   * whichever of the two people triggered it.
    */
   private async assertCanCover(buyerId: string, amount: number, context: 'offer' | 'accept'): Promise<void> {
     const balance = await this.ledger.balanceOf(buyerId);
@@ -186,17 +178,9 @@ export class OfferService {
     OfferService.assertNotProposer(side, o.proposedBy, o.amount);
 
     /**
-     * Purchase FIRST, then record the acceptance.
-     *
-     * The order used to be the other way round, and the status write was outside
-     * any transaction the purchase took part in — so a buyer who could not cover
-     * their own offer left it marked `accepted` with no sale behind it: the card
-     * never moved, the listing stayed live, and neither party could act on the
-     * offer again because it was no longer pending. A dead record that looked
-     * like a completed deal.
-     *
-     * Failing before the status write leaves the offer exactly as it was, which
-     * is the truth: nothing was agreed.
+     * The acceptance is recorded inside the purchase, so a sale that fails (a
+     * buyer who cannot cover the offer) leaves the offer exactly as it was,
+     * which is the truth: nothing was agreed.
      */
     await this.assertCanCover(o.buyerId, o.amount, 'accept');
     // The acceptance is written inside the sale's transaction, and only if the
@@ -231,8 +215,8 @@ export class OfferService {
    */
   async reject(actorId: string, offerId: string) {
     const { side } = await this.loadParticipating(actorId, offerId);
-    // Only while pending: unconditionally, a withdrawal racing an acceptance
-    // relabelled a completed sale as rejected.
+    // Only while pending, so a withdrawal racing an acceptance cannot relabel a
+    // completed sale as rejected.
     const [rejected] = await this.db
       .update(offer)
       .set({ status: 'rejected', updatedAt: new Date() })
@@ -243,12 +227,10 @@ export class OfferService {
   }
 
   /**
-   * Answer a price with a different one — from EITHER side.
+   * Answer a price with a different one, from EITHER side.
    *
-   * Countering used to be the seller's privilege alone, which made the feature
-   * a one-way street: a buyer who was countered could only accept or walk. A
-   * counter from the buyer is just their next offer, so it is priced and funded
-   * by the same rules as their first one.
+   * A counter from the buyer is just their next offer, so it is priced and
+   * funded by the same rules as their first one.
    */
   async counter(actorId: string, offerId: string, amount: number) {
     const { o, l, side } = await this.loadParticipating(actorId, offerId);
@@ -296,8 +278,7 @@ export class OfferService {
            *
            * Said explicitly, because the payload names both parties and the
            * worker, given no `recipientIds`, takes the first single-recipient
-           * key it finds — `sellerId`. A seller's counter was announced to the
-           * seller, in the app and by email, and the buyer never heard of it.
+           * key it finds, which is `sellerId`.
            */
           recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
         },

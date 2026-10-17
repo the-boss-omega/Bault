@@ -45,11 +45,9 @@ const REQUIRED: readonly (keyof GradingFulfillment)[] = [
  * value demands it) → added to a submission → the submission ships and the card
  * becomes `at_grader` → a grade comes back and the card returns to the shelf.
  *
- * The two things this fixes over the previous version are worth naming. The
- * first is TIERS: a grader prices on declared value and turnaround, so a request
- * that carries neither cannot be priced or placed. The second is that a card
- * away at a grader is now in a lifecycle state that says so, and therefore
- * cannot be listed, sold, swapped or shipped while it is gone.
+ * Every request carries a TIER, because a grader prices on declared value and
+ * turnaround. A card away at a grader is `at_grader`, so it cannot be listed,
+ * sold, swapped or shipped while it is gone.
  */
 @Injectable()
 export class GradingService {
@@ -261,13 +259,10 @@ export class GradingService {
       }
 
       /**
-       * Only the requests still waiting for a grade travel.
-       *
-       * A grade may be recorded before the batch leaves — `complete` allows it
-       * for a card that never went anywhere — and this used to take every member
-       * regardless. The closed one was moved to `at_grader` along with the rest,
-       * and since the only way back to the shelf is completing a request that
-       * was already complete, that card stayed away and unsellable for good.
+       * Only the requests still waiting for a grade travel. `complete` may
+       * record a grade before the batch leaves, and that card must not move to
+       * `at_grader`: the only way back to the shelf is completing its request,
+       * which is already complete.
        */
       const members = await tx
         .select()

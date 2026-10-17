@@ -4,17 +4,13 @@ import { AppError } from '../errors/app-error';
 import { ErrorCode } from '../errors/error-codes';
 
 /**
- * The two rules that keep another site from acting through a visitor's browser
- * (E8).
+ * The two rules that keep another site from acting through a visitor's browser.
  *
- * The API decoded form-encoded bodies as well as JSON — Nest registers
- * `urlencoded` on its own unless told not to — so an ordinary HTML form on any
- * site reached every route. `POST /auth/login` from a stranger's page signed
- * the visitor into the stranger's account (login CSRF), and a route that takes
- * no body at all ran on a form post regardless. `SameSite=Lax` holds back the
- * cookie on a cross-site POST, which protects the signed-in routes from a
- * foreign SITE; it does nothing for a route that needs no cookie, and nothing
- * against a page on another subdomain of the same site.
+ * An ordinary HTML form on any site can post to this API. `SameSite=Lax` holds
+ * back the cookie on a cross-site POST, which protects the signed-in routes from
+ * a foreign SITE; it does nothing for a route that needs no cookie (a form
+ * posting to `POST /auth/login` would sign the visitor into a stranger's
+ * account), and nothing against a page on another subdomain of the same site.
  *
  * Both rules are cheap and neither needs a token the SPA would have to carry:
  *
@@ -24,7 +20,7 @@ import { ErrorCode } from '../errors/error-codes';
  *     type without a CORS preflight that this API does not grant.
  *  2. A state-changing request that carries an `Origin` carries ours. Browsers
  *     send `Origin` on every cross-site POST, so a request without one is not
- *     a browser being steered by another page — it is curl, a server, a test.
+ *     a browser being steered by another page; it is curl, a server, a test.
  */
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

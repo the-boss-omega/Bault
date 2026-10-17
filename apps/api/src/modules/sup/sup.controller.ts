@@ -22,14 +22,13 @@ class ReplyDto {
 }
 
 /**
- * SUP endpoints — the helpdesk.
+ * SUP endpoints: the helpdesk.
  *
  * Every collector-facing route carries `@AllowSuspended()`. That is the entire
- * point of the module: an account suspended for debt cannot sign in to any other
- * part of the platform, cannot cash in, and therefore cannot clear the debt that
- * suspended it. Without a channel to ask for help the lock has no key on the
- * inside. These routes are the key, and they are the only ones a suspended
- * holder can reach.
+ * point of the module: an account suspended for debt can reach no other part
+ * of the platform (beyond the profile probe the shell needs), cannot cash in,
+ * and therefore cannot clear the debt that suspended it. Without a channel to
+ * ask for help the lock has no key on the inside. These routes are the key.
  *
  * Roles are per method rather than on the class, because the queue and the
  * resolve/assign actions are staff work while the rest is ordinary account

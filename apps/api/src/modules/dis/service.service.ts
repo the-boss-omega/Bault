@@ -53,7 +53,8 @@ const SERVICE_LABEL: Record<ServiceType, string> = {
  * Lifecycle (status enum reused): requested = PENDING → in_progress = ACCEPTED →
  * completed = DONE; cancelled = DENIED. A warehouse operator ACCEPTS or DENIES a
  * pending request; only an accepted request may be completed by the type-specific
- * service. Every service is billed on creation, in the same transaction.
+ * service. Every service is billed on creation, in the same transaction, unless
+ * the caller marks it free.
  */
 @Injectable()
 export class ServiceRequestService {
@@ -124,17 +125,11 @@ export class ServiceRequestService {
   /**
    * One open request of a given kind per card.
    *
-   * Every service is billed the moment it is created, and nothing stopped the
-   * same one being created twice: a double-clicked "Professional photography"
-   * produced SR-TLJ3EFY5 *and* SR-UVXY72FU, two charges, and two identical jobs
-   * in the operator queue for one card. Nothing in the product said the first
-   * request existed, either — the drawer offered the button again as though
-   * nothing had been asked for.
-   *
-   * The window is deliberately "still open", not "ever": a re-shoot after the
-   * first shoot is finished is a real thing to want. Only a request that has not
-   * been resolved blocks another of its kind, and the refusal names the code of
-   * the one that is already in flight, so the reader can find it.
+   * Every service is billed the moment it is created, so a duplicate request is
+   * a second charge and a second job in the operator queue. The window is
+   * deliberately "still open", not "ever": a re-shoot after the first shoot is
+   * finished is a real thing to want. The refusal names the code of the request
+   * already in flight, so the reader can find it.
    *
    * Batch-scoped requests (`itemId` absent) are not covered: those are keyed on
    * a parcel, and a parcel legitimately carries several.
@@ -171,12 +166,7 @@ export class ServiceRequestService {
   /**
    * One request. Inside a transaction, pass `tx`: the row is then read under a
    * lock, so the checks the caller makes on it (stage, status, who asked) still
-   * hold when it writes.
-   *
-   * Every step of every request type used to read the request outside its own
-   * transaction, with no lock, and write it back by id. Two clicks on Accept
-   * both saw `quoted`, so a buyout credited the collector twice and a custom
-   * quote charged them twice.
+   * hold when it writes, and two clicks on Accept cannot both act on it.
    */
   async get(requestId: string, tx?: Database) {
     const [row] = tx

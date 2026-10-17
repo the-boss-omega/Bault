@@ -63,9 +63,8 @@ export class ConfirmationService {
 
     // Single-use: append-only tables use compensating rows, but confirmation tokens
     // are transient operational state (not history), so a guarded UPDATE is correct here.
-    // Guarded for real: the update claims the token only if it is still unused
-    // and unexpired. It used to update by id alone, so two submissions of one
-    // token both passed the check above and both carried out the action.
+    // The update claims the token only if it is still unused and unexpired, so
+    // two concurrent submissions of one token cannot both carry out the action.
     const [claimed] = await this.db
       .update(confirmationToken)
       .set({ consumedAt: new Date() })

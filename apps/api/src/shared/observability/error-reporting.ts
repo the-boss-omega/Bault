@@ -3,13 +3,11 @@ import { scrubErrorEvent } from '@bault/adapters';
 import type { Env } from '@bault/config';
 
 /**
- * Error reporting (step 15).
+ * Error reporting.
  *
- * A 500 was written to stdout and nowhere else. Nobody is paged by stdout, so
- * the first anyone heard of a broken route was a collector writing in. With
- * `SENTRY_DSN` set, every server-side failure is reported; without it, nothing
- * here does anything at all — no SDK is started, no network is touched — which
- * is the right default for a laptop and for CI.
+ * With `SENTRY_DSN` set, every server-side failure is reported; without it,
+ * nothing here does anything at all (no SDK is started, no network is touched),
+ * which is the right default for a laptop and for CI.
  *
  * Errors only. No tracing and no OpenTelemetry auto-instrumentation: that would
  * need the SDK loaded before everything else in the process and is a separate

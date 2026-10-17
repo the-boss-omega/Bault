@@ -29,10 +29,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Exceptions');
 
   /**
-   * Where a server-side failure is reported (step 15). It used to go to stdout
-   * and nowhere else, and nobody is paged by stdout. The reporter is a no-op
-   * unless `SENTRY_DSN` is set; it is a parameter so the filter can be tested
-   * without one.
+   * Where a server-side failure is reported. The reporter is a no-op unless
+   * `SENTRY_DSN` is set; it is a parameter so the filter can be tested without
+   * one.
    */
   constructor(private readonly report: ExceptionReporter = reportException) {}
 
@@ -41,7 +40,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      // A 5xx raised on purpose is still the server failing — except from the
+      // A 5xx raised on purpose is still the server failing, except from the
       // readiness probes, whose 503 is the answer they exist to give and which
       // the uptime monitor alerts on by itself.
       if (status >= 500) {
@@ -54,10 +53,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? body
           : {
               code: this.mapStatus(status),
-              // A throttled caller was being handed the raw
-              // `ThrottlerException: Too Many Requests` under an `internal`
-              // code, which reads as a server fault and tells a client nothing
-              // about what to do. Say what happened and what to do about it.
+              // Tell a throttled caller what happened and what to do, rather
+              // than the raw `ThrottlerException: Too Many Requests` text.
               message:
                 status === HttpStatus.TOO_MANY_REQUESTS
                   ? 'Too many requests. Wait a moment and try again.'
@@ -70,24 +67,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // A malformed identifier is the caller's mistake, not ours.
     //
-    // Every primary key here is a `uuid` column, and Postgres does not merely
-    // fail to match a non-UUID against one — it aborts the statement with
-    // `22P02 invalid_text_representation`. That error reached this filter as an
-    // unknown exception, so `GET /vault/items/not-a-uuid` answered 500. Every
-    // route taking an id from the URL had the same hole: a typo, a stale
-    // bookmark or a crawler produced an unhandled server error and an alert.
+    // Every primary key here is a `uuid` column, and Postgres aborts a statement
+    // that compares a non-UUID against one with `22P02 invalid_text_representation`.
+    // It is caught HERE rather than with a `ParseUUIDPipe` on each route, because
+    // several ids are legitimately not UUIDs: `/custody/items/:itemId/relocate`
+    // takes the barcode printed on the item, and the bin routes take a shelf
+    // serial, so a blanket UUID pipe would break scanning.
     //
-    // It is caught HERE rather than by putting a `ParseUUIDPipe` on each route,
-    // and that is deliberate. Several of these ids are legitimately not UUIDs —
-    // `/custody/items/:itemId/relocate` takes the barcode printed on the item,
-    // and the bin routes take a shelf serial — so a blanket UUID pipe would
-    // break scanning, which is the one thing the warehouse console is driven by.
-    //
-    // The trade-off is worth stating: this also converts a 22P02 caused by OUR
-    // OWN code passing a bad value into a 400, where it would previously have
-    // been a loud 500. The log line below still records every one of them, so
-    // the evidence survives; what changes is that a caller's typo stops paging
-    // anybody.
+    // This also turns a 22P02 caused by our own code into a 400; the log line
+    // below still records every one of them.
     if (isInvalidTextRepresentation(exception)) {
       this.logger.warn(`Malformed identifier rejected: ${describe(exception)}`);
       res.status(HttpStatus.BAD_REQUEST).json({
@@ -101,9 +89,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     // Body-parser and other connect-style middleware throw plain errors carrying
-    // their own HTTP status rather than a Nest HttpException. The one that
-    // actually fires is `PayloadTooLargeError` — a 200 KB request body answered
-    // 500 instead of 413, which tells a client nothing about what to do next.
+    // their own HTTP status rather than a Nest HttpException (for example
+    // `PayloadTooLargeError`, 413). Answer with that status, not a 500.
     const middlewareStatus = statusOf(exception);
     if (middlewareStatus && middlewareStatus >= 400 && middlewareStatus < 500) {
       this.logger.warn(`Request rejected by middleware (${middlewareStatus}): ${describe(exception)}`);

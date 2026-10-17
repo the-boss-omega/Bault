@@ -28,15 +28,9 @@ export interface BrowseFilters {
  * browse. Joins the item so cards show type/condition/description alongside the
  * price, and attaches a signed URL for each item's newest image.
  *
- * FILTERS AND SORT, which were absent. The only way to narrow this list was a
- * free-text `q` over the description and the type class, and the only order was
- * newest-first with no way to change it — so somebody looking for a graded slab
- * under $200 had to read the whole shelf, and somebody comparing prices had to
- * do it by eye. Both are the first two things anybody does on a marketplace.
- *
- * Applied in SQL rather than in the client, because the query is capped at 200
- * rows: filtering after the cap would silently hide matches that fell off the
- * end of an unfiltered page, which is worse than no filter at all.
+ * Filters and sort are applied in SQL rather than in the client, because the
+ * query is capped at 200 rows: filtering after the cap would silently hide
+ * matches that fell off the end of an unfiltered page.
  */
 @Injectable()
 export class BrowseService {

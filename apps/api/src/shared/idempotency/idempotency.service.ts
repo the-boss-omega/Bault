@@ -24,17 +24,12 @@ const KEY_TTL_MS = 24 * 60 * 60 * 1000;
  *   ...the work...
  *   await idempotency.complete(tx, key, endpoint, 201, result);
  *
- * It used to be a lookup before the transaction and a save after it, with
- * nothing in between, so the key protected only a RETRY. Two requests carrying
- * one key at the same moment both missed the lookup and both ran: a
- * double-clicked Buy on a store product with copies in stock bought two and
- * charged twice (F064).
- *
  * The claim is an INSERT against the unique (key, endpoint) index. A second
  * request with the same key blocks on the first one's uncommitted row; when the
  * first commits, the second sees its stored response and replays it, and when
  * the first fails and rolls back, the claim goes with it and the second simply
- * runs. Either way the work happens once.
+ * runs. Either way the work happens once, even for two requests carrying one
+ * key at the same moment.
  */
 @Injectable()
 export class IdempotencyService {

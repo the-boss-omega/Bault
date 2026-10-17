@@ -14,7 +14,7 @@ import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { ServiceRequestService } from './service.service';
 
 /**
- * Donation (T098, Principles I & VII) — Opus-tier, irreversible.
+ * Donation (T098, Principles I & VII). Irreversible.
  *
  * Two-step confirmed. On confirm, in ONE transaction: the item's ownership moves
  * to the platform custodian (so it leaves the donor's vault WITHOUT the record

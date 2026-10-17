@@ -44,18 +44,15 @@ export interface HousePurchaseResult {
 /**
  * The Bault store: cards the business sells itself.
  *
- * The difference from an ordinary purchase is the whole design. A marketplace
- * sale moves an item that already exists from one owner to another. A store sale
- * CREATES the item — Bault's own stock was never booked in, so it has no serial,
- * no barcode and no record — and the question was when.
+ * A marketplace sale moves an item that already exists from one owner to
+ * another. A store sale CREATES the item: Bault's own stock was never booked in,
+ * so it has no serial, no barcode and no record.
  *
- * Not when the warehouse gets round to it. Ownership is the thing this system is
- * the authority on, and a buyer who has paid and owns nothing on the record until
- * an operator walks to a box is a buyer whose card exists only in a queue. So the
- * item is minted in the purchase transaction, with the money: a serial, a barcode,
- * the buyer as sole owner, a custody event, lifecycle `received`, no bin. The
- * buyer sees it in their vault at once, and cannot list or ship it until it is on
- * a shelf, which is true.
+ * Ownership is the thing this system is the authority on, so the item is minted
+ * in the purchase transaction, with the money: a serial, a barcode, the buyer as
+ * sole owner, a custody event, lifecycle `received`, no bin. The buyer sees it
+ * in their vault at once, and cannot list or ship it until it is on a shelf,
+ * which is true.
  *
  * The part that cannot be transactional — finding the copy, sticking its label on
  * and shelving it — is an order in the warehouse queue, and `stow` finishes it.
@@ -166,10 +163,9 @@ export class HouseStoreService {
     return this.db.transaction(async (tx): Promise<HousePurchaseResult> => {
       /**
        * The key is claimed before anything else, inside this transaction. The
-       * product lock below only QUEUES two requests — each then bought a copy —
-       * so a double-click carrying one key used to buy two copies and charge
-       * twice. A second request with the key now waits on this claim and replays
-       * the first one's order (F064).
+       * product lock below only QUEUES two requests, and each would then buy a
+       * copy; a second request with the same key waits on this claim instead and
+       * replays the first one's order.
        */
       const { replay } = await this.idempotency.claim(tx as Database, key, endpoint, buyerId);
       if (replay) return { ...(replay.body as HousePurchaseResult), replayed: true };
@@ -312,7 +308,7 @@ export class HouseStoreService {
    *
    * The shelf rules are intake's: a named bin must be in service, and without one
    * the directed stow picks the emptiest shelf of the right kind. A photograph of
-   * THIS copy may be attached here — the store listing only ever had a picture of
+   * THIS copy may be attached here; the store listing only ever had a picture of
    * the print.
    */
   async stowOrder(

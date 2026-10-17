@@ -1,14 +1,8 @@
 /**
  * Where a consigned card can actually be sold.
  *
- * Consignment used to be one generic request with the channel hard-coded to
- * "eBay" in the vault drawer. The accounting was exact and the product was
- * empty: a collector could not choose where their card was sold, could not see
- * what each route cost or how long it took, and could not set an asking price.
- *
- * Each channel below differs in the three things a seller actually decides on —
- * what it costs, what it accepts, and how long the money takes. A channel that
- * differed in none of those would not be a channel, it would be a label.
+ * Each channel below differs in the three things a seller actually decides on:
+ * what it costs, what it accepts, and how long the money takes.
  *
  * The FEE recorded here is Bault's own cut, expressed as the `actionType` of a
  * pricing rule (`consignment_fee:<key>`) so the number itself stays in the

@@ -21,63 +21,54 @@ import { jsonBodiesOnly, sameOriginWrites, writeOrigins } from './shared/csrf/cr
  *  1. Validate & load environment (fails fast if a required var is missing).
  *  2. Create the Nest application from the root module.
  *  3. Apply the versioned global route prefix `/api/v1` (matches contracts/openapi.yaml).
- *  4. Publish interactive OpenAPI docs at `/docs`.
+ *  4. Publish interactive OpenAPI docs at `/docs`, when `EXPOSE_API_DOCS` is on.
  *  5. Listen on the configured port.
  */
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
 
   /**
-   * Error reporting, when `SENTRY_DSN` is set — and nothing at all when it is
+   * Error reporting, when `SENTRY_DSN` is set, and nothing at all when it is
    * not. First, so a failure while the application is being built is reported
    * too. Every event is scrubbed of cookies, credential headers and the bodies
    * of the credential routes before it leaves; see `error-reporting.ts`.
    */
   const reporting = initErrorReporting(env);
 
-  /**
-   * Logging that an aggregator can read and a person can correlate.
-   *
-   * The old line here was `logger: ['error', 'warn', 'log']` with a note that
-   * "full logger wiring arrives in T022". What arrived in T022 was the health
-   * checks; the logger did not. `LOG_LEVEL` sat in the env schema unread, output
-   * had no timestamps, no levels an aggregator could filter on, and nothing tied
-   * a line to the request that produced it.
-   */
+  /** Logging that an aggregator can read and a person can correlate; see `logger.ts`. */
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger('api'),
     bufferLogs: false,
     /**
-     * No parsers of Nest's own (E8). Left on, Nest adds `urlencoded` when the app
-     * starts listening — registering `json` below did not stop it, because it
-     * only skips a parser that is already there — and a form-encoded body is
-     * what an HTML form on somebody else's site sends. The one parser this API
-     * needs is registered by hand below.
+     * No parsers of Nest's own. Left on, Nest adds `urlencoded` when the app
+     * starts listening, even with `json` registered below, and a form-encoded
+     * body is what an HTML form on somebody else's site sends. The one parser
+     * this API needs is registered by hand below.
      */
     bodyParser: false,
   });
 
   /**
-   * Before everything else, so every log line from this request — including the
-   * ones written by helmet, the validation pipe and the exception filter — is
+   * Before everything else, so every log line from this request (including the
+   * ones written by helmet, the validation pipe and the exception filter) is
    * tagged with the same id, and the caller gets that id back on the response.
    */
   app.use(requestContext);
 
   /**
-   * Trust the proxy in front of this process — and ONLY that proxy.
+   * Trust the proxy in front of this process, and ONLY that proxy.
    *
-   * In every setup this API has, something on the same machine sits in front
-   * of it: the Vite dev server, `vite preview`, or nginx in the web container.
-   * Without this, every request looked like it came from 127.0.0.1. Behind the
-   * tunnel that meant the rate limiter treated every visitor on earth as one
-   * client, and a session could not record where it was opened from.
+   * In every setup this API has, a proxy sits in front of it: the Vite dev
+   * server, `vite preview`, or nginx in the web container. Without this, every
+   * request would appear to come from the proxy, so the rate limiter would treat
+   * every visitor as one client and a session could not record where it was
+   * opened from.
    *
    * `loopback` rather than `true`: Express then reads `X-Forwarded-For` from the
    * right, skipping only loopback hops, and stops at the first address it does
    * not trust. A visitor who sends their own `X-Forwarded-For: 1.2.3.4` gets it
    * ignored, because the hop to the right of it is their real address and that
-   * is where Express stops. `true` would believe the leftmost entry — whatever
+   * is where Express stops. `true` would believe the leftmost entry, whatever
    * the caller typed.
    *
    * Deployed behind the web image's nginx the proxy is another container, not
@@ -88,10 +79,10 @@ async function bootstrap(): Promise<void> {
   /**
    * Security headers.
    *
-   * There were none. `contentSecurityPolicy` is off because this process serves
-   * a JSON API and an OpenAPI explorer, not the SPA — the CSP that matters
-   * belongs on whatever serves the front end, and a default one here would
-   * break the explorer while protecting nothing.
+   * `contentSecurityPolicy` is off because this process serves a JSON API and
+   * an OpenAPI explorer, not the SPA. The CSP that matters belongs on whatever
+   * serves the front end, and a default one here would break the explorer while
+   * protecting nothing.
    *
    * `strictTransportSecurity` is off because HSTS is set where TLS ends, by
    * Caddy (infra/production/Caddyfile), for the SPA and the API alike. Left on,
@@ -104,7 +95,7 @@ async function bootstrap(): Promise<void> {
   );
 
   /**
-   * Another site cannot act through a visitor's browser (E8).
+   * Another site cannot act through a visitor's browser.
    *
    * Before the body parser, so a cross-site write is refused without its body
    * ever being read. Writes must come from the app's own origin or one named in
@@ -120,9 +111,8 @@ async function bootstrap(): Promise<void> {
   /**
    * Room for a photograph.
    *
-   * Express defaults to a 100 kB JSON body, which is fine for every route this
-   * API had until images could be uploaded and is a hard wall for a phone
-   * photograph — base64 of a 10 MB image is about 13.4 MB. The cap is set ABOVE
+   * Express defaults to a 100 kB JSON body, which is a hard wall for a phone
+   * photograph: base64 of a 10 MB image is about 13.4 MB. The cap is set ABOVE
    * `MAX_IMAGE_BYTES` on purpose, so an oversized upload is refused by the
    * media service with a sentence naming the limit rather than by the body
    * parser with a bare 413 and no explanation.
@@ -137,7 +127,7 @@ async function bootstrap(): Promise<void> {
    * CORS, named explicitly or not at all.
    *
    * The session is an httpOnly cookie, so credentials must be allowed for the
-   * SPA to work across origins — which makes a permissive origin a
+   * SPA to work across origins, which makes a permissive origin a
    * session-riding hole rather than a convenience. An empty CORS_ORIGINS means
    * same-origin only, which is what the Vite dev proxy provides locally.
    */
@@ -151,8 +141,7 @@ async function bootstrap(): Promise<void> {
    *
    * Nest closes the HTTP server and runs module shutdown hooks on SIGTERM, so a
    * request that has already opened a database transaction finishes rather than
-   * being severed mid-write — which, on an append-only ledger, is the difference
-   * between a clean rollback and a half-written custody trail.
+   * being severed mid-write.
    */
   app.enableShutdownHooks();
 
@@ -166,11 +155,9 @@ async function bootstrap(): Promise<void> {
   /**
    * Validate & strip request DTOs globally (whitelist drops unknown fields).
    *
-   * `exceptionFactory` is the important part. Without it every field-validation
-   * failure in the product answered with the literal string "Bad Request
-   * Exception" — Nest's internal class name — naming no field and stating no
-   * rule, on all 164 routes. The detail was always there; nothing was shaping
-   * it. See `validation-error.ts`.
+   * `exceptionFactory` turns the failures into a message that names the fields
+   * and the rules, rather than Nest's "Bad Request Exception". See
+   * `validation-error.ts`.
    */
   app.useGlobalPipes(
     new ValidationPipe({
@@ -184,9 +171,7 @@ async function bootstrap(): Promise<void> {
   /**
    * The OpenAPI explorer, off unless somebody asks for it.
    *
-   * It was served unconditionally at `/docs`, unauthenticated, in every
-   * environment — a complete route map for anyone who asked. It is genuinely
-   * useful, so it is a switch rather than a deletion, and in production the env
+   * It is a complete route map, so it is a switch, and in production the env
    * schema additionally requires a password before the switch can be on.
    */
   if (!env.EXPOSE_API_DOCS) {
@@ -200,22 +185,16 @@ async function bootstrap(): Promise<void> {
   }
 
   /**
-   * The password that was required and enforced nothing.
-   *
-   * `API_DOCS_PASSWORD` has been mandatory in production whenever the explorer
-   * was switched on — and nothing read it. Setting it bought exactly the
-   * confidence that the route map was protected, and none of the protection: a
-   * complete list of all 164 routes was served to anyone who asked for `/docs`.
+   * `API_DOCS_PASSWORD`, when set, guards the explorer.
    *
    * Basic auth rather than a session check, because the caller is a person with
-   * a browser and no account — the explorer's whole audience is somebody who is
+   * a browser and no account: the explorer's whole audience is somebody who is
    * not signed in yet. Compared in constant time, because a password compared
    * with `===` leaks its length and prefix to anyone patient enough to measure.
    */
   if (env.API_DOCS_PASSWORD) {
-    // All three paths. Swagger also serves the raw document at /docs-json and
-    // /docs-yaml, which a '/docs' mount does not cover: the explorer asked for a
-    // password while the full route map it renders was one URL away without one.
+    // All three paths: Swagger also serves the raw document at /docs-json and
+    // /docs-yaml, which a '/docs' mount does not cover.
     app.use(['/docs', '/docs-json', '/docs-yaml'], (req: IncomingMessage & { headers: Record<string, string | undefined> }, res: ServerResponse, next: () => void) => {
       const header = req.headers.authorization ?? '';
       const supplied = header.startsWith('Basic ')
