@@ -2,10 +2,8 @@
 /**
  * The design-system linter.
  *
- * The brief this redesign was written against assumed a PostToolUse "slop
- * detector" that is not installed in this environment. This stands in for it: a
- * plain Node script, no dependencies, that fails on the specific ways a design
- * system rots — and only on those, because a linter that reports style opinions
+ * A plain Node script, no dependencies, that fails on the specific ways a design
+ * system rots, and only on those, because a linter that reports style opinions
  * gets switched off within a week.
  *
  * It checks five things, and each one is a rule from DESIGN.md that a person
@@ -13,13 +11,13 @@
  *
  *   1. PHYSICAL PROPERTIES. `margin-left`, `padding-right`, `left:`, `right:`,
  *      `text-align: left/right` in CSS; `ml-`/`mr-`/`pl-`/`pr-`/`text-left`/
- *      `text-right` class names in TSX. Bault is bilingual and mirrors through
- *      logical properties; one physical property is one screen that does not.
+ *      `text-right` class names and physical inline styles in TSX. Bault is
+ *      bilingual and mirrors through logical properties; one physical property
+ *      is one screen that does not.
  *   2. OFF-SCALE VALUES. A px length that is not on the 4px spacing scale, not
  *      on the type scale, and not one of the handful of legitimate exceptions.
- *      This is what "12.5px, 13.5px, 14.5px" looked like before anybody named it.
- *   3. MORE THAN ONE RADIUS / SHADOW / BORDER WEIGHT. Hardcoded `border-radius`
- *      or `box-shadow` outside the token block.
+ *   3. HARDCODED RADIUS / SHADOW. A `border-radius` or `box-shadow` that is not
+ *      a token, outside the token block.
  *   4. RAW COLOUR. A hex or rgb() literal outside the token block. Every colour
  *      in this product has a name and a job.
  *   5. MONO MISUSE. `--font-mono` applied to a selector that is not a code.
@@ -39,7 +37,7 @@ const cssFile = join(webSrc, 'index.css');
 
 /**
  * The token block is where colours, radii and shadows are ALLOWED to be
- * literals — that is what a token is. Everything after it must use the names.
+ * literals: that is what a token is. Everything after it must use the names.
  */
 const TOKEN_BLOCK_END = '/* ============================================================\n   Application shell';
 
@@ -59,13 +57,9 @@ const ALLOWED_PX = new Set([
 const TYPE_PX = new Set(['12px', '13px', '14px', '16px', '18px', '22px', '28px', '36px', '48px', '64px']);
 
 /**
- * The scale is "a multiple of 4", not an enumerated list.
- *
- * The list was the first version and it was the wrong shape: it turned every
- * legitimate `min-width: 140px` on a flex basis into a finding, which is how a
- * linter teaches people to stop reading it. What actually went wrong in this
- * stylesheet was 12.5px, 13.5px and 14.5px — quarter-point nudges made screen by
- * screen. A multiple of 4 catches those and nothing else.
+ * The scale is "a multiple of 4", not an enumerated list. A list would flag
+ * every legitimate `min-width: 140px` on a flex basis; a multiple of 4 catches
+ * quarter-point nudges like 12.5px and 13.5px and nothing else.
  */
 function onScale(value) {
   const n = Number.parseFloat(value);

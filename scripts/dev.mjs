@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 /**
- * `pnpm dev` — starts the whole local stack in the right order.
+ * `pnpm dev`: starts the whole local stack in the right order.
  *
- * WHY this exists: the SPA asks `GET /api/v1/me/profile` on its very first
- * paint. Starting only the web app (`pnpm dev:web`) therefore produced an
- * immediate `http proxy error: /api/v1/me/profile AggregateError [ECONNREFUSED]`
- * — the frontend was talking to a backend nobody had started. The two processes
- * are ordered here instead of relying on the developer to remember:
+ * The SPA asks `GET /api/v1/me/profile` on its very first paint, so the web app
+ * must not start before the API answers. The two processes are ordered here
+ * instead of relying on the developer to remember:
  *
  *   1. start the API (`nest start --watch`)
  *   2. poll its PUBLIC health endpoint until it answers
@@ -28,7 +26,7 @@ const READY_TIMEOUT_MS = Number(process.env.DEV_API_READY_TIMEOUT_MS ?? 120_000)
 const POLL_INTERVAL_MS = 500;
 
 /**
- * Minimal `.env` reader — only used to discover API_PORT. Values already in the
+ * Minimal `.env` reader, only used to discover API_PORT. Values already in the
  * real environment win, matching the precedence in apps/web/proxy-target.ts.
  */
 function readEnvFile(path) {
@@ -65,7 +63,7 @@ let apiExited = false;
 
 /**
  * `command` is a single string (not argv) because `shell: true` with an argv
- * array is deprecated in Node 22. Every argument here is a project constant —
+ * array is deprecated in Node 22. Every argument here is a project constant;
  * nothing from user input is interpolated.
  */
 function run(name, command, options = {}) {
@@ -123,9 +121,9 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
 }
 
 /**
- * Wait for the API's liveness endpoint. `/healthz` is public and dependency-free
- * — deliberately NOT `/me/profile`, which requires a session and would answer
- * 401 forever even on a perfectly healthy server.
+ * Wait for the API's liveness endpoint. `/healthz` is public and
+ * dependency-free, unlike `/me/profile`, which requires a session and would
+ * answer 401 forever even on a healthy server.
  */
 async function waitForApi() {
   const deadline = Date.now() + READY_TIMEOUT_MS;
@@ -136,7 +134,7 @@ async function waitForApi() {
       const res = await fetch(healthUrl, { signal: AbortSignal.timeout(2_000) });
       if (res.ok) return true;
     } catch {
-      /* not listening yet — keep polling */
+      /* not listening yet; keep polling */
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
@@ -151,15 +149,12 @@ async function waitForApi() {
 /**
  * Is something already sitting on the API's port?
  *
- * Without this the failure is a raw Node stack trace — `EADDRINUSE` followed by
- * twelve frames of Nest internals — which says what happened but nothing about
- * what to do, and buries the one useful word under a wall of paths. The usual
- * cause is the most boring one: an earlier `pnpm dev` that was closed by
- * shutting a terminal rather than with Ctrl-C, so its child API is still
- * running and still holding the port.
+ * Without this the failure is `EADDRINUSE` buried in a Nest stack trace. The
+ * usual cause is an earlier `pnpm dev` closed by shutting a terminal rather
+ * than with Ctrl-C, so its child API still holds the port.
  *
- * Checked BEFORE spawning anything, so the script fails in a sentence instead
- * of starting the API, watching it die, and then reporting that the API died.
+ * Checked BEFORE spawning anything, so the script fails in one sentence that
+ * says what to do.
  */
 async function portIsBusy() {
   try {
@@ -213,8 +208,7 @@ prefix(apiChild.stderr, '[api]', process.stderr);
 
 // The API dying is always fatal here: `nest start --watch` recovers from a
 // compile error on its own, so an actual exit means the process is gone and the
-// web app would be left proxying to a closed port — the exact failure this
-// script exists to prevent.
+// web app would be left proxying to a closed port.
 apiChild.on('exit', (code) => {
   apiExited = true;
   if (shuttingDown) return;
