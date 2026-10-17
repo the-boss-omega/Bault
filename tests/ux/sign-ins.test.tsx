@@ -4,9 +4,8 @@ import { render, screen, within } from '@testing-library/react';
 /**
  * The administrator's sign-in log.
  *
- * Before `login_attempt` a failed sign-in left no trace anywhere, so the
- * question this screen answers — is somebody guessing passwords? — could not be
- * asked. These pin that failures are shown, that a stranger's guess at an
+ * The question this screen answers is whether somebody is guessing passwords.
+ * These pin that failures are shown, that a stranger's guess at an
  * address with no account is shown as what was typed, and that the pattern is
  * pulled out above the table rather than left for somebody to spot.
  */

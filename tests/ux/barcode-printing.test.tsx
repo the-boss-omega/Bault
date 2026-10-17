@@ -3,15 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 /**
  * Printing the labels an intake just produced.
  *
- * The bench books in a whole box now — a Rayquaza ex, a sealed pack and a graded
- * Gold Star, each its own unit with its own serial. Every one of them needs a
- * label stuck on it before it goes to its shelf, and the barcode is what every
- * later scan reads: the shelf scan, the pick, the dispatch.
+ * The bench books in a whole box: a Rayquaza ex, a sealed pack and a graded Gold
+ * Star, each its own unit with its own serial. Every one of them needs a label
+ * stuck on it before it goes to its shelf, and the barcode is what every later
+ * scan reads: the shelf scan, the pick, the dispatch.
  *
- * `printBarcode` opened one dialog per label, which was right when the bench
- * booked in one unit at a time. Twelve units meant twelve trips to the print
- * dialog, twelve confirmations, and no way for an operator who missed one to tell
- * which. `printBarcodes` is the whole run in a single dialog.
+ * `printBarcode` opens one dialog per label. Twelve units that way would be
+ * twelve trips to the print dialog, and no way for an operator who missed one
+ * to tell which, so `printBarcodes` sends the whole run in a single dialog.
  *
  * These assert on the DOCUMENT the printer is handed, because that is the part
  * that has to be right — jsdom has no printer, so `print()` itself is stubbed.
@@ -90,7 +89,6 @@ describe('printing one label', () => {
 
 describe('printing a whole intake run', () => {
   it('sends every label to ONE dialog', () => {
-    // Twelve units used to mean twelve dialogs.
     printBarcodes(LABELS);
 
     expect(printCalls).toBe(1);
