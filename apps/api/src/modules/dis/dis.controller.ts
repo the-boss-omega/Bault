@@ -249,8 +249,8 @@ export class DisController {
    * The tier catalogue.
    *
    * Served before the form is drawn, because the three things that differ
-   * between tiers — the value ceiling, the turnaround, and whether a manager has
-   * to agree — are exactly what a collector needs to see BEFORE choosing one,
+   * between tiers (the value ceiling, the turnaround, and whether a manager has
+   * to agree) are exactly what a collector needs to see BEFORE choosing one,
    * not after being rejected for choosing wrong.
    */
   @Get('grading/tiers')
@@ -308,9 +308,8 @@ export class DisController {
   }
 
   /**
-   * Ship the batch. Every card in it becomes `at_grader`, which is the whole
-   * point: until now a card could be sold or shipped while it was physically in
-   * another state.
+   * Ship the batch. Every card still waiting for a grade becomes `at_grader`,
+   * so it cannot be sold or shipped while it is away.
    */
   @Roles('warehouse_operator', 'admin')
   @Post('grading/submissions/:id/ship')
