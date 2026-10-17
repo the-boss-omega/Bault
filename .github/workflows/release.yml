@@ -14,6 +14,11 @@ name: Release
 #
 # Tag a commit that CI passed on master:
 #   git tag v0.1.0-rc1 && git push origin v0.1.0-rc1
+#
+# Nothing is pushed until CI has passed on the tagged commit: the `ci-passed`
+# job below waits for a successful run of ci.yml on that exact SHA (the run from
+# the master push, or the one the tag push itself starts) and fails the release
+# if CI failed or never ran there.
 on:
   push:
     tags: ['v*']
@@ -28,7 +33,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci-passed:
+    runs-on: ubuntu-latest
+    # Long enough for the CI run this same tag push starts to finish.
+    timeout-minutes: 75
+    # Reading workflow runs is all this job does.
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for CI on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          WAIT_MINUTES: 70
+        run: |
+          start=$(date +%s)
+          deadline=$(( start + WAIT_MINUTES * 60 ))
+          while :; do
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${SHA}&per_page=100" \
+                    | jq -c '[.workflow_runs[] | {id, event, status, conclusion}]')"
+            echo "CI runs on ${SHA}: ${runs}"
+            # The run this tag push starts can take a moment to be listed.
+            if [ "$runs" = "[]" ] && [ $(( $(date +%s) - start )) -lt 120 ]; then
+              sleep 15
+              continue
+            fi
+            # Any successful run: the code is the same whichever push started it.
+            if jq -e 'any(.[]; .conclusion == "success")' <<< "$runs" > /dev/null; then
+              echo "CI passed on ${SHA}"
+              exit 0
+            fi
+            if ! jq -e 'any(.[]; .status != "completed")' <<< "$runs" > /dev/null; then
+              echo "::error::CI has not passed on ${SHA} (no successful run of ci.yml, none still running). Fix it on master and tag the commit CI passed."
+              exit 1
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::CI was still running on ${SHA} after ${WAIT_MINUTES} minutes. Re-run this workflow once it has passed."
+              exit 1
+            fi
+            sleep 30
+          done
+
   images:
+    needs: ci-passed
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
