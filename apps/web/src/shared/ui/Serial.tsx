@@ -1,23 +1,18 @@
 import type { ReactNode } from 'react';
 
 /**
- * The identity primitives: a serial, a code, an amount, and a seal.
+ * The identity primitives: a serial, a code, an amount, a seal, and an LTR run.
  *
- * Four small components that exist because the product had none of them and the
- * consequences were everywhere. Each one solves the same underlying problem —
- * a run of Latin characters inside a page whose base direction may be Hebrew —
- * and each one solves it the same way, so a serial cannot be right on one screen
- * and wrong on the next.
+ * Most of them solve the same problem the same way: a run of Latin characters
+ * inside a page whose base direction may be Hebrew, so a serial cannot be right
+ * on one screen and wrong on the next.
  *
- * WHY ISOLATION IS NOT OPTIONAL. Hebrew is the default locale, and almost every
+ * Isolation is required. Hebrew is the default locale, and almost every
  * identifier and figure in this product is a Latin run: `SN-ROS105-0008`,
- * `BIN-XHMHPADV`, `$3,200.00`, `8 Sep 2026`, and every catalogue description.
- * Dropped into an RTL paragraph with no isolation, the Unicode bidirectional
- * algorithm reorders them against the surrounding text: leading digits migrate
- * to the far end of the line and terminal punctuation migrates to the front.
- * The audit found `90 days included, then …` rendering as
- * `days included, then … 90`, and every date in the product reading
- * `8  2026 בספט׳`.
+ * `BIN-XHMHPADV`, `$3,200.00`, and every catalogue description. Dropped into an
+ * RTL paragraph with no isolation, the Unicode bidirectional algorithm reorders
+ * them against the surrounding text: leading digits migrate to the far end of
+ * the line and terminal punctuation migrates to the front.
  *
  * `dir="ltr"` plus `unicode-bidi: isolate` (in `.serial`, `.code-inline`,
  * `.amount`) fences the run so the algorithm resolves it on its own and the
@@ -25,15 +20,14 @@ import type { ReactNode } from 'react';
  */
 
 /**
- * A serial number. THE identity of an object in this product.
+ * A serial number: the identity of an object in this product.
  *
  * Mono, because it is read aloud, compared character by character down a column,
- * and typed from a printed label into a scanner — all jobs a fixed advance
- * width, a slashed zero and an unambiguous `1/l/I` do real work for.
+ * and typed from a printed label into a scanner, all jobs a fixed advance width,
+ * a slashed zero and an unambiguous `1/l/I` help with.
  *
  * Never truncated, never wrapped mid-code, and `user-select: all` so one click
- * takes the whole thing: the single most common thing anybody does with a serial
- * is paste it into a message to somebody else.
+ * takes the whole thing to paste into a message.
  */
 export function Serial({
   value,
@@ -65,9 +59,9 @@ export function Serial({
 /**
  * Any other code: a bin, a parcel, a ticket, a carrier tracking number.
  *
- * The same isolation and the same face, at less weight, and allowed to wrap —
- * a 22-digit USPS tracking number has to be able to break somewhere or it takes
- * a mobile table sideways.
+ * The same isolation and the same face, at less weight, and allowed to wrap: a
+ * 22-digit USPS tracking number has to break somewhere or it pushes a mobile
+ * table sideways.
  */
 export function Code({ value, className = '' }: { value: string; className?: string }) {
   return (
@@ -80,14 +74,13 @@ export function Code({ value, className = '' }: { value: string; className?: str
 /**
  * Money.
  *
- * The figure LEADS and what it is for follows it — `$12.40 · Storage, Aug`,
- * never `Storage, Aug: $12.40`. That ordering is a rule of this design system
- * and not a preference: on a screen about somebody else's money, the number is
- * the thing being read and everything else is a caption on it.
+ * The figure leads and what it is for follows it: `$12.40 · Storage, Aug`,
+ * never `Storage, Aug: $12.40`. That ordering is a rule of this design system:
+ * on a screen about somebody else's money, the number is the thing being read
+ * and everything else is a caption on it.
  *
- * Set in the UI face with tabular numerals, not in mono. `tabular-nums` is the
- * only thing mono was ever providing here, and a price that looks like a barcode
- * is not saying what it is.
+ * Set in the UI face with tabular numerals. Mono is for codes, and a price that
+ * looks like a barcode is not saying what it is.
  */
 export function Amount({
   children,
@@ -96,7 +89,7 @@ export function Amount({
   what,
   className = '',
 }: {
-  /** The formatted amount. Format with `formatUsd` — never inline. */
+  /** The formatted amount. Format with `formatUsd`, never inline. */
   children: ReactNode;
   size?: 'lead' | 'display';
   tone?: 'brass' | 'credit' | 'debit';
@@ -135,10 +128,10 @@ export function Amount({
  * escrow deal, a condition report signed by an operator, custody confirmed at a
  * facility.
  *
- * Deliberately NOT a badge. A badge is a label somebody applied to a record; a
- * seal is a claim the platform is making about work it did — so it is drawn as a
- * rule and a mark rather than as a chip, and it must never be rendered against
- * anything Bault has not physically handled.
+ * Deliberately not a badge. A badge is a label somebody applied to a record; a
+ * seal is a claim the platform makes about work it did, so it is drawn as a rule
+ * and a mark instead of a chip, and must never be rendered against anything
+ * Bault has not physically handled.
  */
 export function Seal({
   children,
@@ -159,11 +152,9 @@ export function Seal({
 }
 
 /**
- * A run of text that IS Latin, inside a page that may not be.
- *
- * Catalogue descriptions, carrier names, and — the case that produced most of
- * the damage in the audit — free-text `reason` strings that the API returns in
- * English regardless of the reader's locale.
+ * A run of text that is Latin, inside a page that may not be: catalogue
+ * descriptions, carrier names, and free-text `reason` strings that the API
+ * returns in English regardless of the reader's locale.
  */
 export function LtrRun({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <span className={`ltr-run ${className}`.trim()}>{children}</span>;

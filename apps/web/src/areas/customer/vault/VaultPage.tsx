@@ -44,8 +44,7 @@ import { RemoveCommonsPanel } from './RemoveCommonsPanel';
  * `estimatedValueMinor` is deliberately nullable and `valueBasis` says where the
  * figure came from, because the service refuses to invent one: it uses the
  * median of real sales of the same class, or the owner's own asking price, or
- * nothing. The UI has to carry that honesty through rather than rendering a bar
- * against a number nobody can source.
+ * nothing. With no value the UI renders no bar.
  */
 interface BreakEvenRow {
   itemId: string;
@@ -67,14 +66,14 @@ interface VaultItem {
   conditionGrade: string | null;
   lifecycleState: string;
   barcode: string;
-  /** Where the item physically sits — every live item has a bin (Req 10.3). */
+  /** Where the item physically sits; every live item has a bin (Req 10.3). */
   binBarcode: string | null;
   binZone: string | null;
   holdFlag?: boolean;
   isLot: boolean;
   lotSize: number;
   lotBroken: boolean;
-  /** On the much shorter oversized storage terms — fixed at intake. */
+  /** On the much shorter oversized storage terms, fixed at intake. */
   oversized?: boolean;
   /** When it arrived. The cull window is measured from this. */
   receivedAt?: string | null;
@@ -144,8 +143,7 @@ const STATE_META: Record<string, { tone: StatusTone; label: MessageKey }> = {
   consigned: { tone: 'info', label: 'vault.state.consigned' },
   /**
    * Physically at a grader, on the other side of the country. It is its own
-   * state precisely so the card cannot be listed, sold or shipped while it is
-   * gone — which it silently could be before.
+   * state so the card cannot be listed, sold or shipped while it is gone.
    */
   at_grader: { tone: 'violet', label: 'vault.state.atGrader' },
   discarded: { tone: 'neutral', label: 'vault.state.discarded' },
@@ -158,8 +156,8 @@ function stateLabel(t: TranslateFn, state: string): string {
 
 /**
  * The three states a card can be in from the collector's point of view. These
- * are the vault's primary controls — switching one refetches that scope and
- * nothing else: the shell, the header and the search text all stay put.
+ * are the vault's primary controls: switching one refetches that scope and
+ * nothing else; the shell, the header and the search text all stay put.
  */
 const SCOPES = ['active', 'hold', 'history'] as const;
 type Scope = (typeof SCOPES)[number];
@@ -171,7 +169,7 @@ const SCOPE_ICON: Record<Scope, ReactNode> = {
 };
 
 /* ============================================================
-   Card actions — every one backed by a real endpoint
+   Card actions, every one backed by a real endpoint
    ============================================================ */
 
 /** A service already asked for on this card and not yet finished. */
@@ -216,8 +214,8 @@ type FormKind = 'consignment' | 'grading' | 'inspection' | 'custom';
  * A timeline entry's kind, in words.
  *
  * Falls back to the raw value with its underscores removed, so an event type
- * added on the server before a translation exists still renders as something
- * rather than as a blank badge — the same rule the notification catalogue uses.
+ * added on the server before a translation exists still renders as something,
+ * the same rule the notification catalogue uses.
  */
 function timelineKindLabel(t: TranslateFn, kind: string): string {
   const key = `timeline.${kind}` as MessageKey;
@@ -225,13 +223,12 @@ function timelineKindLabel(t: TranslateFn, kind: string): string {
 }
 
 /**
- * Card services moved here from the retired Services section: ordering a service
- * is something you do to a specific card, so it belongs on the card.
+ * Card services: ordering a service is something you do to a specific card, so
+ * it belongs on the card.
  *
- * Every entry maps 1:1 onto an endpoint the API actually exposes. Nothing that
- * the backend cannot do is listed — no "sell now", no "insure", no "request
- * appraisal" — and nothing that only staff may do (hold, release, relocate) is
- * offered to a collector, because those endpoints are role-gated and would fail.
+ * Every entry maps 1:1 onto an endpoint the API exposes. Nothing that only staff
+ * may do (hold, release, relocate) is offered to a collector, because those
+ * endpoints are role-gated and would fail.
  */
 const CARD_ACTIONS: readonly CardAction[] = [
   {
@@ -245,11 +242,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: (item) => api.post('/services/photography', { itemId: item.id }),
   },
   {
-    /**
-     * Grading is a form now for the same reason consignment became one: a tier
-     * is a declared-value ceiling and a turnaround, and posting `{ itemId }`
-     * could express neither.
-     */
+    /** Grading opens a form: a tier is a declared-value ceiling and a turnaround to choose. */
     key: 'grading',
     serviceType: 'third_party_grading',
     label: 'services.grading',
@@ -267,7 +260,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
     description: 'services.video.desc',
     icon: <IconServices />,
     ok: 'services.videoRequested',
-    // Also offered while listed: this is exactly the request a buyer's question
+    // Also offered while listed: this is the request a buyer's question
     // provokes, and a listing is when questions arrive.
     states: ['stored', 'listed'],
     run: (item) => api.post('/services/video', { itemId: item.id }),
@@ -285,9 +278,9 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     /**
-     * Splitting a lot is not free and is not instant — each card that comes out
-     * is a fresh intake with its own serial, bin and charge — so it is a request
-     * in the operator queue rather than a button that fires.
+     * Splitting a lot is not free and is not instant (each card that comes out
+     * is a fresh intake with its own serial, bin and charge), so it is a request
+     * in the operator queue.
      */
     key: 'lot-split',
     serviceType: 'batch_split',
@@ -301,9 +294,8 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     /**
-     * Consignment is no longer a one-click action, because it is no longer one
-     * thing: the seller chooses a channel, sets a price, and — for a card show —
-     * picks the show. The drawer opens a form instead of firing a request.
+     * Consignment opens a form: the seller chooses a channel, sets a price, and,
+     * for a card show, picks the show.
      */
     key: 'consignment',
     serviceType: 'consignment',
@@ -327,13 +319,9 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
   {
     /**
-     * The one action that is not a thing Bault sells.
-     *
-     * Nine fixed services and no way to ask for anything else: a collector who
-     * wanted these sleeved before shipping, or the box weighed, had only a
-     * support ticket — a conversation with no price, no operator queue, no
-     * completion and no link to the collectible it is about. Priced by a person
-     * after they read it, which is why it carries no figure here.
+     * The one action that is not a fixed service: asking for something else
+     * (sleeve these before shipping, weigh the box). Priced by a person after
+     * they read it, which is why it carries no figure here.
      */
     key: 'custom',
     label: 'custom.action',
@@ -395,7 +383,7 @@ const CARD_ACTIONS: readonly CardAction[] = [
 ];
 
 /**
- * Customer vault — the card-management command centre.
+ * Customer vault: the card-management command centre.
  *
  * One search field and three state controls sit above a grid of cards. Every
  * card opens a drawer carrying its record, its full lifecycle timeline and the
@@ -419,17 +407,15 @@ export function VaultPage() {
   const [culling, setCulling] = useState(false);
   const [cullWindowDays, setCullWindowDays] = useState<number | null>(null);
   /**
-   * The Break-Even Watch for the whole vault, in ONE request.
-   *
-   * Not per row: a vault of two hundred cards would otherwise fire two hundred
-   * of these, and the service already computes the comparable medians once for
-   * the whole set. Keyed by item id at render time.
+   * The Break-Even Watch for the whole vault, in one request instead of one per
+   * row; the service computes the comparable medians once for the whole set.
+   * Keyed by item id at render time.
    */
   const [watch, setWatch] = useState<Map<string, BreakEvenRow>>(() => new Map());
 
-  // Incremental search-as-you-type, scoped to the selected state. Both the list
-  // and the badge counts follow the same query, so a badge never claims cards a
-  // search has filtered away.
+  // Search as you type, scoped to the selected state. Both the list and the
+  // badge counts follow the same query, so a badge never claims cards a search
+  // has filtered away.
   const load = useCallback(async () => {
     const query = new URLSearchParams({ scope });
     if (q) query.set('q', q);
@@ -453,9 +439,8 @@ export function VaultPage() {
   }, [load]);
 
   // The break-even figures move only when money moves, so they are fetched once
-  // per mount rather than with every keystroke of the search box. A failure is
-  // silent: the watch is an addition to the register, and a vault that cannot
-  // price its cards is still a vault.
+  // per mount, not with every keystroke of the search box. A failure is silent:
+  // the watch is an addition to the register.
   useEffect(() => {
     void (async () => {
       try {
@@ -467,8 +452,8 @@ export function VaultPage() {
     })();
   }, []);
 
-  // The cull window is a server rule, so it is asked for rather than assumed —
-  // the panel prints it in its own subtitle and on every blocked card.
+  // The cull window is a server rule, so it is asked for, not assumed; the
+  // panel prints it in its own subtitle and on every blocked card.
   useEffect(() => {
     void (async () => {
       try {
@@ -489,11 +474,9 @@ export function VaultPage() {
 
   return (
     <>
-      {/* A filter row, at the start edge. The search field used to be a 720px
-          centred pill, 58px tall, over a list that fits on one screen — the
-          largest and loudest control in the product, searching four holdings.
-          The scope is in the URL and the segmented control shows which of the
-          three views of one collection you are in. */}
+      {/* A filter row, at the start edge. The scope is in the URL and the
+          segmented control shows which of the three views of one collection
+          you are in. */}
       <div className="vault-command">
         <div className="vault-search">
           <IconSearch />
@@ -541,7 +524,7 @@ export function VaultPage() {
         <span className="spacer" />
 
         {/* The count of what is on screen, and the one bulk action that acts on
-            it — beside the control that chose them, not in a band of their own. */}
+            it, beside the control that chose them. */}
         {items !== null && (
           <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
         )}
@@ -569,14 +552,9 @@ export function VaultPage() {
       )}
 
       {/*
-        No section header above the register.
-
-        The page already says "My vault", the scope control already says which of
-        the three views you are in, and a third band repeating "Active / 3 items"
-        between them was one heading too many — it also sat 74px below the filter
-        row and 28px above the register, so it attached itself to the wrong
-        thing. The count moves beside the scope control, where the number belongs;
-        the cull mode moves beside it, where the action belongs.
+        No section header above the register: the page already says "My vault"
+        and the scope control says which view you are in. The count and the cull
+        mode sit beside the scope control.
       */}
       <Panel flush>
         {scope === 'history' && (
@@ -597,12 +575,9 @@ export function VaultPage() {
             text={q ? t('vault.empty.searchText') : t(`vault.empty.${scope}Text` as MessageKey)}
             icon={scope === 'history' ? <IconArchive /> : <IconBox />}
             /*
-              The vault is where a new account lands, and an empty one used to
-              say only "Cards appear here once the warehouse books them in." —
-              a description of something that will never happen unless the
-              reader does something first, with no hint as to what. The whole
-              product begins with sending cards in, and the address to send them
-              to is one section away, so the empty state says so and goes there.
+              The vault is where a new account lands. The product begins with
+              sending cards in, and the address to send them to is one section
+              away, so the empty state says so and goes there.
             */
             action={
               q ? (
@@ -656,16 +631,12 @@ export function VaultPage() {
 /**
  * One holding, as a register row.
  *
- * The order is the direction's first rule: PHOTOGRAPH → SERIAL → STATUS, then
- * what the card is, then what it is costing. The whole row is the control —
- * clicking anywhere on it opens the sheet — so it is a real `<button>` stretched
- * over the row and reachable by Tab, rather than a div with a small "view
- * details" affordance in one corner.
+ * The order is the direction's first rule: photograph, serial, status, then
+ * what the card is, then what it is costing. The whole row is the control
+ * (clicking anywhere on it opens the sheet), so it is a real `<button>`
+ * stretched over the row and reachable by Tab.
  *
- * The title is the CARD, not its class. It used to be `item.typeClass`, so every
- * holding in every vault was called `trading_card` in bold at title size while
- * its actual identity sat underneath in grey, truncated mid-word. The class is a
- * classification and now reads as one.
+ * The title is the card itself; its class reads as a classification.
  */
 function CardTile({
   item,
@@ -701,8 +672,8 @@ function CardTile({
         <span className="sr-only">{t('vault.openCard', { name })}</span>
       </button>
 
-      {/* The artwork pipeline is untouched — a departed card reuses exactly the
-          same component and mapping, desaturated by the container's CSS only. */}
+      {/* A departed card reuses the same artwork component and mapping,
+          desaturated by the container's CSS only. */}
       <div className="card-art">
         <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
         {historical && (
@@ -712,9 +683,9 @@ function CardTile({
         )}
       </div>
 
-      {/* IDENTITY. The serial leads — isolated LTR so a Hebrew row cannot
-          reorder it, and selectable, because somebody is going to paste it into
-          an email — with the catalogue name under it. */}
+      {/* Identity. The serial leads (isolated LTR so a Hebrew row cannot
+          reorder it, and selectable for pasting), with the catalogue name
+          under it. */}
       <div className="card-id">
         <h3 className="card-title">
           <Serial value={item.serialNumber} lead />
@@ -724,7 +695,7 @@ function CardTile({
         </p>
       </div>
 
-      {/* STATE. Its own column, so a reader can run their eye down it. */}
+      {/* State. Its own column, so a reader can run their eye down it. */}
       <div className="card-state">
         {historical ? (
           <StatusBadge tone="neutral">
@@ -747,7 +718,7 @@ function CardTile({
         )}
       </div>
 
-      {/* WHERE IT IS — or, for a departed item, where it went. */}
+      {/* Where it is, or, for a departed item, where it went. */}
       <div className="card-where">
         {historical ? (
           <>
@@ -769,30 +740,18 @@ function CardTile({
       </div>
 
       {/*
-        WHAT IT IS COSTING, on the row rather than three clicks away.
-
-        The API has computed this all along and nothing has ever shown it: a
-        `GET /vault/break-even` that counts what has actually been billed against
-        each item and compares it to what cards of the same class have really
-        sold for here. Never a forecast, never an invented valuation — where
-        there is no honest value signal the bar is absent and the figure stands
-        alone, which is a true and useful sentence rather than a gap.
+        What it is costing, on the row. `GET /vault/break-even` counts what has
+        actually been billed against each item and compares it to what cards of
+        the same class have sold for here. Never a forecast or an invented
+        valuation: with no value signal the bar is absent and the figure stands
+        alone.
       */}
       {watch && !historical ? <Watch row={watch} t={t} /> : <div className="watch" />}
     </li>
   );
 }
 
-/**
- * The register's column header.
- *
- * The single change that turns a list of rows into a register you can read down.
- * Before this, state, condition and location each began at whatever x the text
- * before them happened to end at, so nothing lined up between one row and the
- * next and the eye had to re-find every field on every line — while a 400px void
- * sat in the middle of every row because all the content was packed into one
- * flexible column.
- */
+/** The register's column header, so each field lines up down the rows. */
 function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
   return (
     <li className="register-head" aria-hidden="true">
@@ -809,8 +768,8 @@ function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
  * Break-Even Watch, one row of it.
  *
  * A proportion, not a score: how much of what a card is worth has already been
- * eaten by what it costs to keep. It goes AMBER at two thirds — before it says
- * anything — because a watch that only warns once the number is bad is a report.
+ * eaten by what it costs to keep. It goes amber at two thirds, so it warns
+ * before the number is bad.
  */
 function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
   const value = row.estimatedValueMinor;
@@ -859,9 +818,9 @@ function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
  * The card's actual photographs, and its video if one was shot.
  *
  * Newest version first, because the reason somebody ordered a photo shoot is
- * that they wanted the new pictures rather than the arrival snapshot. Video is
- * rendered as video rather than being linked out to — the whole point of it is
- * watching the light move across the surface, which a download does not do.
+ * that they wanted the new pictures, not the arrival snapshot. Video is rendered
+ * inline, because the point of it is watching the light move across the
+ * surface.
  */
 function ItemMediaGallery({
   media,
@@ -876,12 +835,9 @@ function ItemMediaGallery({
   /**
    * Which of these the browser could not fetch.
    *
-   * Item media are presigned object-storage URLs, and in this environment they
-   * answer 403 — the signature parameters are absent from the URL (reported in
-   * docs/design/01-audit.md; the fix is in the storage adapter, not here). An
-   * <img> that fails renders its alt text sprawled across a grey box, which for
-   * a catalogue description is six lines of it. A photograph that did not load
-   * should say that it did not load.
+   * Item media are presigned object-storage URLs, which can fail to load. A
+   * failed <img> renders its alt text across a grey box, so a photograph that
+   * did not load says so instead.
    */
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -925,9 +881,8 @@ function ItemMediaGallery({
  * What storage costs for this card.
  *
  * Storage is included for a period folded into the intake fee, and after that
- * costs a proportion of that same fee per period — so the answer to "what am I
- * paying to keep this here" is different for a $1 common and a sealed case, and
- * a collector should be able to see which.
+ * costs a proportion of that same fee per period, so the answer to "what am I
+ * paying to keep this here" is different for a $1 common and a sealed case.
  *
  * The wording distinguishes the two states plainly. While the included period is
  * running it says so and names the date it ends; once it has, it names what has
@@ -1020,7 +975,7 @@ function StoragePanel({
 
 /**
  * Everything that ever happened to one card (Requirement 13.2): intake, bin
- * transfers, corrections, offers, sales, shipments and disputes, newest first —
+ * transfers, corrections, offers, sales, shipments and disputes, newest first,
  * alongside the card's own record and the actions it can still take.
  */
 function ItemDrawer({
@@ -1061,14 +1016,9 @@ function ItemDrawer({
   }, [item.id]);
 
   /**
-   * The card's real media, which nothing has ever shown.
-   *
-   * `GET /vault/items/:id` has returned signed URLs for every stored image since
-   * intake was built, and the drawer rendered the deterministic placeholder
-   * artwork instead — so a collector who PAID for a photo shoot got the same
-   * generated tile they had before. Allowed to fail quietly for the same reason
-   * storage is: it is context, and a card whose photographs would not load
-   * should still open.
+   * The card's real media: `GET /vault/items/:id` returns signed URLs for every
+   * stored image. Allowed to fail quietly for the same reason storage is: it is
+   * context, and a card whose photographs would not load should still open.
    */
   useEffect(() => {
     setMedia(null);
@@ -1095,7 +1045,7 @@ function ItemDrawer({
       try {
         setStorage(await api.get<StorageStatus>(`/vault/items/${item.id}/storage`));
       } catch {
-        /* leave the section out rather than showing an error over a detail */
+        /* leave the section out instead of showing an error over a detail */
       }
     })();
   }, [item.id, historical]);
@@ -1109,8 +1059,8 @@ function ItemDrawer({
     : CARD_ACTIONS.filter(
         (a) =>
           a.states.includes(item.lifecycleState) &&
-          // Offering "split this lot" on a single card, or "crack the slab" on a
-          // raw one, would be offering a request the API refuses.
+          // "Split this lot" on a single card, or "crack the slab" on a raw one,
+          // would be a request the API refuses.
           (!a.lotOnly || (item.isLot && !item.lotBroken)) &&
           (!a.gradedOnly || graded),
       );
@@ -1133,17 +1083,15 @@ function ItemDrawer({
   const name = item.description || item.typeClass;
   const frozen = Boolean(item.holdFlag) && !historical;
   /**
-   * The reason the card is frozen, taken from the custody log rather than
-   * invented here. `hold_placed` carries it, and it is the whole difference
-   * between a frozen card and a broken one.
+   * The reason the card is frozen, taken from the custody log: `hold_placed`
+   * carries it, and it tells a frozen card apart from a broken one.
    */
   const holdReason = frozen
     ? ((events ?? [])
         .find((e) => e.kind === 'hold_placed')
         ?.summary // The API prefixes the operator's reason with the event's own
-        // name — "hold placed — Dispute opened on the sale: …". The sentence
-        // above already says the item is frozen, so the prefix is the same fact
-        // twice and the reader has to read past it to reach the reason.
+        // name ("hold placed — Dispute opened on the sale: …"). The sentence
+        // above already says the item is frozen, so the prefix is dropped.
         .replace(/^\s*hold placed\s*[—–-]\s*/i, '') ?? null)
     : null;
 
@@ -1151,9 +1099,7 @@ function ItemDrawer({
     <>
       <DetailDrawer
         title={name}
-        /* The identity, in the direction's order: SERIAL, then status. The
-           title used to be the whole four-line catalogue string with
-           `trading_card` under it, which is a description reading as a name. */
+        /* The identity, in the direction's order: serial, then status. */
         lead={
           <span className="identity">
             <Serial value={item.serialNumber} lead className="identity-serial" />
@@ -1278,10 +1224,9 @@ function ItemDrawer({
                 return (
                   <li key={action.key}>
                     {/*
-                      Every one of these buttons used to be `gold`. Nine primary
-                      actions in one list is the same as none: the eye has
-                      nothing to land on, and "donate this card forever" carried
-                      the identical weight as "take a photo of it".
+                      Secondary, or danger for an irreversible action: a list of
+                      primary buttons would give "donate this card forever" the
+                      same weight as "take a photo of it".
                     */}
                     <Button
                       size="sm"
@@ -1300,8 +1245,7 @@ function ItemDrawer({
                       <span className="action-line">
                         <span>{t(action.label)}</span>
                         {/* The charge lands the moment this is pressed, so it is
-                            stated on the control rather than in a price list in
-                            another section of the app. */}
+                            stated on the control. */}
                         {price && !pending && (
                           <span className="action-price" dir="ltr">
                             {price}
@@ -1379,8 +1323,7 @@ function ItemDrawer({
         )}
 
             {/* The barcode is an operational control on a collector's screen, so
-                it goes last in its column rather than sitting mid-sheet above
-                the record. */}
+                it goes last in its column. */}
             <div className="stack-top-lg">
               <BarcodeLabel value={item.barcode} caption={name} />
             </div>
@@ -1391,9 +1334,8 @@ function ItemDrawer({
 
             It is append-only and it looks it: a continuous rule, a date column,
             an entry beside it, and nothing that suggests any of it can be
-            changed. This is the most trust-critical thing Bault renders — it is
-            the answer to "prove you have had this the whole time" — so it sits
-            beside the card's details rather than three screens below them.
+            changed. It is the answer to "prove you have had this the whole
+            time", so it sits beside the card's details.
           */}
           <div className="sheet-col sheet-col--register">
             <h3 className="drawer-heading">{t('vault.historyTitle')}</h3>
@@ -1408,17 +1350,11 @@ function ItemDrawer({
                   <li key={`${event.at}-${index}`}>
                     <span className="hint date">{formatDate(event.at, locale)}</span>
                     <div>
-                      {/*
-                        The kind was rendered as `event.kind.replace(/_/g, ' ')` —
-                        the database enum with its underscores taken out. A vault's
-                        chain of custody is the most trust-critical thing it shows,
-                        and it read "ownership transfer" / "state change" in English
-                        to a Hebrew reader, in the machine's vocabulary to everyone.
-                      */}
+                      {/* The kind is translated; see `timelineKindLabel`. */}
                       <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
                       {/*
                         The summary comes back from the API in English whatever
-                        the reader's locale — an operator's own words on a custody
+                        the reader's locale: an operator's own words on a custody
                         event. Isolated, so a Hebrew page lays it out as the Latin
                         run it is instead of reordering it.
                       */}
@@ -1442,8 +1378,7 @@ function ItemDrawer({
                   item: `${item.typeClass} — ${item.description}`,
                 })}
               </p>
-              {/* Donating a card charges $20, and the dialog asking somebody to
-                  do something irreversible said nothing about money at all. */}
+              {/* The confirmation names the fee the irreversible step charges. */}
               {(() => {
                 const fee = priceLabel(prices.get(SERVICE_FEE_ACTION[confirming.key] ?? ''));
                 return fee ? <p className="hint">{t('services.confirmFee', { amount: fee })}</p> : null;

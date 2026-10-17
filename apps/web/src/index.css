@@ -32,9 +32,8 @@
    and English are the same layout mirrored, not two layouts.
 
    THE LEGACY BLOCK at the end of `:root` maps the old navy/gold/teal vocabulary
-   onto this one. It is not a shim to be tolerated: 4 600 lines of stylesheet
-   reference those names, and re-pointing them is what makes the whole product
-   change at once instead of screen by screen. New rules use the new names.
+   onto this one. Rules further down still reference those names, and pointing
+   them here keeps the whole product on one palette. New rules use the new names.
    ============================================================ */
 
 :root {
@@ -55,19 +54,17 @@
      be a number, and `tabular-nums` already gives it the column alignment mono
      was being borrowed for.
 
-     Frank Ruhl Libre is the display face, in BOTH scripts, at marketing sizes
-     only. It is a Hebrew family with a Latin companion drawn for it, so the two
-     scripts share a hand by construction. See docs/design/type-specimen.html.
+     Frank Ruhl Libre is the display face, in BOTH scripts, for the wordmark and
+     at marketing sizes only. It is a Hebrew family with a Latin companion drawn
+     for it, so the two scripts share a hand by construction. See
+     docs/design/type-specimen.html.
      ============================================================ */
 
   --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Hebrew', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Frank Ruhl Libre', Georgia, 'Times New Roman', serif;
 
-  /**
-   * Ten sizes. Nothing may sit between them, and the two that used to
-   * (11px eyebrows, 15px "reading copy") are folded onto their neighbours.
-   */
+  /** Ten sizes. Nothing may sit between them. */
   --fs-caption: 12px; /* table headers, timestamps, meta */
   --fs-sm: 13px;      /* dense cells, warehouse body */
   --fs-base: 14px;    /* controls, vault body */
@@ -84,12 +81,10 @@
   --lh-normal: 1.5;  /* body */
 
   /**
-   * Three weights, and `bold` IS 600.
+   * Three weights, and `bold` is 600.
    *
    * The loaded faces ship 400/500/600 and `font-synthesis: none` is set below,
-   * so a rule asking for 700 gets 600 back with no smearing — which is what it
-   * should have been asking for. (The old stylesheet asked for 550 twelve
-   * times, a weight that exists in no static face.)
+   * so a rule asking for 700 gets 600 back with no synthesised smearing.
    */
   --fw-regular: 400;
   --fw-medium: 500;
@@ -110,8 +105,7 @@
   --surface-page: #f3f4f2;
   /**
    * A panel sits on the page, at the page's own colour. Panels are separated by
-   * spacing and a hairline, never by being a lighter rectangle with a shadow —
-   * which is the whole reason this product had cards inside cards inside cards.
+   * spacing and a hairline, never by being a lighter rectangle with a shadow.
    */
   --surface-raised: #f3f4f2;
   /** One step darker: register rails, table headers, the disabled ground. */
@@ -133,16 +127,10 @@
   --ink: #111318;      /* headings — 16.7:1, AAA */
   --ink-body: #2a2d33; /* body — 12.5:1, AAA */
   /*
-   * Secondary ink, and it is darker than the page alone would require.
-   *
-   * #676c74 cleared AA on the page ground at 4.79:1 — but the register header,
-   * the navigation rail and every other sunken surface are one step darker than
-   * the page, and the same ink measures 4.43:1 there and fails. axe found it on
-   * 61 of 104 screen/locale/viewport combinations, always on a `<th>` or on the
-   * rail's wordmark.
-   *
-   * A secondary colour has to clear the bar on the DARKEST surface it is used
-   * on, not the lightest.
+   * Secondary ink, darker than the page alone would require: the register
+   * header, the navigation rail and every other sunken surface are one step
+   * darker than the page, and a secondary colour has to clear AA on the darkest
+   * surface it is used on.
    */
   --ink-2: #62676f;    /* 5.16:1 on the page, 4.74:1 on the sunken surface */
   --ink-on-dark: #f3f4f2;
@@ -280,16 +268,12 @@
      LEGACY VOCABULARY → this system
      ============================================================
      Every name below is referenced by rules further down this file. Pointing
-     them here is what re-skins 4 600 lines at once; it is also the record of
-     which old idea became which new one.
+     them here re-skins those rules at once, and records which old idea became
+     which new one.
 
-     The five that mattered most were BROKEN: `--success-strong`, `--error-strong`,
-     `--warning-strong`, `--warning-tint` and `--link` each declared themselves in
-     terms of themselves in this block, so in the light theme all five resolved to
-     nothing. `a { color: var(--link) }` was therefore invalid at computed-value
-     time, the declaration was discarded, and the property INHERITED — which is
-     why every link in the default theme computed to body ink and was invisible
-     as a link. They have real values now.
+     No name here may be declared in terms of itself: a self-referencing custom
+     property is invalid at computed-value time, so `a { color: var(--link) }`
+     would be discarded and every link would inherit body ink.
      ============================================================ */
 
   --navy: var(--ink);
@@ -339,7 +323,7 @@
   --warning-tint: #faf3ea;
   --info: var(--frost);
   --info-bg: var(--frost-wash);
-  /** There is no violet in this system; it was a sixth status with no job. */
+  /** There is no violet in this system; the old violet status maps to secondary ink. */
   --violet: var(--ink-2);
   --violet-bg: var(--surface-sunken);
   --link: var(--custody);
@@ -620,10 +604,8 @@ code,
 /* ============================================================
    Codes and figures — two different things, told apart
    ============================================================
-   The old rule put money, dates, counts, serials, shelf codes and barcodes in
-   ONE mono bucket, on the reasoning that everything here has a number in it. It
-   does, and that is exactly why the bucket was wrong: when a price and a barcode
-   are set identically, neither one is saying what it is.
+   When a price and a barcode are set identically, neither one is saying what it
+   is, so they are set apart.
 
    CODES are mono. A serial, a bin, a parcel code, a ticket code, a barcode
    label — things that get read aloud, compared character by character, and
@@ -680,9 +662,8 @@ time,
 
    `dir="ltr"` and `unicode-bidi: isolate` together are the whole point: a serial
    is a Latin run, and inside a Hebrew sentence the bidi algorithm would
-   otherwise move its leading digits to the far end of the line — which is
-   exactly what was happening to dates and catalogue strings everywhere in the
-   product. Isolated, `SN-ROS105-0008` reads the same in both languages.
+   otherwise move its leading digits to the far end of the line. Isolated,
+   `SN-ROS105-0008` reads the same in both languages.
 
    Never truncated, never wrapped mid-code, always selectable: somebody is going
    to copy this into an email.
@@ -774,7 +755,7 @@ time,
 }
 
 /**
- * What the money is for, set immediately after it: `₪12.40 · Storage, Aug`.
+ * What the money is for, set immediately after it: `$12.40 · Storage, Aug`.
  * Never on its own line, never before the figure.
  */
 .amount-for {
@@ -793,10 +774,10 @@ time,
 /* ============================================================
    BIDI ISOLATION
    ============================================================
-   The single most common defect in the audit: a Latin run inside a Hebrew
-   paragraph, with nothing telling the bidi algorithm where it starts and stops.
-   "90 days included, then …" rendered as "days included, then … 90"; a full stop
-   migrated to the front of its sentence; every date read "8  2026 בספט׳".
+   A Latin run inside a Hebrew paragraph needs something telling the bidi
+   algorithm where it starts and stops. Without it "90 days included, then …"
+   renders as "days included, then … 90" and a full stop migrates to the front
+   of its sentence.
 
    `.ltr-run` is for text that IS Latin and should be laid out as such — a
    catalogue description, an operator's English note, a carrier's tracking
@@ -814,14 +795,12 @@ time,
 /*
  * Text whose direction is not known in advance.
  *
- * `isolate` alone is NOT enough, and this is the trap: it fences the run off
- * from its surroundings but still resolves that run's direction from the
- * ELEMENT'S `direction`, which on a Hebrew page is rtl. A catalogue string
- * beginning "2011 Pokémon Call of Legends…" starts with a digit — a neutral
- * character, not a strong one — so the whole line was laid out right-to-left and
- * the leading year migrated to the far end: "Pokémon Call of Legends … 2011".
- * The audit caught it on the item title and it survived the first fix, because
- * the first fix was `isolate`.
+ * `isolate` alone is not enough: it fences the run off from its surroundings
+ * but still resolves that run's direction from the element's `direction`, which
+ * on a Hebrew page is rtl. A catalogue string beginning "2011 Pokémon Call of
+ * Legends…" starts with a digit (a neutral character, not a strong one), so the
+ * whole line would be laid out right-to-left and the leading year would migrate
+ * to the far end: "Pokémon Call of Legends … 2011".
  *
  * `plaintext` is the CSS equivalent of `dir="auto"`: isolate, AND resolve the
  * direction from the run's own first strong character. "Pokémon" wins, the line
@@ -912,14 +891,10 @@ time,
 /* ============================================================
    Navigation rail
    ============================================================
-   The rail used to be a navy monolith with a gold plate, a machined notch and a
-   turned rivet riding behind the active icon. It was the most designed object in
-   the product and it was decorating a list of eight links.
-
-   It is now the second surface with a hairline down its trailing edge, and the
-   active destination is marked the way every other state in this system is
-   marked: a 2px custody-green rail on the LEADING edge, ink at full weight, icon
-   at full colour. Nothing moves except the width.
+   A surface with a hairline down its trailing edge. The active destination is
+   marked the way every other state in this system is marked: a 2px
+   custody-green rail on the leading edge, ink at full weight, icon in custody
+   colour. Nothing moves except the width.
    ============================================================ */
 
 .rail {
@@ -1165,16 +1140,6 @@ time,
   opacity: 0;
 }
 
-/*
- * The gold selector plate is gone, element and all.
- *
- * It was an absolutely-positioned span animated between rows behind the active
- * item, carrying a gradient, an inset ring, a machined notch and a turned rivet
- * — five decorative decisions, plus a `ResizeObserver` and an `offsetTop` read
- * per layout, to say "you are here". `.rail-item.is-active` says it with a
- * border. `NavigationRail` no longer renders the element.
- */
-
 /* ============================================================
    Page header
    ============================================================ */
@@ -1227,14 +1192,9 @@ time,
 }
 
 /*
- * The header's controls, as ONE group.
- *
- * They were four separately-bordered boxes of slightly different widths with
- * 12px between them, plus an account line and an avatar, strung along the end of
- * the header — six loose objects reading as six decisions. Segmented into one
- * control with hairlines between, the way the vault's scope control already is,
- * so the header has two things in it (who you are, and the shell's settings)
- * rather than six.
+ * The header's controls, as one group: segmented with hairlines between, the
+ * way the vault's scope control is, so the header has two things in it (who you
+ * are, and the shell's settings).
  */
 .ph-actions {
   display: flex;
@@ -1263,10 +1223,8 @@ time,
 /* ---- Signed-in status pill ---- */
 
 /*
- * Who you are signed in as. A line, not a lozenge: it is standing information
- * rather than a state that changed, and a rounded grey capsule beside four
- * rounded grey icon buttons was five capsules in a row saying nothing to each
- * other.
+ * Who you are signed in as. A line, not a lozenge: it is standing information,
+ * not a state that changed.
  */
 .status-pill {
   display: inline-flex;
@@ -1399,8 +1357,7 @@ time,
   height: 16px;
   padding-inline: 4px;
   border-radius: var(--r-pill);
-  /* The last gold object in the product. A count of unread notifications is not
-     money, and brass is money's colour. */
+  /* A count of unread notifications is not money, so it is not brass. */
   background: var(--custody);
   color: var(--ink-on-accent);
   font-size: var(--fs-caption);
@@ -1664,15 +1621,9 @@ time,
 /*
  * A panel is a heading and a rule.
  *
- * It was a white rounded rectangle with a border and a shadow, sitting on a
- * page that also contained a grid of white rounded rectangles with borders and
- * shadows, each holding white rounded rectangles with borders and shadows. Three
- * nested elevations to show one list.
- *
- * Grouping is done with spacing and a rule, which is what grouping is. The only
- * thing left of the old panel is its padding rhythm — and that now comes from
- * the density scope, so the same panel is comfortable in the vault and tight on
- * the bench.
+ * Grouping is done with spacing and a rule, never nested elevations. The padding
+ * rhythm comes from the density scope, so the same panel is comfortable in the
+ * vault and tight on the bench.
  */
 .panel {
   background: none;
@@ -1728,9 +1679,8 @@ time,
 
 /* ---- Contextual tabs ----
 
-   A row of destinations inside a section. Underlined, not boxed: the tab strip
-   was a floating white card with rounded corners and a shadow, which made the
-   navigation for a screen look like a piece of content on it.
+   A row of destinations inside a section. Underlined, not boxed, so the
+   navigation for a screen does not look like a piece of content on it.
 
    The active mark is custody green and 2px, the same rule that marks the active
    destination on the navigation rail — so "where am I" is answered by one shape
@@ -1817,13 +1767,12 @@ time,
      destructive  irreversible. Oxblood, and — where the action cannot be undone —
                   routed through a confirmation sheet rather than fired on click.
 
-   The legacy variant names are kept because 40 files call them, and each is
-   pointed at the job it was actually doing: `gold` was always the primary,
-   `navy` was always the strong secondary, `ghost` was always the quiet one.
+   The legacy variant names are kept, each pointed at the job it does: `gold` is
+   the primary, `navy` the strong secondary, `ghost` the quiet one.
 
-   A loading button KEEPS ITS LABEL. A spinner that replaces the words is a
-   control that stops saying what it does at the exact moment somebody is
-   watching it, and it changes width while they look. */
+   A loading button keeps its label. A spinner that replaced the words would stop
+   saying what the control does at the moment somebody is watching it, and would
+   change its width. */
 
 .btn {
   display: inline-flex;
@@ -2028,9 +1977,7 @@ time,
 
 /*
  * The wrapper carries the focus treatment for this compound control, so the
- * select inside must not draw a second one. The old rule removed the outline
- * and put NOTHING back — the one genuine `outline: none` without a replacement
- * in the stylesheet, on a control people tab through.
+ * select inside must not draw a second one.
  */
 .control:focus-within {
   outline: var(--focus-width) solid var(--focus-color);
@@ -2104,10 +2051,8 @@ textarea:hover:not(:disabled) {
 }
 
 /*
- * `:focus-visible`, not `:focus`, and the ONE focus treatment rather than a
- * second one made of a border colour and a hardcoded blue box-shadow that was
- * in no token. The old rule also fired on mouse click, which is how a form ends
- * up with a ring around every field somebody has merely touched.
+ * `:focus-visible`, not `:focus`, so a field somebody has merely clicked does
+ * not keep a ring; and the one focus treatment used everywhere.
  */
 input:focus-visible,
 select:focus-visible,
@@ -2239,17 +2184,10 @@ input[type='search'] {
 }
 
 /* ============================================================
-   The balance — a figure, not a card
+   The balance: a figure, not a card
    ============================================================
-   This was a dark navy panel with a gold gradient, a glowing text-shadow and a
-   cropped illustration of a vault door. It was the single most generic object in
-   the product: every fintech dashboard on earth has one, and none of them is
-   more legible for it.
-
    A balance is one number and the sentence that qualifies it. It gets the
-   largest figure on the page, the page's own ground, and a rule under it. The
-   illustration is deleted rather than restyled — there was nothing to restyle it
-   into, because it was saying nothing.
+   largest figure on the page, the page's own ground, and a rule under it.
    ============================================================ */
 
 .hero-balance {
@@ -2324,23 +2262,17 @@ input[type='search'] {
   color: var(--ink-2);
 }
 
-/* The decorative vault door is gone. It was 34 % of the width of the wallet's
-   most important element, and it was a drawing of a safe on a page about money. */
+/* The decorative vault door is hidden: a drawing of a safe adds nothing to a
+   page about money. */
 .hero-art {
   display: none;
 }
 
 /* ============================================================
-   Figures — a row of numbers, not a row of cards
+   Figures: a row of numbers, not a row of cards
    ============================================================
-   Four white rounded cards, each with a tinted rounded-square icon tile above a
-   label above a number, is the shape every SaaS dashboard uses and the reason
-   they are indistinguishable from each other. The icon tile in particular
-   carries no information: nobody has ever needed a small green box to know that
-   "Total credited" is money.
-
-   What is left is what was actually being communicated: a label, a figure, and
-   the sentence that qualifies it — separated by vertical rules, on the ground.
+   A label, a figure, and the sentence that qualifies it, separated by vertical
+   rules, on the ground. No icon tile: it carries no information.
    ============================================================ */
 
 .metric-grid {
@@ -2367,7 +2299,7 @@ input[type='search'] {
   padding-inline-start: 0;
 }
 
-/* The icon tile is deleted, not restyled. */
+/* The icon tile is hidden. */
 .metric-icon {
   display: none;
 }
@@ -2487,13 +2419,8 @@ input[type='search'] {
 }
 
 /*
- * The header is a rule, not a shout.
- *
- * It was 11px uppercase with 0.07em tracking, which is the tracked-out eyebrow
- * label the whole product was wearing on every heading. Here it is the one place
- * small caps genuinely help — a column name is a label, not a sentence — so the
- * treatment is kept and calmed: 12px, medium, sentence-cased, on the sunken
- * ground with a rule under it.
+ * The header is a rule, not a shout: caption size, medium weight, no case
+ * transform or tracking, on the sunken ground with a rule under it.
  */
 .data-table thead th,
 .table thead th {
@@ -2597,12 +2524,11 @@ input[type='search'] {
 /*
  * A register cell's primary value, and the line under it.
  *
- * Both hold text of unknown direction — a pricing rule's description, a
- * carrier's name, an operator's note — so both resolve their own direction from
+ * Both hold text of unknown direction (a pricing rule's description, a
+ * carrier's name, an operator's note), so both resolve their own direction from
  * their own first strong character. Without it, "180 days included, then 10% of
  * the item intake fee every 90 days" renders in a Hebrew table as
- * "days included, then 10% … 90 days 180", which is what the audit found on the
- * pricing screen and the published price list.
+ * "days included, then 10% … 90 days 180".
  */
 .dt-primary {
   font-weight: var(--fw-medium);
@@ -2638,8 +2564,7 @@ input[type='search'] {
  * The thumbnail in a register row.
  *
  * 4:5 is the shape of a card in a slab, and fixing it here means a row of
- * thumbnails is a row of the same rectangle rather than a ragged edge — which is
- * what makes a register of photographs readable as a column at all.
+ * thumbnails is a row of the same rectangle, readable as a column.
  */
 .dt-thumb {
   flex: 0 0 auto;
@@ -2673,30 +2598,21 @@ input[type='search'] {
 }
 
 /*
- * The transaction-type glyph is gone.
- *
- * Every ledger row carried a 24px tinted rounded square containing an arrow or a
- * box, beside a label that already said "Cash in" or "Service charge". Seven
- * rows, seven tiles, no information — and the credit/debit distinction the tile
- * was tinting for is carried by the sign on the amount, which is where somebody
- * reading a ledger is already looking.
+ * The transaction-type glyph is hidden: the label beside it already names the
+ * type, and credit or debit is carried by the sign on the amount.
  */
 .type-icon {
   display: none;
 }
 
 /* ============================================================
-   STATUS — a mark, not a pill
+   STATUS: a mark, not a pill
    ============================================================
-   The product had two of these components (`.pill` and `.badge`), eleven tones
-   between them, and a green "Earning" on every row of a table where nothing was
-   ever anything else. A status that never varies is not a status, and a rounded
-   coloured lozenge on every row is texture rather than information.
-
-   One component now. It reads as a small square-cornered mark with a 2px rule on
-   its leading edge in the semantic colour, on the ground rather than on a tint —
-   so a column of them is a column of rules the eye can run down, and the label
-   still states the status in words for anybody who cannot see the colour.
+   One component under several class names. It reads as a small square-cornered
+   mark with a 2px rule on its leading edge in the semantic colour, on the
+   ground instead of a tint, so a column of them is a column of rules the eye can
+   run down, and the label still states the status in words for anybody who
+   cannot see the colour.
    ============================================================ */
 
 .pill,
@@ -2717,8 +2633,7 @@ input[type='search'] {
   white-space: nowrap;
 }
 
-/* The dot the old pill drew before its label is gone: the leading rule is the
-   mark, and drawing both was saying the same thing twice. */
+/* No dot before the label: the leading rule is the mark. */
 .pill::before {
   content: none;
 }
@@ -2839,9 +2754,7 @@ input[type='search'] {
                actions muted WITH A REASON. A frozen card is not broken and it
                is not gone; somebody else is holding the decision.
      DEPARTED  the photograph desaturates, the chrome stays, the history stays
-               navigable. A departed item must never look deleted — the old
-               treatment painted the whole tile near-black, which read as
-               redaction.
+               navigable. A departed item must never look deleted.
    ============================================================ */
 
 .is-frozen {
@@ -2893,9 +2806,8 @@ input[type='search'] {
   line-height: var(--lh-snug);
 }
 
-/* Sized, like every other icon in this system. Unconstrained, the archive glyph
-   rendered at its intrinsic size — a 250px box drawing dominating the sheet of
-   a departed item, which is the one state that must not shout. */
+/* Sized, like every other icon in this system; unconstrained, the archive glyph
+   would render at its intrinsic size. */
 .departed-note svg,
 .frozen-reason svg {
   width: 16px;
@@ -2905,7 +2817,7 @@ input[type='search'] {
 }
 
 /* ============================================================
-   The sheet — a record opened, not a panel slid in
+   The sheet: a record opened, not a panel slid in
    ============================================================
    Every record in this product opens in the same surface: an item, a shipment, a
    parcel, a ticket, a wallet request. It is addressed by the URL (`?item=…`), so
@@ -2914,9 +2826,8 @@ input[type='search'] {
    it came from.
 
    `--drawer-w` (440px) is the default: enough for a record that is a list of
-   facts. `--sheet-w` (960px) is for the ITEM, which is not — an item has a
-   photograph, an identity, a state, a set of services with prices and a custody
-   register, and 420px was asking it to be a column.
+   facts. `--sheet-w` (960px) is for the item, which has a photograph, an
+   identity, a state, a set of services with prices and a custody register.
    ============================================================ */
 
 .drawer-backdrop {
@@ -3102,10 +3013,8 @@ input[type='search'] {
 }
 
 /*
- * An amount inside a sheet. It was a centred grey rounded box with an uppercase
- * tracked-out caption above a 34px figure — a balance card, in miniature, for a
- * single charge. Money names itself first: the figure leads, at the start edge,
- * with what it is for beside it.
+ * An amount inside a sheet. Money names itself first: the figure leads, at the
+ * start edge, with what it is for beside it.
  */
 .detail-amount {
   margin-block-start: var(--sp-5);
@@ -3220,24 +3129,12 @@ input[type='search'] {
 }
 
 /* ============================================================
-   THE CONFIRMATION SHEET — for what cannot be undone
+   THE CONFIRMATION SHEET: for what cannot be undone
    ============================================================
-   Deslab, donate, cull, retrieve, delist, withdraw an offer. Actions that end
-   with somebody else holding the object, or with the object no longer existing
-   in the form it had.
-
-   Three things make this different from a dialog, and all three are deliberate
-   friction rather than decoration:
-
-     1. THE PHOTOGRAPH IS PRESENT. You are about to do something to a specific
-        object; a dialog naming a serial number is not the same as looking at it.
-     2. THE CONSEQUENCE IS ONE PLAIN SENTENCE, in the reader's own language, in
-        the largest text in the sheet. Not a policy paragraph, not a checkbox.
-     3. IT OPENS SLOWLY. `--dur-slow`, and the confirm control does not become
-        available until the typed confirmation matches — so the fastest possible
-        path through this sheet is still slower than a click.
-
-   Full height, because it must own the screen while it is open.
+   Styles for a full-height confirmation sheet: the photograph present, the
+   consequence as one plain sentence in the largest text, and a slow
+   (`--dur-slow`) open. No component renders `.confirm-sheet` at present;
+   irreversible actions confirm through `ConfirmationModal`.
    ============================================================ */
 
 .confirm-sheet {
@@ -3330,10 +3227,8 @@ input[type='search'] {
 }
 
 /*
- * An empty state is typographic. It says what is not here and what to do about
- * it, and it does not draw a 44px tinted rounded square with a generic box glyph
- * in it first — the third rounded-square-with-a-glyph on a page nobody has any
- * content on yet.
+ * An empty state is typographic: it says what is not here and what to do about
+ * it, with no icon tile.
  */
 .empty-icon {
   display: none;
@@ -3457,15 +3352,8 @@ input[type='search'] {
 }
 
 /* ============================================================
-   The vault register — columns, and a header over them
+   The vault register: columns, and a header over them
    ============================================================
-   The first pass made this a list of rows and stopped there, which is only half
-   a register. Every field after the photograph sat in ONE flexible column,
-   packed to the start edge, so the state began at whatever x the serial happened
-   to end at, the condition at whatever x the state ended at, and nothing lined
-   up between one row and the next — while a 400px void sat in the middle of
-   every row because that one column had all the width and none of the content.
-
    Five real columns, the same on every row, with a header naming them:
 
      photograph │ identity │ state │ where it is │ what it has cost
@@ -3476,15 +3364,12 @@ input[type='search'] {
    ============================================================ */
 
 /*
- * `.card-grid` is a stacked list of rows. Nine surfaces use it — addresses, the
- * storefront, the shipment composer's picker, the help panels — and most of them
- * are a list of ONE kind of thing with two or three fields.
+ * `.card-grid` is a stacked list of rows. Many surfaces use it (addresses, the
+ * storefront, the shipment composer's picker, the help panels), and most of
+ * them are a list of one kind of thing with two or three fields.
  *
- * The five-column register is a MODIFIER, not the default. It was the default
- * for about ten minutes and it silently broke the other six: their rows have
- * three children, so the fourth and fifth tracks collapsed and everything
- * shifted. A register is a specific shape for a specific job, and a class that
- * every list already carries is not the place to declare it.
+ * The five-column register is a modifier, not the default: rows with three
+ * children would collapse the fourth and fifth tracks.
  */
 .card-grid {
   display: flex;
@@ -3519,14 +3404,9 @@ input[type='search'] {
 }
 
 /*
- * A row. By default it is a simple stack — a heading, some lines, maybe some
- * actions — which is what the address list, the storefront and the shipment
- * picker need and all they have ever needed.
- *
- * It becomes a GRID only inside a register. Making the grid the default put an
- * address card's label in a 56px photograph column and truncated its street to
- * "1200…", which is what happens when a specific shape is declared on a generic
- * class.
+ * A row. By default it is a simple stack (a heading, some lines, maybe some
+ * actions), which is what the address list, the storefront and the shipment
+ * picker need. It becomes a grid only inside a register.
  */
 .card {
   position: relative;
@@ -3569,9 +3449,9 @@ input[type='search'] {
 }
 
 /*
- * The photograph. 4:5 — the shape of a slab — fixed for every row, so a column
- * of them is a column and not a ragged edge. On a dark stage, because a card is
- * an object and objects are lit.
+ * The photograph. 4:5, the shape of a slab, fixed for every row, so a column
+ * of them lines up. On a dark stage, because a card is an object and objects
+ * are lit.
  */
 .card-art {
   position: relative;
@@ -3699,13 +3579,11 @@ input[type='search'] {
 }
 
 /*
- * A card with no photograph on disk. It says so, in words, on the stage — a
- * 1.6rem emoji at 40% opacity was a shrug where an answer belongs.
+ * A card with no photograph on disk. It says so, in words, on the stage.
  *
- * The ink is the ON-DARK ink, because `.photo-thumb` is always on the
- * photography stage — in a register row, in a sheet, in a table cell. Secondary
- * ink measured 3.12:1 against it and axe found it on every marketplace surface
- * that had an item with no catalogue photograph.
+ * The ink is the on-dark ink, because `.photo-thumb` is always on the
+ * photography stage (in a register row, in a sheet, in a table cell), where
+ * secondary ink fails AA.
  */
 .photo-thumb-empty {
   display: grid;
@@ -3777,15 +3655,12 @@ input[type='search'] {
 }
 
 /* ============================================================
-   The anonymous surface — the only public face this product has
+   The signed-out forms: sign-in, sign-up, password recovery
    ============================================================
-   A landing page and a sign-in form on one screen. Two columns at ≥900px: the
-   photography stage and its custody line on the start side, the form on the end
-   side. Below that the stage becomes a band above the form, because on a phone
-   the form is why anybody opened this.
-
-   It was a 440px white card floating in the middle of a navy radial gradient,
-   with a gold `B` above it and a paragraph of demo credentials underneath.
+   A stage and a form on one screen. Two columns at ≥900px: the photography
+   stage and its custody line on the start side, the form on the end side. Below
+   that the stage becomes a band above the form, because on a phone the form is
+   why anybody opened this.
    ============================================================ */
 
 .auth-shell {
@@ -3855,13 +3730,9 @@ input[type='search'] {
 }
 
 /*
- * On a phone the stage is a band, not a screen.
- *
- * At marketing density the full-height stage filled the entire first viewport
- * and pushed the sign-in form below the fold — on the surface whose whole job,
- * for anybody who already has an account, is the form. The photograph and the
- * headline share a row, the rest runs under them, and the form starts within one
- * short scroll.
+ * On a phone the stage is a band, not a screen, so the form starts within one
+ * short scroll: the photograph and the headline share a row, and the rest runs
+ * under them.
  */
 @media (max-width: 899px) {
   .auth-stage {
@@ -3892,7 +3763,7 @@ input[type='search'] {
   }
 }
 
-/* The ONLY place the display face appears. Marketing sizes, marketing rhythm. */
+/* The display face, at marketing size and rhythm. */
 .auth-headline {
   font-family: var(--font-display);
   font-size: clamp(28px, 3.2vw, 48px);
@@ -4013,11 +3884,8 @@ input[type='search'] {
 }
 
 /*
- * The demo accounts.
- *
- * A real thing on a real screen: this build ships with seeded accounts and
- * saying so plainly is more honest than hiding them behind a README. Set as a
- * quiet note under a rule rather than a centred grey box.
+ * The demo accounts, shown on a local dev server only (see demoUsers.ts). Set
+ * as a quiet note under a rule.
  */
 .auth-demo {
   padding: var(--sp-3) 0 0;
@@ -4052,14 +3920,13 @@ input[type='search'] {
 /* ============================================================
    The landing page
    ------------------------------------------------------------
-   `areas/customer/marketing/LandingPage.tsx` — the first public surface this
-   product has had. It reuses the auth screen's stage wholesale (the same dark
-   photography ground, the same custody line, the same serial) and then does the
-   thing the auth screen could not: keeps going, at marketing density, through
-   what is promised, what it costs and how an item moves.
+   `areas/customer/marketing/LandingPage.tsx`. It reuses the auth screen's stage
+   (the same dark photography ground, the same custody line, the same serial)
+   and then keeps going, at marketing density, through what is promised, what it
+   costs and how an item moves.
 
-   Nothing here is a card. Every section is a heading, a rule and spacing —
-   `--gap-section` at marketing density is 96px, and that space IS the grouping.
+   Nothing here is a card. Every section is a heading, a rule and spacing:
+   `--gap-section` at marketing density is 96px, and that space is the grouping.
    ============================================================ */
 
 .landing {
@@ -4138,22 +4005,18 @@ input[type='search'] {
  * The card arrives.
  *
  * `DESIGN.md` says motion confirms and never entertains, and this is the one
- * exception the system can justify: the landing page's whole argument is THIS
- * OBJECT, and an object that slides into place is read as being put there.
- * Everywhere else in the product motion acknowledges something the person did;
- * here there is nothing to acknowledge yet, so the rule is met by keeping the
- * animation to the single element the page is about. The headline, the custody
- * line and the buttons do not move — a staggered cascade would be the product
- * performing, which is what the rule exists to prevent.
+ * exception: the landing page's whole argument is this object, and an object
+ * that slides into place is read as being put there. The animation is kept to
+ * the single element the page is about; the headline, the custody line and the
+ * buttons do not move.
  *
  * Inside the system's own limits: `--dur-slow` (250ms), the one easing curve,
  * one purpose, runs once. `both` holds the end state so nothing flickers back.
  *
- * DIRECTION IS NOT HARD-CODED. A transform cannot be written in logical
- * properties, so the offset is a variable and `:dir(rtl)` flips its sign — the
- * card always enters from the OUTSIDE edge of the stage, which is the left in
- * English and the right in Hebrew. This is not a layout branch; the grid is
- * still doing the mirroring on its own.
+ * Direction is not hard-coded. A transform cannot be written in logical
+ * properties, so the offset is a variable and `:dir(rtl)` flips its sign: the
+ * card always enters from the outside edge of the stage, the left in English
+ * and the right in Hebrew. The grid still does the mirroring on its own.
  *
  * Reduced motion needs no rule here: the global `prefers-reduced-motion` block
  * collapses every animation to 0.01ms, and `both` means the card is simply
@@ -4310,10 +4173,9 @@ input[type='search'] {
 /*
  * A claim is a rule and the text under it.
  *
- * Not a bordered tile, not a tinted box, not an icon above a heading — all
- * three are named in DESIGN.md's anti-patterns, and all three were in this
- * product. The 2px custody rule is the same mark a selected rail destination
- * and an active register row take.
+ * Not a bordered tile, not a tinted box, not an icon above a heading: all three
+ * are named in DESIGN.md's anti-patterns. The 2px custody rule is the same mark
+ * a selected rail destination and an active register row take.
  */
 .landing-claims {
   display: grid;
@@ -4450,10 +4312,9 @@ input[type='search'] {
    Membership
    ------------------------------------------------------------
    `areas/customer/membership/MembershipPage.tsx`. One comparison register and
-   a row of offers — deliberately NOT three pricing cards side by side with the
-   middle one scaled up and ribboned, which is the identical-rounded-cards
-   anti-pattern in the one place it is most tempting. Comparing a tier means
-   reading one row across three columns, and a row is what a table has.
+   a row of offers, deliberately not three pricing cards side by side (the
+   identical-rounded-cards anti-pattern). Comparing a tier means reading one row
+   across three columns, and a row is what a table has.
    ============================================================ */
 
 /* What is left this cycle: a definition list, not a grid of tiles. */
@@ -4492,8 +4353,8 @@ input[type='search'] {
 
 /*
  * A tier heading carries three things and they are three different sizes: the
- * name, the figure, and who it is for. Stacked rather than run together with
- * middle dots, which is the meta-string pattern the system retired.
+ * name, the figure, and who it is for. Stacked, not run together with middle
+ * dots.
  */
 .mem-table thead th {
   vertical-align: bottom;
@@ -4570,8 +4431,8 @@ input[type='search'] {
   color: var(--ink-body);
 }
 
-/* What a tier paid towards a parcel. Brass, because it is money — and it
- * names itself, so a total below its own breakdown is never unexplained. */
+/* What a tier paid towards a parcel. Brass, because it is money, and it names
+ * itself, so a total below its own breakdown is never unexplained. */
 .mem-covered {
   color: var(--brass);
 }
@@ -4663,14 +4524,6 @@ input[type='search'] {
   gap: var(--sp-3);
   min-width: 30rem;
 }
-
-/* Small inline badge (item lifecycle, event kind) — pill styling. */
-/*
- * `.badge` and its nine modifiers were the SECOND status component. They are
- * defined once, with `.pill`, in the STATUS section above; the duplicate block
- * that stood here — nine tinted rounded lozenges, several of them unreachable —
- * is deleted rather than re-pointed.
- */
 
 /* ============================================================
    Responsive
@@ -4907,16 +4760,11 @@ input[type='search'] {
 }
 
 /* ============================================================
-   Vault command bar — a filter row, not a hero
+   Vault command bar: a filter row, not a hero
    ============================================================
-   The search field was a 720px pill, 58px tall, with a 999px radius, an 18px
-   placeholder and a drop shadow, centred over a list of four holdings. It was
-   the largest and loudest control in the product, and it was searching a page
-   that fits on one screen.
-
-   It is a filter row now: the field takes the space it needs at the start edge,
-   the three scopes sit beside it as segmented controls carrying live counts, and
-   the whole thing is one rule tall. The scope belongs in the URL and already is.
+   The field takes the space it needs at the start edge, the three scopes sit
+   beside it as segmented controls carrying live counts, and the whole thing is
+   one rule tall. The scope lives in the URL.
    ============================================================ */
 
 .vault-command {
@@ -4977,11 +4825,8 @@ input[type='search'] {
 }
 
 /*
- * The three scopes, as one segmented control.
- *
- * They were three separate 58px rounded buttons, one of which turned near-black
- * with a gold count when selected. Segmenting them says what the old row did
- * not: these are three views of one collection, and you are in exactly one.
+ * The three scopes, as one segmented control: three views of one collection,
+ * and you are in exactly one.
  */
 .state-controls {
   display: flex;
@@ -5101,10 +4946,10 @@ input[type='search'] {
   outline-offset: calc(-1 * var(--focus-width));
 }
 
-/* The card's REAL media — arrival photographs, a paid photo shoot, a video.
-   A horizontal strip rather than a grid: these are versions of one card, and
-   scanning along them is how you compare "before" with "after". It scrolls in
-   its own container so a card with nine photographs never widens the sheet. */
+/* The card's real media: arrival photographs, a paid photo shoot, a video.
+   A horizontal strip, not a grid: these are versions of one card, and scanning
+   along them is how you compare "before" with "after". It scrolls in its own
+   container so a card with nine photographs never widens the sheet. */
 .media-strip {
   display: flex;
   gap: var(--sp-3);
@@ -5138,8 +4983,8 @@ input[type='search'] {
   border: 0;
 }
 
-/* A cull row that cannot be chosen still shows, with its reason beside it — a
-   card that quietly vanished from the list would read as a bug. */
+/* A cull row that cannot be chosen still shows, with its reason beside it,
+   instead of quietly vanishing from the list. */
 .check.is-disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -5161,12 +5006,9 @@ input[type='search'] {
 }
 
 /*
- * DEPARTED — the photograph desaturates, and nothing else changes.
- *
- * The old treatment painted the whole tile near-black with white text inside an
- * otherwise light product, which read as a redaction. A card that has left is
- * not a card that was censored: its history is the most valuable thing about it
- * and has to stay as navigable as it ever was.
+ * DEPARTED: the photograph desaturates, and nothing else changes. A card that
+ * has left is not a card that was censored: its history is the most valuable
+ * thing about it and has to stay navigable.
  */
 .card--historical {
   background: none;
@@ -5230,12 +5072,9 @@ input[type='search'] {
 }
 
 /*
- * A service button states its own price.
- *
- * Every service on a card is billed the moment the button is pressed, and not
- * one of them said so — the figures lived in a price table in the Help section,
- * which is documentation rather than a decision. The label sits at the start,
- * the charge at the end, and the two are pushed apart so a column of them reads
+ * A service button states its own price, because every service on a card is
+ * billed the moment the button is pressed. The label sits at the start, the
+ * charge at the end, and the two are pushed apart so a column of them reads
  * down the trailing edge.
  */
 .action-line {
@@ -5299,14 +5138,10 @@ input[type='search'] {
 }
 
 /*
- * The bench's upload thumbnail — a photograph an operator has just taken, not a
- * catalogue photograph of a card.
- *
- * It was ALSO called `.photo-thumb`, and its fixed 72x72 block-size silently won
- * the cascade over the catalogue thumbnail's 4:5 aspect ratio, which is why the
- * item sheet's photography stage rendered a 260x72 letterbox with a 55px card
- * floating in it. One class, two components, and the later one wins: renamed
- * rather than fought with specificity.
+ * The bench's upload thumbnail: a photograph an operator has just taken, not a
+ * catalogue photograph of a card. It has its own class, apart from
+ * `.photo-thumb`, so its fixed square size never overrides the catalogue
+ * thumbnail's 4:5 ratio.
  */
 .upload-thumb {
   position: relative;
@@ -5361,9 +5196,8 @@ input[type='search'] {
 /*
  * One card per box in the run.
  *
- * The rows are visually separated rather than being a table, because each one
- * carries a form AND a photo strip — a table row that contains a photo strip is
- * a table row that has stopped being a row.
+ * The rows are visually separated instead of being a table, because each one
+ * carries a form and a photo strip.
  */
 .parcel-rows {
   display: grid;
@@ -5408,11 +5242,9 @@ input[type='search'] {
 /*
  * The marketplace filter bar.
  *
- * A row of narrow controls above the shelf, wrapping rather than scrolling so a
+ * A row of narrow controls above the shelf, wrapping instead of scrolling so a
  * phone stacks them instead of hiding the last one off the edge. It sits inside
- * the panel body above the grid — not in the panel's tool slot, which holds the
- * one control (search) that was already there and is the only one wide enough to
- * need the room.
+ * the panel body above the grid, with the search as its first control.
  */
 .filter-bar {
   display: flex;
@@ -5441,14 +5273,7 @@ input[type='search'] {
   min-inline-size: 7rem;
 }
 
-/*
- * The LAST tracked-out uppercase eyebrow in the product.
- *
- * The audit named this pattern as the default chrome of every heading and every
- * table header, and the token and register passes cleared it everywhere except
- * here — the marketplace filter bar, where TYPE / CONDITION / PRICE FROM went on
- * shouting at 11px. A filter caption is a label like any other.
- */
+/* A filter caption is a label like any other: caption size, no uppercase, no tracking. */
 .field--compact .field-label {
   font-size: var(--fs-caption);
   letter-spacing: 0;
@@ -5464,13 +5289,7 @@ input[type='search'] {
   }
 }
 
-/*
- * A field that takes the spare width of its row.
- *
- * Replaces two inline `style={{ flex: '1 1 220px' }}` props that were the only
- * layout in the product expressed as a literal in JSX. The number differed
- * between the two (220px and 200px) for no reason anybody could state.
- */
+/* A field that takes the spare width of its row. */
 .field--grow {
   flex: 1 1 14rem;
   min-inline-size: 0;
@@ -5514,7 +5333,7 @@ input[type='search'] {
 }
 
 /* ============================================================
-   THE REGISTER — append-only, and it looks it
+   THE REGISTER: append-only, and it looks it
    ============================================================
    Custody events, ledger lines, wallet-request history, support messages. Four
    places in this product where the record is the product, and all four render
@@ -5799,8 +5618,8 @@ input[type='search'] {
   border-inline-start: 3px solid var(--border-strong);
 }
 
-/* The copied source answer. Held at a slightly smaller size and indented behind
-   a rule so it reads as quoted third-party material, not as Bault's voice. */
+/* The full answer, under the short one. Held at a slightly smaller size and
+   indented behind a rule. */
 .faq-source-answer {
   padding-inline-start: var(--sp-4);
   border-inline-start: 2px solid var(--border);
@@ -5942,14 +5761,8 @@ input[type='search'] {
   }
 
   /*
-   * The labels STAY on a phone.
-   *
-   * They were hidden here because they wrapped the control past the viewport —
-   * but what that left was three near-identical segments distinguished by a
-   * small glyph and a number, on the control that decides which of three
-   * collections you are looking at. The icon goes instead: it was never carrying
-   * the meaning, and dropping it fits "Active / On hold / History" in 358px with
-   * room to spare.
+   * The labels stay on a phone; the icon goes instead. It never carried the
+   * meaning, and dropping it fits "Active / On hold / History" in 358px.
    */
   .state-control .state-icon {
     display: none;
@@ -6042,17 +5855,16 @@ input[type='search'] {
 }
 
 /* ============================================================
-   ADDITIONS — the system layer
+   ADDITIONS: the system layer
    ============================================================
-   Everything below was either missing or scattered across component files as
-   inline style. Kept at the end so it wins on order without needing
-   specificity tricks — the cascade does the work.
+   Kept at the end so it wins on order without needing specificity tricks; the
+   cascade does the work.
    ============================================================ */
 
 /* ---- Fields, properly associated -------------------------------------- */
 
 /**
- * `.field-label` is now a real <label for>, so clicking the caption focuses the
+ * `.field-label` is a real <label for>, so clicking the caption focuses the
  * control and a screen reader announces the caption alone as the field's name.
  * The hint is attached by aria-describedby instead of being glued into it.
  */
@@ -6062,9 +5874,8 @@ input[type='search'] {
 }
 
 /**
- * A caption is the question; the value is the answer. Setting both at 600 —
- * which is what a 5-column warehouse form was doing — means nothing in the row
- * is the answer. The caption steps back so the value can step forward.
+ * A caption is the question; the value is the answer. If both are set at 600
+ * nothing in the row is the answer, so the caption steps back.
  */
 .field-label {
   font-size: var(--fs-sm);
@@ -6098,10 +5909,9 @@ textarea[aria-invalid='true'] {
 /* ---- Buttons: one busy state, one disabled state ---------------------- */
 
 /**
- * Disabled was previously only `opacity`, which dims the label to a contrast
- * ratio nobody can read and still leaves the control looking pressable. It now
- * flattens to a surface colour and takes `not-allowed`, so "you cannot do this
- * yet" is legible rather than merely faint.
+ * Disabled flattens to a surface colour and takes `not-allowed`, so "you cannot
+ * do this yet" is legible. Opacity alone would dim the label past reading and
+ * still leave the control looking pressable.
  */
 .btn:disabled,
 .btn[aria-disabled='true'] {
@@ -6142,21 +5952,14 @@ textarea[aria-invalid='true'] {
 /* ---- Focus: one ring, everywhere -------------------------------------- */
 
 /**
- * There were seven `:focus-visible` rules for a keyboard user who touches
- * dozens of controls. One rule, on everything focusable, with a ring that
- * reads on both themes and on the navy rail.
+ * One `:focus-visible` rule, on everything focusable, with a ring that reads on
+ * both themes.
  */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: var(--focus-width) solid var(--focus-color);
   outline-offset: var(--focus-offset);
   border-radius: var(--radius);
 }
-
-/*
- * The rail used to need its own ring colour, because it was a navy monolith and
- * a green outline disappeared into it. It is the second surface now, so it takes
- * the same ring as everything else — which is the point of having one.
- */
 
 /* ---- Reading measure --------------------------------------------------- */
 
@@ -6202,22 +6005,10 @@ textarea[aria-invalid='true'] {
 
 /* ---- Status badges: shape as well as colour ---------------------------- */
 
-/**
- * Colour alone is not a signal — roughly one in twelve men cannot separate the
- * red and green these badges use. A tone now carries a weight and a border as
- * well as a hue, so the difference survives being printed, screenshotted in
- * greyscale, or seen by somebody who does not distinguish them.
- */
 /*
- * Shape as well as colour — but the shape is now the leading rule defined in the
- * STATUS section, not a second border wrapped around a tinted lozenge. Roughly
- * one in twelve men cannot separate the red and green these marks use, so the
- * label states the status in words and the rule gives it a position; both
- * survive greyscale.
- *
- * The four rules that stood here added a 1px translucent border to a component
- * that no longer has a border, and letter-spacing to a component that is not
- * set in caps. Removed rather than re-pointed.
+ * Shape as well as colour: the leading rule defined in the STATUS section, and
+ * the label stating the status in words. Roughly one in twelve men cannot
+ * separate the red and green these marks use; both cues survive greyscale.
  */
 
 /* ---- Tables: scannable, and never wider than the page ------------------ */
@@ -6227,12 +6018,7 @@ textarea[aria-invalid='true'] {
   overscroll-behavior-x: contain;
 }
 
-/*
- * The uppercase tracked-out column header lived here and quietly beat the
- * register's own header rule further up the file. It was also the single most
- * repeated instance of the eyebrow-label pattern in the product — every table,
- * every screen. The register defines its header once; nothing overrides it.
- */
+/* The register defines its header once, further up; this only stops it wrapping. */
 .data-table th {
   white-space: nowrap;
 }
@@ -6292,12 +6078,10 @@ textarea[aria-invalid='true'] {
        storage it has accrued. This is the one figure in the vault a collector
        cannot work out for themselves, and it is why the bar exists.
 
-   It goes amber BEFORE it says anything. A watch that only warns once the number
-   is bad is a report; a watch that changes colour while there is still time to
-   act on it is a watch.
+   It goes amber before the number is bad, while there is still time to act.
 
    Square, because it is a measurement and not a token, and always accompanied by
-   its figure — the bar is for comparing down a column, the number is for knowing.
+   its figure: the bar is for comparing down a column, the number is for knowing.
    ============================================================ */
 
 .yield-bar,
@@ -6322,7 +6106,7 @@ textarea[aria-invalid='true'] {
   transition: inline-size var(--dur) var(--ease);
 }
 
-/** Approaching: storage has taken a third of the value. Still time to decide. */
+/** Approaching: storage has taken two thirds of the value. Still time to decide. */
 .proportion--watch > span {
   background: var(--amber-mark);
 }
@@ -6391,11 +6175,9 @@ textarea[aria-invalid='true'] {
 /* ---- Utilities, so layout stops being written inline --------------------- */
 
 /**
- * 130 inline `style={{}}` blocks were scattered through the components — a
- * margin here, a max-height there — which is how spacing drifts out of a system
- * one screen at a time. These are the repeated ones, named. Anything genuinely
- * one-off (a column width, a bar's percentage) stays inline, which is what
- * inline style is actually for.
+ * Repeated layout values, named, so spacing does not drift one screen at a
+ * time. Anything genuinely one-off (a column width, a bar's percentage) stays
+ * inline.
  */
 
 .stack-top {
@@ -6420,10 +6202,9 @@ textarea[aria-invalid='true'] {
  * The way out of a dead end on the receiving bench.
  *
  * When the directed stow has nowhere to send the box, the refusal is followed
- * by the shelf form itself rather than by directions to another tab. It is
- * inset and bordered because it is a second job appearing inside the first one,
- * and an operator should be able to see where the bench stops and the repair
- * begins.
+ * by the shelf form itself. It is inset and bordered because it is a second job
+ * appearing inside the first one, and an operator should see where the bench
+ * stops and the repair begins.
  */
 .stow-rescue {
   display: flex;
@@ -6455,11 +6236,10 @@ textarea[aria-invalid='true'] {
 }
 
 /* ============================================================
-   COMPONENTS THIS PRODUCT DID NOT HAVE
+   PRODUCT COMPONENTS
    ============================================================
-   Everything above is an existing component brought onto the system. What
-   follows had no equivalent at all, and each one exists because the audit found
-   a job nothing was doing.
+   The identity line, the Break-Even Watch, the step register, the priced offer
+   and the other pieces specific to Bault's jobs.
    ============================================================ */
 
 /* ---- The identity line ------------------------------------------------
@@ -6500,10 +6280,8 @@ textarea[aria-invalid='true'] {
  * Break-Even Watch, as the register's last column.
  *
  * End-aligned, because it is money and money aligns on the decimal with the
- * money above it. The caption that used to sit to the RIGHT of the figure —
- * "$5.00 ……… Spent so far", with the reader's eye crossing a gap to reach it —
- * is the column header now, which is where a caption repeated on every row
- * belongs.
+ * money above it. Its caption is the column header, where a caption repeated on
+ * every row belongs.
  */
 .watch {
   display: flex;
@@ -6545,7 +6323,7 @@ textarea[aria-invalid='true'] {
 /* ---- The step register ------------------------------------------------
    A custom request is three steps: ask (free) → an operator proposes a price and
    a scope → you accept. Rendered horizontally, with the current step marked by
-   the same rule everything else in this system is marked by — so a person can
+   the same rule everything else in this system is marked by, so a person can
    see whose turn it is without reading a status word.
 
    Not a progress bar: the steps are named, the money is stated at the step it
@@ -6713,10 +6491,9 @@ textarea[aria-invalid='true'] {
 }
 
 /* ---- Support threads are a register, not a chat -------------------------
-   The helpdesk was rendering as rounded chat bubbles alternating left and right.
-   Support messages are append-only — they are the record of what a company told
-   a customer about their money, their property, or why their account was locked
-   — and a bubble is the shape of a conversation that can be deleted. */
+   Support messages are append-only: the record of what a company told a
+   customer about their money, their property, or why their account was locked.
+   A chat bubble is the shape of a conversation that can be deleted. */
 
 .ask-turns,
 .ask-log {
@@ -6792,16 +6569,15 @@ textarea[aria-invalid='true'] {
 }
 
 /* ============================================================
-   THE ITEM SHEET — two kinds of reading, side by side
+   THE ITEM SHEET: two kinds of reading, side by side
    ============================================================
    The start side is the card: what it is, what it costs to keep, what can be
    done to it and for how much. The end side is the record: every custody event
    in order, which is the answer to "prove you have had this the whole time".
 
-   They are different kinds of reading and they belong abreast, not stacked —
-   which is why the sheet is 960px rather than the 420px column the item used to
-   share with wallet requests and shipments. Below 900px they stack, register
-   last, because on a phone the card comes first.
+   They are different kinds of reading and they belong abreast, not stacked,
+   which is why the item sheet is wider than other drawers. Below 900px they
+   stack, register last, because on a phone the card comes first.
    ============================================================ */
 
 .sheet-cols {
@@ -6848,10 +6624,8 @@ textarea[aria-invalid='true'] {
 /*
  * The photography stage, at the very top of the sheet and full-bleed inside it.
  *
- * The card is given a real size — 260px wide, 4:5, centred on the sweep — rather
- * than the 72px thumbnail it had in the old drawer. This is the whole argument
- * of the direction in one element: a collector cannot hold the object, so the
- * screen lights it like one.
+ * The card is given a real size: 260px wide, 4:5, centred on the sweep. A
+ * collector cannot hold the object, so the screen lights it like one.
  */
 .drawer .stage {
   padding: var(--sp-8) var(--sp-6);
@@ -6917,21 +6691,18 @@ textarea[aria-invalid='true'] {
 
      photograph │ price + identity │ condition │ the two actions
 
-   The photograph is larger, because on a shelf of things for sale it IS the
-   pitch — it is the only thing a buyer can inspect. And the PRICE IS THE FIRST
-   TEXT LINE; it used to be the fourth thing in the tile, below a bold
-   `trading_card` and two lines of truncated catalogue string, in the mono face
-   at the same weight as a barcode.
+   The photograph is larger, because on a shelf of things for sale it is the
+   pitch: the only thing a buyer can inspect. And the price is the first text
+   line.
    ============================================================ */
 
 /*
  * No `auto` in a register's column list.
  *
- * Every row is its own grid — they are `<li>` elements, not table rows — so an
- * `auto` or a `min-content` track resolves against THAT row's content and lands
- * at a different width on the header, which has none. The header's "State" sat
- * 150px to the end side of the condition it was labelling. Every track is either
- * fixed or `1fr`, and then all the rows agree.
+ * Every row is its own grid (they are `<li>` elements, not table rows), so an
+ * `auto` or a `min-content` track resolves against that row's content and lands
+ * at a different width on the header, which has none. Every track is either
+ * fixed or `1fr`, so all the rows agree.
  */
 .card-grid--listings {
   --register-cols: 88px minmax(14rem, 1fr) 11rem 13rem;
@@ -6989,14 +6760,11 @@ textarea[aria-invalid='true'] {
   }
 }
 
-/* A row of actions, wrapping rather than stacking. Three buttons of three
-   different weights piled vertically in a 90px column is what a table does when
-   nobody decided how wide the action column should be. */
+/* A row of actions, side by side instead of stacked. */
 .actions--row {
   display: flex;
   /* `nowrap`, deliberately: this sits in a `td-tight` cell, which is as narrow
-     as its content, so wrapping would put every button on its own line — which
-     is exactly what the offers table was doing. */
+     as its content, so wrapping would put every button on its own line. */
   flex-wrap: nowrap;
   align-items: center;
   gap: var(--sp-2);
@@ -7011,8 +6779,8 @@ textarea[aria-invalid='true'] {
   text-align: end;
 }
 
-/* A label that resolves to no account. Quoted exactly as written — it is the
-   only clue to whose property the box is — and marked as unresolved rather than
+/* A label that resolves to no account. Quoted exactly as written (it is the
+   only clue to whose property the box is) and marked as unresolved instead of
    greyed into looking like an empty cell. */
 .unresolved {
   display: inline-block;
@@ -7025,7 +6793,7 @@ textarea[aria-invalid='true'] {
 }
 
 /* ============================================================
-   THE CHART — one style, and these are its rules
+   THE CHART: one style, and these are its rules
    ============================================================
    Graphite bars. ONE accent, and it marks the thing to act on rather than
    distinguishing a series. Tabular axis labels. A stated maximum, because a bar
@@ -7107,13 +6875,8 @@ textarea[aria-invalid='true'] {
 }
 
 /*
- * All three cells are placed EXPLICITLY, column and row.
- *
- * With only the value and the note placed, grid auto-placement put the label in
- * (1,1), the value in (1,3) — and then, finding its cursor already past column
- * 2, dropped the note into (2,2). Every occupancy count rendered one row below
- * the zone it belonged to, which on a chart about which zone to act on is the
- * one mistake that cannot be tolerated.
+ * All three cells are placed explicitly, column and row: with auto-placement the
+ * note would drop to the next row, under the wrong zone.
  */
 .chart-label {
   grid-column: 1;

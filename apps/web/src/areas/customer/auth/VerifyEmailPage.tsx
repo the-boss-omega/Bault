@@ -7,15 +7,14 @@ import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 /**
  * The page the verification link opens (`#/verify-email?token=…`).
  *
- * Verification runs on mount rather than behind a button: the reader already
- * expressed intent by clicking the link in their mail, and asking them to
- * confirm a second time is a step that carries no information.
+ * Verification runs on mount: the reader already expressed intent by clicking
+ * the link in their mail.
  *
  * Three outcomes, each stated plainly. On failure the token is spent, expired
- * or wrong — an expired link is the common case and the only one with a way
- * forward, so a resend form is offered rather than a dead end. The resend
- * endpoint answers identically for a known and an unknown address, so this
- * page confirms the request without claiming a mail was sent.
+ * or wrong; an expired link is the common case and the only one with a way
+ * forward, so a resend form is offered. The resend endpoint answers identically
+ * for a known and an unknown address, so this page confirms the request without
+ * claiming a mail was sent.
  */
 type State =
   | { status: 'working' }

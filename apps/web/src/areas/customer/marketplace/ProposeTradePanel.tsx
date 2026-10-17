@@ -25,14 +25,12 @@ interface TradableItem {
 /**
  * Propose a swap, or give a card away.
  *
- * The engine behind this ran from the start and had no way in — including no way
- * to name the other person. Swaps were addressed by internal user id, which is
- * not something a collector can obtain or would recognise; the endpoints now
- * take a USERNAME, which is the only customer-facing identifier Bault has.
+ * The other collector is named by username, the only customer-facing identifier
+ * Bault has; the endpoints take it in place of an internal user id.
  *
  * A gift is the same thing with nothing asked in return, and it is presented as
- * one control rather than two pages, because the difference between "swap" and
- * "give away" is whether you tick a box.
+ * one control, because the difference between "swap" and "give away" is whether
+ * you tick a box.
  */
 export function ProposeTradePanel({
   onProposed,
@@ -79,10 +77,10 @@ export function ProposeTradePanel({
   }
 
   /**
-   * Add one of THEIR cards to the ask, by serial.
+   * Add one of their cards to the ask, by serial.
    *
    * You cannot browse another collector's vault, so a swap names what it wants
-   * the way collectors do it anyway — by quoting the serial you already know.
+   * the way collectors do it anyway: by quoting the serial you already know.
    */
   async function addWanted() {
     if (!counterparty) return;
@@ -103,7 +101,7 @@ export function ProposeTradePanel({
     try {
       if (gift) {
         // A gift is two-step confirmed on the sender's side, then still needs the
-        // recipient to accept — nobody receives property without agreeing to.
+        // recipient to accept: nobody receives property without agreeing to.
         const challenge = await api.post<{ confirmationToken: string }>('/marketplace/transfers', {
           itemId: offeredIds[0],
           toUsername: counterparty.username,
@@ -114,10 +112,9 @@ export function ProposeTradePanel({
         await onProposed(t('market.propose.giftSent', { username: counterparty.username }));
       } else {
         /**
-         * A swap MUST name what comes back. An empty requested set is not a
-         * generous swap — the engine reads it as a gift and hands the card over
-         * on approval, so proposing one that way would give away a card the
-         * proposer thought they were negotiating over.
+         * A swap must name what comes back. The engine reads an empty requested
+         * set as a gift and hands the card over on approval, which would give
+         * away a card the proposer thought they were negotiating over.
          */
         await api.post('/marketplace/swaps', {
           responderUsername: counterparty.username,
@@ -187,7 +184,7 @@ export function ProposeTradePanel({
                     onChange={() =>
                       setOffered((prev) =>
                         // A gift moves exactly one card, so ticking a second
-                        // replaces the first rather than silently sending both.
+                        // replaces the first instead of sending both.
                         gift ? { [item.id]: !prev[item.id] } : { ...prev, [item.id]: !prev[item.id] },
                       )
                     }

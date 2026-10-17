@@ -4,17 +4,12 @@ import { useI18n } from '../../../shared/i18n';
 import { Button, ErrorState, Field } from '../../../shared/ui/primitives';
 
 /**
- * "Can you also…" — asking for something the service list has no button for.
+ * "Can you also…": asking for something the service list has no button for
+ * (sleeve these before you ship them, weigh this box, check the seal is intact),
+ * as a request with a price, a queue and a link to the item.
  *
- * The nine services in the drawer are fixed things Bault decided to sell. A
- * collector who wanted anything else — sleeve these before you ship them, weigh
- * this box, check the seal is intact — had one route: a support ticket, which is
- * a conversation with no price, no queue, no completion and no link to the
- * collectible it is about.
- *
- * The form says plainly that ASKING IS FREE and that nothing is charged until
- * they see a price and agree to it, because the reasonable fear about a box
- * marked "custom" is exactly that it will cost something unknown.
+ * The form says plainly that asking is free and that nothing is charged until
+ * the collector sees a price and agrees to it.
  */
 export function CustomRequestForm({
   itemId,
@@ -84,8 +79,7 @@ export function CustomRequestForm({
       </Field>
 
       {/* The reasonable fear about a box marked "custom" is that it will cost
-          something unknown. Answering it here is cheaper than answering it in
-          support afterwards. */}
+          something unknown, so the form answers it here. */}
       <p className="hint">{t('custom.freeNote')}</p>
 
       {error && <ErrorState message={error} />}

@@ -27,12 +27,11 @@ import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { IconAsk, IconPlus } from '../../../shared/ui/icons';
 
 /**
- * Support — the one place a person can ask Bault a question.
+ * Support: the one place a person can ask Bault a question.
  *
- * It matters more than a contact form usually does, because two workflows in
- * this platform genuinely depend on a human: cash in and cash out are reviewed
- * by a person, and an account suspended for debt cannot sign in to fix itself.
- * This page is reachable by a suspended account when nothing else is.
+ * Two workflows depend on a human: cash in and cash out are reviewed by a
+ * person, and an account suspended for debt cannot fix itself. This page is
+ * reachable by a suspended account when nothing else is.
  */
 const TABS = ['tickets', 'new'] as const;
 type SupportTab = (typeof TABS)[number];
@@ -278,7 +277,7 @@ function NewTicketForm({
 }
 
 /* ============================================================
-   The thread — shared by the customer page and the staff queue
+   The thread, shared by the customer page and the staff queue
    ============================================================ */
 
 /**
@@ -286,8 +285,8 @@ function NewTicketForm({
  *
  * Exported because the staff queue renders exactly the same thread. The only
  * difference is `staff`, which adds the resolve control and flips the status
- * wording — "waiting for you" and "waiting for them" are the same fact read from
- * opposite sides, and one shared string would be wrong for somebody.
+ * wording: "waiting for you" and "waiting for them" are the same fact read from
+ * opposite sides.
  */
 export function ThreadDrawer({
   ticketId,

@@ -4,11 +4,8 @@ import type { StatusTone } from './ui/primitives';
 /**
  * The SPA's vocabulary for inbound parcels.
  *
- * Statuses come straight from the API's `parcel_status` enum. They are listed
- * here in full rather than filtered to "the interesting ones": a status the UI
- * cannot name renders as a raw enum value, which is how `dispatched` and
- * `cancelled` ended up on the shipment tracking list describing states the API
- * never had.
+ * Statuses come straight from the API's `parcel_status` enum and are listed in
+ * full, because a status the UI cannot name renders as a raw enum value.
  */
 export type ParcelStatus =
   | 'expected'
@@ -23,8 +20,8 @@ export const PARCEL_TONE: Record<string, StatusTone> = {
   received: 'info',
   opened: 'warning',
   processed: 'success',
-  // Somebody's property with no owner attached — the one state that needs a
-  // person to do something about it.
+  // Somebody's property with no owner attached: the one state that needs a
+  // person to act.
   unclaimed: 'error',
   disposed: 'violet',
 };
@@ -81,7 +78,7 @@ export interface ParcelSummary {
   facilityName: string | null;
 }
 
-/** One row of `GET /parcels` — the warehouse queue. */
+/** One row of `GET /parcels`, the warehouse queue. */
 export interface ParcelQueueRow extends Omit<ParcelSummary, 'declaredContents'> {
   addressedTo: string | null;
   ownerUsername: string | null;
@@ -91,8 +88,8 @@ export interface ParcelQueueRow extends Omit<ParcelSummary, 'declaredContents'> 
    * How many vault items have been booked out of this parcel so far.
    *
    * The bench's reconciliation figure: an opened box showing zero has had
-   * nothing taken out of it yet, and closing it in that state is what the API
-   * now refuses without a stated reason.
+   * nothing taken out of it yet, and the API refuses to close it in that state
+   * without a stated reason.
    */
   itemCount: number;
 }
@@ -147,7 +144,7 @@ export function taxRateLabel(bps: number): string {
 
 /**
  * What a purchase of `amountMinor` would cost in destination sales tax at this
- * address. Guidance only — Bault is not the seller and remits nobody's tax.
+ * address. Guidance only: Bault is not the seller and remits nobody's tax.
  */
 export function estimatedTaxMinor(amountMinor: number, bps: number): number {
   return Math.round((amountMinor * bps) / 10_000);

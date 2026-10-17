@@ -5,7 +5,7 @@ import { useI18n, type MessageKey } from '../../shared/i18n';
 import { Button, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
 import { IconRefresh } from '../../shared/ui/icons';
 
-/** `GET /admin/pricing/coverage` — see `apps/api/src/modules/prc/billable-actions.ts`. */
+/** `GET /admin/pricing/coverage`; see `apps/api/src/modules/prc/billable-actions.ts`. */
 export interface PricingCoverage {
   ready: boolean;
   summary: {
@@ -54,11 +54,11 @@ function ruleValue(rule: { model: string; value: number }): string {
 }
 
 /**
- * Is every price loaded? (E6)
+ * Is every price loaded?
  *
  * No migration inserts a pricing rule, so a database built for production
  * from migrations alone cannot price an intake, and several actions fall back
- * quietly — to another rule, to a figure in the code, or to nothing. This is
+ * quietly: to another rule, to a figure in the code, or to nothing. This is
  * the launch check: every action the code charges for, what it costs right
  * now, and what happens to the ones that have no rule. Problems sort first.
  */

@@ -44,9 +44,8 @@ type MarketTab = (typeof TABS)[number];
 
 /**
  * Marketplace. Browse, buy or make an offer on active listings; list one of your
- * own STORED items for sale (chosen from a vault dropdown — a real UUID, so no
- * invalid-id 500). Prices are entered and shown in dollars; the cents the API
- * stores are produced at submit time.
+ * own stored items for sale, chosen from a vault dropdown. Prices are entered
+ * and shown in dollars; the cents the API stores are produced at submit time.
  */
 export function MarketplacePage() {
   const { t } = useI18n();
@@ -57,19 +56,11 @@ export function MarketplacePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
-   * Narrowing the shelf — and the narrowed shelf is a PLACE.
-   *
-   * Browse offered a free-text box over the description and the type class and
-   * nothing else: no way to see only graded slabs, no price range, and one fixed
-   * order with no control over it. Those controls were added, and then held in
-   * `useState` — so a collector who found a graded slab under $200 could not
-   * link it, bookmark it, reload it or send it to anybody, and the browser's
-   * Back button walked out of the marketplace rather than out of the filter.
-   *
-   * They live in the URL now. `setParams` merges and drops empties, so an
+   * The browse filters live in the URL, so a filtered shelf can be linked,
+   * bookmarked and reloaded. `setParams` merges and drops empties, so an
    * unfiltered browse is `#/marketplace/browse` and a filtered one is
-   * `#/marketplace/browse?type=trading_card&max=200`. It replaces rather than
-   * pushes, because one history entry per keystroke is not a history.
+   * `#/marketplace/browse?type=trading_card&max=200`. It replaces instead of
+   * pushing, so typing does not add one history entry per keystroke.
    */
   const q = route.params.q ?? '';
   const type = route.params.type ?? '';
@@ -92,9 +83,9 @@ export function MarketplacePage() {
   /**
    * The reader's own id.
    *
-   * Escrow is the one screen that has to know which SIDE of a row the reader is
-   * on — a deal names two people and the next step is different for each — and
-   * a username cannot answer that, because a deal stores ids.
+   * Escrow is the one screen that has to know which side of a row the reader is
+   * on (a deal names two people and the next step is different for each), and a
+   * username cannot answer that, because a deal stores ids.
    */
   const [meId, setMeId] = useState<string | null>(null);
 
@@ -112,11 +103,9 @@ export function MarketplacePage() {
     : 'browse';
 
   /**
-   * Filtering happens on the SERVER, not over the rows already fetched.
-   *
-   * The query is capped at 200 listings, so narrowing a page in the client would
-   * silently hide matches that fell off the end of an unfiltered page — a filter
-   * that quietly lies is worse than no filter.
+   * Filtering happens on the server, not over the rows already fetched: the
+   * query is capped, so narrowing a page in the client would hide matches that
+   * fell off the end of an unfiltered page.
    */
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -142,8 +131,8 @@ export function MarketplacePage() {
     }
   }, []);
 
-  // Incremental search-as-you-type: debounce a refetch on every change so results
-  // update live from a partial query — no Enter/button required.
+  // Search as you type: debounce a refetch on every change so results update
+  // from a partial query.
   useEffect(() => {
     const handle = setTimeout(() => void loadListings(query), 250);
     return () => clearTimeout(handle);
@@ -151,8 +140,8 @@ export function MarketplacePage() {
 
   async function buy(listing: Listing) {
     try {
-      // A replay is not a second purchase, and must not be reported as one — a
-      // double-clicked button otherwise says "Purchased" twice.
+      // A replay is not a second purchase, and must not be reported as one, or
+      // a double-clicked button would say "Purchased" twice.
       const result = await api.post<{ replayed?: boolean }>(
         `/marketplace/listings/${listing.id}/purchase`,
       );
@@ -179,14 +168,9 @@ export function MarketplacePage() {
       {tab === 'browse' && (
         <TabPanel tab="browse">
           {/*
-            No section header over the shelf.
-
-            The tab strip already says "Browse" and the page already says
-            "Marketplace"; a third band repeating "Active listings / 1 listing"
-            sat between them with the search box exiled to its far right, a
-            thousand pixels from the five filters it belongs with. The search is
-            the first filter, the count is the result, and both live in the
-            filter bar now.
+            No section header over the shelf: the tab strip already says
+            "Browse". The search is the first filter, the count is the result,
+            and both live in the filter bar.
           */}
           <Panel flush>
             {/*
@@ -288,8 +272,7 @@ export function MarketplacePage() {
                 title={t('market.empty.title')}
                 text={filtered ? t('market.empty.searchText') : t('market.empty.text')}
                 /* An empty shelf caused by a filter has a way out; an empty shelf
-                   because nothing is for sale does not, and offering one would be
-                   a button that changes nothing. */
+                   because nothing is for sale does not. */
                 action={
                   filtered ? (
                     <Button size="sm" onClick={clearFilters}>
@@ -309,8 +292,7 @@ export function MarketplacePage() {
                 {listings.map((listing) => (
                   <li key={listing.id} className="card card--interactive card--listing">
                     {/* The photograph is the pitch: a fixed 4:5 stage, the shape
-                        of a slab, so a shelf of listings is a shelf rather than
-                        a ragged edge. */}
+                        of a slab, so a shelf of listings lines up. */}
                     <div className="card-art">
                       <CardPhotoThumb
                         serialNumber={listing.serialNumber}
@@ -319,9 +301,7 @@ export function MarketplacePage() {
                     </div>
 
                     <div className="card-id">
-                      {/* THE PRICE IS THE FIRST TEXT LINE. It used to be the
-                          fourth thing in the tile, under a bold `trading_card`
-                          and two lines of truncated catalogue string. */}
+                      {/* The price is the first text line. */}
                       <p className="price">
                         <Amount>{formatUsd(listing.askingPrice)}</Amount>
                       </p>
@@ -340,8 +320,8 @@ export function MarketplacePage() {
 
                     <div className="actions">
                       {/* Buying is irreversible and settles from the wallet;
-                          making an offer opens a negotiation. They were the same
-                          size and the same weight. */}
+                          making an offer opens a negotiation. So they carry
+                          different weights. */}
                       <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
                         {t('market.buy')}
                       </Button>

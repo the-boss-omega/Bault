@@ -33,15 +33,13 @@ interface RouteCatalogue {
 /**
  * Putting money in.
  *
- * The screen's whole job is the distinction the product was missing: a card or
- * PayPal Goods & Services payment is confirmed by the provider and settles now;
- * a bank transfer or a Friends & Family payment is confirmed by nothing and has
- * to wait for somebody to read a statement.
+ * The screen's whole job is one distinction: a card or PayPal Goods & Services
+ * payment is confirmed by the provider and settles now; a bank transfer or a
+ * Friends & Family payment is confirmed by nothing and waits for somebody to
+ * read a statement.
  *
- * Both are offered, side by side, with the trade-off stated rather than implied.
- * A collector who wants their balance in ten seconds and a collector who wants
- * to avoid a card fee are both right, and neither should have to guess which
- * button does which.
+ * Both are offered side by side with the trade-off stated, so a collector who
+ * wants their balance now and one who wants to avoid a card fee can each pick.
  */
 export function TopUpPanel({
   onError,
@@ -63,9 +61,8 @@ export function TopUpPanel({
       try {
         const loaded = await api.get<RouteCatalogue>('/finance/funding-routes');
         setCatalogue(loaded);
-        // Start on a route that can actually be used. The default was `card`
-        // even where the server reports it unavailable, so the first thing a
-        // collector saw was a Pay button that could only fail.
+        // Start on a route that can be used: keep the current one if the server
+        // reports it available, otherwise the first available one.
         setRoute((current) =>
           loaded.routes.some((r) => r.key === current && r.available)
             ? current
@@ -94,7 +91,7 @@ export function TopUpPanel({
         {
           amountMinor: cents,
           route,
-          // A key the SERVER can dedupe on. Regenerated per attempt so a genuine
+          // A key the server can dedupe on. Regenerated per attempt so a genuine
           // second top-up is not mistaken for a retry of the first.
           idempotencyKey: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         },
@@ -214,11 +211,8 @@ interface CashOutQuote {
 }
 
 /**
- * What a cash-out actually lands.
- *
- * Cashing out was free and no figure was quoted anywhere. This shows the whole
- * schedule up front and the specific arithmetic as soon as an amount is typed —
- * the number that matters is not the fee, it is what arrives.
+ * What a cash-out actually lands: the whole fee schedule up front, and the
+ * arithmetic as soon as an amount is typed, ending in the amount that arrives.
  */
 export function CashOutQuotePanel({ amount }: { amount: string }) {
   const { t } = useI18n();

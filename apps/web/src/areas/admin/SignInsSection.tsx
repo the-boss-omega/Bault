@@ -40,17 +40,16 @@ const ROUTINE: ReadonlySet<SignInOutcome> = new Set(['success', 'mfa_challenged'
 /**
  * Who signed in, and who tried to.
  *
- * Until `login_attempt` existed this screen could not have been built: a failed
- * sign-in was not recorded anywhere, and a successful one was an audit row with
- * the user left empty. The question an administrator most needs answered —
- * *is somebody guessing passwords?* — had the answer "we would never know".
+ * Every attempt is recorded in `login_attempt`, so the screen can answer the
+ * question an administrator most needs answered: is somebody guessing
+ * passwords?
  *
- * The figures come first because they are what decides whether to read the
- * table at all. The `suspicious` list is the pattern pulled out of the rows —
- * five or more failures against one identifier in a day — so it is not left to
- * somebody scanning two hundred lines for a repeat.
+ * The figures come first because they decide whether to read the table at all.
+ * The `suspicious` list is the pattern pulled out of the rows (five or more
+ * failures against one identifier in a day), so nobody has to scan two hundred
+ * lines for a repeat.
  *
- * The identifier is what was TYPED, so a burst against an address that has no
+ * The identifier is what was typed, so a burst against an address that has no
  * account shows up as clearly as one against an address that does. The password
  * is not in this log, in any form.
  */
@@ -163,7 +162,7 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                       <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>
                     </td>
                     <td data-label={t('admin.signIns.col.account')}>
-                      {/* The account it resolved to — or, when it resolved to
+                      {/* The account it resolved to or, when it resolved to
                           nothing, exactly what was typed, so a stranger's guess
                           is as visible as a member's typo. */}
                       <span className="ltr-run">{a.username ? `@${a.username}` : a.identifier}</span>

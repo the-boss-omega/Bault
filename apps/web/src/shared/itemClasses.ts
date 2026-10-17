@@ -3,24 +3,21 @@ import type { MessageKey, TranslateFn } from './i18n';
 /**
  * The SPA's mirror of the API's item taxonomy.
  *
- * The keys here MUST match `apps/api/src/modules/inv/item-classes.ts` by value —
+ * The keys here must match `apps/api/src/modules/inv/item-classes.ts` by value,
  * the same arrangement `walletRequests.ts` has with `wallet-request.rules.ts`.
- * The API is the enforcement (an unknown class is rejected at intake); this
- * module exists so the operator picks from a list rather than typing into a text
- * box and discovering the vocabulary from an error message.
+ * The API enforces the list (an unknown class is rejected at intake); this
+ * module lets the operator pick from it.
  *
- * Labels live here, as message keys, rather than being taken from the API's
- * English `label`. The intake console runs in Hebrew by default, and a dropdown
- * of English strings inside a Hebrew form is exactly the kind of half-localised
- * surface the bilingual pass set out to remove.
+ * Labels are message keys here instead of the API's English `label`, because
+ * the intake console runs in Hebrew by default.
  */
 
 export interface ItemClassOption {
   key: string;
   labelKey: MessageKey;
-  /** Mirrors the API's flag — used to warn before an oversized booking. */
+  /** Mirrors the API's flag; drives the oversized hint and bin lookup at intake. */
   oversized: boolean;
-  /** Mirrors the API's flag — used to hide the lot controls where meaningless. */
+  /** Mirrors the API's flag; hides the lot controls where they mean nothing. */
   lotEligible: boolean;
   /**
    * Mirrors the API's per-class threshold. Only cards carry one: the
@@ -29,7 +26,7 @@ export interface ItemClassOption {
   lotMinSize?: number;
 }
 
-/** Mirrors `LOT_MIN_SIZE` — the card-lot threshold. */
+/** Mirrors the API's `LOT_MIN_SIZE`, the card-lot threshold. */
 export const LOT_MIN_SIZE = 6;
 
 export const ITEM_CLASSES: readonly ItemClassOption[] = [
@@ -54,9 +51,8 @@ export function itemClassOption(key: string): ItemClassOption | undefined {
 }
 
 /**
- * Label for a class key. Falls back to the raw key rather than a blank cell:
- * historical items carry free-text values from before the taxonomy existed, and
- * showing "Trading Card" as typed is more honest than showing nothing.
+ * Label for a class key. Falls back to the raw key, because historical items
+ * carry free-text values from before the taxonomy existed.
  */
 export function itemClassLabel(t: TranslateFn, key: string): string {
   const option = CLASS_BY_KEY.get(key);

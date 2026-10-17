@@ -2,7 +2,7 @@ import type { SVGProps } from 'react';
 
 /**
  * One icon system for the whole product: 24-box outline glyphs, 1.6 stroke,
- * rounded caps and joins. Nothing filled, no emoji, no illustrations — size is
+ * rounded caps and joins. Nothing filled, no emoji, no illustrations. Size is
  * controlled by CSS (`width`/`height` on the parent rule), never per call site.
  *
  * Every icon is decorative by default (`aria-hidden`); the surrounding control
@@ -124,7 +124,7 @@ export function IconLegal(p: IconProps) {
   );
 }
 
-/** Archive: a lidded box — the marker for cards that have left the vault. */
+/** Archive: a lidded box, the marker for cards that have left the vault. */
 export function IconArchive(p: IconProps) {
   return (
     <Svg {...p}>
@@ -318,9 +318,6 @@ export function IconUpload(p: IconProps) {
   );
 }
 
-/* `IconPin` was removed with the rail's pin control — nothing renders it, and
-   keeping an unused pin glyph around invites the affordance back. */
-
 export function IconMenu(p: IconProps) {
   return (
     <Svg {...p}>
@@ -497,9 +494,9 @@ export function IconGavel(p: IconProps) {
 /* ---------- Decorative brand art ---------- */
 
 /**
- * Stylised vault door for the wallet hero — pure geometry, no photography.
- * It is drawn in `currentColor` at low opacity so it sinks into the navy card
- * and never competes with the balance figure.
+ * Stylised vault door for the wallet hero: pure geometry, no photography, drawn
+ * in `currentColor` at low opacity. The stylesheet hides `.hero-art`, so it is
+ * not shown at present.
  */
 export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
   return (
@@ -547,9 +544,9 @@ export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
 /* ============================================================
    Theme
    ============================================================
-   Three icons for three states. `system` gets a display rather than a
-   half-moon, because "follow the machine" is a different idea from "dark" and
-   drawing it as a variation of one of the other two makes the cycle unreadable.
+   Three icons for three states. `system` gets a display, because "follow the
+   machine" is a different idea from "dark", and a variation of one of the other
+   two would make the cycle unreadable.
    ============================================================ */
 
 export function IconSun(p: IconProps) {

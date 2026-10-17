@@ -6,17 +6,12 @@ import { channelLabel, type ConsignmentChannel, type ConsignmentEvent } from '..
 import { Button, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
 /**
- * Choose where a card is sold, and for how much.
+ * Choose where a card is sold, and for how much: the channel, what each one
+ * costs and how long it takes, and the asking price.
  *
- * Consignment used to be a single button that posted `channel: 'eBay'`. The
- * seller could not choose a route, could not see what each one cost or how long
- * it took, and could not set a price — the three things that actually differ
- * between them.
- *
- * Eligibility is mirrored from the API rather than only enforced there, so a
- * seller is told "graded cards only" before they submit and are charged a
- * service fee, not after. The API re-checks everything regardless; this is the
- * courtesy, not the control.
+ * Eligibility is mirrored from the API, so a seller is told "graded cards only"
+ * before they submit and are charged a service fee. The API re-checks
+ * everything regardless.
  */
 export function ConsignmentForm({
   item,
@@ -56,8 +51,8 @@ export function ConsignmentForm({
   const cents = dollarsToCents(price);
 
   /**
-   * The same three rules the API enforces, evaluated here for the message rather
-   * than for the decision.
+   * The same three rules the API enforces, evaluated here for the message; the
+   * API makes the decision.
    */
   const problems: string[] = [];
   if (channel) {

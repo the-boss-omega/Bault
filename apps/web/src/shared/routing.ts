@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
 /**
- * Minimal hash router — no dependency, no server-side rewrite requirement.
+ * Minimal hash router: no dependency, no server-side rewrite requirement.
  *
  * Shape: `#/<section>/<tab>?<params>`, e.g.
  *   #/wallet
@@ -24,14 +24,12 @@ export interface Route {
 const LAST_SECTION_KEY = 'bault.tab';
 
 /**
- * Routes that no longer exist, and where they now live.
+ * Retired sections, and where they now live.
  *
- * Services stopped being a section of its own: card-specific services moved into
- * the Vault's card drawer and the operational ones merged with Shipping. Old
- * links, bookmarks and the persisted "last visited section" still say `services`
- * or `shipping`, so both are redirected rather than dropped on the floor. The
- * redirect keeps any tab the caller asked for only when the target section knows
- * it; otherwise it lands on the tab the old section was equivalent to.
+ * Card-specific services live in the Vault's card drawer and the operational
+ * ones in Shipping & services. Old links, bookmarks and the stored last-visited
+ * section can still say `services` or `shipping`, so each is redirected to the
+ * tab the old section was equivalent to.
  */
 const LEGACY_ROUTES: Record<string, { section: string; tab: string }> = {
   services: { section: 'shipping-services', tab: 'requests' },
@@ -39,28 +37,19 @@ const LEGACY_ROUTES: Record<string, { section: string; tab: string }> = {
 };
 
 /**
- * Retired TABS within a section that still exists.
+ * Retired tabs within a section that still exists, mapped to the tab that does
+ * their job now, so a held link such as `#/wallet/topup` does not fall back to
+ * the section's default tab.
  *
- * The wallet's `topup` and `withdrawals` tabs held forms that moved money
- * directly. Those forms are gone — cash in and cash out are reviewed requests —
- * but `#/wallet/topup` is a link people hold, so it lands on the tab that now
- * does that job rather than silently falling back to Overview.
- *
- * Keyed by section so a tab name retired in one section cannot accidentally
- * redirect a same-named tab in another.
+ * Keyed by section so a tab name retired in one section cannot redirect a
+ * same-named tab in another.
  */
 const LEGACY_TABS: Record<string, Record<string, string>> = {
   wallet: {
     topup: 'cash-in',
     withdrawals: 'cash-out',
   },
-  /**
-   * `parcels` and `intake` were two tabs describing one piece of work, and the
-   * split cut it in half: "Book contents" on the parcel bench SWITCHED TABS to
-   * the intake form, and the box was closed out over there. They are one
-   * `receiving` tab now, so both old names land on it — an operator's bookmark
-   * should reach the bench, not a section fallback.
-   */
+  /** Receiving a parcel and booking its contents are one `receiving` tab. */
   warehouse: {
     parcels: 'receiving',
     intake: 'receiving',
@@ -127,8 +116,8 @@ export function useRoute(): Route {
 
 /**
  * Navigate. `replace` swaps the current history entry instead of pushing a new
- * one — used for redirects (role fallbacks, default tabs) so Back never lands
- * the user back on a route they were bounced off.
+ * one; redirects (role fallbacks, default tabs) use it so Back never lands the
+ * user on a route they were bounced off.
  */
 export function navigate(
   next: { section: string; tab?: string | null; params?: Record<string, string> },
@@ -139,7 +128,7 @@ export function navigate(
   try {
     localStorage.setItem(LAST_SECTION_KEY, next.section);
   } catch {
-    /* private mode — routing still works, only the restore-on-refresh is lost */
+    /* private mode: routing still works; only the restore-on-refresh is lost */
   }
   if (options.replace) {
     window.history.replaceState(null, '', target);
@@ -168,7 +157,7 @@ export function clearLastVisitedSection(): void {
 
 /**
  * Helpers bound to the current route: switch tab, open or close a record, and
- * merge parameters — so the selected record AND the filters that produced the
+ * merge parameters, so the selected record and the filters that produced the
  * list it came from both live in the URL.
  */
 export function useNavigation(route: Route) {
@@ -191,17 +180,14 @@ export function useNavigation(route: Route) {
   /**
    * Merge a set of parameters into the current route.
    *
-   * This is what puts a marketplace FILTER in the URL rather than in component
-   * state. A filtered shelf is a place — it can be linked to, bookmarked,
-   * reloaded and sent to somebody — and holding it in `useState` meant a
-   * collector who found a graded slab under $200 had no way to show anybody
-   * else. A value of `''` or `null` removes its key rather than writing an empty
-   * parameter, so the hash of an unfiltered browse is `#/marketplace/browse` and
-   * not `#/marketplace/browse?type=&condition=&min=&max=`.
+   * This keeps a filter (the marketplace's, for one) in the URL, so a filtered
+   * list can be linked to, bookmarked and reloaded. A value of `''`, `null` or
+   * `undefined` removes its key, so an unfiltered browse is `#/marketplace/browse`
+   * with no empty parameters.
    *
-   * `replace` by default: typing in a filter box should not fill the history
-   * with one entry per keystroke, and Back should leave the marketplace rather
-   * than walk backwards through a search.
+   * `replace` by default: typing in a filter box should not add a history entry
+   * per keystroke, and Back should leave the page instead of walking back through
+   * a search.
    */
   const setParams = useCallback(
     (next: Record<string, string | null | undefined>, options: { replace?: boolean } = {}) => {

@@ -26,11 +26,11 @@ interface HouseOrderRow {
 /**
  * Cards sold from the Bault store, still in the store's box.
  *
- * They are already on the record — the sale minted each one a serial and a
- * barcode and gave it to its buyer — so there is nothing to type here. The work
+ * They are already on the record (the sale minted each one a serial and a
+ * barcode and gave it to its buyer), so there is nothing to type here. The work
  * is physical: take a copy of the product out of stock, print its label, stick it
  * on, photograph that copy if there is time, and put it on a shelf. Printing all
- * the waiting labels is one job, for the same reason it is on the intake bench.
+ * the waiting labels is one job, as on the intake bench.
  */
 export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t, locale } = useI18n();

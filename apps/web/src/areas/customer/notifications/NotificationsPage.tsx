@@ -41,22 +41,16 @@ interface PreferenceMatrix {
   events: PreferenceRow[];
 }
 
-/**
- * Preferences are written with PUT, which the shared client now supports.
- *
- * This was a hand-rolled `fetch` because `api` had no `put`, and the copy threw
- * a plain `Error` — so these two calls, alone in the app, could not be told
- * apart from a network failure by anything that branches on `ApiError.kind`.
- */
+/** Preferences are written with PUT through the shared client, so failures are `ApiError`s. */
 const putJson = (path: string, body: unknown) => api.put(`/notifications/${path}`, body);
 
 const TABS = ['feed', 'preferences'] as const;
 type NotificationsTab = (typeof TABS)[number];
 
 /**
- * Customer notification feed (NOT). Newest-first list plus per-event-type
- * opt-in/out toggles. Every event type defaults to enabled unless the server
- * returned an explicit `enabled: false` preference.
+ * Customer notification feed. Newest-first list plus per-event-type,
+ * per-channel switches; the preference matrix comes from the server with its
+ * defaults already resolved.
  *
  * The feed itself is owned by the shell (so the header bell and this page never
  * disagree); opening the page marks everything as seen.
@@ -110,7 +104,7 @@ export function NotificationsPage({
     }
   }
 
-  /** "Stop emailing me", in one action rather than twenty-eight. */
+  /** "Stop emailing me", in one action instead of one per event type. */
   async function toggleChannel(channel: string, enabled: boolean) {
     setSaving(true);
     try {
@@ -179,9 +173,8 @@ export function NotificationsPage({
               <SkeletonTable rows={6} columns={3} />
             ) : (
               <>
-                {/* The one thing somebody arriving here in irritation actually
-                    wants to say. Making them tick twenty-eight boxes to say it
-                    would be a dark pattern. */}
+                {/* The one thing somebody arriving here in irritation wants to
+                    say, without ticking a box per event type. */}
                 <div className="row" style={{ gap: 'var(--sp-2)', marginBlockEnd: 'var(--sp-4)', flexWrap: 'wrap' }}>
                   {prefs.channels.map((channel) => (
                     <span key={channel} className="row" style={{ gap: 'var(--sp-2)' }}>

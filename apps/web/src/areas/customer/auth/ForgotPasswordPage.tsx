@@ -7,14 +7,13 @@ import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
  * Step one of password recovery: ask for the reset link.
  *
  * The API answers identically whether or not the address belongs to an account
- * — `VerificationService.issuePasswordReset` returns silently for an unknown
- * email — so this page must do the same. It shows one confirmation for every
- * submission and never says "no such account", because a form that distinguishes
- * the two is an account-enumeration oracle: anyone could test an address list
- * against it.
+ * (`PasswordService.requestReset` only records the request; the worker drops an
+ * unknown address), so this page does the same. It shows one confirmation for
+ * every submission and never says "no such account", because a form that
+ * distinguishes the two is an account-enumeration oracle.
  *
- * That is also why the confirmation is worded as what WILL happen if the
- * address is registered, rather than asserting that a mail was sent.
+ * That is also why the confirmation is worded as what will happen if the
+ * address is registered, instead of asserting that a mail was sent.
  */
 export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const t = useT();

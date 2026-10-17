@@ -1,27 +1,21 @@
 /**
  * Legal documents shown in FAQ & Legal > Legal Terms, and at sign-up.
  *
- * Until 2026-10 this module deliberately carried NO Terms of Service, Privacy
- * Policy or Cookie notice: writing a plausible-sounding agreement nobody had
- * reviewed seemed worse than an honest gap. The gap had a cost the choice did
- * not weigh — Bault charges fees, accrues interest on a negative balance and
- * suspends accounts, and nobody was ever asked to agree to any of it (E21 /
- * F059). So the three documents now exist, as DRAFTS, and say so:
+ * The Terms of Service, Privacy Policy and Cookie notice are drafts, and say so:
  *
  *   - Every draft carries `draft: true`, the banner in `DRAFT_NOTICE`, and the
  *     version in `TERMS_VERSION`. The banner is rendered above the text wherever
- *     a draft is shown — here and on the sign-up form.
+ *     a draft is shown: here and on the sign-up form.
  *   - Every statement in them describes something the code does, and names
  *     where; the commit that added them lists what each clause rests on. What
- *     the code cannot decide — the legal entity, the governing law, liability,
- *     lawful bases, retention periods — is left as a bracketed instruction to
- *     counsel rather than invented. They are not ready to publish until a lawyer
- *     has replaced every bracket and removed the banner.
+ *     the code cannot decide (the legal entity, the governing law, liability,
+ *     lawful bases, retention periods) is left as a bracketed instruction to
+ *     counsel. They are not ready to publish until a lawyer has replaced every
+ *     bracket and removed the banner.
  *   - Figures that are configuration (the debt policy, the prices) are not
- *     printed; the documents point to where the app shows the current value —
+ *     printed; the documents point to where the app shows the current value:
  *     the "Current figures" panel above them, fed by `GET /content/account-terms`,
- *     and the price list. Prose copies of configuration went stale in the
- *     policy below the first time anybody looked.
+ *     and the price list.
  *
  * `TERMS_VERSION` is what sign-up sends and what the API records against the
  * account. It must equal `CURRENT_TERMS_VERSION` in
@@ -29,11 +23,10 @@
  * `tests/web/faq-legal.test.ts` fails if the two disagree. Changing a single
  * word of a draft means a new version in both places.
  *
- * The ACCOUNT USE & BALANCE POLICY is Bault's own and predates the drafts;
- * every clause in it states a rule the code enforces. The SIL OPEN FONT
- * LICENSE is reproduced because shipping the fonts requires it — it names the
- * fonts actually bundled in `assets/fonts`, whose licence file is served at
- * /fonts/OFL.txt.
+ * The Account Use & Balance Policy is Bault's own; every clause in it states a
+ * rule the code enforces. The SIL Open Font License is reproduced because
+ * shipping the fonts requires it. It names the fonts bundled in `assets/fonts`,
+ * whose licence file is served at /fonts/OFL.txt.
  *
  * Body text is English and is not translated. Rendering a legal text in a
  * language its author did not write it in creates a second version that can
@@ -45,7 +38,7 @@ export interface LegalSection {
   /** Stable anchor id, used by the table of contents and deep links. */
   id: string;
   heading: string;
-  /** Verbatim body text. Rendered pre-wrapped — line breaks are meaningful. */
+  /** Verbatim body text. Rendered pre-wrapped: line breaks are meaningful. */
   body: string;
 }
 
@@ -63,7 +56,7 @@ export interface LegalDocument {
    * shown with `DRAFT_NOTICE` above it, and carries `version`.
    */
   draft?: boolean;
-  /** The terms version this text belongs to — what sign-up records. */
+  /** The terms version this text belongs to, which sign-up records. */
   version?: string;
   sections: LegalSection[];
 }

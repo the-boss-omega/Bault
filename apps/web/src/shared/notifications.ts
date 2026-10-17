@@ -1,6 +1,9 @@
 import type { MessageKey, TranslateFn } from './i18n';
 
-/** Message key per known notification event type. */
+/**
+ * Message key per notification event type. Every type the server emits needs
+ * one here, because `eventLabel` falls back to the raw enum value.
+ */
 export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   item_received: 'notifications.event.item_received',
   item_sold: 'notifications.event.item_sold',
@@ -17,15 +20,6 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   support_ticket_resolved: 'notifications.event.support_ticket_resolved',
   buyout_quoted: 'notifications.event.buyout_quoted',
 
-  /**
-   * The twenty-four that were missing.
-   *
-   * `eventLabel` falls back to the raw event type, so the feed badged these as
-   * `wallet_request_completed` and `escrow_funded` — the database enum, in both
-   * languages — and the preferences matrix fell through to the server's English
-   * `label`, leaving a Hebrew reader with two-thirds of their notification
-   * settings in English. The server emits all thirty-six; the client knew twelve.
-   */
   item_donated: 'notifications.event.item_donated',
   commons_removed: 'notifications.event.commons_removed',
   grading_shipped: 'notifications.event.grading_shipped',
@@ -60,11 +54,8 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
 export const EVENT_TYPES = Object.keys(EVENT_LABEL_KEY);
 
 /**
- * Delivery channels.
- *
- * The list itself comes from the server with the preference matrix — this is
- * only the translation, and it falls back to the raw value so a channel added
- * on the server renders as something rather than as nothing.
+ * Delivery channel labels. The list itself comes from the server with the
+ * preference matrix; an unknown channel falls back to its raw value.
  */
 const CHANNEL_LABEL_KEY: Record<string, MessageKey> = {
   in_app: 'notifications.channel.in_app',
@@ -86,8 +77,8 @@ export function eventLabel(t: TranslateFn, eventType: string): string {
  * Render a notification as a proper sentence (Requirement 6.1).
  *
  * The dispatcher writes a rendered `message` into every notification's content, so
- * that is what is displayed. Older rows (or an unexpected shape) fall back to a
- * readable "Key: value" summary of the payload — never a raw JSON dump.
+ * that is what is displayed. Older rows, or an unexpected shape, fall back to a
+ * readable "Key: value" summary of the payload instead of raw JSON.
  */
 export function renderContent(content: unknown, label: string): string {
   if (content == null) return label;

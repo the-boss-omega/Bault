@@ -1,20 +1,16 @@
 # =============================================================================
-# Bault SPA — production image
-#
-# `vite build` produced static assets and nothing served them. This is the
-# missing half, and it is also where the Content-Security-Policy lives: the API
-# turns CSP off deliberately (`main.ts`) on the grounds that "the CSP that
-# matters belongs on whatever serves the front end". This is that thing.
+# Bault SPA: production image. nginx serves the built assets and sends the
+# Content-Security-Policy; the API turns CSP off (`main.ts`) because the policy
+# that matters belongs on whatever serves the front end.
 #
 # Built from the REPO ROOT:
 #   docker build -f apps/web/Dockerfile -t bault-web .
 #
-# Node 22, matching `engines` in the root package.json (the images were on 20,
-# which the engines field excludes). Pinned by digest, not just by tag: a tag
-# is moved by whoever publishes it, so the same Dockerfile built twice could
-# ship two different runtimes. To upgrade, `docker pull node:22-slim`, take the
-# digest from `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim`
-# and change the build FROM line in each of the three Dockerfiles together. nginx
+# Node 22, matching `engines` in the root package.json. Pinned by digest,
+# because a tag can be moved by whoever publishes it. To upgrade,
+# `docker pull node:22-slim`, take the digest from
+# `docker inspect --format '{{index .RepoDigests 0}}' node:22-slim` and change
+# the node FROM lines in the api, worker and web Dockerfiles together. nginx
 # below is pinned the same way.
 # =============================================================================
 FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build

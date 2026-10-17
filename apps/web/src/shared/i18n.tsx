@@ -3,11 +3,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 /**
  * Hebrew/English i18n for the SPA.
  *
- * Hebrew remains the default locale. The Hebrew catalogue is the source of truth:
+ * Hebrew is the default locale. The Hebrew catalogue is the source of truth:
  * `MessageKey` is derived from it, so the English catalogue is a total map over the
  * same keys and TypeScript fails the build if a translation is missing.
  *
- * Switching locale also flips the document direction — the stylesheet uses CSS
+ * Switching locale also flips the document direction. The stylesheet uses CSS
  * logical properties throughout, so LTR falls out of the `dir` attribute with no
  * per-rule overrides.
  */
@@ -1254,8 +1254,6 @@ const he = {
   'nav.workspace': 'סביבת עבודה',
   'nav.warehouse': 'מחסן',
   'nav.management': 'ניהול',
-  // No 'nav.pin' / 'nav.unpin': the rail is no longer pinnable and nothing
-  // replaced the control, so the strings that named it are gone too.
   'nav.skipToContent': 'דלג לתוכן',
   'nav.openMenu': 'פתח תפריט ניווט',
 
@@ -4976,9 +4974,9 @@ const en: Record<MessageKey, string> = {
 const messages: Record<Locale, Record<MessageKey, string>> = { he, en };
 
 /**
- * The catalogues themselves, for tests that assert about the WORDS rather than
- * about a rendered screen — that the product does not call twelve kinds of
- * collectible "a card", or use three names for putting money in.
+ * The catalogues themselves, for tests that assert about the words instead of a
+ * rendered screen: that the product does not call twelve kinds of collectible
+ * "a card", or use three names for putting money in.
  */
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = messages;
 
@@ -4993,23 +4991,19 @@ function format(template: string, vars?: MessageVars): string {
 /**
  * Whether a key exists in the catalogue.
  *
- * `t` falls back to echoing the key, which is a useful last resort but would put
- * a raw string like `ss.tab.overview` in front of a user. Callers that build a
- * key from runtime parts (the breadcrumb composes `<section>.<tab>`) check here
- * first and omit the element rather than render the key.
+ * `t` falls back to echoing the key, which would put a raw string like
+ * `ss.tab.overview` in front of a user. Callers that build a key from runtime
+ * parts (the breadcrumb composes `<section>.<tab>`) check here first and omit
+ * the element instead of rendering the key.
  */
 export function hasMessage(key: string): key is MessageKey {
   return Object.prototype.hasOwnProperty.call(he, key);
 }
 
 /**
- * Every message key in the catalogue.
- *
- * The catalogues themselves stay module-private — nothing outside should index
- * them directly — but the key SET is worth exposing: it is what lets a test walk
- * every user-facing string in both locales at once, which is how the brand and
- * placeholder checks in `tests/web/i18n-catalogue.test.ts` are able to be
- * exhaustive rather than a spot check.
+ * Every message key in the catalogue. It lets a test walk every user-facing
+ * string in both locales, which keeps the brand and placeholder checks in
+ * `tests/web/i18n-catalogue.test.ts` exhaustive.
  */
 export const MESSAGE_KEYS: readonly MessageKey[] = Object.keys(he) as MessageKey[];
 

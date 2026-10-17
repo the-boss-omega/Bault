@@ -22,17 +22,13 @@ export interface StowSuggestion {
 /**
  * One unit coming out of the box.
  *
- * This replaced a single description plus a QUANTITY stepper, and the reason is
- * what a box actually contains. Quantity books N copies of ONE description — the
- * right instrument for a run of identical commons and the wrong one for the
- * ordinary case, which is a Rayquaza ex, a sealed pack and a graded Gold Star in
- * the same carton. Each needs its own class, its own condition, its own serial
- * and its own photographs, and typing them through a form that cleared itself
- * between each meant re-entering the owner and the parcel every time and never
- * seeing the box's contents as a list before committing any of it.
+ * A box usually holds different things (a Rayquaza ex, a sealed pack and a
+ * graded Gold Star in the same carton), and each needs its own class,
+ * condition, serial and photographs. So the bench is a list of units under one
+ * owner and parcel, seen whole before any of it is committed.
  */
 interface UnitDraft {
-  /** Local only — a React key must not be the array index on a list with removals. */
+  /** Local only: a React key must not be the array index on a list with removals. */
   key: string;
   typeClass: string;
   description: string;
@@ -40,8 +36,8 @@ interface UnitDraft {
   /**
    * Optional pre-assigned serial. Left blank the API mints one, which is the
    * norm. It matters for a card that already has a catalogue photograph on
-   * file: photos are stored as /images/<SERIAL>, so booking it in under that
-   * same serial is what makes its picture appear.
+   * file: photos are served as /images/<SERIAL>.<ext>, so booking it in under
+   * that same serial is what makes its picture appear.
    */
   serialNumber: string;
   photos: PhotoRef[];
@@ -58,21 +54,20 @@ const blankUnit = (): UnitDraft => ({
 });
 
 /**
- * The receive bench — emptying a box onto the shelves.
+ * The receive bench: emptying a box onto the shelves.
  *
- * THE BOX LEADS. Choosing a parcel fills in the owner and locks it, because the
- * API refuses items booked into a parcel belonging to somebody else — better to
- * make that impossible to express than to explain it in an error. The running
+ * The box leads. Choosing a parcel fills in the owner and locks it, because the
+ * API refuses items booked into a parcel belonging to somebody else. The running
  * count of what has come out of the box is here, and so is the button that
- * closes it out, at the end of the work rather than on another screen.
+ * closes it out, at the end of the work.
  *
- * THE SYSTEM PICKS THE SHELF. The default is `autoStow`: the API answers with
+ * The system picks the shelf. The default is `autoStow`: the API answers with
  * the emptiest suitable shelf in the building the parcel is actually in, and the
  * panel shows which one so the operator knows where to walk. An operator already
- * standing somewhere else switches to Scan and scans that shelf instead — their
- * claim is better than the system's, because they can see the shelf.
+ * standing somewhere else switches to Scan and scans that shelf instead, because
+ * they can see the shelf.
  *
- * NOTHING IS TYPED THAT CAN BE SCANNED. The shelf field takes the Code 128
+ * Nothing is typed that can be scanned. The shelf field takes the Code 128
  * barcode printed on the shelf label, which is what a scanner emits.
  */
 export function IntakeBench({
@@ -124,16 +119,9 @@ export function IntakeBench({
   }, [loadParcels]);
 
   /*
-   * Arriving from "Book contents": the box that was pressed is the box this is
-   * about — and the bench has to go and FETCH it.
-   *
-   * The list of open parcels was loaded once, on mount. A box only becomes open
-   * when an operator presses "Open and check" on the bench above, which happens
-   * after that mount — so pressing "Book contents" on the box they had just
-   * opened set an id that was not in the list, `parcel` resolved to null, the
-   * owner did not lock, and the dropdown showed nothing selected. The flow
-   * worked only if you reloaded the page between opening the box and emptying
-   * it, which is not a step anybody would think to take.
+   * Arriving from "Book contents": select that box and reload the open parcels.
+   * The box may have been opened after this bench loaded its list, and without
+   * the reload `parcel` would resolve to null and the owner would not lock.
    */
   useEffect(() => {
     if (!initialParcelId) return;
@@ -148,7 +136,7 @@ export function IntakeBench({
   }, [parcel?.ownerUsername]);
 
   const facilityCode = parcel?.facilityCode ?? '';
-  // A lot is one record for many things, so it is a property of the WHOLE
+  // A lot is one record for many things, so it is a property of the whole
   // submission and only ever meaningful for a single unit.
   const single = units.length === 1;
   const firstClass = itemClassOption(units[0]?.typeClass ?? '');
@@ -156,14 +144,14 @@ export function IntakeBench({
   const lotMin = firstClass?.lotMinSize;
   const lotWillSplit = isLot && lotAllowed && lotMin !== undefined && lotSize < lotMin;
 
-  // Oversized shelving is asked for when ANY unit in the run needs it — one
+  // Oversized shelving is asked for when any unit in the run needs it: one
   // suggestion serves the submission, and the wrong kind of shelf for one unit
   // is worse than a larger shelf for the rest.
   const oversized = units.some((u) => itemClassOption(u.typeClass)?.oversized ?? false);
 
   /**
-   * Ask where this goes. Re-asked whenever the answer could change — the classes
-   * decide the kind of shelving, the parcel decides the building — and after
+   * Ask where this goes. Re-asked whenever the answer could change (the classes
+   * decide the kind of shelving, the parcel decides the building) and after
    * every submission, because the shelf just handed out is now fuller.
    */
   const askForBin = useCallback(async () => {
@@ -188,17 +176,13 @@ export function IntakeBench({
    * Put up a shelf from the bench, when the directed stow has nowhere to send
    * this.
    *
-   * `suggest` fails for exactly two reasons — no shelving of the right kind in
-   * this building, or none at all — and both of them used to end the run. The
-   * operator was standing at an open box holding a sealed case, reading "create
-   * an oversized bin before stowing this", with the form to do it on another
-   * tab: leave the bench, lose the units already typed into it, create the
-   * shelf, come back and start the box again.
+   * `suggest` fails for exactly two reasons: no shelving of the right kind in
+   * this building, or none at all. The offer to create one is made here, so the
+   * operator does not leave the bench and lose the units already typed.
    *
-   * So the offer is made where the refusal is. The kind and the building are
-   * NOT asked for — they are the two facts that just failed to match, so they
-   * are taken from the run itself rather than left to be re-chosen wrongly. The
-   * zone is the one thing only the person in the aisle knows.
+   * The kind and the building are not asked for: they are the two facts that
+   * just failed to match, so they are taken from the run itself. The zone is
+   * the one thing only the person in the aisle knows.
    */
   async function createBinHere() {
     setRescuing(true);
@@ -210,9 +194,8 @@ export function IntakeBench({
       });
       onLog(t('warehouse.log.binCreated', { serial: created.serialNumber, zone: created.zone }));
       setRescueZone('');
-      // Ask again rather than assume: the new shelf is empty, so it is the one
-      // that comes back, but the answer still comes from the same place it
-      // always does.
+      // Ask again instead of assuming: the new shelf is empty, so it should be
+      // the one that comes back, but the answer still comes from the API.
       await askForBin();
     } catch (e) {
       setStowError((e as Error).message);
@@ -225,7 +208,7 @@ export function IntakeBench({
   const ownerOk = isValidUsername(normalizedOwner);
   const stowReady = stowMode === 'scan' ? scanBin.trim() !== '' : suggestion !== null;
   // A unit counts once it says what it is. An entirely blank trailing row is
-  // ignored rather than refused — it is the one nobody has reached yet.
+  // ignored instead of refused: it is the one nobody has reached yet.
   const filled = units.filter((u) => u.description.trim() || u.serialNumber.trim() || u.photos.length > 0);
   const ready = ownerOk && stowReady && filled.length > 0 && !busy;
 
@@ -248,7 +231,7 @@ export function IntakeBench({
         conditionGrade: u.conditionGrade.trim() || undefined,
         serialNumber: u.serialNumber.trim() || undefined,
         photoKeys: photoKeys(u.photos),
-        // Only ever on a single-unit submission — see `lotAllowed`.
+        // Only ever on a single-unit submission; see `lotAllowed`.
         isLot: single && isLot && lotAllowed,
         lotSize: single && isLot && lotAllowed ? lotSize : undefined,
       }));
@@ -299,7 +282,7 @@ export function IntakeBench({
 
   return (
     <div className="stack stack--tight">
-      {/* Shared by every unit in the box — asked once. */}
+      {/* Shared by every unit in the box, asked once. */}
       <div className="form-grid">
         <Field label={t('warehouse.intake.parcel')} hint={t('warehouse.intake.parcelHint')}>
           <select value={parcelId} onChange={(e) => setParcelId(e.target.value)}>
@@ -353,8 +336,8 @@ export function IntakeBench({
             ) : (
               <>
                 <span className="field-error">{stowError ?? t('warehouse.intake.stowSearching')}</span>
-                {/* Only once the ask has actually come back empty — while it is
-                    still in flight there is nothing to rescue. */}
+                {/* Only once the ask has come back empty; while it is still in
+                    flight there is nothing to rescue. */}
                 {stowError && (
                   <div className="stow-rescue">
                     <label className="field">
@@ -463,10 +446,9 @@ export function IntakeBench({
               </Field>
             </div>
 
-            {/* A lot is ONE record standing for many things, so it can only describe
+            {/* A lot is one record standing for many things, so it can only describe
                 a submission of one. It sits inside that one unit's window, and is
-                hidden entirely once there is a second row, rather than being
-                offered and then ignored. */}
+                hidden entirely once there is a second row. */}
             {lotAllowed && (
               <div className="row">
                 <label className="check">
@@ -521,8 +503,8 @@ export function IntakeBench({
       </div>
 
       {/* The box being worked through, and the end of the work. The count is the
-          reconciliation the workflow never had: an operator can see that nothing
-          has come out of this parcel before they close it. */}
+          reconciliation: an operator can see that nothing has come out of this
+          parcel before they close it. */}
       {parcel && (
         <div className="stack stack--tight">
           <p className="hint">
@@ -548,15 +530,13 @@ export function IntakeBench({
       )}
 
       {/*
-        THE END OF THE RUN: the labels for what was just booked in.
-        Every item needs one stuck on it before it goes to its shelf, and the
-        barcode is what every later scan reads — so the print control is the last
-        thing on the bench rather than something to go and find.
+        The end of the run: the labels for what was just booked in. Every item
+        needs one stuck on it before it goes to its shelf, and the barcode is
+        what every later scan reads, so the print control is the last thing on
+        the bench.
 
-        Print all is a SINGLE dialog for the whole run. Booking in a box of twelve
-        used to mean twelve trips to the print dialog, twelve confirmations, and
-        no way for an operator who missed one to tell which. The per-label button
-        stays for the reprint of one that jammed.
+        Print all is a single dialog for the whole run. The per-label button is
+        for reprinting one that jammed.
       */}
       {labels.length > 0 && (
         <div className="stack stack--tight intake-labels">

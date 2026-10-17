@@ -30,11 +30,11 @@ interface HousePurchase {
 /**
  * The Bault store: cards the business sells itself.
  *
- * It is a tab of its own rather than rows mixed into Browse, because what is
+ * It is a tab of its own instead of rows mixed into Browse, because what is
  * being bought is different in a way the buyer should know before paying. A
  * Browse listing is one particular card already on a shelf; a store product is
  * a print with copies, and the copy a buyer gets is labelled and shelved after
- * they pay for it — so the confirmation says so, and the receipt names the serial
+ * they pay for it. The confirmation says so, and the receipt names the serial
  * the new card was given.
  */
 export function HouseStorePanel({

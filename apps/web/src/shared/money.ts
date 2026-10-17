@@ -1,10 +1,7 @@
 /**
- * Single money formatter for the whole web app. Every monetary value on the
- * platform is USD ($); amounts travel over the wire as integer minor units
- * (cents), so we divide by 100 and render with the `$` symbol via Intl.
- *
- * There are no shekels/agorot anywhere — the currency string returned by the API
- * is deliberately ignored here so the UI can never display a stale/foreign symbol.
+ * Money and date formatting for the whole web app. Every monetary value is USD
+ * and travels over the wire as integer cents. Any currency string from the API
+ * is ignored, so the UI never shows another symbol.
  *
  * The UI never asks a person to think in cents: `dollarsToCents` converts what
  * the user typed ("250" or "250.50") into the minor units the API expects.
@@ -33,9 +30,9 @@ export function formatLedgerAmount(amount: number, direction: string): string {
 }
 
 /**
- * Parse a dollar amount typed by a human into integer cents.
- * Returns null when the input is blank, malformed, or not a positive amount —
- * callers surface a field-level message rather than sending a bad request.
+ * Parse a dollar amount typed by a human into integer cents. Returns null when
+ * the input is blank, malformed, or not positive, so callers can show a field
+ * message instead of sending a bad request.
  */
 export function dollarsToCents(input: string): number | null {
   const cleaned = input.trim().replace(/[,\s$]/g, '');
@@ -50,7 +47,7 @@ export function centsToDollars(minorUnits: number): string {
   return ((minorUnits ?? 0) / 100).toFixed(2);
 }
 
-/** Full date + time for a detail view, e.g. `July 28, 2026 14:31`. */
+/** Full date and time for a detail view, e.g. `July 28, 2026 at 2:31 PM`. */
 export function formatDateTime(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
   const date = new Date(iso);
@@ -61,7 +58,7 @@ export function formatDateTime(iso: string | null | undefined, locale: string): 
   }).format(date);
 }
 
-/** Compact date for a table cell, e.g. `28 Jul 2026`. */
+/** Compact date for a table cell, e.g. `Jul 28, 2026`. */
 export function formatDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
   const date = new Date(iso);

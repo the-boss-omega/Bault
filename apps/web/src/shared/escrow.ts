@@ -7,8 +7,8 @@ import type { StatusTone } from './ui/primitives';
  * Shapes mirrored by value from `apps/api/src/modules/esc/` and
  * `apps/api/src/modules/shp/fulfilment.ts`, because the SPA cannot import from
  * the API tree. The figures are fetched (`GET /escrow/terms`,
- * `GET /shipping/white-glove/terms`) rather than duplicated — only the labels
- * live here, because a label has to be translatable and a server string is not.
+ * `GET /shipping/white-glove/terms`); only the labels live here, because a
+ * label has to be translatable and a server string is not.
  */
 
 export interface EscrowDeal {
@@ -30,7 +30,7 @@ export interface EscrowDeal {
   fundingReference: string | null;
   itemId: string | null;
   inspectedAt: string | null;
-  /** `'yes'` or `'no'` — the question both parties are paying to have answered. */
+  /** `'yes'` or `'no'`: the question both parties are paying to have answered. */
   inspectionMatches: string | null;
   inspectionNotes: string | null;
   buyerReleasedAt: string | null;

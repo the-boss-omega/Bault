@@ -3,17 +3,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 /**
  * Light, dark, or whatever the machine says.
  *
- * Three states rather than two, and the third is the default — which is the
- * part products usually get wrong. "System" is not a fallback for having no
- * preference; it is a real preference, and it has to keep tracking the OS after
- * the page has loaded. Somebody whose laptop switches at sunset should watch
- * this switch with it, without touching anything.
+ * "System" is the default and a real preference: it keeps tracking the OS after
+ * the page has loaded, so a laptop that switches at sunset switches the app too.
  *
- * The choice stamps `data-theme` on the root element, which is what the two
- * palette blocks in `index.css` key off. `system` stamps NOTHING, so the
- * `prefers-color-scheme` media query is left to decide — that is why the dark
- * block there is guarded as `:root:not([data-theme='light'])` rather than
- * written as a plain media query.
+ * The choice stamps `data-theme` on the root element, which the two palette
+ * blocks in `index.css` key off. `system` stamps nothing and leaves it to the
+ * `prefers-color-scheme` media query, which is why the dark block there is
+ * guarded as `:root:not([data-theme='light'])`.
  */
 
 export type ThemeChoice = 'light' | 'dark' | 'system';
@@ -37,8 +33,7 @@ function storedChoice(): ThemeChoice {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
   } catch {
-    // A private window with storage blocked is not an error state; it is
-    // somebody with no saved preference, which is exactly `system`.
+    // Storage blocked (a private window) means no saved preference: `system`.
     return 'system';
   }
 }
