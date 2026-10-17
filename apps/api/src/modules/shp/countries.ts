@@ -3,32 +3,19 @@ import { CARRIER_SERVICES, DOMESTIC_COUNTRY } from './carriers';
 /**
  * Where a parcel can be addressed, as a code and a name.
  *
- * THE ADDRESS FORM ASKED FOR A COUNTRY AS FREE TEXT, AND OFFERED THE WRONG
- * DEFAULT. `country` was `@IsString()` and nothing more, and the form pre-filled
- * it with the literal word "Israel" — a display name, in a field every carrier
- * rule reads as an ISO 3166-1 alpha-2 code.
- *
- * The consequence was not a cosmetic one. `carriers.ts` decides domestic vs
- * international with `destination.country !== 'US'` and gates each service on
- * `service.countries.includes(destination.country)`, so an address saved with
- * the default landed on the international path and then failed the ePacket
- * contract check — Israel is `IL`, and `IL` is on ePacket's list, but "Israel"
- * is not. The collector lost the cheapest international service they were
- * entitled to and was told "ePacket International is not contracted to ISRAEL",
- * which reads as a carrier limitation and was a text field.
- *
- * A code the user cannot mistype is the fix, so this list is served to the form
- * and the form is a select. It is derived from the carrier table rather than
- * written out again beside it, because a list of destinations maintained
- * separately from the services that reach them drifts the first time a contract
- * changes — and drifting silently is how this bug worked.
+ * Every carrier rule reads `country` as an ISO 3166-1 alpha-2 code: `carriers.ts`
+ * compares it with `DOMESTIC_COUNTRY` and with each service's `countries` list,
+ * so a display name such as "Israel" would be routed as international and then
+ * refused by a service that does reach `IL`. This list is served to the address
+ * form, which is a select. It is derived from the carrier table so it cannot
+ * drift from the services that actually reach each destination.
  */
 
 export interface ShippingCountry {
   /** ISO 3166-1 alpha-2, upper case. */
   code: string;
   name: string;
-  /** True for the country the facilities are in — its rates are the cheap ones. */
+  /** True for the country the facilities are in; its rates are the cheap ones. */
   domestic: boolean;
 }
 
@@ -109,10 +96,9 @@ export function isShippableCountry(value: string): boolean {
 /**
  * Normalise what a caller sent into a code, or return null.
  *
- * Accepts the code in any casing, and accepts a full country NAME — because
- * addresses saved before this validation existed hold names, and a person who
- * types "United States" into a field that wants "US" has said something
- * unambiguous rather than something wrong.
+ * Accepts the code in any casing, and accepts a full country NAME, because a
+ * caller who sends "United States" for a field that wants "US" has said
+ * something unambiguous rather than something wrong.
  */
 export function toCountryCode(value: string): string | null {
   const raw = value.trim();

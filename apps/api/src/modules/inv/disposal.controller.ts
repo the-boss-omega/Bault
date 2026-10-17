@@ -18,11 +18,10 @@ class RecordDisposalDto {
 /**
  * Arrival disposals, and the vocabulary behind them.
  *
- * Roles are set PER METHOD rather than on the class, which is deliberate: the
- * write and the warehouse-wide list are staff work, but a collector must be able
- * to read their own disposals — that is the entire point of recording them. A
- * class-level `@Roles('warehouse_operator', 'admin')`, as `InvController` has,
- * would lock the owner out of the record of their own property.
+ * Roles are set PER METHOD rather than on the class: the write and the
+ * warehouse-wide list are staff work, but a collector must be able to read
+ * their own disposals. A class-level `@Roles('warehouse_operator', 'admin')`,
+ * as `InvController` has, would lock the owner out of that record.
  */
 @ApiTags('INV')
 @Controller()

@@ -21,12 +21,11 @@ export class VltController {
   ) {}
 
   /**
-   * Break-Even Watch — what each card has cost you, against what one like it
+   * Break-Even Watch: what each card has cost you, against what one like it
    * actually sold for here.
    *
-   * A custodian telling a collector to stop paying it. Honest about its own
-   * limits: where Bault has no way to price a card, the row says so and reports
-   * the cost alone rather than inventing a comparison to justify advice.
+   * Where Bault has no way to price a card, the row says so and reports the cost
+   * alone rather than inventing a comparison to justify advice.
    */
   @Get('break-even')
   breakEvenWatch(@CurrentUser() user: AuthUser) {
@@ -65,8 +64,7 @@ export class VltController {
    * What storage has cost this item, and when the next charge falls.
    *
    * Separate from the item record because it is derived from the charge history
-   * rather than stored on the item, and because the vault grid does not need it —
-   * only the drawer, when somebody asks.
+   * rather than stored on the item, and only the drawer needs it, not the grid.
    */
   @Get('items/:itemId/storage')
   storage(@CurrentUser() user: AuthUser, @Param('itemId') itemId: string) {

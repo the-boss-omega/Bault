@@ -1,27 +1,20 @@
 /**
  * How a shipment actually ends.
  *
- * Every route out of a Bault vault was a parcel. A shipment had to resolve to a
- * carrier rate, dispatch bought a label and stamped a tracking number, and there
- * was no fulfilment method that was not a carrier — so two of the reference
- * service's outbound routes, both of which are a human being rather than a
- * package, had nowhere to exist.
+ * The three methods differ in what they SKIP, and each skip is the whole reason
+ * the method exists:
  *
- * This is that dimension. The three methods differ in what they SKIP, and each
- * skip is the whole reason the method exists:
- *
- *   `carrier`       Unchanged. Rate selection, a label, a tracking number.
+ *   `carrier`       Rate selection, a label, a tracking number.
  *   `hand_delivery` No carrier at all. A person collects the card and hands it
  *                   over. There is no rate to select because there is no rate
- *                   card — the price is travel plus a base, quoted per journey.
+ *                   card: the price is travel plus a base, quoted per journey.
  *   `show_pickup`   No delivery at all. The cards travel to a show Bault is
  *                   already attending, and the collector walks up and takes them.
  *                   Priced per show, capped per show, and gated on that show's
  *                   deadline.
  *
- * The last one is worth stating plainly because it is easy to miss: show pickup
- * costs a fraction of postage precisely because Bault's van was going to that
- * show anyway. It is not a discount, it is the absence of a journey.
+ * Show pickup costs a fraction of postage because Bault's van is going to that
+ * show anyway: there is no journey to pay for.
  */
 
 export const FULFILMENT_METHODS = ['carrier', 'hand_delivery', 'show_pickup'] as const;
@@ -44,7 +37,7 @@ export function usesCarrier(method: string): boolean {
  * The base price of putting a person on the road, before travel.
  *
  * Mirrors the reference service's published figures. Travel is quoted on top,
- * per journey, by whoever works out the logistics — which is why this cannot be
+ * per journey, by whoever works out the logistics, which is why this cannot be
  * a rate table: the cost of driving a card from New Jersey to a hotel in Boston
  * on a Tuesday is not something a lookup knows.
  */
@@ -69,7 +62,7 @@ export interface HandDeliveryProblem {
  *
  * The windows are the part that gets people. A pickup window that has already
  * closed, or a delivery window that ends before the pickup window opens, is not
- * a journey anybody can make — and finding that out from an operator two days
+ * a journey anybody can make, and finding that out from an operator two days
  * later wastes both sides' time.
  */
 export function checkHandDelivery(input: {
@@ -127,5 +120,5 @@ export function checkHandDelivery(input: {
  */
 export const PICKUP_USES_SHOW_DEADLINE = true;
 
-/** The pricing-rule action carrying a show's pickup fee, when it has no own. */
+/** The pricing-rule action carrying the pickup fee for a show that sets none of its own. */
 export const PICKUP_FEE_ACTION = 'show_pickup';

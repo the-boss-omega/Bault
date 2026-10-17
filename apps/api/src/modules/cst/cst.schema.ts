@@ -15,7 +15,7 @@ import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
  *
  * Item is NEVER deleted and always has exactly one owner (Principle I). Every
  * change to owner / bin / lifecycle_state writes a CustodyEvent in the SAME
- * transaction (Principle III). CustodyEvent is APPEND-ONLY (Principle II) —
+ * transaction (Principle III). CustodyEvent is APPEND-ONLY (Principle II),
  * enforced at the DB level in 0001_append_only.sql.
  */
 
@@ -31,15 +31,14 @@ export const itemLifecycle = pgEnum('item_lifecycle', [
   /**
    * Physically away at a third-party grader, and coming back.
    *
-   * The one non-terminal state that means "not on our shelf". Without it a card
-   * sent for grading stayed `stored`, so it could be listed, sold, swapped or
-   * shipped while it was in somebody else's building — every one of those
-   * guards asks for `stored`, and every one of them was satisfied by a card that
-   * was hundreds of miles away.
+   * The one non-terminal state that means "not on our shelf". Its only exits
+   * are back to `stored` or to `discarded`, and the ownership guards ask for
+   * `stored`, so a card at the grader cannot be listed, sold, swapped or shipped.
    */
   'at_grader',
   /**
-   * Destroyed at the owner's request — the bulk cull of low-value cards.
+   * Destroyed at the owner's request (the bulk cull of low-value cards), or
+   * reported lost or destroyed by a grader.
    *
    * Terminal, and distinct from `donated`: a donated card still exists and has a
    * new owner, whereas this one is gone. Both leave the record standing forever,
@@ -51,12 +50,10 @@ export const itemLifecycle = pgEnum('item_lifecycle', [
 /**
  * A shelf location. A bin holds whatever physically goes into it.
  *
- * There is deliberately no capacity here. A bin used to declare how many items
- * it held, nothing enforced it, and the number was wrong the moment two
- * different kinds of thing were stowed in the same shelf — four sealed cases
- * fill a bin that four hundred sleeved cards would not. The person who knows
- * whether a bin has room is the person standing in front of it; the system's
- * job is to record where the item actually went. See `0018_stow_wherever_it_fits`.
+ * There is deliberately no capacity here: four sealed cases fill a bin that
+ * four hundred sleeved cards would not. The person standing in front of a bin
+ * knows whether it has room; the system records where the item actually went.
+ * See `0018_stow_wherever_it_fits`.
  */
 export const bin = pgTable(
   'bin',
@@ -65,8 +62,7 @@ export const bin = pgTable(
     /**
      * The shelf's identity: `BIN-` plus eight characters from the unambiguous
      * alphabet, minted at random. Never a sequence, never derived from the zone
-     * — see `0019_bins_get_a_serial` for why the old `BIN-A-001` was a name
-     * rather than an identifier.
+     * (see `0019_bins_get_a_serial`).
      */
     serialNumber: text('serial_number').notNull(),
     /** Code 128. The serial itself, as it is for an item. */
@@ -81,13 +77,13 @@ export const bin = pgTable(
      * The building this shelf is in.
      *
      * Nullable only because it was added to a table that already had rows; every
-     * bin created since names one, and the stow assignment will not hand out a
-     * bin that does not. Without it "put it wherever there is room" could route
-     * a parcel sitting in Delaware onto a New Jersey shelf.
+     * bin created since names one, and a facility-scoped stow suggestion never
+     * hands out a bin without one. Without it "put it wherever there is room"
+     * could route a parcel sitting in Delaware onto a New Jersey shelf.
      */
     facilityId: text('facility_id'),
     /**
-     * Whether this is oversized storage — the shelving that takes a sealed case
+     * Whether this is oversized storage: the shelving that takes a sealed case
      * or a piece of memorabilia rather than a card.
      *
      * Matched against the item CLASS's own `oversized` flag when a bin is
@@ -96,8 +92,8 @@ export const bin = pgTable(
      */
     oversized: boolean('oversized').notNull().default(false),
     /**
-     * Whether the bin may still be stowed into. A bin is never deleted — items
-     * and the transfer ledger reference it forever — so taking one out of
+     * Whether the bin may still be stowed into. A bin is never deleted (items
+     * and the transfer ledger reference it forever), so taking one out of
      * service is a flag, exactly as it is for a facility.
      */
     active: boolean('active').notNull().default(true),
@@ -136,7 +132,7 @@ export const item = pgTable(
      * The inbound parcel this item came out of, when it came out of one.
      *
      * Null for every item booked in before parcels existed, and for anything an
-     * operator receives by hand without one — so it is a link, never a
+     * operator receives by hand without one, so it is a link, never a
      * requirement. Where it is set, it is what lets a collector see which of
      * their purchases produced which cards, and what lets an operator verify a
      * parcel's contents against what was declared.
@@ -147,26 +143,23 @@ export const item = pgTable(
      * Whether this item is bulky enough to fall under the oversized storage
      * terms (a much shorter included period, and a far steeper per-period fee).
      *
-     * Copied from the item's CLASS at intake rather than looked up later, and
-     * deliberately so. It is the same reasoning as the pricing snapshot on a
-     * charge: the storage terms an item is held under were agreed when it was
-     * received, and re-deriving them from a taxonomy somebody edits next year
-     * would retroactively change what a collector is paying for a box that has
-     * been sitting on the same shelf the whole time.
+     * Copied from the item's CLASS at intake rather than looked up later, for
+     * the same reason as the pricing snapshot on a charge: the storage terms were
+     * agreed when the item was received, and re-deriving them from a taxonomy
+     * somebody edits next year would retroactively change what a collector pays.
      *
-     * It also lets the worker's storage sweep — which runs raw SQL and cannot
-     * import the taxonomy — decide the terms without a join.
+     * It also lets the worker's storage sweep, which runs raw SQL and cannot
+     * import the taxonomy, decide the terms without a join.
      */
     oversized: boolean('oversized').notNull().default(false),
     /**
-     * What it actually weighs, packed, in grams — if anybody weighed it.
+     * What it actually weighs, packed, in grams, if anybody weighed it.
      *
-     * A carrier prices on weight, and every rate Bault ever quoted assumed 500 g
-     * per item regardless of whether the item was a single card or a sealed
-     * case. Nullable on purpose: this is the figure somebody put on a scale, and
-     * inventing one for the tens of thousands of items nobody weighed would make
-     * the column useless. Where it is null, the class's typical weight stands in
-     * (`itemWeightGrams` in the taxonomy) and the quote says it is an estimate.
+     * A carrier prices on weight. Nullable on purpose: this is the figure
+     * somebody put on a scale, and inventing one for the items nobody weighed
+     * would make the column useless. Where it is null, the class's typical weight
+     * stands in (`itemWeightGrams` in the taxonomy) and the quote says it is an
+     * estimate.
      */
     weightGrams: integer('weight_grams'),
     // Lot support (Requirement 10.5): a lot is stored & treated as ONE item until
@@ -187,11 +180,10 @@ export const item = pgTable(
 /**
  * What a stored media object IS.
  *
- * `video` joins the two image kinds because a video review produces exactly the
- * same thing an extra photo does — an immutable, versioned object attached to
- * one item — and giving it a second table would have meant two of everything
- * for a difference of one MIME type. The table keeps its `item_image` name; the
- * column is what says which kind of media a row holds.
+ * `video` sits beside the two image kinds because a video review produces the
+ * same thing an extra photo does: an immutable, versioned object attached to
+ * one item. The table keeps its `item_image` name; this column says which kind
+ * of media a row holds.
  */
 export const itemImageType = pgEnum('item_image_type', ['intake', 'professional', 'video']);
 
@@ -219,7 +211,7 @@ export const itemChangeHistory = pgTable('item_change_history', {
 /**
  * Dedicated bin/shelf transfer ledger (Requirement 10.4). Every relocation records
  * BOTH the source (old) bin and the destination (new) bin, appended here in the same
- * transaction as the item update — a purpose-built audit trail for physical moves.
+ * transaction as the item update: a purpose-built audit trail for physical moves.
  */
 export const binTransfer = pgTable('bin_transfer', {
   id: pkId(),

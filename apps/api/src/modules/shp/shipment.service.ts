@@ -61,7 +61,7 @@ export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
  * What a day of waiting is worth, in minor units, when Bault chooses for you.
  *
  * An explicit number rather than a hidden preference. At $2.50 a day, saving $30
- * is worth about twelve days and saving $2 is worth less than one — which is
+ * is worth about twelve days and saving $2 is worth less than one, which is
  * close to how most people actually feel about a parcel, and is at least
  * arguable in public, which "we picked the cheap one" is not.
  */
@@ -80,7 +80,7 @@ export interface ShipmentOptionsInput {
   customerNotes?: string;
   serviceMode?: 'simple' | 'personalised';
   perItemCustomsValues?: Record<string, number>;
-  /** A key from `SHIPPING_BOXES`. Null or absent: priced on weight, the warehouse picks. */
+  /** A key from `SHIPPING_BOXES`. Null or absent: Bault picks the smallest box that fits. */
   boxSize?: string | null;
 }
 
@@ -102,7 +102,7 @@ export interface QuotedRate extends Rate {
   transitDaysMin: number;
   transitDaysMax: number;
   maxInsuredValueMinor: number;
-  /** What Bault adds on top — handling, insurance, add-ons. */
+  /** What Bault adds on top: handling, insurance, add-ons. */
   handlingMinor: number;
   insurancePremiumMinor: number;
   addOnsMinor: number;
@@ -124,10 +124,9 @@ export interface Quote {
   /**
    * The box this was priced in.
    *
-   * Never null any more when anything fits: an unchosen box is now the one
-   * the warehouse would reach for, so the quote carries real dimensions
-   * rather than pricing on weight alone. Null only when nothing in the
-   * catalogue takes these contents.
+   * An unchosen box is the one the warehouse would reach for, so the quote
+   * carries real dimensions. Null only when nothing in the catalogue takes
+   * these contents.
    */
   boxSize: string | null;
   /** True when Bault picked the box rather than the collector. */
@@ -146,23 +145,14 @@ export interface Quote {
 /**
  * Shipment creation, quoting, rating and payment.
  *
- * What changed here is worth stating plainly, because the old version's shape
- * was right and almost everything inside it was synthetic. A rate request
- * hard-coded the destination as country `IL`, postal code `00000`, and assumed
- * 500 g per item — so the two prices that came back were the same two prices for
- * every parcel Bault had ever quoted, whether it held one card or a sealed case,
- * whether it was going to New Jersey or to Japan.
- *
- * Now a quote depends on where the parcel is going, what it weighs, what it is
+ * A quote depends on where the parcel is going, what it weighs, what it is
  * worth and what has been asked for; services that cannot legally carry it say
  * so with the rule they failed; and the price includes the insurance premium and
- * add-ons rather than only the carrier's line.
+ * add-ons as well as the carrier's line.
  *
- * The other change is that a rate can now be selected without being paid for.
- * Previously the charge was unconditional, which quietly drove a wallet negative
- * and blocked every other service the collector had. A shipment that cannot be
- * afforded is now HELD — `awaiting_payment`, for {@link PAYMENT_WINDOW_DAYS} —
- * and its items go back on the shelf if it is never paid.
+ * A rate can be selected without being paid for. A shipment the wallet cannot
+ * cover is HELD (`awaiting_payment`, for {@link PAYMENT_WINDOW_DAYS}) instead of
+ * driving the wallet negative, and its items are freed if it is never paid.
  */
 @Injectable()
 export class ShipmentService {
@@ -195,13 +185,9 @@ export class ShipmentService {
   /**
    * Refuse to put an item into two parcels at once.
    *
-   * Nothing prevented this. `create` checked only that an item was `stored`, and
-   * an item in an open shipment stays `stored` until it is physically dispatched
-   * — so the same card could sit in three open requests, and two of them would
-   * fail at the packing bench with the operator holding one card and two lists.
-   *
-   * It matters more now than it did, because cancelling and merging only mean
-   * something if being IN a shipment means something.
+   * An item in an open shipment stays `stored` until it is physically
+   * dispatched, so `stored` alone does not mean free. Cancelling and merging
+   * also rely on this: they only mean something if being IN a shipment does.
    */
   async assertItemsFree(userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
     const open = await (tx ?? this.db)
@@ -237,28 +223,22 @@ export class ShipmentService {
       signatureRequiredAboveMinor: SIGNATURE_REQUIRED_ABOVE_MINOR,
       paymentWindowDays: PAYMENT_WINDOW_DAYS,
       /**
-       * What cancelling costs once a rate has been selected.
-       *
-       * Published so the warning shown BEFORE the cancel button can name the
-       * figure. It said "charges a restocking fee" while the number was a
-       * constant sitting in the server — asking somebody to accept a cost
-       * nobody was willing to state.
+       * What cancelling costs once a rate has been selected, published so the
+       * warning shown BEFORE the cancel button can name the figure.
        */
       restockingFeeMinor: RESTOCKING_FEE_MINOR,
     };
   }
 
   /* ------------------------------------------------------------------
-     Quoting — pricing a parcel that does not exist yet
+     Quoting: pricing a parcel that does not exist yet
      ------------------------------------------------------------------ */
 
   /**
    * What would this cost?
    *
-   * Nothing is created and nothing is charged. This is the endpoint that was
-   * missing: rates used to appear only after a shipment record existed, so
-   * "how much would it be to send these three?" could only be answered by
-   * committing to sending them.
+   * Nothing is created and nothing is charged, so "how much would it be to send
+   * these three?" can be answered without committing to sending them.
    */
   async quote(userId: string, input: CreateShipmentInput): Promise<Quote> {
     const items = await this.profiles.loadShippableItems(userId, input.itemIds);
@@ -334,7 +314,7 @@ export class ShipmentService {
    *
    * Ineligible services are RETURNED rather than filtered away, each carrying
    * the rule it failed. A collector who wanted the cheap option and cannot have
-   * it is owed the reason — "ePacket insures up to $500.00" is actionable, and
+   * it is owed the reason: "ePacket insures up to $500.00" is actionable, and
    * an option that silently vanished is not.
    */
   private async priceServices(
@@ -348,12 +328,9 @@ export class ShipmentService {
     /**
      * Rush is a BAULT charge, not a carrier one.
      *
-     * It used to be passed to the adapter, which doubled the carrier's base
-     * rate and shortened its estimate — quietly attributing Bault's own picking
-     * speed to the carrier, and telling the collector FedEx would arrive sooner
-     * because Bault packed faster. What rush actually buys is the warehouse
-     * moving a parcel to the front of the queue, so it is priced here and the
-     * carrier's promise is left alone.
+     * What rush buys is the warehouse moving a parcel to the front of the
+     * queue, so it is priced here and the carrier's rate and estimate are left
+     * alone.
      */
     const rushMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
     const handling = { amount: baseHandling.amount + rushMinor };
@@ -365,8 +342,8 @@ export class ShipmentService {
      * What a member's tier pays, apart from postage (which depends on the rate).
      *
      * Insurance is covered up to the tier's cap and no further: a $3,000 parcel
-     * on a $1,000 cap has the premium on $1,000 paid and pays the difference —
-     * "insurance above your tier's cap" is on the published not-covered list.
+     * on a $1,000 cap has the premium on $1,000 paid and pays the difference
+     * ("insurance above your tier's cap" is on the published not-covered list).
      * Rush is covered outright where the tier includes it. A tracker is covered
      * while the tier has one left this cycle.
      */
@@ -389,7 +366,7 @@ export class ShipmentService {
       // shipment than the one that gets bought.
       origin,
       items: [{ weightGrams: profile.weightGrams }],
-      // The box, when one was chosen. The carrier bills dimensional weight from
+      // The box, chosen or predicted. The carrier bills dimensional weight from
       // these itself, so nothing here scales its price a second time.
       dimensionsCm: profile.dimensionsCm,
       packagingGrams: profile.packagingGrams,
@@ -406,8 +383,7 @@ export class ShipmentService {
     const quoted: QuotedRate[] = [];
     for (const service of CARRIER_SERVICES) {
       // Matched through the catalogue's explicit provider names, not by
-      // comparing display names with EasyPost's service codes — which matched
-      // nothing, and left a real account with no way to ship. See `rateFor`.
+      // comparing display names with EasyPost's service codes. See `rateFor`.
       const rate = rateFor(service, carrierRates);
       if (!rate) continue; // the adapter does not sell it to this destination
       const problems = checkService(service, profile);
@@ -460,12 +436,12 @@ export class ShipmentService {
   }
 
   /**
-   * The address parcels ship FROM — the primary storage facility.
+   * The address parcels ship FROM: the primary storage facility.
    *
    * Read from the facility table rather than configured separately, so it is the
    * same address collectors are told to post to and there is one place to change
    * it. A forwarding site stores nothing, so it is never the origin of a vault
-   * shipment — the one exception is direct overnight, which never entered the
+   * shipment. The one exception is direct overnight, which never entered the
    * vault and leaves from the forwarding site it arrived at, named by `code`.
    *
    * Left undefined when the facility still carries a placeholder street, which
@@ -491,7 +467,7 @@ export class ShipmentService {
     };
   }
 
-  /** Each add-on's price, keyed by its fee action — a tier covers them one by one. */
+  /** Each add-on's price, keyed by its fee action, because a tier covers them one by one. */
   private async priceAddOns(keys: string[]): Promise<Record<string, number>> {
     const prices: Record<string, number> = {};
     for (const key of keys) {
@@ -508,15 +484,14 @@ export class ShipmentService {
   /**
    * "Choose for me."
    *
-   * ShipMyCards calls this Simple Shipping and it is the mode most people want:
-   * the collector states the outcome — how fast, how covered — and the platform
-   * picks the carrier.
+   * The mode most people want: the collector states the outcome (how fast, how
+   * covered) and the platform picks the carrier.
    *
    * The rule is neither "cheapest" nor "fastest", because both are wrong on
    * their own. Cheapest sends a $3,000 card by the slowest boat to save $2;
    * fastest charges $525 for a parcel that would have arrived comfortably for
    * $310. So a day of waiting is given an explicit PRICE and the two are added
-   * up — which turns an unstatable preference into an arithmetic one, and makes
+   * up, which turns an unstatable preference into an arithmetic one and makes
    * the choice explicable to the collector afterwards.
    */
   private pickBest(rates: QuotedRate[]): QuotedRate | null {
@@ -525,10 +500,9 @@ export class ShipmentService {
     /**
      * Postage credit counts as money here, because it is money: a member's
      * monthly credit spent on this parcel is credit the next one does not have.
-     * Scored on the net total alone, every covered service ties and the fastest
-     * wins — so "choose for me" quietly spent three times the credit it needed.
-     * Adding it back means a member is recommended what anybody would be, and
-     * simply pays less for it.
+     * Scored on the net total alone, every covered service would tie and the
+     * fastest would win. Adding the credit back means a member is recommended
+     * what anybody would be, and simply pays less for it.
      */
     const score = (r: QuotedRate) =>
       r.totalMinor + (r.membershipCover?.postageMinor ?? 0) + r.transitDaysMax * DAY_OF_WAITING_MINOR;
@@ -575,9 +549,8 @@ export class ShipmentService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
       : null;
 
-    // The checks above, again, with the items locked: two clicks on Create
-    // used to both pass them and put the same cards on two parcels, each of
-    // which could then be paid for.
+    // The checks above, again, with the items locked, so two clicks on Create
+    // cannot put the same cards on two parcels.
     const [created] = await this.db.transaction(async (tx) => {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx);
       await this.assertItemsFree(userId, items.map((i) => i.id), undefined, tx);
@@ -599,8 +572,8 @@ export class ShipmentService {
           insuredValueMinor,
           signatureRequired,
           addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
-          // Stored, because picking a service re-rates from the shipment row: a
-          // box that lived only in the quote would be charged as no box at all.
+          // Stored, because picking a service re-rates from the shipment row,
+          // and the parcel must be charged in the box it was quoted in.
           boxSize: box?.key ?? null,
           customsLines,
           customerNotes: input.customerNotes?.trim() || null,
@@ -672,12 +645,9 @@ export class ShipmentService {
       serviceKey: s.serviceKey,
       serviceMode: s.serviceMode,
       /**
-       * How it ends, and — for a hand delivery — the price somebody worked out.
-       *
+       * How it ends and, for a hand delivery, the price somebody worked out.
        * The SPA's quotes panel filters on `fulfilmentMethod` and shows
-       * `quoteMinor` with an Accept button, and none of the three was in this
-       * view, so a collector who had been quoted never saw the quote and had no
-       * way to accept it.
+       * `quoteMinor` with an Accept button.
        */
       fulfilmentMethod: s.fulfilmentMethod,
       quoteMinor: s.quoteMinor,
@@ -689,12 +659,8 @@ export class ShipmentService {
       currency: s.currency,
       itemIds,
       /**
-       * What is printed on each item's label.
-       *
-       * The packing bench checked the operator's scans against nothing: it held
-       * only these ids, which appear on no label, and sent them back as "what was
-       * scanned" — so the server's scan check compared the shipment's list with
-       * itself. With the labels here, the bench can match a real scan to a card.
+       * What is printed on each item's label, so the packing bench can match a
+       * real scan to a card. The ids above appear on no label.
        */
       items: itemIds.map((id) => labels.get(id) ?? { id, serialNumber: null, barcode: null, description: null }),
       /** A direct-overnight shipment's contents are a parcel, and this is the one. */
@@ -733,8 +699,8 @@ export class ShipmentService {
    *
    * A shipment carries the destination address and can be made to charge its
    * owner's wallet, so it is never addressable by id alone. `notFound` rather
-   * than `forbidden` on a miss — telling a stranger that some other collector's
-   * shipment id exists is itself a leak.
+   * than `forbidden` on a miss, because telling a stranger that some other
+   * collector's shipment id exists is itself a leak.
    */
   async loadFor(shipmentId: string, actor: ShipmentActor) {
     const s = await this.load(shipmentId);
@@ -765,17 +731,12 @@ export class ShipmentService {
   /**
    * What dispatch buys: the rate that was charged, and the parcel it was for.
    *
-   * Dispatch used to build this itself, and built it wrong in three ways at
-   * once: a hard-coded `US`/`00000` destination, the TOTAL parcel weight
-   * repeated once per item (a 3-item parcel weighing 500 g was declared as
-   * 1.5 kg), and no box. It also passed no rate id, and a real carrier sells a
-   * label only against the rate it quoted — so on EasyPost there was nothing to
-   * buy at all.
-   *
-   * Built from the same `profileOf` that priced the shipment, so the label and
-   * the charge describe the same parcel. The one deliberate difference is the
-   * weight: the operator has just put the parcel on a scale, and a measured
-   * figure beats every estimate this system made before it was packed.
+   * The rate carries the carrier's ids, because a real carrier sells a label
+   * only against the rate it quoted. The parcel is built from the same
+   * `profileOf` that priced the shipment, so the label and the charge describe
+   * the same parcel. The one deliberate difference is the weight: the operator
+   * has just put the parcel on a scale, and a measured figure beats every
+   * estimate this system made before it was packed.
    */
   async labelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams?: number) {
     const { profile, measurements } = await this.profileOf(s);
@@ -823,8 +784,8 @@ export class ShipmentService {
   /**
    * What a direct-overnight label is bought for: a parcel that never became items.
    *
-   * There is nothing in the vault to build a profile from — `itemIds` is empty
-   * by design, which is why `labelRequest` cannot serve it. The parcel is the
+   * There is nothing in the vault to build a profile from (`itemIds` is empty
+   * by design), which is why `labelRequest` cannot serve it. The parcel is the
    * contents: it leaves from the forwarding site it arrived at, as one envelope
    * weighing what the scale says.
    */
@@ -846,7 +807,7 @@ export class ShipmentService {
    *
    * Read from the parcel's own append-only trail: booking a direct shipment
    * writes a `direct_shipped` event naming the shipment, and that event is the
-   * link — there is no column to drift from it.
+   * link, so there is no column to drift from it.
    */
   async directParcels(shipmentIds: readonly string[], tx?: Database) {
     const out = new Map<string, { id: string; code: string; trackingNumber: string | null; status: string; facilityId: string }>();
@@ -869,7 +830,7 @@ export class ShipmentService {
   }
 
   /**
-   * What is printed on each item's label, by id — so whoever packs a shipment
+   * What is printed on each item's label, by id, so whoever packs a shipment
    * can check what they scan against what the shipment holds.
    */
   private async itemLabels(itemIds: readonly string[]) {
@@ -922,7 +883,7 @@ export class ShipmentService {
   /**
    * "Choose for me", applied.
    *
-   * Same settlement path as an explicit choice — the only difference is who
+   * Same settlement path as an explicit choice. The only difference is who
    * decided, which is recorded on the shipment so a late parcel can be answered
    * for honestly.
    */
@@ -945,10 +906,10 @@ export class ShipmentService {
    * A rate can be chosen only before anything was charged, and only for a
    * parcel a carrier is taking.
    *
-   * `rates_selected` was accepted too, and `settle` charged again without
-   * crediting the first charge: choosing a different service on a paid parcel
-   * paid for it twice. And a hand-delivery or show-pickup request could be
-   * given a carrier rate, which is far cheaper than what was quoted for it.
+   * A paid (`rates_selected`) shipment is refused because `settle` would charge
+   * again without crediting the first charge. A hand-delivery or show-pickup
+   * request is refused because a carrier rate is far cheaper than what was
+   * quoted for it.
    */
   private static assertRateSelectable(s: typeof shipment.$inferSelect) {
     if (s.status !== 'requested' && s.status !== 'awaiting_payment') {
@@ -972,11 +933,9 @@ export class ShipmentService {
    * Freeze the price and try to pay it.
    *
    * If the wallet cannot cover the total the shipment is HELD rather than
-   * charged. That is the change: driving a wallet negative to buy postage
-   * blocked every other service the collector had, on an action they took
-   * deliberately, and left them no way back except funding the wallet anyway.
-   * Now they are told, the parcel waits a week, and the items are released if
-   * nothing happens.
+   * charged, because driving a wallet negative to buy postage would block every
+   * other service the collector has. They are told, the parcel waits
+   * `PAYMENT_WINDOW_DAYS`, and the items are released if nothing happens.
    */
   private async settle(
     s: typeof shipment.$inferSelect,
@@ -1005,12 +964,9 @@ export class ShipmentService {
     };
 
     /**
-     * One transaction, under the shipment lock and then the wallet lock.
-     *
-     * The balance used to be read before any transaction and the row written by
-     * id alone, so two clicks on a service each found the money, each charged
-     * it, and the worker's expiry sweep could cancel a parcel in the same moment
-     * it was being paid for.
+     * One transaction, under the shipment lock and then the wallet lock, so two
+     * clicks on a service cannot both find the money and charge it, and the
+     * expiry sweep cannot cancel a parcel while it is being paid for.
      */
     return this.db.transaction(async (tx) => {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, s.id)).for('update').limit(1);
@@ -1062,7 +1018,7 @@ export class ShipmentService {
   /**
    * One charge for the whole parcel, with every component in the snapshot.
    *
-   * A single line on the statement, because that is what the collector bought —
+   * A single line on the statement, because that is what the collector bought,
    * but the snapshot carries the carrier's cost, Bault's handling, the insurance
    * premium and the add-ons separately, so "what am I actually paying for" has
    * an answer that survives a pricing change (Principle V).
@@ -1119,8 +1075,8 @@ export class ShipmentService {
   async pay(shipmentId: string, actor: ShipmentActor) {
     await this.loadFor(shipmentId, actor);
 
-    // Everything below under the shipment lock, then the wallet lock — see
-    // `settle`. Two Pay clicks used to charge the parcel twice.
+    // Everything below under the shipment lock, then the wallet lock (see
+    // `settle`), so two Pay clicks cannot charge the parcel twice.
     return this.db.transaction(async (tx) => {
       const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!s) throw AppError.notFound('Shipment not found');
@@ -1177,9 +1133,10 @@ export class ShipmentService {
   }
 
   /**
-   * Release the items of shipments nobody paid for. Called by the worker sweep.
+   * Release the items of shipments nobody paid for.
    *
-   * Returns what it released, so the job can log a real number rather than "ok".
+   * The scheduled release is the worker's own `expireUnpaidShipments`, in raw
+   * SQL; this is the API-side equivalent. Returns what it released.
    */
   async expireUnpaid(now = new Date()) {
     const rows = await this.db.select().from(shipment).where(eq(shipment.status, 'awaiting_payment'));
@@ -1188,9 +1145,8 @@ export class ShipmentService {
     for (const s of rows) {
       if (!s.paymentDueAt || s.paymentDueAt.getTime() > now.getTime()) continue;
       const cancelled = await this.db.transaction(async (tx) => {
-        // Only if it is STILL unpaid. Unconditionally, a parcel paid for in the
-        // seconds between the read above and this write was cancelled anyway,
-        // with the charge kept and the items released.
+        // Only if it is STILL unpaid: a parcel paid for between the read above
+        // and this write must not be cancelled with its charge kept.
         const [row] = await tx
           .update(shipment)
           .set({
@@ -1212,9 +1168,9 @@ export class ShipmentService {
       });
       if (cancelled) expired.push(s.id);
     }
-    // Cancelling IS the release. An item in an open shipment never left `stored`
-    // — what it lost was the ability to be put on a second parcel — so moving
-    // the shipment out of the open set is exactly what hands the items back.
+    // Cancelling IS the release. An item in an open shipment never left
+    // `stored`; what it lost was the ability to be put on a second parcel, so
+    // moving the shipment out of the open set is exactly what hands it back.
     return { expired: expired.length, shipmentIds: expired };
   }
 

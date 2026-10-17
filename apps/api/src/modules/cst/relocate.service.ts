@@ -3,7 +3,7 @@ import { CustodyService } from './custody.service';
 
 /**
  * Relocate + hold operations (T047). Thin transactional orchestration over the
- * custody kernel — each call is one atomic commit (change + custody event).
+ * custody kernel: each call is one atomic commit (change + custody event).
  */
 @Injectable()
 export class RelocateService {

@@ -11,8 +11,8 @@ const CORRECTABLE = new Set(['description', 'conditionGrade', 'typeClass']);
 
 /**
  * Item field correction (T046). Every correction is applied AND recorded in the
- * item change-history (who/what/when) in the same transaction — items are never
- * silently edited (supports Principle I's permanence guarantee).
+ * item change-history (who/what/when) in the same transaction, so items are
+ * never silently edited (Principle I's permanence guarantee).
  */
 @Injectable()
 export class CorrectionService {
@@ -31,10 +31,10 @@ export class CorrectionService {
         if (!CORRECTABLE.has(patch.field)) {
           throw AppError.validation(`Field not correctable: ${patch.field}`);
         }
-        // Intake enforces the taxonomy, so correction has to as well — otherwise
-        // the vocabulary has a hole and an item can be edited back into free
-        // text after being received under a known class. This is also the path
-        // by which a pre-taxonomy item gets a real class.
+        // Intake enforces the taxonomy, so correction has to as well, or an item
+        // could be edited back into free text after being received under a known
+        // class. This is also the path by which a pre-taxonomy item gets a real
+        // class.
         if (patch.field === 'typeClass' && !isKnownItemClass(patch.value)) {
           throw AppError.validation(`Unknown item class "${patch.value}"`);
         }

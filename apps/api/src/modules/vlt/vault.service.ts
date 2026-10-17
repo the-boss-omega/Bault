@@ -23,11 +23,12 @@ import {
 /**
  * Which slice of the customer's vault to return.
  *
- *  - `active`  — held, unencumbered stock: received / stored / listed, no hold.
- *  - `hold`    — anything frozen: the `on-hold` state or the `holdFlag`, which are
- *                set independently (a listed item can be put on hold without its
- *                lifecycle state changing).
- *  - `history` — cards the customer no longer holds. See `listHistory`.
+ *  - `active`:  held, unencumbered stock: received / stored / listed / at_grader,
+ *               no hold.
+ *  - `hold`:    anything frozen: the `on-hold` state or the `holdFlag`, which are
+ *               set independently (a listed item can be put on hold without its
+ *               lifecycle state changing).
+ *  - `history`: cards the customer no longer holds. See `listHistory`.
  */
 export type VaultScope = 'active' | 'hold' | 'history';
 
@@ -35,7 +36,7 @@ export type VaultScope = 'active' | 'hold' | 'history';
  * Normalise a driver-supplied timestamp to ISO-8601, or null if unparseable.
  *
  * An aliased aggregate in a subquery comes back from node-postgres as a raw
- * string in Postgres' own output format — `2026-08-03 16:18:49.573228+00` —
+ * string in Postgres' own output format (`2026-08-03 16:18:49.573228+00`)
  * rather than a parsed Date. Two things in that are not ISO-8601: the space
  * between date and time, and the two-digit `+00` offset. `new Date()` rejects
  * the offset outright in V8, so both are fixed up before parsing.
@@ -66,10 +67,9 @@ export interface VaultFilter {
 /**
  * Terminal states: the card is still owned by the customer but has left storage.
  *
- * `discarded` belongs here and was missing. The lifecycle gained it (a card
- * culled through Remove commons, or reported lost by a grader) without this list
- * learning of it, so a discarded card appeared in no tab at all — while the
- * vault's own note promises that anything which left stays in History for good.
+ * Every state a card can leave storage into must be listed here, or a card in
+ * it appears in no tab at all, while the vault promises that anything which
+ * left stays in History for good.
  */
 const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'> = [
   'shipped',
@@ -83,9 +83,7 @@ const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'
  * States that count as the customer's live stock.
  *
  * `at_grader` is here because the card is still theirs and is coming back: it
- * is away for weeks, not gone. It was in no list, so a card sent for grading
- * vanished from the vault for the whole trip and its owner opened a ticket
- * about a card Bault had lost. The tile carries the state, and no action is
+ * is away for weeks, not gone. The tile carries the state, and no action is
  * offered on it while it is away.
  */
 const LIVE: Array<'received' | 'stored' | 'listed' | 'at_grader'> = ['received', 'stored', 'listed', 'at_grader'];
@@ -93,9 +91,9 @@ const LIVE: Array<'received' | 'stored' | 'listed' | 'at_grader'> = ['received',
 /**
  * Customer vault (T051, Principle: personal vault view).
  *
- * `listOwned` returns the items a customer currently owns AND that are still in
- * storage, with free-text + attribute filtering (Postgres full-text/ILIKE at this
- * scale). `itemCard` returns one item with signed image URLs and its full history.
+ * `listOwned` returns one scope of the customer's vault (see `VaultScope`), with
+ * free-text (ILIKE) and attribute filtering. `itemCard` returns one item with
+ * signed image URLs, its custody history and its open service requests.
  */
 @Injectable()
 export class VaultService {
@@ -118,7 +116,7 @@ export class VaultService {
   }
 
   /**
-   * Whether the customer holds — or has ever held — this card.
+   * Whether the customer holds, or has ever held, this card.
    *
    * Current ownership is the common case. Past ownership is checked against the
    * append-only custody log so a card in the customer's history stays openable
@@ -151,7 +149,7 @@ export class VaultService {
 
     const conditions = [eq(item.ownerId, userId)];
     if (scope === 'hold') {
-      // Either signal is enough — they are set independently.
+      // Either signal is enough: they are set independently.
       conditions.push(or(eq(item.holdFlag, true), eq(item.lifecycleState, 'on-hold')) ?? sql`true`);
     } else {
       conditions.push(inArray(item.lifecycleState, LIVE));
@@ -187,7 +185,7 @@ export class VaultService {
       })
       .from(item)
       // As text: `bin_id` can hold an `EXT:` location for a card at another
-      // warehouse, and converting that to a uuid failed the owner's whole vault.
+      // warehouse, which is not a uuid and would fail the whole query.
       .leftJoin(bin, sql`${bin.id}::text = ${item.binId}`)
       .where(and(...conditions))
       .orderBy(sql`${item.createdAt} desc`)
@@ -215,22 +213,22 @@ export class VaultService {
   }
 
   /**
-   * Cards the customer no longer holds — the vault's permanent history view.
+   * Cards the customer no longer holds: the vault's permanent history view.
    *
    * Two disjoint populations make it up:
    *
    *  1. Cards they still own that have left storage (shipped / donated /
-   *     consigned / sold).
+   *     consigned / sold / discarded).
    *  2. Cards they used to own. Bault is single-owner: a sale or a swap moves
    *     `owner_id`, so those rows stop matching an owner-scoped query entirely.
    *     The append-only custody log is what survives, so previous ownership is
-   *     recovered from `custody_event.prev_owner_id` — an item is "previously
+   *     recovered from `custody_event.prev_owner_id`: an item is "previously
    *     held" when the customer appears as the previous owner of a transfer and
    *     is not the current owner.
    *
    * The projection is deliberately narrower than the live one: it carries the
    * card's own identity and the lifecycle facts of its departure, but never the
-   * current owner or the bin it now sits in — that belongs to whoever holds it
+   * current owner or the bin it now sits in, which belong to whoever holds it
    * now. History is read-only by construction; nothing in this service deletes,
    * hides or rewrites it.
    */
@@ -258,7 +256,7 @@ export class VaultService {
       or(
         // Still owned, but no longer in storage.
         and(eq(item.ownerId, userId), inArray(item.lifecycleState, TERMINAL)),
-        // Previously owned — ownership has since moved on.
+        // Previously owned: ownership has since moved on.
         sql`${item.ownerId} <> ${userId}`,
       ) ?? sql`true`,
     ];
@@ -290,15 +288,12 @@ export class VaultService {
       .limit(limit);
 
     // The reason a card left is the custody event's own reason/state change. The
-    // count path skips it — it only needs how many rows there are.
+    // count path skips it, because it only needs how many rows there are.
     return Promise.all(
       rows.map(async (row) => ({
         ...row,
-        // `max(occurred_at)` comes back through an aliased subquery column, which
-        // node-postgres hands over as a raw string ("2026-08-03 16:18:49.57+00")
-        // rather than a Date. Normalised here so every date this API returns is
-        // ISO-8601 and `new Date(...)` in the browser is not left parsing a
-        // space-separated format that only some engines accept.
+        // A raw Postgres timestamp string here (see `toIso`), normalised so
+        // every date this API returns is ISO-8601.
         departedAt: toIso(row.departedAt),
         holdFlag: false,
         binId: null,
@@ -330,17 +325,12 @@ export class VaultService {
    * The custody events that count as a card leaving this customer.
    *
    * Either it was transferred away from them, or it moved into a terminal state
-   * while it was theirs. The second half used to require `new_owner_id` to name
-   * the customer, and a state change never writes an owner — no code path does —
-   * so a card shipped home (or donated, consigned, discarded) without changing
-   * hands had no departure and never reached History.
-   *
-   * "While it was theirs" is answered from the trail rather than assumed: the
-   * card is theirs now, and the change came no earlier than the event that last
-   * made them its owner (intake and every transfer name the new owner). A
-   * terminal change made by a previous owner — a card bought out and then sold
-   * on — is not this customer's departure. The `new_owner_id` form is kept for
-   * any event that does name one.
+   * while it was theirs. A state change never writes an owner, so "while it was
+   * theirs" is answered from the trail: the card is theirs now, and the change
+   * came no earlier than the event that last made them its owner (intake and
+   * every transfer name the new owner). A terminal change made by a previous
+   * owner (a card bought out and then sold on) is not this customer's
+   * departure. The `new_owner_id` form covers any event that does name one.
    */
   private departedFrom(userId: string) {
     const ownedNow = this.db
@@ -380,8 +370,8 @@ export class VaultService {
   /**
    * What storage has cost, and will cost, for one of the caller's own items.
    *
-   * Every figure about the PAST is read from the charges the sweep actually
-   * wrote — periods billed, total spent — rather than recomputed from the clock.
+   * Every figure about the PAST (periods billed, total spent) is read from the
+   * charges the sweep actually wrote rather than recomputed from the clock.
    * If a sweep were missed, this shows what has genuinely been charged and dates
    * the next charge from there, instead of asserting a number nobody billed.
    *
@@ -420,7 +410,7 @@ export class VaultService {
       it.oversized ? OVERSIZED_STORAGE : STANDARD_STORAGE,
     );
 
-    // What was actually billed — counted, never derived.
+    // What was actually billed: counted, never derived.
     const billed = await this.db
       .select({ amount: charge.amount })
       .from(charge)
@@ -486,16 +476,13 @@ export class VaultService {
       .orderBy(sql`${custodyEvent.occurredAt} desc`);
 
     /**
-     * What has already been asked for on this card, and is not finished.
-     *
-     * The drawer offered every service as though nothing had ever been requested
-     * — so a collector who ordered a photo shoot yesterday opened the card today
-     * and saw the same button, with no sign the first request existed. Pressing
-     * it produced a second charge and a second identical job in the queue.
+     * What has already been asked for on this card, and is not finished, so the
+     * drawer does not offer the same service again as though nothing were
+     * pending (and charge for a second identical job).
      *
      * Sent with the card rather than fetched separately because it changes what
-     * the ACTIONS say, and an action list that renders before it knows this is an
-     * action list that lies for a moment.
+     * the ACTIONS say, and an action list that renders before it knows this is
+     * wrong for a moment.
      */
     const openRequests = await this.db
       .select({

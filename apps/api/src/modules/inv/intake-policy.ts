@@ -7,28 +7,18 @@ import {
 } from './item-classes';
 
 /**
- * What Bault accepts, what it refuses, and what happens to the difference —
- * published.
+ * What Bault accepts, what it refuses, and what happens to the difference,
+ * published so a collector knows BEFORE they post a box.
  *
- * Every rule in here was already being enforced. The closed item taxonomy has
- * been checked on every write path since Part 14; the prohibited categories have
- * produced a recorded arrival disposal and a notification to the owner since the
- * same pass. What did not exist was the sentence telling a collector any of it
- * BEFORE they posted a box. The rule was discoverable exactly one way: by having
- * something refused, destroyed and written up.
- *
- * That is the gap this closes, and the design decision that matters is where the
- * text comes from. It is DERIVED, at request time, from the very modules the
- * intake path validates against — `ITEM_CLASSES` and `DISPOSAL_CATEGORIES`. A
- * hand-written policy page is a second copy of a rule, and a second copy drifts:
- * add a class to the taxonomy and the page silently starts lying. Here, adding a
- * class publishes it, and removing one unpublishes it, because the page and the
+ * The lists are DERIVED, at request time, from the arrays the intake path
+ * validates against (`ITEM_CLASSES` and `DISPOSAL_CATEGORIES`). A hand-written
+ * policy page would be a second copy that drifts; here, adding a class
+ * publishes it and removing one unpublishes it, because the page and the
  * validator read the same array.
  *
- * The prose that cannot be derived — what a refusal actually means for the
- * collector — is held to the FAQ's rule: every sentence states something the
- * code does. Nothing here is aspirational, and nothing describes a handling
- * outcome the disposal record cannot express.
+ * The prose that cannot be derived (what a refusal means for the collector)
+ * states only what the code does, and describes no handling outcome the
+ * disposal record cannot express.
  */
 
 export interface AcceptedClassPolicy {
@@ -40,7 +30,7 @@ export interface AcceptedClassPolicy {
   lotEligible: boolean;
   /**
    * The smallest count that is a lot for this class. Present only for classes
-   * that carry a threshold — anything under it is received as individual items.
+   * that carry a threshold; anything under it is received as individual items.
    */
   lotMinSize?: number;
   /** What one typically weighs packed, used for a rate when nobody weighed it. */
@@ -90,7 +80,7 @@ const REFUSAL_REASON: Record<string, string> = {
 };
 
 /**
- * The rules that are not a list — the things a collector needs stated in
+ * The rules that are not a list: the things a collector needs stated in
  * sentences. Every one names a behaviour that exists in code.
  */
 const RULES: IntakePolicy['rules'] = [

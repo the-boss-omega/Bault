@@ -18,7 +18,7 @@ import {
 import type { Destination, ParcelProfile } from './carriers';
 import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
-/** One line of the commercial invoice — per item, because customs is per item. */
+/** One line of the commercial invoice: per item, because customs is per item. */
 export interface CustomsLine {
   itemId: string;
   serialNumber: string;
@@ -35,7 +35,7 @@ export interface CustomsLine {
 /**
  * The frozen customs lines as the declaration a carrier is sent.
  *
- * One line per item, quantity one, at the value the collector declared — the
+ * One line per item, quantity one, at the value the collector declared: the
  * same lines the commercial invoice prints, so the paper in the pouch and the
  * data the carrier holds cannot disagree. `signer` is who certifies it: the
  * shipper of record, Bault's facility, acting for the collector.
@@ -68,8 +68,8 @@ export interface ItemMeasurements {
 /**
  * Turning a set of item ids into a parcel.
  *
- * Every path that prices a shipment — quoting a hypothetical one, rating a real
- * one, re-rating one after its contents were edited — needs the same three
+ * Every path that prices a shipment (quoting a hypothetical one, rating a real
+ * one, re-rating one after its contents were edited) needs the same three
  * answers: what does this weigh, where is it going, and is it legal to send.
  * Having one place that computes them is what stops a quote and the subsequent
  * charge disagreeing about the same parcel.
@@ -81,8 +81,7 @@ export class ParcelProfileService {
   /**
    * Load items and check they may be shipped by this owner.
    *
-   * The checks are the same ones shipment creation always ran; they live here
-   * now so the edit and merge paths cannot forget one.
+   * The checks live here so the create, edit and merge paths cannot forget one.
    *
    * With `tx` the rows are locked, in id order, until the transaction ends, so
    * the caller can check nothing else has claimed them and then claim them.
@@ -144,17 +143,11 @@ export class ParcelProfileService {
     /**
      * Nobody picked one, so pick the one the warehouse would.
      *
-     * This used to answer `undefined`, which meant no dimensions reached the
-     * carrier, which meant the parcel was billed on weight alone plus a flat
-     * 120 g — and a light-but-bulky parcel was under-quoted by whatever its
-     * volume was worth. The quote was then the charge, so Bault absorbed the
-     * difference on every unboxed shipment.
-     *
-     * The fix is not to make the collector choose. Most people have no idea what
-     * a dimensional divisor is and should not have to: the warehouse was always
-     * going to pick a box, and `chooseBox` picks the same one it would — the
-     * smallest that fits. An explicit choice still wins, because a collector who
-     * wants their card in a bigger box for their own reasons may have one.
+     * Without a box no dimensions reach the carrier, and a light-but-bulky
+     * parcel would be under-quoted by whatever its volume is worth. The
+     * collector is not made to choose: `chooseBox` picks what the warehouse
+     * would, the smallest that fits. An explicit choice still wins, because a
+     * collector who wants their card in a bigger box may have one.
      */
     return { box: chooseBox(contents), problems: [], boxAutoSelected: true };
   }
@@ -163,9 +156,8 @@ export class ParcelProfileService {
    * Resolve where the parcel is going.
    *
    * A saved address is preferred over free text because it carries a real
-   * country and postal code, which is what a rate depends on. The formatted
-   * single line is still stored for humans — it is simply no longer the only
-   * thing stored.
+   * country, postal code and street, which is what a rate depends on. The
+   * formatted single line is also returned, for humans.
    */
   async resolveDestination(
     userId: string,
@@ -179,9 +171,8 @@ export class ParcelProfileService {
         .limit(1);
       if (!a || a.userId !== userId) throw AppError.notFound('Address not found');
       return {
-        // The whole address, not two fields of it. A saved address already has
-        // the street and city a carrier needs; throwing them away here is what
-        // made a real rate impossible to ask for.
+        // The whole address, not two fields of it: a saved address has the
+        // street and city a carrier needs to give a real rate.
         destination: {
           country: a.country.toUpperCase(),
           postalCode: a.postalCode,
@@ -211,10 +202,10 @@ export class ParcelProfileService {
    * The customs declaration, one line per item.
    *
    * The total the collector declared is APPORTIONED across the items by weight
-   * when they have not given per-item figures, which is the honest thing to do:
-   * a single lump sum on a five-item parcel is not a declaration a broker can
-   * use, and inventing per-item values out of nothing would be worse. Where the
-   * collector does give per-item values, those are used verbatim.
+   * when they have not given per-item figures: a single lump sum on a five-item
+   * parcel is not a declaration a broker can use, and inventing per-item values
+   * out of nothing would be worse. Where the collector does give per-item
+   * values, those are used verbatim.
    */
   buildCustomsLines(
     measurements: ItemMeasurements,

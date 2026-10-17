@@ -21,13 +21,13 @@ export interface TransferExpectation {
 }
 
 /**
- * CST custody service (T043, Principles I–III) — THE correctness kernel.
+ * CST custody service (T043, Principles I–III): THE correctness kernel.
  *
  * Every mutation of an item's owner, bin, or lifecycle state goes through this
  * service, and each one writes a custody_event in the SAME transaction as the
- * change. No other code is allowed to UPDATE those item columns directly. Because
- * custody_event is append-only (DB triggers), the chain of custody can never be
- * forged or gapped.
+ * change. The one exception is the admin item editor (`AdmService.updateItem`),
+ * which writes the same custody events itself. Because custody_event is append-only
+ * (DB triggers), the chain of custody can never be forged or gapped.
  *
  * All methods take a transaction handle `tx` so the caller composes them with
  * other work (charge, outbox event, ...) into one atomic commit.
@@ -134,7 +134,7 @@ export class CustodyService {
       sourceBatchId?: string;
       /** The inbound parcel this item was unpacked from, when there was one. */
       sourceParcelId?: string;
-      /** Fixes the storage terms at receipt — see `item.oversized`. */
+      /** Fixes the storage terms at receipt (see `item.oversized`). */
       oversized?: boolean;
       /** What it weighed on the bench, if anybody put it on one. */
       weightGrams?: number;
@@ -146,7 +146,7 @@ export class CustodyService {
       /**
        * `stored` (the default) for something documented on the bench and put on a
        * shelf in the same gesture. `received` for something that is on the record
-       * and not yet on a shelf — a card sold from the Bault store, owned from the
+       * and not yet on a shelf: a card sold from the Bault store, owned from the
        * moment it is paid for and shelved when an operator gets to it.
        */
       lifecycleState?: 'stored' | 'received';
@@ -227,13 +227,10 @@ export class CustodyService {
    *
    * The caller says who it believes owns the item, and in what state, and the
    * transfer happens only if that is still true under the row lock. Callers
-   * used to decide on a read made earlier — when a swap was proposed, when a
-   * listing was created, when a deal was raised — and this method moved the item
-   * from whoever owned it NOW. A card sold on the market after a swap was
-   * proposed was then handed by the swap to a third person; a listing left
-   * behind by an admin reassignment sold the new owner's card and paid the old
-   * one. Every path that moves ownership comes through here, so the check lives
-   * here and no caller can forget it.
+   * decide on an earlier read (a swap proposal, a listing, a deal), and the card
+   * may have changed hands since. Every path that moves ownership, apart from the
+   * admin editor, comes through here, so the check lives here and no caller can
+   * forget it.
    */
   async transferOwnership(
     tx: Tx,
@@ -274,15 +271,9 @@ export class CustodyService {
   }
 
   /**
-   * Returns whether anything actually changed.
-   *
-   * It used to return nothing, and the controller answered `hold_placed` either
-   * way — so an operator who scanned a card that was already frozen was told the
-   * hold had just been placed, and one who released a card that was never on
-   * hold was told a hold had been lifted. The DATA was always right (the early
-   * return means no second custody event is written), but the bench was told a
-   * story about work it had not done, on the one screen whose whole job is
-   * saying what happened to a card.
+   * Returns whether anything actually changed. Setting a hold to the value it
+   * already has writes no custody event and returns false, so the bench is told
+   * that nothing happened.
    */
   async setHold(tx: Tx, itemId: string, hold: boolean, actorId: string): Promise<boolean> {
     const current = await this.lockItem(tx, itemId);

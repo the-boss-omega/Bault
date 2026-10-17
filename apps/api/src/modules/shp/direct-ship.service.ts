@@ -18,27 +18,21 @@ import { insurancePremiumMinor, signatureForced, MAX_INSURED_VALUE_MINOR } from 
 import { formatMinor } from '../../shared/money';
 
 /**
- * Ship it straight out of the tax-free site, overnight, instead of vaulting it.
+ * Ship it straight out of the tax-free site (Delaware), overnight, instead of
+ * vaulting it.
  *
- * This is the one ShipMyCards markets as Direct-from-Oregon; Bault's tax-free
- * forwarding facility is in Delaware, so it is Direct-from-Delaware here.
- *
- * The insight it is built on is that the normal path is slow for a reason that
- * has nothing to do with the collector. A parcel that lands at the forwarding
- * site is trucked to the vault — days of transit and a forwarding fee — booked
- * in as items, and only then shipped out. Somebody who bought a card to have it
- * in their hand on Saturday is paying for a round trip they did not want.
- *
- * So this bypasses the vault entirely: the goods never become items, never get a
- * serial, never accrue storage. That is exactly why it has to be a PARCEL
- * operation rather than a shipment of stored items — there is nothing in the
- * vault to ship. It also means every one of its constraints is a real one:
+ * The normal path trucks a parcel from the forwarding site to the vault (days of
+ * transit and a forwarding fee), books it in as items, and only then ships it
+ * out. This bypasses the vault entirely: the goods never become items, never get
+ * a serial, never accrue storage. That is why it is a PARCEL operation rather
+ * than a shipment of stored items: there is nothing in the vault to ship. It
+ * also means every one of its constraints is a real one:
  *
  *   - it leaves from Delaware, so the parcel has to still be there;
  *   - it is an overnight envelope, so five cards and no more;
  *   - it is domestic, because an overnight international parcel is a different
  *     product at a different price;
- *   - and it is $100 flat, which is the whole proposition.
+ *   - and it is $100 flat.
  */
 @Injectable()
 export class DirectShipService {
@@ -101,7 +95,7 @@ export class DirectShipService {
    * Send it.
    *
    * The card count is stated by the collector rather than counted, because
-   * nobody has opened the parcel — that is the entire point of the service. It
+   * nobody has opened the parcel; that is the entire point of the service. It
    * is checked against the envelope's limit, and an operator who opens it at the
    * bench and finds nine cards has a request that says five and a discrepancy
    * worth recording.
@@ -154,11 +148,8 @@ export class DirectShipService {
     const now = new Date();
     return this.db.transaction(async (tx) => {
       /**
-       * The parcel and the wallet are checked again under their locks.
-       *
-       * Both checks used to run before the transaction and the parcel was
-       * written by id alone, so two clicks on Send each found a received parcel
-       * and the money for it, and the collector paid for direct overnight twice.
+       * The parcel and the wallet are checked again under their locks, so two
+       * clicks on Send cannot both pay for direct overnight.
        */
       const [locked] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
       if (!locked || locked.ownerId !== userId) throw AppError.notFound('Parcel not found');
@@ -242,7 +233,7 @@ export class DirectShipService {
       );
 
       // The parcel is answered for. It is not forwarded, not opened and never
-      // becomes items — the trail says so, permanently.
+      // becomes items; the trail says so, permanently.
       await tx
         .update(parcel)
         .set({ status: 'processed', processedAt: now, updatedAt: now })

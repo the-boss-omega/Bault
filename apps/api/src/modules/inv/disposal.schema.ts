@@ -10,11 +10,10 @@ import { pkId, createdAt } from '../../db/schema/_helpers';
  *   - something arrived whose processing would cost more than it is worth;
  *   - a tracker was found riding along inside somebody's parcel.
  *
- * None of them is an item, and that is the point. Everything Bault takes into
- * custody becomes an `item` that can never be deleted — so recording a refusal
- * as an item would mean booking a thing into a vault it was never in, and then
- * inventing a lifecycle state to take it back out again. A refusal is not a
- * custody event; it is the absence of one, and it gets its own record.
+ * None of them is an item. Everything Bault takes into custody becomes an
+ * `item` that can never be deleted, so recording a refusal as an item would
+ * book a thing into a vault it was never in. A refusal is not a custody event;
+ * it is the absence of one, and it gets its own record.
  *
  * APPEND-ONLY. Registered with the guards in `0001_append_only.sql`: the
  * statement "we destroyed something addressed to you" is evidence, and evidence
@@ -30,13 +29,13 @@ export const arrivalDisposal = pgTable('arrival_disposal', {
   code: text('code').notNull(),
   /** The collector it was addressed to. */
   ownerId: text('owner_id').notNull(),
-  /** A key from `DISPOSAL_CATEGORIES` — why it could not be accepted. */
+  /** A key from `DISPOSAL_CATEGORIES`: why it could not be accepted. */
   category: text('category').notNull(),
-  /** A key from `DISPOSAL_OUTCOMES` — what physically happened to it. */
+  /** A key from `DISPOSAL_OUTCOMES`: what physically happened to it. */
   outcome: text('outcome').notNull(),
   /** What the thing was, in the operator's words. Required. */
   description: text('description').notNull(),
-  /** The operator's account of the decision. Required — see DisposalService. */
+  /** The operator's account of the decision. Required (see DisposalService). */
   notes: text('notes').notNull(),
   /** The operator who made the call. */
   actorId: text('actor_id').notNull(),
