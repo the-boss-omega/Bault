@@ -5,16 +5,13 @@ import type { Pool } from 'pg';
 import { createUser, testPool } from './helpers/db';
 
 /**
- * Tracking refresh with the carrier the deployment is configured for (E17,
- * F039, F050).
+ * Tracking refresh with the carrier the deployment is configured for.
  *
- * The job built `new SandboxShippingAdapter()` itself, whatever
- * `SHIPPING_PROVIDER` said. The sandbox answers `in_transit` for every parcel
- * forever, so in production no shipment would ever have reached `delivered`.
- *
- * EasyPost is stood up locally — `EASYPOST_BASE_URL` exists for exactly this —
- * and answers per tracking code, so the suite can see which adapter the job
- * really asked.
+ * The sandbox answers `in_transit` for every parcel forever, so a job that used
+ * it whatever `SHIPPING_PROVIDER` said would never move a shipment to
+ * `delivered`. EasyPost is stood up locally (`EASYPOST_BASE_URL` exists for
+ * exactly this) and answers per tracking code, so the suite can see which
+ * adapter the job really asked.
  */
 const calls: { code: string; auth: string | undefined }[] = [];
 const answers: Record<string, { status: number; body: unknown }> = {};
@@ -96,8 +93,8 @@ describe('tracking refresh', () => {
     const brokenId = await shipment(pool, broken);
     const fineId = await shipment(pool, fine);
 
-    // Before: one carrier error escaped the loop and every parcel after it
-    // went unrefreshed, every half hour, for as long as that one kept failing.
+    // One carrier error must not escape the loop, or every parcel after it goes
+    // unrefreshed, every half hour, for as long as that one keeps failing.
     await refreshTracking(pool);
 
     expect(await statusOf(pool, fineId)).toBe('delivered');
