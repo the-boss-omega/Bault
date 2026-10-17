@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../../shared/api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
@@ -55,6 +55,16 @@ export function TopUpPanel({
   const [route, setRoute] = useState('card');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * The idempotency key of the top-up being attempted, and what it was for.
+   *
+   * The server dedupes on the key, so a retry must carry the key of the attempt
+   * it retries. A new key on every press made the second press after a network
+   * error a second top-up, although the first may well have charged the card.
+   * A different amount or route is a different top-up and gets a new key, and
+   * so does the next top-up once this one has an answer.
+   */
+  const attempt = useRef<{ key: string; route: string; cents: number } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -84,18 +94,26 @@ export function TopUpPanel({
 
   async function pay() {
     if (cents === null) return;
+    const current = attempt.current;
+    const key =
+      current && current.route === route && current.cents === cents
+        ? current.key
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    attempt.current = { key, route, cents };
     setBusy(true);
     try {
       const result = await api.post<{ status: string; amountMinor: number; replayed: boolean }>(
         '/finance/checkout',
-        {
-          amountMinor: cents,
-          route,
-          // A key the server can dedupe on. Regenerated per attempt so a genuine
-          // second top-up is not mistaken for a retry of the first.
-          idempotencyKey: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-        },
+        { amountMinor: cents, route, idempotencyKey: key },
       );
+      attempt.current = null;
+      // A retry is answered with the first attempt's outcome, which can be a
+      // refusal the network swallowed the first time.
+      if (result.status === 'failed' || result.status === 'refused') {
+        onStatus(null);
+        onError(t('money.notTaken'));
+        return;
+      }
       onStatus(
         result.status === 'succeeded'
           ? t('money.paid', { amount: formatUsd(result.amountMinor) })
@@ -105,6 +123,10 @@ export function TopUpPanel({
       setAmount('');
       onChanged();
     } catch (e) {
+      // No answer, or a 5xx: whether the card was charged is unknown, so the
+      // key stays for the retry. Any other refusal took no money.
+      const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
+      if (!unknown) attempt.current = null;
       onError((e as Error).message);
     } finally {
       setBusy(false);
