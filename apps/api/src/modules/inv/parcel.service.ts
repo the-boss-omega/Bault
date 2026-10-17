@@ -355,13 +355,21 @@ export class ParcelService {
       ownerId = owner?.id ?? null;
     }
 
-    // Adopt a pre-registration when the tracking number matches one.
+    /**
+     * Adopt a pre-registration when the tracking number matches one.
+     *
+     * Locked, so two operators scanning the same box at once cannot both adopt
+     * it (and both write its arrival and tell its owner twice). The second
+     * waits, finds it no longer `expected`, and books its scan in as an
+     * arrival of its own, as a later scan of the same label always has.
+     */
     let existing: typeof parcel.$inferSelect | undefined;
     if (tracking) {
       [existing] = await tx
         .select()
         .from(parcel)
         .where(and(eq(parcel.trackingNumber, tracking), eq(parcel.status, 'expected')))
+        .for('update')
         .limit(1);
     }
 
@@ -371,7 +379,7 @@ export class ParcelService {
     {
       if (existing) {
         assertTransition('expected', nextStatus);
-        await tx
+        const [adopted] = await tx
           .update(parcel)
           .set({
             status: nextStatus,
@@ -386,7 +394,9 @@ export class ParcelService {
             notes: input.notes?.trim() || existing.notes,
             updatedAt: now,
           })
-          .where(eq(parcel.id, existing.id));
+          .where(and(eq(parcel.id, existing.id), eq(parcel.status, 'expected')))
+          .returning({ id: parcel.id });
+        if (!adopted) throw new AppError(ErrorCode.CONFLICT, 'This parcel was booked in a moment ago.', 409);
         await this.writeEvent(tx, {
           parcelId: existing.id,
           eventType: 'received',
