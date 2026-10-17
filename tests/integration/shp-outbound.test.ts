@@ -786,4 +786,51 @@ describe('SHP outbound shipping', () => {
     });
     expect(twice.status).toBe(409);
   });
+
+  it('puts a direct-overnight parcel back at the dock when its shipment is cancelled', async () => {
+    const collector = await signIn(SEED.collector);
+    const operator = await signIn(SEED.operator);
+    const us = await addressFor(collector, US);
+    await fundWallet(SEED.collector, 30_000);
+
+    const registered = await collector.post('/me/parcels', {
+      facilityCode: 'DE',
+      carrier: 'UPS',
+      trackingNumber: `DIRECT-CANCEL-${Date.now()}`,
+      declaredContents: 'One slab',
+    });
+    expect(registered.status).toBe(201);
+    const parcelId = registered.body.id as string;
+    expect(
+      (await operator.post('/parcels/receive', {
+        facilityCode: 'DE',
+        addressedTo: 'red',
+        trackingNumber: registered.body.trackingNumber,
+      })).status,
+    ).toBe(201);
+
+    const before = (await collector.get('/finance/wallet')).body.amount as number;
+    const shipped = await collector.post(`/shipping/direct/${parcelId}`, { addressId: us, cardCount: 1 });
+    expect(shipped.status).toBe(201);
+    expect((await collector.get(`/parcels/${parcelId}`)).body.parcel.status).toBe('processed');
+
+    const cancelled = await collector.post(`/shipping/shipments/${shipped.body.shipmentId}/cancel`, {
+      reason: 'Sending it to the vault instead.',
+    });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.refundedMinor).toBe(shipped.body.costMinor);
+    expect((await collector.get('/finance/wallet')).body.amount).toBe(before - (cancelled.body.restockingFeeMinor as number));
+
+    // The parcel never left and was never opened: it is at the dock, unopened,
+    // as it was before the direct shipment took it, and the trail says why.
+    const after = (await collector.get(`/parcels/${parcelId}`)).body;
+    expect(after.parcel.status).toBe('received');
+    expect(after.parcel.processedAt).toBeNull();
+    expect(after.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: 'direct_cancelled', fromStatus: 'processed', toStatus: 'received' }),
+      ]),
+    );
+    expect((await collector.get(`/shipping/direct/${parcelId}/eligibility`)).body.eligible).toBe(true);
+  });
 });
