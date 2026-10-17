@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { EasyPostError, PaymentProviderError } from '@bault/adapters';
 import { pgErrorCode } from './pg-error';
 import { ErrorCode } from './error-codes';
 import {
@@ -88,6 +89,36 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    // A provider's error carries the PROVIDER's HTTP status, which describes
+    // Bault's call to it, not the customer's call to Bault: answered as it
+    // stands, EasyPost refusing Bault's API key reached the SPA as a 401 and
+    // read as a signed-out session, and a refused address as "Bad request.".
+    // So it is answered in Bault's terms, and the original goes to the log.
+    const provider = providerFailure(exception);
+    if (provider) {
+      if (provider.rejectedInput) {
+        this.logger.warn(`Provider rejected the request (${provider.kind}): ${describe(exception)}`);
+        res.status(HttpStatus.BAD_REQUEST).json({
+          error: {
+            code: ErrorCode.PROVIDER_REJECTED,
+            message: `The carrier could not accept this shipment as entered: ${provider.reason}. Check the address and the parcel details, then try again.`,
+            details: { provider: provider.kind },
+          },
+        });
+        return;
+      }
+      this.logger.error(`Provider failure (${provider.kind}): ${exception instanceof Error ? exception.stack : describe(exception)}`);
+      this.report(exception, describeRequest(requestOf(host)));
+      res.status(HttpStatus.BAD_GATEWAY).json({
+        error: {
+          code: ErrorCode.PROVIDER_UNAVAILABLE,
+          message: `The ${provider.kind === 'shipping' ? 'shipping' : 'payment'} provider could not handle this just now. Try again shortly.`,
+          details: { provider: provider.kind },
+        },
+      });
+      return;
+    }
+
     // Body-parser and other connect-style middleware throw plain errors carrying
     // their own HTTP status rather than a Nest HttpException (for example
     // `PayloadTooLargeError`, 413). Answer with that status, not a 500.
@@ -136,6 +167,31 @@ const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 function isInvalidTextRepresentation(exception: unknown): boolean {
   return pgErrorCode(exception) === PG_INVALID_TEXT_REPRESENTATION;
+}
+
+/**
+ * A provider adapter's HTTP error, and whether it is the customer's to fix.
+ *
+ * Only a carrier's 400 or 422 is: it is the answer to what the customer
+ * entered (an address, a parcel). Every other status (a refused key, a
+ * forbidden account, a missing provider object, a throttle, an outage) is the
+ * provider or Bault's arrangement with it failing. Matched by name as well, as
+ * `LabelNotPurchasedError.is` does, in case two copies of the adapters package
+ * are loaded.
+ */
+function providerFailure(
+  exception: unknown,
+): { kind: 'shipping' | 'payment'; rejectedInput: boolean; reason: string } | null {
+  if (!(exception instanceof Error)) return null;
+  if (exception instanceof EasyPostError || exception.name === 'EasyPostError') {
+    const e = exception as EasyPostError;
+    const reason = (e.detail ?? e.message).replace(/[.\s]+$/, '').slice(0, 300);
+    return { kind: 'shipping', rejectedInput: e.status === 400 || e.status === 422, reason };
+  }
+  if (exception instanceof PaymentProviderError || exception.name === 'PaymentProviderError') {
+    return { kind: 'payment', rejectedInput: false, reason: exception.message };
+  }
+  return null;
 }
 
 /** The HTTP status a connect-style middleware error carries, if it carries one. */
