@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -248,20 +248,25 @@ export class SupportService {
     });
   }
 
-  /** Staff mark a ticket done. A later customer reply reopens it. */
+  /**
+   * Staff mark a ticket done. A later customer reply reopens it.
+   *
+   * Only a ticket that is not yet resolved, decided by the update itself and
+   * in the transaction that emits the notification, so two staff pressing
+   * Resolve together resolve it once and the customer is told once.
+   */
   async resolve(ticketId: string, actor: TicketActor) {
     if (!this.staff(actor)) throw AppError.forbidden('Only staff can resolve a ticket');
     const ticket = await this.loadFor(ticketId, actor);
-    if (ticket.status === 'resolved') {
-      throw new AppError(ErrorCode.CONFLICT, 'Ticket is already resolved', 409);
-    }
 
     return this.db.transaction(async (tx) => {
       const now = new Date();
-      await tx
+      const [resolved] = await tx
         .update(supportTicket)
         .set({ status: 'resolved', resolvedAt: now, resolvedBy: actor.id, updatedAt: now })
-        .where(eq(supportTicket.id, ticketId));
+        .where(and(eq(supportTicket.id, ticketId), ne(supportTicket.status, 'resolved')))
+        .returning({ id: supportTicket.id });
+      if (!resolved) throw new AppError(ErrorCode.CONFLICT, 'Ticket is already resolved', 409);
       await this.outbox.emit(tx, {
         aggregateType: 'support_ticket',
         aggregateId: ticketId,
