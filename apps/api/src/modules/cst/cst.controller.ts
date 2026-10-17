@@ -72,19 +72,24 @@ export class CstController {
   /**
    * Placing a hold is idempotent, and the answer says whether it did anything:
    * `already_on_hold` for a card that was already frozen.
+   *
+   * The item is whatever the scanner produced, as for a relocation: the hold
+   * panel asks for a scan, and the internal id is on no label.
    */
   @Roles('warehouse_operator', 'admin')
   @Post('items/:itemId/hold')
   async placeHold(@Param('itemId') itemId: string, @CurrentUser() user: AuthUser) {
-    const changed = await this.relocate.placeHold(itemId, user.id);
-    return { status: changed ? 'hold_placed' : 'already_on_hold', changed };
+    const target = await this.stow.resolveItem(itemId);
+    const changed = await this.relocate.placeHold(target.id, user.id);
+    return { status: changed ? 'hold_placed' : 'already_on_hold', changed, itemId: target.id };
   }
 
   @Roles('warehouse_operator', 'admin')
   @Delete('items/:itemId/hold')
   async releaseHold(@Param('itemId') itemId: string, @CurrentUser() user: AuthUser) {
-    const changed = await this.relocate.releaseHold(itemId, user.id);
-    return { status: changed ? 'hold_released' : 'was_not_on_hold', changed };
+    const target = await this.stow.resolveItem(itemId);
+    const changed = await this.relocate.releaseHold(target.id, user.id);
+    return { status: changed ? 'hold_released' : 'was_not_on_hold', changed, itemId: target.id };
   }
 
   // Staff-only: these read ANY item, so a customer must use the owner-scoped

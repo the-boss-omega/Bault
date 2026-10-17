@@ -68,6 +68,23 @@ const PRICE_LIST = {
   ],
 };
 
+/**
+ * `GET /content/account-terms`, trimmed to what this page reads: the cash-out
+ * schedule, which is a constant in the charging code rather than a rule.
+ */
+const TERMS = {
+  cashOut: { bandMinor: 10_000, smallBps: 600, smallMinimumMinor: 99, largeFixedMinor: 500, largeBps: 100 },
+};
+
+/** Each endpoint answers with its own body; `terms` may answer with a pending or failing promise. */
+function answer({ terms = (): Promise<unknown> => Promise.resolve(TERMS) } = {}) {
+  get.mockImplementation((path: string) => {
+    if (path === '/pricing/list') return Promise.resolve(PRICE_LIST);
+    if (path === '/content/account-terms') return terms();
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
 function renderPage() {
   return render(
     <I18nProvider>
@@ -83,7 +100,7 @@ beforeEach(() => {
 
 describe('the landing page', () => {
   it('opens on a real item, with its serial, not on an illustration', async () => {
-    get.mockResolvedValue(PRICE_LIST);
+    answer();
     renderPage();
 
     // The identity, in the component that states it everywhere else in the
@@ -103,7 +120,7 @@ describe('the landing page', () => {
   });
 
   it('prices itself from the pricing rules, never from a figure typed into the page', async () => {
-    get.mockResolvedValue(PRICE_LIST);
+    answer();
     renderPage();
 
     await waitFor(() => expect(get).toHaveBeenCalledWith('/pricing/list'));
@@ -113,7 +130,6 @@ describe('the landing page', () => {
     // error a price label exists to prevent.
     expect(await screen.findByText('$5.00')).toBeInTheDocument();
     expect(screen.getByText('5%')).toBeInTheDocument();
-    expect(screen.getByText('1.50%')).toBeInTheDocument();
 
     // $0.00 is PRINTED, not suppressed. Bault adds no handling markup on an
     // outbound parcel, and that is a fact worth stating rather than an absence
@@ -122,7 +138,7 @@ describe('the landing page', () => {
   });
 
   it('states the storage terms from the rule parameters, not from its fallback value', async () => {
-    get.mockResolvedValue(PRICE_LIST);
+    answer();
     renderPage();
 
     // `value` on the storage rule is $1.00 — a fallback base for an item with no
@@ -133,6 +149,42 @@ describe('the landing page', () => {
       await screen.findByText('180 days included, then 10% of the intake fee every 90 days'),
     ).toBeInTheDocument();
     expect(screen.queryByText('$1.00')).not.toBeInTheDocument();
+  });
+
+  it('states the cash-out fee from the schedule the charge uses, not from the price-list rule', async () => {
+    answer();
+    renderPage();
+
+    // The cash-out fee is charged from the schedule in `money-terms.ts`, which
+    // `GET /content/account-terms` reports. Its pricing rule only publishes a
+    // figure, and here it says 1.50%: a front page that printed it would quote
+    // a fee nobody is charged.
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/content/account-terms'));
+    const row = (await screen.findByText('Taking money out')).closest('tr')!;
+    await waitFor(() =>
+      expect(row).toHaveTextContent('6% (at least $0.99) up to $100.00; above that, $5.00 plus 1%'),
+    );
+    expect(screen.queryByText('1.50%')).not.toBeInTheDocument();
+  });
+
+  it('says the cash-out figures are loading until they arrive', async () => {
+    answer({ terms: () => new Promise(() => {}) });
+    renderPage();
+
+    const row = (await screen.findByText('Taking money out')).closest('tr')!;
+    await screen.findByText('$5.00');
+    expect(row).toHaveTextContent('Loading…');
+    expect(row).not.toHaveTextContent('%');
+  });
+
+  it('shows no cash-out figure when the terms cannot be fetched, and the other prices still', async () => {
+    answer({ terms: () => Promise.reject(new Error('unreachable')) });
+    renderPage();
+
+    const row = (await screen.findByText('Taking money out')).closest('tr')!;
+    await waitFor(() => expect(row).toHaveTextContent(/not available just now/i));
+    expect(row).not.toHaveTextContent('%');
+    expect(screen.getByText('$5.00')).toBeInTheDocument();
   });
 
   it('shows no figure at all when the price list cannot be fetched', async () => {
@@ -148,7 +200,7 @@ describe('the landing page', () => {
 
   it('sends "Open an account" to sign-up and "Sign in" to sign-in', async () => {
     const user = userEvent.setup();
-    get.mockResolvedValue(PRICE_LIST);
+    answer();
     renderPage();
 
     // Two calls to action that mean different things. Landing "Open an account"
@@ -163,7 +215,7 @@ describe('the landing page', () => {
   });
 
   it('is one h1 followed by section headings, so it can be read by outline', async () => {
-    get.mockResolvedValue(PRICE_LIST);
+    answer();
     renderPage();
 
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);

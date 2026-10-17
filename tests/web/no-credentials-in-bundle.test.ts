@@ -16,10 +16,10 @@ import { join } from 'node:path';
  * still fail, so the check is on the ARTEFACT: only the built output can say
  * whether it worked.
  *
- * Skipped locally when there is no build to look at; `pnpm --filter @bault/web
- * build` makes it meaningful. In CI a missing build FAILS: `ci.yml` builds the
- * SPA before the web suite, and the failure is what stops an edit from quietly
- * dropping that step.
+ * Locally, with no build to look at, it runs and passes without checking
+ * anything; `pnpm --filter @bault/web build` first makes it meaningful. In CI a
+ * missing build FAILS: `ci.yml` builds the SPA before the web suite, and the
+ * failure is what stops an edit from quietly dropping that step.
  */
 
 const DIST = join(process.cwd(), 'apps', 'web', 'dist', 'assets');

@@ -136,7 +136,7 @@ export function addressLines(address: InboundAddress): string[] {
   ];
 }
 
-/** Basis points → a display percentage, e.g. 6625 → "6.625%". */
+/** Basis points → a display percentage, e.g. 725 → "7.25%", 600 → "6%". */
 export function taxRateLabel(bps: number): string {
   if (bps === 0) return '0%';
   return `${(bps / 100).toFixed(3).replace(/\.?0+$/, '')}%`;

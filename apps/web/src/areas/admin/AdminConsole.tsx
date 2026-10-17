@@ -25,7 +25,8 @@ import { WalletRequestsSection } from './WalletRequestsSection';
 import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
 import { AccountingSection } from './AccountingSection';
-import { PricingCoveragePanel } from './PricingCoveragePanel';
+import { PricingCoveragePanel, type PricingCoverage } from './PricingCoveragePanel';
+import type { MembershipTier, TierCatalogue } from '../../shared/membership';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
 import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 
@@ -46,6 +47,11 @@ interface AdminUser {
   nameReviewRequired: boolean;
   role: string;
   status: string;
+  /**
+   * Suspended by the debt sweep, which lifts it once the balance is paid. Any
+   * status an administrator sets, `suspended` again included, makes it theirs.
+   */
+  autoSuspended: boolean;
   intakeId: string | null;
   /** Signs in with a second factor, and so has one an administrator can reset. */
   mfaEnabled: boolean;
@@ -406,28 +412,62 @@ function UserRow({
   const [lastName, setLastName] = useState(user.lastName ?? '');
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
+  /** What the server holds, as of the list or this row's last save. */
+  const [saved, setSaved] = useState({
+    firstName: user.firstName ?? '',
+    lastName: user.lastName ?? '',
+    role: user.role,
+    status: user.status,
+    autoSuspended: user.autoSuspended,
+  });
 
   const namesOk =
     isValidNamePart(normalizeNamePart(firstName)) &&
     (lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName)));
-  const dirty =
-    normalizeNamePart(firstName) !== (user.firstName ?? '') ||
-    normalizeNamePart(lastName) !== (user.lastName ?? '') ||
-    role !== user.role ||
-    status !== user.status;
 
-  async function save() {
+  /**
+   * Only what the administrator changed.
+   *
+   * The server reads every field it receives as a decision: a status sent with
+   * a name correction would clear the debt sweep's marker on an account the
+   * sweep suspended, and the sweep would never lift it.
+   */
+  const changes: Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>> = {};
+  if (normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
+  // A blank last name is left as it is, never sent as a value.
+  if (lastName.trim() && normalizeNamePart(lastName) !== saved.lastName) changes.lastName = normalizeNamePart(lastName);
+  if (role !== saved.role) changes.role = role;
+  if (status !== saved.status) changes.status = status;
+  const dirty = Object.keys(changes).length > 0;
+
+  async function send(sent: typeof changes) {
     try {
-      await api.patch(`/admin/users/${user.id}`, {
-        firstName: normalizeNamePart(firstName),
-        ...(lastName.trim() ? { lastName: normalizeNamePart(lastName) } : {}),
-        role,
-        status,
-      });
+      const updated = await api.patch<Partial<AdminUser> | null>(`/admin/users/${user.id}`, sent);
+      setSaved((s) => ({
+        ...s,
+        ...sent,
+        // A status sent, even the one the account had, clears the sweep's marker.
+        autoSuspended:
+          typeof updated?.autoSuspended === 'boolean' ? updated.autoSuspended : sent.status ? false : s.autoSuspended,
+      }));
       onSaved(t('admin.users.saved', { email: user.email }));
     } catch (e) {
       onError((e as Error).message);
     }
+  }
+
+  async function save() {
+    if (dirty) await send({ ...changes });
+  }
+
+  /**
+   * Take over a suspension the debt sweep imposed, so the sweep does not lift
+   * it when the balance is paid. Exactly the status, which the server reads as
+   * an administrator's decision; anything else typed into the row stays unsent.
+   */
+  async function keepSuspended() {
+    setStatus('suspended');
+    await send({ status: 'suspended' });
   }
 
   return (
@@ -475,7 +515,7 @@ function UserRow({
       </td>
       <td>
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <StatusBadge tone={ACCOUNT_STATUS_TONE[user.status] ?? 'neutral'}>{user.status}</StatusBadge>
+          <StatusBadge tone={ACCOUNT_STATUS_TONE[saved.status] ?? 'neutral'}>{saved.status}</StatusBadge>
           {user.mfaEnabled && (
             <span title={t('admin.users.mfaOnTitle')}>
               <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
@@ -493,10 +533,23 @@ function UserRow({
             ))}
           </select>
         </div>
+        {saved.status === 'suspended' && saved.autoSuspended && (
+          <>
+            <span className="dt-sub">{t('admin.users.autoSuspended')}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={t('admin.users.keepSuspendedLabel', { email: user.email })}
+              onClick={() => void keepSuspended()}
+            >
+              {t('admin.users.keepSuspended')}
+            </Button>
+          </>
+        )}
       </td>
       <td className="td-tight">
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk} onClick={save}>
+          <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk || !dirty} onClick={save}>
             {t('admin.action.save')}
           </Button>
           {onResetMfa && (
@@ -537,17 +590,37 @@ function ItemRow({
   const [ownerId, setOwnerId] = useState(item.ownerId);
   const [lifecycleState, setLifecycleState] = useState(item.lifecycleState);
   const [holdFlag, setHoldFlag] = useState(item.holdFlag);
+  /** What the server holds, as of the list or this row's last save. */
+  const [saved, setSaved] = useState({
+    description: item.description,
+    typeClass: item.typeClass,
+    conditionGrade: item.conditionGrade ?? '',
+    ownerId: item.ownerId,
+    lifecycleState: item.lifecycleState,
+    holdFlag: item.holdFlag,
+  });
+
+  /**
+   * Only what the administrator changed, as for a user row: an unchanged empty
+   * grade sent back would write "" over a card with none.
+   */
+  const current = { description, typeClass, conditionGrade, ownerId, lifecycleState, holdFlag };
+  const changes: Partial<typeof current> = {};
+  for (const f of Object.keys(current) as (keyof typeof current)[]) {
+    if (current[f] !== saved[f]) Object.assign(changes, { [f]: current[f] });
+  }
+  const dirty = Object.keys(changes).length > 0;
 
   async function save() {
+    if (!dirty) return;
+    const sent = { ...changes };
     try {
-      await api.patch(`/admin/items/${item.id}`, {
-        description,
-        typeClass,
-        conditionGrade,
-        ownerId,
-        lifecycleState,
-        holdFlag,
-      });
+      const updated = await api.patch<{ lifecycleState?: string } | null>(`/admin/items/${item.id}`, sent);
+      // The server may move the state itself (an owner change takes a listed
+      // card back to `stored`), so the row shows the state it answered with.
+      const state = updated?.lifecycleState ?? sent.lifecycleState ?? saved.lifecycleState;
+      setLifecycleState(state);
+      setSaved((s) => ({ ...s, ...sent, lifecycleState: state }));
       onSaved(t('admin.items.saved', { barcode: item.barcode }));
     } catch (e) {
       onError((e as Error).message);
@@ -622,7 +695,7 @@ function ItemRow({
         <CardPhotoButton serialNumber={item.serialNumber} title={item.description || item.typeClass} />
       </td>
       <td className="td-tight">
-        <Button size="sm" variant="secondary" onClick={save}>
+        <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!dirty} onClick={save}>
           {t('admin.action.save')}
         </Button>
       </td>
@@ -654,7 +727,12 @@ const BILLING_LABEL: Record<string, MessageKey> = {
   monthly: 'admin.pricing.billing.monthly',
 };
 
-const ACTION_TYPES = ['intake', 'storage', 'service', 'shipping', 'marketplace_fee'];
+/**
+ * The actions a rule can be written for are the API's own catalogue, read from
+ * the coverage check (`billable-actions.ts`) rather than listed here, so every
+ * price the check reports missing can be loaded from this screen. These labels
+ * are only for the actions that have one; the rest show their key.
+ */
 const ACTION_LABEL: Record<string, MessageKey> = {
   intake: 'admin.pricing.action.intake',
   storage: 'admin.pricing.action.storage',
@@ -667,6 +745,24 @@ const MODEL_LABEL: Record<string, MessageKey> = {
   percentage: 'admin.pricing.model.percentage',
 };
 
+/**
+ * What a membership rule carries besides its price: the shape the seed writes.
+ *
+ * The worker cannot import the tier catalogue, so the storage sweep reads a
+ * member's storage allowance (`storedItems`) off the tier's pricing rule. A
+ * rule without it covers none of a member's items, and every one of them is
+ * billed storage.
+ */
+function tierRuleParameters(tier: MembershipTier) {
+  return {
+    storedItems: tier.storedItems,
+    insuredShipments: tier.insuredShipments,
+    insuredValueCapMinor: tier.insuredValueCapMinor,
+    postageCreditMinor: tier.postageCreditMinor,
+    commissionWaivedOnMinor: tier.commissionWaivedOnMinor,
+  };
+}
+
 function PricingSection({
   onMsg,
   onError,
@@ -676,6 +772,10 @@ function PricingSection({
 }) {
   const { t, locale } = useI18n();
   const [rules, setRules] = useState<PricingRule[] | null>(null);
+  /** The coverage check's answer: the actions the form offers. */
+  const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
+  /** The tiers, for the allowances a membership rule carries. */
+  const [tiers, setTiers] = useState<MembershipTier[] | null>(null);
   const [actionType, setActionType] = useState('intake');
   const [itemClass, setItemClass] = useState('');
   const [description, setDescription] = useState('');
@@ -700,10 +800,23 @@ function PricingSection({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    api
+      .get<TierCatalogue>('/membership/tiers')
+      .then((c) => setTiers(c.tiers))
+      .catch((e: Error) => onError(e.message));
+  }, [onError]);
+
   const value = model === 'fixed' ? dollarsToCents(amount) : percentToBasisPoints(amount);
+  const catalogue = coverage?.actions ?? [];
+  const selected = catalogue.find((a) => a.actionType === actionType) ?? null;
+  const tier = tiers?.find((x) => x.feeActionType === actionType) ?? null;
+  // Both catalogues first: without the tiers, a membership rule would be
+  // written without the allowances the storage sweep reads.
+  const ready = selected !== null && tiers !== null;
 
   async function create() {
-    if (value === null) return;
+    if (value === null || !ready) return;
     try {
       await api.post('/pricing/rules', {
         actionType,
@@ -712,6 +825,7 @@ function PricingSection({
         model,
         value,
         billingTrigger,
+        ...(tier ? { parameters: tierRuleParameters(tier) } : {}),
       });
       onMsg(t('admin.pricing.created'));
       setAmount('');
@@ -729,7 +843,7 @@ function PricingSection({
     <>
       {/* First, because "is anything unpriced?" is the question to answer
           before launch, and before adding a rule to fix it. */}
-      <PricingCoveragePanel refreshKey={coverageKey} onError={onError} />
+      <PricingCoveragePanel refreshKey={coverageKey} onError={onError} onLoaded={setCoverage} />
 
       <Panel title={t('admin.pricing.newRule')} subtitle={t('admin.pricing.newRuleSubtitle')}>
         <div className="stack stack--tight">
@@ -745,14 +859,26 @@ function PricingSection({
             <label className="field">
               <span className="field-label">{t('admin.pricing.col.action')}</span>
               <select value={actionType} onChange={(e) => setActionType(e.target.value)}>
-                {ACTION_TYPES.map((a) => {
-                  const key = ACTION_LABEL[a];
-                  return (
-                    <option key={a} value={a}>
-                      {key ? t(key) : a}
-                    </option>
-                  );
-                })}
+                {/* Apart: a rule for a code constant is only published. */}
+                {(
+                  [
+                    ['admin.pricing.group.charged', catalogue.filter((a) => a.resolution !== 'code_constant')],
+                    ['admin.pricing.group.published', catalogue.filter((a) => a.resolution === 'code_constant')],
+                  ] as const
+                ).map(([label, actions]) =>
+                  actions.length === 0 ? null : (
+                    <optgroup key={label} label={t(label)}>
+                      {actions.map((a) => {
+                        const key = ACTION_LABEL[a.actionType];
+                        return (
+                          <option key={a.actionType} value={a.actionType}>
+                            {key ? t(key) : a.actionType}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ),
+                )}
               </select>
             </label>
             <label className="field">
@@ -801,12 +927,18 @@ function PricingSection({
           </div>
 
           <p className="field-hint">{t('admin.pricing.billingHint')}</p>
+          {tier && (
+            <p className="field-hint">{t('admin.pricing.tierHint', { count: tier.storedItems })}</p>
+          )}
+          {selected?.resolution === 'code_constant' && (
+            <p className="field-hint">{t('admin.pricing.publishedHint')}</p>
+          )}
 
           <div className="row">
             <Button
               variant="gold"
               icon={<IconPlus />}
-              disabled={value === null || description.trim() === ''}
+              disabled={value === null || description.trim() === '' || !ready}
               onClick={create}
             >
               {t('admin.pricing.addRule')}

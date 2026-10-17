@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, signIn, intakeFor, fixtureEmail } from '../../tests/integration/helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
  * Input validation, and what the API does with input nobody sensible would send.
@@ -238,7 +239,7 @@ describe('registration and identity', () => {
         lastName: 'Person',
         username: `u${Date.now()}`,
         // Consent given, so the refusal below is for the reason under test.
-        acceptedTermsVersion: '2026-10-draft-1',
+        acceptedTermsVersion: CURRENT_TERMS_VERSION,
       });
       expect(res.status, `${email} was accepted`).toBeGreaterThanOrEqual(400);
       expect(res.status).toBeLessThan(500);
@@ -254,7 +255,7 @@ describe('registration and identity', () => {
       lastName: 'Person',
       username: 'red', // already seeded
       // Consent given, so the refusal below is for the reason under test.
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);
@@ -269,7 +270,7 @@ describe('registration and identity', () => {
       lastName: 'Person',
       username: `weak${Date.now()}`,
       // Consent given, so the refusal below is for the reason under test.
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);

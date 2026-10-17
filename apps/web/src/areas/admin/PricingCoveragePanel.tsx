@@ -28,7 +28,7 @@ export interface PricingCoverage {
   unknownRules: { id: string; actionType: string }[];
 }
 
-type CoverageStatus = 'priced' | 'missing' | 'falls_back' | 'code_default' | 'free' | 'code_constant';
+export type CoverageStatus = 'priced' | 'missing' | 'falls_back' | 'code_default' | 'free' | 'code_constant';
 
 const STATUS_TONE: Record<CoverageStatus, StatusTone> = {
   priced: 'success',
@@ -62,7 +62,20 @@ function ruleValue(rule: { model: string; value: number }): string {
  * the launch check: every action the code charges for, what it costs right
  * now, and what happens to the ones that have no rule. Problems sort first.
  */
-export function PricingCoveragePanel({ refreshKey, onError }: { refreshKey: number; onError: (m: string) => void }) {
+export function PricingCoveragePanel({
+  refreshKey,
+  onError,
+  onLoaded,
+}: {
+  refreshKey: number;
+  onError: (m: string) => void;
+  /**
+   * Each answer, for the new-rule form beside it. The form offers exactly the
+   * actions listed here, so the screen can load every price this check asks
+   * for, and with one request rather than two.
+   */
+  onLoaded?: (coverage: PricingCoverage) => void;
+}) {
   const { t } = useI18n();
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,13 +83,15 @@ export function PricingCoveragePanel({ refreshKey, onError }: { refreshKey: numb
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setCoverage(await api.get<PricingCoverage>('/admin/pricing/coverage'));
+      const next = await api.get<PricingCoverage>('/admin/pricing/coverage');
+      setCoverage(next);
+      onLoaded?.(next);
     } catch (e) {
       onError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [onError]);
+  }, [onError, onLoaded]);
 
   useEffect(() => {
     void load();

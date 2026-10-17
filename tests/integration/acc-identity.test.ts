@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_USERNAME, fixtureEmail, signIn, usernameOf } from './helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
  * User identity (Requirements 3 & 4).
@@ -25,7 +26,7 @@ async function register(client: Client, overrides: Record<string, unknown> = {})
     lastName: 'Lovelace',
     password: 'password123',
     // A valid registration accepts the terms in force (acc-consent.test.ts).
-    acceptedTermsVersion: '2026-10-draft-1',
+    acceptedTermsVersion: CURRENT_TERMS_VERSION,
     ...overrides,
   });
 }

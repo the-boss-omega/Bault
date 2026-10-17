@@ -80,10 +80,11 @@ export function SignInPage({
   }
 
   /**
-   * The address is whatever was typed into the identifier field. When that was a
-   * username rather than an email, the endpoint answers exactly as it answers an
-   * unknown address (a link is on its way, asserting nothing about whether an
-   * account exists), so nothing here has to guess.
+   * The address is whatever was typed into the identifier field. An unknown
+   * address is answered exactly like a known one (a link is on its way,
+   * asserting nothing about whether an account exists). A username is not an
+   * address at all: `EmailDto` requires one, so the endpoint refuses it with a
+   * 400 and the refusal is shown like any other error.
    */
   async function resendVerification() {
     setBusy(true);

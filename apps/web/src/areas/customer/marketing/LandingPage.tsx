@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
-import { formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatUsd } from '../../../shared/money';
 import { navigate } from '../../../shared/routing';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
 import { Button } from '../../../shared/ui/primitives';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
+import type { AccountTerms } from '../help/FaqLegalPage';
 
 /**
  * The front door: what Bault is and what it will cost, for somebody arriving
@@ -23,6 +24,10 @@ import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
  *     rules the billing engine charges from. When the request fails the figures
  *     are omitted and the page says so, never a placeholder that could be read
  *     as "free".
+ *   - The cash-out fee is the exception: it is charged from a schedule in the
+ *     code (`money-terms.ts`), and its rule only publishes a figure, so it is
+ *     read from `GET /content/account-terms`, the same source the legal pages
+ *     use.
  *   - The wording is translated, the figures are not. A rule's `description` is
  *     stored in English, so the label for each featured rule is a catalogue key
  *     here and the number comes from the server, the same split
@@ -32,7 +37,10 @@ import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
  * the warehouse sit on, and no component the product does not already have.
  */
 
-/** The rules worth putting on a front page, in the order somebody meets them. */
+/**
+ * The rules worth putting on a front page, in the order somebody meets them.
+ * `cash_out_fee` is stated from the account terms, not from its rule.
+ */
 const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
   { actionType: 'intake', labelKey: 'landing.price.intake' },
   { actionType: 'storage', labelKey: 'landing.price.storage' },
@@ -68,6 +76,14 @@ function priceOf(entry: PriceEntry): string {
     : formatUsd(entry.value);
 }
 
+/** The cash-out schedule out of the account terms, or null when it is not all there. */
+function cashOutOf(terms: Partial<AccountTerms> | null | undefined): AccountTerms['cashOut'] | null {
+  const c = terms?.cashOut;
+  if (!c) return null;
+  const figures = [c.bandMinor, c.smallBps, c.smallMinimumMinor, c.largeFixedMinor, c.largeBps];
+  return figures.every((n) => typeof n === 'number' && Number.isFinite(n)) ? c : null;
+}
+
 /** A finite number out of a rule's `parameters`, or null when it is not one. */
 function param(entry: PriceEntry | undefined, key: string): number | null {
   const raw = entry?.parameters?.[key];
@@ -78,6 +94,8 @@ export function LandingPage() {
   const { t } = useI18n();
   const [prices, setPrices] = useState<Map<string, PriceEntry> | null>(null);
   const [pricesFailed, setPricesFailed] = useState(false);
+  /** `undefined` while the account terms load, `null` when they could not be read. */
+  const [cashOut, setCashOut] = useState<AccountTerms['cashOut'] | null | undefined>(undefined);
 
   useEffect(() => {
     let live = true;
@@ -109,6 +127,32 @@ export function LandingPage() {
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .get<AccountTerms>('/content/account-terms')
+      .then((terms) => {
+        if (live) setCashOut(cashOutOf(terms));
+      })
+      .catch(() => {
+        // Omitted, like a price that cannot be fetched.
+        if (live) setCashOut(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const cashOutTerms = cashOut
+    ? t('legal.figures.cashOutValue', {
+        smallPct: bpsToPercent(cashOut.smallBps),
+        min: formatUsd(cashOut.smallMinimumMinor),
+        band: formatUsd(cashOut.bandMinor),
+        fixed: formatUsd(cashOut.largeFixedMinor),
+        largePct: bpsToPercent(cashOut.largeBps),
+      })
+    : null;
 
   const storage = prices?.get('storage');
   const freeDays = param(storage, 'freeDays');
@@ -249,6 +293,7 @@ export function LandingPage() {
                 {FEATURED.map(({ actionType, labelKey }) => {
                   const entry = prices?.get(actionType);
                   const isStorage = actionType === 'storage';
+                  const isCashOut = actionType === 'cash_out_fee';
                   return (
                     <tr key={actionType}>
                       <th scope="row">
@@ -260,8 +305,15 @@ export function LandingPage() {
                       <td className="num">
                         {/* Until the list arrives, and if it never does, the cell
                           is empty instead of holding a figure nobody quoted. */}
-                        {entry !== undefined && !isStorage && (
+                        {entry !== undefined && !isStorage && !isCashOut && (
                           <span className="amount">{priceOf(entry)}</span>
+                        )}
+                        {isCashOut && (
+                          <span className="landing-included">
+                            {cashOut === undefined
+                              ? t('grp.loading')
+                              : (cashOutTerms ?? t('landing.price.unavailable'))}
+                          </span>
                         )}
                         {isStorage && storageTerms !== null && (
                           <span className="landing-included">

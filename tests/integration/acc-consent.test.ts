@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
  * Registration records that the person agreed to the terms.
@@ -9,12 +10,10 @@ import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
  * refuses a registration that did not accept, refuses one that accepted some
  * OTHER version than the one in force, and writes down which version and when.
  *
- * The version is spelled out here rather than imported from the API, so a
- * change of version is a deliberate edit in two places, not something a test
- * follows silently. `tests/web/faq-legal.test.ts` checks that the SPA and the
- * API name the same one.
+ * The version is the API's own constant, so a new version of the terms needs no
+ * edit here. `tests/web/faq-legal.test.ts` checks that the SPA and the API name
+ * the same one.
  */
-const CURRENT_TERMS_VERSION = '2026-10-draft-1';
 
 function registration(overrides: Record<string, unknown> = {}) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;

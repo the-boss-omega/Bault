@@ -4,6 +4,9 @@ import { CustodyService } from './custody.service';
 /**
  * Relocate + hold operations (T047). Thin transactional orchestration over the
  * custody kernel: each call is one atomic commit (change + custody event).
+ *
+ * Every id here is the item's internal id. A scan (barcode or serial) is
+ * resolved to one by `StowService.resolveItem` in the controller first.
  */
 @Injectable()
 export class RelocateService {

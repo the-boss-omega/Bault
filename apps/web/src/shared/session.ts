@@ -27,6 +27,13 @@ export interface SessionProfile {
   fullName: string;
   /** True while a migrated legacy name is still awaiting confirmation. */
   nameReviewRequired: boolean;
+  /** The account has a confirmed second factor. */
+  mfaEnabled: boolean;
+  /**
+   * Its role requires one. `mfaRequired && !mfaEnabled` is an account every
+   * route but enrolment refuses; see `mustEnrolSecondFactor`.
+   */
+  mfaRequired: boolean;
 }
 
 /**

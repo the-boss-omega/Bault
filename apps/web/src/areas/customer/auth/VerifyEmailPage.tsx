@@ -21,22 +21,54 @@ type State =
   | { status: 'verified' }
   | { status: 'failed'; message: string };
 
+/**
+ * One request per link.
+ *
+ * The token is single-use, and StrictMode runs the effect below twice in
+ * development. A second request would be refused because the first spent the
+ * link, and the page would say it failed, so a second run for the same token
+ * waits on the first request. A failed one is dropped once it settles, so
+ * coming back to the page later asks again.
+ */
+const verifying = new Map<string, Promise<unknown>>();
+
+function verifyOnce(token: string): Promise<unknown> {
+  const existing = verifying.get(token);
+  if (existing) return existing;
+  const request = api.post('/auth/verify-email', { token });
+  verifying.set(token, request);
+  request.catch(() => {
+    if (verifying.get(token) === request) verifying.delete(token);
+  });
+  return request;
+}
+
 export function VerifyEmailPage({ token }: { token: string | null }) {
   const t = useT();
-  const [state, setState] = useState<State>(
-    token ? { status: 'working' } : { status: 'failed', message: '' },
-  );
+  /** The answer, and which link it is the answer for. */
+  const [outcome, setOutcome] = useState<(State & { token: string }) | null>(null);
+  const state: State = !token
+    ? { status: 'failed', message: '' }
+    : outcome?.token === token
+      ? outcome
+      : { status: 'working' };
 
   useEffect(() => {
     if (!token) return;
-    void (async () => {
-      try {
-        await api.post('/auth/verify-email', { token });
-        setState({ status: 'verified' });
-      } catch (e) {
-        setState({ status: 'failed', message: (e as Error).message });
-      }
-    })();
+    // An answer that arrives after the page has moved on (unmounted, or opened
+    // with another link) is about nothing on the screen.
+    let live = true;
+    verifyOnce(token).then(
+      () => {
+        if (live) setOutcome({ token, status: 'verified' });
+      },
+      (e: unknown) => {
+        if (live) setOutcome({ token, status: 'failed', message: (e as Error).message });
+      },
+    );
+    return () => {
+      live = false;
+    };
   }, [token]);
 
   function goToSignIn() {

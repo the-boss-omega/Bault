@@ -10,7 +10,7 @@ import {
   timeStep,
   totp,
 } from '../../apps/api/src/modules/acc/mfa/totp';
-import { deriveSubkey, openSecret, sealSecret } from '../../apps/api/src/modules/acc/mfa/secret-box';
+import { UnreadableSecretError, deriveSubkey, openSecret, sealSecret } from '../../apps/api/src/modules/acc/mfa/secret-box';
 import {
   RECOVERY_CODE_COUNT,
   generateRecoveryCodes,
@@ -182,6 +182,15 @@ describe('the secret at rest (AES-256-GCM)', () => {
   it('refuses the wrong key', () => {
     const sealed = sealSecret(key, secret, 'user-1');
     expect(() => openSecret(randomBytes(32), sealed, 'user-1')).toThrow();
+  });
+
+  it('refuses every unreadable value with the one error the service maps to a clear answer', () => {
+    // A changed MFA_ENCRYPTION_KEY, a copied row and a damaged one all reach
+    // the person as `mfa_factor_unreadable`, never as a 500.
+    const sealed = sealSecret(key, secret, 'user-1');
+    expect(() => openSecret(randomBytes(32), sealed, 'user-1')).toThrow(UnreadableSecretError);
+    expect(() => openSecret(key, sealed, 'user-2')).toThrow(UnreadableSecretError);
+    expect(() => openSecret(key, 'v0.garbage', 'user-1')).toThrow(UnreadableSecretError);
   });
 
   it('derives independent subkeys for independent purposes', () => {
