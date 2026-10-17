@@ -3,7 +3,7 @@ import { AppError } from './errors/app-error';
 /**
  * A page size taken from a query string, validated and capped.
  *
- * drizzle 0.38 silently drops a LIMIT that is not a non-negative number, so a
+ * drizzle (0.45) silently drops a LIMIT that is not a non-negative number, so a
  * plain `Number(raw)` of `?limit=abc` (NaN) or `?limit=-1` would return the
  * whole table.
  *
