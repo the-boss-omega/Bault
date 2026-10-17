@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_USERNAME, signIn, intakeFor } from '../../tests/integration/helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
  * Guardrails a person driving the product runs into.
@@ -290,7 +291,7 @@ describe('an unconfirmed account is told so in a way the client can act on', () 
       lastName: 'Three',
       password: 'correct horse battery',
       // A valid registration accepts the terms in force.
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(created.status).toBe(201);
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 /**
  * Account lifecycle: register, verify, sign in, change password, sign out.
@@ -18,7 +19,7 @@ describe('ACC account lifecycle', () => {
       lastName: 'Fixture',
       password: 'password123',
       // A valid registration accepts the terms in force (acc-consent.test.ts).
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_verification');
@@ -37,7 +38,7 @@ describe('ACC account lifecycle', () => {
       lastName: 'Username',
       password: 'password123',
       // Consent given, so the refusal below is for the reason under test.
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(400);
   });
@@ -49,7 +50,7 @@ describe('ACC account lifecycle', () => {
       username: `n${Date.now()}`,
       password: 'password123',
       // Consent given, so the refusal below is for the reason under test.
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(400);
   });
@@ -63,7 +64,7 @@ describe('ACC account lifecycle', () => {
       lastName: 'Username',
       password: 'password123',
       // Consent given, so the refusal below is for the reason under test.
-      acceptedTermsVersion: '2026-10-draft-1',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(400);
   });
