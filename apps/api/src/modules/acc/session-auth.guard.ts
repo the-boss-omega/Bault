@@ -9,23 +9,21 @@ import { ALLOW_SUSPENDED_KEY } from './allow-suspended.decorator';
 import { SessionService } from './session.service';
 
 /**
- * Global authentication + account-status guard (T031 + T034).
+ * Global authentication + account-status guard.
  *
  * Steps for every request:
  *   1. Read the session cookie; if present, resolve it to an AuthUser.
- *   2. If the account is not `active` (suspended/closed), BLOCK it — even on
- *      public routes, that account is barred from signing in and every action
- *      (Principle: suspended/closed blocked from all actions).
+ *   2. If the account is not `active`, BLOCK it, even on public routes: a
+ *      suspended or closed account is barred from every action.
  *   3. Attach the user to the request.
  *   4. Public routes (@Public) pass regardless; all others require a user (401).
  *
- * ONE EXCEPTION, at step 2. A route marked `@AllowSuspended()` is reachable by a
- * SUSPENDED account. It exists for the helpdesk and nothing else: suspension is
- * now imposed automatically for debt, and a holder who cannot sign in cannot
- * cash in, so without a way to ask for help the lock has no key on the inside.
- * `closed` is never let through — that state is terminal.
+ * ONE EXCEPTION, at step 2. A route marked `@AllowSuspended()` (the helpdesk and
+ * the profile probe) is reachable by a SUSPENDED account, so a holder suspended
+ * automatically for debt can still ask for help. `closed` is never let through:
+ * that state is terminal.
  *
- * Runs before RolesGuard, which then checks @Roles.
+ * Runs before MfaEnrollmentGuard and RolesGuard.
  */
 @Injectable()
 export class SessionAuthGuard implements CanActivate {

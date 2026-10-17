@@ -9,24 +9,16 @@ import { userAccount } from '../acc/acc.schema';
 import { facility } from '../inv/facility.schema';
 
 /**
- * Shelf Yield — what a shelf earns, and what it is being used for instead.
+ * Shelf Yield: what a shelf earns, and what it is being used for instead.
  *
- * The other half of the engine behind Break-Even Watch. That one is pointed at
- * the collector and answers "is this card worth keeping"; this one is pointed at
- * the operator and answers "is this SHELF worth what it holds". Same charges,
- * same custody trail, different unit and different audience.
+ * The other half of the engine behind Break-Even Watch. That one answers the
+ * collector's "is this card worth keeping"; this one answers the operator's "is
+ * this SHELF worth what it holds". Same charges, same custody trail, different
+ * unit and audience.
  *
- * Nobody in this industry measures it, and the reason is structural: the metric
- * only becomes actionable if you are willing to tell a customer to take a card
- * away, and a vault whose whole business model is storage will never do that. It
- * is exactly because Bault's exits are billable — sale, cull, ship-home — that
- * an empty shelf is worth more to it than a full unprofitable one.
- *
- * WHAT THIS IS NOT. It is REVENUE per shelf-month, never margin. Bault's costs —
- * rent, labour, insurance — are not in this database, and a "profit per shelf"
- * figure computed without them would be a confident number about something
- * nobody measured. The operator knows their own cost per slot; this supplies the
- * half they cannot compute, and stops there.
+ * It is REVENUE per shelf-month, never margin: Bault's costs (rent, labour,
+ * insurance) are not in this database. The operator knows their own cost per
+ * slot; this supplies the half they cannot compute.
  */
 
 /** One shelf, what sits on it, and what it has earned. */
@@ -70,17 +62,11 @@ export class ShelfYieldService {
   /**
    * Every penny an item has earned, from BOTH places revenue is recorded.
    *
-   * This is the part that had to be built before any yield number could be
-   * trusted, and it is not a detail. The `charge` table holds intake, storage,
-   * services and shipping, each keyed to the item. It does NOT hold the
-   * marketplace commission: a sale writes no charge row at all, only a
-   * `ledger_record` of type `fee` pointing at the LISTING. A yield computed from
-   * charges alone would therefore report zero revenue for every card that
-   * actually sold — scoring the most profitable shelves in the building as the
-   * deadest.
-   *
+   * The `charge` table holds intake, storage, services and shipping, each keyed
+   * to the item. It does NOT hold the marketplace commission: a sale writes no
+   * charge row, only a `ledger_record` of type `fee` pointing at the LISTING.
    * So commission is joined back through `listing.item_id`, and the two sources
-   * are summed per item.
+   * are summed per item; otherwise every card that sold would score as dead.
    */
   private async revenueByItem(itemIds: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>();
@@ -118,13 +104,12 @@ export class ShelfYieldService {
    * How long each item has been sitting where it is now.
    *
    * From the transfer ledger, not from `receivedAt`: a card that arrived a year
-   * ago and moved shelf last week has occupied THIS shelf for a week, and
-   * charging the year to it would make every recently-reorganised zone look
-   * catastrophic. The first shelving is itself a transfer row, so an item that
-   * has never moved is covered by the same query.
+   * ago and moved shelf last week has occupied THIS shelf for a week. The first
+   * shelving is itself a transfer row, so an item that has never moved is
+   * covered by the same query.
    *
-   * `receivedAt` is the fallback for anything booked in before the transfer
-   * ledger existed.
+   * Callers fall back to `receivedAt` for anything booked in before the
+   * transfer ledger existed.
    */
   private async slotDaysByItem(itemIds: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>();
@@ -162,8 +147,7 @@ export class ShelfYieldService {
   }
 
   /**
-   * The shelves, worst yield last — the list an operator reads top-down to
-   * decide what to reclaim.
+   * The shelves, the list an operator reads top-down to decide what to reclaim.
    */
   async byShelf(): Promise<{ shelves: ShelfYieldRow[]; totals: Record<string, number> }> {
     const shelved = await this.db
@@ -228,8 +212,8 @@ export class ShelfYieldService {
       };
     });
 
-    // Occupied shelves first, worst-earning at the top — an empty shelf is not a
-    // problem, it is capacity.
+    // Occupied shelves first, worst-earning at the top. An empty shelf is
+    // capacity, so it goes last.
     shelves.sort((x, y) => {
       if (x.itemCount === 0 && y.itemCount === 0) return x.serialNumber.localeCompare(y.serialNumber);
       if (x.itemCount === 0) return 1;
@@ -252,7 +236,7 @@ export class ShelfYieldService {
     };
   }
 
-  /** The same numbers rolled up per zone — where to put the next rack. */
+  /** The same numbers rolled up per zone: where to put the next rack. */
   async byZone() {
     const { shelves } = await this.byShelf();
     const acc = new Map<string, ShelfYieldRow[]>();
@@ -281,13 +265,11 @@ export class ShelfYieldService {
   /**
    * Which accounts pay for the shelving they occupy, and which are carried.
    *
-   * The uncomfortable number, and the one worth having: a collector with four
-   * hundred commons across four shelves earning $12 a year is subsidised by the
-   * one with six slabs earning $400. Neither is visible from a revenue total.
+   * A collector with four hundred commons across four shelves earning $12 a
+   * year is subsidised by the one with six slabs earning $400; neither is
+   * visible from a revenue total.
    *
-   * Fixture accounts are excluded for the same reason the admin user list
-   * excludes them — they are machinery, and a yield table that ranks the test
-   * suite among its customers is unreadable.
+   * Fixture accounts are excluded, as in the admin user list.
    */
   async byCustomer(): Promise<CustomerYieldRow[]> {
     const shelved = await this.db

@@ -1,35 +1,24 @@
 /**
- * The membership tiers, and what each one actually covers.
+ * The membership tiers, and what each one covers.
  *
- * WHAT THIS IS NOT. It is not a discount scheme. A discount still charges you
- * every time and still makes the bill a surprise, which is the thing collectors
- * complain about — the reference service is explicitly pay-as-you-send with no
- * membership at all, and its published fee list is two pages long. A member here
- * pays ONE fixed amount each month and the services in their tier are simply
- * not billed again.
- *
- * THE THREE RULES THIS FILE ENFORCES, and they are the whole design:
+ * A member pays one fixed amount each month and the services in their tier are
+ * not billed again. Three rules hold the design together:
  *
  *   1. **Everything included has a ceiling.** Every allowance below is a hard
  *      number, so Bault's maximum cost per member per month is computable before
  *      anybody signs up. That is what makes a fixed fee safe to sell.
- *   2. **There is no overage rate.** Anywhere. When an allowance runs out the
- *      service is not silently billed at some higher number — it reverts to its
- *      ordinary published price and requires the same explicit confirmation any
- *      paid action requires. A member can never be charged for something they
- *      did not press a button on.
- *   3. **Allowances do not roll over.** A cycle is a cycle. This is what keeps
- *      (1) true: a rolling balance makes the maximum unbounded again.
+ *   2. **There is no overage rate.** When an allowance runs out the service
+ *      reverts to its ordinary published price and needs the same explicit
+ *      confirmation as any paid action.
+ *   3. **Allowances do not roll over.** A rolling balance would make the
+ *      maximum in (1) unbounded again.
  *
- * WHAT IS DELIBERATELY NOT COVERED: carrier postage beyond the credit, the
- * graders' own fees, white glove, and the penalties (chargeback, restocking).
- * The first three are other people's money — a pass-through Bault cannot cap —
- * and the last two are not services, they are consequences. `UNCOVERED` at the
- * bottom of this file states them in one place so the tier page can print them.
+ * Not covered: carrier postage beyond the credit, graders' own fees and white
+ * glove (pass-through costs Bault cannot cap), and the penalties (chargeback,
+ * restocking). `UNCOVERED` lists them so the tier page can print them.
  *
- * Pure data and predicates, like `carriers.ts` and `boxes.ts`. It talks to
- * nothing, so all of it is directly testable, and the SPA fetches the same
- * catalogue from `GET /membership/tiers` rather than mirroring it by hand.
+ * Pure data and predicates, like `carriers.ts` and `boxes.ts`. The SPA fetches
+ * the same catalogue from `GET /membership/tiers` rather than mirroring it.
  */
 
 /** An allowance with no ceiling. Stored as a number so it survives JSON. */
@@ -38,13 +27,11 @@ export const UNLIMITED = -1;
 /**
  * Fee actions that draw on ANOTHER action's allowance.
  *
- * A lot is billed under its own rule (`intake_lot`) so it can be priced like
- * the reference service prices one, but to a member it is still one thing being
- * booked in — so it uses one of their intakes rather than needing an allowance
- * of its own. Listed explicitly rather than inferred from a prefix: a general
- * "fall back to the parent action" rule would let a tier's flat-service
- * allowance quietly pay for inspections once the inspection allowance ran out,
- * which is more than the table promises.
+ * A lot is billed under its own rule (`intake_lot`), but to a member it is
+ * still one thing being booked in, so it uses one of their intakes. Listed
+ * explicitly rather than inferred from a prefix: a general "fall back to the
+ * parent action" rule would let a flat-service allowance pay for inspections
+ * once the inspection allowance ran out, which is more than the table promises.
  */
 export const ALLOWANCE_ALIASES: Readonly<Record<string, string>> = {
   intake_lot: 'intake',
@@ -65,11 +52,9 @@ export interface MembershipTier {
   /**
    * The pricing-rule action carrying this tier's monthly fee.
    *
-   * The fee is a RULE, not a constant, for the same reason every other price in
-   * this system is: Principle VI makes the rules the source of truth, so a fee
-   * can be changed without a deploy and the rule in force when a member was
-   * charged is frozen onto that charge. `listPriceMinor` below is only the
-   * fallback for an unconfigured tier, exactly as the shipping add-ons do it.
+   * The fee is a rule (Principle VI), so it can change without a deploy and the
+   * rule in force is frozen onto each charge. `listPriceMinor` is only the
+   * fallback for an unconfigured tier, as with the shipping add-ons.
    */
   feeActionType: string;
   /** The catalogue price, used only when no rule is in force. */
@@ -78,8 +63,8 @@ export interface MembershipTier {
   /**
    * Per-event actions this tier covers, and how many per cycle.
    *
-   * Keyed by the EFFECTIVE billing action — `feeActionType ?? actionType` as
-   * `BillingService` resolves it — so a tier can cover cracking a slab
+   * Keyed by the EFFECTIVE billing action (`feeActionType ?? actionType`, as
+   * `BillingService` resolves it), so a tier can cover cracking a slab
    * (`service_fee:deslab`) without covering every flat `service`.
    */
   perCycle: Record<string, number>;
@@ -109,20 +94,13 @@ export interface MembershipTier {
 }
 
 /**
- * The tiers.
- *
- * Named for what a collection IS at each stage rather than for a metal.
- * `DESIGN.md` rejects the whole gold-accent register — "those are pictures of
- * security, and a picture of security is what you show when you cannot show the
- * thing itself" — and Gold/Platinum/Diamond is that same picture in words.
+ * The tiers, named for what a collection is at each stage rather than for a
+ * metal (`DESIGN.md` rejects the gold-accent register).
  *
  *   FOLIO     a collection you keep. The entry tier: storage stops being a
  *             clock you have to watch.
- *   REGISTRY  a collection that is working. You list, sell and ship, so the
- *             record is doing something for you rather than just holding still.
- *   TRUST     a collection held the way a trustee holds property. The top tier,
- *             and the only word in the language that means exactly what Bault
- *             claims to be doing.
+ *   REGISTRY  a collection that is working: you list, sell and ship.
+ *   TRUST     a collection held the way a trustee holds property. The top tier.
  */
 export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
   {
@@ -178,7 +156,7 @@ export const MEMBERSHIP_TIERS: readonly MembershipTier[] = [
       // when the parcel is paid for (`MembershipService.spendShippingCover`).
       'shipping_addon:gps_tracker': 2,
       // Fees that are not billed through `BillingService`, waived where each is
-      // actually charged — see `MembershipService.waive`.
+      // actually charged (see `MembershipService.waive`).
       escrow_fee: 1,
       cash_out_fee: 2,
       show_pickup: 2,
@@ -216,11 +194,9 @@ export function tierRank(key: string | null | undefined): number {
 }
 
 /**
- * What no tier covers, and why — published, not buried.
- *
- * Stated as keys rather than sentences so the SPA translates them. Every one of
- * these still goes through the ordinary flow where the price is shown on the
- * control before the control does anything.
+ * What no tier covers. Keys rather than sentences, so the SPA translates them.
+ * Each still goes through the ordinary flow where the price is shown before
+ * anything happens.
  */
 export const UNCOVERED = [
   'carrier_postage_above_credit',
@@ -235,10 +211,9 @@ export const UNCOVERED = [
 /**
  * How many of `action` this tier still covers this cycle.
  *
- * `used` is what the current cycle has already consumed. Returns 0 for anything
- * the tier does not cover at all, which is the same answer as "you have used
- * them up" on purpose: both mean *this will be charged, after you approve it*,
- * and the caller does not need to tell them apart.
+ * `used` is what the current cycle has already consumed. Returns 0 both for
+ * anything the tier does not cover and for a spent allowance: both mean "this
+ * will be charged, after you approve it".
  */
 export function remaining(tier: MembershipTier, action: string, used: number): number {
   const allowed = tier.perCycle[action];
@@ -256,13 +231,9 @@ export function covers(tier: MembershipTier, action: string, used: number): bool
 /**
  * The most this tier can cost Bault in one cycle, at the published prices.
  *
- * This is the number the whole model rests on, and it is computed rather than
- * asserted so it cannot quietly drift when somebody widens an allowance. An
- * unlimited allowance is scored at its `fairUse` figure, because "unlimited"
- * on a thing a human has to physically do is bounded by the human.
- *
- * `unitPrices` comes from the pricing rules, so this reflects what Bault would
- * actually forgo rather than a figure typed in beside it.
+ * Computed rather than asserted, so it cannot drift when an allowance widens.
+ * An unlimited allowance is scored at its `fairUse` figure (default 10).
+ * `unitPrices` comes from the pricing rules.
  */
 export function fullUseCostMinor(
   tier: MembershipTier,

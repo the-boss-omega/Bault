@@ -6,7 +6,7 @@
  * `apps/worker/src/jobs/outbox-dispatch.ts`); the API only reads it, to show
  * the parked messages and to requeue one. Mirrored by value rather than
  * imported, as the worker and the API share no code, and pinned equal by
- * `tests/worker/outbox-requeue.test.ts` — if the two drifted, the console would
+ * `tests/worker/outbox-requeue.test.ts`. If the two drifted, the console would
  * offer to requeue messages the dispatcher is still retrying, or hide some it
  * has given up on.
  */

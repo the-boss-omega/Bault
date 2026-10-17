@@ -17,19 +17,16 @@ interface WithdrawalPayload {
 }
 
 /**
- * Withdrawal (T068, Principles VII & IV). Two steps:
+ * Withdrawal (Principles VII & IV). Two steps:
  *   request → verify funds, issue a confirmation token (the challenge).
  *   confirm → consume the token, then in one transaction re-check the balance,
  *             record the withdrawal, pay out via the provider, and append a
  *             `withdrawal` ledger DEBIT.
  * Irreversible: reversal would be a new compensating entry, never an edit.
  *
- * STATUS after the wallet-request pass: no customer-invokable route reaches
- * `request`/`confirm` any more — a cash-out is a reviewed request, and the money
- * moves in `WalletRequestService.complete`. The methods are kept, unrouted,
- * because they hold the provider payout call and the confirmation-token protocol
- * that a real (non-sandbox) payout integration will drive from the completion
- * step. `retiredConfirmEndpoint` is what the retired route answers with.
+ * No route reaches `request`/`confirm`: a cash-out is a reviewed request, and
+ * the money moves in `WalletRequestService.complete`. `retiredConfirmEndpoint`
+ * is what the retired route answers with.
  */
 @Injectable()
 export class WithdrawalService {
@@ -41,9 +38,8 @@ export class WithdrawalService {
   ) {}
 
   /**
-   * The error the retired `/finance/withdrawals/confirm` route answers with.
-   * A 410 states that the capability is gone and names what replaced it, which
-   * is more useful to an old client than a 404 or a lie.
+   * The error the retired `/finance/withdrawals/confirm` route answers with:
+   * a 410 that names what replaced it.
    */
   retiredConfirmEndpoint(): AppError {
     return AppError.tokenExpired(

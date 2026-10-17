@@ -10,10 +10,12 @@ import { externalPayment } from './pay.schema';
 import { WalletRequestService } from './wallet-request.service';
 
 /**
- * Wallet top-up (T067). Charges the external provider (token only — no card data,
- * Principle IX/XIII) and, on success, appends a `credit_topup` ledger row. The
- * sandbox settles synchronously; for a real provider the credit is applied by the
- * signed, idempotent webhook (`handleWebhook`, deduped by provider event id).
+ * Wallet top-up and the payment provider's webhook.
+ *
+ * `topup` charges the external provider (token only, no card data, Principle
+ * IX/XIII) and, when it succeeds synchronously, appends a `credit_topup` ledger
+ * row. No route calls it: `POST /finance/wallet/topups` raises a cash-in request.
+ * `handleWebhook` is the provider's callback and settles payout events only.
  */
 @Injectable()
 export class TopupService {
@@ -64,12 +66,9 @@ export class TopupService {
   /**
    * Signed, idempotent webhook (real providers). Deduped by provider event id.
    *
-   * It verified the delivery and then did nothing: `webhook_event_id` was read
-   * and never written, so the dedupe could never match, and a payout PayPal
-   * reported as paid or returned was never recorded as either (F029, F040).
-   * Payout events now settle the payment and its cash-out through
+   * Payout events settle the payment and its cash-out through
    * `WalletRequestService.applyPayoutEvent`, which writes the event id in the
-   * same transaction as the change it made.
+   * same transaction as the change it makes.
    *
    * Capture events are acknowledged and not acted on: checkout under PayPal is
    * switched off until the order flow exists, and the rows it writes are keyed
@@ -85,7 +84,7 @@ export class TopupService {
       .from(externalPayment)
       .where(eq(externalPayment.webhookEventId, event.id))
       .limit(1);
-    if (existing) return { outcome: 'duplicate' }; // already processed — idempotent
+    if (existing) return { outcome: 'duplicate' }; // already processed
 
     // A 2xx either way: an event about a payment Bault never made is not one
     // the provider should keep redelivering.

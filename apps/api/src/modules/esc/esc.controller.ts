@@ -48,7 +48,7 @@ class ReasonDto {
 }
 
 /**
- * ESC endpoints (`/escrow/*`) — a private deal with Bault in the middle.
+ * ESC endpoints (`/escrow/*`): a private deal with Bault in the middle.
  *
  * The operator routes are the ones that matter for correctness: receiving the
  * card, recording the inspection, and attesting on behalf of a party who has no

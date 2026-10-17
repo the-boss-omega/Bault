@@ -3,30 +3,23 @@ import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
- * Membership (MEM) — a fixed monthly fee, and what it has already covered.
- *
- * Two tables, and the split matters:
+ * Membership (MEM): a fixed monthly fee, and what it has already covered.
  *
  *   `membership`        WHO is a member and on which tier. One row per account,
  *                       mutated in place as somebody upgrades or cancels.
- *   `membership_period` WHAT a given billing cycle covered. Append-only, one row
- *                       per account per cycle, carrying the consumption counters.
+ *   `membership_period` WHAT a given billing cycle covered. One row per account
+ *                       per cycle, carrying the consumption counters.
  *
- * The second is separate rather than a JSON column on the first because it is a
- * RECORD, and records in this system are not edited into oblivion. A member who
- * asks "what did I actually get for my $199 in July" is asking for a row that
- * still exists, with the tier and the fee that were in force then frozen onto
- * it — the same guarantee `pricing_rule_snapshot` gives every charge.
+ * Periods are a separate table because each one is a record: the tier and fee
+ * in force for that cycle stay frozen on it, the same guarantee
+ * `pricing_rule_snapshot` gives every charge.
  */
 export const membershipStatus = pgEnum('membership_status', [
   /** Paying, and the allowances apply. */
   'active',
   /**
-   * Cancelled, but paid up to the end of the current cycle.
-   *
-   * The allowances still apply until `currentPeriodEnd`. Somebody who cancels on
-   * the 2nd has paid for the month and keeps it; taking it away at the moment of
-   * cancellation would be charging for a service and then withdrawing it.
+   * Cancelled, but paid up to the end of the current cycle. The allowances
+   * still apply until `currentPeriodEnd`, because that month is paid for.
    */
   'cancelling',
   /** Over. Allowances no longer apply; nothing about the items changes. */
@@ -46,10 +39,9 @@ export const membership = pgTable(
     currentPeriodStart: timestamp('current_period_start', { withTimezone: true }).notNull().defaultNow(),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
     /**
-     * A cheaper tier the member has asked for, taking effect at renewal.
-     *
-     * A downgrade never takes an allowance away mid-cycle — it has been paid for.
-     * It waits here, and the renewal opens the next cycle on this tier instead.
+     * A cheaper tier the member has asked for, taking effect at renewal. A
+     * downgrade never takes a paid-for allowance away mid-cycle, so it waits
+     * here and the renewal opens the next cycle on this tier.
      */
     scheduledTier: text('scheduled_tier'),
     /** Set when the member asks to stop; the cycle still runs to its end. */
@@ -60,12 +52,9 @@ export const membership = pgTable(
   },
   (t) => ({
     /**
-     * One membership per account.
-     *
-     * Not "one ACTIVE membership" — one, full stop. A second row would make
-     * "which tier am I on" a question with two answers, and every allowance
-     * check would have to pick. Upgrades mutate the tier on this row and write
-     * a new period; the history lives in `membership_period`.
+     * One membership row per account, whatever its status, so "which tier am I
+     * on" has one answer. Upgrades mutate the tier on this row and write a new
+     * period; the history lives in `membership_period`.
      */
     userUnique: unique('membership_user_unique').on(t.userId),
   }),
@@ -88,12 +77,9 @@ export const membershipPeriod = pgTable(
     /**
      * Per-action consumption this cycle: `{ intake: 3, parcel_processing: 1 }`.
      *
-     * A counter map rather than a row per use. The alternative — an append-only
-     * consumption log — is the more orthodox shape here and was rejected on
-     * purpose: every billable action would write a second row purely to be
-     * counted, and the thing anybody ever asks is "how many left", which is a
-     * number. What was used is already recoverable from `charge`, which is the
-     * append-only record that matters.
+     * A counter map rather than a row per use: the question asked is "how many
+     * left", and what was used is already recoverable from the append-only
+     * `charge` table.
      */
     consumed: jsonb('consumed').notNull().default({}),
     /** Carrier postage covered so far this cycle, in minor units. */
@@ -103,11 +89,11 @@ export const membershipPeriod = pgTable(
     /** Insured shipments covered so far this cycle. */
     insuredShipmentsUsed: integer('insured_shipments_used').notNull().default(0),
     /**
-     * For a period the renewal job opened: the end of the cycle it renewed
-     * (migration 0032, N15). A renewal starts at the moment it runs, so two
-     * overlapping runs never agreed on `periodStart` and both charged; they do
-     * agree on which cycle they are renewing. Null on a period opened by joining
-     * or changing tier.
+     * For a period the worker's renewal job opened: the end of the cycle it
+     * renewed. A renewal starts at the moment it runs, so two overlapping runs
+     * write different `periodStart`s; they agree on the cycle they renew, and
+     * the unique index below lets only one of them charge. Null on a period
+     * opened by joining or changing tier.
      */
     renewsPeriodEnd: timestamp('renews_period_end', { withTimezone: true }),
     createdAt: createdAt(),
@@ -115,7 +101,7 @@ export const membershipPeriod = pgTable(
   },
   (t) => ({
     byUser: index('membership_period_user_idx').on(t.userId, t.periodStart),
-    /** One period row per membership per cycle — the upsert target. */
+    /** One period row per membership per cycle: the upsert target. */
     periodUnique: unique('membership_period_unique').on(t.membershipId, t.periodStart),
     /** A cycle is renewed at most once. */
     renewalUnique: uniqueIndex('membership_period_renewal_unique')

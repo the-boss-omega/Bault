@@ -16,11 +16,9 @@ const LIST_LIMIT = 500;
  * one back in the queue.
  *
  * The dispatcher parks a message after it has failed `PARKED_AFTER_ATTEMPTS`
- * times — a mail server that was down, a payload it could not read — and its
- * log line said it "needs a person". There was nothing a person could do with
- * that short of an UPDATE typed into the production database. This is the
- * supported way: see what is parked and why, and requeue it once the cause is
- * fixed.
+ * times (a mail server that was down, a payload it could not read). This is the
+ * supported way to see what is parked and why, and to requeue it once the cause
+ * is fixed.
  */
 @Injectable()
 export class OutboxAdminService {
@@ -30,16 +28,13 @@ export class OutboxAdminService {
   ) {}
 
   /**
-   * What failed and when — and NOT what the message carries.
+   * What failed and when, and NOT what the message carries.
    *
-   * A payload is whatever its emitter put in it. Today that includes the
-   * address a password reset was asked for, and the next event somebody adds
-   * could carry a token or a link that signs somebody in; an administrator
-   * deciding whether to retry a message needs neither. So the payload never
-   * leaves the database through this route: only the NAMES of its fields, which
-   * say what kind of message it is. `aggregateId` is left out for the same
-   * reason — for a reset request it is the email address. The error text is
-   * scrubbed of anything shaped like a token before it is returned.
+   * A payload is whatever its emitter put in it: the address a password reset
+   * was asked for, possibly a token or a sign-in link. So the payload never
+   * leaves the database through this route, only the NAMES of its fields.
+   * `aggregateId` is left out for the same reason (for a reset request it is the
+   * email address). The error text is scrubbed of anything shaped like a token.
    */
   async listParked() {
     const rows = await this.db
@@ -65,17 +60,16 @@ export class OutboxAdminService {
   }
 
   /**
-   * Put one parked message back for the dispatcher — once.
+   * Put one parked message back for the dispatcher, once.
    *
    * The attempt count goes back to zero, which is the only thing the dispatcher
    * reads to decide a message is parked, so the next run picks it up and it gets
    * the full number of tries again. Its last error stays on the row as history.
    *
    * The UPDATE is the check: it matches only a row that is undispatched AND has
-   * used up its attempts. Two clicks, two tabs, two administrators at once — the
-   * second UPDATE waits for the first, re-reads the row, finds it no longer
-   * parked and matches nothing, so the message is requeued and audited exactly
-   * once and the second caller is told it is not parked. The audit row commits
+   * used up its attempts. With two requests at once, the second UPDATE waits for
+   * the first, re-reads the row, finds it no longer parked and matches nothing,
+   * so the message is requeued and audited exactly once. The audit row commits
    * with the requeue, in the same transaction, or not at all.
    */
   async requeue(actorId: string, id: string): Promise<{ id: string; status: 'requeued' }> {
@@ -134,7 +128,7 @@ function parked() {
  * link it was sending. Three shapes are removed: a `token=`, `code=`, `secret=`,
  * `password=` or `key=` parameter's value; a run of 32 or more hex digits (every
  * token Bault mints is hex); and a run of 40 or more base64 characters. A UUID
- * survives — its groups are short — because it is how a person finds the row.
+ * survives (its groups are short), because it is how a person finds the row.
  */
 export function redactSecrets(text: string): string {
   return text

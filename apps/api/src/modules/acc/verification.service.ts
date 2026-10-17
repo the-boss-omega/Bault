@@ -15,10 +15,9 @@ const EMAIL_TTL_MS = 24 * 60 * 60 * 1000; // 24h
  * Build the absolute link that goes in an email.
  *
  * Two things make this more than string concatenation. The link must be
- * ABSOLUTE — a mail client has no origin to resolve `/verify-email` against, so
- * the relative path these emails used to carry was unclickable. And the SPA is
- * a HASH router, so the route lives after `#`; a path-style link would load the
- * app at its default section and drop the token on the floor.
+ * ABSOLUTE: a mail client has no origin to resolve `/verify-email` against. And
+ * the SPA is a HASH router, so the route lives after `#`; a path-style link
+ * would load the app at its default section and drop the token.
  *
  * The token is percent-encoded even though `generateToken` emits URL-safe
  * characters today, so a future change to the token alphabet cannot silently
@@ -30,9 +29,10 @@ function emailLink(route: string, token: string): string {
 }
 
 /**
- * Email verification & password-reset TOKEN issuance/consumption (T030).
- * Tokens are single-use and time-limited; only their hash is stored. The raw
- * token travels only in the emailed link.
+ * Email verification TOKEN issuance/consumption. Tokens are single-use and
+ * time-limited; only their hash is stored. The raw token travels only in the
+ * emailed link. Password-reset mail is sent by the worker
+ * (`password-reset-mail.ts`), from the event `PasswordService.requestReset` emits.
  */
 @Injectable()
 export class VerificationService {
@@ -58,13 +58,9 @@ export class VerificationService {
   }
 
   /**
-   * Consume a valid email-verification token and activate the account — if,
-   * and only if, it is still waiting to be activated (N10).
-   *
-   * This used to set `status = 'active'` unconditionally. A link stays valid for
-   * a day, so an account suspended or closed inside that day was reinstated by
-   * whoever still held the mail — the one action in the product that undid an
-   * administrator's decision without an administrator.
+   * Consume a valid email-verification token and activate the account if, and
+   * only if, it is still `pending`. A link stays valid for a day, so it must
+   * never reinstate an account suspended or closed in the meantime.
    */
   async verifyEmail(rawToken: string): Promise<void> {
     const [tok] = await this.db
@@ -99,7 +95,7 @@ export class VerificationService {
         .returning({ id: userAccount.id });
       if (activated) return;
 
-      // Already active — a second link from a resend, say — is not an error:
+      // Already active (a second link from a resend, say) is not an error:
       // the address is confirmed and nothing needs to change.
       const [u] = await tx
         .select({ status: userAccount.status })
@@ -123,7 +119,4 @@ export class VerificationService {
     if (u && u.status === 'pending') await this.issueEmailVerification(u.id, u.email);
     // Silent otherwise: never reveal whether an email exists.
   }
-
-  // The password-reset mail is no longer sent from here: see
-  // `PasswordService.requestReset` and the worker's `password-reset-mail.ts`.
 }

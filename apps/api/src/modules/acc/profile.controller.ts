@@ -11,13 +11,8 @@ import { IsShippableCountry } from '../shp/country.validator';
 
 /**
  * `country` is an ISO 3166-1 alpha-2 code that a carrier rule can read, not
- * free text.
- *
- * It was `@IsString()`, and the address form pre-filled it with the word
- * "Israel". Every rule in `carriers.ts` compares this field against a code, so
- * the default value made each new address international-and-uncontracted: the
- * collector lost the cheapest service they qualified for and was told the
- * carrier does not go there. See `shp/countries.ts`.
+ * free text: every rule in `carriers.ts` compares this field against a code.
+ * See `shp/countries.ts`.
  */
 class CreateAddressDto {
   @IsString() label!: string;
@@ -29,7 +24,7 @@ class CreateAddressDto {
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
-/** Partial edit of a saved address (Requirement 4.2). */
+/** Partial edit of a saved address. */
 class UpdateAddressDto {
   @IsOptional() @IsString() label?: string;
   @IsOptional() @IsString() recipient?: string;
@@ -40,7 +35,7 @@ class UpdateAddressDto {
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
-/** Own-profile endpoints (T035): `/me/profile` + saved addresses `/me/addresses` (ACC-07). */
+/** Own-profile endpoints: `/me/profile` + saved addresses `/me/addresses`. */
 @ApiTags('ACC')
 @Controller('me')
 export class ProfileController {
@@ -50,8 +45,7 @@ export class ProfileController {
    * Readable by a SUSPENDED account, unlike everything else on this controller.
    *
    * The SPA's boot probe is this request: without it the shell cannot tell a
-   * suspended user apart from a signed-out one, and would show them a sign-in
-   * form for an account they have just signed into. It carries the status the
+   * suspended user apart from a signed-out one. It carries the status the
    * restricted shell keys off, and nothing a suspended holder should not see.
    *
    * Readable before a required second factor is enrolled, for the same reason:

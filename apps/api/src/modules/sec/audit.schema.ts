@@ -2,9 +2,8 @@ import { pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
 /**
- * Audit Record (SEC) — APPEND-ONLY (Principle II, enforced in 0001_append_only.sql).
- * One row per state-changing request: actor, action, target, timestamp (Principle:
- * every action that changes system state is written to an immutable audit log).
+ * Audit Record (SEC). Append-only (Principle II, enforced in 0001_append_only.sql).
+ * One row per state-changing request: actor, action, target, timestamp.
  */
 export const auditRecord = pgTable('audit_record', {
   id: pkId(),

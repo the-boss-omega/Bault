@@ -4,11 +4,11 @@ import { tap, type Observable } from 'rxjs';
 import { AuditService } from './audit.service';
 
 /**
- * Audit interceptor (T015, Principle II / audit log).
+ * Audit interceptor (Principle II, audit log).
  *
- * Records one audit row for every STATE-CHANGING request (POST/PUT/PATCH/DELETE)
- * after it succeeds — actor, action (method + path), and timestamp. Read-only
- * GETs are not audited. Registered globally in AppModule.
+ * Records one audit row for every state-changing request (POST/PUT/PATCH/DELETE)
+ * after it succeeds: actor, action (method + path), target and timestamp.
+ * Read-only GETs are not audited. Registered globally in AppModule.
  */
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -20,7 +20,7 @@ export class AuditInterceptor implements NestInterceptor {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (!MUTATING.has(req.method)) return next.handle();
 
-    // SEC-01: target = first path segment after the /api/v1 prefix + the route's id param.
+    // Target = first path segment after the /api/v1 prefix, plus the route's id param.
     const targetEntity =
       req.path.replace(/^\/api\/v1\//, '').split('/').filter(Boolean)[0] ?? null;
     const rawTargetId =
@@ -35,7 +35,7 @@ export class AuditInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap(() => {
-        // Fire-and-forget; audit failure must not mask a successful response, but is logged.
+        // Fire-and-forget: an audit failure must not mask a successful response.
         void this.audit
           .record({
             actorId: req.user?.id ?? null,

@@ -16,7 +16,7 @@ class UpdateUserDto {
   // Two name parts, never a free-text display name (see shared/names).
   @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) firstName?: string;
   @IsOptional() @IsString() @MaxLength(NAME_PART_MAX) lastName?: string;
-  // `username` is deliberately absent — immutable once set (Requirement 4.1).
+  // `username` is deliberately absent: immutable once set.
 }
 
 class UpdateItemDto {
@@ -41,7 +41,7 @@ class UpdateDisputeDto {
   @IsOptional() @IsString() ruling?: string;
 }
 
-/** ADM endpoints — admin only. Manage users, cards, disputes, storage fees. */
+/** ADM endpoints, admin only. Manage users, cards, disputes, storage fees. */
 @ApiTags('ADM')
 @Roles('admin')
 @Controller('admin')
@@ -54,21 +54,18 @@ export class AdmController {
   ) {}
 
   /**
-   * Shelf Yield — what each shelf earns against the occupancy it consumes.
+   * Shelf Yield: what each shelf earns against the occupancy it consumes.
    *
-   * Admin-only, and pointed at the operator rather than the collector: the same
-   * charges and the same custody trail that produce Break-Even Watch, rolled up
-   * by shelf instead of by card. REVENUE per shelf-month, never margin — Bault's
-   * rent, labour and insurance are not in this database, and a profit figure
-   * computed without them would be a confident number about something nobody
-   * measured.
+   * The same charges and custody trail that produce Break-Even Watch, rolled up
+   * by shelf instead of by card. REVENUE per shelf-month, never margin: Bault's
+   * rent, labour and insurance are not in this database.
    */
   @Get('shelf-yield')
   shelfYield() {
     return this.yield_.byShelf();
   }
 
-  /** The same, per zone — which part of the building earns, and where to build. */
+  /** The same, per zone: which part of the building earns, and where to build. */
   @Get('shelf-yield/zones')
   shelfYieldByZone() {
     return this.yield_.byZone();
@@ -101,7 +98,7 @@ export class AdmController {
   }
 
   /**
-   * Remove ANOTHER account's second factor — for somebody who lost their phone
+   * Remove ANOTHER account's second factor, for somebody who lost their phone
    * and their recovery codes. Ends every session they hold and is audited; an
    * administrator cannot reset their own (see `MfaService.resetFor`).
    */
@@ -120,7 +117,7 @@ export class AdmController {
     return this.outbox.listParked();
   }
 
-  /** Back in the queue, once — a second request for the same message is refused. */
+  /** Back in the queue, once: a second request for the same message is refused. */
   @Post('outbox/:id/requeue')
   @HttpCode(200)
   requeueOutbox(@CurrentUser() actor: AuthUser, @Param('id') id: string) {
@@ -137,7 +134,7 @@ export class AdmController {
     return this.adm.updateItem(user.id, id, dto);
   }
 
-  // --- Disputes (ADM-04) ---
+  // --- Disputes ---
 
   @Get('disputes')
   disputes() {
@@ -154,13 +151,13 @@ export class AdmController {
     return this.adm.updateDispute(id, { status: dto.status, ruling: dto.ruling });
   }
 
-  /** Recorded transactions available to reference from a dispute (Requirement 13.3). */
+  /** Recorded transactions available to reference from a dispute. */
   @Get('transactions')
   transactions() {
     return this.adm.listTransactions();
   }
 
-  // --- Storage-fee runs (VLT-04) — read-only; billing is automatic (Req 12.2) ---
+  // --- Storage-fee runs: read-only; billing is automatic ---
 
   @Get('storage-fee-runs')
   storageFeeRuns() {

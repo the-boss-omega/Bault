@@ -8,7 +8,7 @@ import type { AuthUser } from '../sec/auth-context';
 import { AccountingService, parseDayRange, parseMonth } from './accounting.service';
 
 /**
- * The accountant's exports (N40) — admin only. Read-only, no tax logic: see
+ * The accountant's exports, admin only. Read-only, no tax logic: see
  * `AccountingService` for what each one reports and what it leaves to people.
  */
 @ApiTags('ADM')

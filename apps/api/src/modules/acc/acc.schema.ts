@@ -6,27 +6,27 @@ import { pkId, createdAt } from '../../db/schema/_helpers';
  * ACC tables (User Account, Verification Token, Login Session).
  *
  * The item/lifecycle/money tables reference `userAccount.id` as the single owner
- * (Principle I). PII columns (email, profile) are exposed to admins only at the
- * serialization boundary (Principle IX) — the DB stores them normally.
+ * (Principle I). The DB stores PII columns (email, profile) normally; Principle
+ * IX applies at the serialization boundary.
  *
- * Identity, after the identity pass:
+ * Identity:
  *  - `id` is the immutable internal primary key. It is what every other table
  *    references and what audit records name; it is never a customer-facing id.
  *  - `username` is the permanent, unique, CUSTOMER-FACING identifier. It has a
  *    unique index, a lower-case CHECK constraint, and a DB trigger that rejects
- *    any UPDATE of the column — so it cannot be reassigned even by a bug.
- *  - `firstName` / `lastName` replaced the old free-text `displayName`. The
- *    former column survives as `legacyDisplayName` for historical reference and
- *    is never written again.
+ *    any UPDATE of the column, so it cannot be reassigned even by a bug.
+ *  - `firstName` / `lastName` are the name. The old free-text display name
+ *    survives as `legacyDisplayName` for historical reference and is never
+ *    written.
  *  - `intakeId` is retired from every user-facing workflow. It stays, nullable,
  *    because existing rows, audit trails and printed package labels still carry
- *    it; new accounts simply do not get one.
+ *    it; new accounts do not get one.
  */
 
 export const accountStatus = pgEnum('account_status', [
   'pending', // created, email not yet verified
   'active',
-  'suspended', // blocked from sign-in & all actions
+  'suspended', // may sign in, but reaches only `@AllowSuspended()` routes
   'closed', // blocked from sign-in & all actions (terminal)
 ]);
 
@@ -37,7 +37,7 @@ export const userAccount = pgTable(
   {
     id: pkId(),
     email: text('email').notNull(),
-    // IMMUTABLE (Requirement 4.1): chosen once at registration, never editable.
+    // IMMUTABLE: chosen once at registration, never editable.
     // No service or endpoint writes this column after the INSERT in AuthService,
     // and `user_account_username_immutable` rejects it at the database if one ever does.
     username: text('username').notNull(),
@@ -58,11 +58,11 @@ export const userAccount = pgTable(
      * Set when the WALLET DEBT SWEEP suspended this account, and cleared when the
      * same sweep lifts that suspension after the debt clears.
      *
-     * It exists to keep the two kinds of suspension apart. An administrator's
-     * suspension is a human judgement and must survive the balance recovering;
-     * a debt suspension is a consequence of a number and must not. Only the
-     * sweep writes this column, and it only ever reinstates accounts it can see
-     * it suspended itself.
+     * It keeps the two kinds of suspension apart. An administrator's suspension
+     * is a human judgement and must survive the balance recovering; a debt
+     * suspension is a consequence of a number and must not. Only the sweep sets
+     * this column, and it only ever reinstates accounts it can see it suspended
+     * itself. Any status an administrator sets clears it (`AdmService.updateUser`).
      */
     autoSuspendedAt: timestamp('auto_suspended_at', { withTimezone: true }),
     /**
@@ -70,7 +70,7 @@ export const userAccount = pgTable(
      * this person accepted at registration, and when (migration 0033).
      *
      * Written once, by `AuthService.register`, from the version the sign-up
-     * page showed — and only if that is the version in force. NULL on every
+     * page showed, and only if that is the version in force. NULL on every
      * account created before there was anything to accept: back-filling one
      * would invent a consent nobody gave. `user_account_terms_acceptance_complete`
      * keeps the pair together, so a version never exists without its moment.
@@ -113,12 +113,10 @@ export const loginSession = pgTable('login_session', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }), // set on sign-out
   /**
-   * Where the session was opened from, and on what.
-   *
-   * Without these a session row said WHO and WHEN and nothing else, so "was that
-   * me?" had no answer. The IP is the real client address — the API trusts the
-   * loopback proxy in front of it and nothing else (see `main.ts`), so behind the
-   * tunnel it is the visitor, not 127.0.0.1.
+   * Where the session was opened from, and on what, so "was that me?" has an
+   * answer. The IP is the real client address: the API trusts only the
+   * configured proxy hops in front of it (`TRUST_PROXY`, see `main.ts`), so
+   * behind the tunnel it is the visitor, not 127.0.0.1.
    */
   ip: text('ip'),
   userAgent: text('user_agent'),
@@ -128,11 +126,9 @@ export const loginSession = pgTable('login_session', {
 /**
  * Every sign-in attempt, successful or not.
  *
- * A failed sign-in used to leave no trace at all — the audit interceptor only
- * records requests that SUCCEED — so somebody working through passwords against
- * an account was invisible, and the only record of a successful one was an audit
- * row with the user left empty. This is the one place both outcomes land, with
- * the address and the device, in the order they happened.
+ * The audit interceptor only records requests that SUCCEED, so this is the one
+ * place both outcomes land, with the address and the device, in the order they
+ * happened.
  *
  * Append-only (it is on the guard list in `0001_append_only.sql`): a log of who
  * tried to get in that could be edited afterwards is not a log.
@@ -147,10 +143,10 @@ export const loginAttemptOutcome = pgEnum('login_attempt_outcome', [
   'unverified',
   'refused',
   /**
-   * The password was right and a second factor was asked for (migration 0035).
-   * Not a success — no session exists yet — and not a failure: but it does mean
-   * whoever typed it knows the password, which is what an administrator
-   * reading the log needs to see when the next row is a string of wrong codes.
+   * The password was right and a second factor was asked for. Not a success
+   * (no session exists yet) and not a failure, but it means whoever typed it
+   * knows the password, which an administrator needs to see when the next row
+   * is a string of wrong codes.
    */
   'mfa_challenged',
   /** A wrong or reused second-factor code. Counted by the lockout like a wrong password. */
@@ -173,11 +169,10 @@ export const loginAttempt = pgTable(
     byTime: index('login_attempt_time_idx').on(t.occurredAt),
     byUser: index('login_attempt_user_idx').on(t.userId, t.occurredAt),
     /**
-     * The sign-in lockout's question — the last ten failures for THIS typed
-     * identifier — asked on every attempt. Partial on `bad_credentials` in
-     * migration 0034; since 0035 wrong codes count too, and the index names no
-     * outcome so it serves both (see that migration for why it cannot be
-     * partial on the new value).
+     * The sign-in lockout's question (the last ten failures for THIS typed
+     * identifier), asked on every attempt. It names no outcome, so it serves
+     * both wrong passwords and wrong codes (migration 0035 explains why it
+     * cannot be partial on the newer value).
      */
     byIdentifier: index('login_attempt_identifier_idx').on(t.identifier, t.occurredAt),
   }),
@@ -188,7 +183,7 @@ export const loginAttempt = pgTable(
  *
  * One TOTP authenticator per account. `secretCiphertext` is AES-256-GCM under
  * MFA_ENCRYPTION_KEY with the account id as authenticated data (see
- * `mfa/secret-box.ts`) — never the secret. `enabledAt` is NULL while a setup
+ * `mfa/secret-box.ts`), never the secret. `enabledAt` is NULL while a setup
  * waits for its first code. `lastUsedStep` is the newest time step accepted;
  * only a later one is, and the comparison is in the UPDATE that records it.
  */
@@ -218,7 +213,7 @@ export const mfaRecoveryCode = pgTable(
 /**
  * What a right password earns an enrolled account: a five-minute, single-use,
  * account-bound token for the second step. Only its hash is stored.
- * `identifier` is what was typed at the first step — wrong codes are counted
+ * `identifier` is what was typed at the first step; wrong codes are counted
  * against it by the lockout.
  */
 export const mfaChallenge = pgTable(

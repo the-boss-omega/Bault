@@ -2,13 +2,13 @@ import { pgTable, text, integer, jsonb, timestamp, uuid } from 'drizzle-orm/pg-c
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
- * ADM tables: disputes (ADM-04) and storage-fee runs (VLT-04). Both are
- * admin-managed. Dashboard banners were removed platform-wide (Requirement 1.2).
+ * ADM tables: disputes, storage-fee runs, and the storage cover the sweep
+ * records.
  */
 
 export const dispute = pgTable('dispute', {
   id: pkId(),
-  code: text('code'), // human-facing Dispute ID, DSP-XXXXXXXX (Requirement 9.4)
+  code: text('code'), // human-facing Dispute ID, DSP-XXXXXXXX
   transactionId: text('transaction_id').notNull(),
   openedBy: text('opened_by').notNull(), // admin who opened it
   status: text('status').notNull().default('open'), // open | investigating | ruled | closed
@@ -21,8 +21,8 @@ export const dispute = pgTable('dispute', {
 
 /**
  * One row per storage-fee sweep (what was charged, to whom, how much). Sweeps are
- * produced by the automatic daily worker job (Requirement 12.1) — `triggered_by`
- * carries the literal 'system' for those, since there is no manual trigger (12.2).
+ * produced by the automatic daily worker job, which writes `triggered_by` as the
+ * literal 'system'; there is no manual trigger.
  */
 export const storageFeeRun = pgTable('storage_fee_run', {
   id: pkId(),
@@ -37,13 +37,12 @@ export const storageFeeRun = pgTable('storage_fee_run', {
 });
 
 /**
- * When a membership last covered each item's storage (migration 0032, F009,
- * F021). Written only by the storage sweep, once a night, for every item a
- * membership allowance covers.
+ * When a membership last covered each item's storage. Written only by the
+ * storage sweep, once a night, for every item a membership allowance covers.
  *
- * The sweep counts an item's chargeable periods from its included window — or
- * from here, whichever is later. Counting from `received_at` alone billed every
- * period an item had spent covered, all at once, the night cover ended.
+ * The sweep counts an item's chargeable periods from its included window or
+ * from here, whichever is later, so periods spent covered are never billed
+ * when the cover ends.
  */
 export const storageCover = pgTable('storage_cover', {
   itemId: uuid('item_id').primaryKey(),

@@ -1,11 +1,10 @@
 /**
  * The rules a wallet cash-in / cash-out request is held to.
  *
- * They live in one module, apart from the service, for two reasons: the SPA
- * mirrors them in `apps/web/src/shared/walletRequests.ts` so a user is told a
- * limit before submitting rather than after, and the transition table below is
- * the single place the lifecycle is defined — the service asks this module
- * whether a move is legal instead of scattering `if (status === …)` chains.
+ * They live apart from the service for two reasons: the SPA mirrors them in
+ * `apps/web/src/shared/walletRequests.ts` so a user is told a limit before
+ * submitting, and the transition table below is the single place the lifecycle
+ * is defined. The service asks this module whether a move is legal.
  *
  * Nothing here talks to the database, so all of it is directly testable.
  */
@@ -24,11 +23,9 @@ export type WalletRequestStatus =
   | 'payout_failed';
 
 /**
- * The lifecycle, as an explicit adjacency list.
- *
- * `draft` is deliberately not a status: nothing in the product persists an
- * unsubmitted request, and a status with no path into it would be a lie in the
- * enum and in the UI. Everything below is reachable.
+ * The lifecycle, as an explicit adjacency list. There is no `draft` status:
+ * nothing persists an unsubmitted request. Every status is reachable. The main
+ * path (a reviewer may also skip `pending_review` and `processing`):
  *
  *   submitted ──▶ pending_review ──▶ approved ──▶ processing ──▶ completed
  *        │               │              │
@@ -48,8 +45,8 @@ export type WalletRequestStatus =
  * payment row, BEFORE the provider is asked; the provider's answer, its
  * webhook or reconciliation moves it on. There is no way from `paying` to
  * `rejected`: money that may already have left cannot be refused after the
- * fact, and a rejection there invited paying it again by hand. A payout the
- * provider refuses ends `payout_failed`, with the debit reversed by a
+ * fact, and a rejection there would invite paying it again by hand. A payout
+ * the provider refuses ends `payout_failed`, with the debit reversed by a
  * compensating credit.
  */
 export const WALLET_REQUEST_TRANSITIONS: Readonly<Record<WalletRequestStatus, readonly WalletRequestStatus[]>> = {
@@ -65,10 +62,9 @@ export const WALLET_REQUEST_TRANSITIONS: Readonly<Record<WalletRequestStatus, re
 };
 
 /**
- * Statuses a request can still move out of before anything is decided — still
- * somebody's work, and money that has not moved. `paying` is deliberately not
- * one: its money has already left the wallet, so it is neither a duplicate of a
- * new request nor money "spoken for" on top of the balance.
+ * Statuses still awaiting a decision, whose money has not moved. `paying` is
+ * not one: its money has already left the wallet, so it is neither a duplicate
+ * of a new request nor money "spoken for" on top of the balance.
  */
 export const OPEN_WALLET_REQUEST_STATUSES: readonly WalletRequestStatus[] = [
   'submitted',
@@ -91,10 +87,8 @@ export const REQUESTER_TRANSITIONS: readonly WalletRequestStatus[] = ['cancelled
 /**
  * Amount limits, in minor units (USD cents).
  *
- * A minimum exists because the review of a request costs a person's attention
- * and a $0.05 cash-out cannot repay it. The maximum is the ceiling above which
- * this product does not claim to operate; it is enforced rather than merely
- * documented so an accidental extra zero is refused at submission.
+ * The minimum exists because each request costs a reviewer's attention. The
+ * maximum is enforced so an accidental extra zero is refused at submission.
  */
 export const WALLET_REQUEST_LIMITS: Readonly<
   Record<WalletRequestType, { minMinor: number; maxMinor: number }>
@@ -103,7 +97,7 @@ export const WALLET_REQUEST_LIMITS: Readonly<
   cash_out: { minMinor: 2_000, maxMinor: 2_000_000 }, // $20 … $20,000
 };
 
-/** The only settlement currency this platform operates in (Requirement 7.1). */
+/** The only settlement currency this platform operates in. */
 export const SUPPORTED_CURRENCIES: readonly string[] = ['USD'];
 
 /** Funding sources a cash-in may name. Free text would be unreviewable. */
@@ -141,9 +135,9 @@ export interface WalletRequestViolation {
 /**
  * Validate a draft against every rule that does not need the database.
  *
- * Balance is NOT checked here — it is a database question and, more importantly,
- * it has to be re-checked at completion time rather than trusted from submission
- * time. See `WalletRequestService.complete`.
+ * Balance is NOT checked here: it is a database question, and it is re-checked
+ * at completion rather than trusted from submission. See
+ * `WalletRequestService.complete`.
  */
 export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletRequestViolation[] {
   const problems: WalletRequestViolation[] = [];
@@ -219,14 +213,10 @@ export function validateWalletRequestDraft(draft: WalletRequestDraft): WalletReq
 /**
  * Whether two requests are "the same request submitted twice".
  *
- * Identity is type + amount + currency + REFERENCE. The reference matters
- * because it is the only field that distinguishes two genuinely different
- * transfers of the same amount: a customer paying in $250 against wire 8842-A
- * and another $250 against wire 8843-B has two real requests, not one duplicate.
- *
- * What this still catches is the case it exists for — the double-click and the
- * retried submission, which repeat the same reference, or carry none at all. Two
- * requests with no reference and the same amount are treated as one intention.
+ * Identity is type + amount + currency + REFERENCE. The reference is the only
+ * field that tells two real transfers of the same amount apart (two $250 wires
+ * with different references are two requests). A double-click or a retried
+ * submission repeats the same reference, or carries none, and is caught.
  *
  * The guard applies only while the first request is still OPEN. Once it has been
  * decided, an identical request is a new intention and is allowed.

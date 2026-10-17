@@ -1,12 +1,11 @@
 /**
- * External payments against the ledger rows that cite them (N40).
+ * External payments against the ledger rows that cite them.
  *
  * The ledger is the only record of what a wallet holds, and `external_payment`
- * is the only record of money that actually moved at a provider. Nothing ever
- * compared the two. A payment marked `succeeded` with no credit behind it is a
- * customer who paid and was never credited; a credit with no settled payment
- * behind it is store credit that was minted from nothing — and either one
- * would have sat there, invisible, until a customer or an auditor found it.
+ * is the only record of money that actually moved at a provider. A payment
+ * marked `succeeded` with no credit behind it is a customer who paid and was
+ * never credited; a credit with no settled payment behind it is store credit
+ * minted from nothing.
  *
  * What each side must look like when the two agree:
  *
@@ -17,7 +16,7 @@
  *                       somebody has to go and ask the provider about)
  *   payout              the `withdrawal` debit whose completion recorded this
  *                       payout's reference, for the payout plus its fee
- *   withdrawal debit    a payout behind it — money left a wallet, so money
+ *   withdrawal debit    a payout behind it: money left a wallet, so money
  *                       must have left Bault
  *
  * Pure: the service gathers the facts in SQL and this decides what they mean,

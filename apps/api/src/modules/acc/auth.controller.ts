@@ -12,10 +12,9 @@ import { MfaService } from './mfa/mfa.service';
 /**
  * The bucket for routes that check a credential.
  *
- * Read from config rather than hard-coded, which was the bug in the first
- * version of this: an inline `limit: 10` OVERRIDES the configured `auth`
- * throttler, so `AUTH_RATE_LIMIT_PER_MINUTE` was silently doing nothing and
- * every deployment got ten regardless of what it asked for.
+ * Read from config rather than hard-coded: an inline `limit` OVERRIDES the
+ * configured `auth` throttler and would leave `AUTH_RATE_LIMIT_PER_MINUTE`
+ * doing nothing.
  *
  * The right number depends on the deployment. Collectors behind one office NAT
  * or one carrier's egress share an address, and a budget that locks them out
@@ -31,8 +30,8 @@ export const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
  * unauthenticated stranger can make Bault email somebody. Five a minute per IP
  * is far more than any human needs and destroys the value of pointing a script
  * at a mailbox. Deliberately NOT configurable: there is no deployment where a
- * higher number is the right answer, and the one place a low limit would hurt —
- * a shared office IP signing in — is the sign-in route, not this one.
+ * higher number is the right answer, and the one place a low limit would hurt
+ * (a shared office IP signing in) is the sign-in route, not this one.
  */
 const MAIL_ROUTE = 5;
 import { CurrentUser } from '../sec/current-user.decorator';
@@ -53,7 +52,7 @@ import {
 
 const env = loadEnv();
 
-/** ACC auth endpoints (T035). Maps 1:1 to contracts/openapi.yaml `/auth/*`. */
+/** ACC auth endpoints: `/auth/*`. */
 @ApiTags('ACC')
 @Controller('auth')
 export class AuthController {
@@ -66,9 +65,8 @@ export class AuthController {
   ) {}
 
   /**
-   * The response names the account by its USERNAME — the permanent, unique,
-   * customer-facing identifier. No intake ID is returned any more (none is
-   * allocated); nothing downstream ever asks a person to quote one.
+   * The response names the account by its USERNAME: the permanent, unique,
+   * customer-facing identifier. No intake ID is returned (none is allocated).
    */
   @Public()
   @AuthBucket(CREDENTIAL_ROUTE)
@@ -105,14 +103,14 @@ export class AuthController {
   }
 
   /**
-   * The password step. For most accounts it opens a session, as it always did.
-   * For an account with two-factor sign-in it opens NOTHING: it answers
+   * The password step. For most accounts it opens a session. For an account
+   * with two-factor sign-in it opens NOTHING: it answers
    * `{ status: 'mfa_required', challengeToken, expiresAt }` and the session
    * comes from `POST /auth/login/mfa`. `Cache-Control: no-store` because the
    * challenge is half a credential.
    *
    * `mfaEnrollmentRequired` tells the app, before it renders anything, that this
-   * account's role needs a second factor it does not have yet — every route but
+   * account's role needs a second factor it does not have yet: every route but
    * enrolment will refuse it, so the app goes straight to the enrolment screen.
    */
   @Public()
@@ -127,12 +125,9 @@ export class AuthController {
     }
     const { user, rawToken, expiresAt } = result;
     /**
-     * Name the actor for the audit row.
-     *
-     * The audit interceptor records `req.user` once the handler returns, and
-     * sign-in is the one request that has no user until it finishes — so every
-     * sign-in was audited as `POST /api/v1/auth/login` by nobody. Setting it here
-     * is what the interceptor reads a moment later.
+     * Name the actor for the audit row. The audit interceptor records `req.user`
+     * once the handler returns, and sign-in has no user until it finishes, so it
+     * is set here for the interceptor to read.
      */
     req.user = user;
     this.setSessionCookie(res, rawToken, expiresAt);
@@ -141,7 +136,7 @@ export class AuthController {
 
   /**
    * The second sign-in step: the challenge plus a code from the authenticator
-   * app, or plus a recovery code. Public — there is no session yet — and metered
+   * app, or plus a recovery code. Public (there is no session yet) and metered
    * by the same credential bucket as the password, because it checks a
    * credential: without that, a stolen password would buy guesses at the code
    * as fast as the network allowed, held back only by the lockout.
@@ -196,10 +191,8 @@ export class AuthController {
 
   /**
    * The caller's own cookie is passed down so their current session survives and
-   * every OTHER one they hold is ended. The count comes back because "signed out
-   * 3 other devices" and "signed out 0" are different facts, and the person who
-   * just changed their password because they were worried deserves the first one
-   * stated rather than implied.
+   * every OTHER one they hold is ended. The count comes back so the page can say
+   * "signed out 3 other devices".
    */
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('password/change')
@@ -219,12 +212,8 @@ export class AuthController {
   }
 
   /**
-   * Sign out everywhere else, without changing the password.
-   *
-   * The revocation existed only as a side effect of changing a password, which
-   * made "I think somebody is using my account" a thing you could only act on by
-   * also picking a new password. They are separate worries and this is the
-   * separate answer.
+   * Sign out everywhere else, without changing the password: "somebody may be
+   * using my account" and "I want a new password" are separate worries.
    */
   @Post('sessions/revoke-others')
   @HttpCode(200)
@@ -234,8 +223,9 @@ export class AuthController {
   }
 
   /**
-   * The real client: `main.ts` trusts the loopback proxy and nothing else, so
-   * behind the tunnel this is the visitor, not 127.0.0.1.
+   * The real client: `main.ts` trusts only the configured proxy hops
+   * (`TRUST_PROXY`, default loopback), so behind the tunnel this is the
+   * visitor, not 127.0.0.1.
    */
   private origin(req: Request) {
     return { ip: req.ip ?? null, userAgent: req.headers['user-agent'] ?? null };

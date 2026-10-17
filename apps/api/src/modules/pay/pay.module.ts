@@ -13,8 +13,7 @@ import { WalletRequestController } from './wallet-request.controller';
 
 /**
  * PAY module (finance). Global because the ledger/wallet/billing primitives are
- * used by MKT, SHP, DIS. Crucially it provides BILLING_PORT via the REAL
- * BillingService — replacing the Phase-4 no-op adapter without touching callers.
+ * used across modules. It provides BILLING_PORT via BillingService.
  */
 @Global()
 @Module({
