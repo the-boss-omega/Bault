@@ -2,11 +2,10 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOkResponse } from '@nestjs/swagger';
 
 /**
- * Minimal liveness endpoint so the freshly-scaffolded API has one route to
- * prove it boots and that the global `/api/v1` prefix + OpenAPI wiring work.
+ * The API root: a minimal "service is up" answer under the `/api/v1` prefix.
  *
- * NOTE: this is NOT the operational health check. Real readiness/liveness
- * probes (DB reachable, worker heartbeat, etc.) are added in T022.
+ * NOTE: this is NOT the operational health check. The probes are `/healthz`,
+ * `/readyz` and `/readyz/worker`, in `HealthController`.
  */
 @ApiTags('meta')
 @Controller()
