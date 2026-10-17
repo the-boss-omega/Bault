@@ -209,5 +209,7 @@ describe('where the guard runs', () => {
     const mfa = providers.indexOf(guardModule.MfaEnrollmentGuard);
     expect(session).toBeGreaterThanOrEqual(0);
     expect(mfa).toBeGreaterThan(session);
-  });
+    // Importing the whole AppModule takes 3–4s on its own, past the 5s
+    // default on a loaded runner.
+  }, 30_000);
 });
