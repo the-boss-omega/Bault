@@ -196,11 +196,11 @@ export async function dispatchOutbox(pool: Pool): Promise<void> {
 
       // A reset link is account mail, not a notification: no in-app row, no
       // preferences, and it goes to an address that may not have confirmed
-      // itself. The token is minted and mailed on its own connection; this
-      // transaction only marks the message dispatched.
+      // itself. Its token is minted on THIS transaction, so it commits with the
+      // dispatch or not at all (see `sendPasswordReset`).
       const counts =
         claimed.event_type === PASSWORD_RESET_REQUESTED
-          ? await sendPasswordReset(pool, claimed.payload, emailAdapter()).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
+          ? await sendPasswordReset(client, claimed.payload, emailAdapter()).then(() => ({ delivered: 0, mailed: 0, failed: 0 }))
           : await deliver(client, env, claimed);
       await client.query(
         `UPDATE outbox_message
