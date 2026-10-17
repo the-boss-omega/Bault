@@ -6,18 +6,12 @@ import { tierLabel, type GradingTier } from '../../../shared/grading';
 import { Button, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
 /**
- * Send a card away to be graded — at a chosen service level.
+ * Send a card away to be graded, at a chosen service level, with a declared
+ * value and the tier's declared-value ceiling and turnaround shown.
  *
- * Grading used to be a single button that posted `{ itemId }` and nothing else.
- * The owner could not say what the card was worth, could not choose how long
- * they were willing to wait, and was never shown the two facts that decide both:
- * the tier's declared-value ceiling and its turnaround.
- *
- * Both rules are evaluated here as well as on the server, and for the same
- * reason the consignment form does it: so somebody is told "that is above this
- * tier's ceiling" while they can still change it, rather than after a fee has
- * been charged. The server re-checks regardless — this is the courtesy, not the
- * control.
+ * Both rules are evaluated here as well as on the server, as in the consignment
+ * form, so somebody is told "that is above this tier's ceiling" while they can
+ * still change it, before a fee is charged. The server re-checks regardless.
  */
 export function GradingForm({
   item,

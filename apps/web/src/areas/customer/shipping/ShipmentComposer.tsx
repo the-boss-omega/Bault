@@ -37,18 +37,11 @@ interface VaultItem {
 /**
  * Building a parcel, and pricing it before committing to it.
  *
- * The old composer was four controls: tick some items, choose a saved address,
- * tick Rush, press a button — which created a shipment record and only THEN
- * showed two prices. There was no way to ask "what would this cost" without
- * committing, and the two prices were the same two prices for every parcel,
- * because nothing about the destination or the weight reached the rate request.
- *
- * The order of operations here is the substance of the change. Everything on the
- * left is a question about the parcel; the panel on the right re-quotes as those
- * answers change; and the shipment is only created once somebody has seen what
- * it costs. A service that cannot legally carry the parcel is still SHOWN, with
- * the rule it failed — an option that silently vanished would leave a collector
- * hunting for the cheap one they saw a moment ago.
+ * Everything on the left is a question about the parcel; the panel on the right
+ * re-quotes as those answers change; and the shipment is only created once
+ * somebody has seen what it costs. A service that cannot legally carry the
+ * parcel is still shown, with the rule it failed, so a cheaper option never
+ * silently vanishes.
  */
 export function ShipmentComposer({
   items,
@@ -89,9 +82,9 @@ export function ShipmentComposer({
   const insuredMinor = dollarsToCents(insured) ?? 0;
   const declaredMinor = dollarsToCents(declared) ?? 0;
 
-  // The signature is not merely validated — it is FORCED, because the cover
-  // would not pay on a parcel left at a door. Showing it ticked and locked is
-  // more honest than refusing the combination at submit time.
+  // Above the threshold the signature is forced, because the cover would not
+  // pay on a parcel left at a door. It shows ticked and locked instead of being
+  // refused at submit time.
   const signatureForced =
     catalogue !== null && insuredMinor > catalogue.signatureRequiredAboveMinor;
   const effectiveSignature = signature || signatureForced;
@@ -235,10 +228,8 @@ export function ShipmentComposer({
       <Panel title={t('shipping.destination')} subtitle={t('shipping.destinationSubtitle')}>
         {addresses.length === 0 ? (
           /*
-            This told somebody to go and manage their addresses and gave them no
-            way to do it — the form lives on another section entirely, and
-            nothing on screen said which. A shipment cannot be composed at all
-            from here without one, so this is the only thing to do next.
+            A shipment cannot be composed without an address, and addresses are
+            managed in Profile, so the empty state links straight there.
           */
           <EmptyState
             title={t('shipping.noAddresses')}
@@ -271,9 +262,8 @@ export function ShipmentComposer({
               </select>
             </Field>
 
-            {/* The box changes the price — a carrier bills on size as well as
-                weight — so it is asked here, before the quote, not at the packing
-                bench after the price was already given. */}
+            {/* The box changes the price (a carrier bills on size as well as
+                weight), so it is asked here, before the quote. */}
             <Field label={t('ship.boxSize')} hint={t('ship.boxSizeHint')}>
               <select value={boxSize} onChange={(e) => setBoxSize(e.target.value)}>
                 <option value="">{t('ship.box.none')}</option>
@@ -406,9 +396,8 @@ export function ShipmentComposer({
                         insurance: formatUsd(r.insurancePremiumMinor),
                       })}
                     </p>
-                    {/* The tier's part, named. A total that is lower than the
-                        breakdown above it, with nothing to say why, reads as a
-                        mistake — so the membership says what it paid. */}
+                    {/* The tier's part, named, so a total lower than the
+                        breakdown above it does not read as a mistake. */}
                     {r.membershipCover && (r.coveredMinor ?? 0) > 0 && (
                       <p className="hint mem-covered">
                         {t('ship.coveredBy', {
@@ -448,8 +437,7 @@ export function ShipmentComposer({
               </div>
             )}
 
-            {/* Refused services stay on screen with their reason. A collector who
-                wanted the cheap one is owed the rule, not a gap where it was. */}
+            {/* Refused services stay on screen with their reason. */}
             {refused.length > 0 && (
               <>
                 <h3 className="drawer-heading">{t('ship.unavailable')}</h3>

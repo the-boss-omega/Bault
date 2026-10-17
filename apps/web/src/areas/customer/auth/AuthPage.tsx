@@ -18,7 +18,7 @@ import { ForgotPasswordPage } from './ForgotPasswordPage';
 export interface SessionUser {
   id: string;
   role: string;
-  /** `active` or `suspended` — see `SessionProfile.status`. */
+  /** `active` or `suspended`; see `SessionProfile.status`. */
   status?: string;
   /** Filled in from /me/profile once the session is established. */
   email?: string;
@@ -30,7 +30,7 @@ export interface SessionUser {
    * straight away; the profile then says `mfaRequired` and `mfaEnabled`. Either
    * way, an account whose role requires a second factor it has not enrolled is
    * refused by every route but enrolment, so the shell holds it on the
-   * enrolment screen rather than rendering a console of errors.
+   * enrolment screen.
    */
   mfaEnrollmentRequired?: boolean;
   mfaRequired?: boolean;
@@ -39,13 +39,9 @@ export interface SessionUser {
 
 
 /**
- * The card on the landing stage.
- *
- * A seeded, catalogued item with its photograph on disk under this exact
- * serial — the Gold Star, which is the collection's centrepiece and the most
- * valuable thing in the demo vault. Named as constants rather than inlined so
- * that if it is ever swapped, the serial and the caption cannot fall out of step
- * with each other and start describing a different card than the one on screen.
+ * The card on the landing stage: a seeded, catalogued item with its photograph
+ * on disk under this exact serial. Named as constants so that if it is swapped,
+ * the serial and the caption cannot fall out of step.
  */
 export const LANDING_SERIAL = 'SN-DX107-0003';
 export const LANDING_TITLE =
@@ -54,34 +50,18 @@ export const LANDING_TITLE =
 /**
  * The signed-out chrome for the pages that take a password.
  *
- * There IS a marketing page now — `marketing/LandingPage.tsx`, which anonymous
- * visitors meet first — but this screen was the whole public face of the product
- * for a long time, and the reason it looks the way it does still holds. It was a
- * 440px white card floating on a navy radial gradient with a gold `B` above it
- * and a paragraph of demo credentials underneath — a login box, doing the job of
- * a shop window.
+ * The stage shows a real item Bault is holding, photographed, with its serial
+ * and custody line, in the same photograph, serial component and custody green
+ * the signed-in product uses. At ≥ 900px the stage and the form sit side by
+ * side; below that the stage shrinks to a band above the form, because on a
+ * phone the form is why anybody opened this.
  *
- * It is a shop window now, and it is built out of the same argument the product
- * makes everywhere else: A REAL ITEM, PHOTOGRAPHED, WITH ITS SERIAL AND ITS
- * CUSTODY LINE. Not an illustration of a vault door, not a stock photograph of
- * somebody smiling at a laptop — the actual thing Bault is holding, lit on the
- * photography stage, with the record beside it. The image is the pitch, and it
- * is the same photograph, the same serial component and the same custody green
- * that the signed-in product uses, because a landing page that promises a
- * different product than the one behind it is a lie told twice.
- *
- * At ≥ 900px the stage and the form sit side by side; below that the stage
- * shrinks to a band above the form, because on a phone the form is why anybody
- * opened this.
- *
- * `bare` drops the stage for the pages that are opened FROM AN EMAIL —
- * verify-email and reset-password. Somebody who has clicked a link to confirm an
- * address is not being sold anything; they want one sentence and a button.
+ * `bare` drops the stage, for the pages opened from an email (verify-email and
+ * reset-password) and for forced two-factor enrolment.
  *
  * The language control is the shell's globe, in the same logical position it
- * occupies signed in. A language chooser is the one control that has to be
- * recognisable to somebody who cannot read the page it is on, which is an icon
- * and not a word.
+ * occupies signed in. A language chooser has to be recognisable to somebody who
+ * cannot read the page it is on, so it is an icon and not a word.
  */
 export function AuthShell({ children, bare }: { children: ReactNode; bare?: boolean }) {
   const { t } = useI18n();
@@ -93,8 +73,7 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
           <div className="auth-stage-photo">
             {/*
               A real card, held by Bault, photographed. The serial is the
-              filename — the same coupling the whole product runs on — so this
-              cannot drift into being a picture of nothing.
+              filename, the same coupling the whole product runs on.
             */}
             <CardPhotoThumb serialNumber={LANDING_SERIAL} title={LANDING_TITLE} />
           </div>
@@ -138,22 +117,7 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
           </span>
           <span className="auth-brand-word">Bault</span>
 
-          {/*
-            THE SAME LANGUAGE CONTROL THE REST OF THE PRODUCT USES.
-
-            This was a text button that printed the name of the OTHER language:
-            "English" on the Hebrew page, and "עברית" on the English one — a
-            Hebrew word sitting on the sign-in screen of an English build, which
-            reads as a stray label rather than as a way to change anything. It
-            also toggled between exactly two languages, so it could never grow a
-            third without becoming a lie.
-
-            `LanguageSwitcher` is a globe with a menu that names every language in
-            its own script and marks the current one. It is what the signed-in
-            shell has always used, and a language chooser is the one control that
-            has to be recognisable to somebody who cannot read the page it is on —
-            which is an icon, not a word.
-          */}
+          {/* The same language control the signed-in shell uses. */}
           <LanguageSwitcher />
         </div>
 
@@ -167,16 +131,13 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
 export type AuthMode = 'signIn' | 'signUp' | 'forgot';
 
 /**
- * The signed-out entry point. Sign-in, sign-up and "forgot password" remain
- * SEPARATE pages — this only decides which one is on screen, and each page owns
+ * The signed-out entry point. Sign-in, sign-up and "forgot password" are
+ * separate pages; this only decides which one is on screen, and each page owns
  * its own form and fields.
  *
- * `initialMode` exists because the landing page has two calls to action and they
- * mean different things: "Open an account" must arrive on the sign-up form, and
- * arriving on the sign-in form with a link underneath is asking somebody to make
- * the same choice twice. It is the STARTING mode only — the links between the
- * three forms still work as they always did, so a visitor who guessed wrong is
- * one click from the right one and never a page load.
+ * `initialMode` exists because the landing page has two calls to action:
+ * "Open an account" must arrive on the sign-up form. It is the starting mode
+ * only; the links between the three forms still switch without a page load.
  */
 export function AuthPage({
   onSignedIn,

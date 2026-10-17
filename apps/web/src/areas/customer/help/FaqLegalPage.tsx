@@ -19,15 +19,14 @@ import { DraftBanner } from './LegalDocumentView';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
 
-/** Whether any catalogued entry is outright unavailable — see the filter. */
+/** Whether any catalogued entry is outright unavailable; see the filter. */
 const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
 
 /**
  * How each availability value is presented.
  *
- * `partial` is warned rather than greyed out: it is a thing Bault does, with a
- * limit the answer names, so hiding it behind the "not offered" filter would
- * bury a capability people have.
+ * `partial` is warned instead of greyed out: it is a thing Bault does, with a
+ * limit the answer names, so it stays out of the "not offered" filter.
  */
 const AVAILABILITY_TONE: Record<FaqAvailability, 'info' | 'warning' | 'neutral'> = {
   adapted: 'info',
@@ -53,11 +52,11 @@ type HelpTab = (typeof TABS)[number];
 /**
  * FAQ & Legal.
  *
- * Six contextual tabs on the shared shell: Ask (the placeholder assistant),
- * Guides (Bault's own workflow walkthroughs), FAQ (Bault's answers, written
- * from what the product does), Shows (the card-show calendar, from real rows),
- * Contact (how to reach a person) and Legal Terms (the terms, drafts marked as
- * drafts, and the figures they refer to).
+ * Contextual tabs on the shared shell: Ask (the placeholder assistant), Guides
+ * (Bault's own workflow walkthroughs), FAQ (Bault's answers, written from what
+ * the product does), the intake policy, the price list, Shows (the card-show
+ * calendar, from real rows), Contact (how to reach a person) and Legal Terms
+ * (the terms, drafts marked as drafts, and the figures they refer to).
  *
  * The tab lives in the route, so a link can open any of them; the FAQ's `q`
  * param deep-links a single answer open and the Guides' `g` param a single
@@ -129,14 +128,13 @@ export function FaqLegalPage() {
 /**
  * The single seam a real assistant will be wired into.
  *
- * Every query resolves to exactly `#1DDD` and nothing else — no answer text, no
+ * Every query resolves to exactly `#1DDD` and nothing else: no answer text, no
  * heuristics, no lookup against the FAQ. It is deliberately `async` and
- * deliberately ignores its argument so that swapping the body for a real call is
- * the only change needed at the integration point; every caller already awaits
- * it and already handles a pending state.
+ * deliberately ignores its argument, so swapping the body for a real call is the
+ * only change needed; every caller already awaits it and handles a pending state.
  *
- * It performs NO network request. That is a requirement of this placeholder, not
- * an implementation detail: nothing typed into Ask leaves the browser.
+ * It performs no network request. That is a requirement of this placeholder:
+ * nothing typed into Ask leaves the browser.
  */
 export async function answerQuestion(_query: string): Promise<string> {
   return '#1DDD';
@@ -281,8 +279,8 @@ function FaqPanel() {
     });
   }, [q, category, showAll]);
 
-  // A deep link may point at an entry the current filters hide. Reveal it rather
-  // than opening nothing — the link is the stronger signal of intent.
+  // A deep link may point at an entry the current filters hide. Reveal it: the
+  // link is the stronger signal of intent.
   useEffect(() => {
     if (!openId) return;
     const entry = FAQ.entries.find((e) => e.id === openId);
@@ -322,11 +320,8 @@ function FaqPanel() {
             ))}
           </div>
 
-          {/* Offered only when there is something to reveal. Every entry in the
-              catalogue currently describes something Bault does, in whole or in
-              part, so a permanent "also show what does not apply" control would
-              be a toggle that changes nothing — and would imply a set of
-              excluded answers that does not exist. */}
+          {/* Offered only when some entry is `unavailable`; otherwise the toggle
+              would change nothing. */}
           {HAS_UNAVAILABLE && (
             <label className="check">
               <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
@@ -439,7 +434,7 @@ function FaqItem({
         </p>
 
         {/* The full answer. Written in English and not yet translated, so it
-            is marked as English and LTR whatever the app locale — a Hebrew
+            is marked as English and LTR whatever the app locale; a Hebrew
             screen reader would otherwise read it in a Hebrew voice. */}
         <div className="faq-source-answer" lang="en" dir="ltr">
           {entry.blocks.map((block, i) => (
@@ -479,13 +474,13 @@ function FaqBlockView({ block }: { block: FaqBlock }) {
 
 /**
  * Render the two inline markers the content carries: `**bold**` and
- * `[[label|url]]`. Deliberately not a Markdown parser and deliberately not
- * `dangerouslySetInnerHTML` — the text is rendered as React nodes and can never
+ * `[[label|url]]`. Deliberately not a Markdown parser and not
+ * `dangerouslySetInnerHTML`: the text is rendered as React nodes and can never
  * inject markup.
  *
  * The href is the one value that reaches the DOM as an active attribute, so its
  * scheme is checked: an in-app route (`#/...`) opens in place, https opens in a
- * new tab, and anything else is rendered as plain text rather than as a link.
+ * new tab, and anything else is rendered as plain text.
  */
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -634,7 +629,7 @@ function LegalPanel() {
   );
 }
 
-/** `GET /content/account-terms` — see `apps/api/src/modules/not/account-terms.ts`. */
+/** `GET /content/account-terms`; see `apps/api/src/modules/not/account-terms.ts`. */
 export interface AccountTerms {
   termsVersion: string;
   debt: { graceDays: number; interestBpsPerDay: number; suspendBelowMinor: number };
@@ -660,10 +655,9 @@ function bpsToPercent(bps: number): string {
 /**
  * The figures the terms and the FAQ point at.
  *
- * The documents deliberately do not print configuration — the debt policy is
- * environment configuration, and a number copied into prose goes stale the day
- * somebody changes it. This panel is where "shown in the app" is true: it reads
- * the same settings and constants the charging code uses.
+ * The documents deliberately do not print configuration: the debt policy is
+ * environment configuration, and a number copied into prose goes stale. This
+ * panel reads the same settings and constants the charging code uses.
  */
 function CurrentFiguresPanel() {
   const { t } = useI18n();

@@ -9,10 +9,10 @@ import type { SessionUser } from './AuthPage';
  * The second sign-in step: a code from the authenticator app, or a recovery
  * code.
  *
- * Reached only after a right password for an account with two-factor sign-in
- * — the API then answers with a challenge instead of a session — and holds
- * nothing but that challenge. The password is not kept for this step and is not
- * sent again.
+ * Reached only after a right password for an account with two-factor sign-in,
+ * when the API answers with a challenge instead of a session, and holds nothing
+ * but that challenge. The password is not kept for this step and is not sent
+ * again.
  *
  * A wrong code stays here: retyping the password is not the remedy for a
  * mistyped code. An expired, used or burned challenge goes back to the password

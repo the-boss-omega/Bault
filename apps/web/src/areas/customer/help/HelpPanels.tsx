@@ -21,16 +21,14 @@ import {
 import { GUIDES, GUIDE_CATEGORIES, guide, matchesGuideSearch, type Guide } from './guideContent';
 
 /* ============================================================
-   Guides — the written half of "video tutorials for each workflow"
+   Guides: the written half of "video tutorials for each workflow"
    ============================================================ */
 
 /**
  * Step-by-step walkthroughs of every workflow, with real routes.
  *
- * The reference service publishes YouTube tutorials. Bault has none, and this
- * screen says so where a player would be rather than pretending otherwise — a
- * fabricated video link that 404s is worse than an empty state that is honest.
- * What it does have is the part a video would be a recording OF: the ordered
+ * Bault has no video tutorials, and this screen says so where a player would
+ * be. What it has is the part a video would be a recording of: the ordered
  * steps, each naming the screen it happens on, with a link that goes there.
  */
 export function GuidesPanel() {
@@ -115,7 +113,7 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
   return (
     <Panel title={g.title} subtitle={g.summary} tools={<Button size="sm" variant="ghost" onClick={onBack}>{t('guide.back')}</Button>}>
       {/* The absence of a recording is a fact about Bault, so it is stated
-          rather than hidden by omitting the section. */}
+          instead of hidden by omitting the section. */}
       {g.video === null && (
         <p className="drawer-note drawer-note--archive">
           <IconAlert />
@@ -182,10 +180,9 @@ interface Show {
 /**
  * The show calendar.
  *
- * Real rows, not editorial: Bault takes a table at particular shows on
- * particular dates, and a consignment aimed at one has a deadline attached. Past
- * shows are kept — a calendar that silently drops yesterday cannot be used to
- * check what you missed.
+ * Real rows: Bault takes a table at particular shows on particular dates, and a
+ * consignment aimed at one has a deadline attached. Past shows are kept, so the
+ * calendar can be used to check what you missed.
  */
 export function ShowsPanel() {
   const { t, locale } = useI18n();
@@ -294,9 +291,9 @@ interface Location {
  *
  * Every published channel comes from configuration, and an unconfigured one
  * says so instead of showing a plausible placeholder somebody might dial. The
- * helpdesk is listed first and unconditionally, because it is the route that
- * works regardless of whether anybody has filled a variable in — and it is the
- * one that arrives attached to your account, your items and your codes.
+ * helpdesk is listed first and unconditionally, because it works whether or not
+ * anybody has filled a variable in, and it arrives attached to your account,
+ * your items and your codes.
  */
 export function ContactPanel() {
   const { t } = useI18n();

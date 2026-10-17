@@ -23,18 +23,11 @@ interface PriceList {
 }
 
 /**
- * What everything costs, before it is charged.
+ * What everything costs, before it is charged, from `GET /pricing/list`.
  *
- * `GET /pricing/rules` existed and returned every rule ever created, in the
- * shape the admin console edits, and nothing customer-facing called it — so a
- * collector could not find out what anything cost until it had been charged to
- * them. For a platform whose entire economics are per-item fees, that was a
- * straightforward omission.
- *
- * The grouping is the substance of the fix. A flat list of thirty action types
- * reads as a database dump because it is one; somebody wants to know what it
- * costs to send a card home, and `shipping`, `shipping_rush` and
- * `shipping_addon:gps_tracker` are three answers to that single question.
+ * Rules are grouped by what a person wants to know: what it costs to send a
+ * card home is answered by `shipping`, `shipping_rush` and
+ * `shipping_addon:gps_tracker` together, so they sit in one group.
  */
 export function PriceListPanel() {
   const { t } = useI18n();
@@ -55,8 +48,7 @@ export function PriceListPanel() {
    * A rule's price, in the units it is actually stated in.
    *
    * A percentage rule stores basis points and a fixed one stores cents.
-   * Rendering both with `formatUsd` would turn 5% into "$5.00", which is the
-   * kind of error a price list exists to prevent.
+   * Rendering both with `formatUsd` would turn 5% into "$5.00".
    */
   function priceOf(entry: PriceEntry): string {
     return entry.model === 'percentage'

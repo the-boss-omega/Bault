@@ -1,27 +1,17 @@
 /**
- * Workflow guides — how each thing in Bault is actually done.
+ * Workflow guides: how each thing in Bault is actually done.
  *
- * The audit scored "video tutorials for each workflow" and "buying guides" as
- * missing, and this module is the answer to both, with one thing stated plainly
- * because it is the honest part:
+ * There are no videos. Every guide carries a `video` field that is `null`, and
+ * the page says so where a player would be.
  *
- *   **There are no videos.** Nothing here links to one, and no entry pretends
- *   otherwise. Every guide carries a `video` field that is `null`, and the page
- *   says so where a player would be. A fabricated YouTube URL that 404s is worse
- *   than an empty state that tells the truth.
+ * What is here is the written half: ordered steps, each naming the screen it
+ * happens on, with a real hash route the reader can follow. A guide that names
+ * `#/shipping-services/shipping` can be checked against the router.
  *
- * What IS here is the written half: ordered steps, each naming the screen it
- * happens on, with a real hash route the reader can follow. That is the part a
- * video would be a recording OF, and it is the part that can be kept correct —
- * a guide that names `#/shipping-services/shipping` is checkable against the router in a
- * way a two-minute screen capture never is.
- *
- * The rule this module holds itself to is the FAQ's rule, and for the same
- * reason. Every sentence is a factual statement about what Bault does. Nothing
- * is market advice, nothing is a claim about what cards are worth, and nothing
- * describes a capability that does not exist. When a workflow has a constraint
- * that surprises people, the guide says the constraint rather than routing
- * around it.
+ * The rule is the FAQ's rule: every sentence is a factual statement about what
+ * Bault does. Nothing is market advice, nothing is a claim about what cards are
+ * worth, and nothing describes a capability that does not exist. When a workflow
+ * has a constraint that surprises people, the guide states it.
  */
 
 export type GuideCategory = 'getting_started' | 'inbound' | 'vault' | 'selling' | 'outbound' | 'money';
@@ -32,8 +22,8 @@ export interface GuideStep {
   /** The hash route this step happens on, when it happens on one. */
   route?: string;
   /**
-   * A constraint worth knowing BEFORE the step rather than after it. Present
-   * only where there genuinely is one.
+   * A constraint worth knowing before the step. Present only where there is
+   * one.
    */
   note?: string;
 }
@@ -45,13 +35,12 @@ export interface Guide {
   category: GuideCategory;
   /** One sentence: what this gets you. */
   summary: string;
-  /** How long the READING takes. Not how long the workflow takes. */
+  /** How long the reading takes, not how long the workflow takes. */
   minutes: number;
   steps: GuideStep[];
   /**
    * A recorded walkthrough, if one exists. It is `null` on every guide, and the
-   * page renders that as "no recording yet" rather than hiding the field —
-   * because the absence is a fact about Bault, not a gap in the data model.
+   * page renders that as "no recording yet" instead of hiding the field.
    */
   video: string | null;
   /** Guides that answer the obvious next question. */

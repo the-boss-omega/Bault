@@ -45,17 +45,16 @@ import {
 } from '../../../shared/ui/icons';
 
 /**
- * Shipping & Services — the merged operational section.
+ * Shipping & Services: the operational section.
  *
- * Services stopped being a section of its own. Ordering a service is a thing you
- * do TO A CARD, so it now lives in the Vault card drawer; what remains here is
- * the operational half: getting cards out of the vault, following them, and the
- * ledger of every service request raised against them.
+ * Ordering a service is a thing you do to a card, so it lives in the Vault card
+ * drawer; this section holds the operational half: getting cards out of the
+ * vault, following them, and the ledger of every service request raised against
+ * them.
  *
- * Every tab is backed by a real endpoint. There is no "Tracking" that invents
- * carrier scan events and no "History" that shows placeholder rows: tracking is
- * `GET /shipping/shipments/:id` (owner-scoped) and history is the terminal half
- * of `GET /services/mine`.
+ * Every tab is backed by a real endpoint: tracking is `GET /shipping/shipments`
+ * (scoped to the caller) and history is the terminal half of
+ * `GET /services/mine`.
  */
 const TABS = ['overview', 'shipping', 'in-person', 'tracking', 'shared', 'requests', 'history', 'not-accepted'] as const;
 type SsTab = (typeof TABS)[number];
@@ -69,11 +68,6 @@ const STATUS_TONE: Record<string, StatusTone> = {
 
 /** Service requests that are still moving; everything else is history. */
 const OPEN_STATUSES = new Set(['requested', 'in_progress']);
-
-/* The shipment status→tone map moved to `shared/shipments.ts` with the rest of
-   the tracking vocabulary. The copy that used to live here listed statuses the
-   API's enum does not have (`dispatched`, `cancelled`) and omitted ones it does
-   (`picking`, `packed`, `labeled`, `in_transit`, `exception`). */
 
 interface MyRequest {
   id: string;
@@ -95,10 +89,6 @@ interface Address {
   isDefault: boolean;
 }
 
-/* `ShipmentDetail` was this page's private copy of one shipment. The tracking
-   list and its drawer now share `ShipmentSummary` from shared/shipments.ts, so
-   the two views cannot drift apart in what they claim a shipment has. */
-
 /** One-line rendering of a saved address, also persisted with the shipment. */
 export function formatAddress(a: Address): string {
   return `${a.recipient}, ${a.line1}, ${a.city} ${a.postalCode}, ${a.country}`;
@@ -115,8 +105,7 @@ export function ShippingServicesPage() {
   const [status, setStatus] = useState<string | null>(null);
   /**
    * Bumped when a shipment is created, so the tracking list refetches and the
-   * new shipment is there the moment the user switches to that tab. The list
-   * would show it on its own next load anyway — this only removes the wait.
+   * new shipment is there the moment the user switches to that tab.
    */
   const [shipmentsVersion, setShipmentsVersion] = useState(0);
 
@@ -206,8 +195,7 @@ export function ShippingServicesPage() {
                   <IconServices />
                 </span>
                 <h3 className="card-title">{t('ss.tab.requests')}</h3>
-                {/* Says where ordering moved to, so the merge does not read as
-                    a removed feature. */}
+                {/* Says where services are ordered: from the card drawer. */}
                 <p className="card-desc">{t('ss.overview.requestsDesc')}</p>
                 <div className="actions">
                   <Button size="sm" variant="secondary" block onClick={() => goTab('requests')}>
@@ -234,10 +222,9 @@ export function ShippingServicesPage() {
         </TabPanel>
       )}
 
-      {/* The two routes out of the vault that are a person rather than a
+      {/* The two routes out of the vault that are a person instead of a
           parcel. Kept off the main Shipping tab on purpose: neither has a rate
-          to select, and folding them into a carrier flow would make the carrier
-          flow answer questions it does not have. */}
+          to select. */}
       {tab === 'in-person' && (
         <TabPanel tab="in-person">
           <ShowPickupPanel
@@ -337,18 +324,16 @@ export function ShippingServicesPage() {
 
 /**
  * Things that arrived addressed to the signed-in collector and never reached
- * their vault — a prohibited item, a tracker found in a parcel, or something
+ * their vault: a prohibited item, a tracker found in a parcel, or something
  * given away because processing it cost more than it was worth.
  *
- * It lives here rather than in the Vault because these are precisely the things
- * that are NOT in the vault: rendering them in a grid of card photographs, next
- * to items the collector owns, would suggest they are holdings. This section
- * already holds the operational record of what happened to a collector's
- * property, which is what these are.
+ * It lives here instead of in the Vault because these are the things that are
+ * not in the vault, and showing them next to items the collector owns would
+ * suggest they are holdings. This section holds the operational record of what
+ * happened to a collector's property, which is what these are.
  *
  * Read-only by construction. The rows are append-only server-side, and there is
- * no action to offer — the decision was made at a warehouse bench and cannot be
- * undone from a screen.
+ * no action to offer: the decision was made at a warehouse bench.
  */
 function NotAcceptedTable() {
   const { t, locale } = useI18n();
@@ -406,9 +391,7 @@ function NotAcceptedTable() {
                     <StatusBadge tone="warning">
                       {disposalCategoryLabel(t, row.category)}
                     </StatusBadge>
-                    {/* The operator's account of the decision. It is the whole
-                        reason the record exists, so it is shown, not hidden
-                        behind a drawer. */}
+                    {/* The operator's account of the decision, shown in the row. */}
                     <span className="dt-sub">{row.notes}</span>
                   </td>
                   <td data-label={t('ss.notAccepted.col.outcome')}>
@@ -428,21 +411,13 @@ function NotAcceptedTable() {
 }
 
 /* ============================================================
-   Shipping — create a shipment request and pick a carrier rate
-   ============================================================ */
-
-/* ============================================================
-   Tracking — every shipment of the signed-in user
+   Tracking: every shipment of the signed-in user
    ============================================================ */
 
 /**
- * The Shipment Tracking tab.
- *
- * This used to be a lookup: paste a shipment id, get one shipment. It is now a
- * LIST, backed by `GET /shipping/shipments`, and nothing has to be pasted
- * anywhere. A shipment created on the Shipping tab appears here the moment it is
- * created — there is no separate "add to tracking" step, because appearing here
- * is simply what having a shipment means.
+ * The Shipment Tracking tab: a list backed by `GET /shipping/shipments`. A
+ * shipment created on the Shipping tab appears here the moment it is created,
+ * with no separate "add to tracking" step.
  *
  * Authorization is the endpoint's, not this component's: the API returns exactly
  * the shipments the caller may see (their own, or all of them for staff), so
@@ -575,8 +550,7 @@ function TrackingTab({
                       {shipment.serviceLevel && <span className="dt-sub">{shipment.serviceLevel}</span>}
                     </td>
                     <td data-label={t('ss.tracking.col.trackingNumber')}>
-                      {/* Supplied by the carrier. Nothing here is an internal id,
-                          and nothing has to be typed to reach this row. */}
+                      {/* Supplied by the carrier; nothing here is an internal id. */}
                       {shipment.trackingNumber ? (
                         <code dir="ltr">{shipment.trackingNumber}</code>
                       ) : (
@@ -589,8 +563,7 @@ function TrackingTab({
                       </StatusBadge>
                     </td>
                     <td data-label={t('ss.tracking.col.eta')}>
-                      {/* "—" until a rate is chosen: showing a date the carrier
-                          never quoted would be an invention. */}
+                      {/* "—" until a rate is chosen and the carrier quotes a date. */}
                       {shipment.estimatedDeliveryAt ? (
                         <span dir="ltr">{formatDate(shipment.estimatedDeliveryAt, locale)}</span>
                       ) : (
@@ -661,9 +634,8 @@ function ShipmentDrawer({
   /**
    * What cancelling would cost, fetched so the warning can name it.
    *
-   * Loaded lazily and only when the drawer is open — it is one small published
-   * constant, and asking for it on every list render would be a request per card
-   * for a number that does not change.
+   * Loaded only when the drawer is open: it is one small published constant,
+   * not worth a request per list render.
    */
   const [restockingFeeMinor, setRestockingFeeMinor] = useState<number | null>(null);
   useEffect(() => {
@@ -672,14 +644,14 @@ function ShipmentDrawer({
         const svc = await api.get<{ restockingFeeMinor: number }>('/shipping/services');
         setRestockingFeeMinor(svc.restockingFeeMinor ?? null);
       } catch {
-        /* the warning falls back to an em dash; cancelling still works */
+        /* the warning falls back to a dash; cancelling still works */
       }
     })();
   }, []);
 
   /**
    * A request that has not been picked can be called off for nothing; one that
-   * was already paid for costs the restocking fee. Both are the server's rule —
+   * was already paid for costs the restocking fee. Both are the server's rule;
    * this only decides whether to show the button at all.
    */
   const cancellable = ['requested', 'awaiting_payment', 'rates_selected'].includes(shipment.status);
@@ -804,8 +776,8 @@ function ShipmentDrawer({
       )}
 
       {/* What happens at the far end. Shown on any parcel crossing a border,
-          including one with nothing declared yet — that is precisely the case
-          worth warning about. */}
+          including one with nothing declared yet, which is the case most worth
+          warning about. */}
       {shipment.destinationCountry !== 'US' && <CustomsReadiness shipmentId={shipment.id} />}
 
       {(payable || cancellable) && (
@@ -836,13 +808,12 @@ function ShipmentDrawer({
             <span className="field-label">{t('ship.cancelReasonLabel')}</span>
             <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
           </label>
-          {/* Said plainly BEFORE the button, not in a receipt afterwards. */}
+          {/* Said plainly before the button, not in a receipt afterwards. */}
           <span className="field-hint">
             {shipment.status === 'rates_selected'
               ? t('ship.cancelFeeWarning', {
-                  // Named, not implied. The figure is published on
-                  // `/shipping/services`; a warning that says "a fee" is asking
-                  // somebody to accept a cost nobody was willing to state.
+                  // Named, not implied: the figure is published on
+                  // `/shipping/services`.
                   amount: restockingFeeMinor === null ? '—' : formatUsd(restockingFeeMinor),
                 })
               : t('ship.cancelFree')}
@@ -896,11 +867,8 @@ function RequestTable({
   const [busy, setBusy] = useState(false);
 
   /**
-   * A buyout quote is the one service request a COLLECTOR has to answer.
-   *
-   * Everything else here is a record of work being done for them; this is a
-   * number on the table that expires into nothing unless they say yes. So it is
-   * the one row type that carries buttons.
+   * A buyout quote is a service request the collector has to answer: a number
+   * on the table that expires unless they say yes, so the row carries buttons.
    */
   async function answerQuote(request: MyRequest, action: 'accept' | 'decline') {
     setBusy(true);
@@ -924,9 +892,8 @@ function RequestTable({
    * A custom request is the second thing a collector has to answer.
    *
    * The routes are separate from the buyout's because the two are opposite
-   * trades: accepting a buyout quote CREDITS the wallet, and accepting a custom
-   * quote DEBITS it. Sharing one handler would have made the difference a
-   * parameter, and the difference is the whole point.
+   * trades: accepting a buyout quote credits the wallet, and accepting a custom
+   * quote debits it. One shared handler would reduce that to a parameter.
    */
   async function answerCustomQuote(request: MyRequest, action: 'accept' | 'decline') {
     setBusy(true);
@@ -973,9 +940,8 @@ function RequestTable({
                   </td>
                   <td className="td-tight">
                     {/*
-                      What the collector asked for, in their own words — without
-                      it a row reads "A custom request", which names the type and
-                      not the thing.
+                      What the collector asked for, in their own words, so the
+                      row names the thing and not only the type.
                     */}
                     {request.type === 'custom' && <CustomRequestRow request={request} />}
 
@@ -983,8 +949,7 @@ function RequestTable({
                       (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
                         <div className="actions actions--row">
                           {/* The amount is stated on the step above, beside the
-                              scope it buys. Repeating it next to the button was
-                              the price appearing twice and the scope not at all. */}
+                              scope it buys, so the button does not repeat it. */}
                           <Button
                             size="sm"
                             variant="gold"
@@ -1050,24 +1015,16 @@ function RequestTable({
 /**
  * A custom request, as a three-step register.
  *
- * ASK (free) → an operator PROPOSES a price and a scope → you ACCEPT. Those are
- * the three steps of the flow, they are the whole reason the box marked "custom"
- * is not frightening, and the interface showed none of them: one status word in
- * a pill, and the price — the thing being agreed to — inside a collapsed row
- * beside the button that agrees to it.
+ * Ask (free), then an operator proposes a price and a scope, then you accept.
  *
  * Drawn horizontally with the current step marked by the same custody rule that
  * marks an active tab and an active rail destination. Each step states its own
- * fact where that fact belongs: the ask carries the summary, the proposal
- * carries THE AMOUNT AND THE SCOPE — a collector accepting a figure is agreeing
- * to whatever the operator understood the ask to be, and "$18.00" with nothing
- * behind it is not something anybody can agree to — and the last step carries
- * what was actually done.
+ * fact: the ask carries the summary; the proposal carries the amount and the
+ * scope, because a collector accepting a figure is agreeing to whatever the
+ * operator understood the ask to be; and the last step carries what was done.
  *
  * A declined request is not a fourth step; it is the second step answered "no",
- * so it takes the second step's position and states the reason. A refusal
- * without one leaves the collector guessing whether to ask differently or stop
- * asking.
+ * so it takes the second step's position and states the reason.
  */
 function CustomRequestRow({ request }: { request: MyRequest }) {
   const { t } = useI18n();
@@ -1156,16 +1113,14 @@ interface Readiness {
  * What will happen to this parcel at the border, before it leaves.
  *
  * The commercial invoice answers "what did you declare"; this answers the
- * question that comes first and had nowhere to be asked — "am I about to send
- * this somewhere it will get stuck, and what will the person receiving it owe".
+ * question that comes first: "am I about to send this somewhere it will get
+ * stuck, and what will the person receiving it owe".
  *
- * Three things it deliberately will not do. It never states a duty figure:
- * thresholds move, and a number Bault made up is a number somebody plans
- * around, so the destination's own authority is linked instead. It reports
- * rather than blocks, because an estimated weight is a fact worth knowing and
- * not grounds to refuse a parcel. And it names what Bault does NOT do at the
- * destination — a collector expecting Bault to lodge a clearance instruction it
- * has never lodged is exactly who this panel exists for.
+ * It never states a duty figure: thresholds move, so the destination's own
+ * authority is linked instead. It reports instead of blocking, because an
+ * estimated weight is a fact worth knowing and not grounds to refuse a parcel.
+ * And it names what Bault does not do at the destination, such as lodging a
+ * clearance instruction.
  */
 function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
   const { t } = useI18n();
@@ -1176,7 +1131,7 @@ function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
       try {
         setData(await api.get<Readiness>(`/shipping/shipments/${shipmentId}/customs/readiness`));
       } catch {
-        /* guidance is additive — a shipment page still works without it */
+        /* guidance is additive; a shipment page still works without it */
       }
     })();
   }, [shipmentId]);
@@ -1240,8 +1195,7 @@ function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
           </p>
         </>
       ) : (
-        /* An honest absence. A generic paragraph pretending to be
-           destination advice would be worse than saying we have not written it. */
+        /* No guidance written for this destination yet, and the page says so. */
         <p className="field-hint">{t('customs.noGuidance', { country: data.destinationCountry })}</p>
       )}
     </div>

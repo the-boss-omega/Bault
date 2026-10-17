@@ -18,11 +18,11 @@ function isChallenge(body: SessionUser | MfaChallenge): body is MfaChallenge {
 }
 
 /**
- * Sign-in page — credentials only. Registration lives on its own page
+ * Sign-in page: credentials only. Registration lives on its own page
  * (`SignUpPage`); the two never share a form.
  *
- * On success the API sets an httpOnly session cookie and returns the user's id +
- * role, which the app shell uses to decide which destinations to show.
+ * On success the API sets an httpOnly session cookie and returns the user's id
+ * and role, which the app shell uses to decide which destinations to show.
  */
 export function SignInPage({
   onSignedIn,
@@ -33,36 +33,25 @@ export function SignInPage({
   onGoToSignUp: () => void;
   onGoToForgotPassword: () => void;
 }) {
-  // ONE identifier field: the email or the username, either on its own.
+  // One identifier field: the email or the username, either on its own.
   //
-  // EMPTY in any build that is not a local dev server. These two fields shipped
-  // pre-filled with `red@bault.dev` / `11111111` — a real seeded account and its
-  // real password, typed into the login screen of every build including a
-  // production one. Convenient locally and indefensible in a deployment: it
-  // publishes a working credential to anybody who loads the page.
-  //
-  // `import.meta.env.DEV` is false in every `vite build` output, so the
-  // convenience survives exactly where it belongs and nowhere else.
+  // Pre-filled with a seeded account only on a local dev server.
+  // `import.meta.env.DEV` is false in every `vite build` output, so no built
+  // bundle carries a working credential.
   const [identifier, setIdentifier] = useState(import.meta.env.DEV ? 'red@bault.dev' : '');
   const [password, setPassword] = useState(import.meta.env.DEV ? '11111111' : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /**
-   * The sign-in refusal that has a remedy, held apart from the rest.
-   *
-   * Somebody who signed up and never clicked the link was told their address is
-   * unconfirmed and then left on a page offering "Forgot password" — which does
-   * not help — and "Sign up", which answers that the address is already
-   * registered. `POST /auth/verify-email/resend` existed the whole time, and the
-   * only page in the signed-out app that could reach it was the one you arrive
-   * at by following the very link they no longer have. A closed loop, so the way
-   * out is offered here, where the door was shut.
+   * The sign-in refusal that has a remedy, held apart from the rest: an
+   * unconfirmed address is offered a new confirmation link here
+   * (`POST /auth/verify-email/resend`), where the sign-in was refused.
    */
   const [unverified, setUnverified] = useState(false);
   const [resent, setResent] = useState(false);
   /**
    * The challenge a right password earned, for an account with two-factor
-   * sign-in. While it is set the page IS the second step; the password is
+   * sign-in. While it is set the page is the second step; the password is
    * cleared, because it has done its job and is not sent again.
    */
   const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
@@ -92,9 +81,9 @@ export function SignInPage({
 
   /**
    * The address is whatever was typed into the identifier field. When that was a
-   * username rather than an email the endpoint answers exactly as it answers an
-   * unknown address — a confirmation that a link is on its way, asserting
-   * nothing about whether an account exists — so nothing here has to guess.
+   * username rather than an email, the endpoint answers exactly as it answers an
+   * unknown address (a link is on its way, asserting nothing about whether an
+   * account exists), so nothing here has to guess.
    */
   async function resendVerification() {
     setBusy(true);
@@ -170,7 +159,7 @@ export function SignInPage({
       </Button>
 
       {/* Recovery sits directly under the button that just failed, which is
-          where someone looks after a rejected password — not in a footer. */}
+          where someone looks after a rejected password. */}
       <p className="auth-switch">
         <button className="btn--link" type="button" onClick={onGoToForgotPassword}>
           {t('auth.forgotLink')}
@@ -184,9 +173,7 @@ export function SignInPage({
         </button>
       </p>
 
-      {/* The same rule, for the same reason, and this one is worse: it printed
-          every seeded account AND the shared password on screen for anyone who
-          opened the page. */}
+      {/* Development only, like the pre-filled fields; see demoUsers.ts. */}
       {import.meta.env.DEV && <p className="auth-demo">{DEMO_USERS}</p>}
     </form>
   );

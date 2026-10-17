@@ -19,23 +19,19 @@ import {
 /**
  * Membership: what the tiers cover, what you are on, and what is left.
  *
- * The screen is one argument, made in the order somebody actually asks it:
+ * The screen answers in the order somebody asks:
  *
- *   1. WHAT AM I ON, and how much of it is left this cycle — only when there is
- *      an answer. A non-member is not shown an empty version of this.
- *   2. WHAT ARE THE TIERS, as one comparison table rather than three cards side
- *      by side. `DESIGN.md` rejects the identical-rounded-cards pattern, and a
- *      pricing page is the single place it is most tempting: three tiles, one
- *      scaled up with a "most popular" ribbon. A register with a column per tier
- *      is also simply easier to read, because the thing anybody wants to do is
- *      compare one row across the columns, and that is a row.
- *   3. WHAT IS NOT INCLUDED, published on the same screen and not in terms.
+ *   1. What am I on, and how much of it is left this cycle. Only shown when
+ *      there is an answer; a non-member is not shown an empty version.
+ *   2. What are the tiers, as one comparison table with a column per tier.
+ *      `DESIGN.md` rejects the identical-rounded-cards pattern, and comparing
+ *      one row across the columns is what a reader wants to do.
+ *   3. What is not included, published on the same screen and not in terms.
  *
- * THE CONFIRMATION IS THE FEATURE. Subscribing is a recurring charge, which is
- * the most consequential kind of button in the product — so the price, the
- * cycle, and the sentence about what happens when an allowance runs out are all
- * on the control, and the control confirms before it charges. `.offer` exists
- * precisely so a price and its button cannot be rendered apart.
+ * Subscribing is a recurring charge, so the price, the cycle, and the sentence
+ * about what happens when an allowance runs out are all on the control, and the
+ * control confirms before it charges. `.offer` exists so a price and its button
+ * cannot be rendered apart.
  */
 export function MembershipPage() {
   const { t, locale } = useI18n();
@@ -82,8 +78,7 @@ export function MembershipPage() {
       }>('/membership/subscribe', { tier: tier.key });
       /**
        * Three outcomes, three sentences. A downgrade and "keep my tier" both
-       * charge nothing, and the old notice told the second one that a move "takes
-       * effect at the end of the cycle" — about a move nobody had asked for.
+       * charge nothing, but only a downgrade schedules a change.
        */
       setNotice(
         res.scheduledTier
@@ -183,10 +178,8 @@ export function MembershipPage() {
                       <span className="amount">
                         {t('membership.leftOf', { left: counts.remaining, total: counts.allowed })}
                       </span>
-                      {/* The same proportion bar the Break-Even Watch uses. It
-                          goes amber before it says anything, which is the point:
-                          running out is not an error, it is a thing to know
-                          about before you plan around it. */}
+                      {/* The same proportion bar the Break-Even Watch uses, marked
+                          `--over` once the allowance is used up. */}
                       <span
                         className={usedFraction(counts) >= 1 ? 'proportion proportion--over' : 'proportion'}
                         role="img"
@@ -302,10 +295,8 @@ export function MembershipPage() {
                   </span>
                 </div>
 
-                {/* The price and the control are ONE component. It is not
-                    possible to render the button without the figure beside it,
-                    which is the rule for every paid action in this product and
-                    matters most on the one that recurs. */}
+                {/* The price and the control are one component, the rule for
+                    every paid action in this product. */}
                 <div className="offer-price">
                   <span className="amount">
                     {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
@@ -353,7 +344,7 @@ export function MembershipPage() {
    Catalogue keys → message keys.
 
    The API answers with stable identifiers and the catalogue holds the words, so
-   a tier's name is translated rather than shipped from the server in English —
+   a tier's name is translated instead of shipped from the server in English:
    the same split the landing page makes for prices.
    ------------------------------------------------------------------ */
 

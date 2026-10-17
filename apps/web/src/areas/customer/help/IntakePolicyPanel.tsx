@@ -7,22 +7,12 @@ import { IconBox } from '../../../shared/ui/icons';
 /**
  * What Bault accepts, what it refuses, and what happens to the difference.
  *
- * The rules on this page were all being enforced before it existed. The closed
- * item taxonomy has been checked on every intake path since the taxonomy pass;
- * a prohibited arrival has produced a recorded disposal and a notification for
- * just as long. What was missing was the page — so the only way to learn the
- * rule was to break it, and find out when something you posted was destroyed.
- *
  * Everything below is fetched from `GET /content/intake-policy`, which builds it
- * at request time from the same modules the intake path validates against. That
- * is the whole design: a hand-written policy page is a second copy of a rule,
- * and a second copy drifts silently the first time somebody adds a class. Here
- * it cannot — the page and the validator read the same array.
+ * at request time from the same modules the intake path validates against, so
+ * the page and the validator read the same array and cannot drift.
  *
- * The endpoint is public, deliberately. The failure this closes is somebody
- * posting a box without knowing the rule, and a person deciding whether to use
- * Bault at all has to be able to read what it will take before they have an
- * account to read it with.
+ * The endpoint is public, deliberately: a person deciding whether to use Bault
+ * has to be able to read what it will take before they have an account.
  */
 
 interface AcceptedClass {
