@@ -47,6 +47,11 @@ interface AdminUser {
   nameReviewRequired: boolean;
   role: string;
   status: string;
+  /**
+   * Suspended by the debt sweep, which lifts it once the balance is paid. Any
+   * status an administrator sets, `suspended` again included, makes it theirs.
+   */
+  autoSuspended: boolean;
   intakeId: string | null;
   /** Signs in with a second factor, and so has one an administrator can reset. */
   mfaEnabled: boolean;
@@ -413,6 +418,7 @@ function UserRow({
     lastName: user.lastName ?? '',
     role: user.role,
     status: user.status,
+    autoSuspended: user.autoSuspended,
   });
 
   const namesOk =
@@ -434,16 +440,34 @@ function UserRow({
   if (status !== saved.status) changes.status = status;
   const dirty = Object.keys(changes).length > 0;
 
-  async function save() {
-    if (!dirty) return;
-    const sent = { ...changes };
+  async function send(sent: typeof changes) {
     try {
-      await api.patch(`/admin/users/${user.id}`, sent);
-      setSaved((s) => ({ ...s, ...sent }));
+      const updated = await api.patch<Partial<AdminUser> | null>(`/admin/users/${user.id}`, sent);
+      setSaved((s) => ({
+        ...s,
+        ...sent,
+        // A status sent, even the one the account had, clears the sweep's marker.
+        autoSuspended:
+          typeof updated?.autoSuspended === 'boolean' ? updated.autoSuspended : sent.status ? false : s.autoSuspended,
+      }));
       onSaved(t('admin.users.saved', { email: user.email }));
     } catch (e) {
       onError((e as Error).message);
     }
+  }
+
+  async function save() {
+    if (dirty) await send({ ...changes });
+  }
+
+  /**
+   * Take over a suspension the debt sweep imposed, so the sweep does not lift
+   * it when the balance is paid. Exactly the status, which the server reads as
+   * an administrator's decision; anything else typed into the row stays unsent.
+   */
+  async function keepSuspended() {
+    setStatus('suspended');
+    await send({ status: 'suspended' });
   }
 
   return (
@@ -509,6 +533,19 @@ function UserRow({
             ))}
           </select>
         </div>
+        {saved.status === 'suspended' && saved.autoSuspended && (
+          <>
+            <span className="dt-sub">{t('admin.users.autoSuspended')}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={t('admin.users.keepSuspendedLabel', { email: user.email })}
+              onClick={() => void keepSuspended()}
+            >
+              {t('admin.users.keepSuspended')}
+            </Button>
+          </>
+        )}
       </td>
       <td className="td-tight">
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>

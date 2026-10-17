@@ -6,8 +6,8 @@ import { closeDb, sql } from './helpers/db';
 /**
  * What the admin console's Save buttons may and may not change on the server.
  *
- * A console row may send a field it did not change. These pin the server side:
- * a field that is sent but does not change does nothing beyond what it says.
+ * These pin the server side of a save: what a field that is sent does, and what
+ * a field that is left out leaves alone.
  *
  * Requires a running API + a freshly seeded DB.
  */
@@ -33,16 +33,34 @@ describe('saving a user the debt sweep suspended', () => {
     return account;
   }
 
-  it('keeps the sweep\'s marker when the status sent is the status it already has', async () => {
+  it('keeps the sweep\'s marker on a save that sends no status', async () => {
     const admin = await signIn(SEED.admin);
     const account = await autoSuspended('autosus');
 
-    // A name correction, with the unchanged status alongside it.
-    const res = await admin.patch(`/admin/users/${account.id}`, { firstName: 'Renamed', status: 'suspended' });
+    // A name correction: what the console sends for one.
+    const res = await admin.patch(`/admin/users/${account.id}`, { firstName: 'Renamed' });
     expect(res.status).toBe(200);
-    expect(res.body.firstName).toBe('Renamed');
+    expect(res.body).toMatchObject({ firstName: 'Renamed', status: 'suspended', autoSuspended: true });
     // Still the sweep's own suspension, so the sweep lifts it once the debt clears.
     expect(await marker(account.id)).toEqual({ status: 'suspended', auto: true });
+  });
+
+  it("makes it an administrator's suspension when the status is sent, even unchanged", async () => {
+    /**
+     * Support finds fraud on an account the sweep suspended for debt. The row
+     * already says `suspended`, and "Keep suspended" sends exactly that. It has
+     * to take the suspension over, or the debtor tops up, the sweep lifts it,
+     * and the account is active again. The same request is what lands when an
+     * administrator suspends an account the sweep suspended a moment earlier.
+     * tests/worker/wallet-suspension.test.ts runs the sweep over the result.
+     */
+    const admin = await signIn(SEED.admin);
+    const account = await autoSuspended('autosu3');
+
+    const res = await admin.patch(`/admin/users/${account.id}`, { status: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'suspended', autoSuspended: false });
+    expect(await marker(account.id)).toEqual({ status: 'suspended', auto: false });
   });
 
   it('clears the marker when an administrator actually changes the status', async () => {
@@ -51,6 +69,28 @@ describe('saving a user the debt sweep suspended', () => {
 
     expect((await admin.patch(`/admin/users/${account.id}`, { status: 'active' })).status).toBe(200);
     expect(await marker(account.id)).toEqual({ status: 'active', auto: false });
+  });
+
+  it("says in the users list which suspensions are the sweep's", async () => {
+    // The list leaves fixture accounts out, so this borrows a seeded one and
+    // puts it back exactly as it was.
+    const admin = await signIn(SEED.admin);
+    const [before] = await sql<{ id: string; status: string; auto_suspended_at: Date | null }>(
+      `SELECT id, status, auto_suspended_at FROM user_account WHERE email = $1`,
+      [SEED.collector2],
+    );
+    try {
+      await sql(`UPDATE user_account SET status = 'suspended', auto_suspended_at = now() WHERE id = $1`, [before!.id]);
+      const users = (await admin.get('/admin/users')).body as { id: string; status: string; autoSuspended: boolean }[];
+      expect(users.find((u) => u.id === before!.id)).toMatchObject({ status: 'suspended', autoSuspended: true });
+      for (const u of users.filter((x) => x.id !== before!.id)) expect(typeof u.autoSuspended, u.id).toBe('boolean');
+    } finally {
+      await sql(`UPDATE user_account SET status = $2, auto_suspended_at = $3 WHERE id = $1`, [
+        before!.id,
+        before!.status,
+        before!.auto_suspended_at,
+      ]);
+    }
   });
 });
 

@@ -175,9 +175,10 @@ const DEBTOR = {
   lastName: 'Btor',
   nameReviewRequired: false,
   role: 'user',
-  // Suspended by the debt sweep: the server lifts it once the balance recovers,
-  // unless somebody sets a status.
+  // Suspended by the debt sweep: the sweep lifts it once the balance recovers,
+  // unless an administrator sets a status.
   status: 'suspended',
+  autoSuspended: true,
   intakeId: null,
   mfaEnabled: false,
 };
@@ -212,6 +213,38 @@ describe('saving a user row', () => {
     await waitFor(() => expect(patch).toHaveBeenCalled());
     expect(patch).toHaveBeenCalledWith('/admin/users/u1', { status: 'active' });
   });
+
+  it("says the debt sweep suspended it, and 'Keep suspended' makes it an administrator's", async () => {
+    const user = userEvent.setup();
+    consoleApi({ '/admin/users': [DEBTOR] });
+    patch.mockResolvedValue({ ...DEBTOR, autoSuspended: false });
+    window.location.hash = '#/admin/users';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    expect(await screen.findByText(/suspended by the debt sweep/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /keep debtor@bault\.dev suspended/i }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    // Exactly the status, which the server reads as an administrator's decision.
+    expect(patch).toHaveBeenCalledWith('/admin/users/u1', { status: 'suspended' });
+    await waitFor(() => expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
+  });
+
+  it("offers it only for the sweep's suspension, not an administrator's or an active account", async () => {
+    consoleApi({
+      '/admin/users': [
+        { ...DEBTOR, id: 'u3', email: 'held@bault.dev', username: 'held', autoSuspended: false },
+        { ...DEBTOR, id: 'u4', email: 'fine@bault.dev', username: 'fine', status: 'active', autoSuspended: false },
+      ],
+    });
+    window.location.hash = '#/admin/users';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    await screen.findByText('held@bault.dev');
+    expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
+  });
 });
 
 /* ============================================================
@@ -231,7 +264,7 @@ const LISTED_CARD = {
   ownerId: 'u1',
   ownerEmail: DEBTOR.email,
 };
-const BUYER = { ...DEBTOR, id: 'u2', email: 'buyer@bault.dev', username: 'buyer', status: 'active' };
+const BUYER = { ...DEBTOR, id: 'u2', email: 'buyer@bault.dev', username: 'buyer', status: 'active', autoSuspended: false };
 
 describe('saving an item row', () => {
   it('sends only the new owner, not the `listed` state the row was showing', async () => {

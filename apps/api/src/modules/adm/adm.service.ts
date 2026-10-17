@@ -74,6 +74,9 @@ export class AdmService {
         // Whether the account signs in with a second factor; the Users screen
         // offers the reset only where there is one to reset.
         mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
+        // Suspended by the debt sweep, which lifts it once the balance recovers;
+        // the Users screen offers to keep it suspended instead.
+        autoSuspended: sql<boolean>`${userAccount.autoSuspendedAt} is not null`,
       })
       .from(userAccount)
       .where(not(ilike(userAccount.email, `%@${FIXTURE_EMAIL_DOMAIN}`)))
@@ -107,14 +110,14 @@ export class AdmService {
     if (patch.role) set.role = patch.role;
     if (patch.status) {
       set.status = patch.status;
-      // A status a person CHANGES is a person's decision, so the debt sweep's
-      // marker is cleared with it; otherwise a later sweep could lift a manual
-      // suspension once the balance recovered, taking it for one of its own.
-      // A status sent unchanged is no decision, and clearing the marker for it
-      // would make the sweep's suspension permanent. Compared in the statement
-      // itself, against the row as it is when the update runs, so a sweep
-      // landing in between is not missed.
-      set.autoSuspendedAt = sql`case when ${userAccount.status}::text = ${patch.status} then ${userAccount.autoSuspendedAt} else null end`;
+      // Any status a person sets is a person's decision, so the debt sweep's
+      // marker is cleared with it, even when the status is the one the account
+      // already has: that is how an administrator keeps a suspension the sweep
+      // imposed (fraud found on an account suspended for debt), and how a
+      // suspension that lands just after the sweep's own stays theirs. A save
+      // that is not about the status leaves it out (the console sends only the
+      // fields that changed), and so leaves the marker alone.
+      set.autoSuspendedAt = null;
     }
     // An admin who writes a name part has just reviewed it, so the migration's
     // review flag is cleared with it. Nothing else here clears it.
@@ -140,6 +143,7 @@ export class AdmService {
       nameReviewRequired: u.nameReviewRequired,
       role: u.role,
       status: u.status,
+      autoSuspended: u.autoSuspendedAt !== null,
       intakeId: u.intakeId,
     };
   }

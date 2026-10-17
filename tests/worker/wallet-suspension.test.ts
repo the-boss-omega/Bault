@@ -62,4 +62,22 @@ describe('wallet suspension sweep', () => {
     await sweepWalletSuspensions(pool);
     expect((await account(pool, debtor)).status).toBe('suspended');
   });
+
+  it("does not lift a suspension an administrator kept, though the sweep imposed it", async () => {
+    // Suspended for debt, then kept suspended by an administrator who found a
+    // reason of their own: the status they send is the one it already has.
+    const admin = await signIn(SEED.admin);
+    const debtor = await createUser(pool);
+    await ledger(pool, debtor, 'debit', 5_000, 1);
+    await sweepWalletSuspensions(pool);
+    expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: true });
+
+    expect((await admin.patch(`/admin/users/${debtor}`, { status: 'suspended' })).status).toBe(200);
+    expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: false });
+
+    // The debt clears, and the suspension is no longer the sweep's to lift.
+    await ledger(pool, debtor, 'credit', 5_000);
+    await sweepWalletSuspensions(pool);
+    expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: false });
+  });
 });
