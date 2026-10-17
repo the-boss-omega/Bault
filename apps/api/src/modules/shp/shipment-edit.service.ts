@@ -7,6 +7,7 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge, ledgerRecord } from '../pay/pay.schema';
+import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
@@ -281,6 +282,13 @@ export class ShipmentEditService {
       const feeMinor = cur.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
       const paid = cur.status === 'rates_selected' && !cur.trackingNumber;
 
+      // A direct-overnight shipment took its parcel off the dock: the parcel
+      // was marked processed when it was booked, and never opened. Called off,
+      // it goes back to the state it was booked from, in this transaction, so
+      // it can be forwarded to the vault or sent again rather than sit
+      // answered-for with nothing on its way.
+      if (ShipmentService.isDirect(cur)) await this.releaseDirectParcel(tx as Database, cur, actor.id);
+
       // The shipment, then the wallet, then the member's cycle: the order every
       // other money path takes them in.
       await this.ledger.lockWallet(s.userId, tx as Database);
@@ -389,6 +397,38 @@ export class ShipmentEditService {
       });
 
       return { status: 'cancelled' as const, restockingFeeMinor: feeMinor, refundedMinor };
+    });
+  }
+
+  /**
+   * Give a cancelled direct-overnight shipment's parcel back to the dock.
+   *
+   * The booking's own `direct_shipped` event names the parcel and the state it
+   * left; the parcel is locked (after the shipment, before the wallet) and
+   * restored only if it is still where the booking put it.
+   */
+  private async releaseDirectParcel(tx: Database, s: typeof shipment.$inferSelect, actorId: string) {
+    const [booking] = await tx
+      .select({ parcelId: parcelEvent.parcelId, fromStatus: parcelEvent.fromStatus, toStatus: parcelEvent.toStatus })
+      .from(parcelEvent)
+      .where(and(eq(parcelEvent.eventType, 'direct_shipped'), sql`${parcelEvent.metadata} ->> 'shipmentId' = ${s.id}`))
+      .limit(1);
+    if (!booking) return;
+    const [current] = await tx.select().from(parcel).where(eq(parcel.id, booking.parcelId)).for('update').limit(1);
+    if (!current || current.status !== (booking.toStatus ?? 'processed')) return;
+
+    const restored = (booking.fromStatus ?? 'received') as typeof current.status;
+    const now = new Date();
+    await tx.update(parcel).set({ status: restored, processedAt: null, updatedAt: now }).where(eq(parcel.id, current.id));
+    await tx.insert(parcelEvent).values({
+      parcelId: current.id,
+      eventType: 'direct_cancelled',
+      fromStatus: current.status,
+      toStatus: restored,
+      actorId,
+      facilityId: current.facilityId,
+      notes: `Direct overnight shipment ${s.code ?? s.id} cancelled; the parcel is back at the dock, unopened`,
+      metadata: { shipmentId: s.id, shipmentCode: s.code },
     });
   }
 }
