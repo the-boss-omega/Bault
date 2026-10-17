@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type { ValidationError } from 'class-validator';
+import { IS_UUID, type ValidationError } from 'class-validator';
 import { ErrorCode } from './error-codes';
 
 /**
@@ -115,7 +115,8 @@ const TYPE_CONSTRAINTS = new Set([
   'isObject',
   'isDateString',
   'isEmail',
-  'isUUID',
+  // class-validator's own name for `@IsUUID()`, which is `isUuid`.
+  IS_UUID,
 ]);
 
 /**
@@ -130,6 +131,11 @@ const TYPE_CONSTRAINTS = new Set([
 function restate(violation: FieldViolation, present: boolean): string {
   const field = humanField(violation.field);
   const leaf = violation.field.split('.').pop() ?? violation.field;
+  // First: the whitelist's message, "property colour should not exist", does
+  // not begin with the property name, so the custom-message rule would keep it.
+  if (violation.code === 'whitelistValidation') {
+    return `${field} is not a field this accepts.`;
+  }
   // `@IsString({ each: true })` produces "each value in areas must be a string",
   // which names the property in the middle rather than at the front.
   const eachOf = violation.message.startsWith(`each value in ${leaf} `);
@@ -137,9 +143,6 @@ function restate(violation: FieldViolation, present: boolean): string {
   const generated = violation.message.startsWith(leaf);
   if (!generated) return violation.message;
 
-  if (violation.code === 'whitelistValidation') {
-    return `${field} is not a field this accepts.`;
-  }
   if (MISSING_CONSTRAINTS.has(violation.code) || (TYPE_CONSTRAINTS.has(violation.code) && !present)) {
     return `${field} is required.`;
   }
@@ -157,7 +160,7 @@ function restate(violation: FieldViolation, present: boolean): string {
   }
   if (violation.code === 'isPositive') return `${field} has to be more than zero.`;
   if (violation.code === 'isEmail') return `${field} is not a valid email address.`;
-  if (violation.code === 'isUUID') return `${field} is not in a valid format.`;
+  if (violation.code === IS_UUID) return `${field} is not in a valid format.`;
 
   // Everything else keeps the library's sentence with a readable subject:
   // "must be longer than or equal to 8 characters" is genuinely useful.
