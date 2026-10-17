@@ -18,19 +18,14 @@ import { purgeExpiredSessions } from './jobs/session-cleanup';
 /**
  * Worker entry point.
  *
- * pg-boss stores its queue state in the SAME PostgreSQL as ownership/custody/money
- * (no Redis). Jobs run raw SQL through a shared `pg` Pool so the worker stays
- * self-contained. Uses the DIRECT connection (5432) — pg-boss needs LISTEN/NOTIFY,
- * which transaction-pooling PgBouncer does not pass through.
+ * pg-boss stores its queue state in the SAME PostgreSQL as ownership, custody
+ * and money (no Redis). Jobs run raw SQL through a shared `pg` Pool so the
+ * worker stays self-contained. It uses the DIRECT connection (5432) because
+ * pg-boss needs LISTEN/NOTIFY, which transaction-pooling PgBouncer does not pass
+ * through.
  *
- * Registered: outbox dispatch (T128), the automatic daily storage-fee sweep
- * (T120 / Requirement 12.1), interest accrual, the wallet debt-suspension sweep,
- * the ledger-invariant monitor, shipment tracking refresh (T107), shipment
- * expiry, membership renewal and the expired-session cleanup. Image sync (T133)
- * lands in its own phase.
- *
- * Every job runs through `runScheduledJob`, which stamps `worker_heartbeat` —
- * the row `GET /api/v1/readyz/worker` reads to say whether this process is alive.
+ * Every job runs through `runScheduledJob`, which stamps `worker_heartbeat`, the
+ * row `GET /api/v1/readyz/worker` reads to say whether this process is alive.
  */
 
 /** How long a SIGTERM waits for running jobs before they are handed back to pg-boss. */
@@ -48,22 +43,15 @@ async function main(): Promise<void> {
   });
 
   /**
-   * Stopping (E15).
+   * Stopping. Without a handler, Node as PID 1 ignores SIGTERM and Docker
+   * SIGKILLs it, cutting a running job off with pg-boss still holding it `active`.
    *
-   * There was no handler. Outside a container Node's default on SIGTERM is to
-   * die on the spot; inside one, as PID 1, the signal is ignored outright and
-   * Docker SIGKILLs the process ten seconds later. Either way a job half way
-   * through — the nightly storage sweep, interest accrual — was cut off mid-run,
-   * pg-boss never heard it stop, and the job sat `active` until its lease
-   * expired and ran again.
-   *
-   * Now: stop taking new jobs, give the running ones up to thirty seconds to
-   * finish (pg-boss fails whatever is still running after that, so it is retried
-   * — which every job is safe to be), close the pool, send any queued error
-   * reports, and exit 0. Registered before pg-boss starts, so a signal during
-   * start-up is handled the same way. The orchestrator's grace period has to be
-   * longer than the drain for this to finish: `docker stop -t 45`, or
-   * `stop_grace_period: 45s` in compose.
+   * Stop taking new jobs, give the running ones up to DRAIN_MS to finish
+   * (pg-boss fails whatever is still running after that, so it is retried, which
+   * every job is safe to be), close the pool, send queued error reports, and exit
+   * 0. Registered before pg-boss starts, so a signal during start-up is handled
+   * the same way. The orchestrator's grace period must be longer than the drain:
+   * `docker stop -t 45`, or `stop_grace_period: 45s` in compose.
    */
   let stopping = false;
   const stop = async (signal: NodeJS.Signals): Promise<void> => {
@@ -90,13 +78,11 @@ async function main(): Promise<void> {
 
   await boss.start();
 
-  // Each scheduled job: ensure its queue, attach a handler, and set its cron.
   const schedule: { name: string; cron: string; run: () => Promise<void> }[] = [
     { name: JobName.OUTBOX_DISPATCH, cron: '*/1 * * * *', run: () => dispatchOutbox(pool) },
-    // Storage fees are billed FULLY AUTOMATICALLY once a day (Requirement 12.1);
-    // there is no manual trigger anywhere in the platform (Requirement 12.2).
-    // The sweep renews any membership cycle that is due before it decides what
-    // a membership covers — see `storage-fee.ts`.
+    // Storage fees are billed automatically once a day; there is no manual
+    // trigger anywhere in the platform. The sweep renews any membership cycle
+    // that is due before it decides what a membership covers (see `storage-fee.ts`).
     { name: JobName.STORAGE_FEE_RUN, cron: '0 2 * * *', run: () => runStorageFees(pool) },
     { name: JobName.INTEREST_ACCRUAL, cron: '0 3 * * *', run: () => accrueInterest(pool) },
     // Runs AFTER interest accrual, so a debt that crosses the suspension

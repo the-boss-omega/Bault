@@ -4,43 +4,27 @@ import { log } from '../log';
 import { negativeAccounts } from './debt';
 
 /**
- * Interest accrual (T069, Principle: negative balance accrues interest).
+ * Interest accrual.
  *
- * For every account whose derived balance (Σ ledger) has been negative for
- * longer than the GRACE PERIOD, append an `interest` DEBIT proportional to the
- * debt. This increases the debt until the customer settles, and is expressed
- * purely as new append-only ledger rows — never as an edit.
+ * For every account whose derived balance has been negative for at least
+ * `WALLET_DEBT_GRACE_DAYS`, append an `interest` DEBIT of
+ * `WALLET_DEBT_INTEREST_BPS` basis points of the debt, as a new append-only
+ * ledger row. Both are commercial policy, so they are configuration (see
+ * `packages/config/src/env.ts`).
  *
- * The grace period is the change from the original behaviour. Interest used to
- * start the instant a balance went negative, which charged a customer for the
- * hours between a fee posting and their noticing it. `WALLET_DEBT_GRACE_DAYS`
- * (default 14, matching the reference service) is how long a debt may sit
- * before it starts costing anything; the rate is `WALLET_DEBT_INTEREST_BPS`
- * basis points per day.
- *
- * Both are configuration rather than constants because they are a commercial
- * policy, not an implementation detail — see `packages/config/src/env.ts`.
- *
- * ONE DAY OF INTEREST PER DAY, HOWEVER OFTEN THIS RUNS (F051). Every insert was
- * autocommitted with no key, and the job was written as if it ran once a day,
- * exactly. It does not: pg-boss retries a failed job straight away, so a failure
- * half way through charged everybody before it a second time, and a run left
- * over from a lease that expired, or a second replica, did the same. Each row
- * now carries the UTC day it is for in `reference_id`, and a unique index on
- * (account, day) for interest rows makes a repeat insert a no-op.
+ * ONE DAY OF INTEREST PER DAY, HOWEVER OFTEN THIS RUNS. pg-boss retries a failed
+ * job, and a lease can expire or a second replica can run it. Each row carries
+ * the UTC day it is for in `reference_id`, and a unique index on (account, day)
+ * for interest rows makes a repeat insert a no-op.
  *
  * Each account is charged in its own transaction, holding the same wallet lock
  * the API takes before it reads a balance and moves money, and the debt is read
- * again under that lock — a debt that was settled between the sweep's scan and
- * its turn accrues nothing. One account that fails is logged and skipped rather
- * than stopping everybody after it.
+ * again under that lock, so a debt settled since the scan accrues nothing. One
+ * account that fails is logged and skipped rather than stopping the rest.
  *
- * Not on a CLOSED account (N9). Closing an account is the end of the
- * relationship; a debt it was closed with is a matter for a person, not
- * something to keep growing by the day. Nor on a `pending` one, which cannot
- * have spent anything. A SUSPENDED account keeps accruing: the debt sweep
- * suspends exactly the accounts deepest in debt, and exempting them would turn
- * suspension into a way to stop the interest.
+ * Not on a CLOSED account: a debt it was closed with is a matter for a person.
+ * Nor on a `pending` one, which cannot have spent anything. A SUSPENDED account
+ * keeps accruing, so suspension is not a way to stop the interest.
  */
 export async function accrueInterest(pool: Pool): Promise<void> {
   const env = loadEnv();
@@ -122,6 +106,6 @@ export async function accrueInterest(pool: Pool): Promise<void> {
     errored,
   });
   // A run where some accounts could not be charged is a failed run, so the
-  // heartbeat records it and pg-boss retries — safely, because of the key.
+  // heartbeat records it and pg-boss retries, safely because of the key.
   if (errored > 0) throw new Error(`interest accrual failed for ${errored} account(s)`);
 }

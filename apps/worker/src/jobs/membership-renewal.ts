@@ -7,42 +7,31 @@ import { log } from '../log';
  * A cycle is thirty days, and at the end of one of three things happens:
  *
  *   - **active** → a new cycle opens, the fee is charged, and the allowance
- *     counters start again from zero. Allowances do not roll over, which is
- *     what keeps Bault's maximum exposure per member finite and knowable.
+ *     counters start again from zero. Allowances do not roll over, which keeps
+ *     Bault's maximum exposure per member finite and knowable.
  *   - **cancelling** → the membership ENDS. This is the only place a membership
- *     stops, so the end of one is a dated event with a row behind it rather than
- *     an absence somebody infers later.
+ *     stops, so the end of one is a dated event with a row behind it.
  *   - **ended** → nothing. Left alone forever.
  *
- * WHY THIS IS SQL AND NOT THE NEST SERVICE. The worker is a separate process
- * with a `pg` pool and no dependency injection — the same reason the storage
- * sweep is SQL. `MembershipService.renewDue` exists for tests and for an
- * administrator triggering a roll by hand; this is the thing that actually runs
- * on a schedule.
+ * This is SQL rather than the Nest service because the worker is a separate
+ * process with a `pg` pool and no dependency injection, like the storage sweep.
+ * `MembershipService.renewDue` is not what runs on a schedule; this is.
  *
- * FAILING CLOSED IS THE SAFE DIRECTION, and it is worth saying why the worst
- * case here is mild: if this job does not run, a member's cycle lapses and
- * `MembershipService.consume` stops granting allowances, because it checks that
- * `now` falls inside the paid-up window. The member is then billed the ordinary
- * published price for the things they do — after approving each one, like
- * anybody else. They are never charged twice and never charged silently. The
- * next run of this job opens their cycle and the allowances come back.
+ * FAILING CLOSED IS THE SAFE DIRECTION. If this job does not run, a member's
+ * cycle lapses and `MembershipService.consume` stops granting allowances. The
+ * member is billed the ordinary published price, after approving each action,
+ * never twice and never silently. The next run opens their cycle again.
  *
- * ONCE PER CYCLE, HOWEVER MANY RUNS (N15). Each membership is renewed in its own
- * transaction that first CLAIMS the row — `FOR UPDATE SKIP LOCKED`, re-checking
- * that the cycle is still due — so a second run either skips a row the first is
+ * ONCE PER CYCLE, HOWEVER MANY RUNS. Each membership is renewed in its own
+ * transaction that first CLAIMS the row (`FOR UPDATE SKIP LOCKED`, re-checking
+ * that the cycle is still due), so a second run either skips a row the first is
  * renewing or finds it no longer due. Underneath that, the new period records
- * the end of the cycle it renewed, and (membership, renewed cycle) is unique:
- * the period start was the run's own `now()`, so two overlapping runs used to
- * write two different starts, the old ON CONFLICT never fired, and the member
- * paid twice.
+ * the end of the cycle it renewed, and (membership, renewed cycle) is unique.
  *
- * ONLY FOR AN ACCOUNT THAT IS ACTIVE (N9). A closed account kept renewing and
- * paying every thirty days for a service it could not use; its membership now
- * ENDS at the close of the cycle it paid for, like a cancellation. A suspended
- * or pending one is not renewed and not charged, and its cycle is simply left
- * lapsed — the fail-closed state described above — until the account is active
- * again, when the next run renews it.
+ * ONLY FOR AN ACCOUNT THAT IS ACTIVE. A closed account's membership ENDS at the
+ * close of the cycle it paid for, like a cancellation. A suspended or pending
+ * one is not renewed or charged, and its cycle stays lapsed until the account
+ * is active again, when the next run renews it.
  */
 export async function renewMemberships(pool: Pool): Promise<void> {
   let renewed = 0;
@@ -86,7 +75,6 @@ export async function renewMemberships(pool: Pool): Promise<void> {
         renews: Date;
       }>(
         // The tier the NEXT cycle is on: a scheduled downgrade takes effect here.
-        // Without this a downgrade was silently a cancellation (migration 0030).
         `SELECT user_id, coalesce(scheduled_tier, tier) AS tier, current_period_end AS renews
            FROM membership
           WHERE id = $1
@@ -102,7 +90,7 @@ export async function renewMemberships(pool: Pool): Promise<void> {
       }
       userId = m.user_id;
 
-      // Then the wallet, after the row the renewal is about — the lock order
+      // Then the wallet, after the row the renewal is about: the lock order
       // every money movement in the API follows.
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`wallet:${m.user_id}`]);
 
@@ -142,11 +130,8 @@ export async function renewMemberships(pool: Pool): Promise<void> {
       const period = await client.query<{ period_start: string; period_end: string }>(
         // MILLISECONDS, not now()'s microseconds. The period row is found by
         // exact equality on this timestamp, and the value goes through a
-        // JavaScript Date on its way into that row — which keeps milliseconds.
-        // With raw now() the two never matched: after a renewal the member had
-        // no current period, allowances stopped counting, and a covered parcel
-        // could not be paid for at all. The API writes both from one Date, so
-        // this is the one place the precisions could disagree.
+        // JavaScript Date (milliseconds) on its way into that row, so both
+        // must have the same precision.
         `UPDATE membership
             SET tier = $2,
                 scheduled_tier = NULL,
@@ -160,8 +145,8 @@ export async function renewMemberships(pool: Pool): Promise<void> {
       const p = period.rows[0]!;
 
       // ON CONFLICT DO NOTHING covers both unique keys: the period start, and
-      // the cycle being renewed. Either way the cycle already has its period —
-      // and its fee — so this run charges nothing.
+      // the cycle being renewed. Either way the cycle already has its period
+      // and its fee, so this run charges nothing.
       const inserted = await client.query(
         `INSERT INTO membership_period
            (membership_id, user_id, tier, period_start, period_end, fee, currency, pricing_rule_snapshot, consumed,
