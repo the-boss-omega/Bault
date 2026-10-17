@@ -114,11 +114,13 @@ export class HumanFulfilmentService {
 
     // The items again, locked, and not on another open parcel, as creating a
     // shipment checks them: two requests for the same card cannot both find it
-    // free and both put it on a parcel.
-    const [created] = await this.db.transaction(async (tx) => {
+    // free and both put it on a parcel. The event goes in the same
+    // transaction, so a request is never recorded without the event that tells
+    // the collector it arrived.
+    return this.db.transaction(async (tx) => {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
       await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
-      return tx
+      const [created] = await tx
         .insert(shipment)
         .values({
           code: newShipmentCode(),
@@ -140,18 +142,16 @@ export class HumanFulfilmentService {
           status: 'requested',
         })
         .returning();
-    });
-    if (!created) throw AppError.validation('Failed to raise the request');
+      if (!created) throw AppError.validation('Failed to raise the request');
 
-    await this.db.transaction(async (tx) => {
       await this.outbox.emit(tx, {
         aggregateType: 'shipment',
         aggregateId: created.id,
         eventType: 'white_glove_requested',
         payload: { userId, shipmentCode: created.code, quoteWithinHours: WHITE_GLOVE_QUOTE_HOURS },
       });
+      return created;
     });
-    return created;
   }
 
   /** Somebody has worked out the journey. This is the figure. */
