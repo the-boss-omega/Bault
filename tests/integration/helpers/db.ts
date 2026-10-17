@@ -59,7 +59,7 @@ let pool: PgPool | undefined;
 
 /** Run one statement against the test database. */
 export async function sql<R = Record<string, unknown>>(text: string, values: unknown[] = []): Promise<R[]> {
-  pool ??= new Pool({ connectionString: databaseUrl(), max: 2 });
+  pool ??= new Pool({ connectionString: databaseUrl(), max: 4 });
   const res = await pool.query<R>(text, values);
   return res.rows;
 }
@@ -74,7 +74,7 @@ export async function sql<R = Record<string, unknown>>(text: string, values: unk
  * input.
  */
 export async function holdRowLock(table: string, id: string): Promise<{ release: () => Promise<void> }> {
-  pool ??= new Pool({ connectionString: databaseUrl(), max: 2 });
+  pool ??= new Pool({ connectionString: databaseUrl(), max: 4 });
   const client = await pool.connect();
   await client.query('begin');
   await client.query(`select 1 from ${table} where id = $1 for update`, [id]);

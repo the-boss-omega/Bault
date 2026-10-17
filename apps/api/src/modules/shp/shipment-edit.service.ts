@@ -106,27 +106,44 @@ export class ShipmentEditService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, patch.perItemCustomsValues)
       : null;
 
-    const [updated] = await this.db
-      .update(shipment)
-      .set({
-        itemIds: items.map((i) => i.id),
-        insuredValueMinor,
-        declaredValueMinor,
-        signatureRequired,
-        addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
-        boxSize: box?.key ?? null,
-        customsLines,
-        rushFlag: patch.rush ?? s.rushFlag,
-        customerNotes:
-          patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
-        recipientName: patch.recipientName?.trim() || s.recipientName,
-        updatedAt: new Date(),
-      })
-      // Still `requested`: an edit checked before a rate was chosen and paid
-      // for must not land after it, or the parcel leaves holding more than was
-      // charged for.
-      .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      /**
+       * The checks above, again, under the locks, the way creating a shipment
+       * makes them: the request first (the order dispatch takes it and its
+       * cards in), then its cards, then whether any of them is on another open
+       * parcel. Two edits putting the same card on two requests cannot then
+       * both find it free.
+       */
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur || cur.status !== 'requested' || cur.mergedIntoShipmentId) {
+        throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
+      }
+      await this.profiles.loadShippableItems(s.userId, itemIds, tx as Database);
+      await this.shipments.assertItemsFree(s.userId, itemIds, s.id, tx as Database);
+
+      const [row] = await tx
+        .update(shipment)
+        .set({
+          itemIds: items.map((i) => i.id),
+          insuredValueMinor,
+          declaredValueMinor,
+          signatureRequired,
+          addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+          boxSize: box?.key ?? null,
+          customsLines,
+          rushFlag: patch.rush ?? s.rushFlag,
+          customerNotes:
+            patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
+          recipientName: patch.recipientName?.trim() || s.recipientName,
+          updatedAt: new Date(),
+        })
+        // Still `requested`: an edit checked before a rate was chosen and paid
+        // for must not land after it, or the parcel leaves holding more than was
+        // charged for.
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
+        .returning();
+      return row;
+    });
     if (!updated) {
       throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
     }
