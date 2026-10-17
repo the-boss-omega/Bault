@@ -112,39 +112,46 @@ export class HumanFulfilmentService {
     });
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
-    const [created] = await this.db
-      .insert(shipment)
-      .values({
-        code: newShipmentCode(),
-        userId,
-        itemIds: items.map((i) => i.id),
-        fulfilmentMethod: 'hand_delivery',
-        destinationAddress: input.deliveryAddress.trim(),
-        destinationCountry: input.destinationCountry.trim().toUpperCase(),
-        // A hand delivery has no postal routing: a person is walking to a door.
-        destinationPostalCode: '',
-        recipientName: input.recipientName?.trim() || null,
-        pickupAddress: input.pickupAddress.trim(),
-        pickupFrom: new Date(input.pickupFrom),
-        pickupTo: new Date(input.pickupTo),
-        deliverFrom: new Date(input.deliverFrom),
-        deliverTo: new Date(input.deliverTo),
-        customerNotes: input.customerNotes?.trim() || null,
-        currency: DEFAULT_CURRENCY,
-        status: 'requested',
-      })
-      .returning();
-    if (!created) throw AppError.validation('Failed to raise the request');
+    // The items again, locked, and not on another open parcel, as creating a
+    // shipment checks them: two requests for the same card cannot both find it
+    // free and both put it on a parcel. The event goes in the same
+    // transaction, so a request is never recorded without the event that tells
+    // the collector it arrived.
+    return this.db.transaction(async (tx) => {
+      await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
+      await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
+      const [created] = await tx
+        .insert(shipment)
+        .values({
+          code: newShipmentCode(),
+          userId,
+          itemIds: items.map((i) => i.id),
+          fulfilmentMethod: 'hand_delivery',
+          destinationAddress: input.deliveryAddress.trim(),
+          destinationCountry: input.destinationCountry.trim().toUpperCase(),
+          // A hand delivery has no postal routing: a person is walking to a door.
+          destinationPostalCode: '',
+          recipientName: input.recipientName?.trim() || null,
+          pickupAddress: input.pickupAddress.trim(),
+          pickupFrom: new Date(input.pickupFrom),
+          pickupTo: new Date(input.pickupTo),
+          deliverFrom: new Date(input.deliverFrom),
+          deliverTo: new Date(input.deliverTo),
+          customerNotes: input.customerNotes?.trim() || null,
+          currency: DEFAULT_CURRENCY,
+          status: 'requested',
+        })
+        .returning();
+      if (!created) throw AppError.validation('Failed to raise the request');
 
-    await this.db.transaction(async (tx) => {
       await this.outbox.emit(tx, {
         aggregateType: 'shipment',
         aggregateId: created.id,
         eventType: 'white_glove_requested',
         payload: { userId, shipmentCode: created.code, quoteWithinHours: WHITE_GLOVE_QUOTE_HOURS },
       });
+      return created;
     });
-    return created;
   }
 
   /** Somebody has worked out the journey. This is the figure. */
@@ -160,16 +167,23 @@ export class HumanFulfilmentService {
       throw AppError.validation('Say what the figure covers — the journey, the base, anything unusual.');
     }
 
-    const [s] = await this.db.select().from(shipment).where(eq(shipment.id, shipmentId)).limit(1);
-    if (!s) throw AppError.notFound('Shipment not found');
-    if (s.fulfilmentMethod !== 'hand_delivery') throw AppError.validation('That is not a hand-delivery request');
-    if (s.status !== 'requested') {
-      throw new AppError(ErrorCode.CONFLICT, 'That request is no longer open to a quote', 409);
-    }
-
     const now = new Date();
+    /**
+     * Read under the shipment lock and written only while still `requested`.
+     * Acceptance charges the quote on the row; a revision read before an
+     * acceptance and written after it would leave the shipment quoting one
+     * figure and charged another, and one landing on a cancelled request would
+     * quote a parcel nobody is sending.
+     */
     return this.db.transaction(async (tx) => {
-      await tx
+      const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!s) throw AppError.notFound('Shipment not found');
+      if (s.fulfilmentMethod !== 'hand_delivery') throw AppError.validation('That is not a hand-delivery request');
+      if (s.status !== 'requested') {
+        throw new AppError(ErrorCode.CONFLICT, 'That request is no longer open to a quote', 409);
+      }
+
+      const [quoted] = await tx
         .update(shipment)
         .set({
           quoteMinor: form.quoteMinor,
@@ -178,7 +192,9 @@ export class HumanFulfilmentService {
           quotedAt: now,
           updatedAt: now,
         })
-        .where(eq(shipment.id, shipmentId));
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
+        .returning({ id: shipment.id });
+      if (!quoted) throw new AppError(ErrorCode.CONFLICT, 'That request is no longer open to a quote', 409);
       await this.outbox.emit(tx, {
         aggregateType: 'shipment',
         aggregateId: shipmentId,
@@ -245,10 +261,15 @@ export class HumanFulfilmentService {
         },
         tx,
       );
-      await tx
+      // Only from `requested`, and only at the quote that was charged.
+      const [accepted] = await tx
         .update(shipment)
         .set({ status: 'rates_selected', cost: s.quoteMinor, updatedAt: new Date() })
-        .where(eq(shipment.id, shipmentId));
+        .where(
+          and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested'), eq(shipment.quoteMinor, s.quoteMinor)),
+        )
+        .returning({ id: shipment.id });
+      if (!accepted) throw new AppError(ErrorCode.CONFLICT, 'That quote is no longer open', 409);
       return { status: 'rates_selected' as const, cost: s.quoteMinor };
     });
   }
@@ -341,6 +362,31 @@ export class HumanFulfilmentService {
       // Book cannot both pay the show fee for the same cards.
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
       await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
+
+      // The show, locked, and its places counted again under that lock: two
+      // collectors who both saw one place left queue here, and the second
+      // finds the van full. The rows, then the wallet, then the period.
+      const [locked] = await tx
+        .select()
+        .from(consignmentEvent)
+        .where(eq(consignmentEvent.id, show.id))
+        .for('update')
+        .limit(1);
+      if (!locked || !locked.active || !locked.pickupEnabled) {
+        throw AppError.validation('That show does not take pickups');
+      }
+      if (locked.requestDeadline.getTime() <= Date.now()) {
+        throw new AppError(ErrorCode.CONFLICT, 'That show has closed to new requests — the van is packed before the doors open.', 409);
+      }
+      if (locked.pickupCapacity > 0) {
+        const [taken] = await tx
+          .select({ booked: sql<number>`count(*)::int` })
+          .from(shipment)
+          .where(and(eq(shipment.pickupEventId, show.id), sql`${shipment.status} not in ('cancelled')`));
+        if ((taken?.booked ?? 0) >= locked.pickupCapacity) {
+          throw new AppError(ErrorCode.CONFLICT, 'That show is full for pickups', 409);
+        }
+      }
 
       // A membership may cover the pickup, so the waiver is worked out BEFORE
       // the balance check, which runs against what will actually be charged.

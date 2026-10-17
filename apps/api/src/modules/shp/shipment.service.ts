@@ -653,6 +653,11 @@ export class ShipmentService {
       quoteMinor: s.quoteMinor,
       quoteNotes: s.quoteNotes,
       trackingNumber: s.trackingNumber,
+      /**
+       * The carrier refused this shipment's label at dispatch: nothing was
+       * bought, and a fresh rate is what moves it on. Null otherwise.
+       */
+      labelRefused: ShipmentService.labelRefusal(s),
       estimatedDeliveryAt: s.estimatedDeliveryAt,
       rush: s.rushFlag,
       cost: s.cost,
@@ -854,9 +859,37 @@ export class ShipmentService {
       profile,
       addOnKeys,
       s.rushFlag,
-      await this.memberships.shippingCover(s.userId),
+      await this.coverFor(s),
       (s.customsLines as CustomsLine[] | null) ?? null,
     );
+  }
+
+  /**
+   * What the member's tier can pay towards this shipment's rate.
+   *
+   * A shipment re-rated after its label was refused already spent cover on the
+   * refused rate, and that cover goes back to the cycle when the new rate is
+   * settled. Priced without it, the member would be quoted as if this parcel
+   * had used their allowance twice. So, while it is still the cycle the cover
+   * came out of, it is counted as available again here.
+   */
+  private async coverFor(s: typeof shipment.$inferSelect): Promise<ShippingCover | null> {
+    const cover = await this.memberships.shippingCover(s.userId);
+    const spent = ShipmentService.labelRefusal(s) ? ((s.membershipCover as AppliedShippingCover | null) ?? null) : null;
+    if (!cover || !spent || spent.tier !== cover.tier) return cover;
+    const state = await this.memberships.current(s.userId);
+    if (!spent.spentInPeriodId || spent.spentInPeriodId !== state?.period?.id) return cover;
+    const addOnsLeft = { ...cover.addOnsLeft };
+    for (const action of Object.keys(spent.addOns ?? {})) {
+      const left = addOnsLeft[action];
+      if (left !== undefined && left !== UNLIMITED) addOnsLeft[action] = left + 1;
+    }
+    return {
+      ...cover,
+      insuredShipmentsLeft: cover.insuredShipmentsLeft + (spent.insuredShipment ? 1 : 0),
+      postageCreditLeftMinor: cover.postageCreditLeftMinor + Math.max(0, spent.postageMinor ?? 0),
+      addOnsLeft,
+    };
   }
 
   /* ------------------------------------------------------------------
@@ -906,13 +939,17 @@ export class ShipmentService {
    * A rate can be chosen only before anything was charged, and only for a
    * parcel a carrier is taking.
    *
-   * A paid (`rates_selected`) shipment is refused because `settle` would charge
-   * again without crediting the first charge. A hand-delivery or show-pickup
-   * request is refused because a carrier rate is far cheaper than what was
-   * quoted for it.
+   * A paid (`rates_selected`) shipment is refused, because its price is agreed
+   * and paid, with one exception: the carrier refused its label at dispatch.
+   * Nothing was bought, the rate it holds is the one just turned down, and
+   * without a fresh one the only way out would be a paid cancellation; `settle`
+   * then settles the difference against what was paid. A hand-delivery or
+   * show-pickup request is refused because a carrier rate is far cheaper than
+   * what was quoted for it.
    */
   private static assertRateSelectable(s: typeof shipment.$inferSelect) {
-    if (s.status !== 'requested' && s.status !== 'awaiting_payment') {
+    const reRating = s.status === 'rates_selected' && ShipmentService.labelRefusal(s) !== null;
+    if (s.status !== 'requested' && s.status !== 'awaiting_payment' && !reRating) {
       throw new AppError(
         ErrorCode.CONFLICT,
         s.status === 'rates_selected'
@@ -927,6 +964,23 @@ export class ShipmentService {
     if (s.fulfilmentMethod !== 'carrier') {
       throw new AppError(ErrorCode.CONFLICT, 'This shipment is not going by carrier, so it has no carrier rate.', 409);
     }
+  }
+
+  /**
+   * The carrier's refusal of this shipment's label, when that is where it stands.
+   *
+   * Written by dispatch (`labelPurchase.state = 'refused'` on the fulfilment
+   * record) when the carrier answered no to the stored rate, so nothing was
+   * bought. Only a paid carrier parcel with no tracking number counts: a direct
+   * overnight parcel has one flat price and no rate to choose again.
+   */
+  static labelRefusal(s: typeof shipment.$inferSelect): { at: string | null; reason: string | null } | null {
+    if (s.status !== 'rates_selected' || s.trackingNumber || s.fulfilmentMethod !== 'carrier') return null;
+    if (ShipmentService.isDirect(s)) return null;
+    const purchase = (s.fulfillment as { labelPurchase?: { state?: string; startedAt?: string; lastError?: string } } | null)
+      ?.labelPurchase;
+    if (purchase?.state !== 'refused') return null;
+    return { at: purchase.startedAt ?? null, reason: purchase.lastError ?? null };
   }
 
   /**
@@ -972,6 +1026,7 @@ export class ShipmentService {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, s.id)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       ShipmentService.assertRateSelectable(cur);
+      if (cur.status === 'rates_selected') return this.reRate(tx, cur, rate, common, estimatedDeliveryAt);
 
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < rate.totalMinor) {
@@ -1013,6 +1068,101 @@ export class ShipmentService {
         estimatedDeliveryAt,
       };
     });
+  }
+
+  /**
+   * A fresh rate for a paid shipment whose label the carrier refused.
+   *
+   * What is already paid is `cost`. The difference is settled here, in the
+   * shipment's transaction and under the wallet lock: a cheaper rate's comes
+   * back as a `shipping_refund`, a dearer one's is charged, and a wallet that
+   * cannot cover it refuses the change and leaves the shipment as it was. The
+   * cover the refused rate spent goes back to its cycle before the new rate's
+   * is spent, the order a cancellation followed by a new choice would take.
+   */
+  private async reRate(
+    tx: Database,
+    cur: typeof shipment.$inferSelect,
+    rate: QuotedRate,
+    common: Partial<typeof shipment.$inferInsert>,
+    estimatedDeliveryAt: Date,
+  ) {
+    const userId = cur.userId;
+    const currency = cur.currency ?? DEFAULT_CURRENCY;
+    // The shipment, then the wallet, then the member's cycle.
+    await this.ledger.lockWallet(userId, tx);
+    const refusedCover = (cur.membershipCover as AppliedShippingCover | null) ?? null;
+    if (refusedCover) await this.memberships.returnShippingCover(tx, userId, refusedCover);
+    const spentCover = rate.membershipCover
+      ? await this.memberships.spendShippingCover(tx, userId, rate.membershipCover)
+      : null;
+
+    const paidMinor = cur.cost ?? 0;
+    const differenceMinor = rate.totalMinor - paidMinor;
+    if (differenceMinor > 0) {
+      const balance = await this.ledger.balanceOf(userId, tx);
+      if (balance.amount < differenceMinor) {
+        throw new AppError(
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `That service costs ${formatMinor(differenceMinor)} more than the one already paid for, and the wallet holds ${formatMinor(balance.amount)}. Top up, or choose a cheaper service.`,
+          409,
+          { shortfallMinor: differenceMinor - balance.amount },
+        );
+      }
+      const [c] = await tx
+        .insert(charge)
+        .values({
+          userId,
+          actionType: 'shipping',
+          pricingRuleSnapshot: {
+            rateChangeAfterRefusedLabel: true,
+            previousService: cur.serviceKey,
+            previousTotal: paidMinor,
+            service: rate.serviceKey,
+            newTotal: rate.totalMinor,
+            carrierCost: rate.costMinor,
+            handling: rate.handlingMinor,
+            insurancePremium: rate.insurancePremiumMinor,
+            addOns: rate.addOnsMinor,
+            membershipCover: rate.membershipCover ?? null,
+          },
+          amount: differenceMinor,
+          currency,
+          paymentMeans: 'wallet',
+          status: 'settled',
+          referenceId: cur.id,
+        })
+        .returning({ id: charge.id });
+      if (!c) throw AppError.validation('Failed to charge the difference');
+      await this.ledger.record(
+        { userId, type: 'service_charge', amount: differenceMinor, direction: 'debit', currency, referenceType: 'charge', referenceId: c.id },
+        tx,
+      );
+    } else if (differenceMinor < 0) {
+      // Credited against the shipment, as a cancellation's refund is, so a later
+      // cancellation refunds what is paid now and not the first charge.
+      await this.ledger.record(
+        { userId, type: 'shipping_refund', amount: -differenceMinor, direction: 'credit', currency, referenceType: 'shipment', referenceId: cur.id },
+        tx,
+      );
+    }
+
+    const [updated] = await tx
+      .update(shipment)
+      // The refusal is answered: a clean fulfilment record for the next dispatch.
+      .set({ ...common, membershipCover: spentCover, status: 'rates_selected', paymentDueAt: null, fulfillment: null })
+      .where(and(eq(shipment.id, cur.id), eq(shipment.status, 'rates_selected')))
+      .returning({ id: shipment.id });
+    if (!updated) throw new AppError(ErrorCode.CONFLICT, 'This shipment has moved on.', 409);
+    return {
+      status: 'rates_selected' as const,
+      carrier: rate.carrier,
+      serviceLevel: rate.serviceLevel,
+      cost: rate.totalMinor,
+      currency: rate.currency,
+      estimatedDeliveryAt,
+      differenceMinor,
+    };
   }
 
   /**
@@ -1130,48 +1280,6 @@ export class ShipmentService {
         .where(eq(shipment.id, s.id));
       return { status: 'rates_selected' as const, paid: s.cost };
     });
-  }
-
-  /**
-   * Release the items of shipments nobody paid for.
-   *
-   * The scheduled release is the worker's own `expireUnpaidShipments`, in raw
-   * SQL; this is the API-side equivalent. Returns what it released.
-   */
-  async expireUnpaid(now = new Date()) {
-    const rows = await this.db.select().from(shipment).where(eq(shipment.status, 'awaiting_payment'));
-    const expired: string[] = [];
-
-    for (const s of rows) {
-      if (!s.paymentDueAt || s.paymentDueAt.getTime() > now.getTime()) continue;
-      const cancelled = await this.db.transaction(async (tx) => {
-        // Only if it is STILL unpaid: a parcel paid for between the read above
-        // and this write must not be cancelled with its charge kept.
-        const [row] = await tx
-          .update(shipment)
-          .set({
-            status: 'cancelled',
-            cancelledAt: now,
-            cancelReason: `Not paid within ${PAYMENT_WINDOW_DAYS} days`,
-            updatedAt: now,
-          })
-          .where(and(eq(shipment.id, s.id), eq(shipment.status, 'awaiting_payment')))
-          .returning({ id: shipment.id });
-        if (!row) return false;
-        await this.outbox.emit(tx, {
-          aggregateType: 'shipment',
-          aggregateId: s.id,
-          eventType: 'shipment_expired',
-          payload: { userId: s.userId, shipmentCode: s.code, itemCount: ((s.itemIds as string[]) ?? []).length },
-        });
-        return true;
-      });
-      if (cancelled) expired.push(s.id);
-    }
-    // Cancelling IS the release. An item in an open shipment never left
-    // `stored`; what it lost was the ability to be put on a second parcel, so
-    // moving the shipment out of the open set is exactly what hands it back.
-    return { expired: expired.length, shipmentIds: expired };
   }
 
   async track(shipmentId: string, actor: ShipmentActor) {

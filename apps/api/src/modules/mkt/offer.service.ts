@@ -58,6 +58,11 @@ export class OfferService {
     await this.assertNoOpenOffer(buyerId, listingId);
 
     return this.db.transaction(async (tx) => {
+      // Still for sale, read under a share lock: a sale or removal holds the
+      // listing until it commits and closes the open offers, so an offer cannot
+      // slip in beside it and stay open on a card that is gone.
+      const [still] = await tx.select({ status: listing.status }).from(listing).where(eq(listing.id, listingId)).for('share').limit(1);
+      if (still?.status !== 'active') throw new AppError(ErrorCode.CONFLICT, 'Listing not active', 409);
       const [created] = await tx
         .insert(offer)
         .values({ listingId, buyerId, amount, currency: l.currency, status: 'pending', proposedBy: 'buyer' })

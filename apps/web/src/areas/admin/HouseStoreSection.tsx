@@ -84,14 +84,19 @@ export function HouseStoreSection({
     }
   }
 
-  async function patch(row: HouseListingRow, body: Partial<Pick<HouseListingRow, 'stock' | 'status'>>) {
+  async function patch(
+    row: HouseListingRow,
+    body: Partial<Pick<HouseListingRow, 'stock' | 'status'>> & { expectedStock?: number },
+  ) {
     try {
       await api.patch(`/marketplace/house/listings/${row.id}`, body);
       onMsg(t('house.admin.saved'));
-      await load();
     } catch (e) {
       onError((e as Error).message);
     }
+    // Reloaded either way: a refused stock change means the shelf moved, and
+    // the figure to correct is the one it moved to.
+    await load();
   }
 
   return (
@@ -162,6 +167,9 @@ export function HouseStoreSection({
                     <td dir="ltr">{formatUsd(row.askingPrice)}</td>
                     <td>
                       <input
+                        // Keyed by the figure, so a reload that brings a new
+                        // one shows it rather than what was typed over it.
+                        key={`${row.id}:${row.stock}`}
                         type="number"
                         min={0}
                         defaultValue={row.stock}
@@ -170,7 +178,11 @@ export function HouseStoreSection({
                         dir="ltr"
                         onBlur={(e) => {
                           const next = Number(e.target.value);
-                          if (Number.isInteger(next) && next >= 0 && next !== row.stock) void patch(row, { stock: next });
+                          // The figure it was typed over goes with it, so a copy sold
+                          // meanwhile is refused rather than put back on sale.
+                          if (Number.isInteger(next) && next >= 0 && next !== row.stock) {
+                            void patch(row, { stock: next, expectedStock: row.stock });
+                          }
                         }}
                       />
                     </td>

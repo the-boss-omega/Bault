@@ -72,6 +72,22 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         ? `Shipment ${shipment} has been dispatched — tracking number ${tracking}.`
         : `Shipment ${shipment} has been dispatched.`;
     }
+    case 'shipment_delivered': {
+      const tracking = str(p, 'trackingNumber');
+      const shipment = ref(p, 'shipmentCode', 'shipmentId');
+      return tracking
+        ? `Shipment ${shipment} was delivered, the carrier reports (tracking number ${tracking}).`
+        : `Shipment ${shipment} was delivered, the carrier reports.`;
+    }
+    case 'shipment_exception': {
+      // Said plainly: a returned or lost parcel has a claim window, and the
+      // collector cannot start a claim nobody told them about.
+      const tracking = str(p, 'trackingNumber');
+      const shipment = ref(p, 'shipmentCode', 'shipmentId');
+      return tracking
+        ? `The carrier reports a problem with shipment ${shipment} (tracking number ${tracking}): it may be returned, delayed or lost. Contact support if it does not move.`
+        : `The carrier reports a problem with shipment ${shipment}: it may be returned, delayed or lost. Contact support if it does not move.`;
+    }
     case 'hold_placed':
       return `A hold was placed on item ${ref(p, 'barcode', 'itemId')}; it cannot be moved, sold or shipped until the hold is released.`;
     case 'support_ticket_replied':

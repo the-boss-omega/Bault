@@ -119,7 +119,7 @@ export const parcel = pgTable(
 export const parcelEvent = pgTable('parcel_event', {
   id: pkId(),
   parcelId: text('parcel_id').notNull(),
-  eventType: text('event_type').notNull(), // registered | registration_cancelled | received | forwarded | opened | processed | claimed | disposed | direct_shipped | direct_dispatched
+  eventType: text('event_type').notNull(), // registered | registration_cancelled | received | forwarded | opened | processed | claimed | disposed | direct_shipped | direct_dispatched | direct_cancelled
   fromStatus: text('from_status'),
   toStatus: text('to_status'),
   /** Null for a customer's own registration; set for every operator action. */

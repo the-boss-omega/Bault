@@ -37,6 +37,8 @@ const { VaultPage } = await import('../../apps/web/src/areas/customer/vault/Vaul
 const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
 const { WalletPage } = await import('../../apps/web/src/areas/customer/finance/WalletPage');
 const { WhiteGloveQuotes } = await import('../../apps/web/src/areas/customer/shipping/HumanFulfilmentPanels');
+const { RechooseService } = await import('../../apps/web/src/areas/customer/shipping/ShippingServicesPage');
+const { useI18n } = await import('../../apps/web/src/shared/i18n');
 
 function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
@@ -384,5 +386,53 @@ describe('a hand-delivery quote reaches the collector (F060)', () => {
     expect(screen.queryByText('SHP-CARRIER1')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Accept' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/shipping/white-glove/hd1/accept'));
+  });
+});
+
+describe('a label the carrier refused can be re-chosen (fix 4)', () => {
+  const RATE = (serviceKey: string, carrier: string, serviceLevel: string, totalMinor: number) => ({
+    serviceKey,
+    carrier,
+    serviceLevel,
+    totalMinor,
+    eligible: true,
+    costMinor: totalMinor,
+    handlingMinor: 0,
+    insurancePremiumMinor: 0,
+    addOnsMinor: 0,
+    problems: [],
+  });
+
+  it('shows what each service does to what was paid, and chooses one', async () => {
+    get.mockResolvedValue([
+      RATE('usps_ground', 'USPS', 'Ground Advantage', 645),
+      RATE('usps_priority', 'USPS', 'Priority Mail', 1_293),
+      RATE('fedex_2day', 'FedEx', '2Day', 2_254),
+    ]);
+    const onChosen = vi.fn(async (fn: () => Promise<unknown>) => {
+      await fn();
+    });
+    const user = userEvent.setup();
+    function Rechoose() {
+      const { t } = useI18n();
+      return (
+        <RechooseService
+          shipment={{ id: 's1', cost: 1_293, labelRefused: { at: null, reason: 'EasyPost 422: rate expired' } } as never}
+          t={t}
+          busy={false}
+          onChosen={onChosen}
+        />
+      );
+    }
+    renderIn(<Rechoose />);
+
+    expect(await screen.findByText('$6.48 back')).toBeInTheDocument();
+    expect(screen.getByText('No change in price')).toBeInTheDocument();
+    expect(screen.getByText('$9.61 more')).toBeInTheDocument();
+    expect(screen.getByText(/rate expired/)).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button')[0]!);
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/shipping/shipments/s1/select-rate', { carrier: 'USPS', serviceLevel: 'Ground Advantage' }),
+    );
   });
 });

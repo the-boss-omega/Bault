@@ -76,14 +76,21 @@ export class DisposalServicesService {
       'deslab',
       confirmationToken,
     );
-    return this.custody.run(async (tx) =>
-      this.requests.create(tx, {
+    return this.custody.run(async (tx) => {
+      // Step 1's checks were made when the challenge was issued. Repeated under
+      // the item lock, before the fee is charged, so a card sold or held in
+      // between is not cracked on the old owner's word.
+      const it = await this.custody.lockExpecting(tx, itemId, { ownerId });
+      if (!it.conditionGrade || /^raw$/i.test(it.conditionGrade)) {
+        throw AppError.validation('This item has no grade recorded — there is nothing to crack it out of.');
+      }
+      return this.requests.create(tx, {
         type: 'deslab',
         requesterId: ownerId,
         itemId,
         feeActionType: 'service_fee:deslab',
-      }),
-    );
+      });
+    });
   }
 
   /**
@@ -100,8 +107,9 @@ export class DisposalServicesService {
       if (req.type !== 'deslab') throw AppError.validation('Not a de-slab request');
       if (!req.itemId) throw AppError.validation('Request has no item');
 
-      const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
-      if (!it) throw AppError.notFound('Item not found');
+      // Still the requester's card, on the shelf and not on hold: one sold since
+      // the request was raised belongs to somebody who never asked for this.
+      const it = await this.custody.lockExpecting(tx, req.itemId, { ownerId: req.requesterId });
 
       await tx
         .update(item)

@@ -101,6 +101,57 @@ describe('tracking refresh', () => {
     expect(await statusOf(pool, brokenId)).toBe('shipped');
   });
 
+  /**
+   * The collector is told when the carrier says the parcel arrived, or that
+   * something went wrong with it, by the event written in the same transaction
+   * as the status. Once: a delivered or failed parcel is not polled again, and
+   * a run that changes nothing writes nothing.
+   */
+  const eventsFor = async (id: string) =>
+    (
+      await pool.query<{ event_type: string; user_id: string | null }>(
+        `SELECT event_type, payload ->> 'userId' AS user_id FROM outbox_message WHERE aggregate_id = $1 ORDER BY created_at`,
+        [id],
+      )
+    ).rows;
+  const ownerOf = async (id: string) =>
+    (await pool.query<{ user_id: string }>(`SELECT user_id FROM shipment WHERE id = $1`, [id])).rows[0]!.user_id;
+
+  it('tells the collector once when the carrier says the parcel was delivered', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}TOLDDELIVERED`;
+    answers[code] = { status: 200, body: { status: 'delivered' } };
+    const id = await shipment(pool, code);
+
+    await refreshTracking(pool);
+    await refreshTracking(pool);
+
+    expect(await statusOf(pool, id)).toBe('delivered');
+    expect(await eventsFor(id)).toEqual([{ event_type: 'shipment_delivered', user_id: await ownerOf(id) }]);
+  });
+
+  it('tells the collector once when the carrier reports a problem', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}TOLDFAILURE`;
+    answers[code] = { status: 200, body: { status: 'return_to_sender' } };
+    const id = await shipment(pool, code, 'in_transit');
+
+    await refreshTracking(pool);
+    await refreshTracking(pool);
+
+    expect(await statusOf(pool, id)).toBe('exception');
+    expect(await eventsFor(id)).toEqual([{ event_type: 'shipment_exception', user_id: await ownerOf(id) }]);
+  });
+
+  it('writes no event for a parcel that is merely still on its way', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}STILLMOVING`;
+    answers[code] = { status: 200, body: { status: 'in_transit' } };
+    const id = await shipment(pool, code, 'in_transit');
+    await refreshTracking(pool);
+    expect(await eventsFor(id)).toEqual([]);
+  });
+
   it('does not touch a parcel whose status the carrier does not recognise', async () => {
     const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
     const code = `EZ${Date.now()}UNKNOWN`;

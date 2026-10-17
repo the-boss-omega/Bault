@@ -99,6 +99,15 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
     label: 'An unpaid shipment is released',
     emailByDefault: true,
   },
+  // Custody ends: the parcel reached the person it was sent to.
+  { key: 'shipment_delivered', category: 'shipping', label: 'A shipment is delivered', emailByDefault: true },
+  {
+    // A returned, failed or lost parcel: a carrier claim has a deadline.
+    key: 'shipment_exception',
+    category: 'shipping',
+    label: 'The carrier reports a problem with a shipment',
+    emailByDefault: true,
+  },
   { key: 'shipment_cancelled', category: 'shipping', label: 'A shipment is cancelled', emailByDefault: true },
   { key: 'group_shipment_locked', category: 'shipping', label: 'A shared parcel is closed to new members', emailByDefault: false },
   { key: 'direct_ship_booked', category: 'shipping', label: 'A parcel ships direct from the tax-free site', emailByDefault: true },

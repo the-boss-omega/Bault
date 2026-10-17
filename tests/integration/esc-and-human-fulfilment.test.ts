@@ -106,6 +106,9 @@ describe('ESC escrow and human fulfilment', () => {
     expect((await buyer.post(`/escrow/${deal.id}/agree`, {})).status).toBe(201);
 
     const buyerBefore = await balanceOf(buyer);
+    // Other files may leave deals of golden's funded, so the held total is
+    // measured from here.
+    const heldBefore = (await buyer.get('/escrow/held')).body.heldMinor as number;
     const funded = await buyer.post(`/escrow/${deal.id}/fund`, {});
     expect(funded.status).toBe(201);
     expect(funded.body.source).toBe('wallet');
@@ -114,7 +117,7 @@ describe('ESC escrow and human fulfilment', () => {
     // row would be a claim the wallet contradicts.
     expect(await balanceOf(buyer)).toBe(buyerBefore - VALUE);
     const held = (await buyer.get('/escrow/held')).body;
-    expect(held.heldMinor).toBe(VALUE);
+    expect(held.heldMinor).toBe(heldBefore + VALUE);
 
     // The card arrives and is booked in against the deal.
     const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
@@ -146,7 +149,7 @@ describe('ESC escrow and human fulfilment', () => {
     expect(await balanceOf(seller)).toBe(sellerBefore + VALUE - deal.feeMinor);
     // Buyer's balance does not move again — it moved when it was held.
     expect(await balanceOf(buyer)).toBe(buyerBefore - VALUE);
-    expect((await buyer.get('/escrow/held')).body.heldMinor).toBe(0);
+    expect((await buyer.get('/escrow/held')).body.heldMinor).toBe(heldBefore);
 
     // The card is the buyer's now.
     const detail = (await buyer.get(`/escrow/${deal.id}`)).body;

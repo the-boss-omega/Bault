@@ -6,7 +6,8 @@ import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
-import { charge } from '../pay/pay.schema';
+import { charge, ledgerRecord } from '../pay/pay.schema';
+import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
@@ -105,27 +106,44 @@ export class ShipmentEditService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, patch.perItemCustomsValues)
       : null;
 
-    const [updated] = await this.db
-      .update(shipment)
-      .set({
-        itemIds: items.map((i) => i.id),
-        insuredValueMinor,
-        declaredValueMinor,
-        signatureRequired,
-        addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
-        boxSize: box?.key ?? null,
-        customsLines,
-        rushFlag: patch.rush ?? s.rushFlag,
-        customerNotes:
-          patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
-        recipientName: patch.recipientName?.trim() || s.recipientName,
-        updatedAt: new Date(),
-      })
-      // Still `requested`: an edit checked before a rate was chosen and paid
-      // for must not land after it, or the parcel leaves holding more than was
-      // charged for.
-      .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      /**
+       * The checks above, again, under the locks, the way creating a shipment
+       * makes them: the request first (the order dispatch takes it and its
+       * cards in), then its cards, then whether any of them is on another open
+       * parcel. Two edits putting the same card on two requests cannot then
+       * both find it free.
+       */
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur || cur.status !== 'requested' || cur.mergedIntoShipmentId) {
+        throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
+      }
+      await this.profiles.loadShippableItems(s.userId, itemIds, tx as Database);
+      await this.shipments.assertItemsFree(s.userId, itemIds, s.id, tx as Database);
+
+      const [row] = await tx
+        .update(shipment)
+        .set({
+          itemIds: items.map((i) => i.id),
+          insuredValueMinor,
+          declaredValueMinor,
+          signatureRequired,
+          addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+          boxSize: box?.key ?? null,
+          customsLines,
+          rushFlag: patch.rush ?? s.rushFlag,
+          customerNotes:
+            patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
+          recipientName: patch.recipientName?.trim() || s.recipientName,
+          updatedAt: new Date(),
+        })
+        // Still `requested`: an edit checked before a rate was chosen and paid
+        // for must not land after it, or the parcel leaves holding more than was
+        // charged for.
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
+        .returning();
+      return row;
+    });
     if (!updated) {
       throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
     }
@@ -281,6 +299,13 @@ export class ShipmentEditService {
       const feeMinor = cur.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
       const paid = cur.status === 'rates_selected' && !cur.trackingNumber;
 
+      // A direct-overnight shipment took its parcel off the dock: the parcel
+      // was marked processed when it was booked, and never opened. Called off,
+      // it goes back to the state it was booked from, in this transaction, so
+      // it can be forwarded to the vault or sent again rather than sit
+      // answered-for with nothing on its way.
+      if (ShipmentService.isDirect(cur)) await this.releaseDirectParcel(tx as Database, cur, actor.id);
+
       // The shipment, then the wallet, then the member's cycle: the order every
       // other money path takes them in.
       await this.ledger.lockWallet(s.userId, tx as Database);
@@ -289,6 +314,8 @@ export class ShipmentEditService {
        * What the collector actually paid for this parcel, from the charges
        * themselves rather than from `cost`, so the refund is exactly what left
        * the wallet for it: the carrier rate, a white-glove quote, a show fee.
+       * Less whatever was already given back on it: a cheaper rate chosen after
+       * the carrier refused a label refunds its difference at that moment.
        */
       let refundedMinor = 0;
       if (paid) {
@@ -302,7 +329,18 @@ export class ShipmentEditService {
               eq(charge.status, 'settled'),
             ),
           );
-        refundedMinor = Number(row?.total ?? '0');
+        const [back] = await tx
+          .select({ total: sql<string>`coalesce(sum(${ledgerRecord.amount}), 0)::text` })
+          .from(ledgerRecord)
+          .where(
+            and(
+              eq(ledgerRecord.userId, s.userId),
+              eq(ledgerRecord.type, 'shipping_refund'),
+              eq(ledgerRecord.referenceType, 'shipment'),
+              eq(ledgerRecord.referenceId, s.id),
+            ),
+          );
+        refundedMinor = Math.max(0, Number(row?.total ?? '0') - Number(back?.total ?? '0'));
         if (refundedMinor > 0) {
           await this.ledger.record(
             {
@@ -376,6 +414,38 @@ export class ShipmentEditService {
       });
 
       return { status: 'cancelled' as const, restockingFeeMinor: feeMinor, refundedMinor };
+    });
+  }
+
+  /**
+   * Give a cancelled direct-overnight shipment's parcel back to the dock.
+   *
+   * The booking's own `direct_shipped` event names the parcel and the state it
+   * left; the parcel is locked (after the shipment, before the wallet) and
+   * restored only if it is still where the booking put it.
+   */
+  private async releaseDirectParcel(tx: Database, s: typeof shipment.$inferSelect, actorId: string) {
+    const [booking] = await tx
+      .select({ parcelId: parcelEvent.parcelId, fromStatus: parcelEvent.fromStatus, toStatus: parcelEvent.toStatus })
+      .from(parcelEvent)
+      .where(and(eq(parcelEvent.eventType, 'direct_shipped'), sql`${parcelEvent.metadata} ->> 'shipmentId' = ${s.id}`))
+      .limit(1);
+    if (!booking) return;
+    const [current] = await tx.select().from(parcel).where(eq(parcel.id, booking.parcelId)).for('update').limit(1);
+    if (!current || current.status !== (booking.toStatus ?? 'processed')) return;
+
+    const restored = (booking.fromStatus ?? 'received') as typeof current.status;
+    const now = new Date();
+    await tx.update(parcel).set({ status: restored, processedAt: null, updatedAt: now }).where(eq(parcel.id, current.id));
+    await tx.insert(parcelEvent).values({
+      parcelId: current.id,
+      eventType: 'direct_cancelled',
+      fromStatus: current.status,
+      toStatus: restored,
+      actorId,
+      facilityId: current.facilityId,
+      notes: `Direct overnight shipment ${s.code ?? s.id} cancelled; the parcel is back at the dock, unopened`,
+      metadata: { shipmentId: s.id, shipmentCode: s.code },
     });
   }
 }

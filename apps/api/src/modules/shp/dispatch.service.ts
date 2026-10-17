@@ -41,8 +41,11 @@ interface LabelPurchase {
    * `buying`: an attempt is talking to the carrier now.
    * `unknown`: an attempt ended without an answer, so the label may exist.
    * `bought`: the tracking number is on the shipment.
+   * `refused`: the carrier answered no to the stored rate, so nothing was
+   * bought and the shipment is back to `rates_selected`, where a fresh rate
+   * may be chosen (`ShipmentService.labelRefusal`).
    */
-  state: 'buying' | 'unknown' | 'bought';
+  state: 'buying' | 'unknown' | 'bought' | 'refused';
   /** The purchase's idempotency key. The shipment's own id: one label per shipment. */
   key: string;
   startedAt: string;
@@ -276,17 +279,21 @@ export class DispatchService {
       purchaseSent = true;
       return await this.shipping.buyLabel(buyable, request, { idempotencyKey: s.id, signal });
     } catch (err) {
-      const nothingBought = !purchaseSent || LabelNotPurchasedError.is(err);
-      await this.settleFailedPurchase(s.id, nothingBought, err);
+      // The carrier itself said no to the rate it was asked to sell.
+      const refused = purchaseSent && LabelNotPurchasedError.is(err);
+      const nothingBought = !purchaseSent || refused;
+      await this.settleFailedPurchase(s.id, nothingBought, refused, err);
       if (err instanceof AppError) throw err;
       const reason = (err as Error).message;
       throw new AppError(
         ErrorCode.PROVIDER_UNAVAILABLE,
-        nothingBought
-          ? `The carrier did not sell a label: ${reason}. Nothing was bought, and the shipment can be dispatched again.`
-          : `The carrier did not confirm the label (${reason}). It may have been bought. Dispatch again: the same purchase is repeated, and a label that exists is not bought twice.`,
+        refused
+          ? `The carrier refused the label: ${reason}. Nothing was bought. Choose a new service for this shipment (the collector or an operator can), then dispatch again.`
+          : nothingBought
+            ? `The carrier did not sell a label: ${reason}. Nothing was bought, and the shipment can be dispatched again.`
+            : `The carrier did not confirm the label (${reason}). It may have been bought. Dispatch again: the same purchase is repeated, and a label that exists is not bought twice.`,
         HttpStatus.BAD_GATEWAY,
-        { outcome: nothingBought ? 'not_bought' : 'unknown' },
+        { outcome: refused ? 'refused' : nothingBought ? 'not_bought' : 'unknown' },
       );
     }
   }
@@ -317,17 +324,25 @@ export class DispatchService {
     return { ...quoted, carrier: charged.carrier, serviceLevel: charged.serviceLevel };
   }
 
-  private async settleFailedPurchase(shipmentId: string, nothingBought: boolean, err: unknown) {
+  private async settleFailedPurchase(shipmentId: string, nothingBought: boolean, refused: boolean, err: unknown) {
     await this.custody.run(async (tx) => {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!cur || cur.status !== 'labeled' || cur.trackingNumber) return;
       const purchase = DispatchService.purchaseOf(cur);
       const fulfillment = (cur.fulfillment as Record<string, unknown> | null) ?? {};
+      const lastError = String((err as Error)?.message ?? err).slice(0, 300);
       if (nothingBought) {
-        // Back to where it was: paid for, ready to go, cancellable.
+        // Back to where it was: paid for, ready to go, cancellable. A refusal
+        // is kept on the record: the rate it holds is the one just turned
+        // down, and that is what lets a fresh one be chosen.
         await tx
           .update(shipment)
-          .set({ status: 'rates_selected', fulfillment: null, packageWeightGrams: null, updatedAt: new Date() })
+          .set({
+            status: 'rates_selected',
+            fulfillment: refused && purchase ? { labelPurchase: { ...purchase, state: 'refused', lastError } } : null,
+            packageWeightGrams: null,
+            updatedAt: new Date(),
+          })
           .where(eq(shipment.id, shipmentId));
         return;
       }
@@ -336,7 +351,7 @@ export class DispatchService {
         .set({
           fulfillment: {
             ...fulfillment,
-            labelPurchase: { ...purchase, state: 'unknown', lastError: String((err as Error)?.message ?? err).slice(0, 300) },
+            labelPurchase: { ...purchase, state: 'unknown', lastError },
           },
           updatedAt: new Date(),
         })

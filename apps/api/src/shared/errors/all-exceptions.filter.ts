@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { EasyPostError, PaymentProviderError } from '@bault/adapters';
 import { pgErrorCode } from './pg-error';
 import { ErrorCode } from './error-codes';
 import {
@@ -77,12 +78,42 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // This also turns a 22P02 caused by our own code into a 400; the log line
     // below still records every one of them.
     if (isInvalidTextRepresentation(exception)) {
-      this.logger.warn(`Malformed identifier rejected: ${describe(exception)}`);
+      this.logger.warn(`Malformed identifier rejected: ${describe(withoutQueryValues(exception))}`);
       res.status(HttpStatus.BAD_REQUEST).json({
         error: {
           code: ErrorCode.VALIDATION_FAILED,
           message: 'That identifier is not in a valid format.',
           details: {},
+        },
+      });
+      return;
+    }
+
+    // A provider's error carries the PROVIDER's HTTP status, which describes
+    // Bault's call to it, not the customer's call to Bault: answered as it
+    // stands, EasyPost refusing Bault's API key reached the SPA as a 401 and
+    // read as a signed-out session, and a refused address as "Bad request.".
+    // So it is answered in Bault's terms, and the original goes to the log.
+    const provider = providerFailure(exception);
+    if (provider) {
+      if (provider.rejectedInput) {
+        this.logger.warn(`Provider rejected the request (${provider.kind}): ${describe(exception)}`);
+        res.status(HttpStatus.BAD_REQUEST).json({
+          error: {
+            code: ErrorCode.PROVIDER_REJECTED,
+            message: `The carrier could not accept this shipment as entered: ${provider.reason}. Check the address and the parcel details, then try again.`,
+            details: { provider: provider.kind },
+          },
+        });
+        return;
+      }
+      this.logger.error(`Provider failure (${provider.kind}): ${exception instanceof Error ? exception.stack : describe(exception)}`);
+      this.report(exception, describeRequest(requestOf(host)));
+      res.status(HttpStatus.BAD_GATEWAY).json({
+        error: {
+          code: ErrorCode.PROVIDER_UNAVAILABLE,
+          message: `The ${provider.kind === 'shipping' ? 'shipping' : 'payment'} provider could not handle this just now. Try again shortly.`,
+          details: { provider: provider.kind },
         },
       });
       return;
@@ -108,8 +139,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     // Unknown/unexpected error: log server-side, report it, return an opaque 500.
-    this.logger.error(exception instanceof Error ? exception.stack : String(exception));
-    this.report(exception, describeRequest(requestOf(host)));
+    // A failed query is logged and reported without the values it was run with.
+    const safe = withoutQueryValues(exception);
+    this.logger.error(safe instanceof Error ? safe.stack : String(safe));
+    this.report(safe, describeRequest(requestOf(host)));
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: { code: ErrorCode.INTERNAL, message: 'Internal server error', details: {} },
     });
@@ -136,6 +169,88 @@ const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 function isInvalidTextRepresentation(exception: unknown): boolean {
   return pgErrorCode(exception) === PG_INVALID_TEXT_REPRESENTATION;
+}
+
+/**
+ * A provider adapter's HTTP error, and whether it is the customer's to fix.
+ *
+ * Only a carrier's 400 or 422 is: it is the answer to what the customer
+ * entered (an address, a parcel). Every other status (a refused key, a
+ * forbidden account, a missing provider object, a throttle, an outage) is the
+ * provider or Bault's arrangement with it failing. Matched by name as well, as
+ * `LabelNotPurchasedError.is` does, in case two copies of the adapters package
+ * are loaded.
+ */
+function providerFailure(
+  exception: unknown,
+): { kind: 'shipping' | 'payment'; rejectedInput: boolean; reason: string } | null {
+  if (!(exception instanceof Error)) return null;
+  if (exception instanceof EasyPostError || exception.name === 'EasyPostError') {
+    const e = exception as EasyPostError;
+    const reason = (e.detail ?? e.message).replace(/[.\s]+$/, '').slice(0, 300);
+    return { kind: 'shipping', rejectedInput: e.status === 400 || e.status === 422, reason };
+  }
+  if (exception instanceof PaymentProviderError || exception.name === 'PaymentProviderError') {
+    return { kind: 'payment', rejectedInput: false, reason: exception.message };
+  }
+  return null;
+}
+
+/**
+ * A failed query, in a form that may leave the process.
+ *
+ * drizzle-orm 0.45 wraps every failed query in a `DrizzleQueryError` whose
+ * message is the SQL followed by its PARAMETERS, and the parameters are
+ * whatever the query was about: an email, a name, an address, a token hash.
+ * Logged or reported as it stands, that is personal data in the log and in a
+ * third party's error tracker. This keeps what diagnoses the failure: the
+ * SQLSTATE, the constraint, table and column the database names, and the SQL
+ * text, which carries placeholders rather than values (a quoted literal in it
+ * is blanked too), on an error of its own with the original stack frames. The
+ * pg error is not kept as its cause, because its own message can quote the
+ * value (`invalid input syntax for type uuid: "…"`).
+ *
+ * Anything else is returned as it is. Recognised by shape rather than by
+ * class: the error's name is a plain `Error`, and the test suites load drizzle
+ * from more than one copy.
+ */
+function withoutQueryValues(exception: unknown): unknown {
+  const query = queryErrorOf(exception);
+  if (!query) return exception;
+  const db = databaseErrorOf(exception);
+  const named = [
+    db?.constraint ? `constraint ${db.constraint}` : null,
+    db?.table ? `table ${db.table}` : null,
+    db?.column ? `column ${db.column}` : null,
+  ].filter(Boolean);
+  const sqlText = query.query.replace(/'(?:[^']|'')*'/g, "'…'").slice(0, 500);
+  const safe = new Error(
+    `Query failed, SQLSTATE ${pgErrorCode(exception) ?? 'unknown'}${named.length > 0 ? ` (${named.join(', ')})` : ''}: ${sqlText}`,
+  );
+  safe.name = 'DatabaseQueryError';
+  const frames = (query.stack ?? '').split('\n').filter((line) => /^\s+at /.test(line));
+  safe.stack = [`${safe.name}: ${safe.message}`, ...frames].join('\n');
+  return safe;
+}
+
+function queryErrorOf(exception: unknown): { query: string; stack?: string } | null {
+  if (!(exception instanceof Error)) return null;
+  const e = exception as Error & { query?: unknown; params?: unknown };
+  return typeof e.query === 'string' && Array.isArray(e.params) ? { query: e.query, stack: e.stack } : null;
+}
+
+/** The pg error behind a failed query: what it names, never what it quotes. */
+function databaseErrorOf(exception: unknown): { constraint?: string; table?: string; column?: string } | null {
+  let current = (exception as { cause?: unknown })?.cause;
+  for (let depth = 0; depth < 5 && typeof current === 'object' && current !== null; depth += 1) {
+    const e = current as { code?: unknown; constraint?: unknown; table?: unknown; column?: unknown; cause?: unknown };
+    if (typeof e.code === 'string') {
+      const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+      return { constraint: text(e.constraint), table: text(e.table), column: text(e.column) };
+    }
+    current = e.cause;
+  }
+  return null;
 }
 
 /** The HTTP status a connect-style middleware error carries, if it carries one. */
