@@ -361,4 +361,37 @@ describe('webhooks are authenticated by asking PayPal', () => {
     const a = adapter({ '/verify-webhook-signature': { verification_status: 'SUCCESS' } });
     await expect(a.verifyWebhook({ rawBody: 'not json', headers: HEADERS })).rejects.toThrow(/JSON/i);
   });
+
+  /**
+   * The API answers an unverifiable delivery with a 400 and anything else with
+   * a 5xx, so the adapter has to say which one it is: a signature PayPal did
+   * not vouch for is the sender's problem, PayPal being unreachable is ours.
+   */
+  it('names an unverifiable delivery as such, apart from PayPal failing to answer', async () => {
+    const unverifiable = { name: 'WebhookVerificationError' };
+    const refused = adapter({ '/verify-webhook-signature': { verification_status: 'FAILURE' } });
+    await expect(refused.verifyWebhook({ rawBody: BODY, headers: HEADERS })).rejects.toMatchObject(unverifiable);
+    const { 'paypal-transmission-sig': _sig, ...unsigned } = HEADERS;
+    await expect(refused.verifyWebhook({ rawBody: BODY, headers: unsigned })).rejects.toMatchObject(unverifiable);
+    await expect(refused.verifyWebhook({ rawBody: 'not json', headers: HEADERS })).rejects.toMatchObject(unverifiable);
+
+    // PayPal rejecting the verification request itself (malformed headers).
+    const answering = (status: number) =>
+      new PayPalPaymentAdapter({
+        clientId: 'id',
+        clientSecret: 'secret',
+        environment: 'sandbox',
+        webhookId: 'wh_1',
+        fetchImpl: (async (url: string | URL) =>
+          String(url).includes('/v1/oauth2/token')
+            ? { ok: true, status: 200, text: async () => JSON.stringify(AUTH), json: async () => AUTH }
+            : { ok: false, status, text: async () => 'nope', json: async () => ({}) }) as unknown as typeof fetch,
+      });
+    await expect(answering(400).verifyWebhook({ rawBody: BODY, headers: HEADERS })).rejects.toMatchObject(unverifiable);
+
+    // PayPal down: not the sender's fault, and not a verdict on the delivery.
+    const down = answering(503).verifyWebhook({ rawBody: BODY, headers: HEADERS });
+    await expect(down).rejects.toBeInstanceOf(PaymentProviderError);
+    await expect(down).rejects.not.toMatchObject(unverifiable);
+  });
 });

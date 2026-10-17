@@ -193,9 +193,10 @@ export class PayController {
    * headers, not one signature string, and PayPal's is a call rather than a
    * compare.
    *
-   * An unverifiable delivery throws, which the global filter renders as a 4xx:
-   * a provider that gets a 4xx retries and eventually alerts a human, whereas a
-   * 200 would silently accept a body we could not authenticate.
+   * An unverifiable delivery is refused with a 400 (`webhook_unverified`) and
+   * logged: the sender sees why, and a 200 would silently accept a body we
+   * could not authenticate. A provider that could not be asked is a 5xx, which
+   * PayPal retries.
    */
   @Post('webhooks/payment')
   async webhook(@Req() req: Request) {
