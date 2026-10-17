@@ -7,37 +7,20 @@ import { item } from '../cst/cst.schema';
 import { listing, transaction } from '../mkt/mkt.schema';
 
 /**
- * Break-Even Watch — the point at which a card costs more to keep than it is
+ * Break-Even Watch: the point at which a card costs more to keep than it is
  * worth, said out loud.
  *
- * Every vault profits from silence here. A modest card sits on a shelf for years
- * quietly accruing storage, and nobody tells the owner, because storage is the
- * revenue. The reference service's own fee schedule makes the arithmetic
- * explicit — an extra 10% of the intake cost per 90 days after the included
- * period — and then leaves the collector to do it. Nobody does it.
+ * Bault has no market price feed, and inventing a valuation to justify telling
+ * somebody to sell would be worse than saying nothing. So this never states a
+ * value it cannot source. It uses, in order of preference:
  *
- * So this is a custodian telling somebody to stop paying it. Which is only
- * possible because Bault's exits are all billable: the card that leaves is
- * either sold (commission), culled (a disposal fee) or shipped home (a shipping
- * fee), and the shelf it frees takes stock that earns. The interests genuinely
- * line up, which is why this can be built honestly rather than as a gesture.
- *
- * THE HONESTY PROBLEM, and how it is handled.
- *
- * Bault has no market price feed. It does not know what a card is worth, and a
- * platform that invents a valuation to justify telling somebody to sell has done
- * something much worse than saying nothing. So this never states a value it
- * cannot source. It uses, in order of preference:
- *
- *   1. what cards of the same CLASS have actually sold for on Bault's own
- *      marketplace — a real transaction, not an opinion;
+ *   1. the median price cards of the same CLASS have actually sold for on
+ *      Bault's own marketplace;
  *   2. the owner's own asking price, if they have listed it;
  *   3. nothing at all, in which case the item is reported with a `null` value
- *      signal and the cost figures alone.
- *
- * That third case is not a failure. "This has cost you $14 and will cost $9 more
- * this year, and we have no idea what it is worth" is a true and useful sentence.
- * A made-up comparison would not be.
+ *      signal and the cost figures alone. "This has cost you $14 and will cost
+ *      $9 more this year, and we have no idea what it is worth" is still a true
+ *      and useful answer.
  */
 
 /** The confidence attached to a value figure, because there are three grades. */
@@ -61,7 +44,7 @@ export interface BreakEvenRow {
   /** How many real sales the comparable is drawn from. Zero for the other bases. */
   comparableCount: number;
   /**
-   * True when what has been spent already exceeds the value signal.
+   * True when what has been spent has reached the value signal.
    *
    * Never true on an unknown value: an item nobody can price cannot be past a
    * line nobody can draw.
@@ -80,8 +63,8 @@ export class BreakEvenService {
    *
    * A median rather than a mean, because one Gold Star among forty commons drags
    * an average somewhere useless. Class rather than an exact card match, because
-   * Bault has no catalogue identity to match on — and the comparison is labelled
-   * as what it is, so a collector reading it knows how coarse it is.
+   * Bault has no catalogue identity to match on; the comparison is labelled as
+   * what it is, so a collector reading it knows how coarse it is.
    *
    * Computed once for the whole request rather than per item: a vault of two
    * hundred cards would otherwise run two hundred of these.
@@ -91,7 +74,7 @@ export class BreakEvenService {
       .select({ typeClass: item.typeClass, price: transaction.price })
       .from(transaction)
       // `itemIds` is a jsonb array of item ids, so containment of the single
-      // element is the join. The column has to be qualified and cast — an
+      // element is the join. The column has to be qualified and cast: an
       // unqualified `id` is ambiguous across the two tables, and the array holds
       // text rather than uuid.
       .innerJoin(item, sql`${transaction.itemIds} @> to_jsonb(${item.id}::text)`)
@@ -119,7 +102,7 @@ export class BreakEvenService {
   /**
    * The break-even position of every card a collector currently holds.
    *
-   * Spending is read from the CHARGE table — what was actually billed — rather
+   * Spending is read from the CHARGE table (what was actually billed) rather
    * than recomputed from the clock, for the same reason `storageFor` does it:
    * a missed sweep must not turn into a number nobody was charged.
    */
@@ -228,7 +211,7 @@ export class BreakEvenService {
   /**
    * The collector's summary: what the whole vault costs, and what is underwater.
    *
-   * `unknownValue` is reported rather than hidden. A collector is entitled to
+   * `unknownValueCount` is reported rather than hidden. A collector is entitled to
    * know how much of their vault Bault cannot price, because that number is the
    * honest limit on everything else on the page.
    */
