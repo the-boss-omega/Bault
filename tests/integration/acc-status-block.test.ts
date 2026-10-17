@@ -2,11 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_PASSWORD, SEED_USERNAME } from './helpers/http';
 
 /**
- * US1 — suspended/closed accounts are blocked (T025).
+ * Suspended/closed accounts are blocked.
  *
- * This suite documents the expected behavior; enabling the ADM status-change
- * endpoint (Phase 11) lets it suspend an account first. Until then it asserts the
- * unauthenticated-block path, which shares the same guard.
+ * These cases assert the unauthenticated-block path and sign-in, which go
+ * through the same guard that blocks a suspended or closed account.
  */
 describe('ACC account-status blocking', () => {
   it('blocks unauthenticated access to protected routes', async () => {
@@ -38,6 +37,7 @@ describe('ACC account-status blocking', () => {
     expect(byUsername.body.id).toBe(byEmail.body.id);
   });
 
-  // TODO(Phase 11): admin suspends a collector → their next request returns
-  // 403 account_suspended, proving the SessionAuthGuard status check.
+  // TODO: admin suspends a collector (PATCH /admin/users/:id) → their next
+  // request returns 403 account_suspended, proving the SessionAuthGuard status
+  // check.
 });

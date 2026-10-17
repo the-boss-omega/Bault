@@ -10,12 +10,11 @@ import { render, screen, within } from '@testing-library/react';
  * padding change and pass on a serial rendered backwards; these do the reverse.
  *
  * Every case runs twice, once with `<html dir="rtl">` and once with `ltr`,
- * because the whole point of the pass that produced these components is that
- * Hebrew is not a mirrored afterthought. The bugs they guard were all found in
- * Hebrew and all invisible in English:
+ * because Hebrew is not a mirrored afterthought. What they guard against shows
+ * in Hebrew and is invisible in English:
  *
  *   - a serial laid out right-to-left inside a Hebrew sentence;
- *   - a catalogue string whose leading year migrated to the end of the line
+ *   - a catalogue string whose leading year migrates to the end of the line
  *     because `unicode-bidi: isolate` resolves direction from the ELEMENT, and
  *     "2011 Pokémon…" begins with a neutral character;
  *   - a locale-formatted Hebrew date forced left-to-right;

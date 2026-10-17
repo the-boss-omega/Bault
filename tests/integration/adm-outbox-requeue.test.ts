@@ -7,11 +7,9 @@ import { closeDb, sql } from './helpers/db';
  * Parked outbox messages, and putting one back in the queue.
  *
  * A message whose dispatch fails five times is left undispatched, with its
- * error, "for a person to look at" — and until now no person could: there was
- * no screen and no route, so the only way to retry one was an UPDATE typed into
- * a production database. These pin the administrator's view of them, which
- * must not hand out what a payload carries, and the requeue, which must happen
- * once however many times it is asked for.
+ * error, for a person to look at. These pin the administrator's view of them,
+ * which must not hand out what a payload carries, and the requeue, which must
+ * happen once however many times it is asked for.
  *
  * The rows are planted with SQL: making the real dispatcher fail five times on
  * purpose is the worker suite's business, and what matters here is what the

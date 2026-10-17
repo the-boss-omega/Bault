@@ -16,16 +16,15 @@ import { CARRIER_SERVICES, carrierService, checkService, destinationOf } from '.
  * constants. So the chain is class + weight → the smallest box that fits →
  * that box's known L×W×H → dimensional weight → the price.
  *
- * `chooseBox` is the middle step, and it is the step that did not exist: an
- * unchosen box used to mean no dimensions at all, so a light parcel in a large
- * box was quoted as if volume were free.
+ * `chooseBox` is the middle step: an unchosen box means no dimensions at all,
+ * so a light parcel in a large box would be quoted as if volume were free.
  */
 
 describe('dimensional weight', () => {
   it('uses the divisor the reference service publishes', () => {
     // Their FAQ states the formula as (L × W × H) / 167 and quotes prices
-    // against it. It was 139 here — the pricier domestic retail figure — which
-    // over-quoted every boxed parcel by about a fifth.
+    // against it. 139, the pricier domestic retail figure, would over-quote
+    // every boxed parcel by about a fifth.
     expect(DIM_DIVISOR).toBe(167);
   });
 
@@ -163,9 +162,9 @@ describe('the limits a box can break on its own', () => {
 
   it('refuses ePacket for a box over its 36-inch total, before anything is in it', () => {
     // 24 in on the longest side and 36 in for L+W+H. A large Bault box is
-    // 45x35x25 cm — 41 in added up — so it breaks the rule empty. The catalogue
-    // could not express this before, so the cheapest international service was
-    // being offered for parcels a counter would hand straight back.
+    // 45x35x25 cm (41 in added up), so it breaks the rule empty. Without this
+    // the cheapest international service would be offered for parcels a counter
+    // would hand straight back.
     const problems = checkService(carrierService('epacket')!, parcel({ length: 45, width: 35, height: 25 }));
     const dimensions = problems.filter((p) => p.rule === 'dimensions');
     expect(dimensions).toHaveLength(1);
@@ -199,7 +198,7 @@ describe('the limits a box can break on its own', () => {
 
 describe('where a stored shipment is going', () => {
   it('uses the frozen address, street and all, when there is one', () => {
-    // Re-rating used to rebuild the destination from country + postcode only,
+    // Re-rating must not rebuild the destination from country + postcode only,
     // which a real carrier refuses because there is no street.
     const d = destinationOf({
       destinationDetail: { country: 'US', postalCode: '07030', street1: '1 River St', city: 'Hoboken', name: 'Red' },

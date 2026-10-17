@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { SEED, intakeFor, signIn } from './helpers/http';
 
 /**
- * US7 — value-added services with the operator ACCEPT → COMPLETE workflow (T093),
- * where COMPLETE now requires the structured warehouse fulfillment form
- * (Requirement 5.4). Requires a running API + seeded DB.
+ * Value-added services with the operator ACCEPT → COMPLETE workflow, where
+ * COMPLETE requires the structured warehouse fulfillment form (Requirement 5.4).
+ * Requires a running API + seeded DB.
  */
 describe('DIS value-added services', () => {
   async function freshItem() {
@@ -22,7 +22,7 @@ describe('DIS value-added services', () => {
   };
 
   /**
-   * A grading request now names a TIER and a declared value, because a grader
+   * A grading request names a TIER and a declared value, because a grader
    * prices on exactly those two things. `psa_regular` is used here rather than
    * the top tier deliberately: the walkthrough tier requires an admin to sign
    * off before the card may join a submission, which is its own test.

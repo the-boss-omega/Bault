@@ -4,7 +4,7 @@ import { dispatchOutbox } from '../../apps/worker/src/jobs/outbox-dispatch';
 import { count, createUser, testPool } from './helpers/db';
 
 /**
- * Outbox dispatch (N29, and the "exactly once" half of step 10).
+ * Outbox dispatch: each message exactly once, and none stuck behind a bad one.
  *
  * `item_donated` is used because it is in-app only by default: one outbox row
  * becomes exactly one notification, so the count is the whole story.
@@ -51,9 +51,8 @@ describe('dispatching the outbox', () => {
     const user = await createUser(pool);
     const ids = [];
     for (let i = 0; i < 20; i += 1) ids.push(await emit(pool, 'item_donated', { userId: user }));
-    // Both used to read every undispatched row up front and work through the
-    // same list, so a second replica — or a run still going when the next
-    // minute's started — notified everybody twice.
+    // A second replica, or a run still going when the next minute's starts,
+    // must not work through the same rows and notify everybody twice.
     await Promise.all([dispatchOutbox(pool), dispatchOutbox(pool)]);
     expect(await undispatched(pool, ids)).toBe(0);
     expect(await notificationsFor(pool, user)).toBe(20);
@@ -70,9 +69,9 @@ describe('dispatching the outbox', () => {
 
     await dispatchOutbox(pool);
 
-    // Before: the throw escaped the loop, nothing after the bad row was
-    // dispatched, and every minute's retry hit the same row first — the outbox
-    // stopped for everybody.
+    // A throw that escaped the loop would leave everything after the bad row
+    // undispatched, and every minute's retry would hit the same row first,
+    // stopping the outbox for everybody.
     expect(await undispatched(pool, good)).toBe(0);
     expect(await notificationsFor(pool, user)).toBe(3);
 

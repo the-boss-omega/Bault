@@ -2,20 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { SandboxShippingAdapter } from '@bault/adapters';
 
 /**
- * Shipping adapter contract (T102, Principle XIII). Asserts the adapter honors its
- * interface for rates, labels, and tracking. A real ShipStation/Easyship adapter
- * must pass this same suite, guaranteeing swappability.
+ * Shipping adapter contract (Principle XIII). Asserts the adapter honors its
+ * interface for rates, labels, and tracking, so a real carrier's adapter can be
+ * swapped in behind the same interface.
  *
- * What this suite asserts changed with the outbound-shipping pass, because what
- * the adapter is RESPONSIBLE for changed. It used to be handed a `rush` flag and
- * doubled its own base rate — which told the collector that FedEx would arrive
- * sooner because Bault packed faster. Rush is now a Bault handling charge and
- * the carrier's promise is left alone; the assertion that rush costs more moved
- * to the shipment quote, where it is now true of the price somebody actually
- * pays (`tests/integration/shp-outbound.test.ts`).
- *
- * What an adapter genuinely owes is below: a price that moves with the weight
- * and the destination, and a signature surcharge where the service offers one.
+ * Rush is a Bault handling charge, so the adapter leaves the carrier's price and
+ * promise alone; that rush costs more is asserted on the shipment quote
+ * (`tests/integration/shp-outbound.test.ts`). What an adapter owes is below: a
+ * price that moves with the weight and the destination, and a signature
+ * surcharge where the service offers one.
  */
 describe('contract: ShippingAdapter', () => {
   const adapter = new SandboxShippingAdapter();

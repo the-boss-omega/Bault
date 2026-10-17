@@ -83,17 +83,14 @@ describe('notification catalogue', () => {
 
   it('translates every event the server can emit', () => {
     /**
-     * The other direction, which was never checked and was badly broken:
-     * TWENTY-FOUR of the thirty-six event types had no client label at all.
+     * The other direction: every event type has a client label.
      *
-     * `eventLabel` falls back to the raw event type, so the notification feed
-     * badged them `wallet_request_completed`, `escrow_funded`,
-     * `payment_reversed` — the database enum, in both languages — and the
-     * preferences matrix fell through to the server's English `label`, leaving a
-     * Hebrew reader with two-thirds of their notification settings in English.
-     *
-     * The fallbacks are still there and still correct as a safety net. What is
-     * not acceptable is shipping with the safety net load-bearing.
+     * `eventLabel` falls back to the raw event type, so a missing label badges
+     * the feed with `wallet_request_completed`, `escrow_funded` or
+     * `payment_reversed` (the database enum, in both languages), and the
+     * preferences matrix falls through to the server's English `label`, leaving
+     * a Hebrew reader with notification settings in English. The fallbacks are a
+     * safety net, and the product must not ship with the net load-bearing.
      */
     const unlabelled = NOTIFICATION_EVENT_TYPES.filter((e) => !EVENT_LABEL_KEY[e.key]).map(
       (e) => e.key,

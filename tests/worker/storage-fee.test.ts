@@ -4,7 +4,7 @@ import { runStorageFees } from '../../apps/worker/src/jobs/storage-fee';
 import { count, createItem, createMembership, createUser, storageCharges, testPool, warm } from './helpers/db';
 
 /**
- * The nightly storage sweep (F009, F021, F070).
+ * The nightly storage sweep.
  *
  * The seeded rule is the standard one: 180 days included, then one period every
  * 90 days. An item received 400 days ago is therefore three periods in —
@@ -31,9 +31,9 @@ describe('a membership that stops covering an item', () => {
     // The member cancels and the cycle ends.
     await pool.query(`UPDATE membership SET status = 'ended', ended_at = now() WHERE user_id = $1`, [member]);
 
-    // The old sweep counted periods from `received_at`, saw three started and
-    // none billed, and charged all three the night cover ended — rent for the
-    // months the subscription had promised were free.
+    // Counting periods from `received_at` would find three started and none
+    // billed, and charge all three the night cover ended: rent for the months
+    // the subscription had promised were free.
     await runStorageFees(pool);
     expect(await storageCharges(pool, card)).toBe(1);
 
@@ -69,10 +69,9 @@ describe('running the sweep more than once', () => {
     await runStorageFees(pool);
     expect(await storageCharges(pool, once)).toBe(3);
 
-    // Two sweeps overlapping — a retry after the job's lease expired while the
-    // first was still running, or a second worker replica. Each counted the
-    // charges that existed before either had committed, and each billed the
-    // difference.
+    // Two sweeps overlapping: a retry after the job's lease expired while the
+    // first was still running, or a second worker replica. Neither may bill a
+    // period because it counted the charges before the other had committed.
     // Enough items that each sweep's inserts take a while, so the two really
     // do overlap.
     const items: string[] = [];

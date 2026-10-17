@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
 /**
- * US5 — offers: submit → accept triggers purchase at the offer price; own-listing
- * offer blocked (T082). Submitting an offer also notifies the seller (Req 6.2).
+ * Offers: submit → accept triggers purchase at the offer price; own-listing
+ * offer blocked. Submitting an offer also notifies the seller (Req 6.2).
  *
  * The buyer here is `collector3`, NOT `collector2`, deliberately: mkt-purchase
  * asserts an exact debit on collector2's wallet, and two suites moving one
- * wallet produced a failure that looked like a double debit and was really two
+ * wallet produce a failure that looks like a double debit and is really two
  * tests sharing an account. Each money-asserting suite owns its own buyer.
  */
 describe('MKT offers', () => {

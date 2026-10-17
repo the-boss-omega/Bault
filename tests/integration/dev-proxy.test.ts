@@ -4,10 +4,9 @@ import { BASE, SEED, signIn } from './helpers/http';
 /**
  * The local-development contract between the SPA and the API.
  *
- * These assertions are the ones that were violated when the web app booted
- * against a backend nobody had started: the frontend asks `/api/v1/me/profile`
- * on first paint, and `pnpm dev` gates on `/api/v1/healthz` before it lets Vite
- * start. Both must behave exactly as the orchestration assumes.
+ * The frontend asks `/api/v1/me/profile` on first paint, and `pnpm dev` gates on
+ * `/api/v1/healthz` before it lets Vite start. Both must behave exactly as the
+ * orchestration assumes.
  *
  * Runs against a live API (`pnpm dev` or `pnpm dev:api`) with a seeded database,
  * like every other suite in tests/integration.

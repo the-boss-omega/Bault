@@ -4,10 +4,9 @@ import { SEED, intakeFor, signIn } from './helpers/http';
 /**
  * Section 10 — notifications that leave the app, and published content.
  *
- * The notification system was well built and reached exactly one place. That
- * matters here more than it would elsewhere: several of Bault's workflows
- * explicitly wait on a human, and a shipment held for seven days releases its
- * items whether or not anybody was looking at the app.
+ * Notifications have to reach people outside the app: several of Bault's
+ * workflows explicitly wait on a human, and a shipment held for seven days
+ * releases its items whether or not anybody was looking at the app.
  *
  * The content endpoints are the other half of the section — a show calendar and
  * a way to reach a person — and they are deliberately PUBLIC, because somebody

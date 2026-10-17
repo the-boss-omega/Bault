@@ -8,7 +8,7 @@ import userEvent from '@testing-library/user-event';
  * An operator stands at a table with a box and drives this screen. If the stow
  * target is wrong they walk to the wrong shelf; if the submitted payload is
  * wrong the card is recorded in a place it is not. Neither is visible to a type
- * checker, and until now nothing else looked either.
+ * checker.
  */
 
 const get = vi.fn();
@@ -24,10 +24,10 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-/** Barcode rendering draws to a canvas jsdom does not implement. */
 /**
- * Barcodes are stubbed here: this file is about the STOW decision, and the Code
- * 128 encoder is covered on its own in `barcode-printing.test.tsx`.
+ * Barcodes are stubbed here: they draw to a canvas jsdom does not implement,
+ * this file is about the STOW decision, and the Code 128 encoder is covered on
+ * its own in `barcode-printing.test.tsx`.
  *
  * The mock has to keep pace with the module's exports — a missing one throws at
  * import time, which surfaces as an unhandled error rather than a failed
@@ -84,10 +84,9 @@ function renderConsole() {
   /**
    * `receiving`, not `intake`.
    *
-   * The parcel bench and the intake bench were two tabs describing one piece of
-   * work — a box is received, opened, and its contents booked in — and "Book
-   * contents" switched tabs to get from one half to the other. They are one tab
-   * now. `#/warehouse/intake` still resolves for anybody holding the old link
+   * The parcel bench and the intake bench are one tab, because a box is
+   * received, opened and its contents booked in as one piece of work.
+   * `#/warehouse/intake` still resolves for anybody holding the old link
    * (`LEGACY_TABS` in `shared/routing`, covered by the routing suite), but that
    * redirect runs in the app shell, and this test mounts the console alone.
    */
@@ -133,23 +132,13 @@ function selectWithOption(scope: HTMLElement, pattern: RegExp): HTMLSelectElemen
 
 
 /**
- * The control with a given accessible name.
+ * The control with a given accessible name: `getByLabelText` with the
+ * exact-match option.
  *
- * This was a DOM walk, and the comment above it explained why: every field was
- * `<label class="field"><span class="field-label">Caption</span><input/><span
- * class="field-hint">…</span></label>`, associating the control with its label
- * by nesting — so the label's accessible name was the caption AND the hint run
- * together, and `getByLabelText('Owner username')` matched nothing because the
- * real name was "Owner usernameThe customer's permanent identifier…".
- *
- * That is fixed. Every field in the product now goes through the `Field`
- * primitive, which points a real `<label for>` at the control and attaches the
- * hint with `aria-describedby`, so the standard query works and this helper is
- * now just `getByLabelText` with the exact-match option — kept only so the call
- * sites read the same as they did.
- *
- * The assertion below is the point: it fails if anything reintroduces the old
- * pattern, because the accessible name would silently grow the hint back.
+ * Every field goes through the `Field` primitive, which points a real
+ * `<label for>` at the control and attaches the hint with `aria-describedby`.
+ * The exact match fails if a field ever nests its hint inside the label again,
+ * because the accessible name would silently grow the hint.
  */
 function field(scope: HTMLElement, caption: string): HTMLElement {
   return within(scope).getByLabelText(caption, { exact: true });
@@ -192,7 +181,7 @@ describe('the directed stow', () => {
 
   it('books the item in with autoStow, never with a hand-picked bin id', async () => {
     /**
-     * The bench posts a LIST of units now — one row per thing in the box — so
+     * The bench posts a LIST of units, one row per thing in the box, so
      * the stow decision is read off the first entry. It is shared by the whole
      * submission, which is the point: where a box's contents go is one answer,
      * not one per unit.
@@ -279,8 +268,8 @@ describe('the shelf list', () => {
     const table = await waitFor(() => panel(/^shelves$/i, { withTable: true }));
     expect(within(table).getAllByText('BIN-QJLTDJH4').length).toBeGreaterThan(0);
     expect(within(table).getByText('12')).toBeInTheDocument();
-    // The utilisation bar and its denominator are gone; a "12 / 50" would mean
-    // the fake capacity had come back.
+    // No denominator: a "12 / 50" would state a capacity the shelves do not
+    // have.
     expect(within(table).queryByText(/\d+\s*\/\s*\d+/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^capacity$/i)).not.toBeInTheDocument();
   });
@@ -300,11 +289,10 @@ describe('the shelf list', () => {
 
 describe('packing a shipment', () => {
   /**
-   * The bench sent the shipment's OWN item list back as "what was scanned", so
-   * the server's check that the scanned set equals the shipment compared the
-   * list with itself and always passed — the boxes an operator ticked decided
-   * nothing about what was sent. What goes to the server now is exactly what
-   * was scanned, and the button stays shut until every card is accounted for.
+   * What goes to the server is exactly what was scanned, and the button stays
+   * shut until every card is accounted for. Sending the shipment's OWN item list
+   * back would make the server's check compare the list with itself and always
+   * pass, so the boxes an operator ticks would decide nothing.
    */
   const DETAIL = {
     id: 'shp-1',

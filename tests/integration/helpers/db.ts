@@ -6,10 +6,10 @@ import { join } from 'node:path';
  * A direct line to the test database, for the few facts HTTP cannot show.
  *
  * Every suite here drives the API over HTTP and that stays the rule. But some
- * of what the security fixes promise is, by design, invisible from outside:
- * a verification token exists in clear only inside the email that carried it,
- * a password-reset mail now leaves through the outbox rather than inside the
- * request, and an upload's age is a timestamp nobody can wind back over HTTP.
+ * security properties are, by design, invisible from outside: a verification
+ * token exists in clear only inside the email that carried it, a password-reset
+ * mail leaves through the outbox rather than inside the request, and an
+ * upload's age is a timestamp nobody can wind back over HTTP.
  * A test that cannot reach those has to either skip the property or trust it.
  *
  * Kept deliberately small: open a pool, run a query, close it. `pg` is resolved

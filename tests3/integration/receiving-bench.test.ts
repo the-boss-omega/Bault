@@ -4,24 +4,15 @@ import { SEED, SEED_USERNAME, signIn } from '../../tests/integration/helpers/htt
 /**
  * The receiving bench: one workflow, a stack of boxes at a time, with photographs.
  *
- * Three things were wrong with the inbound half of the warehouse, and they were
- * the same thing three times over — the product described the work rather than
- * fitting it.
+ * The inbound half of the warehouse has to fit the work:
  *
- *   1. PARCELS AND INTAKE WERE TWO TABS. Every intake begins with a parcel: a box
- *      is received, opened, and its contents booked in. "Book contents" switched
- *      tabs to a form on another screen and the box was closed out over there, so
- *      an operator moved back and forth between two places to work through one
- *      box.
- *   2. ARRIVALS WERE BOOKED IN ONE AT A TIME. A courier drops a dozen; the form
- *      took one and cleared itself, so the facility and the carrier were
- *      re-entered for every box in the run.
- *   3. NOTHING COULD BE PHOTOGRAPHED. `StorageAdapter.putObject` has existed
- *      since T020 and `item_image` since custody was built, and no route in the
- *      API ever accepted image bytes — the photography service records a key for
- *      a shoot it never receives. A box that arrived crushed was a sentence with
- *      nothing attached, and a booked-in card wore a generated placeholder until
- *      somebody paid for a professional shoot.
+ *   1. PARCELS AND INTAKE ARE ONE WORKFLOW. Every intake begins with a parcel: a
+ *      box is received, opened, and its contents booked in, all in one place.
+ *   2. ARRIVALS ARE BOOKED IN AS A RUN. A courier drops a dozen, and the
+ *      facility and the carrier are entered once for the whole run.
+ *   3. EVERYTHING CAN BE PHOTOGRAPHED. Bytes go to `POST /media/uploads`, so a
+ *      box that arrives crushed carries its picture and a booked-in card has
+ *      its own photograph instead of a generated placeholder.
  */
 
 /** A 1×1 PNG — the smallest thing that is genuinely an image. */
@@ -214,10 +205,9 @@ describe('photographs on a parcel', () => {
 describe('photographs on an item', () => {
   it('puts the bench’s picture in the owner’s vault immediately', async () => {
     /**
-     * `item_image` has existed since custody was built and nothing outside the
-     * seed ever wrote a row into it, so a collector's card wore a generated
-     * placeholder until somebody paid for a professional shoot. These are type
-     * `intake`, which is exactly the pipeline the vault drawer already reads.
+     * Intake photographs are written to `item_image` as type `intake`, which is
+     * exactly the pipeline the vault drawer reads, so a collector's card shows
+     * its own picture without a paid professional shoot.
      */
     const operator = await signIn(SEED.operator);
     const key = await upload(operator, 'item_intake');
@@ -279,9 +269,8 @@ describe('photographs on an item', () => {
 describe('one box, worked start to finish in one place', () => {
   it('receives, opens, books contents and closes out without a detour', async () => {
     /**
-     * The sequence the merged bench performs top to bottom. It used to cross a
-     * tab boundary twice: once to book the contents, and once more because the
-     * close-out lived on the far side with the count of what had come out.
+     * The sequence the bench performs top to bottom, with no tab boundary
+     * between booking the contents and closing the box out.
      */
     const operator = await signIn(SEED.operator);
     const code = await facilityCode(operator);
@@ -313,8 +302,8 @@ describe('one box, worked start to finish in one place', () => {
       photoKeys: [await upload(operator, 'item_intake')],
     });
 
-    // The count the operator sees before closing the box — the reconciliation
-    // that made the close-out safe to move next to the work.
+    // The count the operator sees before closing the box: the reconciliation
+    // that makes the close-out safe to sit next to the work.
     const queued = ((await operator.get('/parcels')).body as { id: string; itemCount: number }[]).find(
       (p) => p.id === parcel.id,
     );
@@ -334,9 +323,10 @@ describe('booking a box of different units in at once', () => {
   /**
    * `quantity` books N copies of ONE description — right for a run of identical
    * commons, wrong for the ordinary case, which is a Rayquaza ex, a sealed pack
-   * and a graded Gold Star in the same carton. The multi-row form moved off the parcel
-   * bench (where receiving a box is one scan) and onto the intake bench, where
-   * each unit genuinely needs its own class, condition, serial and photographs.
+   * and a graded Gold Star in the same carton. The multi-row form is on the
+   * intake bench rather than the parcel bench (where receiving a box is one
+   * scan), because each unit genuinely needs its own class, condition, serial
+   * and photographs.
    */
   it('gives every unit its own class, description, serial and photographs', async () => {
     const operator = await signIn(SEED.operator);
@@ -367,11 +357,10 @@ describe('booking a box of different units in at once', () => {
 
   it('books nothing at all when one unit is bad, and names the unit', async () => {
     /**
-     * This was broken when it was first written, in exactly the way the parcel
-     * batch had been: a loop over `intakeItem`, which opens its own transaction
-     * per unit, so a bad row nine deep left the first eight on the shelves — and
-     * the refusal invited the operator to fix row nine and press again, which
-     * would have booked those eight in twice.
+     * `intakeItem` opens its own transaction per unit, so a plain loop over it
+     * would leave the first eight units of a box on the shelves when row nine is
+     * bad, and the refusal would invite the operator to fix row nine and press
+     * again, booking those eight in twice.
      *
      * `intakeItem` cannot be wrapped in one transaction from outside (it resolves
      * a shelf, bills through the billing port and writes custody events, each

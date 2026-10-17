@@ -2,20 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
 
 /**
- * Registration records that the person agreed to the terms (E21 / F059).
+ * Registration records that the person agreed to the terms.
  *
  * Bault charges fees, accrues interest on a negative balance and suspends
- * accounts — and before this, nobody was ever asked to agree to any of it. The
- * sign-up form had no checkbox, the API had no field, and the account row had
- * nowhere to write the answer. These cases pin all three ends: the API refuses
- * a registration that did not accept, refuses one that accepted some OTHER
- * version than the one in force, and writes down which version and when.
+ * accounts, so nobody gets an account without agreeing to that. The API
+ * refuses a registration that did not accept, refuses one that accepted some
+ * OTHER version than the one in force, and writes down which version and when.
  *
- * The version is spelled out here rather than imported from the API, so this
- * suite keeps compiling against a build that predates it — and so a change of
- * version is a deliberate edit in two places, not something a test follows
- * silently. `tests/web/faq-legal.test.ts` checks that the SPA and the API name
- * the same one.
+ * The version is spelled out here rather than imported from the API, so a
+ * change of version is a deliberate edit in two places, not something a test
+ * follows silently. `tests/web/faq-legal.test.ts` checks that the SPA and the
+ * API name the same one.
  */
 const CURRENT_TERMS_VERSION = '2026-10-draft-1';
 

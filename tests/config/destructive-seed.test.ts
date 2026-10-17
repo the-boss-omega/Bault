@@ -9,12 +9,10 @@ import { pathToFileURL } from 'node:url';
 /**
  * The seed refuses production, and so does the reset at the end of `pnpm test`.
  *
- * `apps/api/src/db/seed.ts` TRUNCATEs every table — the ledger, the custody
+ * `apps/api/src/db/seed.ts` TRUNCATEs every table, the ledger, the custody
  * trail and the audit log included, because row triggers do not fire on
- * TRUNCATE — and creates two admin accounts whose password is in the source.
- * Its only guard against production was a comment saying not to. It also
- * shipped in the API image as dist/db/seed.js, and `pnpm test` ran it after
- * every run against whatever database `.env` named.
+ * TRUNCATE. It also creates admin accounts whose password is in the source, and
+ * `pnpm test` runs it after every run against whatever database `.env` names.
  *
  * Every case points the seed at 127.0.0.1:1, where nothing listens. A seed
  * that gets past the guard fails with ECONNREFUSED instead of touching any

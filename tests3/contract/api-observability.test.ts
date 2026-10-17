@@ -2,14 +2,14 @@ import { EventEmitter } from 'node:events';
 import { beforeAll, describe, it, expect } from 'vitest';
 
 /**
- * What the API tells its operators about a request (step 15).
+ * What the API tells its operators about a request. Both answer "how would we
+ * know?":
  *
- * Two gaps, both found by asking "how would we know?":
- *
- *  - A request left NO line at all unless something inside it logged. There was
- *    no status and no duration anywhere, so "the shelf page is slow" and "sign-in
- *    is returning 500s" could only be answered by reproducing them.
- *  - A 500 was logged to stdout and nowhere else. Nobody is paged by stdout.
+ *  - Every request leaves one line with its status and duration, so "the shelf
+ *    page is slow" and "sign-in is returning 500s" can be answered without
+ *    reproducing them.
+ *  - A 500 goes to the error tracker as well as the log. Nobody is paged by
+ *    stdout.
  *
  * Unit-level: the middleware and the exception filter are driven directly, with
  * the error reporter replaced by a recorder, so this needs no server, no

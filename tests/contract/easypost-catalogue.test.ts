@@ -7,22 +7,18 @@ import type { CustomsLine } from '../../apps/api/src/modules/shp/parcel-profile.
 /**
  * EasyPost's rates, through the catalogue, through `ShipmentService`.
  *
- * F062 / F068. The catalogue names services for people — "Ground Advantage",
- * "Priority Mail", "2Day" — and EasyPost names them for carriers:
- * `GroundAdvantage`, `Priority`, `FEDEX_2_DAY`. Rates were paired with the
- * catalogue by comparing the two strings exactly, so with
- * `SHIPPING_PROVIDER=easypost` every rate was dropped and a collector had no way
- * to ship anything. The adapter's own contract test could not see it, because
- * the adapter was right: the pairing happens in `shipment.service.ts`, so that
- * is what this drives.
+ * The catalogue names services for people ("Ground Advantage", "Priority
+ * Mail", "2Day") and EasyPost names them for carriers (`GroundAdvantage`,
+ * `Priority`, `FEDEX_2_DAY`). A rate the pairing drops is a service a collector
+ * cannot ship by, and the adapter's own contract test cannot see that: the
+ * pairing happens in `shipment.service.ts`, so that is what this drives. The
+ * customs lines frozen on a shipment must reach EasyPost too, or an
+ * international label is bought with no customs information.
  *
- * F069. The customs lines frozen on a shipment were never sent, so an
- * international label was bought with no customs information at all.
- *
- * The fetch stub answers with EasyPost's own response shape — rate objects as
+ * The fetch stub answers with EasyPost's own response shape: rate objects as
  * the API returns them, with the services a test-mode account with USPS, FedEx
- * and UPS connected actually quotes. Whether a live EZTK account returns
- * exactly these codes is what the live check is for; see the report.
+ * and UPS connected quotes. Whether a live EZTK account returns exactly these
+ * codes is what a live check is for.
  */
 
 const NJ = {

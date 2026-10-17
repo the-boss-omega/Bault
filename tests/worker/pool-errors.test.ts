@@ -4,13 +4,13 @@ import { BASE } from '../integration/helpers/http';
 import { testPool } from './helpers/db';
 
 /**
- * A database restart must not kill the processes that use it (F063).
+ * A database restart must not kill the processes that use it.
  *
  * When Postgres or PgBouncer restarts, every idle connection a `pg` Pool is
  * holding gets an error, and the pool re-emits it as an `error` event. An
  * EventEmitter with no `error` listener THROWS, and here that throw happens in a
- * socket callback — an uncaught exception, and the process exits. A routine
- * database restart took the whole API down with it, and the worker too.
+ * socket callback: an uncaught exception, and the process exits. A routine
+ * database restart would take the API and the worker down with it.
  *
  * Simulated here the way it happens: the server ends the backends. Only this
  * database's backends, and never this test's own.

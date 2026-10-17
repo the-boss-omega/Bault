@@ -10,9 +10,8 @@ import { SEED, intakeFor, signIn, type Client } from './helpers/http';
  * The tests worth having here are the ones about the RULES rather than the
  * plumbing. A tier that refuses a card above its ceiling, a card that stops
  * being sellable while it is at a grader, an inspection that cannot be closed
- * with an area left unanswered — those are the claims that would be silently
- * false if the wiring were wrong, and each of them was true of the platform
- * before this pass.
+ * with an area left unanswered: those are the claims that would be silently
+ * false if the wiring were wrong.
  *
  * Requires a running API + a freshly seeded DB.
  */
@@ -145,7 +144,7 @@ describe('DIS services on a stored item', () => {
     });
     expect(listed.status).toBeGreaterThanOrEqual(400);
 
-    // A closed submission cannot be closed with cards still outstanding.
+    // A submission cannot be closed with cards still outstanding.
     const early = await operator.post(`/services/grading/submissions/${submission.id}/close`);
     expect(early.status).toBe(409);
 
@@ -168,12 +167,11 @@ describe('DIS services on a stored item', () => {
 
   it('does not send a card whose grade was already recorded with the rest of its batch', async () => {
     /**
-     * F048. A grade may be recorded for a card that never left (completing a
-     * request does not require the batch to have shipped), and shipping the
-     * batch then moved EVERY member to `at_grader` — including the one whose
-     * request was already closed. Nothing brings a card back from the grader
-     * except completing its request, so that card was stuck, unsellable, for
-     * good.
+     * A grade may be recorded for a card that never left (completing a request
+     * does not require the batch to have shipped). Shipping the batch must leave
+     * that card on the shelf: nothing brings a card back from the grader except
+     * completing its request, so a closed one moved to `at_grader` would be
+     * stuck, unsellable, for good.
      */
     const { operator, item: graded } = await freshItem({ description: 'F048: graded before the batch left' });
     const { item: travelling } = await freshItem({ description: 'F048: travels with the batch' });

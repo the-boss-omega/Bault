@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from '../integration/helpers/http';
 
 /**
- * US4 property (T056, Principle IV): after ANY sequence of money operations, the
- * wallet balance equals the sum of that user's ledger records.
+ * Principle IV: after ANY sequence of money operations, the wallet balance
+ * equals the sum of that user's ledger records.
  *
- * The sequence is now driven through the cash-in/cash-out REQUEST workflow,
- * because that is the only way money moves. This makes the property stronger
- * than it was: it asserts not merely that the balance tracks the ledger, but
- * that requests which were never completed contribute NOTHING to either.
+ * The sequence is driven through the cash-in/cash-out REQUEST workflow, because
+ * that is the only way money moves. So it also asserts that requests which were
+ * never completed contribute NOTHING to either.
  *
  * Requires a running API + seeded DB.
  */
@@ -71,8 +70,7 @@ describe('property: wallet balance == Σ ledger', () => {
     await admin.post(`/admin/wallet-requests/${out.body.id}/complete`, {});
     /**
      * A cash-out costs exactly the amount asked for: the fee comes out of it, as
-     * its own row, and the rest is the withdrawal. This modelled the gross PLUS
-     * the fee — the double-charged fee of F004.
+     * its own row, and the rest is the withdrawal.
      *
      * Taken from the quote endpoint rather than recomputed here, so this model
      * cannot drift from the schedule the platform actually charges — which is

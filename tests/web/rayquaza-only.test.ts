@@ -5,26 +5,15 @@ import { join, relative, sep } from 'node:path';
 /**
  * The catalogue is Rayquaza, and nothing else.
  *
- * This has now been cleared out twice. The seeded catalogue was replaced with ten
- * real Rayquaza cards — each with its real set, collector number, rarity,
- * illustrator, TCG id and its own photograph on disk — and both times, other
- * collectibles crept back in through the side door: a Base Set Charizard and a
- * 1986 Fleer Jordan in escrow fixtures, an Amazing Fantasy #15 in an intake test,
- * a Charizard in four doc comments, and a whole page of DIVE1 still describing a
- * nine-item mixed catalogue that had been deleted long before.
+ * The seeded catalogue is real Rayquaza cards, each with its real set, collector
+ * number, rarity, illustrator, TCG id and its own photograph on disk. Other
+ * collectibles creep back in through the side door: a fixture description in
+ * an escrow or intake test, a doc comment, a design document. No behavioural
+ * test can reach those, so the check is textual, and it runs over the
+ * repository rather than over the running product.
  *
- * None of that was reachable by a test, because every one of them was either a
- * fixture description or a sentence in a comment. So the check is textual, and it
- * runs over the repository rather than over the running product.
- *
- * WHAT IS DELIBERATELY EXEMPT:
- *
- *   - `.claude/`, `node_modules`, build output and the scratchpad are not the
- *     product.
- *
- * `faqContent.ts` used to be exempt, because it reproduced another company's
- * FAQ verbatim and a quotation cannot be edited to suit us. It is Bault's own
- * text now (E20), so it is held to the same rule as everything else.
+ * Directories that are not the product (`.claude/`, `node_modules`, build
+ * output, coverage) are skipped.
  */
 
 const FORBIDDEN = [
@@ -88,8 +77,8 @@ describe('the catalogue is Rayquaza only', () => {
     /**
      * The standing rule: every seeded item is a genuine collectible, described
      * exactly as its slab reads, with a real photograph and catalogue information
-     * matching it. The serial IS the filename — the coupling is by convention
-     * with nothing to enforce it, so this is what enforces it.
+     * matching it. The serial IS the filename: the coupling is by convention
+     * with nothing else to enforce it, so this is what enforces it.
      */
     const seed = readFileSync(join(root, 'apps', 'api', 'src', 'db', 'seed.ts'), 'utf8');
     const items = [...seed.matchAll(/serialNumber: '(SN-[^']+)'/g)].map((m) => m[1]!);

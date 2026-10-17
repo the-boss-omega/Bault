@@ -172,12 +172,10 @@ describe('the vault', () => {
     renderIn(<VaultPage />);
     /**
      * An empty state is a sentence, not the absence of one — the difference
-     * between "nothing in your vault yet" and a page that looks broken.
-     *
-     * The wording moved twice: away from "No active cards", because a vault
-     * holds comics and sealed boxes too, and towards something that says what to
-     * do about it. The matcher is deliberately loose about the exact phrasing
-     * and strict about there being one.
+     * between "nothing in your vault yet" and a page that looks broken. It does
+     * not say "cards", because a vault holds comics and sealed boxes too. The
+     * matcher is deliberately loose about the exact phrasing and strict about
+     * there being one.
      */
     await waitFor(() => {
       const empty = screen.queryByText(/nothing (in your vault|to show)|no (active )?(cards|items)/i);
@@ -359,7 +357,8 @@ describe('the wallet running balance (F055)', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filters' }), 'service_charge');
     await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').length).toBe(6));
     // The newest movement is a service charge: after it the wallet held $75.00,
-    // whatever else is hidden. Recomputed over the filtered rows it read -$25.00.
+    // whatever else is hidden. Recomputed over the filtered rows it would read
+    // -$25.00.
     expect(balances()[0]).toBe(before);
   });
 });

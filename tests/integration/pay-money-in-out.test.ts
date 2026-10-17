@@ -4,16 +4,12 @@ import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http
 /**
  * Section 9 — money in, money out, and knowing what it costs.
  *
- * What the audit found here was a set of OMISSIONS rather than bugs. The ledger
- * was right, the request workflow was right, the history was right. What was
- * missing was every point at which a collector needed to know something before
- * acting — what a cash-out lands, where to send a bank transfer, what anything
- * costs at all — and one point at which the platform needed to record something
- * that had happened to it.
- *
- * So the assertions are mostly about ARITHMETIC being visible and consistent:
- * a quote that matches the charge, a fee that appears as its own row, a
- * reversal that actually moves the balance back.
+ * A collector needs to know things before acting: what a cash-out lands, where
+ * to send a bank transfer, what anything costs. And the platform has to record
+ * a chargeback that happens to it. So the assertions are mostly about
+ * ARITHMETIC being visible and consistent: a quote that matches the charge, a
+ * fee that appears as its own row, a reversal that actually moves the balance
+ * back.
  *
  * Requires a running API + a freshly seeded DB.
  */
@@ -148,10 +144,9 @@ describe('PAY money in and out', () => {
     expect((await admin.post(`/admin/wallet-requests/${id}/complete`, {})).status).toBe(201);
 
     /**
-     * Exactly what was asked for came off — the fee comes out of it, it is not
-     * added on top. This asserted `AMOUNT + fee` and a withdrawal row of the
-     * full AMOUNT, which is the double-charged fee F004 found: the provider was
-     * paid the net while the ledger took the gross and the fee again.
+     * Exactly what was asked for came off: the fee comes out of it and is not
+     * added on top. The provider is paid the net, and the ledger takes the net
+     * as the withdrawal and the fee as its own row.
      */
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
 
@@ -172,10 +167,9 @@ describe('PAY money in and out', () => {
     await fundWallet(SEED.collector2, 5_000);
 
     /**
-     * The fee comes out of the amount, so asking for the whole balance is fine —
-     * that used to be the case under test, refused for want of room for a fee
-     * added on top (F004). What has to be refused is a balance that has fallen
-     * between approval and completion.
+     * The fee comes out of the amount, so asking for the whole balance is fine.
+     * What has to be refused is a balance that has fallen between approval and
+     * completion.
      */
     const balance = await balanceOf(collector);
     const created = await collector.post('/finance/wallet-requests', {

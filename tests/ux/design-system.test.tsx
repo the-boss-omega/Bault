@@ -59,7 +59,7 @@ describe('a field and its label', () => {
     );
 
     // The whole point of a real <label for>: the caption is a hit target for
-    // the control, which a wrapping <label> around a <span> never provided.
+    // the control.
     await user.click(screen.getByText('Owner username'));
     expect(document.activeElement).toBe(screen.getByRole('textbox'));
   });
@@ -71,8 +71,8 @@ describe('a field and its label', () => {
       </Field>,
     );
 
-    // Previously the accessible name was the caption and the hint run together,
-    // so a screen reader announced the help text as part of the field's name.
+    // The name is the caption alone; the hint run into it would have a screen
+    // reader announce the help text as part of the field's name.
     expect(screen.getByLabelText('Owner username')).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveAccessibleDescription('As shown on the parcel.');
   });

@@ -21,7 +21,6 @@ describe('ACC saved shipping addresses', () => {
     expect(created.status).toBe(201);
     const id = created.body.id as string;
 
-    // EDIT — the piece that used to be missing entirely.
     const edited = await c.patch(`/me/addresses/${id}`, {
       line1: '501 Howard St',
       isDefault: true,

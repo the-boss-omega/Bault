@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, signIn } from './helpers/http';
 
 /**
- * US4 / Scenario E — the wallet, after cash in and cash out became REQUESTS.
+ * The wallet, where cash in and cash out are REQUESTS.
  *
  * The property these tests defend is the one the request workflow exists for:
  * **a balance changes only when an approved request is completed.** Submitting
@@ -101,7 +101,6 @@ describe('PAY wallet requests', () => {
     /**
      * Cashing out carries a fee, and it comes OUT of the amount: the balance
      * moves by exactly what was asked for, and what arrives is the quote's net.
-     * This asserted the gross plus the fee — the fee taken twice, F004.
      * Asserted against the QUOTE rather than a hard-coded figure: the claim
      * worth defending is that the collector is charged exactly what they were
      * told before they asked.
@@ -430,7 +429,7 @@ describe('PAY legacy endpoint compatibility', () => {
     });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_approval');
-    // No confirmation token: there is nothing a token could confirm now.
+    // No confirmation token: there is nothing for a token to confirm.
     expect(res.body.confirmationToken).toBeUndefined();
     expect((await client.get('/finance/wallet')).body.amount).toBe(before);
 

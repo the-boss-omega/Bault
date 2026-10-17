@@ -4,24 +4,19 @@ import { Client, SEED, signIn, intakeFor, fundWallet } from '../../tests/integra
 /**
  * Band 1 — money and ownership, as a person drives it.
  *
- * These pin the defects found by exercising the money actions by hand rather
- * than by reading them. Two of the three could not have been caught by a
- * happy-path test, because each one SUCCEEDED when it should not have.
+ * Several of these cannot be caught by a happy-path test, because the failure
+ * they guard against is a request that SUCCEEDS when it should not.
  */
 
 describe('an offer is the other side’s to accept', () => {
   /**
    * The serious one.
    *
-   * `loadParticipating` allowed either side of a negotiation, and `accept` used
-   * it with no further check — so a buyer could offer $40 on a $100 listing,
-   * accept their own offer, and take the card at their own price with the seller
-   * never consulted. Verified by doing it: the item moved.
-   *
-   * The FIRST fix for this said "only the seller may accept", which is right for
-   * an opening offer and wrong for every counter — see
-   * `band2-negotiation.test.ts`, which pins the rule that replaced it. These
-   * cases still hold under that rule; only the wording of the refusal changed.
+   * Either side of a negotiation may act on it, but a buyer must never accept
+   * their own offer: offer $40 on a $100 listing, accept it, and the card would
+   * be theirs at their own price with the seller never consulted. The full rule
+   * (whoever did not make the current offer accepts it) is pinned in
+   * `band2-negotiation.test.ts`.
    */
   it('refuses to let the buyer accept their own offer', async () => {
     const operator = await signIn(SEED.operator);
@@ -118,9 +113,8 @@ describe('an offer is the other side’s to accept', () => {
 
 describe('a validation failure says which field and why', () => {
   /**
-   * Every field-validation failure in the product answered with the literal
-   * string "Bad Request Exception" — Nest's internal class name — on all 164
-   * routes. The detail existed and was being discarded.
+   * Nest's default answer to a validation failure is the literal string "Bad
+   * Request Exception", its internal class name, with the detail discarded.
    */
   it('names the fields rather than the exception class', async () => {
     const anon = new Client();

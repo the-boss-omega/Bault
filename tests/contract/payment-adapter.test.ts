@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { SandboxPaymentAdapter } from '@bault/adapters';
 
 /**
- * Payment adapter contract (T057, Principle XIII). Asserts the adapter honors its
- * interface and never surfaces raw card data — only provider refs. A real Stripe
- * adapter must pass this same suite, guaranteeing swappability.
+ * Payment adapter contract (Principle XIII). Asserts the adapter honors its
+ * interface and never surfaces raw card data, only provider refs, so a real
+ * provider's adapter can be swapped in behind the same interface.
  */
 describe('contract: PaymentAdapter', () => {
   const adapter = new SandboxPaymentAdapter();
@@ -37,8 +37,7 @@ describe('contract: PaymentAdapter', () => {
   /**
    * `verifyWebhook` is ASYNC and takes the whole delivery — body AND headers —
    * because real verification is a network call against the provider using
-   * several transmission headers, not a string compare. The interface changed
-   * shape when PayPal arrived; this asserts the new one.
+   * several transmission headers, not a string compare.
    */
   it('verifyWebhook parses a delivery and returns the event', async () => {
     const event = await adapter.verifyWebhook({
