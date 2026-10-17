@@ -11,27 +11,17 @@ import { charge, externalPayment } from './pay.schema';
 import { CHARGEBACK_FEE_MINOR } from './money-terms';
 
 /**
- * A payment the cardholder took back.
- *
- * Bault had no way to record one. A card top-up credited the wallet, the goods
- * shipped, and if the payment was reversed six weeks later there was nothing in
- * the system that could say so — the ledger would go on insisting the money had
- * arrived, because as far as it knew it had.
- *
- * Recording a chargeback is not a punishment, it is bookkeeping. Two rows:
+ * A payment the cardholder took back. Recording one writes two rows:
  *
  *  - the reversal itself, a DEBIT of exactly what was credited, so the derived
  *    balance stops claiming money the platform no longer has;
  *  - the provider's dispute fee, as an ordinary fee charge.
  *
- * Both land on the account that received the money, which is the only account
- * that could be right. The collector sees both on their statement, which
- * matters most when the first they hear of it is a balance that went negative.
+ * Both land on the account that received the money, and the collector sees
+ * both on their statement.
  *
- * This is deliberately operator-only and deliberately manual. A chargeback is
- * something a provider tells Bault about out of band, and inventing an
- * automatic path for a message Bault does not receive would be inventing the
- * message.
+ * Operator-only and manual: a provider tells Bault about a chargeback out of
+ * band, so there is no message for an automatic path to act on.
  */
 @Injectable()
 export class ChargebackService {
@@ -50,10 +40,9 @@ export class ChargebackService {
   /**
    * Record that a top-up was reversed.
    *
-   * Keyed on the external payment rather than on an amount, because a
-   * chargeback reverses a specific payment and the amount has to be that
-   * payment's — letting an operator type a figure would let them type the wrong
-   * one against a real reversal.
+   * Keyed on the external payment rather than on an amount: a chargeback
+   * reverses a specific payment, so the amount is that payment's and an
+   * operator cannot type the wrong figure.
    */
   async record(
     operatorId: string,
@@ -102,8 +91,7 @@ export class ChargebackService {
       );
 
       // The provider's dispute fee. Optional, because a chargeback Bault WINS
-      // sometimes carries no fee, and charging one anyway would be inventing a
-      // cost that was not incurred.
+      // sometimes carries no fee.
       const feeMinor = input.chargeFee === false ? 0 : CHARGEBACK_FEE_MINOR;
       if (feeMinor > 0) {
         const [c] = await tx

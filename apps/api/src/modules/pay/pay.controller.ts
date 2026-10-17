@@ -42,28 +42,15 @@ class ChargebackDto {
 }
 
 /**
- * PAY endpoints (T071). `/finance/*` + `/webhooks/payment`.
+ * PAY endpoints: `/finance/*` and `/webhooks/payment`.
  *
- * BACKWARD COMPATIBILITY, deliberate and documented:
- *
- * `POST /finance/wallet/topups` and `POST /finance/withdrawals` used to move money
- * directly — the top-up credited the ledger on the spot, and the withdrawal
- * debited it after a confirmation challenge. Under the request workflow no path
- * may change a balance without an approved, completed request, so both routes
- * survive at the same URL with the same request body but NEW semantics: each now
- * RAISES a wallet request and returns it. Their responses carry
- * `status: 'pending_approval'` plus the request id and code, so an older client
- * that ignores the extra fields still gets a 2xx and a truthful `status`, and one
- * that reads `status` sees plainly that nothing settled.
- *
- * `POST /finance/withdrawals/confirm` is the one route that could not be kept
- * honest: consuming a confirmation token used to pay money out immediately.
- * There is no longer any such capability for a customer to invoke, so the route
- * refuses with a clear pointer to the request workflow rather than pretending.
- *
- * `TopupService` and `WithdrawalService` remain wired: the payment-provider and
- * confirmation plumbing they own is what a completed request will use when a real
- * provider is connected, and `handleWebhook` is still the provider's callback.
+ * No path may change a balance without an approved, completed wallet request.
+ * The legacy `POST /finance/wallet/topups` and `POST /finance/withdrawals` keep
+ * their URL and request body for older clients, but each only RAISES a wallet
+ * request and returns `status: 'pending_approval'` with the request id and code,
+ * so a client that reads `status` sees that nothing settled.
+ * `POST /finance/withdrawals/confirm` refuses with a pointer to the request
+ * workflow. `TopupService.handleWebhook` is the provider's callback.
  */
 @ApiTags('PAY')
 @Controller()
@@ -78,11 +65,8 @@ export class PayController {
   ) {}
 
   /**
-   * How money can come in, with the account details for the manual routes.
-   *
-   * `bank_transfer` was one of five strings on a form and no particulars were
-   * published anywhere, so choosing it told Bault how the money would arrive
-   * and told the customer nothing about how to send it.
+   * How money can come in, with the account details for the manual routes, so
+   * a customer who picks one knows how to send the money.
    */
   @Get('finance/funding-routes')
   fundingRoutes() {
@@ -106,13 +90,7 @@ export class PayController {
     return this.checkout.listMine(user.id);
   }
 
-  /**
-   * What a cash-out of this size costs, before asking for one.
-   *
-   * Cashing out was free and no figure was quoted anywhere, which reads as
-   * generous and is really an omission — the provider fee was being absorbed
-   * silently and the collector could not find out what would land.
-   */
+  /** What a cash-out of this size costs and lands, before asking for one. */
   @Get('finance/cash-out-quote')
   cashOutQuote(@Query('amountMinor') amountMinor: string) {
     const amount = Number.parseInt(amountMinor ?? '0', 10);
@@ -154,7 +132,7 @@ export class PayController {
   }
 
   /**
-   * LEGACY SHIM — raises a cash-in request instead of crediting the wallet.
+   * Legacy shim: raises a cash-in request instead of crediting the wallet.
    * The balance does not move here; only an approved, completed request moves it.
    */
   @Post('finance/wallet/topups')
@@ -175,9 +153,8 @@ export class PayController {
   }
 
   /**
-   * LEGACY SHIM — raises a cash-out request instead of issuing a confirmation
-   * challenge. Returns no `confirmationToken`, because there is nothing a token
-   * could confirm: a reviewer decides this now.
+   * Legacy shim: raises a cash-out request instead of issuing a confirmation
+   * challenge. Returns no `confirmationToken`, because a reviewer decides.
    */
   @Post('finance/withdrawals')
   async requestWithdrawal(@CurrentUser() user: AuthUser, @Body() dto: WithdrawRequestDto) {
@@ -198,9 +175,8 @@ export class PayController {
   }
 
   /**
-   * RETIRED. Confirming a token used to pay out immediately; no customer-invokable
-   * path may do that any more. Answered with a 410 naming its replacement rather
-   * than a silent success that moves nothing.
+   * Retired: no customer path may pay money out directly. Answered with a 410
+   * naming its replacement rather than a silent success that moves nothing.
    */
   @Post('finance/withdrawals/confirm')
   confirmWithdrawal(@CurrentUser() _user: AuthUser, @Body() _dto: WithdrawConfirmDto) {
@@ -211,16 +187,15 @@ export class PayController {
   /**
    * A provider telling us something happened.
    *
-   * Public, because a provider has no session — which is exactly why the
-   * verification behind it is the only thing standing between this route and
-   * anyone on the internet. The WHOLE delivery is handed to the adapter: real
-   * verification needs the headers, not one signature string, and PayPal's is a
-   * call rather than a compare.
+   * Public, because a provider has no session, so the verification behind it
+   * is the only thing standing between this route and anyone on the internet.
+   * The WHOLE delivery is handed to the adapter: real verification needs the
+   * headers, not one signature string, and PayPal's is a call rather than a
+   * compare.
    *
-   * An unverifiable delivery throws, which the global filter renders as a 4xx.
-   * That is deliberate — a provider that gets a 4xx retries and eventually
-   * alerts a human, whereas a 200 for a body we could not authenticate is a
-   * silent acceptance of whatever it said.
+   * An unverifiable delivery throws, which the global filter renders as a 4xx:
+   * a provider that gets a 4xx retries and eventually alerts a human, whereas a
+   * 200 would silently accept a body we could not authenticate.
    */
   @Post('webhooks/payment')
   async webhook(@Req() req: Request) {

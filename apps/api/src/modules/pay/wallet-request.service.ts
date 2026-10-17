@@ -32,10 +32,9 @@ export type RequestActor = Pick<AuthUser, 'id' | 'role'>;
 /**
  * How long the payout provider may take to answer before the call is given up.
  *
- * There was no limit, and the call ran inside the transaction that held the
- * wallet lock (N6). Giving up is safe now: the debit and a pending payment are
- * committed before the call, so an abandoned call leaves an unknown outcome for
- * reconciliation, not money unaccounted for.
+ * Giving up is safe: the debit and a pending payment are committed before the
+ * call, outside any transaction, so an abandoned call leaves an unknown outcome
+ * for reconciliation, not money unaccounted for.
  */
 export const PAYOUT_PROVIDER_TIMEOUT_MS = 20_000;
 
@@ -46,8 +45,8 @@ export const MANUAL_PAYOUT_PROVIDER = 'manual';
  * The key a cash-out's payout is sent under, and recorded as.
  *
  * One per request, for the life of the request: PayPal takes it as both the
- * request id and the batch id, so sending it again — a retry, a reconciliation
- * — finds the original payout instead of making a second one.
+ * request id and the batch id, so sending it again (a retry, a reconciliation)
+ * finds the original payout instead of making a second one.
  */
 export function payoutKey(requestId: string): string {
   return `wallet_request:${requestId}`;
@@ -82,21 +81,19 @@ export interface WalletRequestFilters {
 }
 
 /**
- * Cash-in / cash-out REQUESTS (Requirements 7 & 8).
+ * Cash-in / cash-out REQUESTS.
  *
- * The invariant this service exists to hold: **submitting a request never moves
- * money**. A submission writes one `wallet_request` row and one
- * `wallet_request_event` row and stops. The wallet balance — which is derived
- * from `ledger_record` and nothing else (Principle IV) — changes at exactly one
- * moment in this file, in `complete()`, and only for a request an authorized
- * reviewer has already approved.
+ * The invariant this service holds: **submitting a request never moves money**.
+ * A submission writes one `wallet_request` row and one `wallet_request_event`
+ * row and stops. The wallet balance (derived from `ledger_record` alone,
+ * Principle IV) changes only when a reviewer completes an approved request
+ * (`complete()`), or when a refused payout is reversed (`recordPayoutOutcome`).
  *
- * Separation of duties is enforced rather than assumed: the account that raised a
- * request can never be the account that reviews it, even when that account is an
- * admin reviewing their own cash-out.
+ * Separation of duties is enforced: the account that raised a request can never
+ * be the account that reviews it, even when that account is an admin.
  *
  * Every transition appends to `wallet_request_event`, which is registered with
- * the append-only guards in `0001_append_only.sql` — so the review trail cannot
+ * the append-only guards in `0001_append_only.sql`, so the review trail cannot
  * be edited or deleted afterwards, by anyone, including this service.
  */
 @Injectable()
@@ -126,7 +123,7 @@ export class WalletRequestService {
 
   /**
    * Raise a request. Validates the draft, refuses a duplicate of an open request,
-   * and — for a cash-out — refuses an amount the wallet cannot currently cover.
+   * and, for a cash-out, refuses an amount the wallet cannot currently cover.
    *
    * The balance check here is a courtesy that fails fast at submission time. It
    * is NOT the guarantee: the binding check happens again inside `complete()`,
@@ -141,9 +138,8 @@ export class WalletRequestService {
       throw AppError.validation(violations[0]?.message ?? 'Invalid wallet request', { violations });
     }
 
-    // Duplicate guard: an identical request that is still somebody's open work.
-    // The reference is part of the identity — see `isDuplicateOf` for why two
-    // same-amount transfers with different references are not duplicates.
+    // Duplicate guard: an identical request that is still open. The reference
+    // is part of the identity (see `isDuplicateOf`).
     const reference = normalized.reference ?? null;
     const [duplicate] = await this.db
       .select({ id: walletRequest.id, code: walletRequest.code, status: walletRequest.status })
@@ -283,10 +279,7 @@ export class WalletRequestService {
    * One request, with its full audit history. Owner or reviewer only.
    *
    * Carries the SAME joined identity fields as the queue (`listForReview`), so
-   * the review drawer names the customer it is about. Without them the drawer
-   * showed a request with "Customer —" beside a queue row that named the person
-   * perfectly well; a reviewer deciding someone's money should not have to go
-   * back to the table to find out whose.
+   * the review drawer names the customer it is about.
    */
   async detail(requestId: string, actor: RequestActor) {
     const request = await this.loadFor(requestId, actor);
@@ -383,16 +376,16 @@ export class WalletRequestService {
   }
 
   /**
-   * Completion — THE ONLY PLACE A WALLET REQUEST MOVES MONEY.
+   * Completion: where a wallet request moves money.
    *
    * A cash-in, and a cash-out under `PAYOUT_MODE=manual`, settle in one
-   * transaction: re-check what could have changed since approval, append the
-   * ledger rows, link the request to them (`settled_ledger_id` carries a partial
-   * unique index, so a second settlement is impossible at the database), and
+   * transaction: lock the request, re-check what could have changed since
+   * approval, append the ledger rows, link the request to them
+   * (`settled_ledger_id`, which `lockForCompletion` refuses to set twice), and
    * record the transition.
    *
    * A cash-out paid through the provider cannot be one transaction, because the
-   * money leaves through somebody else's API — see `payOut`.
+   * money leaves through somebody else's API (see `payOut`).
    */
   async complete(requestId: string, actor: RequestActor, options: { note?: string; payoutReference?: string } = {}) {
     this.assertReviewer(actor);
@@ -410,9 +403,9 @@ export class WalletRequestService {
     if (peek.type === 'cash_out') {
       if (loadEnv().PAYOUT_MODE === 'provider') {
         /**
-         * An administrator who believes they paid this by hand, on a platform
-         * that pays through the provider, is one click from paying it twice.
-         * Refused, with the reason, rather than quietly ignored.
+         * A payout reference here means an administrator believes they paid
+         * this by hand on a platform that pays through the provider, one click
+         * from paying it twice. Refused with the reason, not ignored.
          */
         if (reference) {
           throw AppError.validation(
@@ -476,18 +469,17 @@ export class WalletRequestService {
     /**
      * The cash-out fee.
      *
-     * Frozen here rather than at submission, because the schedule is a platform
-     * rule and the request may have sat in review across a change to it — but
-     * quoted to the collector at submission from the same function, so the two
-     * agree unless somebody deliberately moved the schedule.
+     * Frozen here rather than at submission, because the request may have sat
+     * in review across a change to the schedule. It is quoted at submission
+     * from the same function, so the two agree unless the schedule moved.
      */
     const grossFeeMinor = cashOutSettlement(request.amount).feeMinor;
     // The wallet before the membership period the waiver writes to, the order
     // every other spend takes them in, so a cash-out completing while its owner
     // pays for a parcel cannot deadlock against it.
     await this.ledger.lockWallet(request.userId, tx);
-    // A membership may waive it. Only ever less than the fee quoted at
-    // submission, never more — see `MembershipService.waive`.
+    // A membership may waive it: only ever less than the fee quoted at
+    // submission, never more (see `MembershipService.waive`).
     const waiver =
       grossFeeMinor > 0
         ? await this.memberships.waive(tx, request.userId, 'cash_out_fee', grossFeeMinor)
@@ -508,9 +500,8 @@ export class WalletRequestService {
       );
     }
 
-    // The withdrawal is what the provider pays out — the net, not the gross.
-    // The ledger used to debit the gross AND the fee while the provider was
-    // paid the net, taking the fee twice (F004).
+    // The withdrawal is what the provider pays out: the net, not the gross.
+    // With the fee row below it adds up to the gross, so the fee is taken once.
     const [ledgerRow] = await tx
       .insert(ledgerRecord)
       .values({
@@ -528,10 +519,9 @@ export class WalletRequestService {
     /**
      * The fee, as its own charge and its own ledger row.
      *
-     * Deliberately NOT netted into the withdrawal row. A collector asking for
-     * $200 and receiving $193 should be able to see both numbers on their
-     * statement — and the two rows together are exactly the $200 they asked
-     * for, the figure the quote showed them.
+     * Not netted into the withdrawal row, so a collector asking for $200 and
+     * receiving $193 sees both numbers on their statement, and the two rows
+     * together are exactly the $200 the quote showed.
      */
     if (settlement.feeMinor > 0) {
       const [c] = await tx
@@ -702,14 +692,9 @@ export class WalletRequestService {
   }
 
   /**
-   * A cash-out paid through the provider, in three steps (F172, N6, F029).
-   *
-   * It used to be one transaction with the provider call in the middle of it,
-   * and no timeout. A failure after the provider paid — a write, an audit row —
-   * rolled back the debit and not the money, so cash left with nothing debited
-   * for it; a hung provider held a pooled connection and the wallet lock for as
-   * long as it hung; and a payout the provider had only accepted was written up
-   * as completed.
+   * A cash-out paid through the provider, in three steps. The provider call is
+   * outside any transaction, so a failure after the provider paid cannot roll
+   * back the debit, and a hung provider holds no connection or wallet lock.
    *
    *   1. Under the request lock: debit the wallet, write a `pending` payment and
    *      mark the request `paying`. Commit. From here the money is accounted
@@ -824,8 +809,8 @@ export class WalletRequestService {
   }
 
   /**
-   * Record what became of a payout — from the provider's answer, its webhook,
-   * or reconciliation — exactly once.
+   * Record what became of a payout (from the provider's answer, its webhook,
+   * or reconciliation) exactly once.
    *
    * Only a payment still `pending` on a request still `paying` changes: the
    * first word on a payout is the one that counts, and every later one (a
@@ -862,7 +847,7 @@ export class WalletRequestService {
 
       if (outcome.status === 'pending') {
         // Nothing has happened yet, but the provider has said what it calls the
-        // payout — which is what a later lookup needs.
+        // payout, which is what a later lookup needs.
         if (externalRef && externalRef !== payment.externalRef) {
           await tx.update(externalPayment).set({ externalRef, updatedAt: now }).where(eq(externalPayment.id, paymentId));
           const [updated] = await tx
@@ -927,8 +912,8 @@ export class WalletRequestService {
       }
 
       // Refused or returned: the money never reached the collector, so all of
-      // it comes back — the withdrawal and the fee, which together are the
-      // amount they asked for.
+      // it comes back (the withdrawal and the fee, which together are the
+      // amount they asked for).
       await this.ledger.lockWallet(request.userId, tx as Database);
       await this.ledger.record(
         {
@@ -997,15 +982,15 @@ export class WalletRequestService {
   /**
    * Ask the provider again about payouts that have been pending too long.
    *
-   * The webhook is how a payout normally settles, and webhooks get lost. This is
-   * the other way: every pending payout older than `olderThanMinutes` is looked
-   * up — by the provider's batch id when it gave one, or, when its answer never
-   * arrived, by sending the same payout again under the same key, which the
-   * provider recognises rather than paying twice. Whatever it says is recorded
-   * through `recordPayoutOutcome`; an error is recorded as nothing, because on a
-   * retry it proves nothing either way.
+   * The webhook is how a payout normally settles, and webhooks get lost. Every
+   * pending payout older than `olderThanMinutes` is looked up by the provider's
+   * batch id when it gave one, or, when its answer never arrived, by sending
+   * the same payout again under the same key, which the provider recognises
+   * rather than paying twice. Whatever it says is recorded through
+   * `recordPayoutOutcome`; an error is recorded as nothing, because on a retry
+   * it proves nothing either way.
    *
-   * Admin-only and on demand. The worker can drive it on a schedule.
+   * Admin-only and on demand; no worker job runs it.
    */
   async reconcilePayouts(actor: RequestActor, options: { olderThanMinutes?: number; limit?: number } = {}) {
     this.assertReviewer(actor);
@@ -1062,10 +1047,10 @@ export class WalletRequestService {
   }
 
   /**
-   * Apply a payout event the provider sent us (F029, F040).
+   * Apply a payout event the provider sent us.
    *
-   * Matched by the key Bault sent — PayPal echoes it as the item's
-   * `sender_item_id` and the batch's `sender_batch_id` — or by the batch id it
+   * Matched by the key Bault sent (PayPal echoes it as the item's
+   * `sender_item_id` and the batch's `sender_batch_id`), or by the batch id it
    * returned. The caller has already authenticated the delivery and checked
    * `event.id` against the events already applied.
    */
@@ -1126,10 +1111,9 @@ export class WalletRequestService {
   /**
    * Separation of duties.
    *
-   * An admin is a customer too — they have a wallet and may raise their own
-   * cash-out. Nothing about the `admin` role should let them decide their own
-   * money, so the requester is barred from every reviewer action on their own
-   * request regardless of role.
+   * An admin is a customer too and may raise their own cash-out, so the
+   * requester is barred from every reviewer action on their own request
+   * regardless of role.
    */
   private assertSeparationOfDuties(requesterId: string, actor: RequestActor): void {
     if (requesterId === actor.id) {
@@ -1141,7 +1125,7 @@ export class WalletRequestService {
 
   /**
    * The shared transition path: legality, separation of duties, the row update,
-   * the append-only event, the notification and the audit record — in one
+   * the append-only event, the notification and the audit record, in one
    * transaction, so a state change is never visible without its trail.
    */
   private async applyTransition(
@@ -1228,7 +1212,7 @@ export class WalletRequestService {
     });
   }
 
-  /** One immutable row per state change (Requirement 8: acting user, timestamp, from, to, reason). */
+  /** One immutable row per state change: acting user, timestamp, from, to, reason. */
   private async appendEvent(
     tx: Database,
     entry: {

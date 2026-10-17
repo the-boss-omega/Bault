@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { pkId, createdAt, updatedAt, amountMinor, currency } from '../../db/schema/_helpers';
 
 /**
- * PAY tables. `ledger_record` is APPEND-ONLY (Principle II) — the append-only
+ * PAY tables. `ledger_record` is APPEND-ONLY (Principle II): the append-only
  * guards installed in 0001_append_only.sql attach to it automatically on the next
  * migrate. The wallet balance is DERIVED from these rows (Principle IV); there is
  * no stored-balance table.
@@ -17,36 +17,28 @@ export const ledgerType = pgEnum('ledger_type', [
   'withdrawal',
   'interest',
   /**
-   * Escrow. Three types rather than one, because they answer three different
-   * questions on a statement — "why did my balance drop", "where did that
-   * credit come from", "was I actually refunded".
-   *
-   * A hold is a real DEBIT: money in escrow has genuinely left the spendable
-   * balance, which is what held means, and Bault keeps no stored balances to
-   * mark otherwise (Principle IV).
+   * Escrow. Three types, so a statement can tell a hold, a release and a refund
+   * apart. A hold is a real DEBIT: money in escrow has left the spendable
+   * balance, and there is no stored balance to mark otherwise (Principle IV).
    */
   'escrow_hold',
   'escrow_release',
   'escrow_refund',
   /**
-   * A card payment the cardholder took back.
-   *
-   * Its own type rather than a negative `credit_topup`, because the two are
-   * different facts: one is money arriving, the other is money being taken back
-   * weeks later by somebody who is not Bault. A statement that could not tell
-   * them apart would be a statement nobody could reconcile.
+   * A card payment the cardholder took back. Its own type rather than a
+   * negative `credit_topup`, so a statement can tell money arriving from money
+   * taken back later, and can be reconciled.
    */
   'chargeback',
   /**
-   * Giving money back (0031). A parcel cancelled before any label was bought,
-   * and a custom request declined after it was paid for, used to keep what the
-   * collector had paid because there was no type to record a refund as.
+   * Giving money back: for a parcel cancelled before any label was bought, and
+   * for a custom request declined after it was paid for.
    */
   'shipping_refund',
   'service_refund',
   /**
    * A payout the provider refused or returned. The money never left, so the
-   * debit is reversed — by this compensating credit, never by editing the debit.
+   * debit is reversed by this compensating credit, never by editing the debit.
    */
   'payout_reversal',
 ]);
@@ -62,16 +54,16 @@ export const ledgerRecord = pgTable(
     amount: amountMinor().notNull(), // always positive; sign is carried by `direction`
     direction: ledgerDirection('direction').notNull(),
     currency: currency().notNull(),
-    referenceType: text('reference_type'), // 'charge' | 'transaction' | 'withdrawal' | 'external_payment' | 'interest'
+    referenceType: text('reference_type'), // what reference_id names: 'charge', 'external_payment', 'wallet_request', 'escrow_deal', 'interest', ...
     referenceId: text('reference_id'),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: createdAt(),
   },
   (t) => ({
     /**
-     * One interest row per account per day (migration 0032, F051). The accrual
-     * job puts the UTC date in `reference_id`, so a retry or an overlapping run
-     * the same day inserts nothing.
+     * One interest row per account per day. The accrual job puts the UTC date
+     * in `reference_id`, so a retry or an overlapping run the same day inserts
+     * nothing.
      */
     interestDailyUnique: uniqueIndex('ledger_record_interest_daily_unique')
       .on(t.userId, t.referenceId)
@@ -90,8 +82,8 @@ export const externalPayment = pgTable('external_payment', {
   id: pkId(),
   userId: text('user_id').notNull(),
   provider: text('provider').notNull(),
-  providerRef: text('provider_ref').notNull(), // token/ref ONLY — never raw card data
-  purpose: text('purpose').notNull(), // 'topup' | 'charge' | 'payout'
+  providerRef: text('provider_ref').notNull(), // token/ref ONLY, never raw card data
+  purpose: text('purpose').notNull(), // 'topup' | 'payout'
   status: text('status').notNull(),
   amount: amountMinor().notNull(),
   currency: currency().notNull(),
@@ -110,7 +102,7 @@ export const externalPayment = pgTable('external_payment', {
 export const charge = pgTable('charge', {
   id: pkId(),
   userId: text('user_id').notNull(),
-  actionType: text('action_type').notNull(), // intake|storage|service|shipping|marketplace_fee
+  actionType: text('action_type').notNull(), // a pricing action, e.g. intake, storage, service, membership:folio
   pricingRuleSnapshot: jsonb('pricing_rule_snapshot').notNull(), // exact pricing applied
   amount: amountMinor().notNull(),
   currency: currency().notNull(),
@@ -128,14 +120,12 @@ export const charge = pgTable('charge', {
 export const walletRequestType = pgEnum('wallet_request_type', ['cash_in', 'cash_out']);
 
 /**
- * The lifecycle a wallet request actually moves through.
- *
- * `draft` is deliberately absent: nothing in the product saves an unsubmitted
- * request, so a status with no path into it would be a lie in the enum. The
- * statuses here are exactly the ones the review process produces.
+ * The statuses a wallet request moves through. The legal transitions are
+ * defined in `wallet-request.rules.ts`. There is no `draft`: nothing saves an
+ * unsubmitted request.
  *
  *   submitted → pending_review → approved → processing → completed
- *                             ↘ rejected
+ *   submitted / pending_review / approved / processing → rejected
  *   submitted / pending_review → cancelled   (by the requester)
  *
  *   approved / processing → paying → completed | payout_failed   (a cash-out
@@ -154,7 +144,7 @@ export const walletRequestStatus = pgEnum('wallet_request_status', [
 ]);
 
 /**
- * A REQUEST to move money in or out of a wallet — never the movement itself.
+ * A REQUEST to move money in or out of a wallet, never the movement itself.
  *
  * Submitting one writes this row and nothing else: no ledger row, no balance
  * change. The wallet only moves when an authorized reviewer completes an
@@ -181,7 +171,7 @@ export const walletRequest = pgTable('wallet_request', {
   notes: text('notes'),
   /** Set when the request completes; the ledger row that actually moved money. */
   settledLedgerId: text('settled_ledger_id'),
-  /** A cash-out's `external_payment` row — the money on its way out (0031). */
+  /** A cash-out's `external_payment` row: the money on its way out. */
   payoutPaymentId: text('payout_payment_id'),
   /** What the payment is called outside Bault: a provider batch id, or a manual transfer's reference. */
   payoutReference: text('payout_reference'),
@@ -194,7 +184,7 @@ export const walletRequest = pgTable('wallet_request', {
 });
 
 /**
- * Audit history for a wallet request — APPEND-ONLY, one row per state change.
+ * Audit history for a wallet request. APPEND-ONLY, one row per state change.
  *
  * Every transition records who did it, when, what the status was before and
  * after, and the reason where the process demands one. Registered with the
