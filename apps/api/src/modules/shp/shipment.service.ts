@@ -1282,48 +1282,6 @@ export class ShipmentService {
     });
   }
 
-  /**
-   * Release the items of shipments nobody paid for.
-   *
-   * The scheduled release is the worker's own `expireUnpaidShipments`, in raw
-   * SQL; this is the API-side equivalent. Returns what it released.
-   */
-  async expireUnpaid(now = new Date()) {
-    const rows = await this.db.select().from(shipment).where(eq(shipment.status, 'awaiting_payment'));
-    const expired: string[] = [];
-
-    for (const s of rows) {
-      if (!s.paymentDueAt || s.paymentDueAt.getTime() > now.getTime()) continue;
-      const cancelled = await this.db.transaction(async (tx) => {
-        // Only if it is STILL unpaid: a parcel paid for between the read above
-        // and this write must not be cancelled with its charge kept.
-        const [row] = await tx
-          .update(shipment)
-          .set({
-            status: 'cancelled',
-            cancelledAt: now,
-            cancelReason: `Not paid within ${PAYMENT_WINDOW_DAYS} days`,
-            updatedAt: now,
-          })
-          .where(and(eq(shipment.id, s.id), eq(shipment.status, 'awaiting_payment')))
-          .returning({ id: shipment.id });
-        if (!row) return false;
-        await this.outbox.emit(tx, {
-          aggregateType: 'shipment',
-          aggregateId: s.id,
-          eventType: 'shipment_expired',
-          payload: { userId: s.userId, shipmentCode: s.code, itemCount: ((s.itemIds as string[]) ?? []).length },
-        });
-        return true;
-      });
-      if (cancelled) expired.push(s.id);
-    }
-    // Cancelling IS the release. An item in an open shipment never left
-    // `stored`; what it lost was the ability to be put on a second parcel, so
-    // moving the shipment out of the open set is exactly what hands it back.
-    return { expired: expired.length, shipmentIds: expired };
-  }
-
   async track(shipmentId: string, actor: ShipmentActor) {
     const s = await this.loadFor(shipmentId, actor);
     const [owner] = await this.db
