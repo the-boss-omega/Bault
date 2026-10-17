@@ -33,6 +33,11 @@ export class Client {
     return { status: res.status, body: json as any };
   }
 
+  /** True once a response has set a cookie, which for these routes is the session. */
+  get hasSession(): boolean {
+    return this.cookie !== '';
+  }
+
   get = (p: string) => this.request('GET', p);
   /** `headers` carries what a body cannot, such as an `Idempotency-Key`. */
   post = (p: string, b?: unknown, headers?: Record<string, string>) => this.request('POST', p, b, headers);
@@ -47,7 +52,7 @@ export class Client {
    * would hand back `null` for exactly the responses whose content matters.
    */
   async getText(path: string) {
-    const res = await fetch(BASE + path, { headers: this.cookie ? { cookie: this.cookie } : {} });
+    const res = await fetch(this.base + path, { headers: this.cookie ? { cookie: this.cookie } : {} });
     return { status: res.status, headers: res.headers, text: await res.text() };
   }
 }
@@ -99,12 +104,20 @@ export const SEED_USERNAME = {
 /**
  * Sign in a seeded account and return an authenticated client. `identifier` is
  * an email OR a username — login accepts either.
+ *
+ * A right password for an account with two-factor sign-in is a 200 too, but it
+ * answers with a challenge and sets no cookie, so a client handed back then
+ * would make every later request anonymously. That is refused here; the
+ * two-factor suites sign such an account in with the helpers in `./mfa`.
  */
 export async function signIn(identifier: string, password = SEED_PASSWORD, base = BASE): Promise<Client> {
   const c = new Client(base);
   const res = await c.post('/auth/login', { identifier, password });
   if (res.status !== 200)
     throw new Error(`login failed for ${identifier}: ${JSON.stringify(res.body)}`);
+  if (res.body?.status === 'mfa_required')
+    throw new Error(`login for ${identifier} stopped at the second factor: no session was opened (use ./mfa)`);
+  if (!c.hasSession) throw new Error(`login for ${identifier} answered 200 but set no session cookie`);
   return c;
 }
 
