@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
+import { activeAccount, passwordOnly } from './helpers/mfa';
+import { closeDb } from './helpers/db';
 import type { LabelResult, Rate, RateRequest, ShippingAdapter, ShippingCallOptions, TrackingStatus } from '@bault/adapters';
 import { createDb, type Database } from '../../apps/api/src/db/client';
 import { CustodyService } from '../../apps/api/src/modules/cst/custody.service';
@@ -85,6 +87,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await close();
+  await closeDb();
 });
 
 /** The services dispatch uses, built the way Nest builds them, with this carrier. */
@@ -242,5 +245,216 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
     expect((second as { getStatus?: () => number }).getStatus?.()).toBe(409);
     expect((await first).status).toBe('shipped');
     expect(carrier.purchases).toBe(1);
+  });
+});
+
+/**
+ * A label the carrier refuses at dispatch.
+ *
+ * Nothing was bought, so the shipment goes back to `rates_selected`, paid for.
+ * The rate it holds is the one the carrier just turned down, so dispatching it
+ * again buys nothing either. The way forward is a fresh rate, chosen by the
+ * collector or by an operator, with the difference settled against what was
+ * already paid: a cheaper rate's difference comes back, a dearer one's is
+ * charged, and neither leaves the cancellation (and its fee) as the only exit.
+ */
+describe('a label refused at dispatch', () => {
+  const walletOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
+
+  /** A paid shipment whose label the carrier has just refused. */
+  async function refusedShipment(label: string, pick: 'cheapest' | 'dearest', ownerEmail: string = SEED.collector) {
+    const card = await intakeFor(operator, ownerEmail, { description: `Refused label: ${label}` });
+    const owner = await signIn(ownerEmail);
+    await fundWallet(ownerEmail, 20_000);
+    const s = (
+      await owner.post('/shipping/shipments', {
+        itemIds: [card.id],
+        destinationAddress: 'Red, 1200 Market St, San Francisco 94102, US',
+        destinationCountry: 'US',
+        destinationPostalCode: '94102',
+      })
+    ).body;
+    const eligible = ((await owner.get(`/shipping/shipments/${s.id}/rates`)).body as {
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+      totalMinor: number;
+    }[])
+      .filter((r) => r.eligible)
+      .sort((a, b) => a.totalMinor - b.totalMinor);
+    expect(eligible.length).toBeGreaterThan(1);
+    const chosen = pick === 'cheapest' ? eligible[0]! : eligible[eligible.length - 1]!;
+
+    const beforePaying = await walletOf(owner);
+    const selected = await owner.post(`/shipping/shipments/${s.id}/select-rate`, {
+      carrier: chosen.carrier,
+      serviceLevel: chosen.serviceLevel,
+    });
+    expect(selected.body.status).toBe('rates_selected');
+
+    const { dispatch } = dispatchWith(new FakeCarrier('refuse'));
+    const refused = await dispatch.dispatch(operatorId, s.id, FORM(card.id)).catch((e: unknown) => e);
+    expect((refused as { getStatus?: () => number }).getStatus?.()).toBe(502);
+    const back = (await owner.get(`/shipping/shipments/${s.id}`)).body;
+    expect(back.status).toBe('rates_selected');
+
+    return { shipmentId: s.id as string, itemId: card.id as string, owner, chosen, eligible, beforePaying };
+  }
+
+  it('takes a cheaper rate and gives the difference back, once', async () => {
+    const { shipmentId, owner, chosen, eligible, beforePaying } = await refusedShipment('cheaper', 'dearest');
+    const cheaper = eligible[0]!;
+    expect(cheaper.totalMinor).toBeLessThan(chosen.totalMinor);
+    const refusedView = (await owner.get(`/shipping/shipments/${shipmentId}`)).body;
+
+    const before = await walletOf(owner);
+    const again = await owner.post(`/shipping/shipments/${shipmentId}/select-rate`, {
+      carrier: cheaper.carrier,
+      serviceLevel: cheaper.serviceLevel,
+    });
+    expect(again.status).toBe(201);
+    // The collector was shown why: the refusal is on the shipment until a new rate replaces it.
+    expect(refusedView.labelRefused).toMatchObject({ reason: expect.stringContaining('rate expired') });
+    expect(again.body).toMatchObject({ status: 'rates_selected', cost: cheaper.totalMinor });
+    expect((await walletOf(owner)) - before).toBe(chosen.totalMinor - cheaper.totalMinor);
+
+    const after = (await owner.get(`/shipping/shipments/${shipmentId}`)).body;
+    expect(after).toMatchObject({ status: 'rates_selected', cost: cheaper.totalMinor, carrier: cheaper.carrier });
+    expect(after.labelRefused).toBeNull();
+
+    // Paid for again, so a further change is refused as on any paid shipment.
+    const third = await owner.post(`/shipping/shipments/${shipmentId}/select-rate`, {
+      carrier: chosen.carrier,
+      serviceLevel: chosen.serviceLevel,
+    });
+    expect(third.status).toBe(409);
+
+    // A cancellation now refunds what is actually paid, not the first charge:
+    // the collector ends up out the restocking fee and nothing else.
+    const cancelled = await owner.post(`/shipping/shipments/${shipmentId}/cancel`, { reason: 'Changed my mind.' });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.refundedMinor).toBe(cheaper.totalMinor);
+    expect(await walletOf(owner)).toBe(beforePaying - (cancelled.body.restockingFeeMinor as number));
+  });
+
+  it('takes the same rate again for nothing, chosen by an operator, and then dispatches', async () => {
+    const { shipmentId, itemId, owner, chosen } = await refusedShipment('same', 'cheapest');
+    const before = await walletOf(owner);
+
+    const again = await operator.post(`/shipping/shipments/${shipmentId}/select-rate`, {
+      carrier: chosen.carrier,
+      serviceLevel: chosen.serviceLevel,
+    });
+    expect(again.status).toBe(201);
+    expect(again.body.cost).toBe(chosen.totalMinor);
+    expect(await walletOf(owner)).toBe(before);
+
+    const { dispatch } = dispatchWith(new FakeCarrier('sell'));
+    const shipped = await dispatch.dispatch(operatorId, shipmentId, FORM(itemId));
+    expect(shipped.status).toBe('shipped');
+  });
+
+  it('takes a dearer rate and charges the difference', async () => {
+    const { shipmentId, owner, chosen, eligible } = await refusedShipment('dearer', 'cheapest');
+    const dearer = eligible[eligible.length - 1]!;
+    expect(dearer.totalMinor).toBeGreaterThan(chosen.totalMinor);
+
+    const before = await walletOf(owner);
+    const again = await owner.post(`/shipping/shipments/${shipmentId}/select-rate`, {
+      carrier: dearer.carrier,
+      serviceLevel: dearer.serviceLevel,
+    });
+    expect(again.status).toBe(201);
+    expect(again.body).toMatchObject({ status: 'rates_selected', cost: dearer.totalMinor });
+    expect(before - (await walletOf(owner))).toBe(dearer.totalMinor - chosen.totalMinor);
+  });
+
+  it('refuses a dearer rate the wallet cannot cover, and changes nothing', async () => {
+    const { shipmentId, owner, chosen, eligible } = await refusedShipment('dearer, short', 'cheapest', SEED.collector3);
+    const dearer = eligible[eligible.length - 1]!;
+
+    // Spend whatever is left, so the difference cannot be covered.
+    const left = await walletOf(owner);
+    if (left > 0) {
+      const seller = await signIn(SEED.collector);
+      const card = await intakeFor(operator, SEED.collector, { description: 'Refused label: wallet drain' });
+      const listing = await seller.post('/marketplace/listings', { itemId: card.id, askingPrice: left });
+      expect((await owner.post(`/marketplace/listings/${listing.body.id}/purchase`)).status).toBe(201);
+    }
+    expect(await walletOf(owner)).toBe(0);
+
+    const short = await owner.post(`/shipping/shipments/${shipmentId}/select-rate`, {
+      carrier: dearer.carrier,
+      serviceLevel: dearer.serviceLevel,
+    });
+    expect(short.status).toBe(409);
+    expect(await walletOf(owner)).toBe(0);
+    const still = (await owner.get(`/shipping/shipments/${shipmentId}`)).body;
+    expect(still).toMatchObject({ status: 'rates_selected', cost: chosen.totalMinor, carrier: chosen.carrier });
+    expect(still.labelRefused).toBeTruthy();
+  });
+
+  it('prices a member the same after a refusal, and spends the allowance once', async () => {
+    // A fresh account, so becoming a member changes nobody else's prices.
+    const account = await activeAccount('relabel');
+    const member = await passwordOnly(account);
+    const admin = await signIn(SEED.admin);
+    const cashIn = await member.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 30_000,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `relabel-${Date.now()}`,
+    });
+    expect(cashIn.status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
+    expect([200, 201]).toContain((await member.post('/membership/subscribe', { tier: 'folio' })).status);
+
+    const bins = (await operator.get('/custody/bins')).body as { id: string }[];
+    const card = await operator.post('/intake/items', {
+      ownerUsername: account.username,
+      typeClass: 'trading_card',
+      binId: bins[0]!.id,
+      description: 'Refused label: member',
+    });
+    expect(card.status).toBe(201);
+    const s = (
+      await member.post('/shipping/shipments', {
+        itemIds: [card.body.id],
+        destinationAddress: 'Two Factor, 1200 Market St, San Francisco 94102, US',
+        destinationCountry: 'US',
+        destinationPostalCode: '94102',
+      })
+    ).body;
+    type Quoted = { serviceKey: string; carrier: string; serviceLevel: string; eligible: boolean; totalMinor: number; membershipCover: { postageMinor: number } | null };
+    const quoted = async () =>
+      ((await member.get(`/shipping/shipments/${s.id}/rates`)).body as Quoted[]).filter((r) => r.eligible);
+    const fresh = await quoted();
+    const covered = fresh.filter((r) => (r.membershipCover?.postageMinor ?? 0) > 0).sort((a, b) => b.totalMinor - a.totalMinor);
+    expect(covered.length).toBeGreaterThan(1);
+    const first = covered[0]!;
+    const second = covered[covered.length - 1]!;
+    const usedOf = async () => (await member.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const usedBefore = await usedOf();
+
+    expect((await member.post(`/shipping/shipments/${s.id}/select-rate`, { carrier: first.carrier, serviceLevel: first.serviceLevel })).body.status).toBe('rates_selected');
+    expect(await usedOf()).toBe(usedBefore + first.membershipCover!.postageMinor);
+    const { dispatch } = dispatchWith(new FakeCarrier('refuse'));
+    await dispatch.dispatch(operatorId, s.id, FORM(card.body.id)).catch(() => undefined);
+
+    // Quoted as if this parcel had never spent the allowance.
+    const again = await quoted();
+    expect(again.map((r) => [r.serviceKey, r.totalMinor])).toEqual(fresh.map((r) => [r.serviceKey, r.totalMinor]));
+
+    const before = await walletOf(member);
+    const reselected = await member.post(`/shipping/shipments/${s.id}/select-rate`, {
+      carrier: second.carrier,
+      serviceLevel: second.serviceLevel,
+    });
+    expect(reselected.status).toBe(201);
+    expect((await walletOf(member)) - before).toBe(first.totalMinor - second.totalMinor);
+    // The refused rate's cover went back; only the new rate's is spent.
+    expect(await usedOf()).toBe(usedBefore + second.membershipCover!.postageMinor);
   });
 });

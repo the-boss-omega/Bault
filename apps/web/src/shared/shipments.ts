@@ -29,6 +29,12 @@ export interface ShipmentSummary {
   serviceLevel: string | null;
   /** Supplied by the carrier; null until a label exists. */
   trackingNumber: string | null;
+  /**
+   * The carrier refused this paid shipment's label at dispatch, with what it
+   * said. Nothing was bought; choosing a service again is the way on. Null
+   * otherwise (and absent from an older API).
+   */
+  labelRefused?: { at: string | null; reason: string | null } | null;
   /** Carrier-quoted ETA, stamped when a rate is selected. Null before that. */
   estimatedDeliveryAt: string | null;
   rush: boolean;

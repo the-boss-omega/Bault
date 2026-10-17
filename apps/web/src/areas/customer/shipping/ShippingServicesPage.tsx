@@ -31,6 +31,7 @@ import {
   type StatusTone,
 } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { serviceLabel, type QuotedRate } from '../../../shared/carriers';
 import { ShipmentComposer } from './ShipmentComposer';
 import { SharedParcelsTab } from './SharedParcelsTab';
 import { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } from './HumanFulfilmentPanels';
@@ -780,6 +781,10 @@ function ShipmentDrawer({
           warning about. */}
       {shipment.destinationCountry !== 'US' && <CustomsReadiness shipmentId={shipment.id} />}
 
+      {shipment.labelRefused && (
+        <RechooseService shipment={shipment} t={t} busy={busy} onChosen={(fn) => act(fn, t('ship.rechosen'))} />
+      )}
+
       {(payable || cancellable) && (
         <div className="row stack-top">
           {payable && (
@@ -839,6 +844,79 @@ function ShipmentDrawer({
         </div>
       )}
     </DetailDrawer>
+  );
+}
+
+/**
+ * A paid shipment whose label the carrier refused: the services it can go by
+ * now, each with what choosing it does to what was paid.
+ *
+ * The rates are fetched only here, when the drawer shows a refusal. Choosing
+ * one is the server's to settle; the figures shown are what it will settle.
+ */
+export function RechooseService({
+  shipment,
+  t,
+  busy,
+  onChosen,
+}: {
+  shipment: ShipmentSummary;
+  t: TranslateFn;
+  busy: boolean;
+  onChosen: (fn: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [rates, setRates] = useState<QuotedRate[] | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try {
+        setRates(await api.get<QuotedRate[]>(`/shipping/shipments/${shipment.id}/rates`));
+      } catch {
+        setRates([]);
+      }
+    })();
+  }, [shipment.id]);
+
+  const paid = shipment.cost ?? 0;
+  const eligible = (rates ?? []).filter((r) => r.eligible);
+  return (
+    <div className="stack stack--tight stack-top">
+      <p className="field-hint">{t('ship.labelRefused')}</p>
+      {shipment.labelRefused?.reason && (
+        <p className="hint">{t('ship.labelRefusedReason', { reason: shipment.labelRefused.reason })}</p>
+      )}
+      {eligible.map((r) => {
+        const difference = r.totalMinor - paid;
+        return (
+          <div key={r.serviceKey} className="row">
+            <span>
+              {serviceLabel(t, r)} · <span dir="ltr">{formatUsd(r.totalMinor)}</span>
+              <span className="detail-value-sub" dir="ltr">
+                {difference < 0
+                  ? t('ship.rechoose.refund', { amount: formatUsd(-difference) })
+                  : difference > 0
+                    ? t('ship.rechoose.extra', { amount: formatUsd(difference) })
+                    : t('ship.rechoose.same')}
+              </span>
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void onChosen(() =>
+                  api.post(`/shipping/shipments/${shipment.id}/select-rate`, {
+                    carrier: r.carrier,
+                    serviceLevel: r.serviceLevel,
+                  }),
+                )
+              }
+            >
+              {t('shipping.selectRate')}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
