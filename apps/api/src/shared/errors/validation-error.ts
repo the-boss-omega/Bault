@@ -5,45 +5,18 @@ import { ErrorCode } from './error-codes';
 /**
  * Turn a class-validator failure into something a person can act on.
  *
- * Every field-validation failure in this product reached the client as:
+ * `ValidationPipe` hands `BadRequestException` the full list of which property
+ * broke which constraint, but the exception's own `.message` is just Nest's
+ * class name. So the problem body is built HERE, at the pipe: the payload
+ * already carries `code`, so the global filter passes it straight through.
  *
- *     { "error": { "code": "validation_failed",
- *                  "message": "Bad Request Exception", "details": {} } }
+ * `details.violations` matches the shape the wallet-request rules produce, so a
+ * client has one thing to read for every kind of validation failure.
  *
- * on all 164 routes. "Bad Request Exception" is Nest's internal class name. It
- * names no field, states no rule, and tells a person nothing they can do — which
- * is the exact failure the error-shape contract exists to prevent.
- *
- * The detail was never missing. `ValidationPipe` builds a full list of which
- * property broke which constraint and hands it to `BadRequestException`, whose
- * `.message` is then the class name rather than the list. The global filter,
- * seeing no `code` on the payload, fell back to that `.message` and discarded
- * the rest.
- *
- * So the shape is built HERE, at the pipe, rather than pattern-matched back out
- * in the filter: the payload already carries `code`, so the filter passes it
- * straight through untouched.
- *
- * `details.violations` matches the shape the wallet-request rules already
- * produce, so a client has one thing to read for every kind of validation
- * failure rather than two.
- *
- * WHAT THE MESSAGE SAYS was the second half of the problem, and it survived the
- * first fix. Naming the fields was a large improvement over naming the exception
- * class, and it still produced sentences written for whoever wrote the DTO:
- *
- *     Check these fields: label, recipient, line1, city, country, postalCode.
- *     destinationAccount must be a string.
- *     status must be one of the following values: pending, active, suspended, closed.
- *
- * `line1` and `postalCode` are property names, not the words on the form. "Must
- * be a string" is what a validator library says about an absent value; a person
- * reading it has been told the type system's opinion of their mistake. And a
- * flat list gives no clue whether the fields are missing or merely wrong, which
- * is the one thing a reader needs in order to act.
- *
- * Everything below is that translation, done once at the only place every route
- * passes through.
+ * The message is written for the person at the form, not the DTO's author:
+ * fields are named the way the form names them (`line1` is "street address"),
+ * a type rule broken by an absent value reads as "is required", and missing
+ * fields are told apart from wrong ones.
  */
 
 export interface FieldViolation {
@@ -195,9 +168,8 @@ function restate(violation: FieldViolation, present: boolean): string {
  * One sentence a person can act on.
  *
  * Missing fields and wrong fields are stated separately, because they call for
- * different actions and a single flat list of names told the reader neither. A
- * lone failure states itself; the full list is always in `details.violations` for
- * a client that wants to mark up the form.
+ * different actions. A lone failure states itself; the full list is always in
+ * `details.violations` for a client that wants to mark up the form.
  */
 function summarise(violations: readonly FieldViolation[], present: (field: string) => boolean): string {
   if (violations.length === 0) return 'That request is not valid.';
@@ -206,14 +178,10 @@ function summarise(violations: readonly FieldViolation[], present: (field: strin
   if (restated.length === 1) return restated[0]!.text;
 
   /**
-   * Bucketed by FIELD, not by violation.
-   *
-   * One absent property routinely breaks two or three constraints at once —
-   * `@IsString()` and `@IsNotEmpty()` and a length rule all fire on the same
-   * missing value — and bucketing each violation independently put the same
-   * field in two clauses of one sentence: "Subject, body are required; check
-   * category, subject, body." A field that was never sent is missing, and that
-   * is the only thing worth saying about it.
+   * Bucketed by FIELD, not by violation. One absent property routinely breaks
+   * two or three constraints at once (`@IsString()`, `@IsNotEmpty()` and a
+   * length rule all fire on the same missing value), and each field belongs in
+   * one clause only. A field that was never sent is just missing.
    */
   const byField = new Map<string, { name: string; kind: 'unknown' | 'missing' | 'invalid' }>();
   for (const v of restated) {
@@ -232,23 +200,16 @@ function summarise(violations: readonly FieldViolation[], present: (field: strin
   const count = (kind: string) => fields.filter((f) => f.kind === kind).length;
 
   /**
-   * Every violation on a single field: one sentence, not a pile of them.
-   *
-   * An absent property breaks several constraints at once, and reading them all
-   * back produces "asking price has to be more than zero. asking price is
-   * required." — two statements where the second makes the first meaningless.
-   * A field that is missing is missing; otherwise the most specific complaint
-   * wins over the type-shape one, which is the least informative thing a
-   * validator can say.
+   * Every violation on a single field: one sentence, not a pile of them. A field
+   * that is missing is reported only as missing.
    */
   if (byField.size === 1) {
     const required = restated.find((v) => v.text.endsWith('is required.'));
     if (required) return required.text;
     /**
      * A value that IS present but the wrong shape makes the type constraint the
-     * informative one, not the least informative one: `quantity: "lots"` broke
-     * the integer rule and both range rules, and reporting only the ranges gave
-     * "must not be greater than 100. must not be less than 1." about a word.
+     * informative one: `quantity: "lots"` breaks the integer rule and both range
+     * rules, and only the integer rule says anything useful about a word.
      */
     const wrongType = restated.find((v) => TYPE_CONSTRAINTS.has(v.code));
     if (wrongType) return wrongType.text;
@@ -267,9 +228,8 @@ function summarise(violations: readonly FieldViolation[], present: (field: strin
   /**
    * "Required" is the same statement about every field it applies to, so those
    * group into one clause. A field that is present but WRONG is wrong in its own
-   * particular way, and "check country" throws that away — the sentence the
-   * country validator writes ("Choose a destination country from the list…") is
-   * the whole reason it was written by hand.
+   * particular way, so its own sentence is kept (the country validator's "Choose
+   * a destination country from the list…" was written by hand for a reader).
    *
    * Capped, because a form with nine bad fields would otherwise answer with a
    * paragraph. `details.violations` always carries every one of them.

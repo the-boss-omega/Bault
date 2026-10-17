@@ -7,19 +7,16 @@ import { loadEnv } from '@bault/config';
 /**
  * Structured logging, and the request id that makes it worth having.
  *
- * `LOG_LEVEL` was in the env schema and read by NOTHING. Logging was Nest's
+ * Logging goes through this logger, not Nest's
  * default formatter plus a scattering of `console.log` behind eslint-disable
- * comments: no level control, no JSON, no timestamps an aggregator can parse,
- * and — the part that actually hurts — no correlation. When a collector said
- * "my card vanished", there was no way to find the request that did it, because
- * nothing tied a line of output to the call that produced it.
+ * comments, so every line has a level, a parseable timestamp and the id of the
+ * request that produced it. `LOG_LEVEL` sets the threshold.
  *
  * NO DEPENDENCY. pino and winston are both excellent and both are a dependency
  * plus a transport plus a config file for something that is, at this size, one
- * JSON.stringify and a level check. The thing that was missing was never the
- * library; it was the request id and the shape.
+ * JSON.stringify and a level check.
  *
- * In development the output stays human — a single tinted line — because a
+ * In development the output stays human, one plain line per entry, because a
  * developer reading a terminal is a different reader from a log aggregator, and
  * JSON-per-line is miserable to scan by eye.
  */
@@ -56,14 +53,10 @@ export function requestContext(req: Request, res: Response, next: NextFunction):
    * One line per request, written when the response has gone: what was asked,
    * what was answered and how long it took.
    *
-   * There was no such line. A request only left a trace if something inside it
-   * happened to log, so "sign-in is slow" or "the shelf page is returning 500s"
-   * could only be answered by reproducing it. The path is logged WITHOUT its
-   * query string: the verification and reset links carry their token there.
-   * The probes poll every few seconds and are logged at debug, or they would
-   * be most of the log — a probe answering 503 at warn, since the monitor that
-   * polls it is what pages, and an error line every few seconds would only
-   * bury the one that matters.
+   * The path is logged WITHOUT its query string: the verification and reset
+   * links carry their token there. The probes poll every few seconds, so they
+   * log at debug, or they would be most of the log. A probe answering 503 logs
+   * at warn, since the monitor that polls it is what pages.
    */
   const started = process.hrtime.bigint();
   res.on('finish', () => {

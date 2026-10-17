@@ -26,10 +26,10 @@ const OUTBOX_DISPATCH = 'outbox.dispatch';
  *  - /readyz/worker  the worker's jobs are running (see `worker` below).
  * Used by the load balancer / orchestrator to route traffic only to ready nodes.
  *
- * Both are @Public: the callers are probes (load balancer, container
+ * All three are @Public: the callers are probes (load balancer, container
  * orchestrator, the local `pnpm dev` readiness gate) that have no session
- * cookie. Behind the global SessionAuthGuard they answered 401 and were useless
- * as probes. Neither response exposes anything beyond "up" and "db reachable".
+ * cookie. None says more than whether things are up, plus a time per job for
+ * the worker.
  */
 @ApiTags('meta')
 // Probes poll from one address every few seconds; refusing them with a 429
@@ -46,14 +46,9 @@ export class HealthController {
   }
 
   /**
-   * Readiness, answered with a STATUS CODE.
-   *
-   * This used to catch the failure and return `{ status: 'degraded', db: false }`
-   * with a 200. A load balancer reads the code, not the body — so a node whose
-   * database had gone away announced itself as healthy and kept taking traffic,
-   * which is the one thing a readiness probe exists to prevent. The body is
-   * unchanged for anything reading it by hand; what changed is that a degraded
-   * node now answers 503 and is pulled out of rotation.
+   * Readiness, answered with a STATUS CODE. A load balancer reads the code, not
+   * the body, so a node whose database is unreachable answers 503 and is pulled
+   * out of rotation.
    */
   @Public()
   @Get('readyz')
@@ -67,16 +62,13 @@ export class HealthController {
   }
 
   /**
-   * Whether the WORKER is alive (step 10).
+   * Whether the WORKER is alive.
    *
-   * Nothing could tell. The worker has no HTTP port, and when it stopped the API
-   * kept answering and `/readyz` kept saying the database was up, while
-   * notifications, storage billing and interest silently stopped. Every job now
-   * stamps `worker_heartbeat` when it succeeds; this answers 503 once outbox
-   * dispatch has not succeeded for five minutes, so an uptime monitor pointed
-   * here pages somebody.
+   * The worker has no HTTP port, so every job stamps `worker_heartbeat` when it
+   * succeeds; this answers 503 once outbox dispatch has not succeeded for five
+   * minutes, so an uptime monitor pointed here pages somebody.
    *
-   * Freshness is decided by the database's clock, which wrote the timestamps —
+   * Freshness is decided by the database's clock, which wrote the timestamps,
    * not this process's, which may disagree with the worker host's.
    *
    * Public like `/readyz`, and as careful about what it says: a time per job,
