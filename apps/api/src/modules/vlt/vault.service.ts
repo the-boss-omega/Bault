@@ -385,6 +385,7 @@ export class VaultService {
         receivedAt: item.receivedAt,
         oversized: item.oversized,
         lifecycleState: item.lifecycleState,
+        lotBroken: item.lotBroken,
       })
       .from(item)
       .where(and(eq(item.id, itemId), eq(item.ownerId, userId)))
@@ -445,9 +446,9 @@ export class VaultService {
       periodChargeMinor: periodChargeMinor(intakeMinor, params),
       freeUntil: received ? freeUntil(received, params) : null,
       // An item that has left storage is not accruing anything, so there is no
-      // next charge to name.
+      // next charge to name. Nor is a split lot: its cards are billed instead.
       nextChargeAt:
-        received && it.lifecycleState === 'stored'
+        received && it.lifecycleState === 'stored' && !it.lotBroken
           ? nextChargeAt(received, params, periodsBilled)
           : null,
     };

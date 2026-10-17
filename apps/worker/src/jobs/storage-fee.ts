@@ -44,6 +44,11 @@ import { renewMemberships } from './membership-renewal';
  *
  * Memberships are renewed FIRST, so a cycle that ran out since the hourly
  * renewal's last run still covers the member's items tonight.
+ *
+ * A SPLIT LOT IS NOT STORED STOCK. `breakLot` leaves the lot `stored` with
+ * `lot_broken` set, as the record its cards came from, and books each card in
+ * as an item of its own. Both statements skip it: billed, it would be charged
+ * beside its own cards, and covered, it would take one of the member's slots.
  */
 const SWEEP_LOCK = 'job:storage-fee';
 
@@ -87,6 +92,7 @@ const COVERED = `
           FROM item i
           JOIN member_cap c ON c.user_id = i.owner_id
          WHERE i.lifecycle_state = 'stored'
+           AND NOT i.lot_broken
            AND i.received_at IS NOT NULL
       ) r
      WHERE r.rn <= r.stored_items
@@ -211,6 +217,7 @@ export async function runStorageFees(pool: Pool): Promise<void> {
            FROM item i
            LEFT JOIN storage_cover sc ON sc.item_id = i.id
           WHERE i.lifecycle_state = 'stored'
+            AND NOT i.lot_broken
             AND i.received_at IS NOT NULL
             AND i.id NOT IN (SELECT id FROM member_covered)
        ),
