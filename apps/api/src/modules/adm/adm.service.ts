@@ -33,11 +33,10 @@ export interface ItemPatch {
 }
 
 /**
- * Administration (minimal Phase-11 slice). Lets a manager (admin) SEE all accounts
- * and all cards and EDIT them. Descriptive item edits are recorded in change
- * history; owner/bin/state/hold changes still write custody events so the
- * chain-of-custody is never broken (Principle III) — the admin simply overrides
- * the lifecycle transition validation.
+ * Administration. Lets an admin SEE all accounts and all cards and EDIT them.
+ * Descriptive item edits are recorded in change history; owner/bin/state/hold
+ * changes still write custody events so the chain-of-custody is never broken
+ * (Principle III). The admin overrides only the lifecycle transition validation.
  */
 export type DisputeStatus = 'open' | 'investigating' | 'ruled' | 'closed';
 
@@ -52,24 +51,18 @@ export class AdmService {
   /**
    * The product-facing Users table.
    *
-   * Integration fixtures are excluded. The e2e suites register real accounts
-   * against a real database, and those rows used to pile up in this table run
-   * after run — three of them were sitting in the development database and were
-   * indistinguishable from customers at a glance.
-   *
-   * The exclusion is deliberately narrow: it matches ONLY the reserved fixture
-   * domain that the test helper mints (`FIXTURE_EMAIL_DOMAIN`), which is a
-   * `.test` TLD reserved by RFC 2606 and can never be a real address. It does
-   * NOT match on the substring "test" anywhere else — a genuine customer at
-   * `test.family@…` or `contest@…` stays visible, as does anything at
-   * `bault.dev`.
+   * Integration fixtures, which the e2e suites register against a real
+   * database, are excluded. The match is narrow: ONLY the reserved fixture
+   * domain the test helper mints (`FIXTURE_EMAIL_DOMAIN`, a `.test` TLD
+   * reserved by RFC 2606). A genuine customer at `test.family@…` or
+   * `contest@…` stays visible, as does anything at `bault.dev`.
    */
   listUsers() {
     return this.db
       .select({
         id: userAccount.id,
         email: userAccount.email,
-        username: userAccount.username, // read-only everywhere (Requirement 4.1)
+        username: userAccount.username, // read-only everywhere
         firstName: userAccount.firstName,
         lastName: userAccount.lastName,
         // Set by migration 0004 where a legacy display name could not be split
@@ -78,7 +71,7 @@ export class AdmService {
         role: userAccount.role,
         status: userAccount.status,
         intakeId: userAccount.intakeId,
-        // Whether the account signs in with a second factor — the Users screen
+        // Whether the account signs in with a second factor; the Users screen
         // offers the reset only where there is one to reset.
         mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
       })
@@ -88,21 +81,13 @@ export class AdmService {
   }
 
   /**
-   * Edit a user. `actorId` is the administrator doing it, and it matters.
+   * Edit a user. `actorId` is the administrator doing it.
    *
-   * SUSPENDING YOURSELF WORKED, AND IT WAS FATAL. `PATCH /admin/users/:id` with
-   * your own id and `status: 'suspended'` returned 200, and the very next admin
-   * request answered `account_suspended`. Every route on the console is behind
-   * the admin role and the suspension guard, so the one person who could lift
-   * the suspension was the person who could no longer make a request. Nothing in
-   * the product could undo it — it needed a hand on the database. Demoting
-   * yourself to `user` had exactly the same effect by a different door.
-   *
-   * The guard is narrow on purpose: an administrator may still edit their own
-   * NAME, which is an ordinary thing to want and cannot lock anybody out. Only
-   * the two fields that revoke your own access are refused, and the refusal says
-   * what to do instead — another administrator can make the change, which is
-   * also the only way it gets reviewed by somebody.
+   * An administrator may not suspend, close or demote themselves: every console
+   * route is behind the admin role and the suspension guard, so the change would
+   * lock out the one person able to undo it. Only those two fields are refused
+   * (an administrator may still edit their own name), and the refusal says to
+   * ask another administrator.
    */
   async updateUser(actorId: string, id: string, patch: UserPatch) {
     if (actorId === id) {
@@ -123,15 +108,12 @@ export class AdmService {
     if (patch.status) {
       set.status = patch.status;
       // Any status a person sets is a person's decision, so the debt sweep's
-      // marker goes with it (N7). It survived manual changes before: an
-      // administrator who reinstated a debt-suspended account and later
-      // suspended it for some other reason had that suspension lifted by the
-      // next sweep once the balance recovered, because the sweep still took it
-      // for one of its own.
+      // marker is cleared with it. Otherwise a later sweep could lift a manual
+      // suspension once the balance recovered, taking it for one of its own.
       set.autoSuspendedAt = null;
     }
     // An admin who writes a name part has just reviewed it, so the migration's
-    // review flag is cleared with it — that is the only thing that clears it here.
+    // review flag is cleared with it. Nothing else here clears it.
     for (const f of ['firstName', 'lastName'] as const) {
       if (patch[f] === undefined) continue;
       const value = normalizeNamePart(patch[f]);
@@ -141,7 +123,7 @@ export class AdmService {
     }
     if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
 
-    // NOTE: `username` is deliberately not patchable here either (Requirement 4.1).
+    // `username` is deliberately not patchable here either.
     await this.db.update(userAccount).set(set as never).where(eq(userAccount.id, id));
     const [u] = await this.db.select().from(userAccount).where(eq(userAccount.id, id)).limit(1);
     if (!u) throw AppError.notFound('User not found');
@@ -214,12 +196,10 @@ export class AdmService {
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'ownership_transfer', prevOwnerId: cur.ownerId, newOwnerId: patch.ownerId, actorId, reason: 'admin edit' });
 
         /**
-         * The previous owner's listing goes with the previous owner.
-         *
-         * It used to stay live: the card belonged to somebody new, and a buyer
-         * could still buy it from the old owner, who was paid for it. Taken off
-         * sale here, open offers on it closed, and the card put back on the
-         * shelf unless this same edit sets a state of its own.
+         * The previous owner's listing goes with the previous owner, so nobody
+         * can buy the card from somebody who no longer owns it. Taken off sale
+         * here, open offers on it closed, and the card put back on the shelf
+         * unless this same edit sets a state of its own.
          */
         const removed = await tx
           .update(listing)
@@ -265,14 +245,14 @@ export class AdmService {
   }
 
   // ---------------------------------------------------------------------------
-  // Disputes (ADM-04)
+  // Disputes
   // ---------------------------------------------------------------------------
 
   listDisputes() {
     return this.db.select().from(dispute).orderBy(sql`${dispute.createdAt} desc`);
   }
 
-  /** Recorded transactions a dispute can reference (Requirement 13.3). */
+  /** Recorded transactions a dispute can reference. */
   listTransactions() {
     return this.db
       .select({
@@ -288,7 +268,7 @@ export class AdmService {
   }
 
   async openDispute(adminId: string, input: { transactionId: string; note?: string }) {
-    // A dispute MUST reference an actual recorded transaction (Requirement 13.3).
+    // A dispute MUST reference an actual recorded transaction.
     const [tx] = await this.db
       .select({ id: transaction.id })
       .from(transaction)
@@ -324,7 +304,7 @@ export class AdmService {
   }
 
   // ---------------------------------------------------------------------------
-  // Storage-fee runs (VLT-04)
+  // Storage-fee runs
   // ---------------------------------------------------------------------------
 
   /**
@@ -332,8 +312,9 @@ export class AdmService {
    * All charges + ledger debits + the run record commit in ONE transaction, each
    * charge carrying the pricing-rule snapshot in force now (price freeze).
    *
-   * There is no manual trigger for this (Requirement 12.2) — it is invoked by the
-   * automatic daily worker sweep, which passes `'system'` as the actor.
+   * Nothing calls this and there is no manual trigger. The daily sweep is the
+   * worker's own SQL job (`apps/worker/src/jobs/storage-fee.ts`), which also
+   * applies included windows and membership cover; this method does not.
    */
   async runStorageFees(adminId: string, thresholdDays: number) {
     if (!Number.isInteger(thresholdDays) || thresholdDays < 0) {
@@ -415,14 +396,10 @@ export class AdmService {
    * Who signed in, and who tried to.
    *
    * Read from `login_attempt`, the append-only log every exit from
-   * `AuthService.login` writes to. Before it existed the honest answer to "has
-   * anybody been guessing passwords?" was "we would never know": failures were
-   * not recorded anywhere, and successes were an audit row with no user on it.
+   * `AuthService.login` writes to.
    *
-   * The summary is the part an administrator acts on. A run of failures against
-   * one account from several addresses is somebody working through a list; the
-   * `suspicious` rows name the accounts that have crossed the line in the last
-   * day so nobody has to eyeball two hundred rows to see it.
+   * The summary is the part an administrator acts on: the `suspicious` rows
+   * name the accounts with a run of failures in the last day.
    */
   async recentLogins(limit = 200) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -446,11 +423,10 @@ export class AdmService {
       .limit(Math.min(Math.max(limit, 1), 500));
 
     /**
-     * What counts as a failure. Not "anything but success": since sign-in grew
-     * a second step, `mfa_challenged` — the password was right and a code was
-     * asked for — precedes every successful two-step sign-in, and counting it
-     * would list every enrolled account that signs in five times a day as
-     * somebody guessing passwords. A wrong code (`mfa_failed`) is a failure.
+     * What counts as a failure. Not "anything but success": `mfa_challenged`
+     * (the password was right and a code was asked for) precedes every
+     * successful two-step sign-in, so it is not counted. A wrong code
+     * (`mfa_failed`) is a failure.
      */
     const failed = sql`${loginAttempt.outcome} NOT IN ('success', 'mfa_challenged')`;
 

@@ -13,21 +13,16 @@ import {
 } from './reconciliation';
 
 /**
- * What an accountant needs from the ledger (N40) — and deliberately nothing
- * more.
+ * What an accountant needs from the ledger, and deliberately nothing more.
  *
  * `ledger_record` is a single-entry WALLET ledger: a fee comes off a customer
- * and is credited to no account of Bault's. So Bault's revenue was never
- * recorded anywhere; it existed only as a sum of rows nobody had written the
- * query for. There was no export for an accountant, no monthly figure, and no
- * comparison between the ledger and the money that actually moved through
- * PayPal.
+ * and is credited to no account of Bault's, so Bault's revenue is a sum of
+ * rows, computed here. Alongside it: the ledger export, a monthly summary, and
+ * a comparison with the money that actually moved through the provider.
  *
- * This is the reporting half of the fix: read-only, admin-only, computed from
- * the rows that exist. It does NOT apply tax, issue invoices or decide which
- * of these lines are taxable revenue — those depend on the legal entity and
- * where it trades, which is an accountant's and a lawyer's decision, not the
- * code's. What it does is make every number they need one request away.
+ * Read-only, admin-only, computed from the rows that exist. It does NOT apply
+ * tax, issue invoices or decide which lines are taxable revenue: that depends
+ * on the legal entity and where it trades, which is for an accountant.
  */
 
 /** One calendar day, UTC: `2026-10-15`. */
@@ -38,10 +33,9 @@ const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 /**
  * The widest range one export may cover.
  *
- * The export streams, so memory is not the limit — but one request holding a
- * read open across years of ledger is a request that competes with every
- * customer's for the database. A year at a time is what an accountant asks for
- * anyway.
+ * The export streams, so memory is not the limit, but one request holding a
+ * read open across years of ledger competes with every customer's for the
+ * database. A year at a time is what an accountant asks for anyway.
  */
 export const MAX_EXPORT_DAYS = 366;
 
@@ -105,7 +99,7 @@ export function parseMonth(month: string | undefined) {
  *
  * A username may begin with `-`, and a spreadsheet opening this file treats a
  * cell starting `=`, `+`, `-` or `@` as a formula. A leading apostrophe makes it
- * text — which is what it is.
+ * text.
  */
 export function csvField(value: string | number | null): string {
   if (value === null) return '';
@@ -229,16 +223,16 @@ export class AccountingService {
    *
    * Three things an accountant must never add together:
    *
-   *   REVENUE — what Bault charged: fees, service charges, escrow and cash-out
-   *     fees, interest. Debits net of any credit of the same type.
-   *   CUSTOMER MONEY IN AND OUT — top-ups and cash-ins, cash-outs, and payments
+   *   REVENUE: what Bault charged (fees, service charges, escrow and cash-out
+   *     fees, interest). Debits net of any credit of the same type.
+   *   CUSTOMER MONEY IN AND OUT: top-ups and cash-ins, cash-outs, and payments
    *     the cardholder took back. Money passing through, not earned.
-   *   BALANCES HELD — what every customer wallet adds up to at the end of the
+   *   BALANCES HELD: what every customer wallet adds up to at the end of the
    *     month: money Bault holds that belongs to somebody else, net of what
    *     customers in debt owe it.
    *
-   * Movements between customers — a purchase and the matching sale credit, an
-   * escrow hold and its release — appear in `byType` and in none of the three.
+   * Movements between customers (a purchase and the matching sale credit, an
+   * escrow hold and its release) appear in `byType` and in none of the three.
    */
   async summary(month: { month: string; start: Date; end: Date }) {
     const from = month.start.toISOString();
@@ -256,8 +250,8 @@ export class AccountingService {
     /**
      * Revenue, split by what was charged for.
      *
-     * The ledger type alone cannot tell an escrow fee from a cash-out fee —
-     * both are `fee` — but every fee written through a charge carries its
+     * The ledger type alone cannot tell an escrow fee from a cash-out fee
+     * (both are `fee`), but every fee written through a charge carries its
      * reason in the charge's snapshot, and the marketplace and consignment
      * commissions name the listing or the request they came from.
      */
@@ -290,8 +284,8 @@ export class AccountingService {
      *
      * A shipping charge is one line to the customer and one `service_charge` on
      * the ledger, but most of it is the carrier's rate, which Bault pays on.
-     * Reported beside the revenue — not subtracted from it — because whether
-     * it is revenue and a cost, or a pass-through, is the accountant's call.
+     * Reported beside the revenue, not subtracted from it, because whether it
+     * is revenue and a cost, or a pass-through, is the accountant's call.
      */
     const [carrier] = (
       await this.db.execute<{ total: string }>(sql`
@@ -445,12 +439,11 @@ export class AccountingService {
     /**
      * Every debit that sent money out of a wallet, with the payout it belongs to.
      *
-     * Two shapes. A cash-out paid through the payout flow links its request to
-     * its payment (`wallet_request.payout_payment_id`) before the provider is
-     * called, and its withdrawal row is already the NET, the fee being a row of
-     * its own. One completed before that flow existed recorded the reference
-     * and the fee in its `completed` event, and its withdrawal row was the
-     * gross. A debit with neither has no payout to point at.
+     * Two shapes. A cash-out completed through the payout flow links its
+     * request to its payment (`wallet_request.payout_payment_id`), and its
+     * withdrawal row is the NET, the fee being a row of its own. An older one
+     * recorded the reference and the fee in its `completed` event, and its
+     * withdrawal row is the gross. A debit with neither has no payout to point at.
      */
     const withdrawals = (
       await this.db.execute<Record<string, unknown>>(sql`
