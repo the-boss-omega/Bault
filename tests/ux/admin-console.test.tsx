@@ -223,7 +223,7 @@ const LISTED_CARD = {
   serialNumber: 'SN-1',
   barcode: 'BLT-0001',
   typeClass: 'trading_card',
-  description: 'Charizard',
+  description: '2021 Evolving Skies Rayquaza VMAX #218/203',
   conditionGrade: null,
   lifecycleState: 'listed',
   holdFlag: false,
