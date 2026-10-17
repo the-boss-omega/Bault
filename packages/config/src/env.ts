@@ -260,6 +260,12 @@ const BaseSchema = z.object({
    * rather than `z.coerce.boolean()`, which maps the string "false" to TRUE.
    */
   SMTP_SECURE: booleanFromEnv(false),
+  /**
+   * On 587, refuse to go on in clear when the server does not offer STARTTLS.
+   * `false` is for a local mail catcher (Mailpit, MailHog) in development, and
+   * is refused anywhere else (`checkCombinations`).
+   */
+  SMTP_REQUIRE_TLS: booleanFromEnv(true),
   SMTP_USER: z.string().optional().default(''),
   /**
    * Whitespace is stripped. Google displays an app password as four
@@ -412,6 +418,15 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
   if (env.EMAIL_PROVIDER === 'smtp') {
     for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const) {
       require(key, 'EMAIL_PROVIDER=smtp');
+    }
+    // Plaintext SMTP sends the password and every reset link in clear.
+    if (env.SMTP_REQUIRE_TLS === false && env.NODE_ENV !== 'development') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SMTP_REQUIRE_TLS'],
+        message:
+          'SMTP_REQUIRE_TLS=false is for a local mail catcher in development only; anywhere else SMTP must use TLS',
+      });
     }
   }
 
