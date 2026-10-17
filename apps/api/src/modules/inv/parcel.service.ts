@@ -76,7 +76,7 @@ export interface ReceiveParcelInput {
   notes?: string;
   /**
    * Object keys of photographs of the box as it turned up, already uploaded via
-   * `POST /media/uploads`. Keys, never bytes — the same convention the wallet
+   * `POST /media/uploads`. Keys, never bytes: the same convention the wallet
    * request uses for its supporting document.
    */
   photoKeys?: string[];
@@ -90,7 +90,7 @@ export interface OpenParcelInput {
 }
 
 /**
- * Inbound parcels — the half of the platform that did not exist.
+ * Inbound parcels.
  *
  * A collector buys from a third-party seller, ships to a Bault address, and the
  * parcel travels through: registered (optionally) → received → opened → the
@@ -104,9 +104,10 @@ export interface OpenParcelInput {
  * whose" is to have no record of it at all. It is held as `unclaimed`, with
  * whatever was written on the label preserved verbatim.
  *
- * SECOND, money moves at exactly one point — `process` — and only once. A parcel
- * that is received and never opened costs nothing; the fee is for the work of
- * unpacking and cataloguing, so it is charged when that work is done.
+ * SECOND, the per-package fee is charged at exactly one point, `process`, and
+ * only once. The fee is for the work of unpacking and cataloguing, so it is
+ * charged when that work is done. (Forwarding is separate work with its own
+ * fee; see `forward`.)
  */
 @Injectable()
 export class ParcelService {
@@ -166,7 +167,7 @@ export class ParcelService {
   /**
    * Tell Bault a parcel is on its way.
    *
-   * Optional by design — a parcel that turns up unannounced is received exactly
+   * Optional by design: a parcel that turns up unannounced is received exactly
    * the same way. Registering one buys two things: the collector can watch it,
    * and the operator receiving it has a tracking number to match against, which
    * is what turns a mystery box into somebody's property before it is opened.
@@ -336,13 +337,8 @@ export class ParcelService {
   }
 
   /**
-   * One arrival, inside a transaction the CALLER owns.
-   *
-   * Split out so a batch can put the whole stack in one transaction. `receive`
-   * opened its own, so `receiveMany` — which was a loop over it — committed each
-   * box as it went: the refusal on row two left row one on the system, and an
-   * operator fixing the bad row and pressing the button again received the first
-   * box twice.
+   * One arrival, inside a transaction the CALLER owns, so `receiveMany` can put
+   * the whole stack in one transaction.
    */
   private async receiveIn(tx: Database, operatorId: string, input: ReceiveParcelInput) {
     const fac = await this.facilityByCode(input.facilityCode);
@@ -445,12 +441,8 @@ export class ParcelService {
   }
 
   /**
-   * Book several arrivals in one gesture.
-   *
-   * A receiving bench does not process one box at a time — a courier drops a
-   * dozen, and the operator works down the stack. Receiving them one at a time
-   * through a form that clears itself between each meant re-choosing the
-   * facility, re-typing the carrier, and no way to see the run as a whole.
+   * Book several arrivals in one gesture: a courier drops a dozen, and the
+   * operator works down the stack.
    *
    * ALL OR NOTHING, on purpose. A partial success would leave the operator
    * reading a list of results to work out which four of seven boxes are now on
@@ -481,10 +473,9 @@ export class ParcelService {
    * Silently ignores an empty list so every caller can pass the field through
    * without checking it.
    *
-   * This comment used to say the keys "have already been through MediaService".
-   * Nothing made that true: any string was stored and later signed, including a
-   * key minted for an item, a key nobody uploaded, or one with a `..` segment
-   * (F453). `assertAttachable` now makes it true, in this transaction.
+   * The keys are checked by `MediaService.assertAttachable` in this
+   * transaction, so a key nobody uploaded, or one uploaded for something other
+   * than a parcel, is refused before it is stored and later signed.
    */
   private async attachPhotos(
     tx: Database,
@@ -587,7 +578,7 @@ export class ParcelService {
   /**
    * Open it and record what the check found.
    *
-   * The condition finding is written BEFORE any item exists, and is required —
+   * The condition finding is written BEFORE any item exists, and is required:
    * "sound" is a positive statement that somebody looked, not a default that
    * means nobody did. It is the timestamped evidence a damage dispute rests on.
    */
@@ -629,7 +620,7 @@ export class ParcelService {
       });
 
       // A damaged arrival is told to the owner immediately rather than waiting
-      // for the contents to be catalogued — they may want to open a claim with
+      // for the contents to be catalogued: they may want to open a claim with
       // the seller or the carrier, and both have deadlines.
       if (input.condition !== 'sound') {
         await this.notifyOwner(tx, parcelId, row.ownerId, 'parcel_damaged', {
@@ -650,15 +641,10 @@ export class ParcelService {
    * transition guard is what stops it being charged twice: `processed` has no
    * outgoing edges, so a second call cannot reach this code.
    *
-   * The empty-parcel guard is the reconciliation step this workflow was missing.
-   * Closing an opened parcel that produced no items was a single click, and it
-   * charged the collector a processing fee for unpacking nothing while leaving a
-   * record that says the box was dealt with. There are only two ways a box can
-   * be empty at this point — it really arrived empty, or somebody pressed the
-   * button before booking the contents in — and the second is by far the more
-   * likely, so the default answer is to refuse. `emptyReason` is the operator
-   * asserting the first, in words, onto the append-only trail, which is what
-   * makes it a finding rather than a slip.
+   * An opened parcel that produced no items is refused by default. It either
+   * really arrived empty or somebody pressed the button before booking the
+   * contents in, and the second is far more likely. `emptyReason` is the
+   * operator asserting the first, in words, onto the append-only trail.
    */
   async process(operatorId: string, parcelId: string, emptyReason?: string) {
     const statedEmptyReason = emptyReason?.trim() ?? '';
@@ -770,7 +756,7 @@ export class ParcelService {
     });
   }
 
-  /** Dispose of a parcel — refused outright, or held past the retention window. */
+  /** Dispose of a parcel: refused outright, or held past the retention window. */
   async dispose(operatorId: string, parcelId: string, reason: string) {
     const notes = reason?.trim() ?? '';
     if (!notes) throw AppError.validation('Record why this parcel is being disposed of');
@@ -809,10 +795,9 @@ export class ParcelService {
   /**
    * Everything a warehouse still has to act on, oldest first.
    *
-   * `itemCount` is the running number of units already booked out of the box.
-   * It is the one number a receive bench needs and did not have: an operator
-   * looking at an opened parcel could not tell, without leaving the page,
-   * whether they had booked in three of its cards or none of them.
+   * `itemCount` is the running number of units already booked out of the box,
+   * so an operator can see from the queue how far through an opened parcel they
+   * are.
    */
   listQueue() {
     const contents = this.db
@@ -854,8 +839,8 @@ export class ParcelService {
    *
    * Two numbers and one age. The counts say how much work is in front of any
    * given parcel; the age of the oldest unprocessed arrival is the honest answer
-   * to "how long is this taking at the moment" — a turnaround figure derived from
-   * what is actually on the bench rather than a promise typed into a page.
+   * to "how long is this taking at the moment", derived from what is actually on
+   * the bench rather than a promise typed into a page.
    */
   async workflow() {
     const rows = await this.db
@@ -885,7 +870,7 @@ export class ParcelService {
     };
   }
 
-  /** Unclaimed arrivals past the retention window — the disposal candidates. */
+  /** Unclaimed arrivals past the retention window: the disposal candidates. */
   listRetentionDue(retentionDays: number) {
     return this.db
       .select({
@@ -916,9 +901,8 @@ export class ParcelService {
     eventType: string,
     payload: Record<string, unknown>,
   ): Promise<void> {
-    // An unclaimed parcel has nobody to tell. The event is still worth writing
-    // to the trail, but there is no recipient, so no outbox message is emitted —
-    // the dispatcher would consume it and deliver to nobody.
+    // An unclaimed parcel has nobody to tell. The caller still writes the event
+    // to the trail, but with no recipient no outbox message is emitted.
     if (!ownerId) return;
     await this.outbox.emit(tx, {
       aggregateType: 'parcel',

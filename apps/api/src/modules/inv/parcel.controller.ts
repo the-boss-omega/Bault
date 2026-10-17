@@ -49,12 +49,9 @@ class ReceiveParcelDto {
 }
 
 /**
- * A stack of boxes, booked in together.
- *
- * A courier drops a dozen at once and the operator works down the pile; the
- * single-parcel form cleared itself between each, so the facility and the
- * carrier were re-chosen every time and there was no way to see the run as a
- * whole. `ArrayMaxSize` is a sanity bound, not a workflow limit.
+ * A stack of boxes, booked in together: a courier drops a dozen at once and the
+ * operator works down the pile. `ArrayMaxSize` is a sanity bound, not a
+ * workflow limit.
  */
 class ReceiveManyDto {
   @IsArray()
@@ -76,7 +73,7 @@ class OpenParcelDto {
 /**
  * The only way to close out a parcel that produced no items: the operator
  * states, in words, that it really did arrive empty. Absent, an empty parcel is
- * refused rather than billed — see `ParcelService.process`.
+ * refused rather than billed (see `ParcelService.process`).
  */
 class ProcessParcelDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(1000) emptyReason?: string;
@@ -93,8 +90,8 @@ class DisposeParcelDto {
 /**
  * Inbound parcels and the addresses they are sent to.
  *
- * Roles are per method. The collector half — their addresses, their parcels,
- * registering one, cancelling one they registered — is ordinary account
+ * Roles are per method. The collector half (their addresses, their parcels,
+ * registering one, cancelling one they registered) is ordinary account
  * functionality; the warehouse half is staff-only. A class-level role, as
  * `InvController` has, would put a collector's own inbound record behind a
  * warehouse permission.
@@ -132,8 +129,8 @@ export class ParcelController {
 
   /**
    * One parcel in full. Staff may open any; a collector only their own, and the
-   * service answers `notFound` rather than `forbidden` on a miss — telling a
-   * stranger that somebody else's parcel id exists is itself a leak.
+   * service answers `notFound` rather than `forbidden` on a miss, because
+   * telling a stranger that somebody else's parcel id exists is itself a leak.
    */
   @Get('parcels/:id')
   detail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
@@ -165,13 +162,7 @@ export class ParcelController {
     return this.parcels.receive(user.id, dto);
   }
 
-  /**
-   * Several arrivals in one gesture — all of them, or none.
-   *
-   * Declared before `parcels/:id/...` for the same reason `listings/mine` is: the
-   * route table is ordered, and a literal segment that sits after a parameter is
-   * unreachable.
-   */
+  /** Several arrivals in one gesture: all of them, or none. */
   @Roles('warehouse_operator', 'admin')
   @Post('parcels/receive/batch')
   receiveMany(@Body() dto: ReceiveManyDto, @CurrentUser() user: AuthUser) {
@@ -182,7 +173,7 @@ export class ParcelController {
    * The photographs on one parcel.
    *
    * Same visibility rule as the parcel itself: `detailFor` decides whether this
-   * caller may see the box at all, and the photographs follow it — a collector
+   * caller may see the box at all, and the photographs follow it: a collector
    * gets the pictures of their own arrival, which is the point of taking them.
    */
   @Get('parcels/:id/photos')

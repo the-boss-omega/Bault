@@ -2,16 +2,14 @@ import { pgEnum, pgTable, text, boolean, jsonb, timestamp, uniqueIndex } from 'd
 import { pkId, createdAt, updatedAt } from '../../db/schema/_helpers';
 
 /**
- * PARCEL — a package on its way to, or sitting at, a facility.
+ * PARCEL: a package on its way to, or sitting at, a facility.
  *
- * This is the record the platform was missing. Everything in a Bault vault used
- * to begin its life as an operator typing into a form, so there was no answer to
- * "what is on its way to me", no way to verify what turned up against what was
- * expected, nothing to charge a per-package fee against, and no such thing as an
- * arrival nobody could attribute.
+ * It answers "what is on its way to me", lets an arrival be checked against
+ * what was expected, carries the per-package fee, and records arrivals nobody
+ * can attribute.
  *
  * The parcel is deliberately NOT an item. It is a container that may turn into
- * any number of items, none at all, or a problem — and it exists from before it
+ * any number of items, none at all, or a problem, and it exists from before it
  * arrives until after it has been emptied.
  */
 export const parcelStatus = pgEnum('parcel_status', [
@@ -24,7 +22,7 @@ export const parcelStatus = pgEnum('parcel_status', [
   /** Every item has been booked in. Terminal for a normal parcel. */
   'processed',
   /**
-   * Arrived with nothing that resolves to an account. Held, not opened — it is
+   * Arrived with nothing that resolves to an account. Held, not opened: it is
    * somebody's property and nobody knows whose. Terminal unless claimed.
    */
   'unclaimed',
@@ -34,7 +32,7 @@ export const parcelStatus = pgEnum('parcel_status', [
 
 /**
  * What the arrival check found. Recorded when the parcel is opened, before the
- * contents are booked in — so a dispute about damage has a timestamped finding
+ * contents are booked in, so a dispute about damage has a timestamped finding
  * that predates the item records.
  */
 export const parcelCondition = pgEnum('parcel_condition', [
@@ -54,8 +52,8 @@ export const parcel = pgTable(
      * The account this belongs to, once known. NULL is a real, meaningful state:
      * a parcel can arrive addressed to a username that does not exist, and the
      * platform has to be able to hold it and say so rather than refuse to record
-     * it. `addressedTo` keeps whatever was actually written on the label, even —
-     * especially — when it resolves to nothing.
+     * it. `addressedTo` keeps whatever was actually written on the label, even
+     * (especially) when it resolves to nothing.
      */
     ownerId: text('owner_id'),
     addressedTo: text('addressed_to'),
@@ -113,7 +111,7 @@ export const parcel = pgTable(
  * The parcel row carries the current state; this carries how it got there. It
  * matters more here than almost anywhere else in the platform, because a parcel
  * is the one place where somebody else's unopened property sits in Bault's
- * custody before any item record exists — so "when did it arrive, who opened it,
+ * custody before any item record exists, so "when did it arrive, who opened it,
  * what did they find" cannot be a mutable field.
  *
  * Registered with the guards in `0001_append_only.sql`.
@@ -121,7 +119,7 @@ export const parcel = pgTable(
 export const parcelEvent = pgTable('parcel_event', {
   id: pkId(),
   parcelId: text('parcel_id').notNull(),
-  eventType: text('event_type').notNull(), // registered | received | forwarded | opened | processed | unclaimed | claimed | disposed
+  eventType: text('event_type').notNull(), // registered | registration_cancelled | received | forwarded | opened | processed | claimed | disposed | direct_shipped | direct_dispatched
   fromStatus: text('from_status'),
   toStatus: text('to_status'),
   /** Null for a customer's own registration; set for every operator action. */
@@ -134,13 +132,13 @@ export const parcelEvent = pgTable('parcel_event', {
 });
 
 /**
- * A photograph of a PARCEL — the container, not its contents.
+ * A photograph of a PARCEL: the container, not its contents.
  *
  * Deliberately its own table rather than a row in `item_image`. A parcel
  * photograph is evidence about a box: it is taken before anybody knows what is
  * inside, it belongs to no item, and it has to outlive the box being emptied. An
- * arrival shot and a condition shot answer different questions — "this is how it
- * turned up" and "this is what the check found" — so the kind is recorded rather
+ * arrival shot ("this is how it turned up") and a condition shot ("this is what
+ * the check found") answer different questions, so the kind is recorded rather
  * than inferred from when it was taken.
  *
  * Not append-only guarded: unlike `parcel_event`, a photograph attached to the

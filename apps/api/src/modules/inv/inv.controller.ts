@@ -23,8 +23,8 @@ import { BatchService } from './batch.service';
 
 /**
  * `ownerUsername` is the field the intake form fills in. `ownerIntakeId` is
- * optional and legacy — kept so a package with a pre-printed OW- label can still
- * be received — and no UI offers it. `IntakeService.resolveOwner` prefers the
+ * optional and legacy, kept so a package with a pre-printed OW- label can still
+ * be received; no UI offers it. `IntakeService.resolveOwner` prefers the
  * username whenever both arrive.
  */
 class IntakeItemDto {
@@ -36,7 +36,7 @@ class IntakeItemDto {
   /**
    * The shelf, by internal id OR by the barcode printed on it. Optional here
    * and only here: send `autoStow` instead and the system directs the stow.
-   * Every item still ends up on a shelf (Requirement 10.3) — see
+   * Every item still ends up on a shelf (Requirement 10.3); see
    * `IntakeService.resolveStowBin`.
    */
   @IsOptional() @IsString() binId?: string;
@@ -55,11 +55,9 @@ class IntakeItemDto {
    * Photographs of the thing actually being booked in, as keys from
    * `POST /media/uploads`.
    *
-   * Recorded as `item_image` rows of type `intake`, which is the pipeline the
-   * customer's card drawer already reads — so a card photographed at the bench
-   * shows the operator's picture of it from the moment it lands in the vault,
-   * instead of the generated placeholder it showed until somebody paid for a
-   * professional shoot.
+   * Recorded as `item_image` rows of type `intake`, which the customer's card
+   * drawer reads, so a card photographed at the bench shows that picture from
+   * the moment it lands in the vault.
    *
    * On a bulk intake every copy gets the same photographs, which is the truth:
    * one shot of a run of twelve identical commons describes all twelve.
@@ -71,7 +69,7 @@ class IntakeItemDto {
  * Several DIFFERENT units, booked in together.
  *
  * `quantity` on `IntakeItemDto` makes N copies of one description, which is the
- * wrong instrument for the ordinary case — a box holds a Rayquaza ex, a sealed
+ * wrong instrument for the ordinary case: a box holds a Rayquaza ex, a sealed
  * pack and a graded Gold Star. Each entry here is its own unit with its own class,
  * description, condition, serial and photographs.
  */
@@ -123,18 +121,13 @@ export class InvController {
     return this.intake.intakeItem(user.id, dto);
   }
 
-  /**
-   * A box's worth of different units, in one submission.
-   *
-   * Declared before `items/:itemId` for the reason `listings/mine` is: the route
-   * table is ordered, and a literal segment after a parameter is unreachable.
-   */
+  /** A box's worth of different units, in one submission. */
   @Post('items/batch')
   createUnits(@Body() dto: IntakeUnitsDto, @CurrentUser() user: AuthUser) {
     return this.intake.intakeUnits(user.id, dto.units);
   }
 
-  /** Lots that are still whole — the candidates for "Break Lot" (Requirement 10.5). */
+  /** Lots that are still whole: the candidates for "Break Lot" (Requirement 10.5). */
   @Get('lots')
   lots() {
     return this.intake.listOpenLots();

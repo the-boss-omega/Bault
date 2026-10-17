@@ -16,7 +16,7 @@ export interface SplitItemInput {
   typeClass: string;
   description?: string;
   conditionGrade?: string;
-  /** A shelf by id or barcode. Omitted, the stow is directed — see `split`. */
+  /** A shelf by id or barcode. Omitted, the stow is directed (see `split`). */
   binId?: string;
 }
 
@@ -40,8 +40,8 @@ export class BatchService {
    * Open a batch for an owner named by their permanent USERNAME.
    *
    * A legacy OW- intake ID is still accepted as a fallback for pre-printed
-   * arrivals, exactly as in `IntakeService.resolveOwner` — same rule, so the two
-   * intake paths never disagree about who an arrival belongs to.
+   * arrivals, exactly as in `IntakeService.resolveOwner`, so the two intake
+   * paths never disagree about who an arrival belongs to.
    */
   async open(owner: { ownerUsername?: string; ownerIntakeId?: string }) {
     const username = normalizeUsername(owner.ownerUsername ?? '');
@@ -71,24 +71,19 @@ export class BatchService {
   /**
    * Split a batch into individually tracked items.
    *
-   * This is the same act as an intake — a container becomes units, each unit
-   * gets an identity, a shelf and a charge — so it now obeys the same three
-   * rules, which it previously did not.
+   * This is the same act as an intake (a container becomes units, each unit
+   * gets an identity, a shelf and a charge), so it obeys the same three rules.
    *
-   * THE CLASS IS VOCABULARY. A split entry could name any class it liked,
-   * including one that does not exist, while `/intake/items` had rejected
-   * unknown classes since Part 14. Two doors into the same table cannot disagree
-   * about what may come through them.
+   * THE CLASS IS VOCABULARY. An unknown class is refused, as on `/intake/items`:
+   * two doors into the same table cannot disagree about what may come through.
    *
    * THE STORAGE TERMS ARE SET AT RECEIPT. `oversized` is copied from the class
    * here exactly as intake does it, so a sealed case decanted out of a batch is
    * billed as the bulky thing it is rather than as a card.
    *
-   * EVERY UNIT IS STOWED. A split entry with no bin used to produce an item
-   * shelved nowhere — a record saying the platform has custody of something it
-   * cannot say the location of, which is the one thing the custody trail exists
-   * to prevent. An entry that names a shelf still uses it; one that does not is
-   * directed to a shelf with room, the same way intake's `autoStow` is.
+   * EVERY UNIT IS STOWED, so the platform never has custody of something it
+   * cannot locate. An entry that names a shelf uses it; one that does not is
+   * directed to a shelf, the same way intake's `autoStow` is.
    *
    * The stow is resolved BEFORE the transaction opens, because it reads the
    * whole item table to count shelves and there is no reason to hold a batch row

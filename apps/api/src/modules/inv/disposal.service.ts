@@ -25,13 +25,12 @@ export interface RecordDisposalInput {
 /**
  * Recording an arrival that was not accepted.
  *
- * The physical act — pulling a battery out of an AirTag, binning a bottle of
- * perfume, handing a box of commons to a youth club — happens in a warehouse and
- * is not something software can do or check. What software owes is the other
- * three quarters of the job: PUBLISH the rule in advance (the Account Use &
- * Balance Policy), RECORD which of the permitted decisions was actually taken,
- * and TELL the collector, who is otherwise left waiting for something that is
- * never going to appear in their vault.
+ * The physical act (pulling a battery out of an AirTag, binning a bottle of
+ * perfume, handing a box of commons to a youth club) happens in a warehouse and
+ * is not something software can do or check. What software owes is the rest:
+ * PUBLISH the rule in advance (the Account Use & Balance Policy), RECORD which
+ * of the permitted decisions was actually taken, and TELL the collector, who is
+ * otherwise left waiting for something that will never appear in their vault.
  *
  * Nothing here is billable. Nothing entered storage, so there is nothing to
  * charge for storing, and charging an intake fee for an item that was destroyed

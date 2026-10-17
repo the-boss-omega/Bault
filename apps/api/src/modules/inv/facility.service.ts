@@ -62,30 +62,28 @@ export class FacilityService {
   }
 
   /**
-   * Every address this collector may ship to, addressed to them.
-   *
-   * The username is read from the account rather than taken from the caller, so
-   * the `C/O` line can never name somebody else — this is the string a person
-   * pastes into a checkout, and getting it wrong sends their property to a
-   * stranger's shelf.
-   */
-  /**
    * Guard against handing a collector an address that does not exist.
    *
    * The seed ships two facilities whose `line1` is literally
    * `SET REAL ADDRESS — placeholder`, which is correct for a dataset nobody has
-   * configured and catastrophic the moment a real person reads it and posts a
-   * card there. This is the last point before that string reaches a customer, so
-   * it is where the check belongs: in production a placeholder address is
-   * withheld rather than shown.
+   * configured and harmful the moment a real person posts a card there. In
+   * production a placeholder address is withheld rather than shown.
    *
-   * It filters rather than throwing. One configured facility and one forgotten
-   * one should still let collectors ship to the configured one.
+   * It filters rather than throwing, so one configured facility still works
+   * beside a forgotten one.
    */
   private static isPlaceholder(line1: string): boolean {
     return /placeholder|SET REAL ADDRESS/i.test(line1);
   }
 
+  /**
+   * Every address this collector may ship to, addressed to them.
+   *
+   * The username is read from the account rather than taken from the caller, so
+   * the `C/O` line can never name somebody else: this is the string a person
+   * pastes into a checkout, and getting it wrong sends their property to a
+   * stranger's shelf.
+   */
   async inboundAddressesFor(userId: string): Promise<InboundAddress[]> {
     const [account] = await this.db
       .select({ username: userAccount.username })
