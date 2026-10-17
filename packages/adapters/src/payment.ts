@@ -1,13 +1,12 @@
 /**
- * Payment adapter (T020, Principle XIII).
+ * Payment adapter.
  *
- * The platform stores ONLY provider tokens/refs — never raw card data. Every
+ * The platform stores ONLY provider tokens and refs, never raw card data. Every
  * method deals in opaque references.
  *
- * Two implementations ship: `PayPalPaymentAdapter`, which is the rail the
- * reference service actually uses, and `SandboxPaymentAdapter`, which settles
- * everything and is refused in production by the factory in
- * `apps/api/src/shared/adapters/adapters.module.ts`.
+ * Two implementations ship: `PayPalPaymentAdapter`, and `SandboxPaymentAdapter`,
+ * which settles everything and is refused in production by
+ * `createPaymentAdapter` in `select.ts`.
  */
 export interface ChargeRequest {
   userId: string;
@@ -18,17 +17,13 @@ export interface ChargeRequest {
    * A provider-side reference; NEVER a PAN/CVV.
    *
    * For PayPal this is the ORDER ID the payer approved in the PayPal window.
-   * The adapter captures it, which is what makes the money real: an order id
-   * cannot be invented, and capture fails unless a human approved that exact
-   * order for that exact amount.
+   * The adapter captures it: an order id cannot be invented, and capture fails
+   * unless a human approved that exact order for that exact amount.
    */
   paymentMethodToken?: string;
   /**
-   * Gives up on the call when aborted.
-   *
-   * A payout used to be awaited with nothing bounding it, from inside a
-   * database transaction: a provider that hung held a pooled connection and
-   * the wallet lock for as long as it hung. The caller passes
+   * Gives up on the call when aborted, so a provider that hangs cannot hold a
+   * pooled connection or the wallet lock. The caller passes
    * `AbortSignal.timeout(...)` and treats the abort as "outcome unknown".
    */
   signal?: AbortSignal;
@@ -38,7 +33,7 @@ export interface ChargeRequest {
  * A provider call that went wrong, and how wrong.
  *
  * `refused` is true only when the provider ANSWERED and the answer proves
- * nothing was or will be moved — a request it rejected as invalid. Everything
+ * nothing was or will be moved: a request it rejected as invalid. Everything
  * else (a timeout, a dropped connection, a 5xx, an expired credential) leaves
  * the outcome unknown: the provider may have acted before the failure, so the
  * caller must not treat it as a refusal and give money back on a guess.
@@ -62,9 +57,8 @@ export interface ProviderResult {
    * What the provider says was actually moved, in minor units.
    *
    * Present whenever the provider reported it. The caller must compare this
-   * against what it asked for and refuse the difference — an approval for $1
-   * must never credit $5,000, and only the provider knows which of those
-   * happened.
+   * against what it asked for and refuse the difference: an approval for $1
+   * must never credit $5,000.
    */
   settledAmountMinor?: number;
   settledCurrency?: string;
@@ -76,7 +70,7 @@ export interface WebhookEvent {
   data: Record<string, unknown>;
 }
 
-/** Everything needed to authenticate a webhook — the body AND its headers. */
+/** Everything needed to authenticate a webhook: the body AND its headers. */
 export interface WebhookDelivery {
   rawBody: string;
   headers: Record<string, string | undefined>;
@@ -103,7 +97,7 @@ export interface PaymentAdapter {
    * Authenticate a webhook delivery and return the parsed event.
    *
    * ASYNC and takes the whole delivery, because real verification is a network
-   * call against the provider using several headers — not a string compare. It
+   * call against the provider using several headers, not a string compare. It
    * MUST throw rather than return on a delivery it cannot authenticate.
    */
   verifyWebhook(delivery: WebhookDelivery): Promise<WebhookEvent>;
@@ -142,7 +136,7 @@ function toMinor(decimal: string): number {
  * What a PayPal payout ITEM's `transaction_status` means for the collector.
  *
  * The item, not the batch: a batch is `SUCCESS` once PayPal has processed it,
- * which says nothing about whether this one recipient was paid — an item in a
+ * which says nothing about whether this one recipient was paid. An item in a
  * successful batch can still be UNCLAIMED and come back thirty days later.
  * UNCLAIMED and ONHOLD are therefore still pending; only SUCCESS is money that
  * landed, and the statuses below are money that did not.
@@ -157,21 +151,19 @@ export function paypalPayoutItemOutcome(transactionStatus: string | undefined): 
 }
 
 /**
- * PayPal, which is what the reference service takes money through.
+ * PayPal.
  *
- * The shape of the integration follows PayPal's own model rather than pretending
- * to be a card processor:
+ * The integration follows PayPal's own model rather than pretending to be a card
+ * processor:
  *
  *   TOP-UP is a CAPTURE, never a charge. The SPA creates an order and sends the
  *   payer to PayPal; PayPal returns an approved order id; this adapter captures
- *   it. That ordering is the whole security property. An order id cannot be
+ *   it. That ordering is the whole security property: an order id cannot be
  *   guessed, and a capture only succeeds if a real person approved that exact
- *   order — so the failure this replaces, where any string in
- *   `paymentMethodToken` settled, is not expressible. The adapter also returns
- *   what PayPal says it captured, so the caller can refuse a mismatch.
+ *   order. The adapter also returns what PayPal says it captured, so the caller
+ *   can refuse a mismatch.
  *
- *   CASH-OUT is a PAYOUT to an email address, which is how the reference service
- *   sends store credit back to a collector.
+ *   CASH-OUT is a PAYOUT to an email address.
  *
  *   WEBHOOKS are verified by asking PayPal, using the five transmission headers
  *   plus the webhook id. There is no local secret to compare; the verification
@@ -179,9 +171,8 @@ export function paypalPayoutItemOutcome(transactionStatus: string | undefined): 
  *
  * `environment: 'sandbox'` is a first-class production-safe configuration. It
  * talks to PayPal's real API with real signatures and real webhooks, moving fake
- * money — which is exactly what is wanted to exercise the whole product before a
- * bank account exists. `handlesRealMoney` is false there so the product can say
- * so out loud rather than looking identical to the live rail.
+ * money. `handlesRealMoney` is false there so the product can say so rather than
+ * looking identical to the live rail.
  */
 export class PayPalPaymentAdapter implements PaymentAdapter {
   readonly providerName: string;
@@ -210,9 +201,8 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
   /**
    * An OAuth token, cached until shortly before it expires.
    *
-   * The 60-second haircut is deliberate: a token that expires in flight fails a
-   * capture, and a failed capture on a payment the payer already approved is the
-   * worst possible moment to be clever about caching.
+   * The 60-second margin is deliberate: a token that expires in flight fails a
+   * capture on a payment the payer already approved.
    */
   private async accessToken(signal?: AbortSignal): Promise<string> {
     const now = Date.now();
@@ -272,9 +262,8 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
   /**
    * Capture an order the payer already approved.
    *
-   * `paymentMethodToken` is that order's id. Its absence is an error rather than
-   * a fallback, because the fallback is the bug: something has to have been
-   * approved before anything can be captured.
+   * `paymentMethodToken` is that order's id. Its absence is an error, never a
+   * fallback: something has to have been approved before anything is captured.
    */
   private async capture(req: ChargeRequest): Promise<ProviderResult> {
     const orderId = req.paymentMethodToken?.trim();
@@ -305,10 +294,9 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
      * The CAPTURE's status, never the order's.
      *
      * PayPal marks an order COMPLETED once it has been captured, while the
-     * capture inside it can still be PENDING — an eCheck, a payment held for
-     * review — and may yet be declined. Reading the order credited a wallet
-     * for money that had not arrived and might never (F028). No capture at all
-     * is pending too: nothing has been taken yet.
+     * capture inside it can still be PENDING (an eCheck, a payment held for
+     * review) and may yet be declined. No capture at all is pending too:
+     * nothing has been taken yet.
      */
     const captureStatus = (capture?.status ?? '').toUpperCase();
     const status: ProviderResult['status'] =
@@ -320,8 +308,8 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
     return {
       providerRef: capture?.id ?? body.id,
       status,
-      // Reported so the caller can refuse a mismatch. The adapter does not
-      // decide what a discrepancy means — that is a ledger decision.
+      // Reported so the caller can refuse a mismatch. What a discrepancy means
+      // is a ledger decision, not the adapter's.
       settledAmountMinor: capture ? toMinor(capture.amount.value) : undefined,
       settledCurrency: capture?.amount.currency_code,
     };
@@ -339,8 +327,8 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
    * Send money back out, to an email address.
    *
    * `destinationToken` is the recipient's PayPal email. PayPal accepts the batch
-   * and settles asynchronously, so this returns `pending` on acceptance rather
-   * than claiming the money has landed — the webhook says when it has.
+   * and settles asynchronously, so an accepted batch is `pending`; `getPayout`
+   * or the webhook says when the money has landed.
    */
   async createPayout(
     req: ChargeRequest & { destinationToken: string },
@@ -406,11 +394,10 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
   /**
    * Ask PayPal whether it really sent this.
    *
-   * There is no local secret to compare against — PayPal signs with a rotating
-   * certificate and verification is a call carrying the five transmission
-   * headers and the webhook id. A missing header is treated as a failed
-   * verification rather than skipped, because "no signature" is the one case an
-   * attacker controls completely.
+   * There is no local secret to compare against: PayPal signs with a rotating
+   * certificate, and verification is a call carrying the five transmission
+   * headers and the webhook id. A missing header is a failed verification, never
+   * skipped, because "no signature" is the one case an attacker controls completely.
    */
   async verifyWebhook(delivery: WebhookDelivery): Promise<WebhookEvent> {
     const h = (name: string): string => {
@@ -461,11 +448,10 @@ export class PayPalPaymentAdapter implements PaymentAdapter {
 /**
  * Deterministic in-memory sandbox for local dev and contract tests.
  *
- * It settles everything and authenticates nothing. That is correct for what it
- * is and catastrophic anywhere near production, which is why the factory refuses
- * to construct it when `NODE_ENV=production` — see
- * `apps/api/src/shared/adapters/adapters.module.ts`. `handlesRealMoney` is false
- * so the running product can say so rather than looking like a live rail.
+ * It settles everything and authenticates nothing, which is why
+ * `createPaymentAdapter` (`select.ts`) refuses to construct it when
+ * `NODE_ENV=production`. `handlesRealMoney` is false so the running product can
+ * say so rather than looking like a live rail.
  */
 export class SandboxPaymentAdapter implements PaymentAdapter {
   readonly providerName = 'sandbox';
@@ -490,10 +476,9 @@ export class SandboxPaymentAdapter implements PaymentAdapter {
   /**
    * A payout, scripted by its destination.
    *
-   * With no instruction it settles at once, as it always has. A destination
-   * containing one of these stages the case a real provider produces and a
-   * sandbox otherwise never would, so every outcome of a cash-out can be
-   * exercised end to end against a running API:
+   * With no instruction it settles at once. A destination containing one of
+   * these stages a case a real provider produces, so every outcome of a
+   * cash-out can be exercised end to end against a running API:
    *
    *   +payout-pending   accepted, and stays pending however often it is asked
    *   +payout-settles   accepted; asked again, it has landed

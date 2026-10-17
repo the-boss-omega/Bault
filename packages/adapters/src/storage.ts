@@ -1,7 +1,7 @@
 /**
- * Object-storage adapter (T020) — S3-compatible (MinIO locally, Hetzner in prod).
- * Item images are immutable versioned objects served via time-limited signed URLs
- * (Principle IX). The DB stores only the object key; bytes live in storage.
+ * Object-storage adapter, S3-compatible (MinIO locally, Hetzner in production).
+ * Item images are immutable versioned objects served via time-limited signed
+ * URLs. The database stores only the object key; the bytes live in storage.
  */
 export interface PutObjectRequest {
   key: string;
@@ -14,12 +14,11 @@ export interface PutObjectRequest {
  *
  * An object key is opaque to S3, but the URL it is sent in is not: the WHATWG
  * URL parser resolves `.` and `..` segments before the request is signed, so
- * `intake/../other-bucket/x.png` was signed — and served — as a different
- * bucket on the same endpoint (F428). Only a WHOLE segment of `.` or `..` does
- * that; `receipt.v2.pdf` is a name with dots in it and stays allowed.
+ * `intake/../other-bucket/x.png` would be signed as a key in a different bucket
+ * on the same endpoint. Only a WHOLE segment of `.` or `..` does that;
+ * `receipt.v2.pdf` is a name with dots in it and stays allowed.
  *
- * Exported so the API's DTOs refuse exactly what the adapter refuses, rather
- * than a second, slightly different idea of a safe key.
+ * Exported so the API's DTOs refuse exactly what the adapter refuses.
  */
 export function isSafeObjectKey(key: string): boolean {
   if (typeof key !== 'string' || key.length === 0) return false;

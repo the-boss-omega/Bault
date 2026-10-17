@@ -2,29 +2,18 @@ import { createHash, createHmac } from 'node:crypto';
 import { isSafeObjectKey, type PutObjectRequest, type StorageAdapter } from './storage';
 
 /**
- * A REAL S3-compatible storage adapter — the thing the product has been missing.
+ * A real S3-compatible storage adapter.
  *
- * `SandboxStorageAdapter` returns the key and writes nothing, and it was bound
- * unconditionally. So every photograph an operator took at the intake bench, and
- * every picture of a damaged arrival, was accepted, acknowledged and discarded,
- * while `item_image` and `parcel_photo` rows were written pointing at keys that
- * resolve to nothing. The loss was invisible until somebody opened a damage
- * claim and found the evidence gone. `STORAGE_ENDPOINT`, `STORAGE_BUCKET`,
- * `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY` were required by the env schema
- * and read by nothing; MinIO was in the compose file and never contacted.
- *
- * SIGNED BY HAND, and on purpose. `@aws-sdk/client-s3` is ~15 MB of dependency
- * to perform two operations — PUT an object, and presign a GET. AWS Signature
- * Version 4 is a published algorithm, it is stable, and the whole of it that
- * these two calls need is below: canonical request, string to sign, a chain of
- * four HMACs. The alternative is carrying the SDK's entire surface and its
- * transitive tree for two HTTP requests.
+ * SIGNED BY HAND, on purpose. `@aws-sdk/client-s3` is ~15 MB of dependency for
+ * two operations: PUT an object, and presign a GET. AWS Signature Version 4 is a
+ * published, stable algorithm, and all of it these two calls need is below:
+ * canonical request, string to sign, a chain of four HMACs.
  *
  * S3-COMPATIBLE, not S3-specific. It speaks to MinIO locally and to any S3 API
- * in production, because it only ever issues signed HTTP against
- * `STORAGE_ENDPOINT`. Path-style addressing (`endpoint/bucket/key`) is used
- * throughout rather than virtual-host style, since MinIO and most non-AWS
- * implementations do not provide per-bucket DNS.
+ * in production, because it only issues signed HTTP against `STORAGE_ENDPOINT`.
+ * Path-style addressing (`endpoint/bucket/key`) is used throughout rather than
+ * virtual-host style, since MinIO and most non-AWS implementations do not
+ * provide per-bucket DNS.
  */
 
 export interface S3Config {
@@ -49,11 +38,9 @@ const hmac = (key: string | Buffer, data: string): Buffer =>
  * Percent-encode one path segment per RFC 3986.
  *
  * `encodeURIComponent` leaves `!'()*` alone and S3 does not, so a key containing
- * any of them signs to a different canonical request than the one the server
- * computes and the request is rejected with a signature mismatch that names
- * nothing useful. Object keys here are minted (`intake/2026/09/<uuid>.jpg`) so
- * this should never fire — which is exactly why it would be a miserable bug to
- * find later.
+ * any of them would sign to a different canonical request than the server
+ * computes and fail with an unhelpful signature mismatch. Minted keys
+ * (`intake/2026/09/<uuid>.jpg`) never contain them; this covers any that do.
  */
 function encodeSegment(segment: string): string {
   return encodeURIComponent(segment).replace(
@@ -92,7 +79,7 @@ export class S3StorageAdapter implements StorageAdapter {
    *
    * Every request is built here, so this is where a dot segment is refused: the
    * URL parser below would otherwise resolve it and the signature would be
-   * computed over the RESOLVED path — a valid link to whatever it pointed at.
+   * computed over the RESOLVED path, a valid link to whatever it pointed at.
    */
   private urlFor(key: string): URL {
     if (!isSafeObjectKey(key)) {
@@ -114,8 +101,8 @@ export class S3StorageAdapter implements StorageAdapter {
    *
    * The body hash goes in `x-amz-content-sha256` and into the canonical request,
    * so a payload altered in flight fails the signature rather than being stored.
-   * That is the whole reason not to use UNSIGNED-PAYLOAD here: these are the
-   * only copy of a photograph of somebody else's property.
+   * That is why this does not use UNSIGNED-PAYLOAD: these are the only copy of a
+   * photograph of somebody else's property.
    */
   async putObject(req: PutObjectRequest): Promise<{ key: string }> {
     const url = this.urlFor(req.key);
@@ -165,9 +152,8 @@ export class S3StorageAdapter implements StorageAdapter {
     });
 
     if (!response.ok) {
-      // The body carries S3's own error code; without it the failure is a bare
-      // status and the operator is left guessing between credentials, bucket
-      // and clock skew — which are the three things that actually go wrong.
+      // The body carries S3's own error code, which tells credentials, bucket
+      // and clock skew apart.
       const detail = await response.text().catch(() => '');
       throw new Error(
         `Storage upload failed (${response.status} ${response.statusText}) for key "${req.key}"` +

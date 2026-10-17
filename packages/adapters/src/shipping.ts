@@ -1,21 +1,20 @@
 /**
- * Shipping adapter (T020) — a carrier API behind one interface.
- * Provides carrier rates, label purchase, and tracking. Rush handling is a flag.
+ * Shipping adapter: a carrier API behind one interface, for rates, label
+ * purchase and tracking. Rush handling is a flag.
  *
  * Two implementations: `EasyPostShippingAdapter` (real carriers, real labels)
  * and `SandboxShippingAdapter` (invented prices, fake labels). The choice is
- * made from validated config in `AdaptersModule`, and the sandbox is refused in
- * production — a customer charged for a label that cannot be printed is the
- * worst failure this module has.
+ * made from validated config by `createShippingAdapter` in `select.ts`, and the
+ * sandbox is refused in production, because a customer charged for a label that
+ * cannot be printed is the worst failure this module has.
  */
 
 /**
  * A postal address, as a carrier needs it.
  *
- * Only `country` and `postalCode` are required, because that is all the sandbox
- * ever needed and all the quoting flow could originally supply. A REAL carrier
- * cannot rate on that alone — it needs a street — so `EasyPostShippingAdapter`
- * refuses a request missing one, loudly, rather than quoting a number that would
+ * Only `country` and `postalCode` are required, which is all the sandbox needs.
+ * A REAL carrier cannot rate on that alone, so `EasyPostShippingAdapter` refuses
+ * a request without a street and city rather than quoting a number that would
  * change at label time.
  */
 export interface ShipAddress {
@@ -50,17 +49,14 @@ export const DEFAULT_PACKAGING_GRAMS = 120;
  *
  * **167, because that is the figure the reference service publishes.** Its FAQ
  * states the formula as `(L × W × H) / 167` and quotes prices against it, so a
- * Bault quote computed with a different divisor is a quote for a different
- * parcel. It was 139 here — the domestic retail figure FedEx and UPS use for
- * some US services — which is the more expensive end and over-quoted every
- * boxed parcel by about 20%.
+ * quote computed with a different divisor is a quote for a different parcel.
  *
  * One constant, exported, so the adapter and the carrier catalogue cannot drift
  * apart on the number that decides the price.
  */
 export const DIM_DIVISOR = 167;
 
-/** Cubic centimetres per cubic inch — the other half of the conversion. */
+/** Cubic centimetres per cubic inch, the other half of the conversion. */
 export const CM3_PER_IN3 = 16.387;
 
 /** Grams in a pound. */
@@ -73,10 +69,9 @@ export const GRAMS_PER_OZ = 28.3495;
  * How a service meters weight.
  *
  * Carriers do not sell fractions. A parcel is weighed, the figure is rounded UP
- * to the next whole unit, and that is what is billed — so 1.02 lb and 1.98 lb
- * cost the same, and 2.01 lb costs a band more. Quoting on the continuous weight
- * instead, which is what this adapter used to do, under-quotes almost every
- * parcel by up to one whole unit.
+ * to the next whole unit, and that is what is billed: 1.02 lb and 1.98 lb cost
+ * the same, and 2.01 lb costs a band more. Quoting on the continuous weight
+ * would under-quote almost every parcel by up to one whole unit.
  *
  * The reference service publishes the unit per service in its FAQ: *"Postage
  * amount is charged per pound"* for ePost, and *per ounce* for ePacket. The
@@ -123,9 +118,9 @@ export function dimensionalGrams(dims?: { length: number; width: number; height:
 export interface RateRequest {
   destination: ShipAddress;
   /**
-   * Where the parcel physically ships FROM — the facility holding the goods.
+   * Where the parcel physically ships FROM: the facility holding the goods.
    *
-   * Optional only because the sandbox never used it. A real carrier prices on
+   * Optional only because the sandbox does not use it. A real carrier prices on
    * the origin/destination pair, so quoting without it is quoting a different
    * shipment than the one that will be bought.
    */
@@ -135,7 +130,7 @@ export interface RateRequest {
   /**
    * The services the caller is willing to consider, by carrier/service pair.
    *
-   * The CALLER decides what is eligible — it knows the parcel's insured value,
+   * The CALLER decides what is eligible: it knows the parcel's insured value,
    * its customs value, how many items are in it and which building they are in,
    * and none of that belongs in a rate adapter. Omitted means "quote everything
    * you have".
@@ -153,17 +148,14 @@ export interface RateRequest {
   /**
    * The customs declaration, for a parcel that crosses a border.
    *
-   * It was never sent. The shipment froze per-item customs lines at creation
-   * and printed them as a commercial invoice, and the carrier was asked for a
-   * rate — and later sold a label — with no customs information at all, which
-   * a real carrier refuses for an international parcel or holds at the border.
-   * A real carrier needs it at RATE time: the label is bought against the
+   * A real carrier refuses an international parcel without one, or holds it at
+   * the border. It is needed at RATE time: the label is bought against the
    * shipment that was rated, and that shipment cannot be amended afterwards.
    */
   customs?: CustomsDeclaration;
 }
 
-/** One line of a customs declaration — one item, as the commercial invoice lists it. */
+/** One line of a customs declaration: one item, as the commercial invoice lists it. */
 export interface CustomsLineItem {
   description: string;
   quantity: number;
@@ -207,7 +199,7 @@ export interface ShippingCallOptions {
    */
   signal?: AbortSignal;
   /**
-   * The caller's own key for this purchase — one label per key.
+   * The caller's own key for this purchase: one label per key.
    *
    * Passed by an adapter whose provider honours one. A provider whose own
    * shipment object is already single-purchase (EasyPost) gets the same
@@ -248,10 +240,10 @@ export interface Rate {
   /**
    * The provider's own handles for this quote.
    *
-   * A real carrier does not let you buy "FedEx 2Day at $18.50" — you buy THE
+   * A real carrier does not let you buy "FedEx 2Day at $18.50"; you buy THE
    * RATE IT QUOTED, by id, against the shipment it was quoted for. Carrying them
-   * here is what makes `buyLabel` able to purchase the exact price the collector
-   * was shown, instead of re-rating at label time and charging something else.
+   * here lets `buyLabel` purchase the exact price the collector was shown,
+   * instead of re-rating at label time and charging something else.
    *
    * Undefined for the sandbox, which has nothing to refer to.
    */
@@ -306,13 +298,11 @@ interface SandboxService {
 /**
  * The prices this sandbox quotes.
  *
- * These are invented, and deliberately labelled as such — Bault has no carrier
- * account, so nothing here can be a real rate. What IS real is the SHAPE: a base
- * plus a per-kilogram component, international costing several times domestic,
- * express costing several times ground, and a signature surcharge. A quote that
- * moves when the parcel gets heavier or the destination gets further away
- * exercises every code path a real integration would, which the old two-fixed-
- * prices stub did not.
+ * These are invented, and labelled as such: nothing here is a real rate. What
+ * IS real is the SHAPE: a base plus a per-kilogram component, international
+ * costing several times domestic, express costing several times ground, and a
+ * signature surcharge. A quote that moves when the parcel gets heavier or the
+ * destination gets further away exercises every code path a real integration would.
  */
 const SANDBOX_SERVICES: readonly SandboxService[] = [
   { carrier: 'USPS', serviceLevel: 'Ground Advantage', international: false, baseMinor: 550, perKgMinor: 420, estimatedDays: 4, signatureMinor: 340, increment: 'ounce' },
@@ -379,10 +369,9 @@ export class SandboxShippingAdapter implements ShippingAdapter {
           serviceLevel: s.serviceLevel,
           costMinor: cost,
           currency: 'USD',
-          // Rush does not change what a carrier promises — it changes how fast
+          // Rush does not change what a carrier promises. It changes how fast
           // the WAREHOUSE gets the parcel to them, which is a Bault handling
-          // step, not a transit one. It used to be folded into the carrier's
-          // estimate, which quietly attributed Bault's own speed to the carrier.
+          // step, not a transit one, so it is not folded into this estimate.
           estimatedDays: s.estimatedDays,
         };
       })
@@ -393,7 +382,7 @@ export class SandboxShippingAdapter implements ShippingAdapter {
   private readonly bought = new Map<string, LabelResult>();
 
   /**
-   * Sells a label that cannot be printed — and sells it ONCE per key.
+   * Sells a label that cannot be printed, and sells it ONCE per key.
    *
    * Honouring the idempotency key here is what lets dispatch's retry path be
    * exercised without a carrier account: asked again for the same key, it
