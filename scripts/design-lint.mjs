@@ -113,8 +113,8 @@ const PHYSICAL_CSS =
  *
  * A `design-lint-allow: <why>` block comment on the line itself, or on either
  * of the two lines above it, silences every rule for that line. (Written
- * without the literal delimiters, which cannot appear inside this comment —
- * they used to be held apart by a zero-width space, which is an invisible
+ * without the literal delimiters, which cannot appear inside this comment;
+ * holding them apart with a zero-width space would put an invisible
  * character in source and an eslint error.) The comment is stripped
  * before the rules run (so the prose in it is never itself a finding), which is
  * why the ORIGINAL text is what is searched here.
