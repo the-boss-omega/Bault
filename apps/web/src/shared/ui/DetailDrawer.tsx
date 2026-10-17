@@ -171,7 +171,8 @@ export function DetailDrawer({
 }
 
 /**
- * Modal confirmation for an irreversible step (a donation, a cash-out, a sale).
+ * Modal confirmation for a consequential step (a donation, a purchase, a
+ * delisting, completing a cash-out).
  * Same focus rules as the drawer; deliberately small and centred.
  */
 export function ConfirmationModal({
