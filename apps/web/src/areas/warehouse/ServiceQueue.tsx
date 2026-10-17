@@ -37,11 +37,12 @@ interface QueueItem {
 }
 
 /**
- * Operator service queue. Shows pending + accepted service requests. An operator
- * ACCEPTS or DENIES a pending request, then CLOSES an accepted one by filling the
- * type-specific STRUCTURED FULFILLMENT FORM (Requirement 5.4) — the same
- * customer-request → warehouse-form pattern the shipment flow uses. A request
- * cannot be closed until every required field is filled and the item is verified.
+ * Operator service queue. Shows pending and accepted service requests. An
+ * operator accepts or denies a pending request, then closes an accepted one by
+ * filling the type-specific structured fulfillment form (Requirement 5.4), the
+ * same customer-request → warehouse-form pattern the shipment flow uses. A
+ * request cannot be closed until every required field is filled and the item
+ * is verified.
  */
 export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | void }) {
   const t = useT();
@@ -159,7 +160,7 @@ function QueueActions({
     );
   }
 
-  // A condition inspection is one row PER AREA, so it cannot be a flat field
+  // A condition inspection is one row per area, so it cannot be a flat field
   // list like its neighbours and gets its own form.
   if (q.type === 'condition_inspection') return <InspectionFulfillment q={q} onAct={onAct} t={t} />;
 
@@ -170,11 +171,11 @@ function QueueActions({
 /**
  * Record what was found, one line per area the customer asked about.
  *
- * The areas are read off the REQUEST rather than offered as a free choice: the
- * customer paid to have specific areas looked at, and an operator answering a
- * different set is answering a different question. The API refuses a submission
- * that leaves any requested area unanswered, because a report that silently
- * omits the corners reads as "nothing wrong" when it means "nobody looked".
+ * The areas are read off the request, not offered as a free choice: the
+ * customer asked for specific areas, and an operator answering a different set
+ * is answering a different question. The API refuses a submission that leaves
+ * any requested area unanswered, because a report that silently omits the
+ * corners reads as "nothing wrong" when it means "nobody looked".
  */
 function InspectionFulfillment({
   q,
@@ -329,12 +330,12 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     ],
   },
   /**
-   * A buyout QUOTE, not a completion.
+   * A buyout quote, not a completion.
    *
-   * The request stays in progress afterwards: quoting is putting a number on
-   * the table, and the customer still has to accept or decline it. That is why
-   * this form posts to `/quote` rather than to a `/complete` like its
-   * neighbours — the money only moves when the owner says yes.
+   * The request stays in progress afterwards: the customer still has to accept
+   * or decline the quote. That is why this form posts to `/quote` instead of a
+   * `/complete` like its neighbours; the money only moves when the owner says
+   * yes.
    */
   buyout: {
     endpoint: (id) => `/services/buyout/${id}/quote`,
@@ -346,13 +347,12 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     ],
   },
   /**
-   * A custom request is QUOTED, like a buyout, and for the same reason: nobody
-   * knows what it costs until an operator reads what was asked for.
+   * A custom request is quoted, like a buyout: nobody knows what it costs until
+   * an operator reads what was asked for.
    *
-   * `scope` is required and is not a note. The collector is about to agree to a
-   * figure, and what they are agreeing to is this sentence — "we will do it for
-   * $30" with nothing behind it is not something anybody can accept. The ask
-   * itself is shown above the form so it can be read without leaving the row.
+   * `scope` is required and is not a note: it is the sentence the collector
+   * agrees to along with the figure. The ask itself is shown above the form so
+   * it can be read without leaving the row.
    */
   custom: {
     endpoint: (id) => `/services/custom/${id}/quote`,
@@ -379,9 +379,9 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     ],
   },
   /**
-   * De-slab records what the card looked like once it was OUT of the holder.
-   * That field is not paperwork: the grade is cleared when this closes, and this
-   * is what replaces it, so a card that came out with a bent corner says so.
+   * De-slab records what the card looked like once it was out of the holder.
+   * The grade is cleared when this closes, and this field replaces it, so a card
+   * that came out with a bent corner says so.
    */
   deslab: {
     endpoint: (id) => `/services/deslab/${id}/complete`,
@@ -399,9 +399,9 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
     ],
   },
   /**
-   * Closing this actually runs `breakLot` — every card in the lot becomes its
-   * own item with its own serial, bin and intake charge. There is no undo, which
-   * is why the verification tick is not decoration.
+   * Closing this runs `breakLot`: every card in the lot becomes its own item
+   * with its own serial, bin and intake charge. There is no undo, which is why
+   * the verification tick is required.
    */
   batch_split: {
     endpoint: (id) => `/services/lot-split/${id}/complete`,
@@ -469,10 +469,8 @@ function FulfillmentForm({
   return (
     <div className="fulfill-form">
       {/*
-        What the collector actually asked for.
-        A custom row otherwise reads "A custom request" — the type, not the
-        thing — and the operator is being asked to price something they cannot
-        see without opening another screen.
+        What the collector actually asked for, so the operator can price it
+        without opening another screen.
       */}
       {q.type === 'custom' && (
         <div className="ask-notice">

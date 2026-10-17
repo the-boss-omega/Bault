@@ -23,13 +23,11 @@ import { IconAsk } from '../../shared/ui/icons';
 /**
  * The staff side of the helpdesk.
  *
- * Ordered LONGEST-WAITING FIRST, which is the API's ordering and not a client
- * preference: a support queue sorted newest-first is one where whoever has been
- * ignored longest keeps being ignored.
+ * Ordered longest-waiting first, which is the API's ordering: a queue sorted
+ * newest-first keeps ignoring whoever has been ignored longest.
  *
- * The thread itself is the same component the customer sees — deliberately. Two
- * renderings of one conversation is how a support tool ends up showing the two
- * sides different things.
+ * The thread itself is deliberately the same component the customer sees, so
+ * the two sides are always shown the same conversation.
  */
 export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | void }) {
   const { t, locale } = useI18n();

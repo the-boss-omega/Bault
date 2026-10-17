@@ -25,7 +25,7 @@ import { ConfirmationModal, DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { IconReceipt } from '../../shared/ui/icons';
 
 /**
- * Which reviewer actions the request's CURRENT status permits.
+ * Which reviewer actions the request's current status permits.
  *
  * The same adjacency the API enforces in `wallet-request.rules.ts`, so a button
  * never offers a transition the server would refuse. `cancelled` belongs to the
@@ -54,12 +54,12 @@ export function reviewerActions(status: string): readonly string[] {
  * detail of the selected request, its immutable audit history, and only the
  * actions its current status allows.
  *
- * Two rules are made VISIBLE here, not merely enforced behind the screen:
+ * Two rules are made visible here, as well as enforced by the API:
  *
- *   - SEPARATION OF DUTIES. A request the signed-in admin raised themselves
+ *   - Separation of duties. A request the signed-in admin raised themselves
  *     offers no actions at all, and says why. The API refuses those calls too;
  *     this is the explanation, not the enforcement.
- *   - COMPLETION IS THE MONEY. "Complete" is the only action that changes a
+ *   - Completion is the money. "Complete" is the only action that changes a
  *     balance. It is one of two behind a confirmation dialog, and that dialog
  *     names the amount, the customer, and the fact that it cannot be undone.
  */
@@ -142,7 +142,7 @@ export function WalletRequestsSection({
   }
 
   /**
-   * Ask the payout provider again about cash-outs still paying out — the ones
+   * Ask the payout provider again about cash-outs still paying out: the ones
    * whose confirmation never arrived.
    */
   async function reconcile() {
