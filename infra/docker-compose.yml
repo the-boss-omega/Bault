@@ -1,4 +1,4 @@
-# Local development dependencies (T006).
+# Local development dependencies.
 # Brings up the single source of truth (PostgreSQL) behind PgBouncer, plus
 # S3-compatible object storage (MinIO) for item images.
 #
@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: bault
       POSTGRES_DB: bault
     command:
-      # WAL settings that enable point-in-time recovery later (T132). Safe defaults for dev.
+      # WAL level that allows point-in-time recovery. Safe for dev.
       - "postgres"
       - "-c"
       - "wal_level=replica"
@@ -41,11 +41,9 @@ services:
         condition: service_healthy
 
   minio:
-    # Built from source (minio/Dockerfile). MinIO no longer publishes community
-    # images: `minio/minio` left Docker Hub, the quay.io image this pulled
-    # failed on every CI run, and a failed pull stops `up` before Postgres
-    # starts. The first `up` builds it, which takes a few minutes. `mc` is in
-    # the image, for making the bucket.
+    # Built from source (minio/Dockerfile), because MinIO no longer publishes
+    # community images. The first `up` builds it, which takes a few minutes.
+    # `mc` is in the image, for making the bucket.
     build: ./minio
     command: server /data --console-address ":9001"
     environment:

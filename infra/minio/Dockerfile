@@ -1,8 +1,6 @@
 # MinIO for local development (infra/docker-compose.yml), built from source.
 #
-# The compose file used `quay.io/minio/minio:latest`, and MinIO no longer
-# publishes community images: `minio/minio` is gone from Docker Hub, and the
-# quay.io pull failed on every CI run. A failed pull stops
+# MinIO no longer publishes community images, and a failed pull stops
 # `docker compose up` before anything starts, Postgres included. The source is
 # still published, and the Go module proxy serves every version it has ever
 # served, checked against the checksum database on download.
