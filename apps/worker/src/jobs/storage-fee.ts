@@ -99,7 +99,12 @@ const COVERED = `
   )`;
 
 export async function runStorageFees(pool: Pool): Promise<void> {
-  await renewMemberships(pool);
+  // A renewal that failed for one member must not stop tonight's billing for
+  // everybody. The renewals that could be made were made; the failures were
+  // logged by id, and the hourly renewal job reports them on its heartbeat.
+  await renewMemberships(pool).catch((err: Error) =>
+    log.warn('some memberships could not be renewed before billing', { job: 'storage-fee.run', error: err.message }),
+  );
 
   const client = await pool.connect();
   try {
