@@ -17,7 +17,7 @@
  *   payout              the `withdrawal` debit whose completion recorded this
  *                       payout's reference, for the payout plus its fee
  *   payout, failed      that debit, credited back in full (withdrawal and
- *                       fee) by `payout_reversal` rows on the same request
+ *   or reversed         fee) by `payout_reversal` rows on the same request
  *   withdrawal debit    a payout behind it: money left a wallet, so money
  *                       must have left Bault
  *
@@ -267,18 +267,20 @@ export function reconcile(input: {
         recordedMinor: p.amount,
       });
     }
-    // A refused payout is settled once the cash-out has been credited back in
-    // full, which `recordPayoutOutcome` does in the same transaction that
-    // records the refusal. Only what is still debited is a mismatch.
+    // A refused payout, or one the provider took back after paying it, is
+    // settled once the cash-out has been credited back in full, which
+    // `recordPayoutOutcome` does in the same transaction that records it. Only
+    // what is still debited is a mismatch.
     const stillDebited = w.debitedMinor - w.reversedMinor;
-    if (p.status === 'failed' && stillDebited !== 0) {
+    if ((p.status === 'failed' || p.status === 'reversed') && stillDebited !== 0) {
+      const what = p.status === 'failed' ? 'failed' : 'was taken back after it was paid';
       found.push({
         ...base,
         kind: 'payout_failed_but_debited',
         detail:
           w.reversedMinor === 0
-            ? 'The provider reports this payout failed, and the wallet was debited anyway.'
-            : 'The provider reports this payout failed, and the wallet was credited back a different amount than it was debited.',
+            ? `The provider reports this payout ${what}, and the wallet was debited anyway.`
+            : `The provider reports this payout ${what}, and the wallet was credited back a different amount than it was debited.`,
         ledgerId: w.ledgerId,
         walletRequestId: w.walletRequestId,
         expectedMinor: 0,
