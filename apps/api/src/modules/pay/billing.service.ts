@@ -10,8 +10,8 @@ import { charge } from './pay.schema';
 
 /**
  * Billing engine (Principle VI): the BillingPort implementation. For any
- * billable action not covered by a membership it, inside the caller's
- * transaction:
+ * billable action a membership does not cover, it does this inside the
+ * caller's transaction:
  *   1. resolves the in-force price from PRC (with snapshot),
  *   2. inserts a settled Charge (with that snapshot),
  *   3. appends a ledger DEBIT.
