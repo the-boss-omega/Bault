@@ -3,15 +3,14 @@ import { SEED, SEED_USERNAME, fundWallet, signIn } from '../../tests/integration
 import { closeDb, sql } from '../../tests/integration/helpers/db';
 
 /**
- * Uploads, from the wrong side (E9, E10, F428, N17, F453).
+ * Uploads, from the wrong side.
  *
- * `POST /media/uploads` let ANY signed-in account put up to ten megabytes of
- * anything in the private bucket: the only check on the content was the
- * `contentType` string the client chose to send. A failure in the store came
- * back as the same opaque 500 as a bug. The routes that attach a key stored
- * whatever string they were handed — a key minted for some other purpose,
- * somebody else's key, or one with a `..` segment that the storage adapter's
- * URL parser resolved into another bucket before signing a link to it.
+ * `POST /media/uploads` is for staff, and judges the content by its bytes, not
+ * by the `contentType` string the client chose to send. A failure in the store
+ * says so instead of answering the same opaque 500 as a bug. The routes that
+ * attach a key accept only one this API minted for that purpose: never
+ * somebody else's, and never one with a `..` segment that a URL parser would
+ * resolve into another bucket before a link to it is signed.
  */
 
 type Client = Awaited<ReturnType<typeof signIn>>;
@@ -62,7 +61,7 @@ const facilityCode = async (client: Client) =>
   ((await client.get('/me/inbound-addresses')).body as { code: string }[])[0]!.code;
 
 /* ============================================================
-   E9 — who may upload
+   Who may upload
    ============================================================ */
 
 describe('who may put bytes in the bucket', () => {
@@ -81,7 +80,7 @@ describe('who may put bytes in the bucket', () => {
 });
 
 /* ============================================================
-   E9 — what counts as an image
+   What counts as an image
    ============================================================ */
 
 describe('an upload is judged by its bytes, not by its label', () => {
@@ -122,7 +121,7 @@ describe('an upload is judged by its bytes, not by its label', () => {
 });
 
 /* ============================================================
-   N17 — the size limit, in words a person reads
+   The size limit, in words a person reads
    ============================================================ */
 
 describe('an oversized photograph', () => {
@@ -141,7 +140,7 @@ describe('an oversized photograph', () => {
 });
 
 /* ============================================================
-   E10 — a store that is down says so
+   A store that is down says so
    ============================================================ */
 
 describe('when the store cannot be reached', () => {
@@ -158,7 +157,7 @@ describe('when the store cannot be reached', () => {
 });
 
 /* ============================================================
-   F428 — a key is a name, never a path
+   A key is a name, never a path
    ============================================================ */
 
 describe('a key with a dot segment', () => {
@@ -219,7 +218,7 @@ describe('a key with a dot segment', () => {
 });
 
 /* ============================================================
-   F453 — an attached key has to be one this API minted, for this
+   An attached key has to be one this API minted, for this
    ============================================================ */
 
 describe('attaching a photograph', () => {

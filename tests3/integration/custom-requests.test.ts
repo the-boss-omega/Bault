@@ -4,13 +4,12 @@ import { SEED, SEED_USERNAME, signIn, intakeFor } from '../../tests/integration/
 /**
  * "Can you also…" — the request the service list has no button for.
  *
- * The vault offered nine services and every one was a fixed thing Bault had
- * decided to sell. A collector who wanted anything else — sleeve these before
- * you ship them, weigh this box, check the seal is intact — had exactly one
- * route: a support TICKET. A ticket is a conversation. It has no price, no
- * operator queue, no completion and no link to the collectible it is about, so
- * work agreed in a thread had to be re-entered by hand as something else, or it
- * quietly did not happen.
+ * Every listed service is a fixed thing Bault has decided to sell. A collector
+ * who wants anything else (sleeve these before you ship them, weigh this box,
+ * check the seal is intact) needs more than a support TICKET. A ticket is a
+ * conversation: it has no price, no operator queue, no completion and no link to
+ * the collectible it is about, so work agreed in a thread would have to be
+ * re-entered by hand as something else, or would quietly not happen.
  *
  * The shape is `buyout`'s, because the same thing is true of both: nobody knows
  * what it costs until somebody reads it.
@@ -264,14 +263,13 @@ describe('booking a run of collectibles in at once', () => {
 });
 
 /**
- * F027, F033, F034. A quote is something to agree to, so once it has been
- * agreed to — and paid for — it is no longer something to quote.
+ * A quote is something to agree to, so once it has been agreed to, and paid
+ * for, it is no longer something to quote.
  *
- * `quote` checked only that the request had been accepted by an operator, not
- * what stage the collector had got to. An operator pressing Send quote again on
- * a paid request put it back to `quoted`, and the collector's next Accept
- * charged them a second time for the same work. `declineToQuote` closed a paid
- * request and kept the money.
+ * `quote` checks the stage the collector has reached as well as the operator's
+ * acceptance: Send quote again on a paid request would put it back to `quoted`,
+ * and the collector's next Accept would charge them a second time for the same
+ * work. Declining a paid request refunds it.
  */
 describe('a quote that has been accepted', () => {
   const QUOTE = { priceMinor: 30_00, scope: 'Weigh it and photograph the seal before it ships.' };

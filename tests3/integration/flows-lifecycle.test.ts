@@ -6,9 +6,10 @@ import { SEED, signIn, intakeFor, fundWallet, usernameOf } from '../../tests/int
  *
  * Two things this covers that no other suite does.
  *
- * FIRST, the modules nobody had tested: the helpdesk end to end, arrival
- * disposals from both sides, the admin surface, consignment and buyout. A module
- * with no test is a module whose first bug is found by a customer.
+ * FIRST, whole journeys through modules no other suite drives: the helpdesk end
+ * to end, arrival disposals from both sides, the admin surface, consignment and
+ * buyout. A module with no test is a module whose first bug is found by a
+ * customer.
  *
  * SECOND, ILLEGAL transitions. Every state machine here is written out as an
  * adjacency list in its service, and every one of those lists is a claim that
@@ -379,11 +380,11 @@ describe('notification preferences', () => {
    * Driven against `collector3` and restored afterwards, on purpose.
    *
    * `/notifications/preferences/channel` is a MASTER switch: it turns a channel
-   * off for every event at once. Running it against a shared seeded account and
-   * walking away broke `not-channels-and-content.test.ts`, which asserts that
-   * account's default email matrix — a suite-order-dependent failure that only
-   * appears in a full run. The suite has no per-test isolation, so a test that
-   * mutates account-level settings has to put them back.
+   * off for every event at once. Left switched off on a shared seeded account,
+   * it breaks `not-channels-and-content.test.ts`, which asserts that account's
+   * default email matrix: a suite-order-dependent failure that only appears in
+   * a full run. The suite has no per-test isolation, so a test that mutates
+   * account-level settings has to put them back.
    */
   it('round-trips a per-event and a per-channel switch, and restores them', async () => {
     const collector = await signIn(SEED.collector3);

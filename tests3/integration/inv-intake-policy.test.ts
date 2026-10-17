@@ -4,8 +4,8 @@ import { Client, SEED, signIn } from '../../tests/integration/helpers/http';
 /**
  * The published intake policy, and the customs guidance that goes with it.
  *
- * Both close the same class of gap: a rule Bault already enforced that no
- * customer could read. So the tests are mostly about the two properties that
+ * Both are rules Bault enforces that a customer has to be able to read. So the
+ * tests are mostly about the two properties that
  * make a published rule trustworthy — that it is REACHABLE by the person who
  * needs it, and that it CANNOT DRIFT from the rule actually being enforced.
  */
@@ -139,8 +139,7 @@ describe('destination customs guidance', () => {
     expect(res.body.specific.name).toBe('Australia');
     // Every destination-specific claim carries the authority that issues it.
     expect(res.body.specific.authority.url).toMatch(/^https:\/\//);
-    // And it names the clearance step Bault does NOT perform — the one thing
-    // the parity audit found genuinely unattempted.
+    // And it names the clearance step Bault does NOT perform.
     expect(res.body.specific.notHandled.join(' ')).toMatch(/assembly order/i);
   });
 
