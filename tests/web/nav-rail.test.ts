@@ -49,7 +49,7 @@ describe('navigation rail: two states only', () => {
 
   it('exposes no pin field at all', () => {
     // A regression guard with teeth: if a "pinned"/"locked"/"sticky" flag is
-    // ever reintroduced to this state, this fails.
+    // ever added to this state, this fails.
     expect(Object.keys(INITIAL_NAV_RAIL_STATE).sort()).toEqual(['dismissed', 'focusWithin', 'hovering']);
   });
 });
@@ -79,13 +79,13 @@ describe('navigation rail: closing after a selection', () => {
   });
 
   /**
-   * The regression this shape caused in the real browser.
+   * What the real browser does after a selection.
    *
    * Selecting a destination remounts the workspace body under a cursor that has
    * not moved, and the browser emits mouseleave + mouseenter for that stationary
-   * pointer. Treated as intent, the rail reopened the instant it closed — the
-   * unit tests passed and the app was visibly wrong. Only genuine MOVEMENT
-   * counts now, so this exact sequence must leave the rail shut.
+   * pointer. Treated as intent, that would reopen the rail the instant it
+   * closed. Only genuine MOVEMENT counts, so this exact sequence must leave the
+   * rail shut.
    */
   it('stays closed through the leave/enter storm a selection causes', () => {
     const state = run(
@@ -108,7 +108,7 @@ describe('navigation rail: closing after a selection', () => {
 describe('navigation rail: collapsing on hover end', () => {
   it('collapses on pointer leave with no grace period in the state itself', () => {
     // The reducer is synchronous and has no timer: 'pointerLeave' collapses on
-    // the spot. A delay could only be reintroduced by adding one to the
+    // the spot. A delay could only be introduced by adding one to the
     // component, which this asserts is not the model.
     const hovering = run({ type: 'pointerEnter' });
     expect(isExpanded(hovering)).toBe(true);

@@ -68,15 +68,11 @@ function textOf(entry: (typeof FAQ.entries)[number]): string {
 const ALL_FAQ_TEXT = FAQ.entries.map(textOf).join('\n');
 
 /**
- * Bault's own FAQ (E20 / F058).
+ * Bault's own FAQ.
  *
- * This suite used to assert the OPPOSITE: that the FAQ was a verbatim copy of
- * another company's, down to its source URL, its first question, its curly
- * apostrophes and the exact count of 48 bullet lists. Those expectations encoded
- * the finding — another company's addresses, phone number, payment account and
- * prices shown to Bault's customers — so they were replaced, not kept. What is
- * pinned now is that the answers are Bault's, and that the figures in them are
- * the ones the code charges.
+ * Pinned: the answers are Bault's, carrying no other company's addresses,
+ * phone number, payment account or prices, and the figures in them are the
+ * ones the code charges.
  */
 describe('FAQ: Bault’s own answers', () => {
   it('records when it was last checked against the code', () => {
@@ -127,12 +123,11 @@ describe('FAQ: Bault’s own answers', () => {
   /**
    * The drift guard.
    *
-   * The copied FAQ quoted another company's prices, and the policy below it
-   * quoted Bault's configuration as prose — both went wrong the same way: a
-   * number written down once, in a place nothing checks. So: a dollar figure or
-   * a percentage may appear in an answer only if it is a constant in the code
-   * that charges it. Anything that is configuration — a pricing rule, an
-   * environment variable — has to be described as shown in the app instead.
+   * A number written down once, in a place nothing checks, goes wrong. So a
+   * dollar figure or a percentage may appear in an answer only if it is a
+   * constant in the code that charges it. Anything that is configuration (a
+   * pricing rule, an environment variable) has to be described as shown in the
+   * app instead.
    */
   it('quotes no dollar amount or percentage the code does not charge', () => {
     const m = moneyTerms;
@@ -215,10 +210,9 @@ describe('Legal documents', () => {
   });
 
   /**
-   * E21 / F059. There were no terms at all — the pending list named three
-   * documents and gave none of them a body — while the product charged fees,
-   * accrued interest and suspended accounts. They exist now, as drafts, and a
-   * draft must never be mistaken for a reviewed agreement.
+   * The product charges fees, accrues interest and suspends accounts, so the
+   * terms exist with a body. They are drafts, and a draft must never be
+   * mistaken for a reviewed agreement.
    */
   it('has a Terms of Service, a Privacy Policy and a Cookie notice, each a visibly marked draft', () => {
     expect(DRAFT_NOTICE).toBe('DRAFT — must be reviewed by a lawyer before launch');
@@ -306,7 +300,7 @@ describe('Legal documents', () => {
       expect(prefix, `${file} is a font nobody licensed`).toBeDefined();
       expect(text).toContain(families[prefix!]!);
     }
-    // The font it used to name is not bundled at all.
+    // Libertinus is not bundled at all, so the licence must not name it.
     expect(text).not.toMatch(/Libertinus/);
 
     expect(ofl.downloadPath).toBe('/fonts/OFL.txt');

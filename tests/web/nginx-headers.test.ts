@@ -5,11 +5,11 @@ import { join } from 'node:path';
 /**
  * The web image's nginx sends its security headers on every response.
  *
- * They were declared once, at the `server` level, and nginx dropped them from
- * every location that set a header of its own: `/assets/`, `/images/` and
- * `= /index.html`, which every SPA route ends in. The HTML document — the one
- * response where a CSP and frame-ancestors matter — went out with neither
- * (E22). Nothing in CI starts nginx, so this reads the configuration instead:
+ * nginx drops `server`-level headers from every location that sets a header of
+ * its own: `/assets/`, `/images/` and `= /index.html`, which every SPA route
+ * ends in. Declared only there, the HTML document (the one response where a CSP
+ * and frame-ancestors matter) would go out with neither. Nothing in CI starts
+ * nginx, so this reads the configuration instead:
  * every location includes the shared header file, and the file the include
  * names is the one the Dockerfile renders.
  */
