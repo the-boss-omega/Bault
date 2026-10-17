@@ -68,7 +68,10 @@ export class SessionService {
         mfaEnabledAt: mfaFactor.enabledAt,
       })
       .from(loginSession)
-      .innerJoin(userAccount, sql`${userAccount.id}::text = ${loginSession.userId}`)
+      // uuid = text through the operator in 0001_append_only.sql, which plans as
+      // `id = user_id::uuid` and so uses user_account_pkey. Casting `id` to text
+      // instead made every authenticated request scan the whole account table.
+      .innerJoin(userAccount, eq(userAccount.id, loginSession.userId))
       // Read with the session, on every request, because enrolment is what
       // `MfaEnrollmentGuard` decides on: a staff account that has just enrolled
       // is let through on its very next request, and one whose second factor
