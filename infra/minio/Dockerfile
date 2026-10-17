@@ -6,7 +6,8 @@
 # served, checked against the checksum database on download.
 #
 # The same server release as CI (MINIO_VERSION in .github/workflows/ci.yml),
-# plus `mc`, which the setup steps use to make the bucket. The first
+# plus `mc`, which the setup steps use to make the bucket. Both versions are
+# updated by hand; Dependabot updates only the two FROM lines. The first
 # `docker compose up` builds it, which takes a few minutes; after that the
 # image is reused.
 
