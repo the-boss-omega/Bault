@@ -34,9 +34,9 @@ scp infra/production/bootstrap.sh root@<server>:
 ssh root@<server> bash bootstrap.sh <ADMIN_IP>
 ```
 
-Docker, ufw, age and the PostgreSQL 16 client are installed; `deploy` gets your
-key; the firewall allows 80, 443 and SSH from `ADMIN_IP` only; SSH takes keys
-only. Re-running it is safe. A database on another major version:
+Docker, ufw, age, rclone (the backup upload) and the PostgreSQL 16 client are
+installed; `deploy` gets your key; the firewall allows 80, 443 and SSH from
+`ADMIN_IP` only; SSH takes keys only. Re-running it is safe. A database on another major version:
 `sudo PG_MAJOR=17 bash bootstrap.sh <ADMIN_IP>`.
 
 Docker publishes container ports with its own iptables rules, which ufw does

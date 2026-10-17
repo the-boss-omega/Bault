@@ -35,9 +35,13 @@
 # UPLOAD. `--upload` copies the dump and its checksum off the host, to a bucket in
 # a SEPARATE account, so losing the provider account or this server does not take
 # the backups with it:
-#   s3://<bucket>/<prefix>     aws cli (`aws s3 cp`); credentials from the usual
-#                              AWS_* variables or profile
 #   rclone:<remote>:<path>     rclone (`rclone copyto`), remote from rclone.conf
+#                              or from RCLONE_CONFIG_<REMOTE>_* variables. The
+#                              one infra/production/bootstrap.sh installs, and
+#                              the set-up infra/ops/crontab.example describes
+#   s3://<bucket>/<prefix>     aws cli (`aws s3 cp`); credentials from the usual
+#                              AWS_* variables or profile. Not in Ubuntu 24.04's
+#                              archive: install it yourself to use this form
 # Give the uploading key PutObject only, and turn on versioning or object lock on
 # the bucket: a key that can overwrite or delete backups lets whoever takes this
 # host take the backups too. Upload refuses an unencrypted dump: a plaintext copy
@@ -208,9 +212,13 @@ cmd_dump() {
       rclone:*)
         dest="${upload#rclone:}"
         dest="${dest%/}"
+        # A PutObject-only key may not look at the bucket or read an object
+        # back, and rclone does both by default. The name is new every run, so
+        # there is nothing at the destination to compare with anyway.
+        local put_only=(--no-check-dest --s3-no-check-bucket --s3-no-head)
         echo "==> uploading to ${dest}/${base}"
-        rclone copyto "$file" "${dest}/${base}"
-        rclone copyto "${file}.sha256" "${dest}/${base}.sha256"
+        rclone copyto "${put_only[@]}" "$file" "${dest}/${base}"
+        rclone copyto "${put_only[@]}" "${file}.sha256" "${dest}/${base}.sha256"
         ;;
     esac
   fi
