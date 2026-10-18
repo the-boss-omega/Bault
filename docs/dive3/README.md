@@ -33,4 +33,4 @@ After DIVE3: design work (5 to 10 hours), then staging, the live provider checks
 - **T-numbers** (for example T8.3) point at a section of Stage 1. When an entry or task cites one you don't remember, read that section again.
 - **The code has no comments, on purpose.** This guide explains it. When you change the code in Stage 3, keep it that way: put the reason in the pull request, and in the test name.
 - **Names in `code font`** are exact. Search for them as written.
-- **The code this guide describes** is `master` after pull requests #9 to #15 are merged, #15 being this guide. Merge them before you start Stage 2, from the top down and with merge commits, as the launch plan's Day 1 sets out, and start every Stage 3 branch from that `master`.
+- **The code this guide describes** is `master` after pull requests #9 to #20 are merged: #15 is this guide, and #16 to #20 keep it true as they change the code. Merge them before you start Stage 2, from the top down and with merge commits, as the launch plan's Day 1 sets out, and start every Stage 3 branch from that `master`.
