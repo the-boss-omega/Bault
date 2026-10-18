@@ -1,6 +1,6 @@
 ## 2.10 Infrastructure, CI and tests
 
-How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, then the tests. Budget: 20 minutes.
+How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts, then the tests. Budget: 24 minutes.
 
 #### `apps/api/Dockerfile`, `apps/worker/Dockerfile` · 2 min · T17.1
 Multi-stage builds from the repo root on `node:22-slim`, pinned by digest: build the packages and the app, reinstall with `--prod`, run as UID 10001 with an exec-form `CMD` so SIGTERM reaches Node. The API image carries the migrations, so `node dist/db/migrate.js` runs from the release itself, and its `HEALTHCHECK` calls `/api/v1/healthz`. The worker has no port; `/api/v1/readyz/worker` reads its `worker_heartbeat` instead.
@@ -53,6 +53,22 @@ Prepares Ubuntu 24.04: Docker, ufw, age, rclone, the Postgres client, a `deploy`
 The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`, roles, deploy, nightly backup, then the staging check. `production.env.example` holds every production value (live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP, S3); `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs.
 
 **Watch:** no step creates the first administrator, or the `platform@bault.dev` account that `HouseStoreService`, `AccountingService` and `ServiceRequestService` look up by address. The seed is the only code that creates them, and it must never run in production.
+
+#### `infra/production/prices.json`, `scripts/ops/prices.mjs`, `scripts/ops/session.mjs` · 2 min · T8.5, T12.1, T7.6
+`pnpm prices:load --url <site>` puts every price on a fresh database. The file lists each rule as `"fixed": "$5.00"` or `"percent": "5%"`, with its trigger, its description (customers read it) and, for both storage rules, the terms the sweep reads.
+- `parsePriceFile` refuses a duplicate, a missing description, storage without its terms, and parameters on a membership: `withTierParameters` takes those from `GET /membership/tiers`, as the console does.
+- `plan` sorts each rule into load, same or differs against the rules in force (newest `effectiveFrom` per action and class); `gaps` names the actions coverage lists that the file lacks, and file actions the API does not know.
+- A run creates only what is missing; `--update` replaces what differs, `--dry-run` and `--check` write nothing, and `--check` exits 1 unless the server matches. `signInAdmin` asks for the password and the authenticator code, or reads them from the environment, and keeps the session cookie in memory only.
+- `tests/config/prices-file.test.ts` runs the file through `coverage` itself, so a new billable action without a price fails CI, and checks that the three code-constant fees publish exactly their constants.
+
+**Watch:** the file ships with the seed's numbers and `"reviewed": false`, and the loader refuses it until somebody has decided the prices; staging may pass `--allow-unreviewed`.
+
+#### `scripts/ops/load-test.mjs`, `scripts/ops/security-check.mjs` · 1.5 min · T17.7, T7.9, T7.6
+The Day 6 checks, run from outside.
+- `ops:load-test` sends `MIX` (public listings, the price list, a collector's vault and wallet) at a steady `--rps`, plus a few sign-ins a minute, and fails past `--max-p95` or `--max-error-rate`. It refuses anything but `--target staging`.
+- `ops:security-check` tests the HTTPS redirect, the certificate, that TLS 1.0 and 1.1 are refused, the SSL Labs grade, `gradeHeaders` on the page, a script and the API, `docsVerdict` on the docs paths, the open ports (nmap, or a connect scan of `COMMON_PORTS`), and `adminNeedsCode`: an administrator's password alone must open no session.
+
+**Watch:** the API limits each address to `RATE_LIMIT_PER_MINUTE`, so a load test from one machine measures the limiter unless staging raises it for the run.
 
 #### `infra/ops/backup.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md` · 2 min · T17.4
 - `dump` — `pg_dump` as the owner, checked, encrypted with age (only the public key on the host), checksummed, uploaded off the host; an unencrypted upload is refused.
