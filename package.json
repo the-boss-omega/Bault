@@ -17,6 +17,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "users:remove-test": "node scripts/remove-test-users.mjs",
+    "staging:check": "node scripts/staging-check.mjs",
     "db:reset": "pnpm --filter @bault/api db:seed",
     "typecheck": "pnpm -r typecheck",
     "test": "node scripts/test.mjs",

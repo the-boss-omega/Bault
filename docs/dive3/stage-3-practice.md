@@ -127,7 +127,7 @@ The estimates include writing the failing test, the fix, and running the named s
 <details><summary>Hints</summary>
 
 1. `approve` writes `reviewedBy` through `applyTransition`; `lockForCompletion` already holds the row, so the comparison belongs there.
-2. Grep the suites for `/complete` on cash-outs to see what a two-person rule breaks. `fundWallet` completes cash-ins, so a cash-out-only rule leaves it alone.
+2. Grep the suites for `/complete` on cash-outs to see what a two-person rule breaks. `fundWallet` completes cash-ins, so a cash-out-only rule leaves it alone. `scripts/staging-check/run.mjs` completes both kinds through `completer`, which asks for `secondAdmin` on a 403; give its test one.
 3. A second seeded administrator also needs an entry in `PROTECTED`, or `scripts/remove-test-users.mjs` could offer it for deletion.
 </details>
 

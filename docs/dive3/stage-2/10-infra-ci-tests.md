@@ -50,7 +50,7 @@ Prepares Ubuntu 24.04: Docker, ufw, age, rclone, the Postgres client, a `deploy`
 **Watch:** migrations run while the old release still serves, and rollback does not undo them: every migration must suit the previous code.
 
 #### `infra/production/README.md` and the `*.env.example` files · 1.5 min · T4.5, T17.2
-The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`, roles, deploy, nightly backup. `production.env.example` holds every production value (live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP, S3); `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs.
+The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`, roles, deploy, nightly backup, then the staging check. `production.env.example` holds every production value (live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP, S3); `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs.
 
 **Watch:** no step creates the first administrator, or the `platform@bault.dev` account that `HouseStoreService`, `AccountingService` and `ServiceRequestService` look up by address. The seed is the only code that creates them, and it must never run in production.
 
@@ -79,6 +79,14 @@ The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`,
 `pnpm test` runs `SUITES` in order: the five that need nothing, then `integration`, `core`, `concurrency`, `property` and `worker`, each after `db:seed`. It stops at the first failure, reseeds at the end unless `--no-reset`, and refuses `NODE_ENV=production`.
 
 **Watch:** it starts no API. The database suites need one running at `API_URL`, and two files start a second one from the build, so build first.
+
+#### `scripts/staging-check.mjs`, `scripts/staging-check/run.mjs` · 1.5 min · T17.2, T18.2
+`pnpm staging:check` walks the launch plan's staging journeys and provider checks through the public API, as your admin and three `chk…` collectors it creates.
+- `runStagingCheck` — the checks in `CHECKS` order. Each waits for the ones named in `DEPENDS`, and records pass, fail, skip or by hand. With `providers: 'sandbox'`, the checks only live PayPal and EasyPost can answer are skipped, and it sends the payout webhook itself.
+- `assertStagingTarget` — refuses without `--target staging`, refuses the production host, and refuses a PayPal receiver outside `.example.com`. The command then has the host typed back before it starts.
+- `tests/integration/staging-check.test.ts` runs it against the CI API, writing `verification_token` rows in place of the emailed links.
+
+**Watch:** it uses only the routes the web app uses. When a change alters one, that test fails with the check's own reason, so update the check in the same pull request.
 
 #### `tests/` and `tests3/`: the ten suites · 3 min · T15.3, T18.1
 `tests3/` drives each flow from the wrong side.
