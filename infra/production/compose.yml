@@ -1,40 +1,6 @@
-# =============================================================================
-# Bault production stack: one host, one network, one public entry point.
-#
-#   internet ──443──> caddy ──> web (nginx: SPA + /api proxy) ──> api ──> Postgres
-#                                                             worker ──> Postgres
-#
-# Postgres is NOT in this file. The database is the record of who owns what and
-# lives somewhere with its own backups (managed Postgres, or a dedicated host);
-# the containers here are stateless and can be thrown away and recreated from
-# an image tag at any time.
-#
-# Run through infra/production/deploy.sh, or by hand from the repo root:
-#
-#   docker compose --env-file /etc/bault/production.env \
-#     -f infra/production/compose.yml <command>
-#
-# `--env-file` is what fills the ${…} below (domain, image tag, registry). It is
-# NOT how containers get their configuration: that is `env_file:` per service,
-# and only api, worker and migrate are given production.env. Caddy and nginx
-# get the two or three non-secret values they need, and none of the secrets.
-#
-# Each of api, worker and migrate connects as its own database role
-# (infra/production/roles.sql): bault_app, bault_worker, bault_owner. The same
-# two variables, DATABASE_URL and DIRECT_DATABASE_URL, therefore differ per
-# service, so each reads production.env (shared) and then its own file in
-# /etc/bault holding just those two: api.env, worker.env, migrate.env. All
-# three are required; see the *.env.example files next to this one.
-#
-# Values in production.env must not contain an unquoted `$` (compose
-# interpolates it); wrap such a value in single quotes.
-# =============================================================================
 name: bault
 
 x-logging: &logging
-  # Docker's default json-file driver has no size limit: a chatty container
-  # fills the disk, and a full disk stops Postgres clients, Caddy's certificate
-  # renewal and docker itself. 5 x 20 MB per container is the ceiling.
   driver: json-file
   options:
     max-size: "20m"
@@ -44,20 +10,11 @@ x-node: &node
   restart: unless-stopped
   networks: [internal]
   logging: *logging
-  # Read-only root: the processes write nothing but logs to stdout. /tmp is
-  # writable for libraries that insist on a scratch file.
   read_only: true
   tmpfs: [/tmp]
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
   volumes:
-    # The database provider's CA, named in every connection string as
-    # sslrootcert=/etc/bault/db-ca.crt. node-postgres treats sslmode=require as
-    # verify-full, and Node's own CA list does not contain a managed provider's
-    # private CA, so without this file every connection is refused. Same path
-    # inside and outside, so pg_dump on the host reads the same URL. Required:
-    # a missing file is an error here rather than an empty directory created in
-    # its place.
     - type: bind
       source: ${BAULT_ENV_DIR:-/etc/bault}/db-ca.crt
       target: /etc/bault/db-ca.crt
@@ -69,26 +26,16 @@ services:
   caddy:
     image: caddy:2.11-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     restart: unless-stopped
-    # The ONLY published ports in the stack. Docker publishes ports by writing
-    # its own iptables rules, which ufw does not filter, so anything added here
-    # is open to the internet whatever the firewall says.
-    # BAULT_HTTP_PORT / BAULT_HTTPS_PORT exist for a local rehearsal on a
-    # machine where 80/443 are taken; production leaves them unset.
     ports:
       - "${BAULT_HTTP_PORT:-80}:80"
       - "${BAULT_HTTPS_PORT:-443}:443"
       - "${BAULT_HTTPS_PORT:-443}:443/udp"
     environment:
       BAULT_DOMAIN: ${BAULT_DOMAIN:?set BAULT_DOMAIN in production.env}
-      # Empty unless the site is behind Cloudflare; see the Caddyfile.
       BAULT_TRUSTED_PROXIES: ${BAULT_TRUSTED_PROXIES:-}
-      # Empty in production. `local_certs` makes Caddy issue from its own CA,
-      # for a rehearsal with no public DNS.
       CADDY_LOCAL_CERTS: ${CADDY_LOCAL_CERTS:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Certificates and the ACME account. Losing this volume means re-issuing
-      # every certificate, which Let's Encrypt rate-limits.
       - caddy_data:/data
       - caddy_config:/config
     networks: [internal]
@@ -103,7 +50,6 @@ services:
     restart: unless-stopped
     environment:
       API_UPSTREAM: http://api:3000
-      # The CSP's img-src and media-src name this origin (apps/web/nginx-*).
       STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:?set STORAGE_ENDPOINT in production.env}
       STORAGE_PUBLIC_ORIGIN: ${STORAGE_PUBLIC_ORIGIN:-}
     networks: [internal]
@@ -112,9 +58,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-        # nginx resolves `api` once, when it starts. A new api container can
-        # come up on a new address, so web restarts whenever api is recreated
-        # rather than proxying to the old one until somebody notices the 502s.
         restart: true
 
   api:
@@ -126,11 +69,7 @@ services:
     environment:
       API_PORT: "3000"
     mem_limit: 768m
-    # Docker's grace before SIGKILL. The API finishes in-flight transactions on
-    # SIGTERM (enableShutdownHooks); ten seconds is not always enough for that.
     stop_grace_period: 30s
-    # Readiness, not just liveness: /readyz answers 503 when the database is
-    # unreachable, and web waits for this before it starts.
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -145,15 +84,8 @@ services:
       - path: ${BAULT_ENV_DIR:-/etc/bault}/production.env
       - path: ${BAULT_ENV_DIR:-/etc/bault}/worker.env
     mem_limit: 512m
-    # On SIGTERM the worker stops taking jobs and drains the running ones for
-    # up to 30 seconds. Docker's default of 10 would SIGKILL it mid-drain; 45
-    # leaves the drain room to finish and the process to exit on its own.
     stop_grace_period: 45s
 
-  # One-shot: `docker compose --profile migrate run --rm migrate`. Same image as
-  # the API, so the migrations that run are exactly the ones that release ships.
-  # migrate.env connects as bault_owner, the only role that may change the
-  # schema; api and worker run as roles that cannot.
   migrate:
     <<: *node
     image: ${BAULT_REGISTRY}/bault-api:${BAULT_TAG}
@@ -166,13 +98,6 @@ services:
     mem_limit: 512m
 
 networks:
-  # One private bridge for the whole stack. Not `internal: true`: the API and
-  # worker must reach PayPal, EasyPost, SMTP, the bucket and Sentry, and Caddy
-  # must reach Let's Encrypt. Nothing on it is published except Caddy's ports.
-  #
-  # The subnet is fixed so the API can be told exactly which hops may speak for
-  # the client: TRUST_PROXY in production.env must be this CIDR. Change both
-  # together, or rate limiting and the sign-in log see one address for everyone.
   internal:
     ipam:
       config:

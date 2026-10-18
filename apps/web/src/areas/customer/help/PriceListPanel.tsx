@@ -10,7 +10,6 @@ interface PriceEntry {
   itemClass: string | null;
   description: string;
   model: 'fixed' | 'percentage';
-  /** Cents for a fixed rule, basis points for a percentage one. */
   value: number;
   currency: string;
   billingTrigger: string;
@@ -22,13 +21,6 @@ interface PriceList {
   note: string;
 }
 
-/**
- * What everything costs, before it is charged, from `GET /pricing/list`.
- *
- * Rules are grouped by what a person wants to know: what it costs to send a
- * card home is answered by `shipping`, `shipping_rush` and
- * `shipping_addon:gps_tracker` together, so they sit in one group.
- */
 export function PriceListPanel() {
   const { t } = useI18n();
   const [list, setList] = useState<PriceList | null>(null);
@@ -44,12 +36,6 @@ export function PriceListPanel() {
     })();
   }, []);
 
-  /**
-   * A rule's price, in the units it is actually stated in.
-   *
-   * A percentage rule stores basis points and a fixed one stores cents.
-   * Rendering both with `formatUsd` would turn 5% into "$5.00".
-   */
   function priceOf(entry: PriceEntry): string {
     return entry.model === 'percentage'
       ? `${(entry.value / 100).toFixed(2)}%`

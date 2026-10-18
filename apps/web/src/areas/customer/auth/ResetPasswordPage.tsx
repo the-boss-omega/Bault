@@ -5,18 +5,6 @@ import { navigate } from '../../../shared/routing';
 import { PASSWORD_MIN } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 
-/**
- * Step two of password recovery: the page the emailed link opens.
- *
- * The token arrives in the hash route (`#/reset-password?token=…`) and is never
- * shown, edited or stored: it goes straight from the URL into the one request
- * that consumes it. It is single-use and expires in an hour, both enforced
- * server-side, so this page only collects a new password and reports the
- * outcome.
- *
- * A missing token is its own state instead of a form that cannot succeed: the
- * usual cause is a mail client that truncated the link.
- */
 export function ResetPasswordPage({ token }: { token: string | null }) {
   const t = useT();
   const [password, setPassword] = useState('');

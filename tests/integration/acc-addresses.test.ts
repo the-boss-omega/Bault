@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 
-/**
- * ACC-07 / Requirement 4.2 — saved shipping addresses are added, EDITED and
- * removed from the Profile page, and they are what feeds the shipping dropdown
- * (Requirement 5.1). Requires a running API + seeded DB.
- */
 describe('ACC saved shipping addresses', () => {
   it('adds, edits and removes an address, keeping one default', async () => {
     const c = await signIn(SEED.collector);
@@ -29,7 +24,6 @@ describe('ACC saved shipping addresses', () => {
     expect(edited.body.line1).toBe('501 Howard St');
     expect(edited.body.isDefault).toBe(true);
 
-    // Promoting a new default demotes the previous one — exactly one survives.
     const all = (await c.get('/me/addresses')).body as { id: string; isDefault: boolean }[];
     expect(all.filter((a) => a.isDefault)).toHaveLength(1);
 

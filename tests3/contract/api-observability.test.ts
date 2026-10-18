@@ -1,24 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { beforeAll, describe, it, expect } from 'vitest';
 
-/**
- * What the API tells its operators about a request. Both answer "how would we
- * know?":
- *
- *  - Every request leaves one line with its status and duration, so "the shelf
- *    page is slow" and "sign-in is returning 500s" can be answered without
- *    reproducing them.
- *  - A 500 goes to the error tracker as well as the log. Nobody is paged by
- *    stdout.
- *
- * Unit-level: the middleware and the exception filter are driven directly, with
- * the error reporter replaced by a recorder, so this needs no server, no
- * database and no error-tracking account.
- */
 type Reported = { error: unknown; request: { method?: string; url?: string } | undefined };
 
-// JSON lines, the way every deployed environment writes them. Set before the
-// config is first read; dotenv never overrides a variable that is already set.
 process.env.NODE_ENV = 'test';
 
 let logger: typeof import('../../apps/api/src/shared/observability/logger');
@@ -32,7 +16,6 @@ beforeAll(async () => {
   common = await import('../../apps/api/node_modules/@nestjs/common');
 });
 
-/** Every line written to stdout and stderr while `fn` runs. */
 async function captureOutput(fn: () => void | Promise<void>): Promise<string[]> {
   const lines: string[] = [];
   const out = process.stdout.write.bind(process.stdout);
@@ -89,7 +72,6 @@ describe('the request log', () => {
     expect(line!.duration_ms as number).toBeGreaterThanOrEqual(10);
     expect(line!.level).toBe('info');
     expect(typeof line!.requestId).toBe('string');
-    // The query string is left out: on some routes it is where a token travels.
     expect(line!.path).toBe('/api/v1/vault/items');
     expect(JSON.stringify(line)).not.toContain('cursor=abc');
   });

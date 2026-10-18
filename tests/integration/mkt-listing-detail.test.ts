@@ -1,15 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, intakeFor, signIn } from './helpers/http';
 
-/**
- * `GET /marketplace/listings/:id` is public: the page a listing link opens,
- * for anybody, signed in or not. Requires a running API + seeded DB.
- */
-
-/** A 1×1 PNG, so the listing has a photograph to show. */
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-/** Every key anywhere in a JSON value, however deep. */
 function keysOf(value: unknown, into = new Set<string>()): Set<string> {
   if (Array.isArray(value)) for (const v of value) keysOf(v, into);
   else if (value && typeof value === 'object') {
@@ -39,9 +32,6 @@ describe('MKT a listing, as an anonymous visitor sees it', () => {
     const res = await anon.get(`/marketplace/listings/${listing.id}`);
     expect(res.status).toBe(200);
 
-    // Who owns it, where it sits, what parcel it came in, whether it is frozen,
-    // the label on it, and the storage keys and hashes of its photographs: none
-    // of it is anybody's business but the warehouse's and the owner's.
     const keys = keysOf(res.body);
     for (const leaked of [
       'ownerId',
@@ -60,8 +50,6 @@ describe('MKT a listing, as an anonymous visitor sees it', () => {
       expect(keys.has(leaked), `${leaked} is in the public listing`).toBe(false);
     }
 
-    // What the marketplace screen shows for a listing, exactly as browsing
-    // shows it.
     const browsed = ((await anon.get('/marketplace/listings?limit=200')).body as Record<string, unknown>[]).find(
       (l) => l.id === listing.id,
     );

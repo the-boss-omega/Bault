@@ -6,26 +6,6 @@ import {
   type CustomsDeclaration,
 } from '@bault/adapters';
 
-/**
- * The EasyPost adapter contract.
- *
- * Driven against a stubbed `fetch` rather than the live API, on purpose. The
- * things worth defending here are not "does EasyPost work" — that is EasyPost's
- * problem — but the four places THIS adapter can quietly do the wrong thing with
- * somebody's money:
- *
- *   1. authenticate the way EasyPost actually expects (Basic, key as USERNAME,
- *      empty password — not a bearer token);
- *   2. convert units, because the ledger is in cents and EasyPost quotes decimal
- *      dollar strings, and parcels are grams here and ounces there;
- *   3. buy THE RATE THAT WAS QUOTED, never re-rate at label time;
- *   4. refuse an address a carrier cannot rate, instead of quoting a number that
- *      would change when the label was bought.
- *
- * A live-API suite is the right companion to this and needs an EZTK key in the
- * environment; this one runs everywhere, including CI with no account.
- */
-
 const ORIGIN = {
   name: 'Bault New Jersey',
   street1: '12 Ferry Street',
@@ -104,8 +84,6 @@ describe('the EasyPost adapter', () => {
 
     const auth = (calls[0]!.init.headers as Record<string, string>).authorization;
     expect(auth).toMatch(/^Basic /);
-    // "EZTK_test_key:" — the trailing colon is the empty password, and leaving
-    // it off is the mistake that makes every call 401.
     const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
     expect(decoded).toBe('EZTK_test_key:');
   });
@@ -124,7 +102,6 @@ describe('the EasyPost adapter', () => {
       carrier: 'USPS',
       serviceLevel: 'GroundAdvantage',
       currency: 'USD',
-      // delivery_days was null; est_delivery_days stands in.
       estimatedDays: 4,
       providerShipmentId: 'shp_abc123',
       providerRateId: 'rate_cheap',
@@ -141,9 +118,6 @@ describe('the EasyPost adapter', () => {
     });
 
     const sent = JSON.parse(String(calls[0]!.init.body));
-    // 120g of contents + 120g of box = 240g = 8.47oz. Quoting the contents alone
-    // under-declares every shipment, which with a real carrier is a billing
-    // adjustment after the fact rather than a wrong number on a screen.
     expect(sent.shipment.parcel.weight).toBeCloseTo(8.47, 1);
   });
 
@@ -162,8 +136,6 @@ describe('the EasyPost adapter', () => {
     expect(parcel.length).toBeCloseTo(13, 0);
     expect(parcel.width).toBeCloseTo(9.8, 0);
     expect(parcel.height).toBeCloseTo(5.9, 0);
-    // 60g of contents + 320g of box = 380g = 13.4oz — the box replaces the flat
-    // 120g allowance rather than being added to it.
     expect(parcel.weight).toBeCloseTo(13.4, 1);
   });
 
@@ -218,8 +190,6 @@ describe('the EasyPost adapter', () => {
       items: [{ weightGrams: 60 }],
       rush: false,
     };
-    // A rate from somewhere else — the sandbox, a cache, a hand-built object.
-    // Re-rating here would charge a price nobody was shown, and would succeed.
     await expect(
       adapter().buyLabel(
         { carrier: 'USPS', serviceLevel: 'GroundAdvantage', costMinor: 541, currency: 'USD', estimatedDays: 4 },
@@ -232,8 +202,6 @@ describe('the EasyPost adapter', () => {
     stubFetch(() => SHIPMENT_RESPONSE);
     await expect(
       adapter().getRates({
-        // Country and postcode only — enough for the sandbox's distance band,
-        // not enough for a real quote.
         destination: { country: 'US', postalCode: '60613' },
         origin: ORIGIN,
         items: [{ weightGrams: 60 }],
@@ -266,8 +234,6 @@ describe('the EasyPost adapter', () => {
   it('maps an unreadable tracking status to unknown, never to in_transit', async () => {
     stubFetch(() => ({ status: 'some_status_easypost_added_last_week' }));
     const t = await adapter().getTracking('9400100000000000000042');
-    // A parcel whose state nobody can read is not a parcel in transit, and
-    // pretending otherwise is how a lost shipment stays "on its way" for weeks.
     expect(t.status).toBe('unknown');
 
     stubFetch(() => ({ status: 'delivered' }));
@@ -276,8 +242,6 @@ describe('the EasyPost adapter', () => {
     stubFetch(() => ({ status: 'return_to_sender' }));
     expect((await adapter().getTracking('x')).status).toBe('exception');
   });
-
-  /* ---- customs ---- */
 
   const TOKYO = { name: 'Red Ashwood', street1: '1-1 Chiyoda', city: 'Tokyo', postalCode: '100-0001', country: 'JP' };
   const TORONTO = { name: 'Red Ashwood', street1: '100 Queen St W', city: 'Toronto', region: 'ON', postalCode: 'M5H 2N2', country: 'CA' };
@@ -296,7 +260,6 @@ describe('the EasyPost adapter', () => {
     await expect(
       adapter().getRates({ destination: TOKYO, origin: ORIGIN, items: [{ weightGrams: 60 }], rush: false }),
     ).rejects.toThrow(/needs a customs declaration/i);
-    // Refused before anything was sent: no shipment exists to buy a bare label against.
     expect(calls).toHaveLength(0);
   });
 
@@ -321,8 +284,6 @@ describe('the EasyPost adapter', () => {
   });
 
   it('refuses a declaration that needs an AES filing, rather than claiming an exemption', async () => {
-    // $3,000 under one tariff number is past the $2,500 at which an EEI must be
-    // filed and its ITN printed on the label. Bault files none.
     stubFetch(() => SHIPMENT_RESPONSE);
     await expect(
       adapter().getRates({
@@ -334,8 +295,6 @@ describe('the EasyPost adapter', () => {
       }),
     ).rejects.toThrow(/EEI filing in AES/);
   });
-
-  /* ---- buying safely ---- */
 
   const BOUGHT = {
     id: 'shp_abc123',
@@ -355,8 +314,6 @@ describe('the EasyPost adapter', () => {
   const REQ = { destination: DESTINATION, origin: ORIGIN, items: [{ weightGrams: 60 }], rush: false };
 
   it('does not buy a second label for a shipment that already has one', async () => {
-    // A retry after a purchase whose answer was lost: EasyPost already holds the
-    // label, and asking for it must not pay for another.
     stubFetch(() => BOUGHT);
     const label = await adapter().buyLabel(QUOTED_RATE, REQ, { idempotencyKey: 'ship-1' });
     expect(label.trackingNumber).toBe('9400100000000000000042');
@@ -364,7 +321,6 @@ describe('the EasyPost adapter', () => {
   });
 
   it('reports a refused purchase as nothing bought, and an outage as unknown', async () => {
-    // The shipment is read first (no postage on it yet), then the purchase is refused.
     let n = 0;
     vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
       calls.push({ url: String(url), init });
@@ -416,10 +372,6 @@ describe('the EasyPost adapter', () => {
 });
 
 describe('the sandbox shipping adapter', () => {
-  /**
-   * A fine development stand-in that cannot post a parcel, which is why the env
-   * schema and the adapter factory refuse it in production.
-   */
   it('sells a label that cannot be printed', async () => {
     const label = await new SandboxShippingAdapter().buyLabel(
       { carrier: 'USPS', serviceLevel: 'Ground Advantage', costMinor: 550, currency: 'USD', estimatedDays: 4 },

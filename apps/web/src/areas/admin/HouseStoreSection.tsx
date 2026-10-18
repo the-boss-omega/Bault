@@ -20,14 +20,6 @@ interface HouseListingRow {
   status: 'active' | 'removed';
 }
 
-/**
- * Managing the Bault store: what the business sells, at what price, and how many
- * copies are left.
- *
- * The description is not marketing copy. It becomes the item record of every copy
- * sold, word for word, so it is asked for in the vault's catalogue shape (year,
- * set, card, number), and the photo is a catalogue scan named by its file stem.
- */
 export function HouseStoreSection({
   onMsg,
   onError,
@@ -94,8 +86,6 @@ export function HouseStoreSection({
     } catch (e) {
       onError((e as Error).message);
     }
-    // Reloaded either way: a refused stock change means the shelf moved, and
-    // the figure to correct is the one it moved to.
     await load();
   }
 
@@ -167,8 +157,6 @@ export function HouseStoreSection({
                     <td dir="ltr">{formatUsd(row.askingPrice)}</td>
                     <td>
                       <input
-                        // Keyed by the figure, so a reload that brings a new
-                        // one shows it rather than what was typed over it.
                         key={`${row.id}:${row.stock}`}
                         type="number"
                         min={0}
@@ -178,8 +166,6 @@ export function HouseStoreSection({
                         dir="ltr"
                         onBlur={(e) => {
                           const next = Number(e.target.value);
-                          // The figure it was typed over goes with it, so a copy sold
-                          // meanwhile is refused rather than put back on sale.
                           if (Number.isInteger(next) && next >= 0 && next !== row.stock) {
                             void patch(row, { stock: next, expectedStock: row.stock });
                           }

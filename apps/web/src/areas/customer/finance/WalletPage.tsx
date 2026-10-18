@@ -66,27 +66,15 @@ interface LedgerRow {
   occurredAt: string;
 }
 
-/**
- * `GET /finance/wallet/pending`: money spoken for by requests that are still
- * open. Deliberately not folded into the balance: none of it has moved, and a
- * balance that included it would be a number the ledger does not support.
- */
 interface PendingTotals {
   cashInMinor: number;
   cashOutMinor: number;
   count: number;
 }
 
-/**
- * Wallet contextual tabs. `cash-in` and `cash-out` raise requests, and
- * `requests` is the status view where those requests live out their lifecycle.
- * Links to the retired `topup` and `withdrawals` tabs are redirected (see
- * `LEGACY_TABS` in shared/routing).
- */
 const TABS = ['overview', 'transactions', 'cash-in', 'cash-out', 'requests'] as const;
 type WalletTab = (typeof TABS)[number];
 
-/** Ledger type → label key + glyph. Types come straight from the API enum. */
 const TYPE_META: Record<string, { label: MessageKey; icon: ReactNode }> = {
   credit_topup: { label: 'wallet.type.credit_topup', icon: <IconPlus /> },
   sale_credit: { label: 'wallet.type.sale_credit', icon: <IconTag /> },
@@ -105,11 +93,6 @@ function typeLabel(t: TranslateFn, type: string): string {
   return meta ? t(meta.label) : type.replace(/_/g, ' ');
 }
 
-/**
- * What a ledger row points at. The API writes a free-form `referenceType`, so
- * anything not in this map degrades to the raw value instead of a translation
- * key.
- */
 const REF_LABEL: Record<string, MessageKey> = {
   charge: 'wallet.ref.charge',
   transaction: 'wallet.ref.transaction',
@@ -130,14 +113,6 @@ const RANGES = [
   { key: '90', days: 90, label: 'wallet.range.90' as MessageKey },
 ];
 
-/**
- * Wallet. The derived balance (Σ ledger) is the hero; every immutable ledger
- * row is the auditable money history beneath it.
- *
- * Contextual tabs switch the wallet's own content only; the rail, header and
- * shell stay mounted. Money is entered and read in dollars everywhere; the cents
- * the API expects are produced at the edge, in `dollarsToCents`.
- */
 export function WalletPage() {
   const { t, locale } = useI18n();
   const route = useRoute();
@@ -149,8 +124,6 @@ export function WalletPage() {
   const [pending, setPending] = useState<PendingTotals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  // Table filters live at page level so leaving the Transactions tab and coming
-  // back does not silently reset what the user was looking at (Requirement 36).
   const [typeFilter, setTypeFilter] = useState('all');
   const [rangeFilter, setRangeFilter] = useState('all');
 
@@ -193,7 +166,6 @@ export function WalletPage() {
 
   return (
     <>
-      {/* ---- Hero balance ---- */}
       {balance ? (
         <section className="hero-balance">
           <div className="hero-inner">
@@ -220,7 +192,6 @@ export function WalletPage() {
       {status && <SuccessNote>{status}</SuccessNote>}
       {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
 
-      {/* ---- Contextual tabs + primary actions ---- */}
       <ContextTabs
         label={t('wallet.title')}
         tabs={tabs}
@@ -228,8 +199,6 @@ export function WalletPage() {
         onSelect={(key) => goTab(key)}
         actions={
           <>
-            {/* Both actions open a request form. There is deliberately no control
-                on this page that adds or removes funds directly. */}
             <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
               {t('wallet.action.cashIn')}
             </Button>
@@ -274,8 +243,6 @@ export function WalletPage() {
 
       {tab === 'cash-in' && (
         <TabPanel tab="cash-in">
-          {/* The fast route first: a card payment is confirmed by the provider,
-              so making it wait on a reviewer protects nobody. */}
           <TopUpPanel onError={setError} onStatus={setStatus} onChanged={() => void load()} />
 
           <Panel title={t('wallet.cashIn.title')} subtitle={t('wallet.cashIn.subtitle')}>
@@ -320,7 +287,6 @@ export function WalletPage() {
         </TabPanel>
       )}
 
-      {/* ---- Overlays ---- */}
       {selected && (
         <TransactionDrawer
           row={selected}
@@ -342,10 +308,6 @@ export function WalletPage() {
     </>
   );
 }
-
-/* ============================================================
-   Overview
-   ============================================================ */
 
 function OverviewTab({
   ledger,
@@ -408,9 +370,6 @@ function OverviewTab({
         />
       </div>
 
-      {/* Money that has been requested but has not moved. Shown apart from the
-          balance and the flows above, never added into them: the balance is the
-          sum of the ledger, and none of these amounts is in the ledger yet. */}
       {pending && pending.count > 0 && (
         <div className="metric-grid">
           <MetricCard
@@ -452,10 +411,6 @@ function OverviewTab({
     </>
   );
 }
-
-/* ============================================================
-   Transactions
-   ============================================================ */
 
 function TransactionsTab({
   ledger,
@@ -557,18 +512,6 @@ function TransactionsTab({
   );
 }
 
-/**
- * The balance the wallet stood at once each entry had landed, by entry id.
- *
- * Computed once, over the whole ledger, and looked up per row. A row's balance
- * is a fact about the ledger, so walking only the rows on screen (the newest
- * six, or a filtered list) would give wrong figures.
- *
- * `GET /finance/ledger` returns the whole ledger, newest first (LedgerService
- * .list has no limit), so the walk runs from the oldest entry and the newest
- * entry's figure is exactly the balance the header shows. If that endpoint ever
- * pages, this has to come from the server instead.
- */
 function runningBalances(ledger: readonly LedgerRow[]): Map<string, number> {
   const out = new Map<string, number>();
   let running = 0;
@@ -580,7 +523,6 @@ function runningBalances(ledger: readonly LedgerRow[]): Map<string, number> {
   return out;
 }
 
-/** The shared transaction table: same markup on the overview and the full list. */
 function TransactionTable({
   rows,
   balanceAfter,
@@ -594,7 +536,6 @@ function TransactionTable({
   emptyAction,
 }: {
   rows: readonly LedgerRow[];
-  /** From {@link runningBalances}, over the whole ledger, never over `rows`. */
   balanceAfter: ReadonlyMap<string, number>;
   loading: boolean;
   locale: string;
@@ -673,11 +614,6 @@ function TransactionTable({
                     {formatLedgerAmount(row.amount, row.direction)}
                   </Amount>
                 </td>
-                {/*
-                  The running balance, looked up from the walk over the whole
-                  ledger (see `runningBalances`), never recomputed over the rows
-                  on screen.
-                */}
                 <td data-label={t('wallet.col.balance')} className="td-end num">
                   <Amount>{formatUsd(balanceAfter.get(row.id) ?? 0)}</Amount>
                 </td>
@@ -689,10 +625,6 @@ function TransactionTable({
     </div>
   );
 }
-
-/* ============================================================
-   Transaction detail drawer
-   ============================================================ */
 
 function TransactionDrawer({
   row,
@@ -707,10 +639,6 @@ function TransactionDrawer({
 }) {
   const credit = row.direction === 'credit';
 
-  /**
-   * The receipt is generated from the ledger row itself: the row is the record
-   * of truth, and there is no receipt endpoint.
-   */
   function downloadReceipt() {
     const lines = [
       'BAULT — TRANSACTION RECEIPT',
@@ -784,19 +712,6 @@ function TransactionDrawer({
   );
 }
 
-/* ============================================================
-   Requests: the central status view
-   ============================================================ */
-
-/**
- * Every cash-in and cash-out request the signed-in user has raised.
- *
- * This is where a request lives after submission: it appears here immediately,
- * with its current status, its creation and last-update timestamps, and a way
- * into its full detail and audit history. Nothing here moves money: the amounts
- * shown are what was requested, and only a `completed` row has a matching ledger
- * entry behind it.
- */
 function RequestsTab({
   requests,
   locale,
@@ -902,18 +817,6 @@ function RequestsTab({
   );
 }
 
-/* ============================================================
-   Request detail drawer
-   ============================================================ */
-
-/**
- * One request in full, with its immutable audit history and, while it is still
- * undecided, the one action its owner has: cancelling it.
- *
- * Fetched by id rather than taken from the list, because the drawer shows the
- * history the list does not carry, and because a request opened from a bookmarked
- * URL has no list entry to read from.
- */
 function RequestDrawer({
   requestId,
   locale,
@@ -1019,8 +922,6 @@ function RequestDrawer({
               {detail.rejectionReason && (
                 <DetailRow label={t('wallet.requests.rejectionReason')}>{detail.rejectionReason}</DetailRow>
               )}
-              {/* Present only on a completed request: the proof that the balance
-                  moved because this request completed. */}
               {detail.settledLedgerId && (
                 <DetailRow label={t('wallet.requests.settledLedger')}>
                   <code dir="ltr">{detail.settledLedgerId}</code>

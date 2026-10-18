@@ -29,13 +29,6 @@ export interface TimelineEvent {
   data?: Record<string, unknown>;
 }
 
-/**
- * Inventory reconciliation + reports (T052).
- *  - `report` aggregates item counts by the chosen cut, resolved to HUMAN-READABLE
- *    labels (bin serial and zone, owner email) rather than raw UUIDs.
- *  - `reportPdf` renders the same data as a PDF.
- *  - `itemTimeline` merges every recorded event about an item into one timeline.
- */
 @Injectable()
 export class InventoryService {
   constructor(
@@ -51,7 +44,6 @@ export class InventoryService {
       .orderBy(sql`${custodyEvent.occurredAt} desc`);
   }
 
-  /** Human-readable inventory report grouped by the chosen cut (Requirement 11.1). */
   async report(cut: Cut) {
     const column = {
       shelf: item.binId,
@@ -72,8 +64,6 @@ export class InventoryService {
 
   private async labelRows(cut: Cut, grouped: { key: string | null; count: number }[]) {
     if (cut === 'shelf') {
-      // Named by SERIAL, which is what is on the shelf label and therefore what
-      // somebody holding this report walks to the shelf and compares against.
       const bins = await this.db
         .select({ id: bin.id, serialNumber: bin.serialNumber, zone: bin.zone })
         .from(bin);
@@ -97,7 +87,6 @@ export class InventoryService {
     return grouped.map((g) => ({ key: g.key, label: g.key ?? fallback, count: g.count }));
   }
 
-  /** Build the PDF for a report cut (Requirement 11.2). */
   async reportPdf(cut: Cut): Promise<Buffer> {
     const report = await this.report(cut);
     return renderReportPdf({
@@ -109,11 +98,6 @@ export class InventoryService {
     });
   }
 
-  /**
-   * Complete, viewable per-item history (Requirement 13.2): merges custody events,
-   * field corrections, bin transfers, sales/transactions, shipments, offers and
-   * disputes into one timeline, newest first.
-   */
   async itemTimeline(itemId: string): Promise<TimelineEvent[]> {
     const contains = (col: unknown) => sql`${col} @> ${JSON.stringify([itemId])}::jsonb`;
     const events: TimelineEvent[] = [];
@@ -195,16 +179,6 @@ export class InventoryService {
     return events.sort((a, b) => (a.at < b.at ? 1 : -1));
   }
 
-  /**
-   * INV-01: operator creates a shelf. Its serial is minted here and there is
-   * no barcode input: an operator who can type an identifier will type a name,
-   * which is what `0019_bins_get_a_serial` removed.
-   *
-   * No capacity is asked for (`0018_stow_wherever_it_fits`). What is asked for
-   * is what the stow assignment needs: which building the shelf is in, and
-   * whether it is oversized storage. The facility defaults to a primary site,
-   * the only kind that stores anything.
-   */
   async createBin(input: {
     zone: string;
     facilityId?: string;
@@ -231,13 +205,6 @@ export class InventoryService {
     return row;
   }
 
-  /**
-   * Which building a new shelf belongs to.
-   *
-   * An explicit id or code wins. With neither, it is the primary facility: a
-   * forwarding site stores nothing, so a bin there would be a shelf in a
-   * building that by definition has no shelves.
-   */
   private async resolveFacilityForBin(input: { facilityId?: string; facilityCode?: string }) {
     if (input.facilityId) {
       const [row] = await this.db
@@ -267,14 +234,6 @@ export class InventoryService {
     return primary.id;
   }
 
-  /**
-   * Take a bin out of service, or put it back.
-   *
-   * Never a delete: items reference their bin forever, and the transfer ledger
-   * references bins that items left years ago. An inactive bin keeps everything
-   * it holds and everything it ever held; it is simply never handed out by the
-   * stow assignment again, so it empties as its contents are picked.
-   */
   async setBinActive(binId: string, active: boolean) {
     const [row] = await this.db
       .update(bin)
@@ -285,7 +244,6 @@ export class InventoryService {
     return row;
   }
 
-  /** Every bin with what is on it: the console's locations list. */
   listBins() {
     return this.stow.listWithCounts();
   }

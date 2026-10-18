@@ -5,7 +5,6 @@ import { useI18n, type MessageKey } from '../../shared/i18n';
 import { Button, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
 import { IconRefresh } from '../../shared/ui/icons';
 
-/** `GET /admin/pricing/coverage`; see `apps/api/src/modules/prc/billable-actions.ts`. */
 export interface PricingCoverage {
   ready: boolean;
   summary: {
@@ -48,20 +47,10 @@ const STATUS_LABEL: Record<CoverageStatus, MessageKey> = {
   code_constant: 'admin.coverage.status.code_constant',
 };
 
-/** A rule's value as a person reads it: cents for a fixed rule, basis points for a percentage. */
 function ruleValue(rule: { model: string; value: number }): string {
   return rule.model === 'percentage' ? `${Number((rule.value / 100).toFixed(2))}%` : formatUsd(rule.value);
 }
 
-/**
- * Is every price loaded?
- *
- * No migration inserts a pricing rule, so a database built for production
- * from migrations alone cannot price an intake, and several actions fall back
- * quietly: to another rule, to a figure in the code, or to nothing. This is
- * the launch check: every action the code charges for, what it costs right
- * now, and what happens to the ones that have no rule. Problems sort first.
- */
 export function PricingCoveragePanel({
   refreshKey,
   onError,
@@ -69,11 +58,6 @@ export function PricingCoveragePanel({
 }: {
   refreshKey: number;
   onError: (m: string) => void;
-  /**
-   * Each answer, for the new-rule form beside it. The form offers exactly the
-   * actions listed here, so the screen can load every price this check asks
-   * for, and with one request rather than two.
-   */
   onLoaded?: (coverage: PricingCoverage) => void;
 }) {
   const { t } = useI18n();

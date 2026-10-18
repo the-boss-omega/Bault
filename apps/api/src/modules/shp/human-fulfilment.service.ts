@@ -26,23 +26,6 @@ import {
 import { formatMinor } from '../../shared/money';
 import { MembershipService } from '../mem/membership.service';
 
-/**
- * The two ways out of the vault that are a person rather than a parcel.
- *
- * WHITE GLOVE is somebody driving the card there and putting it in a hand. It
- * cannot be priced from a rate card, so it is a QUOTE: the collector says where,
- * when and where to, Bault works out the journey and comes back with a figure,
- * and the collector accepts or does not.
- *
- * SHOW PICKUP is the cards travelling to a show Bault is already attending, and
- * the collector walking up and taking them. It is cheap because the van is going
- * anyway, which is also why it is capped per show and gated on the same
- * deadline the consignments use: it is the same van.
- *
- * Both end the same way, and differently from a parcel: there is no carrier scan
- * to close them, so they are closed by a person putting a name to having taken
- * the thing.
- */
 @Injectable()
 export class HumanFulfilmentService {
   constructor(
@@ -57,11 +40,6 @@ export class HumanFulfilmentService {
     private readonly memberships: MembershipService,
   ) {}
 
-  /* ------------------------------------------------------------------
-     White glove
-     ------------------------------------------------------------------ */
-
-  /** The published terms, so somebody can see the shape of the price first. */
   async whiteGloveTerms() {
     const [domestic, international] = await Promise.all([
       this.pricing.tryPrice(whiteGloveFeeAction('domestic')),
@@ -71,18 +49,10 @@ export class HumanFulfilmentService {
       baseDomesticMinor: domestic?.amount.amount ?? WHITE_GLOVE_BASE_DOMESTIC_MINOR,
       baseInternationalMinor: international?.amount.amount ?? WHITE_GLOVE_BASE_INTERNATIONAL_MINOR,
       quoteWithinHours: WHITE_GLOVE_QUOTE_HOURS,
-      /** Travel is on top and is quoted per journey. There is no rate card. */
       travelQuotedSeparately: true,
     };
   }
 
-  /**
-   * Ask for a card to be hand-delivered.
-   *
-   * Creates a shipment with no carrier and no price. `quoteMinor` stays null,
-   * which is a real state rather than a missing value: this is a question, and
-   * Bault has to go and find out the answer.
-   */
   async requestHandDelivery(
     userId: string,
     input: {
@@ -112,11 +82,6 @@ export class HumanFulfilmentService {
     });
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
-    // The items again, locked, and not on another open parcel, as creating a
-    // shipment checks them: two requests for the same card cannot both find it
-    // free and both put it on a parcel. The event goes in the same
-    // transaction, so a request is never recorded without the event that tells
-    // the collector it arrived.
     return this.db.transaction(async (tx) => {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
       await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
@@ -129,7 +94,6 @@ export class HumanFulfilmentService {
           fulfilmentMethod: 'hand_delivery',
           destinationAddress: input.deliveryAddress.trim(),
           destinationCountry: input.destinationCountry.trim().toUpperCase(),
-          // A hand delivery has no postal routing: a person is walking to a door.
           destinationPostalCode: '',
           recipientName: input.recipientName?.trim() || null,
           pickupAddress: input.pickupAddress.trim(),
@@ -154,7 +118,6 @@ export class HumanFulfilmentService {
     });
   }
 
-  /** Somebody has worked out the journey. This is the figure. */
   async quoteHandDelivery(
     operatorId: string,
     shipmentId: string,
@@ -168,13 +131,6 @@ export class HumanFulfilmentService {
     }
 
     const now = new Date();
-    /**
-     * Read under the shipment lock and written only while still `requested`.
-     * Acceptance charges the quote on the row; a revision read before an
-     * acceptance and written after it would leave the shipment quoting one
-     * figure and charged another, and one landing on a cancelled request would
-     * quote a parcel nobody is sending.
-     */
     return this.db.transaction(async (tx) => {
       const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!s) throw AppError.notFound('Shipment not found');
@@ -205,20 +161,9 @@ export class HumanFulfilmentService {
     });
   }
 
-  /**
-   * The collector takes the quote.
-   *
-   * Charged at the quoted figure and nothing else. A quote that moved between
-   * being given and being accepted would not be a quote.
-   */
   async acceptQuote(shipmentId: string, actor: ShipmentActor) {
     await this.shipments.loadFor(shipmentId, actor);
 
-    /**
-     * Status, quote and balance are all read under the shipment lock and then
-     * the wallet lock, so two clicks on Accept cannot both see `requested` and
-     * charge the quote twice.
-     */
     return this.db.transaction(async (tx) => {
       const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!s) throw AppError.notFound('Shipment not found');
@@ -261,7 +206,6 @@ export class HumanFulfilmentService {
         },
         tx,
       );
-      // Only from `requested`, and only at the quote that was charged.
       const [accepted] = await tx
         .update(shipment)
         .set({ status: 'rates_selected', cost: s.quoteMinor, updatedAt: new Date() })
@@ -274,16 +218,6 @@ export class HumanFulfilmentService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     Show pickup
-     ------------------------------------------------------------------ */
-
-  /**
-   * Shows you can collect at, with what is left of each one's capacity.
-   *
-   * The remaining count is computed rather than stored, so it cannot drift from
-   * the pickups actually booked.
-   */
   async pickupShows() {
     const rows = await this.db
       .select()
@@ -319,7 +253,6 @@ export class HumanFulfilmentService {
           feeMinor,
           capacity: show.pickupCapacity,
           booked,
-          /** Null means uncapped. */
           remaining,
           open: show.requestDeadline.getTime() > now && (remaining === null || remaining > 0),
           notes: show.notes,
@@ -328,13 +261,6 @@ export class HumanFulfilmentService {
     );
   }
 
-  /**
-   * Book a pickup at a show.
-   *
-   * Charged on the spot, because there is nothing to quote and nothing to
-   * select: the fee is the show's, the van is going, and the only question was
-   * whether there was room.
-   */
   async requestPickup(
     userId: string,
     input: { itemIds: string[]; eventId: string; customerNotes?: string },
@@ -358,14 +284,9 @@ export class HumanFulfilmentService {
     }
 
     return this.db.transaction(async (tx) => {
-      // The items again, locked, and not on another parcel, so two clicks on
-      // Book cannot both pay the show fee for the same cards.
       await this.profiles.loadShippableItems(userId, input.itemIds, tx as Database);
       await this.shipments.assertItemsFree(userId, items.map((i) => i.id), undefined, tx as Database);
 
-      // The show, locked, and its places counted again under that lock: two
-      // collectors who both saw one place left queue here, and the second
-      // finds the van full. The rows, then the wallet, then the period.
       const [locked] = await tx
         .select()
         .from(consignmentEvent)
@@ -388,10 +309,6 @@ export class HumanFulfilmentService {
         }
       }
 
-      // A membership may cover the pickup, so the waiver is worked out BEFORE
-      // the balance check, which runs against what will actually be charged.
-      // Wallet first, then the membership period the waiver writes to: the same
-      // order paying for a parcel takes them in, so the two cannot deadlock.
       await this.ledger.lockWallet(userId, tx as Database);
       const waiver = await this.memberships.waive(tx as Database, userId, 'show_pickup', show.feeMinor);
       const feeMinor = show.feeMinor - waiver.waivedMinor;
@@ -415,7 +332,6 @@ export class HumanFulfilmentService {
           cost: feeMinor,
           currency: DEFAULT_CURRENCY,
           status: 'rates_selected',
-          // The show is the delivery date. Nothing is estimated about it.
           estimatedDeliveryAt: show.startsAt,
         })
         .returning();
@@ -460,19 +376,6 @@ export class HumanFulfilmentService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     The hand-over
-     ------------------------------------------------------------------ */
-
-  /**
-   * Somebody took it.
-   *
-   * This is what closes a shipment that has no tracking number. A parcel is
-   * closed by a carrier scan; these two are closed by a person putting a name to
-   * having received the cards, and by the same scan-verification a dispatch
-   * uses: an operator handing over a box at a show still has to confirm that
-   * what is in the box is what the request says.
-   */
   async handOver(
     operatorId: string,
     shipmentId: string,
@@ -501,11 +404,6 @@ export class HumanFulfilmentService {
         });
       }
 
-      /**
-       * Every card must still be the collector's, on the shelf and not on hold:
-       * a card sold on the market after the booking, or frozen by an operator,
-       * must not be handed over. Locked first, all of them, in one order.
-       */
       await this.custody.lockItems(tx, [...expected]);
       for (const itemId of expected) await this.custody.lockExpecting(tx, itemId, { ownerId: s.userId });
 

@@ -4,28 +4,6 @@ import { closeDb, sql } from './helpers/db';
 
 afterAll(closeDb);
 
-/**
- * A cash-out leaves Bault. These are the tests for the moment it does.
- *
- * Four ways a payout can lose money, each pinned here:
- *
- *   - the provider is paid the amount less the fee, so the ledger must debit
- *     the amount once (net plus fee), never the amount AND the fee;
- *   - a failure after the provider paid must not roll back the debit, or cash
- *     leaves with no debit behind it;
- *   - the provider is called outside the transaction that debits the wallet, so
- *     a hung provider holds neither a pool connection nor the wallet lock;
- *   - a payout PayPal has only ACCEPTED stays pending until it settles or
- *     bounces, so one that later fails does not leave the collector debited for
- *     money that never arrived.
- *
- * The sandbox provider takes instructions from the destination, so each case
- * here can be staged without a real provider: `+payout-slow`, `+payout-lost`,
- * `+payout-pending`, `+payout-settles`, `+payout-bounces`, `+payout-refused`.
- *
- * Requires a running API (in the default `provider` payout mode) and a seeded DB.
- */
-
 interface Payout {
   id: string;
   status: string;
@@ -53,7 +31,6 @@ interface LedgerRow {
 
 const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
 
-/** Raise and approve a cash-out of `amount` to `destination`, after funding enough to cover it. */
 async function approvedCashOut(email: string, amount: number, destination: string) {
   await fundWallet(email, amount + 1_000);
   const collector = await signIn(email);
@@ -77,7 +54,6 @@ async function detail(admin: Client, id: string): Promise<RequestDetail> {
   return res.body as RequestDetail;
 }
 
-/** The ledger rows that name this request. */
 async function ledgerFor(collector: Client, requestId: string): Promise<LedgerRow[]> {
   const rows = (await collector.get('/finance/ledger')).body as LedgerRow[];
   return rows.filter((r) => r.referenceId === requestId);
@@ -94,7 +70,7 @@ async function webhook(event: { id: string; type: string; data: Record<string, u
 
 describe('PAY a cash-out debits exactly what was quoted (F004)', () => {
   it('pays the provider the net, and debits the collector the gross and nothing more', async () => {
-    const AMOUNT = 40_000; // $400, over the fee band
+    const AMOUNT = 40_000;
     const { collector, admin, id } = await approvedCashOut(SEED.collector2, AMOUNT, 'golden@example.test');
     const quote = (await collector.get(`/finance/cash-out-quote?amountMinor=${AMOUNT}`)).body as {
       amountMinor: number;
@@ -109,16 +85,13 @@ describe('PAY a cash-out debits exactly what was quoted (F004)', () => {
     expect(done.status).toBe(201);
     expect(done.body.status).toBe('completed');
 
-    // What the collector was told: they ask for $400, $400 leaves the wallet.
     expect(await balanceOf(collector)).toBe(before - quote.amountMinor);
 
-    // What the provider was asked to send is what the quote said would land.
     const d = await detail(admin, id);
     expect(d.payout).not.toBeNull();
     expect(d.payout!.amount).toBe(quote.netMinor);
     expect(d.payout!.status).toBe('succeeded');
 
-    // Both numbers are on the statement, and together they are the quote.
     const all = (await collector.get('/finance/ledger')).body as LedgerRow[];
     const withdrawal = all.find((r) => r.type === 'withdrawal' && r.referenceId === id);
     expect(withdrawal?.amount).toBe(quote.netMinor);
@@ -144,8 +117,6 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
       return r;
     });
 
-    // While the provider is still answering, the request already says money is
-    // on its way, and the wallet already shows it gone.
     let seen: RequestDetail | null = null;
     const deadline = Date.now() + 2_000;
     while (Date.now() < deadline) {
@@ -160,8 +131,6 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(seen?.payout?.status).toBe('pending');
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
 
-    // And nothing is locked: another movement on the same wallet goes through
-    // while the provider is still on the line.
     await fundWallet(SEED.collector2, 1_234);
     expect(payoutDone).toBe(false);
 
@@ -169,7 +138,6 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('completed');
     expect(await balanceOf(collector)).toBe(before - AMOUNT + 1_234);
-    // The staged provider takes three seconds on purpose; the default five is too tight.
   }, 30_000);
 
   it('keeps the debit when the answer is lost, refuses to reject it, and reconciles it', async () => {
@@ -181,8 +149,6 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     );
     const before = await balanceOf(collector);
 
-    // The provider took it and the connection dropped. The money may well have
-    // gone, so the debit stays and the payment stays pending, to be found again.
     const res = await admin.post(`/admin/wallet-requests/${id}/complete`, {});
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe('provider_unavailable');
@@ -191,18 +157,15 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(d.status).toBe('paying');
     expect(d.payout?.status).toBe('pending');
 
-    // Rejecting it now would invite paying it again by hand.
     const reject = await admin.post(`/admin/wallet-requests/${id}/reject`, { reason: 'Looks stuck.' });
     expect(reject.status).toBe(409);
     expect((await admin.post(`/admin/wallet-requests/${id}/complete`, {})).status).toBe(409);
 
-    // Reconciliation asks again, with the same key, and records what happened.
     const reconciled = await admin.post('/admin/payouts/reconcile', { olderThanMinutes: 0 });
     expect(reconciled.status).toBe(201);
     const after = await detail(admin, id);
     expect(after.status).toBe('completed');
     expect(after.payout?.status).toBe('succeeded');
-    // One debit, not two.
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
   }, 30_000);
 
@@ -223,7 +186,6 @@ describe('PAY the payout is recorded before the provider is asked (F172, N6)', (
     expect(d.payout?.status).toBe('failed');
     expect(await balanceOf(collector)).toBe(before);
 
-    // Put back by a compensating row, never by editing the debit.
     const rows = await ledgerFor(collector, id);
     expect(rows.some((r) => r.type === 'withdrawal' && r.direction === 'debit')).toBe(true);
     expect(rows.some((r) => r.type === 'payout_reversal' && r.direction === 'credit' && r.amount === AMOUNT)).toBe(true);
@@ -266,7 +228,6 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     expect(after.payout?.status).toBe('succeeded');
     expect(after.payout?.webhookEventId).toBe(eventId);
 
-    // A redelivery changes nothing.
     expect(await webhook(event)).toBe(201);
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
   }, 30_000);
@@ -298,8 +259,6 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     expect(after.payout?.status).toBe('failed');
     expect(await balanceOf(collector)).toBe(before);
 
-    // The same event again, and a second failure event for the same payout:
-    // still one reversal.
     expect(await webhook(failed)).toBe(201);
     expect(await webhook({ ...failed, id: `${failed.id}-again`, type: 'PAYMENT.PAYOUTS-ITEM.FAILED' })).toBe(201);
     expect(await balanceOf(collector)).toBe(before);
@@ -321,7 +280,6 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     }
     const before = await balanceOf(collector);
 
-    // Only an administrator may run it.
     expect((await collector.post('/admin/payouts/reconcile', { olderThanMinutes: 0 })).status).toBe(403);
 
     const res = await admin.post('/admin/payouts/reconcile', { olderThanMinutes: 0 });
@@ -331,7 +289,6 @@ describe('PAY a pending payout is not a completed one (F029, F040)', () => {
     expect((await detail(admin, settles.id)).status).toBe('completed');
     expect((await detail(admin, bounces.id)).status).toBe('payout_failed');
     expect((await detail(admin, stuck.id)).status).toBe('paying');
-    // Only the bounced one came back.
     expect(await balanceOf(collector)).toBe(before + 2_600);
   }, 30_000);
 });
@@ -355,15 +312,12 @@ describe('PAY a payout that comes back after it was paid', () => {
     expect((await detail(admin, id)).status).toBe('completed');
     expect(await balanceOf(collector)).toBe(before - AMOUNT);
 
-    // The money comes back to Bault: PayPal reverses the paid item. Delivered
-    // twice, and then reported again as a refund of the same item.
     const reversed = { id: `WH-${stamp}-rev`, type: 'PAYMENT.PAYOUTS-ITEM.REVERSED', data: { ...item, transaction_status: 'REVERSED' } };
     expect(await webhook(reversed)).toBe(201);
     expect(await webhook(reversed)).toBe(201);
     expect(
       await webhook({ id: `WH-${stamp}-refund`, type: 'PAYMENT.PAYOUTS-ITEM.REFUNDED', data: { ...item, transaction_status: 'REFUNDED' } }),
     ).toBe(201);
-    // A late copy of the success changes nothing either.
     expect(await webhook(paid)).toBe(201);
 
     const after = await detail(admin, id);
@@ -380,7 +334,6 @@ describe('PAY a payout that comes back after it was paid', () => {
     );
     expect(audited[0]!.n).toBe(1);
 
-    // And the accounts agree: credited back in full, so not a mismatch.
     const report = (await admin.get('/admin/accounting/reconciliation')).body as {
       mismatches: { walletRequestId: string | null }[];
     };
@@ -388,13 +341,6 @@ describe('PAY a payout that comes back after it was paid', () => {
   }, 30_000);
 });
 
-/**
- * A delivery that cannot be authenticated is refused with a 400 the provider
- * can see, never a 500 it keeps retrying. The sandbox provider checks no
- * signature, except that it refuses one that says `invalid`, so the API's
- * handling of a bad signature is exercised here; the PayPal adapter's own
- * verdict is pinned in `tests3/contract/paypal-adapter.test.ts`.
- */
 describe('PAY a webhook that cannot be verified', () => {
   it('is refused with a 400 naming why, and applies nothing', async () => {
     const res = await fetch(`${BASE}/webhooks/payment`, {

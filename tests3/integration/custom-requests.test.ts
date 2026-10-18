@@ -1,20 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, SEED_USERNAME, signIn, intakeFor } from '../../tests/integration/helpers/http';
 
-/**
- * "Can you also…" — the request the service list has no button for.
- *
- * Every listed service is a fixed thing Bault has decided to sell. A collector
- * who wants anything else (sleeve these before you ship them, weigh this box,
- * check the seal is intact) needs more than a support TICKET. A ticket is a
- * conversation: it has no price, no operator queue, no completion and no link to
- * the collectible it is about, so work agreed in a thread would have to be
- * re-entered by hand as something else, or would quietly not happen.
- *
- * The shape is `buyout`'s, because the same thing is true of both: nobody knows
- * what it costs until somebody reads it.
- */
-
 const ASK = {
   summary: 'Sleeve before shipping',
   detail: 'Please put this in a penny sleeve and a toploader before it goes out.',
@@ -22,11 +8,6 @@ const ASK = {
 
 describe('asking for something that is not on the list', () => {
   it('costs nothing to ask', async () => {
-    /**
-     * Deliberate. A charge on the QUESTION would stop people asking, and the
-     * questions are how Bault finds out which services it should be selling as
-     * standard.
-     */
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const item = await intakeFor(operator, SEED.collector, { description: 'Custom: free to ask' });
@@ -45,9 +26,6 @@ describe('asking for something that is not on the list', () => {
   });
 
   it('allows two different asks about one collectible', async () => {
-    // Two photo shoots on one card is a double charge for one job. "Sleeve this"
-    // and "weigh this" are two pieces of work that share a type only because the
-    // type means "not on the list".
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const item = await intakeFor(operator, SEED.collector, { description: 'Custom: two asks' });
@@ -83,12 +61,6 @@ describe('the quote', () => {
   const GOOD_QUOTE = { priceMinor: 25_00, scope: 'Penny sleeve plus toploader, fitted before packing.' };
 
   it('has to say what will actually be done, not just a number', async () => {
-    /**
-     * A collector accepting a figure is agreeing to whatever the operator
-     * understood the ask to be. "We will do it for $30" with nothing behind it
-     * is not something anybody can agree to — the same reason a buyout quote has
-     * to carry its rationale.
-     */
     const { operator, id } = await raised();
     const thin = await operator.post(`/services/custom/${id}/quote`, { priceMinor: 25_00, scope: 'ok' });
     expect(thin.status).toBe(400);
@@ -100,7 +72,6 @@ describe('the quote', () => {
     const { operator, owner, id } = await raised();
     await operator.post(`/services/custom/${id}/quote`, GOOD_QUOTE);
 
-    // Quoting alone moves nothing.
     const quoted = (await owner.get('/finance/wallet')).body.amount as number;
     const accepted = await owner.post(`/services/custom/${id}/accept-quote`, {});
     expect(accepted.status).toBe(201);
@@ -109,7 +80,6 @@ describe('the quote', () => {
   });
 
   it('bills the quoted figure, never one supplied by the caller', async () => {
-    // The price is re-read from the request inside the transaction.
     const { operator, owner, id } = await raised();
     await operator.post(`/services/custom/${id}/quote`, GOOD_QUOTE);
 
@@ -144,8 +114,6 @@ describe('the quote', () => {
   });
 
   it('says why when the answer is no', async () => {
-    // A refusal with no reason leaves the collector guessing whether to ask
-    // differently or stop asking.
     const { operator, id } = await raised();
     const bare = await operator.post(`/services/custom/${id}/decline`, { reason: 'no' });
     expect(bare.status).toBe(400);
@@ -161,7 +129,6 @@ describe('the quote', () => {
 
 describe('doing the work', () => {
   it('refuses to complete something the collector never accepted', async () => {
-    // Nobody can do unrequested work and then present it as complete.
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const item = await intakeFor(operator, SEED.collector, { description: 'Custom: unaccepted' });
@@ -197,7 +164,6 @@ describe('doing the work', () => {
     expect(done.status).toBe(201);
     expect(done.body.status).toBe('completed');
 
-    // It is an ordinary service request, so it appears where all of them do.
     const mine = (await owner.get('/services/mine')).body as { id: string; type: string }[];
     expect(mine.find((r) => r.id === created.body.id)?.type).toBe('custom');
   });
@@ -215,11 +181,6 @@ describe('doing the work', () => {
 
 describe('booking a run of collectibles in at once', () => {
   it('gives every copy its own serial, barcode and charge', async () => {
-    /**
-     * `quantity` is not the lot box. A lot is ONE record standing for many
-     * things, tracked and charged as one; a quantity is N separate records that
-     * happen to have been typed once.
-     */
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const before = (await owner.get('/finance/wallet')).body.amount as number;
@@ -239,7 +200,6 @@ describe('booking a run of collectibles in at once', () => {
     expect(new Set(made.map((i) => i.barcode)).size).toBe(12);
     expect(made.every((i) => !i.isLot)).toBe(true);
 
-    // Twelve items, twelve intake charges — not one.
     const after = (await owner.get('/finance/wallet')).body.amount as number;
     expect(before - after).toBeGreaterThan(0);
     expect((before - after) % 12).toBe(0);
@@ -262,15 +222,6 @@ describe('booking a run of collectibles in at once', () => {
   });
 });
 
-/**
- * A quote is something to agree to, so once it has been agreed to, and paid
- * for, it is no longer something to quote.
- *
- * `quote` checks the stage the collector has reached as well as the operator's
- * acceptance: Send quote again on a paid request would put it back to `quoted`,
- * and the collector's next Accept would charge them a second time for the same
- * work. Declining a paid request refunds it.
- */
 describe('a quote that has been accepted', () => {
   const QUOTE = { priceMinor: 30_00, scope: 'Weigh it and photograph the seal before it ships.' };
 
@@ -293,11 +244,9 @@ describe('a quote that has been accepted', () => {
     const again = await operator.post(`/services/custom/${id}/quote`, { ...QUOTE, priceMinor: 45_00 });
     expect(again.status).toBe(409);
 
-    // And there is no second quote for the collector to accept.
     const secondAccept = await owner.post(`/services/custom/${id}/accept-quote`, {});
     expect(secondAccept.status).toBe(409);
 
-    // Charged once, at the figure that was agreed.
     expect((await owner.get('/finance/wallet')).body.amount).toBe(before - QUOTE.priceMinor);
     const detail = (await owner.get(`/services/requests/${id}`)).body as { typeFields: Record<string, unknown> };
     expect(detail.typeFields.stage).toBe('accepted');
@@ -312,7 +261,6 @@ describe('a quote that has been accepted', () => {
     expect(declined.status).toBe(201);
     expect(declined.body.status).toBe('cancelled');
 
-    // Whole again, by a refund row on the ledger rather than by forgetting the charge.
     expect((await owner.get('/finance/wallet')).body.amount).toBe(before);
     const ledger = (await owner.get('/finance/ledger')).body as Array<{
       type: string;
@@ -324,7 +272,6 @@ describe('a quote that has been accepted', () => {
       ledger.some((r) => r.type === 'service_refund' && r.direction === 'credit' && r.amount === QUOTE.priceMinor && r.referenceId === id),
     ).toBe(true);
 
-    // A decline is final: a second one refunds nothing more.
     expect((await operator.post(`/services/custom/${id}/decline`, { reason: 'Declining it twice.' })).status).toBe(409);
     expect((await owner.get('/finance/wallet')).body.amount).toBe(before);
   });

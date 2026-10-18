@@ -5,7 +5,6 @@ import { notAnAuthRoute } from './shared/throttle/auth-bucket';
 import { loadEnv } from '@bault/config';
 import { AppController } from './app.controller';
 
-// Infrastructure (global)
 import { DbModule } from './db/db.module';
 import { SecModule } from './modules/sec/sec.module';
 import { SharedModule } from './shared/shared.module';
@@ -13,7 +12,6 @@ import { AdaptersModule } from './shared/adapters/adapters.module';
 import { NotModule } from './modules/not/not.module';
 import { ObservabilityModule } from './shared/observability/observability.module';
 
-// Feature modules
 import { AccModule } from './modules/acc/acc.module';
 import { CstModule } from './modules/cst/cst.module';
 import { InvModule } from './modules/inv/inv.module';
@@ -29,39 +27,19 @@ import { AdmModule } from './modules/adm/adm.module';
 import { SupModule } from './modules/sup/sup.module';
 import { MemModule } from './modules/mem/mem.module';
 
-// Global guards + interceptors
 import { SessionAuthGuard } from './modules/acc/session-auth.guard';
 import { MfaEnrollmentGuard } from './modules/acc/mfa/mfa-enrollment.guard';
 import { RolesGuard } from './modules/sec/roles.guard';
 import { AuditInterceptor } from './modules/sec/audit.interceptor';
 
-/**
- * Root module of the modular monolith. Composition order:
- *  - global infra (DB, SEC, shared services, adapters, outbox, health)
- *  - global kernels PRC and PAY (pricing, ledger/wallet, the billing port)
- *  - feature modules
- *  - APP_GUARD chain: ThrottlerGuard → SessionAuthGuard (authenticate + block suspended) →
- *    MfaEnrollmentGuard (a role that requires a second factor gets nothing else
- *    until it has one) → RolesGuard (@Roles)
- *  - APP_INTERCEPTOR: AuditInterceptor (immutable audit log of state-changing requests)
- */
 @Module({
   imports: [
-    /**
-     * Rate limiting, in two budgets. The generous `default` keeps an operator
-     * working a bench from being throttled while scanning items in; the `auth`
-     * bucket is deliberately small because every route in it either checks a
-     * credential or sends mail to a stranger. Both come from config, because the
-     * right number depends on the deployment rather than on anything knowable
-     * here.
-     */
     ThrottlerModule.forRootAsync({
       useFactory: () => {
         const env = loadEnv();
         return {
           throttlers: [
             { name: 'default', ttl: 60_000, limit: env.RATE_LIMIT_PER_MINUTE },
-            // Only on the routes marked `@AuthBucket` — see that decorator.
             { name: 'auth', ttl: 60_000, limit: env.AUTH_RATE_LIMIT_PER_MINUTE, skipIf: notAnAuthRoute },
           ],
         };
@@ -73,8 +51,6 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
     AdaptersModule,
     NotModule,
     ObservabilityModule,
-    // Global kernels: PRC/PAY provide pricing, ledger/wallet, and the
-    // BILLING_PORT used by INV/DIS/MKT.
     PrcModule,
     PayModule,
     AccModule,
@@ -92,13 +68,8 @@ import { AuditInterceptor } from './modules/sec/audit.interceptor';
   ],
   controllers: [AppController],
   providers: [
-    // Throttling runs BEFORE authentication: an unauthenticated flood must be
-    // cheap to refuse, and a guard that first hits the session table to decide
-    // whether to rate-limit has already done the expensive part.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionAuthGuard },
-    // Before RolesGuard, so an administrator who has not enrolled hears
-    // "enrol first" on an admin route rather than a role check that passed.
     { provide: APP_GUARD, useClass: MfaEnrollmentGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

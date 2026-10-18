@@ -4,17 +4,6 @@ import { useI18n } from '../../../shared/i18n';
 import { EmptyState, ErrorState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox } from '../../../shared/ui/icons';
 
-/**
- * What Bault accepts, what it refuses, and what happens to the difference.
- *
- * Everything below is fetched from `GET /content/intake-policy`, which builds it
- * at request time from the same modules the intake path validates against, so
- * the page and the validator read the same array and cannot drift.
- *
- * The endpoint is public, deliberately: a person deciding whether to use Bault
- * has to be able to read what it will take before they have an account.
- */
-
 interface AcceptedClass {
   key: string;
   label: string;
@@ -57,8 +46,6 @@ export function IntakePolicyPanel() {
   if (error) return <ErrorState message={error} />;
   if (!policy) return <p className="hint">{t('grp.loading')}</p>;
 
-  // A judgement about value is not a refusal, and putting the two under one
-  // heading would tell somebody their box of commons was "prohibited".
   const refused = policy.refusedCategories.filter((c) => c.prohibited);
   const judgement = policy.refusedCategories.filter((c) => !c.prohibited);
 

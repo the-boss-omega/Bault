@@ -2,21 +2,6 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
 import { closeDb, holdRowLock, sql, waitForLockWaiters } from '../integration/helpers/db';
 
-/**
- * Locking a shared parcel, twice, or while it is being called off.
- *
- * Locking closes a group to new members, hands it to the warehouse and tells
- * every member. It is decided on a read of the group, so the write has to say
- * what it expects to find there: two clicks on Lock that both write would tell
- * every member twice, and a lock written after a cancellation would hand the
- * warehouse a parcel the payer had called off.
- *
- * Each race is driven in a known order: the group row is held, the requests
- * queue behind it, and it is let go.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 type Res = Awaited<ReturnType<Client['post']>>;
 
 afterAll(closeDb);
@@ -30,13 +15,10 @@ const SHARED = {
   postalCode: '08401',
 };
 
-/** A forming group of two: Red pays, Golden joined. */
 async function formingGroup(label: string) {
   const operator = await signIn(SEED.operator);
   const red = await signIn(SEED.collector);
   const golden = await signIn(SEED.collector2);
-  // Funded first: intake bills the owner, and a wallet the other suites left
-  // at zero would go negative and block the shipment this needs.
   await fundWallet(SEED.collector, 5_000);
   await fundWallet(SEED.collector2, 5_000);
   const mine = await intakeFor(operator, SEED.collector, { description: `${label}: Red's` });
@@ -114,7 +96,6 @@ describe('concurrency: locking a shared parcel', () => {
     expect(lateRes.status, JSON.stringify(lateRes.body)).toBe(201);
     const late = lateRes.body;
 
-    // The joiner's own request is held, so the join is in flight while the lock runs.
     const held = await holdRowLock('shipment', late.id);
     let join: Promise<Res> | undefined;
     let lock: Promise<Res> | undefined;
@@ -130,7 +111,6 @@ describe('concurrency: locking a shared parcel', () => {
     expect(locked.status).toBe(201);
 
     const members = await sql<{ n: number }>('select count(*)::int as n from shipment where group_id = $1', [groupId]);
-    // Every member of the locked group was told, and the joiner is one only if told.
     expect({ members: members[0]!.n, told: await lockedEvents(code) }).toEqual(
       joined.status === 201 ? { members: 3, told: 3 } : { members: 2, told: 2 },
     );

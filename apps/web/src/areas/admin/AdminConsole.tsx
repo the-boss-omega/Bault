@@ -30,30 +30,17 @@ import type { MembershipTier, TierCatalogue } from '../../shared/membership';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
 import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 
-/**
- * `GET /admin/users`.
- *
- * `intakeId` appears here and only here, read-only. No customer workflow uses
- * it, but a manager troubleshooting a parcel that arrived with an old
- * pre-printed OW- label needs to be able to look it up.
- */
 interface AdminUser {
   id: string;
   email: string;
   username: string;
   firstName: string | null;
   lastName: string | null;
-  /** Migrated legacy name whose split was a guess nobody has confirmed yet. */
   nameReviewRequired: boolean;
   role: string;
   status: string;
-  /**
-   * Suspended by the debt sweep, which lifts it once the balance is paid. Any
-   * status an administrator sets, `suspended` again included, makes it theirs.
-   */
   autoSuspended: boolean;
   intakeId: string | null;
-  /** Signs in with a second factor, and so has one an administrator can reset. */
   mfaEnabled: boolean;
 }
 
@@ -82,23 +69,12 @@ const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
   closed: 'neutral',
 };
 
-/**
- * `yield` sits first, before the management tables.
- *
- * The others are opened by an administrator who already knows what they came to
- * do (find a user, settle a dispute, change a price). Shelf Yield is the one
- * that tells them what to do, so it is what the section opens on.
- */
 const TABS = [
   'yield',
   'users',
   'signins',
-  // Beside the sign-in log: the other screen about the platform's own health
-  // rather than its customers'.
   'outbox',
   'requests',
-  // Beside the wallet requests: the other screen about money, and the one an
-  // accountant's questions are answered from.
   'accounting',
   'items',
   'house',
@@ -122,14 +98,6 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   storage: 'admin.section.storage',
 };
 
-/**
- * Management console (the admin area, presented as "Management" in the UI while
- * keeping the `admin` route key and permissions internally).
- *
- * Sub-sections are contextual tabs on the shared shell: users and items are
- * inline-editable tables, pricing rules and disputes are managed here, and
- * storage-fee billing is read-only because it is fully automatic (Req 12.2).
- */
 export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const { t } = useI18n();
   const route = useRoute();
@@ -139,20 +107,10 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const [items, setItems] = useState<AdminItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** The account whose second factor is about to be reset, while the confirmation is open. */
   const [resetting, setResetting] = useState<AdminUser | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
-  /**
-   * How many outbox messages are parked, on the tab itself.
-   *
-   * A parked message is a notification or a reset link somebody did not get,
-   * and it waits for a person, so the count shows without opening the tab. Read
-   * once when the console opens, and kept current by the section when it
-   * requeues.
-   */
   const [parkedCount, setParkedCount] = useState<number | null>(null);
 
-  // Opens on Shelf Yield; see the comment on `TABS`.
   const section: SectionKey = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as SectionKey)
     : 'yield';
@@ -177,8 +135,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
     void load();
   }, [load]);
 
-  // Apart from `load`: the count is a convenience, and a failure to read it
-  // must not take the users and items tables down with it.
   useEffect(() => {
     api
       .get<ParkedMessage[]>('/admin/outbox/parked')
@@ -253,8 +209,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
                         user={u}
                         onSaved={setMessage}
                         onError={setError}
-                        // Somebody else's, and only where there is one to reset.
-                        // The API refuses one's own regardless.
                         onResetMfa={u.mfaEnabled && u.id !== currentUserId ? () => setResetting(u) : undefined}
                       />
                     ))}
@@ -293,8 +247,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 
       {section === 'requests' && (
         <TabPanel tab="requests">
-          {/* `currentUserId` lets the queue mark the reviewer's own requests as
-              undecidable by them. The API enforces it regardless. */}
           <WalletRequestsSection
             currentUserId={currentUserId}
             onMsg={setMessage}
@@ -381,20 +333,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   );
 }
 
-/* ============================================================
-   Users
-   ============================================================ */
-
-/**
- * One editable user row.
- *
- * The username column is text, not an input: a username is permanent, the API
- * has no field to change it, and the database trigger installed by migration
- * 0004 rejects the write outright.
- *
- * The name is two inputs, and saving them clears the migration's review flag:
- * an admin who edits a flagged name has, by doing so, reviewed it.
- */
 function UserRow({
   user,
   onSaved,
@@ -404,7 +342,6 @@ function UserRow({
   user: AdminUser;
   onSaved: (m: string) => void;
   onError: (m: string) => void;
-  /** Present only when this administrator may reset this account's second factor. */
   onResetMfa?: () => void;
 }) {
   const { t } = useI18n();
@@ -412,7 +349,6 @@ function UserRow({
   const [lastName, setLastName] = useState(user.lastName ?? '');
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
-  /** What the server holds, as of the list or this row's last save. */
   const [saved, setSaved] = useState({
     firstName: user.firstName ?? '',
     lastName: user.lastName ?? '',
@@ -426,19 +362,9 @@ function UserRow({
     isValidNamePart(normalizeNamePart(firstName)) &&
     (lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName)));
 
-  /**
-   * Only what the administrator changed.
-   *
-   * The server reads every field it receives as a decision: a status sent with
-   * a name correction would clear the debt sweep's marker on an account the
-   * sweep suspended, and the sweep would never lift it.
-   */
   const changes: Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>> = {};
-  // A flagged name is confirmed by sending it, changed or not: the server
-  // clears the review flag only when a name part arrives.
   const confirmName = saved.nameReviewRequired && namesOk;
   if (confirmName || normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
-  // A blank last name is left as it is, never sent as a value.
   if (lastName.trim() && (confirmName || normalizeNamePart(lastName) !== saved.lastName))
     changes.lastName = normalizeNamePart(lastName);
   if (role !== saved.role) changes.role = role;
@@ -451,7 +377,6 @@ function UserRow({
       setSaved((s) => ({
         ...s,
         ...sent,
-        // A status sent, even the one the account had, clears the sweep's marker.
         autoSuspended:
           typeof updated?.autoSuspended === 'boolean' ? updated.autoSuspended : sent.status ? false : s.autoSuspended,
         nameReviewRequired:
@@ -471,11 +396,6 @@ function UserRow({
     if (dirty) await send({ ...changes });
   }
 
-  /**
-   * Take over a suspension the debt sweep imposed, so the sweep does not lift
-   * it when the balance is paid. Exactly the status, which the server reads as
-   * an administrator's decision; anything else typed into the row stays unsent.
-   */
   async function keepSuspended() {
     setStatus('suspended');
     await send({ status: 'suspended' });
@@ -579,10 +499,6 @@ function UserRow({
   );
 }
 
-/* ============================================================
-   Items
-   ============================================================ */
-
 function ItemRow({
   item,
   users,
@@ -601,7 +517,6 @@ function ItemRow({
   const [ownerId, setOwnerId] = useState(item.ownerId);
   const [lifecycleState, setLifecycleState] = useState(item.lifecycleState);
   const [holdFlag, setHoldFlag] = useState(item.holdFlag);
-  /** What the server holds, as of the list or this row's last save. */
   const [saved, setSaved] = useState({
     description: item.description,
     typeClass: item.typeClass,
@@ -611,10 +526,6 @@ function ItemRow({
     holdFlag: item.holdFlag,
   });
 
-  /**
-   * Only what the administrator changed, as for a user row: an unchanged empty
-   * grade sent back would write "" over a card with none.
-   */
   const current = { description, typeClass, conditionGrade, ownerId, lifecycleState, holdFlag };
   const changes: Partial<typeof current> = {};
   for (const f of Object.keys(current) as (keyof typeof current)[]) {
@@ -627,8 +538,6 @@ function ItemRow({
     const sent = { ...changes };
     try {
       const updated = await api.patch<{ lifecycleState?: string } | null>(`/admin/items/${item.id}`, sent);
-      // The server may move the state itself (an owner change takes a listed
-      // card back to `stored`), so the row shows the state it answered with.
       const state = updated?.lifecycleState ?? sent.lifecycleState ?? saved.lifecycleState;
       setLifecycleState(state);
       setSaved((s) => ({ ...s, ...sent, lifecycleState: state }));
@@ -714,10 +623,6 @@ function ItemRow({
   );
 }
 
-/* ============================================================
-   Pricing rules (ADM-02 / PRC-02)
-   ============================================================ */
-
 interface PricingRule {
   id: string;
   actionType: string;
@@ -738,12 +643,6 @@ const BILLING_LABEL: Record<string, MessageKey> = {
   monthly: 'admin.pricing.billing.monthly',
 };
 
-/**
- * The actions a rule can be written for are the API's own catalogue, read from
- * the coverage check (`billable-actions.ts`) rather than listed here, so every
- * price the check reports missing can be loaded from this screen. These labels
- * are only for the actions that have one; the rest show their key.
- */
 const ACTION_LABEL: Record<string, MessageKey> = {
   intake: 'admin.pricing.action.intake',
   storage: 'admin.pricing.action.storage',
@@ -756,14 +655,6 @@ const MODEL_LABEL: Record<string, MessageKey> = {
   percentage: 'admin.pricing.model.percentage',
 };
 
-/**
- * What a membership rule carries besides its price: the shape the seed writes.
- *
- * The worker cannot import the tier catalogue, so the storage sweep reads a
- * member's storage allowance (`storedItems`) off the tier's pricing rule. A
- * rule without it covers none of a member's items, and every one of them is
- * billed storage.
- */
 function tierRuleParameters(tier: MembershipTier) {
   return {
     storedItems: tier.storedItems,
@@ -783,19 +674,14 @@ function PricingSection({
 }) {
   const { t, locale } = useI18n();
   const [rules, setRules] = useState<PricingRule[] | null>(null);
-  /** The coverage check's answer: the actions the form offers. */
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
-  /** The tiers, for the allowances a membership rule carries. */
   const [tiers, setTiers] = useState<MembershipTier[] | null>(null);
   const [actionType, setActionType] = useState('intake');
   const [itemClass, setItemClass] = useState('');
   const [description, setDescription] = useState('');
   const [model, setModel] = useState<'fixed' | 'percentage'>('fixed');
-  // A flat rule is priced in dollars; a percentage rule is a plain percentage.
-  // Both are converted to the minor units / basis points the API stores.
   const [amount, setAmount] = useState('');
   const [billingTrigger, setBillingTrigger] = useState('per_event');
-  // Bumped when a rule is added, so the coverage check re-reads what is priced.
   const [coverageKey, setCoverageKey] = useState(0);
 
   const load = useCallback(async () => {
@@ -822,8 +708,6 @@ function PricingSection({
   const catalogue = coverage?.actions ?? [];
   const selected = catalogue.find((a) => a.actionType === actionType) ?? null;
   const tier = tiers?.find((x) => x.feeActionType === actionType) ?? null;
-  // Both catalogues first: without the tiers, a membership rule would be
-  // written without the allowances the storage sweep reads.
   const ready = selected !== null && tiers !== null;
 
   async function create() {
@@ -852,8 +736,6 @@ function PricingSection({
 
   return (
     <>
-      {/* First, because "is anything unpriced?" is the question to answer
-          before launch, and before adding a rule to fix it. */}
       <PricingCoveragePanel refreshKey={coverageKey} onError={onError} onLoaded={setCoverage} />
 
       <Panel title={t('admin.pricing.newRule')} subtitle={t('admin.pricing.newRuleSubtitle')}>
@@ -870,7 +752,6 @@ function PricingSection({
             <label className="field">
               <span className="field-label">{t('admin.pricing.col.action')}</span>
               <select value={actionType} onChange={(e) => setActionType(e.target.value)}>
-                {/* Apart: a rule for a code constant is only published. */}
                 {(
                   [
                     ['admin.pricing.group.charged', catalogue.filter((a) => a.resolution !== 'code_constant')],
@@ -1021,7 +902,6 @@ function PricingSection({
   );
 }
 
-/** "2.5" → 250 basis points. Null for anything that isn't a positive number. */
 function percentToBasisPoints(input: string): number | null {
   const cleaned = input.trim().replace(/[%\s]/g, '');
   if (cleaned === '' || !/^\d*\.?\d{0,2}$/.test(cleaned)) return null;
@@ -1029,10 +909,6 @@ function percentToBasisPoints(input: string): number | null {
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.round(value * 100);
 }
-
-/* ============================================================
-   Disputes (ADM-04)
-   ============================================================ */
 
 interface Dispute {
   id: string;
@@ -1116,7 +992,6 @@ function DisputesSection({
           <EmptyState title={t('admin.disputes.noTransactions')} icon={<IconGavel />} />
         ) : (
           <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-            {/* A dispute must reference an actual recorded transaction, picked here. */}
             <label className="field">
               <span className="field-label">{t('admin.disputes.col.transaction')}</span>
               <select value={transactionId} onChange={(e) => setTransactionId(e.target.value)} dir="ltr">
@@ -1251,10 +1126,6 @@ function DisputeRow({
   );
 }
 
-/* ============================================================
-   Storage-fee runs (VLT-04): read-only; billing is fully automatic
-   ============================================================ */
-
 interface FeeRun {
   id: string;
   thresholdDays: number;
@@ -1283,8 +1154,6 @@ function StorageFeesSection({ onError }: { onError: (m: string) => void }) {
 
   return (
     <>
-      {/* Billing is fully automatic: the worker's storage sweep bills each item's
-          elapsed periods after its included period. There is no manual trigger. */}
       <p className="infobox">{t('admin.storage.autoNotice')}</p>
 
       <Panel title={t('admin.storage.previousRuns', { count: runs?.length ?? 0 })} flush>

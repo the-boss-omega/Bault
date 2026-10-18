@@ -2,19 +2,6 @@ import type { Pool } from 'pg';
 import { log } from '../log';
 import { reportAlert } from '../observability';
 
-/**
- * Ledger invariant check.
- *
- * The wallet balance is DERIVED, so "balance == sum of ledger" holds by
- * construction. This monitor hunts for CORRUPTION that would undermine that:
- *   1. ledger rows with a non-positive amount (amount must be a positive minor unit),
- *   2. settled charges with NO backing ledger record (a billable action that
- *      escaped the ledger).
- *
- * A violation is logged at error level with the counts as fields and reported
- * to the error tracker when one is configured. Every hourly run that still
- * finds it reports it again on purpose, so a broken ledger keeps paging.
- */
 export async function checkLedgerInvariants(pool: Pool): Promise<void> {
   const badAmounts = await pool.query(`SELECT count(*)::int AS n FROM ledger_record WHERE amount <= 0`);
   const orphanCharges = await pool.query(

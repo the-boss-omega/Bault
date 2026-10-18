@@ -14,13 +14,6 @@ interface VaultItem {
   description: string;
 }
 
-/**
- * Collecting at a show.
- *
- * The cheapest way out of the vault, because the van was going anyway. That is
- * also why it is capped per show and closes on the same deadline the
- * consignments use.
- */
 export function ShowPickupPanel({
   items,
   onError,
@@ -148,13 +141,6 @@ export function ShowPickupPanel({
   );
 }
 
-/**
- * Hand delivery.
- *
- * The screen makes the round trip obvious, because the round trip is the
- * product: nothing here has a price, and the button says "ask for a quote"
- * instead of "book", so a collector does not expect to be charged on submit.
- */
 export function WhiteGlovePanel({
   items,
   onError,
@@ -291,7 +277,6 @@ export function WhiteGlovePanel({
             <span className="field-label">{t('ff.wg.deliverTo')}</span>
             <input type="datetime-local" value={deliverTo} onChange={(e) => setDeliverTo(e.target.value)} />
           </label>
-          {/* The same country select the address form uses. */}
           <Field label={t('ff.wg.country')} htmlFor="wg-country">
             <select id="wg-country" value={country} onChange={(e) => setCountry(e.target.value)}>
               {countries.map((c) => (
@@ -309,7 +294,6 @@ export function WhiteGlovePanel({
         </label>
 
         <div className="row">
-          {/* Deliberately "ask for a quote", not "book": nothing is charged here. */}
           <Button variant="gold" disabled={busy || !ready} onClick={() => void request()}>
             {t('ff.wg.ask')}
           </Button>
@@ -320,13 +304,6 @@ export function WhiteGlovePanel({
   );
 }
 
-/**
- * The outstanding quotes, and accepting one.
- *
- * Separate from the request form because they happen days apart: a collector
- * asks on Monday and comes back on Wednesday to a figure. If the two lived on
- * one screen the second visit would be a form they had already filled in.
- */
 export function WhiteGloveQuotes({
   reloadToken,
   onError,
@@ -339,8 +316,6 @@ export function WhiteGloveQuotes({
   onChanged: () => void;
 }) {
   const { t } = useI18n();
-  // The shared row type, so the compiler checks the filter below against the
-  // fields the API sends.
   const [rows, setRows] = useState<ShipmentSummary[]>([]);
   const [busy, setBusy] = useState(false);
 

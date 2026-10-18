@@ -10,37 +10,6 @@ import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
 import type { AccountTerms } from '../help/FaqLegalPage';
 
-/**
- * The front door: what Bault is and what it will cost, for somebody arriving
- * for the first time. It is built from the same parts as the rest of the
- * product:
- *
- *   - The pitch is a real item: the same photograph, `Serial`, custody line and
- *     custody green the signed-in product uses, on the same dark photography
- *     stage. The serial and the caption are imported from `AuthPage`, so there is
- *     one definition of the card on the stage.
- *   - The prices are fetched, never written. `GET /pricing/list` is public so
- *     somebody without an account can read what it costs, and it returns the
- *     rules the billing engine charges from. When the request fails the figures
- *     are omitted and the page says so, never a placeholder that could be read
- *     as "free".
- *   - The cash-out fee is the exception: it is charged from a schedule in the
- *     code (`money-terms.ts`), and its rule only publishes a figure, so it is
- *     read from `GET /content/account-terms`, the same source the legal pages
- *     use.
- *   - The wording is translated, the figures are not. A rule's `description` is
- *     stored in English, so the label for each featured rule is a catalogue key
- *     here and the number comes from the server, the same split
- *     `servicePrices.ts` makes for the service buttons.
- *
- * It uses `marketing` density, the generous end of the same scale the vault and
- * the warehouse sit on, and no component the product does not already have.
- */
-
-/**
- * The rules worth putting on a front page, in the order somebody meets them.
- * `cash_out_fee` is stated from the account terms, not from its rule.
- */
 const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
   { actionType: 'intake', labelKey: 'landing.price.intake' },
   { actionType: 'storage', labelKey: 'landing.price.storage' },
@@ -51,10 +20,8 @@ const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
 
 interface PriceEntry {
   actionType: string;
-  /** Null on a catch-all rule; set on a class-specific one. */
   itemClass?: string | null;
   model: 'fixed' | 'percentage';
-  /** Cents for a fixed rule, basis points for a percentage one. */
   value: number;
   parameters: Record<string, unknown> | null;
 }
@@ -63,20 +30,12 @@ interface PriceList {
   groups: { group: string; entries: PriceEntry[] }[];
 }
 
-/**
- * A rule in the units it is actually stated in.
- *
- * A percentage rule stores basis points and a fixed one stores cents, so running
- * both through `formatUsd` would turn 5% into "$5.00". Zero is formatted, not
- * suppressed: a $0.00 rule is a fact worth printing.
- */
 function priceOf(entry: PriceEntry): string {
   return entry.model === 'percentage'
     ? `${(entry.value / 100).toFixed(entry.value % 100 === 0 ? 0 : 2)}%`
     : formatUsd(entry.value);
 }
 
-/** The cash-out schedule out of the account terms, or null when it is not all there. */
 function cashOutOf(terms: Partial<AccountTerms> | null | undefined): AccountTerms['cashOut'] | null {
   const c = terms?.cashOut;
   if (!c) return null;
@@ -84,7 +43,6 @@ function cashOutOf(terms: Partial<AccountTerms> | null | undefined): AccountTerm
   return figures.every((n) => typeof n === 'number' && Number.isFinite(n)) ? c : null;
 }
 
-/** A finite number out of a rule's `parameters`, or null when it is not one. */
 function param(entry: PriceEntry | undefined, key: string): number | null {
   const raw = entry?.parameters?.[key];
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
@@ -94,7 +52,6 @@ export function LandingPage() {
   const { t } = useI18n();
   const [prices, setPrices] = useState<Map<string, PriceEntry> | null>(null);
   const [pricesFailed, setPricesFailed] = useState(false);
-  /** `undefined` while the account terms load, `null` when they could not be read. */
   const [cashOut, setCashOut] = useState<AccountTerms['cashOut'] | null | undefined>(undefined);
 
   useEffect(() => {
@@ -103,12 +60,6 @@ export function LandingPage() {
       .get<PriceList>('/pricing/list')
       .then((list) => {
         if (!live) return;
-        /**
-         * One entry per action, and for intake the `trading_card` rule
-         * specifically. Intake is priced per class, so the list carries a dozen
-         * `intake` rules; the single-card rule is the headline, and the full
-         * list is one click away in Help.
-         */
         const byAction = new Map<string, PriceEntry>();
         for (const group of list.groups ?? []) {
           for (const entry of group.entries ?? []) {
@@ -120,7 +71,6 @@ export function LandingPage() {
         setPrices(byAction);
       })
       .catch(() => {
-        // A price that cannot be fetched is omitted.
         if (live) setPricesFailed(true);
       });
     return () => {
@@ -136,7 +86,6 @@ export function LandingPage() {
         if (live) setCashOut(cashOutOf(terms));
       })
       .catch(() => {
-        // Omitted, like a price that cannot be fetched.
         if (live) setCashOut(null);
       });
     return () => {
@@ -159,14 +108,6 @@ export function LandingPage() {
   const periodDays = param(storage, 'periodDays');
   const percentBps = param(storage, 'percentOfIntakeBps');
 
-  /**
-   * Storage is the one featured rule whose figure is not its `value`.
-   *
-   * `value` on the storage rule is a fallback base for an item with no intake
-   * charge to take a proportion of; the real terms live in `parameters`, which
-   * the worker's sweep reads. So the terms are phrased from the parameters, and
-   * omitted when they are not there.
-   */
   const storageTerms =
     freeDays !== null && periodDays !== null && percentBps !== null
       ? t('landing.price.storageTerms', {
@@ -197,7 +138,6 @@ export function LandingPage() {
         </div>
       </header>
 
-      {/* ---- The stage. The one dark surface, and the whole pitch. ---- */}
       <section className="landing-stage" aria-labelledby="landing-headline">
         <div className="landing-stage-photo">
           <CardPhotoThumb serialNumber={LANDING_SERIAL} title={LANDING_TITLE} />
@@ -209,8 +149,6 @@ export function LandingPage() {
           </h1>
           <p className="landing-lede">{t('landing.hero.lede')}</p>
 
-          {/* The custody line: what the platform actually knows about this
-              object, in the components that state it everywhere else. */}
           <dl className="landing-custody">
             <div>
               <dt>{t('vault.serial')}</dt>
@@ -243,7 +181,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- Three promises, as ruled entries rather than three cards ---- */}
       <section className="landing-section" aria-labelledby="landing-promises">
         <h2 className="landing-h2" id="landing-promises">
           {t('landing.promises.title')}
@@ -266,7 +203,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- What it costs, read from the rules that do the charging ---- */}
       <section className="landing-section" aria-labelledby="landing-prices">
         <h2 className="landing-h2" id="landing-prices">
           {t('landing.prices.title')}
@@ -276,9 +212,6 @@ export function LandingPage() {
         {pricesFailed ? (
           <p className="hint">{t('landing.prices.unavailable')}</p>
         ) : (
-          /* `.dt-wrap` is the product's own scroller for a table that outgrows
-             its column; a table is only allowed to be wider than the page
-             inside it. */
           <div className="dt-wrap">
             <table className="data-table landing-price-table">
               <thead>
@@ -303,8 +236,6 @@ export function LandingPage() {
                         )}
                       </th>
                       <td className="num">
-                        {/* Until the list arrives, and if it never does, the cell
-                          is empty instead of holding a figure nobody quoted. */}
                         {entry !== undefined && !isStorage && !isCashOut && (
                           <span className="amount">{priceOf(entry)}</span>
                         )}
@@ -331,7 +262,6 @@ export function LandingPage() {
         <p className="landing-footnote">{t('landing.prices.footnote')}</p>
       </section>
 
-      {/* ---- How a card moves, in the order the work happens ---- */}
       <section className="landing-section" aria-labelledby="landing-journey">
         <h2 className="landing-h2" id="landing-journey">
           {t('landing.journey.title')}
@@ -350,7 +280,6 @@ export function LandingPage() {
         </ol>
       </section>
 
-      {/* ---- And the three ways it leaves ---- */}
       <section className="landing-section" aria-labelledby="landing-out">
         <h2 className="landing-h2" id="landing-out">
           {t('landing.out.title')}
@@ -373,7 +302,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- The close ---- */}
       <section className="landing-close" aria-labelledby="landing-close-h">
         <h2 className="landing-h2" id="landing-close-h">
           {t('landing.close.title')}

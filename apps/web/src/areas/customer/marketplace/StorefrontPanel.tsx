@@ -18,16 +18,6 @@ interface StorefrontListing {
   conditionGrade: string | null;
 }
 
-/**
- * A collector's public storefront: everything one seller currently has for sale.
- *
- * The endpoint behind it is `@Public()` on purpose: this is the page a seller
- * shares. Only active listings appear, because a sold or delisted card is not
- * for sale.
- *
- * The seller's own link is shown here, since the point of the feature is having
- * something to send somebody.
- */
 export function StorefrontPanel({
   myUsername,
   onError,
@@ -59,8 +49,6 @@ export function StorefrontPanel({
     [onError],
   );
 
-  // Land on the reader's own storefront: the first question somebody has about
-  // this page is "what does mine look like".
   useEffect(() => {
     if (myUsername) void open(myUsername);
   }, [myUsername, open]);
@@ -103,10 +91,6 @@ export function StorefrontPanel({
               text={t('market.store.emptyText')}
             />
           ) : (
-            /*
-              A public storefront is the vault's register, read-only: the same
-              columns, components and order (photograph, price, serial, name).
-            */
             <ul className="card-grid card-grid--listings">
               {listings.map((l) => (
                 <li key={l.id} className="card card--listing">

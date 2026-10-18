@@ -9,40 +9,18 @@ import { shippingAddress } from './address.schema';
 import { toCountryCode } from '../shp/countries';
 import { MfaService } from './mfa/mfa.service';
 
-/**
- * What a user sees about themselves.
- *
- * `intakeId` is deliberately ABSENT. The OW- code is retired from every
- * user-facing workflow: nothing asks a customer to quote one, so returning it
- * here would only invite its reuse. It still exists on the row, and admins can
- * read it through `GET /admin/users` for troubleshooting a pre-printed label,
- * the one surface it survives on.
- */
 export interface ProfileView {
   id: string;
-  email: string; // a user always sees their OWN email
-  username: string; // immutable, read-only
+  email: string;
+  username: string;
   role: string;
   status: string;
   firstName: string | null;
   lastName: string | null;
-  /** Derived from the two parts above with `fullName()`, never stored. */
   fullName: string;
-  /** True while the legacy-name migration's split is still unconfirmed. */
   nameReviewRequired: boolean;
-  /**
-   * The terms this person accepted at registration, and when. Both NULL for an
-   * account created before there was anything to accept, rather than
-   * back-filled with a consent nobody gave.
-   */
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
-  /**
-   * Whether this account has a confirmed second factor, and whether its role
-   * requires one. The app reads both on every load: `mfaRequired && !mfaEnabled`
-   * is an account every route but enrolment refuses, and the app sends it
-   * straight to the enrolment screen.
-   */
   mfaEnabled: boolean;
   mfaRequired: boolean;
 }
@@ -57,15 +35,8 @@ export interface AddressInput {
   isDefault?: boolean;
 }
 
-/** Every address field is individually editable. */
 export type AddressPatch = Partial<AddressInput>;
 
-/**
- * Own-profile read/update + saved shipping addresses. Returns the caller's own
- * record, including their own PII, which is legitimate. Address access is
- * strictly own-only: an address is found by its id AND the caller's id before
- * it is read, changed or deleted.
- */
 @Injectable()
 export class ProfileService {
   constructor(
@@ -97,15 +68,6 @@ export class ProfileService {
     };
   }
 
-  /**
-   * Only the two name parts are writable. `username` is never in the SET clause
-   * (no code path updates it after registration), and there is no separate
-   * display name that could drift out of step with these.
-   *
-   * A name the owner has just confirmed clears `nameReviewRequired`, which is the
-   * only way the flag set by the legacy-name migration (0004) is ever cleared by
-   * the person it describes.
-   */
   async update(userId: string, patch: { firstName: string; lastName: string }): Promise<ProfileView> {
     const first = normalizeNamePart(patch.firstName);
     const last = normalizeNamePart(patch.lastName);
@@ -119,10 +81,6 @@ export class ProfileService {
     return this.get(userId);
   }
 
-  // ---------------------------------------------------------------------------
-  // Shipping addresses: own-only.
-  // ---------------------------------------------------------------------------
-
   listAddresses(userId: string) {
     return this.db
       .select()
@@ -133,7 +91,6 @@ export class ProfileService {
 
   async addAddress(userId: string, dto: AddressInput) {
     return this.db.transaction(async (tx) => {
-      // A new default demotes any existing default (single default per user).
       if (dto.isDefault) {
         await tx.update(shippingAddress).set({ isDefault: false }).where(eq(shippingAddress.userId, userId));
       }
@@ -145,8 +102,6 @@ export class ProfileService {
           recipient: dto.recipient,
           line1: dto.line1,
           city: dto.city,
-          // Stored as the code the carrier rules read, whatever shape it arrived
-          // in; the validator has already established it resolves to one.
           country: toCountryCode(dto.country) ?? dto.country,
           postalCode: dto.postalCode,
           isDefault: dto.isDefault ?? false,
@@ -157,10 +112,6 @@ export class ProfileService {
     });
   }
 
-  /**
-   * Edit a saved address. Own-only; promoting an address to the
-   * default demotes the previous one so exactly one default survives.
-   */
   async updateAddress(userId: string, id: string, patch: AddressPatch) {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
@@ -188,7 +139,6 @@ export class ProfileService {
     });
   }
 
-  /** Delete an address; only the owner may delete it. */
   async deleteAddress(userId: string, id: string) {
     const [row] = await this.db
       .select()

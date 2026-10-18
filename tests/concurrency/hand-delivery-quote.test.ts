@@ -2,21 +2,6 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
 import { closeDb, holdRowLock, sql, waitForLockWaiters } from '../integration/helpers/db';
 
-/**
- * A hand-delivery quote and its acceptance, arriving together.
- *
- * The collector is charged the quote on the shipment when they accept. An
- * operator revising the quote at that moment must either land before the
- * acceptance (and be the figure charged) or be refused; a revision written
- * after it would leave the shipment quoting one figure and charged another.
- * And two clicks on Accept charge once.
- *
- * Both races are driven in a known order: the shipment row is held, the
- * requests queue behind it, and it is let go.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 type Res = Awaited<ReturnType<Client['post']>>;
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
 const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
@@ -79,7 +64,6 @@ describe('concurrency: hand-delivery quotes', () => {
     const { operator, collector, shipmentId } = await quotedHandDelivery('Quote racing accept', FIRST);
     const before = await balanceOf(collector);
 
-    // The acceptance queues first; the revision is sent after it.
     const lock = await holdRowLock('shipment', shipmentId);
     let accept: Promise<Res> | undefined;
     let revise: Promise<Res> | undefined;
@@ -99,7 +83,6 @@ describe('concurrency: hand-delivery quotes', () => {
     expect(accepted.status).toBe(201);
     expect(accepted.body.cost).toBe(FIRST);
     expect(before - (await balanceOf(collector))).toBe(FIRST);
-    // The shipment still quotes what it was charged.
     const [row] = await sql<{ quote_minor: number; cost: number; status: string }>(
       'select quote_minor, cost::int as cost, status from shipment where id = $1',
       [shipmentId],

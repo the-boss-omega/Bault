@@ -36,14 +36,6 @@ interface ReadyRequest {
   serialNumber: string | null;
 }
 
-/**
- * The batch that physically goes to the grader.
- *
- * Graders are not a per-card service: cards accumulate and go out together in
- * one insured package. Shipping a submission from here moves every card in the
- * batch to `at_grader` in one transaction, so none can be listed, sold or
- * shipped while it is in another company's building.
- */
 export function GradingSubmissions() {
   const t = useT();
   const { locale } = useI18n();
@@ -181,13 +173,6 @@ export function GradingSubmissions() {
   );
 }
 
-/**
- * One open batch: what is in it, what could still go into it, and shipping it.
- *
- * `readyFor` only offers requests that are accepted, aimed at this grader, not
- * already in a batch, and, where the tier demands it, approved. All four are
- * server-side rules, mirrored so an ineligible card is never offered.
- */
 function OpenSubmission({
   submission,
   onChanged,

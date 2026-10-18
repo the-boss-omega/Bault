@@ -9,29 +9,17 @@ import type { StorageAdapter } from '@bault/adapters';
 import { listing } from './mkt.schema';
 import { item, itemImage } from '../cst/cst.schema';
 
-/** How a browse result is ordered. `newest` is what the shelf shows by default. */
 export type BrowseSort = 'newest' | 'price_asc' | 'price_desc';
 
 export interface BrowseFilters {
   q?: string;
-  /** An item class key — `trading_card`, `graded_slab`, … */
   type?: string;
-  /** A condition grade as recorded on the item, matched case-insensitively. */
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
   sort?: BrowseSort;
 }
 
-/**
- * Browse/search active listings (T078, MKT-03/MKT-04). Public — anyone can
- * browse. Joins the item so cards show type/condition/description alongside the
- * price, and attaches a signed URL for each item's newest image.
- *
- * Filters and sort are applied in SQL rather than in the client, because the
- * query is capped at 200 rows: filtering after the cap would silently hide
- * matches that fell off the end of an unfiltered page.
- */
 @Injectable()
 export class BrowseService {
   constructor(
@@ -49,8 +37,6 @@ export class BrowseService {
       );
     }
     if (type && type.trim() !== '') conditions.push(eq(item.typeClass, type.trim()));
-    // Grades are free text on the item (`Raw`, `PSA 10`, …), so this matches the
-    // way somebody would type it rather than demanding the exact casing.
     if (condition && condition.trim() !== '') conditions.push(ilike(item.conditionGrade, condition.trim()));
     if (Number.isFinite(minPrice)) conditions.push(gte(listing.askingPrice, minPrice as number));
     if (Number.isFinite(maxPrice)) conditions.push(lte(listing.askingPrice, maxPrice as number));
@@ -84,18 +70,6 @@ export class BrowseService {
     );
   }
 
-  /**
-   * One listing, for anybody: the page a listing link opens.
-   *
-   * The same fields the browse list shows, plus the listing's status and every
-   * photograph. Projected, never the whole rows: those carry the owner and
-   * seller ids, the shelf, the label barcode, the parcel the card came in, the
-   * hold flag, and the storage keys of the photographs, none of which an
-   * anonymous visitor may see.
-   *
-   * A sold or removed listing is still served, as it always has been, so an old
-   * link shows what happened to it; `status` says which.
-   */
   async detail(listingId: string) {
     const [row] = await this.db
       .select({
@@ -127,7 +101,6 @@ export class BrowseService {
     return { ...row, imageUrl: signedImages[0]?.url ?? null, images: signedImages };
   }
 
-  /** Signed URL of the item's newest image (highest version), or null if none. */
   private async newestImageUrl(itemId: string): Promise<string | null> {
     const [img] = await this.db
       .select()

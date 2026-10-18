@@ -1,8 +1,5 @@
 import { createTransport, type Transporter } from 'nodemailer';
 
-/**
- * Transactional email adapter: verification and reset links, and event notifications.
- */
 export interface EmailMessage {
   to: string;
   subject: string;
@@ -14,23 +11,11 @@ export interface EmailAdapter {
   send(message: EmailMessage): Promise<{ providerRef: string }>;
 }
 
-/* ============================================================
-   Templates
-   ============================================================ */
-
-/**
- * The rendered body of one message, in both parts a mail client may read.
- *
- * Both are always produced. A text-only client, and every spam filter, reads
- * `text`, where a link inside an anchor tag is invisible, so the URL is written
- * out in full in the plain part too.
- */
 export interface RenderedEmail {
   text: string;
   html: string;
 }
 
-/** Escape the four characters that would otherwise break out of HTML text. */
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -39,11 +24,6 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * A message body built around a single call to action: a sentence of context,
- * one link, and a line saying what happens if it is ignored. One function, so a
- * new template cannot arrive without a plain-text part or with an unescaped URL.
- */
 function actionEmail(input: {
   heading: string;
   body: string;
@@ -65,12 +45,6 @@ function actionEmail(input: {
   return { text, html };
 }
 
-/**
- * Render a message body from its template name and variables.
- *
- * An unknown template does NOT throw, because a mail that fails to render would
- * abort whatever triggered it. It degrades to the variables it was given.
- */
 export function renderEmail(template: string, variables: Record<string, string>): RenderedEmail {
   const link = variables.link ?? '';
   switch (template) {
@@ -91,10 +65,6 @@ export function renderEmail(template: string, variables: Record<string, string>)
         footer: 'The link is valid for 1 hour and can be used once. If you did not ask for this, ignore this message — your current password stays in force.',
       });
     case 'notification_event':
-      /**
-       * One domain event, as a mail. The body is the SAME sentence the in-app
-       * feed shows, composed once by the worker and passed through here.
-       */
       return actionEmail({
         heading: variables.heading ?? 'An update on your vault',
         body: variables.message ?? '',
@@ -113,11 +83,6 @@ export function renderEmail(template: string, variables: Record<string, string>)
   }
 }
 
-/* ============================================================
-   Adapters
-   ============================================================ */
-
-/** Dev sink: logs the email (including the link) to the console instead of sending. */
 export class ConsoleEmailAdapter implements EmailAdapter {
   async send(message: EmailMessage): Promise<{ providerRef: string }> {
     // eslint-disable-next-line no-console
@@ -129,44 +94,17 @@ export class ConsoleEmailAdapter implements EmailAdapter {
 export interface SmtpConfig {
   host: string;
   port: number;
-  /** true = implicit TLS (465); false = STARTTLS upgrade (587). */
   secure: boolean;
-  /**
-   * Refuse to continue in clear when the server offers no STARTTLS. False only
-   * for a local mail catcher in development (`createEmailAdapter` decides).
-   */
   requireTls: boolean;
   user: string;
   password: string;
-  /** Envelope sender, e.g. `Bault <noreply@example.com>`. */
   from: string;
 }
 
-/**
- * Real SMTP delivery.
- *
- * Works with any SMTP server; the configuration documented in `.env.example` is
- * Gmail with an app password, for genuine delivery in development.
- *
- * The credentials arrive through the constructor rather than from `process.env`,
- * so this package stays free of the config schema and the adapter is testable
- * with a fake transport.
- *
- * `verify()` is deliberately NOT called at construction: the API must boot
- * whether or not the mail server is reachable, and a failure surfaces on the
- * first send with the provider's own error.
- */
 export class SmtpEmailAdapter implements EmailAdapter {
   private readonly transport: Transporter;
 
   constructor(private readonly config: SmtpConfig) {
-    /**
-     * `requireTLS`: on 587 the session starts in clear, and nodemailer upgrades
-     * only if the server offers STARTTLS. Without it, a server that does not
-     * offer it, or anybody on the path who strips the offer, receives the
-     * password and every reset link in clear. With it, nodemailer stops before
-     * AUTH. On 465 (`secure`) TLS starts with the first byte.
-     */
     this.transport = createTransport({
       host: config.host,
       port: config.port,
@@ -185,8 +123,6 @@ export class SmtpEmailAdapter implements EmailAdapter {
       text,
       html,
     });
-    // The provider's own message id, so a delivery can be traced back from the
-    // mail server's logs. Falls back to a local stamp if the server omits it.
     return { providerRef: info.messageId ?? `smtp_${Date.now()}` };
   }
 }

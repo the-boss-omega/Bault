@@ -13,21 +13,6 @@ import { shipmentGroup } from './shipment-group.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { ShipmentService, type ShipmentActor } from './shipment.service';
 
-/**
- * One parcel, several collectors, one payer.
- *
- * Three people at a convention with cards in the vault and one hotel address
- * between them. One shipment never carries everybody's items: an item has
- * exactly one owner (Principle I), and a shipment that moved somebody else's
- * card would be a custody event that person never authorised.
- *
- * So each collector keeps their own shipment, with their own items, their own
- * custody events and their own history. The GROUP says they travel together,
- * and names the payer who alone may lock or cancel it.
- *
- * Joining is always the member's own act. A group you can be added to without
- * agreeing is a group that can send your property to an address you never saw.
- */
 @Injectable()
 export class GroupShipmentService {
   constructor(
@@ -37,12 +22,6 @@ export class GroupShipmentService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /**
-   * Open a group around a shipment you already have.
-   *
-   * The opener nominates themselves as the payer, because somebody who is not
-   * prepared to pay for the parcel has no business calling it together.
-   */
   async open(
     userId: string,
     shipmentId: string,
@@ -82,13 +61,6 @@ export class GroupShipmentService {
     });
   }
 
-  /**
-   * Join with a request of your own.
-   *
-   * The destination must match exactly. "Everybody typed the same thing" is not
-   * the same claim as "there is one destination", and only the second one gets a
-   * parcel to the right door.
-   */
   async join(userId: string, groupCode: string, shipmentId: string, actor: ShipmentActor) {
     const [group] = await this.db
       .select()
@@ -115,9 +87,6 @@ export class GroupShipmentService {
     }
 
     await this.db.transaction(async (tx) => {
-      // The group still forming, read under a share lock that a lock or a
-      // cancellation must wait for: a member who joins as the group is locked
-      // either joins before it (and is told) or is refused, never added after.
       await this.assertForming(tx, group.id, 'That group has already been closed to new members');
       const [joined] = await tx
         .update(shipment)
@@ -140,7 +109,6 @@ export class GroupShipmentService {
     if (row?.status !== 'forming') throw new AppError(ErrorCode.CONFLICT, message, 409);
   }
 
-  /** Step back out, while the group is still forming. */
   async leave(userId: string, shipmentId: string, actor: ShipmentActor) {
     const s = await this.shipments.loadFor(shipmentId, actor);
     if (s.userId !== userId) throw AppError.forbidden('That is not your shipment');
@@ -160,7 +128,6 @@ export class GroupShipmentService {
 
     const groupId = s.groupId;
     await this.db.transaction(async (tx) => {
-      // As for joining: not out of a group that was locked meanwhile.
       await this.assertForming(tx, groupId, 'That group has been locked — ask support to unpick it');
       await tx
         .update(shipment)
@@ -170,7 +137,6 @@ export class GroupShipmentService {
     return { status: 'left' as const };
   }
 
-  /** Who is in it, what they are sending, and what it weighs together. */
   async describe(groupId: string) {
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
@@ -222,7 +188,6 @@ export class GroupShipmentService {
     };
   }
 
-  /** The groups this collector is part of. */
   async mine(userId: string) {
     const rows = await this.db
       .select({ groupId: shipment.groupId })
@@ -234,16 +199,6 @@ export class GroupShipmentService {
     return Promise.all(groups.map((g) => this.describe(g.id)));
   }
 
-  /**
-   * Close the group and hand it to the warehouse.
-   *
-   * Only the payer may lock it, and only they may cancel it.
-   *
-   * Each member still selects and pays for their own service. What the group
-   * changes is that the warehouse packs them into one box; it does not merge
-   * anybody's money, because merging money across accounts is exactly the thing
-   * a custody platform must never do quietly.
-   */
   async lock(userId: string, groupId: string) {
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
@@ -257,9 +212,6 @@ export class GroupShipmentService {
 
     const now = new Date();
     return this.db.transaction(async (tx) => {
-      // Only from `forming`: the read above is not the write. A second click on
-      // Lock, or a cancellation that landed in between, finds it changed, and
-      // nobody is told twice or told about a parcel the payer called off.
       const [locked] = await tx
         .update(shipmentGroup)
         .set({ status: 'locked', lockedAt: now, updatedAt: now })
@@ -267,8 +219,6 @@ export class GroupShipmentService {
         .returning({ id: shipmentGroup.id });
       if (!locked) throw new AppError(ErrorCode.CONFLICT, 'That group is no longer open to locking', 409);
 
-      // The members as they stand now the group row is held: one who left in
-      // between is not told, and a group emptied meanwhile does not lock.
       const current = await tx.select().from(shipment).where(eq(shipment.groupId, groupId));
       if (current.length < 2) {
         throw AppError.validation('A shared parcel needs at least two people in it.');
@@ -291,7 +241,6 @@ export class GroupShipmentService {
     });
   }
 
-  /** Call the whole thing off. Members keep their own requests. */
   async cancel(userId: string, groupId: string, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
@@ -307,8 +256,6 @@ export class GroupShipmentService {
         .update(shipmentGroup)
         .set({ status: 'cancelled', cancelledAt: now, notes: reason.trim(), updatedAt: now })
         .where(eq(shipmentGroup.id, groupId));
-      // Each member's own request survives untouched: cancelling the shared
-      // parcel is not cancelling everybody's shipment.
       await tx.update(shipment).set({ groupId: null, updatedAt: now }).where(eq(shipment.groupId, groupId));
       return { status: 'cancelled' as const };
     });

@@ -2,22 +2,6 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
 import { closeDb, holdRowLock, sql } from '../integration/helpers/db';
 
-/**
- * The last place in the van.
- *
- * A show takes a fixed number of pickups, because it is one van. Counting the
- * bookings before the booking's own transaction lets two collectors who both
- * saw one place left both book it. So the count is made under the show's row
- * lock, in the transaction that books.
- *
- * The show is this test's own, with room for one pickup, so the seeded shows
- * the other suites book against are untouched; it is closed again afterwards.
- * Both bookings are held at the cards' locks until both have counted, so on
- * a count made outside the lock both would see the place free.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 type Res = Awaited<ReturnType<Client['post']>>;
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
 

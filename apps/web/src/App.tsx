@@ -56,28 +56,12 @@ import { ProfilePage } from './areas/customer/profile/ProfilePage';
 import { WarehouseConsole } from './areas/warehouse/WarehouseConsole';
 import { AdminConsole } from './areas/admin/AdminConsole';
 
-/**
- * Root component and application shell.
- *
- * The shell (navigation rail, page header, workspace) is mounted once and stays
- * mounted: switching section only moves the custody rule on the active rail
- * item, swaps the title and breadcrumb and re-renders the workspace body. Role
- * gating:
- *   - every role gets the collector sections (vault, inbound, wallet,
- *     membership, marketplace, shipping & services, notifications, support,
- *     FAQ & Legal, profile);
- *   - staff (warehouse_operator / admin) also get the warehouse console;
- *   - the manager (admin) also gets Management (the admin console).
- * Profile and sign-out live in the account menu, not the rail; theme and
- * language are header controls.
- */
 const ROLE_KEY: Record<string, MessageKey> = {
   user: 'role.user',
   warehouse_operator: 'role.warehouse_operator',
   admin: 'role.admin',
 };
 
-/** Rail destinations in order. `admin` keeps its internal key and permissions. */
 interface SectionSpec {
   key: string;
   labelKey: MessageKey;
@@ -89,13 +73,8 @@ interface SectionSpec {
 
 const SECTIONS: readonly SectionSpec[] = [
   { key: 'vault', labelKey: 'tab.vault', titleKey: 'vault.title', icon: <IconVault /> },
-  // Inbound sits directly after the Vault because it is where the Vault's
-  // contents come from: addresses to ship purchases to, and the parcels those
-  // purchases become on their way in.
   { key: 'inbound', labelKey: 'tab.inbound', titleKey: 'inbound.title', icon: <IconInbox /> },
   { key: 'wallet', labelKey: 'tab.wallet', titleKey: 'wallet.title', icon: <IconWallet /> },
-  // Directly after the wallet: a subscription is a money decision, and the
-  // thing somebody wants to see next to it is the balance it comes out of.
   { key: 'membership', labelKey: 'tab.membership', titleKey: 'membership.title', icon: <IconShield /> },
   { key: 'marketplace', labelKey: 'tab.marketplace', titleKey: 'market.title', icon: <IconMarketplace /> },
   {
@@ -142,10 +121,6 @@ const SECTIONS: readonly SectionSpec[] = [
   },
 ];
 
-/**
- * Message-key prefix for each section's contextual tabs, so the breadcrumb can
- * name the active tab. Sections absent here have no tab strip.
- */
 const TAB_PREFIX: Record<string, string> = {
   vault: 'vault.scope.',
   inbound: 'inbound.tab.',
@@ -158,54 +133,20 @@ const TAB_PREFIX: Record<string, string> = {
   admin: 'admin.section.',
 };
 
-/**
- * Result of the boot-time `/me/profile` probe.
- *
- * `anonymous` and `blocked` are deliberately different: a 401 means "nobody is
- * signed in" and belongs on the sign-in page, while an unreachable API or a 5xx
- * means we do not know who is signed in. The sign-in form would look like a
- * sign-out and invite a password that cannot be checked, so those states get
- * their own screen with a retry.
- */
 type BootState =
   | { status: 'loading' }
   | { status: 'anonymous' }
   | { status: 'ready'; user: SessionUser }
   | { status: 'blocked'; messageKey: MessageKey; detail: string | null };
 
-/**
- * Routes that are answered without a session and before the session probe.
- *
- * Both are opened from a link in an email, often by someone not signed in, and
- * in the reset case perhaps unable to sign in at all. Handling them here, not
- * inside the signed-out `AuthPage`, keeps them working for a reader who already
- * has a session (a shared machine, a second account); the signed-in shell
- * would otherwise treat the route as unknown and discard the token.
- */
 const TOKEN_ROUTES = ['verify-email', 'reset-password'] as const;
 
-/**
- * The anonymous routes that are a form, and which form each one opens on.
- *
- * Everything else an anonymous visitor can ask for falls into one of two cases,
- * and they want opposite things:
- *
- *   - The bare root (`#/`, or no hash at all) is somebody arriving. They get
- *     `LandingPage`: what this is and what it costs, without an account.
- *   - A deep link (`#/vault`, `#/wallet`, …) is somebody who had a session and
- *     no longer does. They get the sign-in form, because "take me back to my
- *     vault" should not be answered with a shop window.
- *
- * `#/welcome` is the landing page addressed by name, so the sign-in screen can
- * link back to it and a visitor can return to it without clearing the hash.
- */
 const AUTH_ROUTES: Record<string, AuthMode> = {
   signin: 'signIn',
   signup: 'signUp',
   forgot: 'forgot',
 };
 
-/** Routes that answer with the marketing page instead of a form. */
 const LANDING_ROUTES = ['', 'welcome'];
 
 export default function App() {
@@ -213,10 +154,6 @@ export default function App() {
   const route = useRoute();
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
 
-  // Restore the session on load: the httpOnly cookie survives a refresh, so ask
-  // the API who we are. This keeps the user signed in after a reload and gives
-  // the account menu a real name and email. `loadProfile` collapses concurrent
-  // callers onto a single request, so StrictMode's double effect stays one call.
   const loadSession = useCallback(async () => {
     const me = await loadProfile();
     setBoot({ status: 'ready', user: me });
@@ -231,8 +168,6 @@ export default function App() {
         setBoot({ status: 'anonymous' });
         return;
       }
-      // Unreachable, 5xx, 403 or 404: a real fault, shown as one. Exactly one
-      // attempt is made; recovery is the explicit retry button, never a loop.
       setBoot({
         status: 'blocked',
         messageKey: apiErrorKey(e) ?? 'error.unexpected',
@@ -245,13 +180,9 @@ export default function App() {
     void probeSession();
   }, [probeSession]);
 
-  // Answered ahead of the boot states below: neither page needs to know who is
-  // signed in, so neither waits on the session probe.
   if ((TOKEN_ROUTES as readonly string[]).includes(route.section)) {
     const token = route.params.token ?? null;
     return (
-      /* `bare`: no landing stage. Somebody who has clicked a link in an email to
-         confirm an address or reset a password wants one sentence and a button. */
       <AuthShell bare>
         {route.section === 'verify-email' ? (
           <VerifyEmailPage token={token} />
@@ -262,17 +193,6 @@ export default function App() {
     );
   }
 
-  /**
-   * The landing page does not wait for the session probe, and does not fail with it.
-   *
-   * It is a public page. It renders nothing that depends on who is signed in,
-   * and fetches its own figures from a route that is `@Public()` on the server.
-   * So it shows even while the API is unreachable; Sign in is the control that
-   * needs a backend.
-   *
-   * It stays below `TOKEN_ROUTES` because those carry a token and are more
-   * specific, and above the boot states because it outranks all three.
-   */
   if (boot.status !== 'ready' && LANDING_ROUTES.includes(route.section)) {
     return <LandingPage />;
   }
@@ -324,8 +244,6 @@ export default function App() {
             },
             { replace: true },
           );
-          // Backfill email / display name for the account menu. A fresh sign-in
-          // needs a fresh request, so drop any settled in-flight slot first.
           resetProfileRequest();
           void loadSession().catch(() => undefined);
         }}
@@ -333,14 +251,6 @@ export default function App() {
     );
   }
 
-  /**
-   * A member of staff who must enrol a second factor and has not.
-   *
-   * The API refuses them everything but enrolment, sign-out and the profile, so
-   * the workspace would mount a rail, a header and a section that each fail. They
-   * are held on the enrolment screen instead, and the console loads once the
-   * profile says they are enrolled.
-   */
   if (mustEnrolSecondFactor(boot.user)) {
     return (
       <ForcedEnrollmentPage
@@ -362,11 +272,6 @@ export default function App() {
     );
   }
 
-  /*
-   * Not keyed on `locale`: a locale change re-renders in place through context,
-   * so the section's state (open drawer, table filters, half-typed form)
-   * survives it.
-   */
   return (
     <Workspace
       user={boot.user}
@@ -387,15 +292,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
 
   const isStaff = user.role === 'warehouse_operator' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
-  /**
-   * A suspended account can sign in, and can do exactly one thing: use the
-   * helpdesk. The debt sweep suspends accounts automatically, so a holder has to
-   * be able to sign in and ask to be let back in; the API restricts everything
-   * except the ticket routes.
-   *
-   * The rail is narrowed to match, instead of showing destinations that would
-   * each answer 403.
-   */
   const suspended = user.status === 'suspended';
 
   const allowed = useMemo(
@@ -407,19 +303,11 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
     [isStaff, isAdmin, suspended],
   );
 
-  // Resolve the section: the hash wins, then the last visited section, then the
-  // role's landing page. An unpermitted or unknown section falls back instead of
-  // rendering a blank workspace.
   const fallback = suspended ? 'support' : isAdmin ? 'admin' : isStaff ? 'warehouse' : 'vault';
   const requested = route.section || lastVisitedSection() || fallback;
   const known = (!suspended && requested === 'profile') || allowed.some((s) => s.key === requested);
   const section = known ? requested : fallback;
 
-  // A retired route (`#/services`, `#/shipping`) is rewritten to where its
-  // workflow lives before anything else runs, including a stored last-visited
-  // section. `replace` keeps Back from returning to the dead URL.
-  // Destructured to primitives so the effect below does not re-fire on a fresh
-  // object identity every render.
   const legacy = legacyRedirect({ ...route, section: requested });
   const legacySection = legacy?.section ?? null;
   const legacyTab = legacy?.tab ?? null;
@@ -448,9 +336,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const spec = SECTIONS.find((s) => s.key === section);
   const pageTitle = section === 'profile' ? t('profile.title') : spec ? t(spec.titleKey) : t('app.title');
   const sectionLabel = section === 'profile' ? t('profile.title') : spec ? t(spec.labelKey) : pageTitle;
-  // The trailing crumb names the active contextual tab, so the current location
-  // is stated in full ("Home › Vault › Card history"). Omitted when the section
-  // has no tabs or the tab is unknown.
   const tabKey = route.tab ? `${TAB_PREFIX[section] ?? ''}${route.tab}` : '';
   const crumbs: Crumb[] = [
     { label: t('nav.home'), onClick: () => goto(fallback) },
@@ -464,15 +349,12 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
     try {
       await api.post('/auth/logout');
     } catch {
-      /* ignore; clear local state regardless */
     }
     clearLastVisitedSection();
     navigate({ section: 'vault' }, { replace: true });
     onSignedOut();
   }
 
-  // Hold this frame instead of flashing the fallback section while the legacy
-  // redirect lands. Placed after every hook so the hook order stays stable.
   if (legacySection) return null;
 
   return (
@@ -514,9 +396,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                   roleLabel={roleLabel}
                   suspended={suspended}
                 />
-                {/* Shell settings, together and segmented: theme, language and
-                    the bell act on the frame, not the content, so they are one
-                    object with hairlines between them. */}
                 <span className="ph-controls">
                   <ThemeToggle />
                   <LanguageSwitcher />
@@ -544,10 +423,6 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
             }
           />
 
-          {/* The section body is the only thing that changes between
-              destinations; the rail and header above stay mounted. Keyed on the
-              section alone, so switching a contextual tab updates content in
-              place instead of remounting (and resetting) the page. */}
           <main className="page" id="main" key={section}>
             {section === 'vault' && <VaultPage />}
             {section === 'inbound' && <InboundPage />}

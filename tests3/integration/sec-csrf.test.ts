@@ -1,22 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BASE, SEED, SEED_PASSWORD, signIn } from '../../tests/integration/helpers/http';
 
-/**
- * Cross-site requests.
- *
- * A plain HTML form on any site can post a body that is not JSON. If the API
- * read it, `POST /auth/login` from a stranger's page would sign the visitor's
- * browser into the stranger's account (login CSRF), and `SameSite=Lax` does
- * nothing about that, nor about a page on another subdomain of the same site.
- * So the API refuses non-JSON bodies and checks `Origin`.
- *
- * Raw `fetch` here rather than the suite's `Client`, because the whole point is
- * the headers a browser would send and that client does not.
- */
-
 const APP_ORIGIN = new URL(process.env.APP_BASE_URL ?? 'http://localhost:5173').origin;
 
-/** The API's problem envelope, or whatever a successful route returned. */
 type ProblemOr<T> = T & { error: { code: string; message: string } };
 
 async function raw(
@@ -51,9 +37,6 @@ describe('a body that is not JSON', () => {
   });
 
   it('cannot reach a route that needs no body, which no DTO would have caught', async () => {
-    // `enctype="text/plain"` is the third thing a form can send. A route with no
-    // body to validate would run on it regardless: here, signing the person out
-    // of every other device.
     const collector = await signIn(SEED.collector);
     const res = await raw('POST', '/auth/sessions/revoke-others', {
       headers: { 'content-type': 'text/plain', cookie: cookieOf(collector) },
@@ -82,8 +65,6 @@ describe('the Origin a browser sends', () => {
   });
 
   it('refuses the opaque origin a sandboxed frame sends', async () => {
-    // `Origin: null` is what a sandboxed iframe or a `data:` page sends — an
-    // attacker's easiest way to post without naming their own site.
     const res = await raw('POST', '/auth/login', {
       headers: { 'content-type': 'application/json', origin: 'null' },
       body: JSON.stringify({ identifier: SEED.collector, password: SEED_PASSWORD }),
@@ -119,16 +100,11 @@ describe('the Origin a browser sends', () => {
 
 describe('the payment provider’s callback', () => {
   it('is exempt from the Origin rule and still reaches verification', async () => {
-    // A provider is not a browser and owes us no particular Origin. What stands
-    // between this route and the internet is the adapter's signature check —
-    // the sandbox adapter accepts any JSON, which is why it is refused in
-    // production.
     const res = await raw('POST', '/webhooks/payment', {
       headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
       body: JSON.stringify({ id: `evt_csrf_${Date.now()}`, type: 'topup.settled', data: {} }),
     });
     expect(res.status).toBe(201);
-    // The handler also says what it did with the event; only that it was received matters here.
     expect(res.body).toMatchObject({ received: true });
   });
 

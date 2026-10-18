@@ -5,12 +5,6 @@ import { closeDb, sql } from './helpers/db';
 
 afterAll(closeDb);
 
-/**
- * Suspended/closed accounts are blocked.
- *
- * These cases assert the unauthenticated-block path and sign-in, which go
- * through the same guard that blocks a suspended or closed account.
- */
 describe('ACC account-status blocking', () => {
   it('blocks unauthenticated access to protected routes', async () => {
     const c = new Client();
@@ -40,19 +34,9 @@ describe('ACC account-status blocking', () => {
     expect(byEmail.status).toBe(200);
     expect(byUsername.body.id).toBe(byEmail.body.id);
   });
-
-  // TODO: admin suspends a collector (PATCH /admin/users/:id) → their next
-  // request returns 403 account_suspended, proving the SessionAuthGuard status
-  // check.
 });
 
-/**
- * Signing out always works. It ends the session the request presents and
- * grants nothing, so an account that is suspended, or closed, can still end
- * its own session rather than leave it live until the cookie expires.
- */
 describe('ACC signing out, whatever the account status', () => {
-  /** A fixture account that can sign in: the seeded password and terms. */
   async function fixtureAccount(): Promise<string> {
     const tag = randomBytes(5).toString('hex');
     const email = `signout-${tag}@fixture.bault.test`;
@@ -73,7 +57,6 @@ describe('ACC signing out, whatever the account status', () => {
       const tokenHash = createHash('sha256').update(cookie.slice(cookie.indexOf('=') + 1)).digest('hex');
 
       await sql(`UPDATE user_account SET status = $2 WHERE email = $1`, [email, status]);
-      // Everything else is closed to it.
       expect((await client.get('/vault/items')).status).toBe(403);
 
       const out = await client.post('/auth/logout');

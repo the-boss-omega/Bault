@@ -4,13 +4,6 @@ import { useI18n } from '../../../shared/i18n';
 import { areaLabel } from '../../../shared/grading';
 import { Button } from '../../../shared/ui/primitives';
 
-/**
- * Ask somebody to look at the card and write down what they see.
- *
- * The areas are chosen, so an operator spends time only on what the collector
- * cares about. The list comes from the server: it is a closed vocabulary, which
- * is what makes two reports comparable.
- */
 export function InspectionForm({
   item,
   onCancel,
@@ -32,8 +25,6 @@ export function InspectionForm({
       try {
         const data = await api.get<{ areas: string[] }>('/services/inspection/areas');
         setAreas(data.areas);
-        // Everything ticked to begin with: a full report is what most people
-        // want, and un-ticking is easier than hunting for the one you need.
         setChosen(data.areas);
       } catch (e) {
         onError((e as Error).message);

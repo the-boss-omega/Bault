@@ -3,24 +3,6 @@ import { EventEmitter } from 'node:events';
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { createDb, type Database } from '../../apps/api/src/db/client';
 
-/**
- * What a failed query leaves in the log and in the error report.
- *
- * drizzle-orm 0.45 wraps a failed query in a `DrizzleQueryError` whose message
- * is the SQL AND ITS PARAMETERS. The parameters are whatever the query was
- * about: an email, a name, an address, a token hash. The exception filter wrote
- * that message to the log and handed the error to Sentry, a third party that
- * keeps it. So the filter logs and reports the query error's code and the SQL
- * without its values, and the scrubber every report passes through removes the
- * parameters from an exception message or a breadcrumb of that shape too.
- *
- * The failures are real: queries forced to fail against the test database,
- * each carrying a recognisable value, handed to the filter with a reporter
- * that records what it is given.
- *
- * Requires a migrated database (the API need not be running).
- */
-
 const apiRequire = createRequire(new URL('../../apps/api/package.json', import.meta.url));
 const { sql } = apiRequire('drizzle-orm') as typeof import('drizzle-orm');
 const { scrubErrorEvent } = apiRequire('@bault/adapters') as typeof import('@bault/adapters');
@@ -42,7 +24,6 @@ afterAll(async () => {
   await close();
 });
 
-/** What `run` throws, which must be a query failure. */
 async function failure(run: () => Promise<unknown>): Promise<Error> {
   try {
     await run();
@@ -52,7 +33,6 @@ async function failure(run: () => Promise<unknown>): Promise<Error> {
   throw new Error('expected the query to fail');
 }
 
-/** Everything the filter wrote and reported for `exception`. */
 async function filtered(exception: unknown) {
   const reported: unknown[] = [];
   const filter = new filters.AllExceptionsFilter((error) => reported.push(error));
@@ -81,7 +61,6 @@ async function filtered(exception: unknown) {
   process.stderr.write = grab as typeof process.stderr.write;
   try {
     filter.catch(exception, host as never);
-    // The Nest logger writes on the next tick.
     await new Promise((r) => setTimeout(r, 20));
   } finally {
     process.stdout.write = out;
@@ -90,7 +69,6 @@ async function filtered(exception: unknown) {
   return { status: res.statusCode, body: res.body, log: lines.join(''), reported };
 }
 
-/** Every string an error carries, its causes included. */
 function everything(error: unknown, depth = 0): string {
   if (depth > 5 || error === null || error === undefined) return '';
   if (typeof error !== 'object') return String(error);
@@ -99,14 +77,12 @@ function everything(error: unknown, depth = 0): string {
   try {
     json = JSON.stringify(error);
   } catch {
-    /* circular */
   }
   return [String(e.message ?? ''), String(e.stack ?? ''), json, everything(e.cause, depth + 1)].join('\n');
 }
 
 describe('a failed query, in the log and the error report', () => {
   it('logs and reports a server-side query failure by its code, without the values', async () => {
-    // division_by_zero, with the canary as a bound parameter.
     const boom = await failure(() => db.execute(sql`select 1 / (length(${SECRET}) - length(${SECRET}))`));
     expect(everything(boom)).toContain(SECRET);
 
@@ -120,7 +96,6 @@ describe('a failed query, in the log and the error report', () => {
   });
 
   it('logs a malformed identifier by its code, without the identifier', async () => {
-    // invalid_text_representation: the canary compared against a uuid column.
     const bad = await failure(() => db.execute(sql`select 1 where gen_random_uuid() = ${SECRET}::uuid`));
     const out = await filtered(bad);
     expect(out.status).toBe(400);
@@ -138,7 +113,6 @@ describe('a failed query, in the log and the error report', () => {
     };
     const scrubbed = scrubErrorEvent(event);
     expect(JSON.stringify(scrubbed)).not.toContain(SECRET);
-    // What is left still says what failed.
     expect(scrubbed.exception!.values![0]!.value).toContain('Failed query: select 1 / (length($1) - length($2))');
     expect(scrubbed.breadcrumbs![0]!.message).toContain('Failed query');
   });

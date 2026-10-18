@@ -4,15 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { createUser, testPool } from './helpers/db';
 
-/**
- * Tracking refresh with the carrier the deployment is configured for.
- *
- * The sandbox answers `in_transit` for every parcel forever, so a job that used
- * it whatever `SHIPPING_PROVIDER` said would never move a shipment to
- * `delivered`. EasyPost is stood up locally (`EASYPOST_BASE_URL` exists for
- * exactly this) and answers per tracking code, so the suite can see which
- * adapter the job really asked.
- */
 const calls: { code: string; auth: string | undefined }[] = [];
 const answers: Record<string, { status: number; body: unknown }> = {};
 let server: Server;
@@ -34,8 +25,6 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
 
-  // Set BEFORE the config is first read in this file: `loadEnv` caches, and
-  // dotenv never overrides a variable that is already set.
   process.env.SHIPPING_PROVIDER = 'easypost';
   process.env.EASYPOST_API_KEY = 'EZTK_worker_suite_not_a_real_key';
   process.env.EASYPOST_BASE_URL = `http://127.0.0.1:${port}/v2`;
@@ -70,13 +59,11 @@ describe('tracking refresh', () => {
     await refreshTracking(pool);
 
     expect(calls.some((c) => c.code === code)).toBe(true);
-    // EasyPost's own scheme: the key as the Basic username, no password.
     expect(calls.find((c) => c.code === code)!.auth).toBe(
       `Basic ${Buffer.from('EZTK_worker_suite_not_a_real_key:').toString('base64')}`,
     );
     expect(await statusOf(pool, id)).toBe('delivered');
 
-    // Twice is the same as once: a delivered parcel is no longer polled.
     const before = calls.length;
     await refreshTracking(pool);
     expect(calls.filter((c) => c.code === code).length).toBe(1);
@@ -93,20 +80,12 @@ describe('tracking refresh', () => {
     const brokenId = await shipment(pool, broken);
     const fineId = await shipment(pool, fine);
 
-    // One carrier error must not escape the loop, or every parcel after it goes
-    // unrefreshed, every half hour, for as long as that one keeps failing.
     await refreshTracking(pool);
 
     expect(await statusOf(pool, fineId)).toBe('delivered');
     expect(await statusOf(pool, brokenId)).toBe('shipped');
   });
 
-  /**
-   * The collector is told when the carrier says the parcel arrived, or that
-   * something went wrong with it, by the event written in the same transaction
-   * as the status. Once: a delivered or failed parcel is not polled again, and
-   * a run that changes nothing writes nothing.
-   */
   const eventsFor = async (id: string) =>
     (
       await pool.query<{ event_type: string; user_id: string | null }>(

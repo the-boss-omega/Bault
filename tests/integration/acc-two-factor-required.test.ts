@@ -6,20 +6,6 @@ import { Client, SEED, signIn } from './helpers/http';
 import { closeDb } from './helpers/db';
 import { MFA_PASSWORD, activeAccount, challenge, codeAt, enrol, type Account } from './helpers/mfa';
 
-/**
- * Two-factor sign-in REQUIRED of staff, against an API that requires it.
- *
- * Production requires a second factor of every administrator and operator, and
- * refuses to boot with that switched off. The API under test runs in
- * development, where the requirement defaults to nobody — every other suite
- * signs in as the seeded administrator and operator, with a password, hundreds
- * of times. So, like `pay-payout-manual.test.ts`, this starts a SECOND API from
- * the same build and against the same database, with
- * `MFA_REQUIRED_ROLES=admin,warehouse_operator` — exactly what production runs
- * — and proves the requirement there. Accounts are promoted through the API
- * under test, by the seeded administrator, who is not required to enrol on it.
- */
-
 let child: ChildProcess | null = null;
 let base = '';
 let output = '';
@@ -55,7 +41,6 @@ beforeAll(async () => {
       const res = await fetch(`${base}/readyz`);
       if (res.ok) return;
     } catch {
-      // not listening yet
     }
     if (child.exitCode !== null) break;
     await new Promise((r) => setTimeout(r, 250));
@@ -65,13 +50,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   child?.kill('SIGTERM');
-  // Put the promoted fixtures back, so no stray staff account outlives the suite.
   const admin = await signIn(SEED.admin);
   for (const id of promoted) await admin.patch(`/admin/users/${id}`, { role: 'user' });
   await closeDb();
 });
 
-/** A fresh account with `role`, promoted by the seeded administrator on the API under test. */
 async function staff(label: string, role: 'admin' | 'warehouse_operator'): Promise<Account> {
   const account = await activeAccount(label);
   const admin = await signIn(SEED.admin);
@@ -81,7 +64,6 @@ async function staff(label: string, role: 'admin' | 'warehouse_operator'): Promi
   return account;
 }
 
-/** Signed in with the password alone, on the API that requires a second factor of staff. */
 async function signedInThere(account: Account): Promise<{ client: Client; body: Record<string, unknown> }> {
   const client = new Client(base);
   const res = await client.post('/auth/login', { identifier: account.username, password: MFA_PASSWORD });
@@ -95,18 +77,15 @@ describe('a member of staff who has not enrolled', () => {
     const { client, body } = await signedInThere(operator);
     expect(body).toMatchObject({ role: 'warehouse_operator', mfaEnrollmentRequired: true });
 
-    // A staff route and a collector route alike: every privileged route.
     for (const path of ['/custody/bins', '/finance/wallet', '/vault/items']) {
       const res = await client.get(path);
       expect(res.status, path).toBe(403);
       expect(res.body.error.code, path).toBe('mfa_enrollment_required');
     }
-    // A write too, refused before it is attempted.
     const write = await client.patch('/me/profile', { firstName: 'Changed', lastName: 'Name' });
     expect(write.status).toBe(403);
     expect(write.body.error.code).toBe('mfa_enrollment_required');
 
-    // What remains: who am I, the enrolment itself.
     const me = await client.get('/me/profile');
     expect(me.status).toBe(200);
     expect(me.body).toMatchObject({ role: 'warehouse_operator', mfaRequired: true, mfaEnabled: false });
@@ -146,9 +125,6 @@ describe('the same API', () => {
   });
 
   it('lets one code open one session even when two API processes are asked at once', async () => {
-    // The in-process queue serialises one API's attempts; across processes only
-    // the database stands between two submissions of one code. One challenge
-    // from each API, the same code to both, together.
     const account = await activeAccount('mfaxproc');
     const { secret } = await enrol(await signedInThere(account).then((s) => s.client));
     const here = await challenge(account);

@@ -8,19 +8,6 @@ import {
 import { defaultEmailEnabled, eventSubject } from '../../apps/worker/src/jobs/notification-events';
 import { EVENT_LABEL_KEY } from '../../apps/web/src/shared/notifications';
 
-/**
- * The API's event catalogue and the worker's mirror must agree.
- *
- * They are separate modules on purpose — the worker is deliberately independent
- * of the Nest container and cannot import from the API tree, the same
- * arrangement the item taxonomy has with the SPA. That independence is worth
- * having and it has exactly one failure mode: the two drift, and an event
- * quietly starts or stops sending mail because somebody edited one file.
- *
- * This is the test that makes the duplication safe. It is in the `web` project
- * because it needs no database and no running server: it is two arrays and a
- * comparison.
- */
 describe('notification catalogue', () => {
   it('agrees with the worker about which events go out by email', () => {
     const disagreements = NOTIFICATION_EVENT_TYPES.filter(
@@ -31,9 +18,6 @@ describe('notification catalogue', () => {
   });
 
   it('gives every event type a subject line', () => {
-    // The fallback exists so an unregistered event still sends SOMETHING, but a
-    // registered one falling through to it means somebody added an entry to the
-    // catalogue and not to the subjects.
     const generic = eventSubject('a-key-that-does-not-exist');
     const missing = NOTIFICATION_EVENT_TYPES.filter((e) => eventSubject(e.key) === generic).map(
       (e) => e.key,
@@ -51,8 +35,6 @@ describe('notification catalogue', () => {
       expect(defaultEnabled(event.key, 'in_app')).toBe(true);
       expect(defaultEnabled(event.key, 'email')).toBe(event.emailByDefault);
     }
-    // An unregistered event still reaches the collector in-app, and cannot start
-    // sending mail without a deliberate entry.
     expect(defaultEnabled('not_registered', 'in_app')).toBe(true);
     expect(defaultEnabled('not_registered', 'email')).toBe(false);
   });
@@ -63,7 +45,6 @@ describe('notification catalogue', () => {
     );
     expect(mandatory.sort()).toEqual(['arrival_not_accepted', 'parcel_damaged']);
 
-    // Email is never mandatory. Somebody who wants no mail gets no mail.
     for (const event of NOTIFICATION_EVENT_TYPES) {
       expect(isMandatory(event.key, 'email')).toBe(false);
     }
@@ -74,24 +55,12 @@ describe('notification catalogue', () => {
   });
 
   it('does not label an event the SPA has never heard of as one it has', () => {
-    // A label key for an event the server no longer emits is a dead translation
-    // nobody will ever see fail.
     const known = new Set(NOTIFICATION_EVENT_TYPES.map((e) => e.key));
     const orphans = Object.keys(EVENT_LABEL_KEY).filter((key) => !known.has(key));
     expect(orphans).toEqual([]);
   });
 
   it('translates every event the server can emit', () => {
-    /**
-     * The other direction: every event type has a client label.
-     *
-     * `eventLabel` falls back to the raw event type, so a missing label badges
-     * the feed with `wallet_request_completed`, `escrow_funded` or
-     * `payment_reversed` (the database enum, in both languages), and the
-     * preferences matrix falls through to the server's English `label`, leaving
-     * a Hebrew reader with notification settings in English. The fallbacks are a
-     * safety net, and the product must not ship with the net load-bearing.
-     */
     const unlabelled = NOTIFICATION_EVENT_TYPES.filter((e) => !EVENT_LABEL_KEY[e.key]).map(
       (e) => e.key,
     );

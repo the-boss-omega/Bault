@@ -2,19 +2,11 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 import { closeDb, sql } from './helpers/db';
 
-/**
- * Amounts are never negative, checked twice: at the door (the pricing-rule
- * form) and at the bottom (the ledger itself), so a bug in between cannot write
- * a wallet movement that runs the wrong way. Requires a running API + seeded DB.
- */
-
 afterAll(closeDb);
 
 describe('PAY amounts that cannot be right', () => {
   it('refuses a pricing rule with a negative value, or a percentage over 100%', async () => {
     const admin = await signIn(SEED.admin);
-    // An action nothing prices, so the rules this creates are in force for
-    // nothing and cannot change what any other test is charged.
     const rule = (over: Record<string, unknown>) =>
       admin.post('/pricing/rules', {
         actionType: 'fixture:bounds_check',
@@ -32,7 +24,6 @@ describe('PAY amounts that cannot be right', () => {
     const overHundred = await rule({ model: 'percentage', value: 10_001 });
     expect(overHundred.status, JSON.stringify(overHundred.body)).toBe(400);
 
-    // A free action and a 100% rule are both legitimate.
     expect((await rule({ value: 0 })).status).toBe(201);
     expect((await rule({ model: 'percentage', value: 10_000 })).status).toBe(201);
   });

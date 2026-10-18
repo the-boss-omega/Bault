@@ -1,32 +1,12 @@
-/**
- * The boxes a parcel can go out in.
- *
- * A box brings the two numbers a carrier prices on beyond the contents' weight:
- * its OUTER dimensions, which drive dimensional weight, and its own weight,
- * which replaces the adapters' flat packaging allowance. A collector who does
- * not choose one is not made to guess: `chooseBox` predicts the box the
- * warehouse would use.
- *
- * The limits are the courtesy layer, not a packing algorithm. Bault does not know
- * the dimensions of what is on its shelves, only the class and the weight, so the
- * rules are the two it can state honestly: a box refuses more weight than it is
- * rated for, and the rigid mailer and the small box refuse the things that
- * physically cannot go in them.
- */
 import { itemClass } from '../inv/item-classes';
 
 export interface ShippingBox {
   key: string;
   label: string;
-  /** Outer dimensions: what the carrier measures, not what fits inside. */
   dimensionsCm: { length: number; width: number; height: number };
-  /** The box and its padding. Replaces the flat packaging allowance. */
   tareGrams: number;
-  /** The most it is rated to carry. */
   maxContentsGrams: number;
-  /** When set, only these item classes fit at all. */
   onlyClasses?: readonly string[];
-  /** Whether an oversized item (a sealed case, a framed piece) can go in it. */
   takesOversized: boolean;
 }
 
@@ -82,33 +62,12 @@ export function shippingBox(key: string | null | undefined): ShippingBox | undef
   return key ? BY_KEY.get(key) : undefined;
 }
 
-/** Outer volume in cm³: the ordering "smallest box that fits" is built on. */
 function volumeCm3(box: ShippingBox): number {
   return box.dimensionsCm.length * box.dimensionsCm.width * box.dimensionsCm.height;
 }
 
-/** The catalogue, smallest first. Computed once; the catalogue is a constant. */
 const BY_VOLUME = [...SHIPPING_BOXES].sort((a, b) => volumeCm3(a) - volumeCm3(b));
 
-/**
- * The box the warehouse would reach for, worked out from the contents.
- *
- * THIS IS WHERE A PARCEL'S DIMENSIONS COME FROM: **nothing is ever measured.**
- * Bault knows each item's CLASS and WEIGHT, and those are enough, because the
- * dimensions that get billed are the BOX's:
- *
- *   item class + weight  →  the smallest box that will take them  →  its known
- *   outer L×W×H  →  dimensional weight  →  the carrier's price.
- *
- * Bault quotes before anybody packs, so the box is predicted rather than
- * observed. Smallest-that-fits is the packer's own rule, and the cheapest for
- * the collector, because every box bigger than necessary is volume they pay for
- * and do not use.
- *
- * Returns `undefined` when nothing in the catalogue will take these contents
- * (more than 30 kg of them). The parcel is then quoted without dimensions
- * rather than in a box that cannot hold it.
- */
 export function chooseBox(contents: {
   totalWeightGrams: number;
   typeClasses: string[];
@@ -118,17 +77,10 @@ export function chooseBox(contents: {
 
 export interface BoxProblem {
   field: 'boxSize';
-  /** So the SPA can phrase it without parsing English. */
   rule: 'box_weight' | 'box_contents';
   message: string;
 }
 
-/**
- * Whether the parcel fits the box that was chosen.
- *
- * Returned in the same shape as `checkOptions`, and for the same reason: a quote
- * shows it next to the prices, and create and edit refuse on it.
- */
 export function checkBox(
   box: ShippingBox | undefined,
   contents: { totalWeightGrams: number; typeClasses: string[] },

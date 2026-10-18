@@ -1,19 +1,3 @@
-/**
- * What an error report may carry off the platform.
- *
- * Error reports go to a third party (Sentry) and are kept there, readable by
- * anyone with access to the project. The SDK attaches the request it can see:
- * the headers, the cookies and, for an incoming request, the body. Unscrubbed,
- * a crash in `POST /auth/login` would hand over the password being checked, and
- * every report would carry the session cookie, which IS the account until it
- * expires.
- *
- * This is the `beforeSend` hook both the API and the worker install, kept here
- * so the two processes cannot drift apart and so it can be tested without either.
- *
- * Typed structurally rather than against the SDK, so this package takes no
- * dependency on it; the SDK's own event type is assignable to this one.
- */
 export interface ReportableRequest {
   method?: string;
   url?: string;
@@ -30,26 +14,12 @@ export interface ReportableEvent {
   breadcrumbs?: { message?: string }[];
 }
 
-/**
- * The parameters of a failed query, wherever an event carries its message.
- *
- * drizzle-orm's query error reads `Failed query: <sql>\nparams: <values>`,
- * and the values are what the query was about: an email, a name, an address,
- * a token hash. The exception filter reports such an error without them; this
- * catches the copies the SDK makes by itself, in the exception's message and
- * in a console breadcrumb of a logged stack. The SQL, which has placeholders,
- * and the stack frames after it are kept.
- */
 const QUERY_PARAMS = /(Failed query: [\s\S]*?\nparams: )[\s\S]*?(?=\n\s+at |$)/g;
 
 function withoutQueryParams<T extends string | undefined>(text: T): T {
   return (typeof text === 'string' ? text.replace(QUERY_PARAMS, '$1[redacted]') : text) as T;
 }
 
-/**
- * Headers that ARE credentials. Compared case-insensitively: Node lower-cases
- * incoming header names, but an event can be built by hand.
- */
 const CREDENTIAL_HEADERS = new Set([
   'cookie',
   'set-cookie',
@@ -58,16 +28,6 @@ const CREDENTIAL_HEADERS = new Set([
   'x-api-key',
 ]);
 
-/**
- * Routes whose request body is a secret by construction: everything under
- * `/auth` (sign-in, registration, password reset and change, verification,
- * two-factor) and anything under `/me/password`. Their query strings go too,
- * because the verification and reset links carry their token there.
- *
- * `auth` is matched as a whole path SEGMENT, so `/admin/authors-note` is not
- * mistaken for an `/auth` route. `/me/password` is a prefix match on purpose,
- * so `/me/password/confirm` or `/me/passwords` would be covered too.
- */
 const SECRET_BODY_ROUTES = [/(^|\/)auth(\/|$)/, /(^|\/)me\/password/];
 
 function pathOf(url: string | undefined): string {

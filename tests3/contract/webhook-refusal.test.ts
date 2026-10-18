@@ -1,23 +1,6 @@
 import { beforeAll, describe, it, expect, vi } from 'vitest';
 import { SandboxPaymentAdapter, type WebhookDelivery } from '@bault/adapters';
 
-/**
- * Who hears about a payment webhook the API refuses.
- *
- * Both kinds are answered 400 `webhook_unverified`. Only one is reported:
- *
- *  - `malformed` (a header missing, a body that is not JSON) is a request
- *    somebody else got wrong. A warning in the log is enough.
- *  - `refused` (a signature the provider would not vouch for) is, for a
- *    genuine delivery, a stale PAYPAL_WEBHOOK_ID. Every delivery then fails
- *    quietly, and a payout PayPal refunds or reverses after paying it is never
- *    credited back, because that event arrives by webhook and nothing else
- *    re-checks a paid payout. So it goes to the error tracker.
- *
- * Unit-level: `TopupService` is built by hand with the sandbox adapter and a
- * recording reporter, so this needs no server, no database and no DSN.
- */
-
 process.env.NODE_ENV = 'test';
 
 let topups: typeof import('../../apps/api/src/modules/pay/topup.service');

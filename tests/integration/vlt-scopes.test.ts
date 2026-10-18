@@ -1,17 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 
-/**
- * Where a card is in the vault, for every state a card can be in.
- *
- * The vault answers three questions (what do I hold, what is frozen, what has
- * left), and every lifecycle state has to land in exactly one of them,
- * `at_grader` and `discarded` included. A card shipped home has to reach
- * History even though no state change records an owner. A card that is missing
- * from every tab reads to its owner as a card Bault lost.
- *
- * Requires a running API + a freshly seeded DB.
- */
 describe('VLT scopes cover every state', () => {
   interface Row {
     id: string;
@@ -60,9 +49,7 @@ describe('VLT scopes cover every state', () => {
     });
     expect(dispatched.status).toBe(201);
 
-    // It left the shelf, so it is not active…
     expect((await scope(collector, 'active', tag)).some((r) => r.id === card.id)).toBe(false);
-    // …and it is still the collector's card, so History is where it lives now.
     const history = await scope(collector, 'history', tag);
     const row = history.find((r) => r.id === card.id);
     expect(row, 'a card shipped home is missing from History').toBeDefined();
@@ -89,7 +76,6 @@ describe('VLT scopes cover every state', () => {
     });
     expect(shipped.status).toBe(201);
 
-    // Away for weeks and coming back: it is still part of what they hold.
     const active = await scope(collector, 'active', tag);
     expect(active.find((r) => r.id === card.id)?.lifecycleState).toBe('at_grader');
 

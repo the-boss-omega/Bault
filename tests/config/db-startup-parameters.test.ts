@@ -2,20 +2,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 
-/**
- * The API's pool must connect through PgBouncer in transaction mode.
- *
- * PgBouncer closes a client that sends a startup parameter it does not know
- * ("unsupported startup parameter: statement_timeout"), and `pg` turns pool
- * options such as `statement_timeout` into exactly such parameters. Every query
- * the API made through the pooler then failed, while CI, which connects to
- * Postgres directly, passed.
- *
- * A stand-in server records the startup message the API's pool sends, the same
- * bytes PgBouncer would judge, and answers with an error. Needs nothing running.
- */
-
-/** What PgBouncer 1.22 accepts without `ignore_startup_parameters`. */
 const POOLER_ACCEPTS = new Set([
   'user',
   'database',
@@ -28,7 +14,6 @@ const POOLER_ACCEPTS = new Set([
 
 const SSL_REQUEST = 80877103;
 
-/** An ErrorResponse, so the client gives up at once instead of waiting. */
 function errorResponse(message: string): Buffer {
   const body = Buffer.concat([
     Buffer.from('SFATAL\0', 'utf8'),

@@ -16,14 +16,6 @@ interface CullItem {
   receivedAt?: string | null;
 }
 
-/**
- * The bulk cull: cards worth less than the storage they are about to accrue,
- * removed in one action instead of one donation at a time.
- *
- * It is free, because charging somebody to stop charging them is indefensible.
- * It is limited to a window after arrival, so the ineligible cards are still
- * listed here, greyed, with the reason on them, instead of quietly vanishing.
- */
 export function RemoveCommonsPanel({
   items,
   windowDays,
@@ -43,7 +35,6 @@ export function RemoveCommonsPanel({
 
   const cutoff = Date.now() - windowDays * 86_400_000;
 
-  /** Eligibility mirrors the server's checks so the reason is visible up front. */
   const rows = useMemo(
     () =>
       items.map((it) => {
@@ -62,15 +53,6 @@ export function RemoveCommonsPanel({
 
   const eligible = rows.filter((r) => !r.reason);
 
-  /**
-   * What will actually be removed: the ticked cards that are on screen and
-   * still eligible.
-   *
-   * `chosen` outlives the list: the vault reloads `items` on every keystroke of
-   * its search, so a ticked card can be hidden by a search. Everything below
-   * (the count on the button, the confirmation and the request) reads this list,
-   * never `chosen`, so nothing off screen is removed.
-   */
   const selected = useMemo(() => {
     const visible = new Map(eligible.map((r) => [r.it.id, r.it]));
     return chosen.flatMap((id) => {
@@ -185,8 +167,6 @@ export function RemoveCommonsPanel({
                   ? t('cull.confirmDiscard', { count: selected.length })
                   : t('cull.confirmDonate', { count: selected.length })}
               </p>
-              {/* Every card by name. This cannot be undone, so the collector
-                  confirms a list they can read, not a number. */}
               <ul className="check-list list-unbounded">
                 {selected.map((it) => (
                   <li key={it.id}>

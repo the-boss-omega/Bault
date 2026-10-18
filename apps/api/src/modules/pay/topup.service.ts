@@ -16,14 +16,6 @@ import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { externalPayment } from './pay.schema';
 import { WalletRequestService } from './wallet-request.service';
 
-/**
- * Wallet top-up and the payment provider's webhook.
- *
- * `topup` charges the external provider (token only, no card data, Principle
- * IX/XIII) and, when it succeeds synchronously, appends a `credit_topup` ledger
- * row. No route calls it: `POST /finance/wallet/topups` raises a cash-in request.
- * `handleWebhook` is the provider's callback and settles payout events only.
- */
 @Injectable()
 export class TopupService {
   private readonly logger = new Logger(TopupService.name);
@@ -33,11 +25,6 @@ export class TopupService {
     @Inject(PAYMENT_ADAPTER) private readonly payment: PaymentAdapter,
     private readonly ledger: LedgerService,
     private readonly walletRequests: WalletRequestService,
-    /**
-     * Where a refused webhook is reported. Nothing provides the token, so the
-     * API uses `reportException` (a no-op without SENTRY_DSN); a test passes a
-     * recorder, as it does to `AllExceptionsFilter`.
-     */
     @Optional() @Inject(EXCEPTION_REPORTER) private readonly report: ExceptionReporter = reportException,
   ) {}
 
@@ -78,30 +65,7 @@ export class TopupService {
     return { status: result.status };
   }
 
-  /**
-   * Signed, idempotent webhook (real providers). Deduped by provider event id.
-   *
-   * Payout events settle the payment and its cash-out through
-   * `WalletRequestService.applyPayoutEvent`, which writes the event id in the
-   * same transaction as the change it makes.
-   *
-   * Capture events are acknowledged and not acted on: checkout under PayPal is
-   * switched off until the order flow exists, and the rows it writes are keyed
-   * by Bault's own reference rather than the capture id an event would carry.
-   */
   async handleWebhook(delivery: WebhookDelivery): Promise<{ outcome: string }> {
-    // Throws on anything it cannot authenticate. Nothing below this line runs
-    // for a delivery the provider did not vouch for. That refusal is a 400 the
-    // sender can see; the adapter's plain Error made it a 500, which PayPal
-    // keeps retrying. Any other failure (PayPal unreachable) stays a 5xx.
-    //
-    // A 400 is not reported by the exception filter, so a REFUSED signature is
-    // reported here. For a genuine delivery it means PAYPAL_WEBHOOK_ID no
-    // longer matches the webhook in PayPal (rotated, recreated), every delivery
-    // fails, and a payout refunded or reversed after it was paid is never
-    // credited back: that event arrives by webhook only, and reconciliation
-    // re-checks pending payouts, not paid ones. A MALFORMED delivery is a
-    // request somebody else got wrong, and a warning is enough.
     let event: WebhookEvent;
     try {
       event = await this.payment.verifyWebhook(delivery);
@@ -129,10 +93,8 @@ export class TopupService {
       .from(externalPayment)
       .where(eq(externalPayment.webhookEventId, event.id))
       .limit(1);
-    if (existing) return { outcome: 'duplicate' }; // already processed
+    if (existing) return { outcome: 'duplicate' };
 
-    // A 2xx either way: an event about a payment Bault never made is not one
-    // the provider should keep redelivering.
     return { outcome: await this.walletRequests.applyPayoutEvent(event) };
   }
 }

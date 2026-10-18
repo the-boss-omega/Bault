@@ -4,32 +4,11 @@ import { useT } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 
-/**
- * The page the verification link opens (`#/verify-email?token=…`).
- *
- * Verification runs on mount: the reader already expressed intent by clicking
- * the link in their mail.
- *
- * Three outcomes, each stated plainly. On failure the token is spent, expired
- * or wrong; an expired link is the common case and the only one with a way
- * forward, so a resend form is offered. The resend endpoint answers identically
- * for a known and an unknown address, so this page confirms the request without
- * claiming a mail was sent.
- */
 type State =
   | { status: 'working' }
   | { status: 'verified' }
   | { status: 'failed'; message: string };
 
-/**
- * One request per link.
- *
- * The token is single-use, and StrictMode runs the effect below twice in
- * development. A second request would be refused because the first spent the
- * link, and the page would say it failed, so a second run for the same token
- * waits on the first request. A failed one is dropped once it settles, so
- * coming back to the page later asks again.
- */
 const verifying = new Map<string, Promise<unknown>>();
 
 function verifyOnce(token: string): Promise<unknown> {
@@ -45,7 +24,6 @@ function verifyOnce(token: string): Promise<unknown> {
 
 export function VerifyEmailPage({ token }: { token: string | null }) {
   const t = useT();
-  /** The answer, and which link it is the answer for. */
   const [outcome, setOutcome] = useState<(State & { token: string }) | null>(null);
   const state: State = !token
     ? { status: 'failed', message: '' }
@@ -55,8 +33,6 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
 
   useEffect(() => {
     if (!token) return;
-    // An answer that arrives after the page has moved on (unmounted, or opened
-    // with another link) is about nothing on the screen.
     let live = true;
     verifyOnce(token).then(
       () => {
@@ -111,11 +87,6 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
   );
 }
 
-/**
- * Ask for a fresh verification link. Shared shape with the sign-up page's own
- * resend control, but this one collects the address because the reader arrived
- * from a link rather than from having just typed it.
- */
 function ResendForm() {
   const t = useT();
   const [email, setEmail] = useState('');

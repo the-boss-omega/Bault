@@ -1,14 +1,10 @@
 import { pgTable, text, boolean } from 'drizzle-orm/pg-core';
 import { pkId, createdAt } from '../../db/schema/_helpers';
 
-/**
- * Saved shipping addresses. Owned by the user; managed only through
- * /me/addresses (own-only access enforced in ProfileService).
- */
 export const shippingAddress = pgTable('shipping_address', {
   id: pkId(),
   userId: text('user_id').notNull(),
-  label: text('label').notNull(), // e.g. "Home", "Office"
+  label: text('label').notNull(),
   recipient: text('recipient').notNull(),
   line1: text('line1').notNull(),
   city: text('city').notNull(),

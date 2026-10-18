@@ -1,9 +1,5 @@
 import type { MessageKey, TranslateFn } from './i18n';
 
-/**
- * Message key per notification event type. Every type the server emits needs
- * one here, because `eventLabel` falls back to the raw enum value.
- */
 export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   item_received: 'notifications.event.item_received',
   item_sold: 'notifications.event.item_sold',
@@ -55,10 +51,6 @@ export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
 
 export const EVENT_TYPES = Object.keys(EVENT_LABEL_KEY);
 
-/**
- * Delivery channel labels. The list itself comes from the server with the
- * preference matrix; an unknown channel falls back to its raw value.
- */
 const CHANNEL_LABEL_KEY: Record<string, MessageKey> = {
   in_app: 'notifications.channel.in_app',
   email: 'notifications.channel.email',
@@ -69,19 +61,11 @@ export function channelLabel(t: TranslateFn, channel: string): string {
   return key ? t(key) : channel;
 }
 
-/** Human label for an event type, falling back to the raw type. */
 export function eventLabel(t: TranslateFn, eventType: string): string {
   const key = EVENT_LABEL_KEY[eventType];
   return key ? t(key) : eventType;
 }
 
-/**
- * Render a notification as a proper sentence (Requirement 6.1).
- *
- * The dispatcher writes a rendered `message` into every notification's content, so
- * that is what is displayed. Older rows, or an unexpected shape, fall back to a
- * readable "Key: value" summary of the payload instead of raw JSON.
- */
 export function renderContent(content: unknown, label: string): string {
   if (content == null) return label;
   if (typeof content === 'string') return content;
