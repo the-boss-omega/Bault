@@ -55,7 +55,7 @@ The estimates include writing the failing test, the fix, and running the named s
 
 ### Group: Before the first visitor
 
-### P1. Production has its platform custodian and its first administrator · 75 min · db, ops, CI · T5, T7, T17
+### P1. Production has its platform custodian and its first administrator · 75 min · db, ops, CI · T5.3, T5.8, T7.2, T17.6
 **Why:** Only the seed creates `platform@bault.dev` and the first administrator, and the seed refuses production. On a new production database the house store, donations and the accounting summary fail with "Platform custodian account not seeded", and nobody can sign in to the console.
 **Where:**
 - `apps/api/src/db/migrations/` and `meta/_journal.json` (the latest is `0036_a_ledger_amount_is_never_zero`);
@@ -80,7 +80,7 @@ The estimates include writing the failing test, the fix, and running the named s
 4. In CI, run the image twice with `docker run … node dist/db/<name>.js`, the second run expected to fail, and count rows with `psql` as the guard-trigger step does.
 </details>
 
-### P2. The web app opens when the browser blocks storage · 20 min · web · T16
+### P2. The web app opens when the browser blocks storage · 20 min · web · T16.1, T16.4
 **Why:** `I18nProvider` reads and writes `localStorage` with no `try`. A browser that blocks site storage throws on that access, and `I18nProvider` sits outside `ErrorBoundary` in `apps/web/src/main.tsx`, so the visitor sees a blank page.
 **Where:** `initialLocale` and the persisting `useEffect` in `I18nProvider` (`apps/web/src/shared/i18n.tsx`); `storedChoice` and `ThemeProvider` in `apps/web/src/shared/theme.tsx`, which already guard every access; `apps/web/src/main.tsx`.
 **Task:** With storage blocked, the app renders in `DEFAULT_LOCALE`, switching language works for the rest of the visit, and nothing is thrown.
@@ -95,7 +95,7 @@ The estimates include writing the failing test, the fix, and running the named s
 
 ### Group: Money in and out of a wallet
 
-### P3. Decide: the cash-out fee on a payout PayPal takes back · 35 min · pay · T8, T15
+### P3. Decide: the cash-out fee on a payout PayPal takes back · 35 min · pay · T8.7, T8.10
 **Decide:** when PayPal refunds, reverses or returns a payout it already paid, `WalletRequestService.reversePaidPayout` credits the whole `request.amount`, Bault's cash-out fee included.
 - **Return the fee** (the current behaviour): the collector is made whole and Bault absorbs PayPal's own cost on the returned item. Pin it with a test and a sentence in the cash-out terms. About 15 minutes.
 - **Keep the fee:** credit only the net. Then `reconcile` reports `payout_failed_but_debited`, because it expects a full credit, and `AccountingService.summary` takes a fee off revenue that was never given back. Both must learn the kept fee. About 60 minutes.
@@ -113,7 +113,7 @@ The estimates include writing the failing test, the fix, and running the named s
 4. A fee a membership waived was never charged, so there is nothing to keep (`waivedMinor`).
 </details>
 
-### P4. Decide: one administrator approving and completing the same cash-out · 35 min · pay · T1, T8
+### P4. Decide: one administrator approving and completing the same cash-out · 35 min · pay · T1.4, T8.6, T8.7
 **Decide:** `WalletRequestService.assertSeparationOfDuties` bars only the requester, so one administrator can approve a cash-out and then complete it (F046).
 - **One person** (the current behaviour): workable with one administrator. Record the decision and pin it with a test. About 10 minutes.
 - **Two people for every cash-out:** the completer must not be the request's `reviewedBy`. Launch then needs two administrators with two-factor sign-in, the seed a second administrator, and every test that approves and completes a cash-out as `SEED.admin` a second account for the completion. About 60 minutes.
@@ -131,7 +131,7 @@ The estimates include writing the failing test, the fix, and running the named s
 3. A second seeded administrator also needs an entry in `PROTECTED`, or `scripts/remove-test-users.mjs` could offer it for deletion.
 </details>
 
-### P5. A cash-in that is taken back can be recorded · 50 min · pay · T8, T15
+### P5. A cash-in that is taken back can be recorded · 50 min · pay · T8.6, T8.8, T15.2
 **Why:** in production every cash-in arrives as a reviewed wallet request, because PayPal instant top-up is not built, and a completed cash-in writes a `credit_topup` row with no `external_payment` row. `ChargebackService.record` works only on an `external_payment`, so when a bank recalls a transfer or PayPal reverses a Friends and Family payment, an administrator cannot take the credit back. The collector can still spend or cash out money Bault no longer holds.
 **Where:** `ChargebackService.record` and `reversible` (`pay/chargeback.service.ts`); `PayController.recordChargeback`, `reversible` and `ChargebackDto` (`pay/pay.controller.ts`, `POST /finance/chargebacks/:paymentId`, `GET /finance/chargebacks/reversible`); `settledLedgerId` on `walletRequest` (`pay/pay.schema.ts`), written by `WalletRequestService.settleInOneStep`; `LedgerService.lockWallet`; `reversedMinor` in `AccountingService.summary`.
 **Task:** an administrator records that the money behind a completed cash-in request was taken back. The wallet is debited exactly what was credited, once (a second attempt answers 409); the handling fee follows `chargeFee` as it does for a top-up; the audit record and the `payment_reversed` event match the existing chargeback; the reversible list includes completed cash-ins.
@@ -147,7 +147,7 @@ The estimates include writing the failing test, the fix, and running the named s
 
 ### Group: Prices and the monthly summary
 
-### P6. PricingService refuses what it cannot price · 40 min · prc, web · T8, T16
+### P6. PricingService refuses what it cannot price · 40 min · prc, web · T8.4, T8.5
 **Why:**
 - A percentage rule is a share of a base amount, and only the commission actions pass one. On any other action `PricingService.price` takes the percentage of $0, and `BillingService.charge` then records nothing, so an intake priced as "10%" is free (F462). The console's pricing form offers "percentage" for every action.
 - `PricingService.tryPrice` turns every error into "no rule". A database error during a shipping quote makes rush packing and a show pickup free and puts an add-on on its catalogue price, without anybody being told.
@@ -171,7 +171,7 @@ The estimates include writing the failing test, the fix, and running the named s
 3. In `price`, the percentage branch passes `money(0, …)` when there is no base; that is the line to make refuse.
 </details>
 
-### P7. Refunds come off revenue, and the console shows the netting · 50 min · adm, web · T8, T16
+### P7. Refunds come off revenue, and the console shows the netting · 50 min · adm, web · T8.2, T8.10, T16.4
 **Why:** `AccountingService.summary` builds revenue from `fee`, `service_charge` and `interest` rows only. A `shipping_refund` or `service_refund` credit never comes off it, so a cancelled shipment's charge or a declined custom request's fee is still reported as revenue. On the console, `AccountingSection` has its own copy of the summary type without `payoutsReturnedMinor` and `cashOutFeesReturnedMinor`, so the netting the API does is not on screen, and money out cannot be squared with the by-type table.
 **Where:** `AccountingService.summary` (`revenueRows`, `REVENUE_LINES`, `revenueBy`, the `returned` query) in `adm/accounting.service.ts`; the writers of refunds, `ShipmentEditService.cancel` and `CustomRequestService.declineToQuote`; `AccountingSummary` and `SummaryView` in `apps/web/src/areas/admin/AccountingSection.tsx`; the keys `admin.accounting.summary.revenueNote` and `admin.accounting.summary.moneyOut` in the `he` and `en` objects of `apps/web/src/shared/i18n.tsx`.
 **Task:**
@@ -193,7 +193,7 @@ The estimates include writing the failing test, the fix, and running the named s
 
 ### Group: Service requests
 
-### P8. Decide: what a service the warehouse does not do costs · 60 min · dis, pay · T8, T10
+### P8. Decide: what a service the warehouse does not do costs · 60 min · dis, pay · T8.4, T10.1, T10.2, T10.4
 **Decide:** every service request is billed when it is created. Three paths then close it, or leave it, without the work:
 - an operator denies it (`ServiceRequestService.deny`);
 - an administrator refuses a grading approval (`GradingService.approve` with `approve: false`);
@@ -220,7 +220,7 @@ The options:
 4. The deslab completion's transaction throws at `lockExpecting`, so closing and refunding is an operator action of its own, or `deny` widened to accept `in_progress`.
 </details>
 
-### P9. Count and charge under the lock: show places and media requests · 45 min · dis · T10, T15
+### P9. Count and charge under the lock: show places and media requests · 45 min · dis · T10.3, T10.5, T15.3, T15.4
 **Why:**
 - `ConsignmentService.request` counts a show's consignments inside its transaction but reads the `consignment_event` row without `FOR UPDATE`, so two sellers can both take its last place.
 - `PhotographyService.request`, and `MediaService.requestVideo` and `requestInspection` in `dis/media.service.ts`, read the card without a lock, so two requests sent together both pass `ServiceRequestService.assertNotAlreadyOpen` and the collector is charged twice for one job.
@@ -241,7 +241,7 @@ The options:
 
 ### Group: Reads, conflicts and error reports
 
-### P10. Three reads that show one collector another's data · 40 min · dis, shp, vlt · T7, T10, T13
+### P10. Three reads that show one collector another's data · 40 min · dis, shp, vlt · T7.7, T10.1, T13.7
 **Why:**
 - `DisController.get` (`GET /services/requests/:id`) has no role and no owner check: any signed-in account with a request's id reads it, `typeFields` included (asking prices, buyout quotes, fulfilment details).
 - `ShpController.group` (`GET /shipping/groups/:id`) returns every member's username and name, the destination address and the recipient to any signed-in account.
@@ -262,7 +262,7 @@ The options:
 4. One condition on `charge.userId` fixes the break-even sum; check `summaryFor`'s totals follow.
 </details>
 
-### P11. Decide: where a unique violation becomes a 409 · 40 min · mkt, not, errors · T6, T11, T15
+### P11. Decide: where a unique violation becomes a 409 · 40 min · mkt, not, errors · T6.4, T11.2, T15.4
 **Decide:** two parallel offers from one buyer on one listing both pass `OfferService.assertNoOpenOffer`, which runs outside the transaction, and the second insert hits `offer_one_open_per_buyer`. Two parallel saves of a new preference both miss in `NotificationService.setPreference` and the second hits `notification_preference_user_event_channel_unique`. Postgres raises 23505 and `AllExceptionsFilter` answers 500.
 - **Per call site:** each place answers what the violation means (a 409 "you already have an open offer", an upsert for the preference). Precise, and a 23505 nobody expected stays a loud, reported 500.
 - **Centrally:** the filter answers every 23505 with 409 `conflict`. It covers future cases, but a 23505 that is a real bug, a generated code colliding say, becomes a quiet 409 and stops reaching Sentry.
@@ -281,7 +281,7 @@ The options:
 4. The pg error names its `constraint`; matching on it keeps a per-site catch from swallowing a different violation.
 </details>
 
-### P12. Error reports carry nothing the customer typed · 40 min · errors, adapters · T6, T17
+### P12. Error reports carry nothing the customer typed · 40 min · errors, adapters · T6.4, T17.5
 **Why:** on any 5xx, `describeRequest` hands the request body to the reporter, and `scrubErrorEvent` drops bodies only under `/auth` and `/me/password`. A failed shipment creation sends `destinationAddress` and `recipientName` to Sentry, a failed cash-out the destination account. A provider failure is logged and reported with the provider's own message (`EasyPostError.detail`, up to 500 characters of its reply), which can quote what was sent.
 **Where:** `scrubErrorEvent` and `SECRET_BODY_ROUTES` (`packages/adapters/src/error-report.ts`), installed by `initErrorReporting` (`apps/api/src/shared/observability/error-reporting.ts`) and by `apps/worker/src/observability.ts`; `describeRequest`, `providerFailure` and the provider-failure branch of `AllExceptionsFilter.catch`; `EasyPostError` (`packages/adapters/src/easypost.ts`).
 **Task:** no error report carries a request body's values or a provider's message text, on any route. A report keeps what diagnoses the failure: method, path, request id, the body's field names, and for a provider failure its kind, HTTP status and the provider path called. The provider-failure log line carries the same. The customer's 400 `provider_rejected` still shows the carrier's reason.
@@ -299,7 +299,7 @@ The options:
 
 ### Group: Shipping
 
-### P13. A shared parcel counts only the members still in it · 45 min · shp, worker · T13, T14
+### P13. A shared parcel counts only the members still in it · 45 min · shp, worker · T13.2, T13.7, T13.9, T14.2
 **Why:**
 - Cancelling a member's shipment (`ShipmentEditService.cancel`) or releasing it unpaid (the worker's `expireUnpaidShipments`) leaves its `groupId` set. `GroupShipmentService.lock` counts members by `groupId`, so a group whose other members all cancelled still locks, and the cancelled members are told the shared parcel is closed.
 - `describe` loads every member's cards with `ParcelProfileService.loadShippableItems`, which throws once a card is no longer `stored` or no longer the member's. After a dispatch or a sale, `GET /shipping/groups/:id` and `GET /shipping/groups` fail for everyone in the group.
@@ -324,7 +324,7 @@ The options:
 3. `describe` needs the cards' weights, not their fitness to ship: read the items plainly and pass them to `measure`.
 </details>
 
-### P14. Accepting a hand delivery names the figure the collector saw · 45 min · shp, web · T6, T13, T15
+### P14. Accepting a hand delivery names the figure the collector saw · 45 min · shp, web · T6.2, T13.6, T15.1
 **Why:** `HumanFulfilmentService.acceptQuote` charges whatever `quoteMinor` is on the shipment when the click arrives. If an operator revises the quote while the collector is reading the old one, the collector is charged a figure they never saw. The accept request has no body, so the server cannot tell.
 **Where:** `ShpController.acceptQuote` (`POST /shipping/white-glove/:id/accept`) and the DTO classes beside it in `shp/shp.controller.ts` (`QuoteDto` is the pattern); `HumanFulfilmentService.acceptQuote` and `quoteHandDelivery`; the Accept button in `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx`; the callers that accept with no body in `tests/integration/esc-and-human-fulfilment.test.ts`, `tests/concurrency/hand-delivery-quote.test.ts` and `tests/concurrency/money-races.test.ts`.
 **Task:** accepting requires the figure the collector saw. It is compared with `quoteMinor` under the shipment lock, and a different figure is a 409 that says the quote changed and gives the new one; nothing is charged. The SPA sends the figure it shows.
@@ -341,7 +341,7 @@ The options:
 4. Update the three test files that accept with no body; they describe the old contract.
 </details>
 
-### P15. Decide: cancelling a shipment nobody packed · 35 min · shp, mem · T12, T13
+### P15. Decide: cancelling a shipment nobody packed · 35 min · shp, mem · T12.3, T13.4, T13.6, T13.9
 **Decide:** `ShipmentEditService.cancel` charges `RESTOCKING_FEE_MINOR` ($25) on any shipment in `rates_selected`. Three kinds sit there with no picking done: a carrier parcel whose label the carrier refused (`ShipmentService.labelRefusal`), a show pickup (booked straight into `rates_selected` by `HumanFulfilmentService.requestPickup`) and an accepted hand delivery.
 - **A fee only for work done:** none on a refused label, the carrier's failure; for pickups and hand deliveries, none until the warehouse has started (you need a sign that it has, or a cut-off before the show).
 - **The fee everywhere:** simple, but say so on the price list, and accept that a collector pays $25 for a carrier's refusal.
