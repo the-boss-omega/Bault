@@ -419,6 +419,7 @@ function UserRow({
     role: user.role,
     status: user.status,
     autoSuspended: user.autoSuspended,
+    nameReviewRequired: user.nameReviewRequired,
   });
 
   const namesOk =
@@ -433,9 +434,13 @@ function UserRow({
    * sweep suspended, and the sweep would never lift it.
    */
   const changes: Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>> = {};
-  if (normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
+  // A flagged name is confirmed by sending it, changed or not: the server
+  // clears the review flag only when a name part arrives.
+  const confirmName = saved.nameReviewRequired && namesOk;
+  if (confirmName || normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
   // A blank last name is left as it is, never sent as a value.
-  if (lastName.trim() && normalizeNamePart(lastName) !== saved.lastName) changes.lastName = normalizeNamePart(lastName);
+  if (lastName.trim() && (confirmName || normalizeNamePart(lastName) !== saved.lastName))
+    changes.lastName = normalizeNamePart(lastName);
   if (role !== saved.role) changes.role = role;
   if (status !== saved.status) changes.status = status;
   const dirty = Object.keys(changes).length > 0;
@@ -449,6 +454,12 @@ function UserRow({
         // A status sent, even the one the account had, clears the sweep's marker.
         autoSuspended:
           typeof updated?.autoSuspended === 'boolean' ? updated.autoSuspended : sent.status ? false : s.autoSuspended,
+        nameReviewRequired:
+          typeof updated?.nameReviewRequired === 'boolean'
+            ? updated.nameReviewRequired
+            : sent.firstName !== undefined || sent.lastName !== undefined
+              ? false
+              : s.nameReviewRequired,
       }));
       onSaved(t('admin.users.saved', { email: user.email }));
     } catch (e) {
@@ -500,7 +511,7 @@ function UserRow({
             onChange={(e) => setLastName(e.target.value)}
           />
         </div>
-        {user.nameReviewRequired && (
+        {saved.nameReviewRequired && (
           <span className="dt-sub">{t('admin.users.nameReviewRequired')}</span>
         )}
       </td>

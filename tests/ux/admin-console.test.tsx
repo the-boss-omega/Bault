@@ -231,6 +231,45 @@ describe('saving a user row', () => {
     expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
   });
 
+  it('confirms a name flagged for review that is already right, by sending the name and nothing else', async () => {
+    const user = userEvent.setup();
+    // A migrated account whose split name is correct as it stands: confirming
+    // it is the whole edit, so there is nothing to change before saving.
+    const flagged = {
+      ...DEBTOR,
+      id: 'u5',
+      email: 'veteran@bault.dev',
+      username: 'veteran',
+      firstName: 'Vera',
+      lastName: 'Teran',
+      nameReviewRequired: true,
+      status: 'active',
+      autoSuspended: false,
+    };
+    consoleApi({ '/admin/users': [flagged] });
+    patch.mockResolvedValue({ ...flagged, nameReviewRequired: false });
+    window.location.hash = '#/admin/users';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    expect(await screen.findByText(/needs review/i)).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    expect(patch).toHaveBeenCalledWith('/admin/users/u5', { firstName: 'Vera', lastName: 'Teran' });
+    await waitFor(() => expect(screen.queryByText(/needs review/i)).not.toBeInTheDocument());
+  });
+
+  it('keeps Save disabled on a row that is not flagged and has nothing changed', async () => {
+    consoleApi({ '/admin/users': [{ ...DEBTOR, id: 'u6', status: 'active', autoSuspended: false }] });
+    window.location.hash = '#/admin/users';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    await screen.findByText('debtor@bault.dev');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
   it("offers it only for the sweep's suspension, not an administrator's or an active account", async () => {
     consoleApi({
       '/admin/users': [
