@@ -6,11 +6,11 @@ import { assertStagingTarget, runStagingCheck } from './staging-check/run.mjs';
 
 const USAGE = `Walks the launch plan's staging journeys and provider checks against a running staging.
 
-  pnpm staging:check --base-url https://staging.example.com --target staging \\
+  pnpm staging:check --url https://staging.example.com --target staging \\
     --admin you@example.com --email you@example.com \\
     --paypal-receiver sb-…@personal.example.com [--manual]
 
-  --base-url         staging's address (or BAULT_STAGING_URL)
+  --url              staging's address (or BAULT_STAGING_URL)
   --target staging   required: the check creates accounts and moves test money
   --production-host  production's host name, which the check refuses (or BAULT_PRODUCTION_HOST)
   --admin            the admin's email or username (or BAULT_ADMIN); the password is asked
@@ -44,7 +44,7 @@ function parseArgs(argv) {
     };
     if (arg === '--help' || arg === '-h') out.help = true;
     else if (arg === '--manual') out.manual = true;
-    else if (arg === '--base-url') out.baseUrl = value();
+    else if (arg === '--url' || arg === '--base-url') out.baseUrl = value();
     else if (arg === '--target') out.target = value();
     else if (arg === '--production-host') out.productionHost = value();
     else if (arg === '--admin') out.admin = value();
@@ -95,7 +95,7 @@ async function main() {
   }
   const env = process.env;
   const baseUrl = args.baseUrl ?? env.BAULT_STAGING_URL;
-  if (!baseUrl) throw new Error('Pass --base-url (or set BAULT_STAGING_URL). Run with --help.');
+  if (!baseUrl) throw new Error('Pass --url (or set BAULT_STAGING_URL). Run with --help.');
   const providers = args.providers ?? 'live';
   if (!['live', 'sandbox'].includes(providers)) throw new Error('--providers is live or sandbox');
   const paypalReceiver = args.paypalReceiver ?? env.BAULT_PAYPAL_RECEIVER;
