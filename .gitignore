@@ -39,3 +39,6 @@ _local/
 # host's checkout (/opt/bault).
 /CURRENT_TAG
 /PREVIOUS_TAG
+
+# What pnpm design:screens captures, regenerated on every run.
+/design-screens/
