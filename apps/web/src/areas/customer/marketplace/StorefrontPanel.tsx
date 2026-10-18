@@ -4,6 +4,7 @@ import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { itemClassLabel } from '../../../shared/itemClasses';
 import { Amount, Serial } from '../../../shared/ui/Serial';
 import { formatUsd } from '../../../shared/money';
+import { storefrontHref } from '../../../shared/market';
 import { useI18n } from '../../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
 import { Button, EmptyState, Panel, SuccessNote } from '../../../shared/ui/primitives';
@@ -19,14 +20,18 @@ interface StorefrontListing {
 }
 
 export function StorefrontPanel({
+  seller,
   myUsername,
   onError,
 }: {
+  seller?: string;
   myUsername?: string;
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
-  const [username, setUsername] = useState(myUsername ?? '');
+  const named = seller && isValidUsername(normalizeUsername(seller)) ? normalizeUsername(seller) : undefined;
+  const target = named ?? myUsername;
+  const [username, setUsername] = useState(target ?? '');
   const [viewing, setViewing] = useState<string | null>(null);
   const [listings, setListings] = useState<StorefrontListing[] | null>(null);
 
@@ -50,8 +55,8 @@ export function StorefrontPanel({
   );
 
   useEffect(() => {
-    if (myUsername) void open(myUsername);
-  }, [myUsername, open]);
+    if (target) void open(target);
+  }, [target, open]);
 
   return (
     <>
@@ -73,7 +78,7 @@ export function StorefrontPanel({
 
         {myUsername && (
           <SuccessNote>
-            {t('market.store.yourLink', { link: `#/marketplace/store?seller=${myUsername}` })}
+            {t('market.store.yourLink', { link: storefrontHref(myUsername) })}
           </SuccessNote>
         )}
       </Panel>

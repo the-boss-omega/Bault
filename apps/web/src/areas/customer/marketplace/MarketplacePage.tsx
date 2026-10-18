@@ -4,7 +4,8 @@ import { useVaultItems } from '../../../shared/useVaultItems';
 import { ITEM_CLASSES, itemClassLabel } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
-import { Amount, Serial } from '../../../shared/ui/Serial';
+import { Amount, Code, Serial } from '../../../shared/ui/Serial';
+import { storefrontHref } from '../../../shared/market';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
@@ -36,6 +37,7 @@ interface Listing {
   typeClass: string;
   conditionGrade: string | null;
   description: string;
+  sellerUsername: string | null;
   imageUrl?: string;
 }
 
@@ -265,6 +267,7 @@ export function MarketplacePage() {
                       <p className="card-desc" title={listing.description || undefined}>
                         {listing.description || '—'}
                       </p>
+                      {listing.sellerUsername && <SellerLine t={t} username={listing.sellerUsername} />}
                     </div>
 
                     <div className="card-state">
@@ -374,7 +377,7 @@ export function MarketplacePage() {
 
       {tab === 'store' && (
         <TabPanel tab="store">
-          <StorefrontPanel myUsername={myUsername} onError={setError} />
+          <StorefrontPanel seller={route.params.seller} myUsername={myUsername} onError={setError} />
         </TabPanel>
       )}
 
@@ -390,6 +393,22 @@ export function MarketplacePage() {
         />
       )}
     </>
+  );
+}
+
+function SellerLink({ t, username }: { t: TranslateFn; username: string }) {
+  return (
+    <a href={storefrontHref(username)} aria-label={t('market.store.of', { username })}>
+      <Code value={`@${username}`} />
+    </a>
+  );
+}
+
+function SellerLine({ t, username }: { t: TranslateFn; username: string }) {
+  return (
+    <p className="card-sub">
+      {t('market.listing.soldBy')} <SellerLink t={t} username={username} />
+    </p>
   );
 }
 
@@ -528,6 +547,14 @@ function OfferDrawer({
             {formatUsd(listing.askingPrice)}
           </dd>
         </div>
+        {listing.sellerUsername && (
+          <div className="detail-row">
+            <dt className="detail-label">{t('market.listing.soldBy')}</dt>
+            <dd className="detail-value">
+              <SellerLink t={t} username={listing.sellerUsername} />
+            </dd>
+          </div>
+        )}
       </dl>
 
       <div className="field" style={{ marginBlockStart: 'var(--sp-5)' }}>

@@ -97,7 +97,7 @@ The client's copy of the cash-in and cash-out rules.
 **Watch:** nothing imports the API file. A limit or status changed there must be changed here.
 
 #### `apps/web/src/shared/market.ts`, `apps/web/src/shared/escrow.ts`, `apps/web/src/shared/parcels.ts`, `apps/web/src/shared/shipments.ts`, `apps/web/src/shared/carriers.ts`, `apps/web/src/shared/grading.ts`, `apps/web/src/shared/itemClasses.ts`, `apps/web/src/shared/serviceLabels.ts`, `apps/web/src/shared/support.ts`, `apps/web/src/shared/signIns.ts`, `apps/web/src/shared/notifications.ts`, `apps/web/src/shared/membership.ts` · 1 min · T2, T11.5, T12.2, T13.1
-Response types, a status-to-tone map and label functions per domain, such as `ESCROW_TONE`, `ruleLabel` (the rule a refused rate failed) and `ITEM_CLASSES`.
+Response types, a status-to-tone map and label functions per domain, such as `ESCROW_TONE`, `ruleLabel` (the rule a refused rate failed) and `ITEM_CLASSES`. `storefrontHref` builds a seller's page link.
 
 **Watch:** `tierAction` repeats the proration in `MembershipService.subscribe` so the confirm button shows the exact charge; change both together. `tests/web/notification-catalogue.test.ts` fails when `EVENT_LABEL_KEY` and the API's events drift.
 
@@ -120,7 +120,7 @@ Response types, a status-to-tone map and label functions per domain, such as `ES
 #### `apps/web/src/areas/customer/vault/VaultPage.tsx` · 2 min · T9.6, T10.1, T12.6
 The collector's cards: search, three scope tabs (`active`, `hold`, `history`), a grid and an item drawer.
 - `GET /vault/items` and `GET /vault/counts` load together, debounced, so counts follow the search. `GET /vault/break-even` feeds the `Watch` badge.
-- `ItemDrawer` loads the item, its `/timeline` and its `/storage` forecast.
+- `ItemDrawer` loads the item, its `/timeline` and its `/storage` forecast. `timelineDetail` (`apps/web/src/shared/itemTimeline.ts`, beside `STATE_META`) words each register entry in the page's language, with every code in its own isolated run (U+2068 to U+2069), so a Latin barcode can't reorder a Hebrew sentence.
 - `CARD_ACTIONS` lists the services, gated by `states`, `lotOnly` or `gradedOnly` and priced from `useServicePrices`.
 - Deslab and donation are irreversible: a `ConfirmationModal`, then the challenge (`/services/donation`) and its `confirmationToken` posted at once to `/services/donation/confirm` (T6.6).
 
@@ -157,6 +157,7 @@ Tabs `browse`, `house`, `sell`, `listings`, `offers`, `trade`, `escrow`, `store`
 - Browse filters live in the URL (`setParams`) and go to `GET /marketplace/listings`; the server filters because results are capped.
 - `buy` posts `/marketplace/listings/:id/purchase` with no key. The controller builds one from the buyer and listing ids, so a double click comes back `replayed`.
 - `SellPanel` creates a listing; `OfferDrawer` makes an offer.
+- `SellerLine` on each card and the seller row in `OfferDrawer` link to `storefrontHref`, `#/marketplace/store?seller=<username>`.
 
 #### `apps/web/src/areas/customer/marketplace/SellerPanels.tsx`, `apps/web/src/areas/customer/marketplace/ProposeTradePanel.tsx`, `apps/web/src/areas/customer/marketplace/EscrowTab.tsx`, `apps/web/src/areas/customer/marketplace/HouseStorePanel.tsx` · 1.5 min · T11, T15.3
 - `MyListingsPanel` reprices and takes down through the `/remove` confirmation pair. `OffersPanel` accepts, rejects or counters; on accept the controller falls back to a key from the offer id. `SwapsPanel` approves or rejects swaps.
@@ -236,7 +237,7 @@ The queue behind the beta rule: an admin decides every cash-in and cash-out.
 - `apps/web/src/fonts.css`: `@font-face` rules, subset by `unicode-range`.
 - `apps/web/src/shared/ui/icons.tsx`: inline SVG icons.
 - `apps/web/src/areas/admin/YieldChart.tsx`: the Shelf Yield bar chart.
-- `apps/web/src/areas/customer/marketplace/StorefrontPanel.tsx`: a seller's public storefront.
+- `apps/web/src/areas/customer/marketplace/StorefrontPanel.tsx`: a seller's public storefront, the one `?seller=` names, else the visitor's own.
 - `apps/web/src/areas/customer/help/HelpPanels.tsx`, `IntakePolicyPanel.tsx`, `PriceListPanel.tsx`, `LegalDocumentView.tsx`: the help tabs.
 - `apps/web/src/areas/customer/help/faqContent.ts`, `guideContent.ts`, `legalContent.ts`: static help and legal text.
 - `apps/web/src/areas/customer/auth/demoUsers.ts`: the seeded-account hint on the dev server.

@@ -85,7 +85,7 @@ Where things go, and what a scan means.
 The staff read model and bin management.
 - `createBin` — mints the serial (`makeBinSerial`) in the given facility, else the first `primary`. `setBinActive` retires a shelf; bins are never deleted.
 - `report` / `reportPdf` — counts by `Cut` (`shelf`, `owner`, `condition`, `item_class`).
-- `itemTimeline` — custody events, corrections, moves, sales, shipments, offers and disputes for one item, merged.
+- `itemTimeline` — custody events, corrections, moves, sales, shipments, offers and disputes for one item, merged into `TimelineEvent`s: a `kind` and its `params`. `binLabels` resolves every shelf id to a `BinLabel` (barcode and zone) in one query; amounts stay in minor units. No sentence and no id leaves the API: the web app's `timelineDetail` words each entry.
 - `reconcile` — only the total item count and a timestamp.
 
 **Watch:** `report` counts every item ever received, including those that left, and a split lot as well as its cards.

@@ -960,7 +960,7 @@ An operator places or lifts a hold by scanning the item; setting the value it al
 
 - **Relocation** takes an item scan and a shelf scan, is refused on a held item, and writes a `relocate` event and a bin transfer naming both shelves.
 - **Corrections** change description, grade or class (a known one), each with a change-history row.
-- **Reports** count items by shelf, owner, condition or class, also as a PDF. An item's timeline merges every recorded event about it; a collector sees their own through the vault, which checks ownership first.
+- **Reports** count items by shelf, owner, condition or class, also as a PDF. An item's timeline merges every recorded event about it; a collector sees their own through the vault, which checks ownership first. Each entry is a kind and its parameters (shelves by label, states, amounts in minor units), never a sentence and never an id: the web app words it in the reader's language.
 
 #### T9.7 Leaving custody
 
@@ -1074,7 +1074,7 @@ Trading moves two people's property and money at once, so these flows lean harde
 
 #### T11.1 Listings
 
-A seller lists a card they own that is `stored`, not held and not committed (not in an open escrow deal, an open shipment, or an open buyout, consignment or donation). It becomes `listed`. An active listing can be repriced. Removing one takes a confirmation token, returns the card to `stored`, and closes its open offers. Browsing is public: the list, a seller's page, and a listing's detail, which carries only the browse fields, the status and signed image links, never the owner, bin or barcode.
+A seller lists a card they own that is `stored`, not held and not committed (not in an open escrow deal, an open shipment, or an open buyout, consignment or donation). It becomes `listed`. An active listing can be repriced. Removing one takes a confirmation token, returns the card to `stored`, and closes its open offers. Browsing is public: the list, a seller's page, and a listing's detail, which carries only the browse fields, the status and signed image links, never an account id, the bin or the barcode. Each listing names its seller by username, the name their public page already shows, and links to that page.
 
 #### T11.2 Offers
 

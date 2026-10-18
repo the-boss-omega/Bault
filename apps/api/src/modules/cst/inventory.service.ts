@@ -22,11 +22,29 @@ const CUT_LABEL: Record<Cut, string> = {
   item_class: 'By item class',
 };
 
+export interface BinLabel {
+  barcode: string;
+  zone: string;
+}
+
+export interface TimelineParams {
+  fromBin?: BinLabel | null;
+  toBin?: BinLabel | null;
+  fromState?: string | null;
+  toState?: string | null;
+  field?: string;
+  from?: string | null;
+  to?: string | null;
+  amountMinor?: number | null;
+  code?: string | null;
+  status?: string;
+  ruling?: string | null;
+}
+
 export interface TimelineEvent {
   at: string;
   kind: string;
-  summary: string;
-  data?: Record<string, unknown>;
+  params: TimelineParams;
 }
 
 @Injectable()
@@ -103,13 +121,23 @@ export class InventoryService {
     const events: TimelineEvent[] = [];
 
     const custody = await this.db.select().from(custodyEvent).where(eq(custodyEvent.itemId, itemId));
+    const transfers = await this.db.select().from(binTransfer).where(eq(binTransfer.itemId, itemId));
+    const binOf = await this.binLabels([
+      ...custody.flatMap((e) => [e.prevBinId, e.newBinId]),
+      ...transfers.flatMap((tr) => [tr.fromBinId, tr.toBinId]),
+    ]);
+
     for (const e of custody) {
-      events.push({
-        at: (e.occurredAt as Date).toISOString(),
-        kind: e.eventType,
-        summary: `${e.eventType.replace(/_/g, ' ')}${e.reason ? ` — ${e.reason}` : ''}`,
-        data: { prevBinId: e.prevBinId, newBinId: e.newBinId, prevState: e.prevState, newState: e.newState },
-      });
+      const params: TimelineParams = {};
+      if (e.prevBinId || e.newBinId) {
+        params.fromBin = binOf(e.prevBinId);
+        params.toBin = binOf(e.newBinId);
+      }
+      if (e.prevState || e.newState) {
+        params.fromState = e.prevState;
+        params.toState = e.newState;
+      }
+      events.push({ at: (e.occurredAt as Date).toISOString(), kind: e.eventType, params });
     }
 
     const changes = await this.db.select().from(itemChangeHistory).where(eq(itemChangeHistory.itemId, itemId));
@@ -117,16 +145,15 @@ export class InventoryService {
       events.push({
         at: (c.createdAt as Date).toISOString(),
         kind: 'correction',
-        summary: `${c.field}: ${c.oldValue ?? '∅'} → ${c.newValue ?? '∅'}`,
+        params: { field: c.field, from: c.oldValue, to: c.newValue },
       });
     }
 
-    const transfers = await this.db.select().from(binTransfer).where(eq(binTransfer.itemId, itemId));
     for (const tr of transfers) {
       events.push({
         at: (tr.occurredAt as Date).toISOString(),
         kind: 'bin_transfer',
-        summary: `Moved ${tr.fromBinId ?? 'intake'} → ${tr.toBinId}`,
+        params: { fromBin: binOf(tr.fromBinId), toBin: binOf(tr.toBinId) },
       });
     }
 
@@ -137,8 +164,7 @@ export class InventoryService {
       events.push({
         at: (tx.executedAt as Date).toISOString(),
         kind: tx.type,
-        summary: `${tx.type} recorded${tx.price != null ? ` (${tx.price} cents)` : ''}`,
-        data: { transactionId: tx.id },
+        params: { amountMinor: tx.price },
       });
     }
 
@@ -147,8 +173,7 @@ export class InventoryService {
       events.push({
         at: (sh.createdAt as Date).toISOString(),
         kind: 'shipment',
-        summary: `Shipment ${sh.code ?? sh.id} — ${sh.status}`,
-        data: { shipmentId: sh.id },
+        params: { code: sh.code, status: sh.status },
       });
     }
 
@@ -160,7 +185,7 @@ export class InventoryService {
         events.push({
           at: (o.createdAt as Date).toISOString(),
           kind: 'offer',
-          summary: `Offer ${o.amount} cents — ${o.status}`,
+          params: { amountMinor: o.amount, status: o.status },
         });
       }
     }
@@ -171,12 +196,24 @@ export class InventoryService {
         events.push({
           at: (d.createdAt as Date).toISOString(),
           kind: 'dispute',
-          summary: `Dispute ${d.status}${d.ruling ? ` — ${d.ruling}` : ''}`,
+          params: { status: d.status, ruling: d.ruling },
         });
       }
     }
 
     return events.sort((a, b) => (a.at < b.at ? 1 : -1));
+  }
+
+  private async binLabels(ids: (string | null)[]): Promise<(id: string | null) => BinLabel | null> {
+    const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+    const rows = wanted.length
+      ? await this.db
+          .select({ id: bin.id, barcode: bin.barcode, zone: bin.zone })
+          .from(bin)
+          .where(inArray(sql`${bin.id}::text`, wanted))
+      : [];
+    const byId = new Map(rows.map((b) => [b.id, { barcode: b.barcode, zone: b.zone }]));
+    return (id) => (id ? byId.get(id) ?? null : null);
   }
 
   async createBin(input: {

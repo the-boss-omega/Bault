@@ -72,8 +72,8 @@ Bault selling its own stock.
 
 #### `apps/api/src/modules/mkt/browse.service.ts`, `market-read.service.ts`, `mkt.controller.ts`, `offer.controller.ts`, `trade.controller.ts`, `house-store.controller.ts`, `mkt.module.ts` · 2 min · T11, T6.2
 Reads (no locks or writes) and the `/marketplace` routes and DTOs.
-- `BrowseService.list` — active listings with item; SQL filters and sort, as `clampLimit` caps at 200 rows; a signed URL per newest image.
-- `BrowseService.detail` — one listing for anybody, safe fields only (no owner, bin, barcode, storage keys); sold and removed ones still served (decision in Stage 3).
+- `BrowseService.list` — active listings with item and the seller's username (`sellerUsername`, a left join on `user_account`); SQL filters and sort, as `clampLimit` caps at 200 rows; a signed URL per newest image.
+- `BrowseService.detail` — one listing for anybody, safe fields only: the seller's username, never an account id, bin, barcode or storage key (`mkt-listing-detail.test.ts` lists them); sold and removed ones still served (decision in Stage 3).
 - `MarketReadService` — `counterparty` (username to id, active only), `tradableItem` (another's item by serial, the privacy control), `myListings`, `myOffers` (`yourTurn`), `mySwaps` (`awaitingMe`), public `storefront` (active only).
 - `MktController` — public `listings`, `listings/:id`, `sellers/:username`; `listings/mine` precedes `listings/:id`, so `mine` is no id.
 - `OfferController.respond` — `action` `accept`, `reject` or `counter`; accept's default key is `offer-<offerId>`.
