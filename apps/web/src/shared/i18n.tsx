@@ -962,7 +962,7 @@ const he = {
   'mfa.status.on': 'פעיל',
   'mfa.status.off': 'כבוי',
   'mfa.setup': 'הגדרת אימות דו־שלבי',
-  'mfa.setup.scan': 'סרקו את קוד ה‑QR באפליקציית אימות (Google Authenticator,‏ 1Password,‏ Authy…), או הקלידו את המפתח שמתחתיו.',
+  'mfa.setup.scan': 'סרקו את קוד ה‑QR באפליקציית אימות (⁨Google Authenticator, 1Password, Authy…⁩), או הקלידו את המפתח שמתחתיו.',
   'mfa.setup.qrAlt': 'קוד QR לאפליקציית האימות',
   'mfa.setup.key': 'מפתח להקלדה ידנית',
   'mfa.setup.confirmHint': 'הזינו את הסיסמה ואת הקוד שהאפליקציה מציגה עכשיו, כדי לוודא שהיא קיבלה את המפתח. שאר החיבורים לחשבון ינותקו.',

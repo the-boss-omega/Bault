@@ -104,6 +104,11 @@ The Day 6 checks, run from outside.
 
 **Watch:** it uses only the routes the web app uses. When a change alters one, that test fails with the check's own reason, so update the check in the same pull request.
 
+#### `scripts/design-screens.mjs` · 1 min · T16.4, T16.5
+`pnpm design:screens` captures every screen of a local, seeded Bault for a design review: each persona (`PERSONAS`), every section and tab, both languages, 390 and 1440 px, the three item sheets, and the verify and reset e-mails. It serves the production build with `vite preview` on 4173, the port the API takes writes from in development, and writes a contact sheet to the gitignored design-screens folder, flagged screens first (`inspect`: ids, cents, enum names, English words on a Hebrew page, sideways scrolling, console errors, failed calls).
+
+**Watch:** it signs in with the seed's password and enrols two-factor on the staff accounts, keeping their secrets in `.totp.json`, so `assertLocal` refuses any other machine. Start the API with `MFA_REQUIRED_ROLES=admin,warehouse_operator` to see the enrolment production shows.
+
 #### `tests/` and `tests3/`: the ten suites · 3 min · T15.3, T18.1
 `tests3/` drives each flow from the wrong side.
 

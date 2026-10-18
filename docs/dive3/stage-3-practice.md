@@ -409,7 +409,6 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **A card left free during a deal:** `EscrowService.receiveItem` neither holds nor marks the card; `settle` then refuses and the deal can be returned, so nothing is lost.
 - **Offer accept retry:** a retry answers 409 instead of a replay (`OfferService.accept`).
 - **Reprice racing a sale** can write a price onto a sold listing; the sale is right (`ListingService.reprice`).
-- **Departure reasons in English:** the History tab shows why a card left the vault in the machine's words, such as "remove commons — discarded" (`DisposalServicesService`, `CustodyService.changeState`); the register fix in #16 did not cover them.
 - **A suspended seller's storefront** is still served: `MarketReadService.storefront` selects the seller's `status` and never reads it.
 - **Decide: a reason for every hold.** DESIGN.md wants a frozen card to say who froze it and why, but `CustodyService.setHold` records only "hold placed"; giving it a reason is a small feature.
 - **Dead code in money:** `TopupService.topup`, and `isDuplicateOf`, `isOpenStatus`, `REQUESTER_TRANSITIONS` in `wallet-request.rules.ts`.

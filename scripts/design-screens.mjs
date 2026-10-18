@@ -422,8 +422,8 @@ async function runPersona(state, browser, persona, locale, width) {
       const session = await signIn(page, persona, state.opts, state.secrets);
       await open(page, `${state.baseUrl}/#/${session?.mfaEnrollmentRequired ? '' : 'profile/security'}`);
       await capture(state, page, `${persona}-two-factor-enrolment`, ctx);
-      const start = page.locator('.btn--gold').first();
-      if (await start.isVisible().catch(() => false)) {
+      const start = page.getByRole('button', { name: /^(Set up two-factor sign-in|הגדרת אימות דו־שלבי)$/ }).first();
+      if (await start.isEnabled({ timeout: 5000 }).catch(() => false)) {
         await start.click();
         await page.waitForSelector('img[src^="data:image/svg+xml"]', { timeout: 10000 }).catch(() => {});
         await capture(state, page, `${persona}-two-factor-enrolment-code`, ctx);
