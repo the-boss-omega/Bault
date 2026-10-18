@@ -243,3 +243,62 @@ describe('a renewal that fails for one membership', () => {
     expect(rows[0]?.last_error).toContain(bad);
   });
 });
+
+/**
+ * A collector's very first subscribe, sent twice at once (a double click).
+ *
+ * Subscribe locks the membership row before the wallet, but a collector who
+ * has never subscribed has no row to lock, so both requests get past that
+ * read and meet at the wallet lock. The second must be told the membership was
+ * just started, not fail on the unique user_id with a 500.
+ *
+ * Made deterministic by holding the collector's wallet lock from here until
+ * both requests are waiting on it. Needs the API.
+ */
+describe('two first subscribes at once', () => {
+  it('starts one membership, charges it once, and answers the other with a 409', async () => {
+    const userId = await createUser(pool);
+    const { rows } = await pool.query<{ email: string }>(
+      `UPDATE user_account u
+          SET password_hash = s.password_hash, terms_version = s.terms_version, terms_accepted_at = s.terms_accepted_at
+         FROM user_account s
+        WHERE u.id = $1 AND s.email = $2
+       RETURNING u.email`,
+      [userId, SEED.collector],
+    );
+    const member = await signIn(rows[0]!.email);
+    await ledger(pool, userId, 'credit', 100_000);
+
+    const holder = await pool.connect();
+    let results: { status: number; body: unknown }[] = [];
+    try {
+      await holder.query('BEGIN');
+      await holder.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`wallet:${userId}`]);
+      const both = Promise.all([
+        member.post('/membership/subscribe', { tier: 'folio' }),
+        member.post('/membership/subscribe', { tier: 'folio' }),
+      ]);
+      const until = Date.now() + 10_000;
+      for (;;) {
+        const waiting = await pool.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`,
+        );
+        if (waiting.rows[0]!.n >= 2) break;
+        if (Date.now() > until) throw new Error('timed out waiting for both subscribes to reach the wallet lock');
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await holder.query('COMMIT');
+      results = await both;
+    } finally {
+      await holder.query('ROLLBACK').catch(() => undefined);
+      holder.release();
+    }
+
+    expect(results.map((r) => r.status).sort(), JSON.stringify(results.map((r) => r.body))).toEqual([201, 409]);
+    const memberships = await pool.query<{ id: string }>(`SELECT id FROM membership WHERE user_id = $1`, [userId]);
+    expect(memberships.rows).toHaveLength(1);
+    const membershipId = memberships.rows[0]!.id;
+    expect(await periods(pool, membershipId)).toBe(1);
+    expect(await fees(pool, membershipId)).toBe(1);
+  });
+});

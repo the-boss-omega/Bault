@@ -343,7 +343,13 @@ export class MembershipService {
               currentPeriodStart: now,
               currentPeriodEnd: periodEnd,
             })
-            .returning({ id: membership.id }))[0]!.id;
+            .onConflictDoNothing({ target: membership.userId })
+            .returning({ id: membership.id }))[0]?.id;
+      // No row to lock on a first subscribe, so a second one sent at the same
+      // moment waited only on the wallet, and finds the first one's row here.
+      if (!id) {
+        throw new AppError(ErrorCode.CONFLICT, 'A membership was just started for this account. Reload and try again.', 409);
+      }
 
       await this.openPeriod(tx as Database, { id, userId }, tier, now, periodEnd, fee);
       return {
