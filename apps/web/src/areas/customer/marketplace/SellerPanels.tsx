@@ -4,6 +4,7 @@ import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { useI18n, type TranslateFn } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
 import {
   LISTING_TONE,
   OFFER_TONE,
@@ -121,7 +122,7 @@ export function MyListingsPanel({
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td data-label={t('market.mine.col.item')} className="dt-primary">
-                      {row.description || row.typeClass}
+                      {itemName(t, row)}
                       <span className="dt-sub" dir="ltr">
                         {row.serialNumber}
                       </span>
@@ -154,7 +155,7 @@ export function MyListingsPanel({
                         {listingStatusLabel(t, row.status)}
                       </StatusBadge>
                     </td>
-                    <td data-label={t('market.mine.col.listed')} dir="ltr">
+                    <td data-label={t('market.mine.col.listed')}>
                       {formatDate(row.publishedAt, locale)}
                     </td>
                     <td className="td-tight">
@@ -205,7 +206,7 @@ export function MyListingsPanel({
       {removing && (
         <ConfirmationModal
           title={t('market.mine.delistTitle')}
-          body={<p>{t('market.mine.delistBody', { item: removing.description || removing.typeClass })}</p>}
+          body={<p>{t('market.mine.delistBody', { item: itemName(t, removing) })}</p>}
           confirmLabel={t('market.mine.delist')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
@@ -306,7 +307,7 @@ export function OffersPanel({
                       </span>
                       <span>
                         <Serial value={row.serialNumber} />
-                        <span className="dt-sub ltr-run">{row.description || row.typeClass}</span>
+                        <span className="dt-sub ltr-run">{itemName(t, row)}</span>
                       </span>
                     </span>
                   </td>
@@ -492,7 +493,7 @@ export function SwapsPanel({
   }
 
   const names = (items: MySwap['offeredItems']) =>
-    items.map((i) => i.description || i.typeClass || i.id).join(', ') || '—';
+    items.map((i) => i.description || (i.typeClass ? itemName(t, { typeClass: i.typeClass }) : i.id)).join(', ') || '—';
 
   return (
     <Panel title={t('market.swaps.title')} subtitle={t('market.swaps.subtitle')} flush>

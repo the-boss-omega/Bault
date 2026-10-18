@@ -3,6 +3,7 @@ import { api } from './api';
 
 export interface VaultItem {
   id: string;
+  serialNumber: string;
   typeClass: string;
   description: string;
   conditionGrade: string | null;

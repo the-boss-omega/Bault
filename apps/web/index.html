@@ -1,39 +1,14 @@
 <!doctype html>
-<!--
-  Hebrew-primary, full RTL shell.
-  `lang="he"` + `dir="rtl"` set the document's base direction so the whole app
-  lays out right-to-left by default; individual LTR fields (e.g. barcodes, emails)
-  opt back in locally.
--->
 <html lang="he" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bault</title>
-    <!--
-      Document metadata. The product name is Bault everywhere, including here:
-      the browser tab, the description a search result would show, and the card a
-      link preview builds.
-
-      No `og:url` and no `og:image`: Bault has no published canonical URL and no
-      brand image asset in this repository, and inventing either would produce a
-      link preview pointing at somewhere that does not exist. They belong here
-      the moment those two things do.
-    -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="description" content="Bault — collectibles vault and marketplace." />
-    <!--
-      Matches the page ground in each theme, so the browser chrome above the
-      page is the same colour as the page rather than a navy band left over
-      from a palette this product no longer uses.
-    -->
     <meta name="theme-color" content="#f3f4f2" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)" />
-
-    <!--
-      The two faces the first paint actually needs: the Latin and Hebrew UI text.
-      Everything else (the other weights, the mono, the display face) is fetched
-      on demand by unicode-range, which is the point of subsetting them.
-    -->
     <link
       rel="preload"
       href="/fonts/plex-sans-400-latin.woff2"

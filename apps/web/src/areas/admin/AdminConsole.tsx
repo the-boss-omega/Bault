@@ -6,6 +6,7 @@ import { BarcodePrintButton } from '../../shared/Barcode';
 import { dollarsToCents, formatDate, formatUsd } from '../../shared/money';
 import { useI18n } from '../../shared/i18n';
 import type { MessageKey } from '../../shared/i18n';
+import { stateLabel } from '../../shared/itemTimeline';
 import { NAME_PART_MAX, isValidNamePart, normalizeNamePart } from '../../shared/names';
 import { useNavigation, useRoute } from '../../shared/routing';
 import {
@@ -439,14 +440,16 @@ function UserRow({
         <select value={role} aria-label={t('admin.users.col.role')} onChange={(e) => setRole(e.target.value)}>
           {ROLES.map((r) => (
             <option key={r} value={r}>
-              {r}
+              {t(`role.${r}` as MessageKey)}
             </option>
           ))}
         </select>
       </td>
       <td>
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <StatusBadge tone={ACCOUNT_STATUS_TONE[saved.status] ?? 'neutral'}>{saved.status}</StatusBadge>
+          <StatusBadge tone={ACCOUNT_STATUS_TONE[saved.status] ?? 'neutral'}>
+            {t(`account.status.${saved.status}` as MessageKey)}
+          </StatusBadge>
           {user.mfaEnabled && (
             <span title={t('admin.users.mfaOnTitle')}>
               <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
@@ -459,7 +462,7 @@ function UserRow({
           >
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {t(`account.status.${s}` as MessageKey)}
               </option>
             ))}
           </select>
@@ -598,7 +601,7 @@ function ItemRow({
         >
           {STATES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {stateLabel(t, s)}
             </option>
           ))}
         </select>

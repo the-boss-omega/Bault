@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
+import { ItemPick } from '../../../shared/ui/Serial';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import {
   boxLabel,
@@ -30,6 +32,7 @@ interface Address {
 
 interface VaultItem {
   id: string;
+  serialNumber?: string;
   typeClass: string;
   description: string;
 }
@@ -196,9 +199,7 @@ export function ShipmentComposer({
               <li key={item.id}>
                 <label className="check">
                   <input type="checkbox" checked={!!selected[item.id]} onChange={() => toggleItem(item.id)} />
-                  <span>
-                    {item.typeClass} — {item.description}
-                  </span>
+                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                 </label>
               </li>
             ))}
@@ -302,9 +303,9 @@ export function ShipmentComposer({
                 <input type="checkbox" checked={addOns.includes(a.key)} onChange={() => toggleAddOn(a.key)} />
                 {t('ship.addon.gps_tracker')} — {formatUsd(a.priceMinor)}
               </label>
-              <span className="field-hint">
+              <div className="field-hint">
                 {t('ship.addonNeedsInsurance', { amount: formatUsd(a.requiresInsuranceMinor) })}
-              </span>
+              </div>
             </div>
           ))}
 

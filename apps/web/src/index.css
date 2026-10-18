@@ -420,9 +420,7 @@ code,
 code,
 .mono,
 .rail-count,
-.state-count,
-.detail-value[dir='ltr'],
-.data-table td[dir='ltr'] {
+.state-count {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;

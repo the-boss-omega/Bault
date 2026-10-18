@@ -34,7 +34,7 @@ export async function sendPasswordReset(
   try {
     await mailer.send({
       to: email,
-      subject: 'Reset your Bault password',
+      subject: 'איפוס הסיסמה ב־Bault · Reset your Bault password',
       template: 'password_reset',
       variables: { link: `${base}/#/reset-password?token=${encodeURIComponent(raw)}` },
     });

@@ -4,11 +4,14 @@ import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../share
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { BarcodeLabel } from '../../../shared/Barcode';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { itemClassLabel, itemName } from '../../../shared/itemClasses';
 import {
   STATE_META,
+  departureLabel,
   stateLabel,
   timelineDetail,
   timelineKindLabel,
+  type Departure,
   type TimelineEvent,
 } from '../../../shared/itemTimeline';
 import { formatDate, formatUsd } from '../../../shared/money';
@@ -23,7 +26,7 @@ import {
   SuccessNote,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { Serial } from '../../../shared/ui/Serial';
+import { Code, Serial } from '../../../shared/ui/Serial';
 import {
   IconAlert,
   IconAsk,
@@ -73,7 +76,7 @@ interface VaultItem {
   receivedAt?: string | null;
   historical?: boolean;
   departedAt?: string | null;
-  departureReason?: string | null;
+  departure?: Departure | null;
   stillOwned?: boolean;
 }
 
@@ -488,7 +491,7 @@ function CardTile({
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
   const frozen = Boolean(item.holdFlag) && !historical;
-  const name = item.description || item.typeClass;
+  const name = itemName(t, item);
 
   return (
     <li
@@ -550,14 +553,14 @@ function CardTile({
                 {t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}
               </span>
             )}
-            {item.departureReason && (
-              <span className="card-sub ltr-run">{item.departureReason}</span>
-            )}
+            {item.departure && <span className="card-sub">{departureLabel(t, item.departure)}</span>}
           </>
         ) : (
-          <span className="code-inline">
-            {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
-          </span>
+          item.binBarcode ? (
+            <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} />
+          ) : (
+            <span>{t('vault.noBin')}</span>
+          )
         )}
       </div>
 
@@ -736,7 +739,7 @@ function StoragePanel({
             {storage.nextChargeAt && (
               <div className="detail-row">
                 <dt className="detail-label">{t('vault.storage.next')}</dt>
-                <dd className="detail-value" dir="ltr">
+                <dd className="detail-value">
                   {formatDate(storage.nextChargeAt, locale)}
                   <span className="detail-value-sub">
                     {t('vault.storage.nextAmount', {
@@ -842,7 +845,7 @@ function ItemDrawer({
     }
   }
 
-  const name = item.description || item.typeClass;
+  const name = itemName(t, item);
   const frozen = Boolean(item.holdFlag) && !historical;
 
   return (
@@ -902,7 +905,7 @@ function ItemDrawer({
         <dl className="detail-list">
           <div className="detail-row">
             <dt className="detail-label">{t('vault.class')}</dt>
-            <dd className="detail-value">{item.typeClass}</dd>
+            <dd className="detail-value">{itemClassLabel(t, item.typeClass)}</dd>
           </div>
           <div className="detail-row">
             <dt className="detail-label">{t('vault.item.condition')}</dt>
@@ -914,23 +917,23 @@ function ItemDrawer({
               {item.departedAt && (
                 <div className="detail-row">
                   <dt className="detail-label">{t('vault.historical.dateLabel')}</dt>
-                  <dd className="detail-value" dir="ltr">
+                  <dd className="detail-value">
                     {formatDate(item.departedAt, locale)}
                   </dd>
                 </div>
               )}
-              {item.departureReason && (
+              {item.departure && (
                 <div className="detail-row">
                   <dt className="detail-label">{t('vault.historical.reasonLabel')}</dt>
-                  <dd className="detail-value">{item.departureReason}</dd>
+                  <dd className="detail-value">{departureLabel(t, item.departure)}</dd>
                 </div>
               )}
             </>
           ) : (
             <div className="detail-row">
               <dt className="detail-label">{t('vault.item.bin')}</dt>
-              <dd className="detail-value" dir="ltr">
-                {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
+              <dd className="detail-value">
+                {item.binBarcode ? <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} /> : t('vault.noBin')}
               </dd>
             </div>
           )}
@@ -1091,7 +1094,7 @@ function ItemDrawer({
             <>
               <p>
                 {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                  item: `${item.typeClass} — ${item.description}`,
+                  item: `\u2068${itemName(t, item)}\u2069`,
                 })}
               </p>
               {(() => {

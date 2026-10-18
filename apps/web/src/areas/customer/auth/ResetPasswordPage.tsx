@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { api } from '../../../shared/api';
+import { ApiError, api, apiErrorKey } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { PASSWORD_MIN } from '../../../shared/names';
@@ -30,7 +30,8 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       await api.post('/auth/password/reset', { token, newPassword: password });
       setDone(true);
     } catch (err) {
-      setError((err as Error).message);
+      const key = err instanceof ApiError && err.status === 410 ? 'auth.resetLinkInvalid' : apiErrorKey(err);
+      setError(key ? t(key) : (err as Error).message);
     } finally {
       setBusy(false);
     }
