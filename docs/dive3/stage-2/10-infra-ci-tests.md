@@ -1,6 +1,6 @@
 ## 2.10 Infrastructure, CI and tests
 
-How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts, then the tests. Budget: 25 minutes.
+How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts, then the tests. Budget: 26 minutes.
 
 #### `apps/api/Dockerfile`, `apps/worker/Dockerfile` · 2 min · T17.1
 Multi-stage builds from the repo root on `node:22-slim`, pinned by digest: build the packages and the app, reinstall with `--prod`, run as UID 10001 with an exec-form `CMD` so SIGTERM reaches Node. The API image carries the migrations, so `node dist/db/migrate.js` runs from the release itself, and its `HEALTHCHECK` calls `/api/v1/healthz`. The worker has no port; `/api/v1/readyz/worker` reads its `worker_heartbeat` instead.

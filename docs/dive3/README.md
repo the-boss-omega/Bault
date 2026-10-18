@@ -19,7 +19,7 @@ After DIVE3: design work (5 to 10 hours), then staging, the live provider checks
 | 3 | [2.1 Foundation](stage-2/01-foundation.md), [2.2 API core](stage-2/02-api-core.md), [2.3 Accounts and security](stage-2/03-accounts-security.md) | 85 min |
 | 4 | [2.4 Money](stage-2/04-money.md), [2.5 Goods](stage-2/05-goods.md) | 75 min |
 | 5 | [2.6 Marketplace and services](stage-2/06-marketplace-services.md), [2.7 Shipping](stage-2/07-shipping.md), [2.8 Worker](stage-2/08-worker.md) | 80 min |
-| 6 | [2.9 Web app](stage-2/09-web.md), [2.10 Infrastructure, CI and tests](stage-2/10-infra-ci-tests.md) | 70 min |
+| 6 | [2.9 Web app](stage-2/09-web.md), [2.10 Infrastructure, CI and tests](stage-2/10-infra-ci-tests.md) | 71 min |
 | 7 to 11 | Stage 3: six groups of tasks, one pull request per group (its time budget table lists each one) | 10 h 55 min |
 
 ## How to read it
