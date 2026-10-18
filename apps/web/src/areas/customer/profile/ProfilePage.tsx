@@ -9,7 +9,7 @@ import {
   normalizeNamePart,
 } from '../../../shared/names';
 import { useNavigation, useRoute } from '../../../shared/routing';
-import { countryName, useShippingCountries } from '../../../shared/countries';
+import { countryName, lacksRegion, regionRequired, useShippingCountries } from '../../../shared/countries';
 import {
   Button,
   ContextTabs,
@@ -43,6 +43,7 @@ interface Address {
   recipient: string;
   line1: string;
   city: string;
+  region: string | null;
   country: string;
   postalCode: string;
   isDefault: boolean;
@@ -412,7 +413,13 @@ function AddressCard({
   const [draft, setDraft] = useState(address);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.region || !regionRequired(draft.country, countries));
 
   async function save() {
     try {
@@ -421,6 +428,7 @@ function AddressCard({
         recipient: draft.recipient,
         line1: draft.line1,
         city: draft.city,
+        region: draft.region?.trim() || null,
         country: draft.country,
         postalCode: draft.postalCode,
         isDefault: draft.isDefault,
@@ -440,10 +448,14 @@ function AddressCard({
             {address.label}
           </h3>
           {address.isDefault && <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>}
+          {lacksRegion(address, countries) && (
+            <StatusBadge tone="warning">{t('profile.addresses.regionMissing')}</StatusBadge>
+          )}
         </div>
         <p className="card-desc">{address.recipient}</p>
         <p className="card-desc">
-          {address.line1}, {address.city}, {countryName(address.country, countries)}{' '}
+          {address.line1}, {address.city}
+          {address.region ? `, ${address.region}` : ''}, {countryName(address.country, countries)}{' '}
           {address.postalCode}
         </p>
         <div className="actions">
@@ -493,6 +505,7 @@ function AddressFields({
   const countries = useShippingCountries();
   const set = (patch: Partial<AddressDraft>) => onChange({ ...draft, ...patch });
   const id = useId();
+  const country = countries.find((c) => c.code === draft.country);
 
   return (
     <div className="form-grid">
@@ -531,7 +544,7 @@ function AddressFields({
         <select
           id={`${id}-country`}
           value={draft.country}
-          onChange={(e) => set({ country: e.target.value })}
+          onChange={(e) => set({ country: e.target.value, region: '' })}
           autoComplete="country"
         >
           <option value="">{t('profile.addressForm.countryPlaceholder')}</option>
@@ -541,6 +554,39 @@ function AddressFields({
             </option>
           ))}
         </select>
+      </Field>
+      <Field
+        label={t('profile.addressForm.region')}
+        htmlFor={`${id}-region`}
+        hint={
+          country?.regionRequired
+            ? t('profile.addressForm.regionRequiredHint', { country: country.name })
+            : t('profile.addressForm.regionOptionalHint')
+        }
+      >
+        {country?.regions ? (
+          <select
+            id={`${id}-region`}
+            value={draft.region ?? ''}
+            onChange={(e) => set({ region: e.target.value })}
+            autoComplete="address-level1"
+          >
+            <option value="">{t('profile.addressForm.regionPlaceholder')}</option>
+            {country.regions.map((r) => (
+              <option key={r.code} value={r.code}>
+                {r.code} — {r.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id={`${id}-region`}
+            value={draft.region ?? ''}
+            maxLength={60}
+            onChange={(e) => set({ region: e.target.value })}
+            autoComplete="address-level1"
+          />
+        )}
       </Field>
       <Field label={t('profile.addressForm.postalCode')} htmlFor={`${id}-postal`}>
         <input
@@ -571,11 +617,13 @@ function AddressForm({
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
+  const countries = useShippingCountries();
   const empty: AddressDraft = {
     label: '',
     recipient: '',
     line1: '',
     city: '',
+    region: '',
     country: '',
     postalCode: '',
     isDefault: false,
@@ -583,11 +631,17 @@ function AddressForm({
   const [draft, setDraft] = useState<AddressDraft>(empty);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.region || !regionRequired(draft.country, countries));
 
   async function add() {
     try {
-      await api.post('/me/addresses', draft);
+      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null });
       setDraft(empty);
       await onAdded();
     } catch (e) {

@@ -121,13 +121,13 @@ Pure crypto on `node:crypto`, pinned by `tests3/contract/mfa-crypto.test.ts`.
 `/me/profile` and `/me/addresses`, always the caller's own.
 - `get` — the `ProfileView`, including `nameReviewRequired`, the terms acceptance, `mfaEnabled` and `mfaRequired`. It is `@AllowSuspended()` and `@AllowWithoutMfa()` because the SPA's shell boots from it.
 - `update` — writes `firstName` and `lastName` only, and clears `nameReviewRequired`.
-- `listAddresses`, `addAddress`, `updateAddress`, `deleteAddress` — scoped to the caller; an address is found by its id and the caller's id. `country` must pass `IsShippableCountry` and is stored via `toCountryCode`. A new default demotes the old one in the same transaction.
+- `listAddresses`, `addAddress`, `updateAddress`, `deleteAddress` — scoped to the caller; an address is found by its id and the caller's id. `country` must pass `IsShippableCountry` and is stored via `toCountryCode`. `regionFor` checks `region` against the country through `normalizeRegion`: a US or Canadian code, upper-cased, is required; elsewhere it is optional free text. An edit re-checks the pair only when it changes `country` or `region`. A new default demotes the old one in the same transaction.
 
 **Watch:** no unique index backs "one default address", so two concurrent saves can leave two defaults.
 
 #### `apps/api/src/modules/acc/acc.schema.ts`, `apps/api/src/modules/acc/address.schema.ts` · 1 min · T5.4, T7.1, T7.2
 - `userAccount` — `accountStatus` (`pending`, `active`, `suspended`, `closed`), `userRole`, unique `email` and `username`. `autoSuspendedAt` marks a debt-sweep suspension: the sweep lifts only those, and any status an admin sets clears it. `user_account_terms_acceptance_complete` keeps the two terms columns set together. Nothing writes `intakeId` or `legacyDisplayName`.
-- `verificationToken`, `loginSession`, `loginAttempt`, `mfaFactor`, `mfaRecoveryCode`, `mfaChallenge` and `shippingAddress`.
+- `verificationToken`, `loginSession`, `loginAttempt`, `mfaFactor`, `mfaRecoveryCode`, `mfaChallenge` and `shippingAddress`. `shippingAddress.region`, added by `0037`, is nullable: rows saved before it have none.
 
 **Watch:** every `user_id` here is `text` with no foreign key.
 

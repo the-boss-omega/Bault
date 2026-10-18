@@ -34,7 +34,7 @@ The box catalogue, read through `boxFor`.
 Turns item ids into a parcel, for every path that prices one.
 - `loadShippableItems` — each item must be the owner's, `stored` and not on hold. With `tx` it locks the rows `FOR UPDATE`, in id order.
 - `boxFor` — the chosen box and its problems, or `chooseBox`'s pick.
-- `resolveDestination` — a saved address with its street, or free text that must carry a country and postal code.
+- `resolveDestination` — a saved address with its street and `region`, or free text that must carry a country and postal code. A saved address in a country that needs a region and has none is refused with a 422, `address_region_required`, before any carrier is asked; `details.addressId` names it.
 - `buildCustomsLines` — splits the declared total by weight; the last line absorbs rounding. `customsDeclarationFor` sends the same lines to the carrier.
 
 #### `apps/api/src/modules/shp/shipment.service.ts` · 3 min · T13.1, T13.2, T12.3, T15.3
@@ -120,5 +120,6 @@ Paperwork for a parcel that crosses a border.
 | Direct overnight | `DirectShipService.request` | parcel, wallet | flat price plus premium |
 
 **Also in this area:**
-- `apps/api/src/modules/shp/countries.ts` — `shippingCountries` (each country a service names, plus `US`) for `GET /shipping/countries`, and `toCountryCode`.
+- `apps/api/src/modules/shp/countries.ts` — `shippingCountries` (each country a service names, plus `US`) for `GET /shipping/countries`, each with `regionRequired` and, for the US and Canada, its `regions`; and `toCountryCode`.
+- `apps/api/src/modules/shp/regions.ts` — `normalizeRegion`, `regionRequired` and `regionsOf`: the US states, territories and military codes, and the Canadian provinces and territories, the two countries whose carriers need one.
 - `apps/api/src/modules/shp/country.validator.ts` — `IsShippableCountry`, used by the address DTOs in `apps/api/src/modules/acc/profile.controller.ts`.

@@ -879,8 +879,8 @@ async function main(): Promise<void> {
   await db.insert(notificationPreference).values({ userId: golden, eventType: 'hold_placed', enabled: false });
 
   await db.insert(shippingAddress).values([
-    { userId: red, label: 'Home', recipient: 'Red Ashwood', line1: '1200 Market St', city: 'San Francisco', country: 'US', postalCode: '94102', isDefault: true },
-    { userId: golden, label: 'Home', recipient: 'Golden Marsh', line1: '55 Wall St', city: 'New York', country: 'US', postalCode: '10005', isDefault: true },
+    { userId: red, label: 'Home', recipient: 'Red Ashwood', line1: '1200 Market St', city: 'San Francisco', region: 'CA', country: 'US', postalCode: '94102', isDefault: true },
+    { userId: golden, label: 'Home', recipient: 'Golden Marsh', line1: '55 Wall St', city: 'New York', region: 'NY', country: 'US', postalCode: '10005', isDefault: true },
     { userId: veteran, label: 'Home', recipient: 'Ana Maria van der Berg', line1: 'Keizersgracht 12', city: 'Amsterdam', country: 'NL', postalCode: '1015 CS', isDefault: true },
   ]);
 
