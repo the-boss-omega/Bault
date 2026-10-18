@@ -286,6 +286,9 @@ async function settle(page) {
     .waitForFunction(() => !globalThis.document.querySelector('[aria-busy="true"], .skeleton, .boot'), null, { timeout: 10000 })
     .catch(() => {});
   await page.evaluate(() => globalThis.document.fonts.ready);
+  await page
+    .waitForFunction(() => [...globalThis.document.images].every((img) => img.complete), null, { timeout: 10000 })
+    .catch(() => {});
   await page.waitForTimeout(250);
 }
 

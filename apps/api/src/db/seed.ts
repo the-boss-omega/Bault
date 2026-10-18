@@ -934,7 +934,7 @@ async function main(): Promise<void> {
   });
   await custody({
     itemId: rayAltArt, eventType: 'ownership_transfer', prevOwnerId: red, newOwnerId: platform,
-    actorId: eldar, reason: 'donation accepted — youth league raffle',
+    actorId: eldar, reason: 'donation',
   });
   await custody({
     itemId: rayAltArt, eventType: 'state_change', prevState: 'stored', newState: 'donated',
