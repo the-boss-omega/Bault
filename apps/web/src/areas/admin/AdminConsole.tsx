@@ -754,7 +754,13 @@ function PricingSection({
             </label>
             <label className="field">
               <span className="field-label">{t('admin.pricing.col.action')}</span>
-              <select value={actionType} onChange={(e) => setActionType(e.target.value)}>
+              <select
+                value={actionType}
+                onChange={(e) => {
+                  setActionType(e.target.value);
+                  if (!catalogue.find((a) => a.actionType === e.target.value)?.percentOf) setModel('fixed');
+                }}
+              >
                 {(
                   [
                     ['admin.pricing.group.charged', catalogue.filter((a) => a.resolution !== 'code_constant')],
@@ -788,7 +794,7 @@ function PricingSection({
               <span className="field-label">{t('admin.pricing.col.model')}</span>
               <select value={model} onChange={(e) => setModel(e.target.value as 'fixed' | 'percentage')}>
                 <option value="fixed">{t('admin.pricing.model.fixed')}</option>
-                <option value="percentage">{t('admin.pricing.model.percentage')}</option>
+                {selected?.percentOf ? <option value="percentage">{t('admin.pricing.model.percentage')}</option> : null}
               </select>
             </label>
             <div className="field">

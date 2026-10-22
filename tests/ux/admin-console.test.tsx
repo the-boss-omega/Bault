@@ -87,6 +87,23 @@ describe('the pricing form', () => {
     expect(new Set(offered)).toEqual(new Set(UNPRICED.actions.map((a) => a.actionType)));
   });
 
+  it('offers a percentage only for an action priced on an amount', async () => {
+    const user = userEvent.setup();
+    consoleApi();
+    window.location.hash = '#/admin/pricing';
+    renderIn(<AdminConsole currentUserId="me" />);
+
+    const select = await actionPicker();
+    const models = () =>
+      [...(screen.getByRole('combobox', { name: /^model/i }) as HTMLSelectElement).options].map((o) => o.value);
+
+    await user.selectOptions(select, 'intake');
+    expect(models()).toEqual(['fixed']);
+
+    await user.selectOptions(select, 'marketplace_fee');
+    expect(models()).toEqual(['fixed', 'percentage']);
+  });
+
   it('prices parcel forwarding from the screen', async () => {
     const user = userEvent.setup();
     consoleApi();

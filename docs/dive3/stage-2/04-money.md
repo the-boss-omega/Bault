@@ -42,14 +42,15 @@ A thin view over the ledger.
 **Watch:**
 - No balance check: a charge may take the wallet negative (debt). Callers refuse new work with `assertNotBlocked`.
 - A caller that needs the wallet lock takes it before `charge`, since `consume` has already locked the period.
-- No `base` is passed, so a `percentage` rule here prices at zero and is skipped (Stage 3).
+- No `base` is passed, so an action priced here must have a `fixed` rule; `PricingService` refuses a percentage with nothing to take it of.
 - `BillingModule` in `shared/billing/billing.port.ts` binds the port to `NoopBillingAdapter`, which only logs. Nothing imports it; keep it that way.
 
 #### `apps/api/src/modules/prc/pricing.service.ts` · 2 min · T8.4, T8.5, T5.5
 Finds the rule in force and computes the amount, for `BillingService` and the services that price their own fees.
-- `price` — rules for the action whose `item_class` is null or the given class, with `effective_from <= now()` and `effective_to` null or later. Class-specific first (`nulls last`), then newest. `fixed` gives `value` in cents; `percentage` gives `applyBasisPoints` of `base` (zero when absent). Returns the `snapshot` callers store on the `charge`; throws a 400 when no rule is in force.
-- `tryPrice` — the same, answering null on any error, a database failure included.
-- `createRule` — inserts a row effective now, never edits one, caps a percentage at 10,000 bps.
+- `ruleInForce` — the rule for the action whose `item_class` is null or the given class, with `effective_from <= now()` and `effective_to` null or later. Class-specific first (`nulls last`), then newest; null when there is none.
+- `tryPrice` — null when no rule is in force. Otherwise `fixed` gives `value` in cents and `percentage` gives `applyBasisPoints` of `base`; a percentage with no `base` is a 400. Returns the `snapshot` callers store on the `charge`. Any other error, a database failure included, reaches the caller.
+- `price` — `tryPrice`, with a 400 when no rule is in force.
+- `createRule` — inserts a row effective now, never edits one. A percentage only for an action whose `percentOf` names its base, at most 10,000 bps.
 **Watch:** nothing writes `effective_to`, so only a newer rule for the same scope supersedes one, and a class-specific rule keeps beating a newer catch-all. The "in force" test is repeated in `PriceListService`, `PricingCoverageController`, `VaultService` and two worker jobs; change all of them.
 
 #### `apps/api/src/modules/prc/price-list.service.ts` · 1.5 min · T8.5
@@ -59,7 +60,7 @@ The public price list behind `GET /pricing/list`.
 
 #### `apps/api/src/modules/prc/billable-actions.ts`, `apps/api/src/modules/prc/pricing-coverage.controller.ts` · 2 min · T8.5
 The launch gate for prices. No migration inserts a `pricing_rule`; only the seed does.
-- `billableActions` — every price the code charges, with its `PriceResolution`: `required` (the action fails without a rule), `fallback_rule`, `code_default`, `free_if_unpriced`, `code_constant`. Families derive from `GRADING_TIERS`, `CONSIGNMENT_CHANNELS`, `SHIPMENT_ADD_ONS` and `MEMBERSHIP_TIERS`.
+- `billableActions` — every price the code charges, with its `PriceResolution`: `required` (the action fails without a rule), `fallback_rule`, `code_default`, `free_if_unpriced`, `code_constant`. Families derive from `GRADING_TIERS`, `CONSIGNMENT_CHANNELS`, `SHIPMENT_ADD_ONS` and `MEMBERSHIP_TIERS`. `percentOf` names the amount a percentage is taken of (the sale price, the agreed value, the amount cashed out); null means fixed prices only.
 - `coverage` — `ready` only when every action is `priced` or `code_constant`; `unknownRules` lists rules no code reads, usually a typo.
 - `PricingCoverageController.coverage` — `GET /admin/pricing/coverage`, admin only.
 **Watch:** `tests3/contract/pricing-coverage.test.ts` scans the source for literal action types; a new literal passed to `price` or `tryPrice` must be listed here.
@@ -149,13 +150,12 @@ The other `/finance/*` routes, the webhook route and the module.
 The accountant's reads, read-only and admin only. The ledger is single-entry: a fee leaves a customer and is credited to no Bault account, so revenue is computed here from rows.
 - `ledgerCsv` — keyset pages on `(occurred_at, id)`, 2,000 rows each, the cursor kept as Postgres text so microseconds survive. `csvField` defuses formula injection; `decimalAmount` uses integer arithmetic.
 - `parseDayRange` — both days included, UTC, at most `MAX_EXPORT_DAYS`. `parseMonth` — `YYYY-MM`. `recordExport` — audit row `accounting.ledger_export`.
-- `summary` — `byType` (count and total per type and direction); `revenue` (net `fee`, `service_charge` and `interest` rows, split into `REVENUE_LINES` by snapshot key and reference, less `cashOutFeesReturnedMinor`, with carrier cost beside it); `customerMoney` (top-ups in, withdrawals out net of `payoutsReturnedMinor`, chargebacks); `balancesHeld` (every wallet at month end, the platform account apart).
+- `summary` — `byType` (count and total per type and direction); `revenue` (net `fee`, `service_charge` and `interest` rows, split into `REVENUE_LINES` by snapshot key and reference; `shipping_refund` and `service_refund` credits come off the line their charge was counted on, a custom request's off `custom_request_fee`, the rest off `service_charge`, totalled as `refundsMinor`; less `cashOutFeesReturnedMinor`; with carrier cost beside it); `customerMoney` (top-ups in, withdrawals out net of `payoutsReturnedMinor`, chargebacks); `balancesHeld` (every wallet at month end, the platform account apart).
 - `reconciliation` — gathers top-ups, payouts, withdrawal debits and rows citing a missing payment, and passes them to `reconcile`. `manualCashIns` are counted apart, since no provider reports them.
 **Watch:**
-- Revenue nets only its own types: `shipping_refund` and `service_refund` credits are not subtracted, so a refunded shipping or custom-request charge stays in revenue.
 - The platform account is found by `PLATFORM_EMAIL`, also hard-coded in `HouseStoreService` and `ServiceRequestService`.
 - A fee with no known snapshot key lands in `other_fee`.
-- `AccountingSection.tsx` shows neither returned figure (Stage 3).
+- A new refund type must be added to both the revenue query and `refundsMinor`, or it stays in revenue.
 
 #### `apps/api/src/modules/adm/accounting.controller.ts` · 1 min · T8.10, T6.7
 `/admin/accounting/*`, admin only.

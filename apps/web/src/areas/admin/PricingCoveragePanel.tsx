@@ -22,6 +22,7 @@ export interface PricingCoverage {
     fallsBackTo: string | null;
     status: CoverageStatus;
     description: string;
+    percentOf: string | null;
     rule: { model: string; value: number } | null;
   }[];
   unknownRules: { id: string; actionType: string }[];

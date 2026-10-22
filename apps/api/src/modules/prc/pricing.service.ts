@@ -5,6 +5,7 @@ import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { applyBasisPoints, money, type Money } from '../../shared/money';
 import { pricingRule } from './prc.schema';
+import { billableActions } from './billable-actions';
 
 export type BillingTrigger = 'per_event' | 'daily' | 'weekly' | 'monthly';
 
@@ -29,6 +30,11 @@ export class PricingService {
 
   async createRule(adminId: string, input: CreateRuleInput) {
     if (!input.description?.trim()) throw AppError.validation('A rule description is required');
+    if (input.model === 'percentage' && !billableActions().some((a) => a.actionType === input.actionType && a.percentOf)) {
+      throw AppError.validation(`"${input.actionType}" has no amount to take a percentage of, so give it a fixed price`, {
+        field: 'model',
+      });
+    }
     if (input.model === 'percentage' && input.value > 10_000) {
       throw AppError.validation('A percentage rule is at most 10000 basis points (100%)', { field: 'value' });
     }
@@ -51,23 +57,7 @@ export class PricingService {
     return row;
   }
 
-  async tryPrice(
-    actionType: string,
-    opts: { itemClass?: string; base?: Money } = {},
-    tx?: Database,
-  ): Promise<PriceResult | null> {
-    try {
-      return await this.price(actionType, opts, tx);
-    } catch {
-      return null;
-    }
-  }
-
-  async price(
-    actionType: string,
-    opts: { itemClass?: string; base?: Money } = {},
-    tx?: Database,
-  ): Promise<PriceResult> {
+  async ruleInForce(actionType: string, itemClass?: string, tx?: Database) {
     const exec = tx ?? this.db;
     const rows = await exec
       .select()
@@ -75,21 +65,33 @@ export class PricingService {
       .where(
         and(
           eq(pricingRule.actionType, actionType),
-          or(isNull(pricingRule.itemClass), eq(pricingRule.itemClass, opts.itemClass ?? '')),
+          or(isNull(pricingRule.itemClass), eq(pricingRule.itemClass, itemClass ?? '')),
           sql`${pricingRule.effectiveFrom} <= now()`,
           or(isNull(pricingRule.effectiveTo), sql`${pricingRule.effectiveTo} > now()`),
         ),
       )
       .orderBy(sql`${pricingRule.itemClass} nulls last`, sql`${pricingRule.effectiveFrom} desc`)
       .limit(1);
+    return rows[0] ?? null;
+  }
 
-    const rule = rows[0];
-    if (!rule) throw AppError.validation(`No pricing rule for action "${actionType}"`);
+  async tryPrice(
+    actionType: string,
+    opts: { itemClass?: string; base?: Money } = {},
+    tx?: Database,
+  ): Promise<PriceResult | null> {
+    const rule = await this.ruleInForce(actionType, opts.itemClass, tx);
+    if (!rule) return null;
 
-    const amount =
-      rule.model === 'fixed'
-        ? money(rule.value, rule.currency)
-        : applyBasisPoints(opts.base ?? money(0, rule.currency), rule.value);
+    let amount: Money;
+    if (rule.model === 'fixed') amount = money(rule.value, rule.currency);
+    else if (opts.base) amount = applyBasisPoints(opts.base, rule.value);
+    else {
+      throw AppError.validation(`"${actionType}" is priced as a percentage, and nothing was given to take it of`, {
+        actionType,
+        ruleId: rule.id,
+      });
+    }
 
     return {
       amount,
@@ -103,5 +105,15 @@ export class PricingService {
         effectiveFrom: rule.effectiveFrom,
       },
     };
+  }
+
+  async price(
+    actionType: string,
+    opts: { itemClass?: string; base?: Money } = {},
+    tx?: Database,
+  ): Promise<PriceResult> {
+    const result = await this.tryPrice(actionType, opts, tx);
+    if (!result) throw AppError.validation(`No pricing rule for action "${actionType}"`);
+    return result;
   }
 }

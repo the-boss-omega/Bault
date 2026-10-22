@@ -12,9 +12,17 @@ export interface AccountingSummary {
   revenue: {
     totalMinor: number;
     lines: { key: string; totalMinor: number }[];
+    refundsMinor: number;
+    cashOutFeesReturnedMinor: number;
     carrierCostOnShippingChargesMinor: number;
   };
-  customerMoney: { inMinor: number; outMinor: number; reversedMinor: number; netMinor: number };
+  customerMoney: {
+    inMinor: number;
+    outMinor: number;
+    payoutsReturnedMinor: number;
+    reversedMinor: number;
+    netMinor: number;
+  };
   balancesHeld: {
     asOf: string;
     customerTotalMinor: number;
@@ -172,7 +180,10 @@ function SummaryView({ summary, locale }: { summary: AccountingSummary; locale: 
           value={formatUsd(summary.revenue.totalMinor)}
           icon={<IconChart />}
           tone="green"
-          footer={t('admin.accounting.summary.revenueNote')}
+          footer={t('admin.accounting.summary.revenueNote', {
+            refunds: formatUsd(summary.revenue.refundsMinor),
+            feesReturned: formatUsd(summary.revenue.cashOutFeesReturnedMinor),
+          })}
         />
         <MetricCard
           label={t('admin.accounting.summary.moneyIn')}
@@ -181,6 +192,7 @@ function SummaryView({ summary, locale }: { summary: AccountingSummary; locale: 
           tone="blue"
           footer={t('admin.accounting.summary.moneyOut', {
             out: formatUsd(summary.customerMoney.outMinor),
+            returned: formatUsd(summary.customerMoney.payoutsReturnedMinor),
             reversed: formatUsd(summary.customerMoney.reversedMinor),
           })}
         />

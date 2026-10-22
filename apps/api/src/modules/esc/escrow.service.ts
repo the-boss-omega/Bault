@@ -48,12 +48,12 @@ export class EscrowService {
   ) {}
 
   async terms() {
-    const rule = await this.pricing.tryPrice(ESCROW_FEE_ACTION);
+    const rule = await this.pricing.ruleInForce(ESCROW_FEE_ACTION);
     return {
       feeBps: ESCROW_FEE_BPS,
       minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
       minimumValueMinor: ESCROW_MINIMUM_VALUE_MINOR,
-      configuredBps: rule?.snapshot ? rule.amount.amount : null,
+      configuredBps: rule?.model === 'percentage' ? rule.value : null,
     };
   }
 

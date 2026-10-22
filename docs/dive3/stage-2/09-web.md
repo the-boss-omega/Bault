@@ -235,7 +235,7 @@ The queue behind the beta rule: an admin decides every cash-in and cash-out.
 - `AccountingSection`: month summary, reconciliation, ledger CSV. `ShelfYieldPanel`: yield by zone and customer. `PricingCoveragePanel`: actions with no price. `OutboxSection`: requeue parked messages. `SignInsSection`: the sign-in log.
 - `HouseStoreSection` changes stock with `expectedStock`, so a change against a stale count is refused.
 
-**Watch:** `AccountingSummary` is a hand-written copy of the API type without `payoutsReturnedMinor` and `cashOutFeesReturnedMinor`, so returned payouts never show.
+**Watch:** `AccountingSummary` is a hand-written copy of the API type, the SPA's only description of it; a new summary field must be added here, field by field, before the panel can show it. `PricingSection` offers a percentage only for an action whose `percentOf` the coverage report names.
 
 **Also in this area**
 - `apps/web/src/fonts.css`: `@font-face` rules, subset by `unicode-range`.

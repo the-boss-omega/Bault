@@ -179,6 +179,9 @@ export class AccountingService {
     const revenueRows = (
       await this.db.execute<{ key: string; total: string }>(sql`
         SELECT CASE
+                 WHEN l.type = 'shipping_refund' THEN 'service_charge'
+                 WHEN l.type = 'service_refund' AND s.type::text = 'custom' THEN 'custom_request_fee'
+                 WHEN l.type = 'service_refund' THEN 'service_charge'
                  WHEN l.type = 'interest' THEN 'interest'
                  WHEN l.type = 'service_charge' THEN 'service_charge'
                  WHEN c.pricing_rule_snapshot ? 'escrowFeeBps' THEN 'escrow_fee'
@@ -193,9 +196,16 @@ export class AccountingService {
           FROM ledger_record l
           LEFT JOIN charge c ON l.reference_type = 'charge' AND c.id::text = l.reference_id
           LEFT JOIN service_request s ON l.reference_type = 'service_request' AND s.id::text = l.reference_id
-         WHERE l.type IN ('fee', 'service_charge', 'interest')
+         WHERE l.type IN ('fee', 'service_charge', 'interest', 'shipping_refund', 'service_refund')
            AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz
          GROUP BY 1`)
+    ).rows;
+    const [refunds] = (
+      await this.db.execute<{ total: string }>(sql`
+        SELECT COALESCE(sum(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0)::text AS total
+          FROM ledger_record
+         WHERE type IN ('shipping_refund', 'service_refund')
+           AND occurred_at >= ${from}::timestamptz AND occurred_at < ${to}::timestamptz`)
     ).rows;
     const [returned] = (
       await this.db.execute<{ total: string; fee: string }>(sql`
@@ -271,6 +281,7 @@ export class AccountingService {
       revenue: {
         totalMinor: lines.reduce((a, l) => a + l.totalMinor, 0),
         lines,
+        refundsMinor: Number(refunds?.total ?? 0),
         cashOutFeesReturnedMinor: returnedFeeMinor,
         carrierCostOnShippingChargesMinor: Number(carrier?.total ?? 0),
       },
@@ -291,7 +302,8 @@ export class AccountingService {
       },
       note:
         'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows, ' +
-        'less the cash-out fees given back when a payout was refused or returned. ' +
+        'less the shipping and service refunds written that month, each off the line its charge was counted on, ' +
+        'and less the cash-out fees given back when a payout was refused or returned. ' +
         'No tax has been applied or separated; which lines are taxable is for the accountant.',
     };
   }
