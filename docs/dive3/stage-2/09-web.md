@@ -212,7 +212,7 @@ The operator console, at warehouse density. Tabs `overview`, `receiving`, `inven
 **Watch:** the batch has no idempotency key; only `busy` stops a second press.
 
 #### `apps/web/src/areas/warehouse/ServiceQueue.tsx`, `apps/web/src/areas/warehouse/GradingSubmissions.tsx`, `apps/web/src/areas/warehouse/SupportQueue.tsx`, `apps/web/src/areas/warehouse/HouseOrdersPanel.tsx` · 1 min · T10.1, T10.2, T11.6
-- `ServiceQueue` accepts or denies requests, then closes one with its form from `FORMS` (`/services/<type>/:id/complete`), which needs every field and `itemVerified`.
+- `ServiceQueue` accepts or declines a pending request, then closes one under way with its form from `FORMS` (`/services/<type>/:id/complete`), which needs every field and `itemVerified`, or cancels and refunds it (`/services/requests/:id/deny`).
 - `GradingSubmissions` batches cards for a grading company. `SupportQueue` assigns tickets. `HouseOrdersPanel` shelves the copy a house-store buyer paid for.
 
 #### `apps/web/src/areas/admin/AdminConsole.tsx` · 2 min · T7.1, T7.6, T8.5, T8.9

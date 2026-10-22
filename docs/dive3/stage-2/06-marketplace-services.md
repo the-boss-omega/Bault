@@ -108,8 +108,10 @@ Each step re-reads the deal via `lockDeal` (`FOR UPDATE`, expected statuses): a 
 
 #### `apps/api/src/modules/dis/dis.schema.ts`, `apps/api/src/modules/dis/service.service.ts` · 2 min · T10.1, T8.4, T15.1
 One `service_request` table: `type` (`service_request_type`), `typeFields` (per-type data, with `stage`), `fulfillment` (closing form); status `requested`, `in_progress` (operator accepted), `completed` or `cancelled`.
-- `create` — in the caller's transaction: `WalletService.assertNotBlocked` (plain read; negative balance refuses), `assertNotAlreadyOpen` (one open per type, item, requester, unless `allowDuplicate`), then `BillingService.charge` (`actionType: 'service'`, optional `feeActionType`) unless `free`: billed at raise.
-- `accept`, `deny` — via `transition`: locks the request, moves only from `requested`.
+- `create` — in the caller's transaction: `WalletService.assertNotBlocked` (plain read; negative balance refuses), `assertNotAlreadyOpen` (one open per type, item, requester, unless `allowDuplicate`), then `BillingService.charge` (`actionType: 'service'`, optional `feeActionType`) unless `free`: billed at raise, with what it returned kept as `typeFields.billed`.
+- `accept` — via `transition`: locks the request, moves only from `requested`.
+- `deny` — locks the request; an open one (`requested` or `in_progress`) goes to `refundAndCancel`, a closed one is a 409.
+- `refundAndCancel` — the caller holds the request lock; then `lockWallet` and a `service_refund` for `billed.amountMinor`, or `restoreCounted` for a covered request; then `cancelled`, with `refundedMinor` or `allowanceRestored`. Lock order: request, wallet, period.
 - `get` — with `tx`, `FOR UPDATE`; every completion starts here.
 - `assertAccepted` — completion needs `in_progress`.
 - `completeWithFulfillment` — refuses a required field missing, blank, zero or `false`, and a `completed` or `cancelled` request, so no credit or transfer repeats.
@@ -117,7 +119,8 @@ One `service_request` table: `type` (`service_request_type`), `typeFields` (per-
 - `platformAccountId` — the custodian (`platform@bault.dev`) of donated, consigned, bought-out cards.
 
 **Watch:**
-- `deny` keeps the creation fee.
+- `deny` also cancels a request under way, refunding work that was started; the queue offers it as "Cancel and refund".
+- A request created before `billed` existed has none, so cancelling it refunds nothing.
 - `assertNotAlreadyOpen` is a plain read, sound only under the caller's item lock.
 - `DisController.get` (`GET /services/requests/:id`) checks no role or requester: anyone signed in with the id reads it.
 
@@ -127,7 +130,7 @@ A batched pipeline.
 - `checkTier` — refuses a value over the cap, or a walkthrough under `WALKTHROUGH_THRESHOLD_MINOR`. `tierFeeAction` — `grading_fee:<key>`.
 - `tiers` — prices via `PricingService.tryPrice`; `null` without a rule.
 - `request` — locks the item (owner's, `stored`, not on hold); `ServiceRequestService.create` at the tier's fee action; `approvalState` `pending` or `not_required`.
-- `approve` — admin; locks the request; refusal cancels.
+- `approve` — admin; locks the request; refusal refunds and cancels it (`refundAndCancel`).
 - `openSubmission`, `readyFor`, `addToSubmission` — the `grading_submission` batch (`open`, `shipped`, `returned`); adding (accepted requests only) locks it, then the request.
 - `shipSubmission` — locks the submission; each `in_progress` member goes `at_grader` (custody event, `grading_shipped`).
 - `complete` — locks request, then item; writes `conditionGrade` and `item_change_history`; back to `stored` only from `at_grader`.
@@ -150,7 +153,7 @@ Irreversible, two steps: checks and `ConfirmationService.issue`, then `consume` 
 - `requestCull`, `confirmCull` — remove commons, free, within `CULL_WINDOW_DAYS` of intake. Confirm: request, `lockItems` (id order), `lockExpecting` each, then donate (platform, `donated`) or discard (`discarded`); `commons_removed`.
 - `DonationService.confirm` — the billed request first (its charge can write the donor's period), then `transferOwnership` to the platform (item locked, donor expected); `donated`, a `transfer` `transaction` with null price, `item_donated`.
 
-**Watch:** a card sold after its deslab was accepted makes `completeDeslab` refuse; the fee stays charged, the request open (Stage 3).
+**Watch:** a card sold after its deslab was accepted makes `completeDeslab` refuse; the operator then cancels the request with `deny`, which refunds the old owner.
 
 #### `apps/api/src/modules/dis/consignment.service.ts`, `consignment-channels.ts`, `consignment-event.schema.ts` · 2 min · T10.5, T10.7, T15.4
 Consignment, plus the staff warehouse transfer.

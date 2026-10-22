@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Database } from '../../db/client';
-import type { BillableAction, BillingPort } from '../../shared/billing/billing.port';
+import type { BillableAction, BillingPort, ChargeOutcome } from '../../shared/billing/billing.port';
 import { AppError } from '../../shared/errors/app-error';
 import { PricingService } from '../prc/pricing.service';
 import { MembershipService } from '../mem/membership.service';
@@ -16,16 +16,19 @@ export class BillingService implements BillingPort {
     private readonly memberships: MembershipService,
   ) {}
 
-  async charge(tx: Database, action: BillableAction): Promise<void> {
+  async charge(tx: Database, action: BillableAction): Promise<ChargeOutcome> {
     const billedAs = action.feeActionType ?? action.actionType;
-    const entitlement = await this.memberships.consume(tx, action.userId, allowanceFor(billedAs));
-    if (entitlement.covered) return;
+    const allowance = allowanceFor(billedAs);
+    const entitlement = await this.memberships.consume(tx, action.userId, allowance);
+    if (entitlement.covered) {
+      return entitlement.periodId ? { kind: 'covered', periodId: entitlement.periodId, allowance } : { kind: 'free' };
+    }
 
     const opts = { itemClass: action.itemClass };
     const { amount, snapshot } =
       (action.feeActionType ? await this.pricing.tryPrice(action.feeActionType, opts, tx) : null) ??
       (await this.pricing.price(action.actionType, opts, tx));
-    if (amount.amount === 0) return;
+    if (amount.amount === 0) return { kind: 'free' };
 
     const [row] = await tx
       .insert(charge)
@@ -54,5 +57,6 @@ export class BillingService implements BillingPort {
       },
       tx,
     );
+    return { kind: 'charged', chargeId: row.id, amountMinor: amount.amount, currency: amount.currency };
   }
 }

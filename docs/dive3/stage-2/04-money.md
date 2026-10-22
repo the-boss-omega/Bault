@@ -38,7 +38,7 @@ A thin view over the ledger.
 
 #### `apps/api/src/modules/pay/billing.service.ts` · 2 min · T8.4, T8.5, T12.3, T15.2
 `BillingService` implements `BILLING_PORT`, which INV, DIS and MKT call to charge a fixed-price action inside their own transaction.
-- `charge` — first `MembershipService.consume` on `allowanceFor(feeActionType ?? actionType)`; a covered action writes nothing. Then `tryPrice(feeActionType)`, else `price(actionType)`, with `itemClass`; zero writes nothing. Otherwise it inserts a settled `charge` and one debit: `fee` for `marketplace_fee`, else `service_charge`. Locks: none of its own; `consume` row-locks the period with a conditional UPDATE. Retry: it commits or rolls back with the caller.
+- `charge` — first `MembershipService.consume` on `allowanceFor(feeActionType ?? actionType)`; a covered action writes nothing and returns `covered` with the period and allowance. Then `tryPrice(feeActionType)`, else `price(actionType)`, with `itemClass`; zero writes nothing (`free`). Otherwise it inserts a settled `charge` and one debit, `fee` for `marketplace_fee`, else `service_charge`, and returns `charged` with the charge's id and amount. Locks: none of its own; `consume` row-locks the period with a conditional UPDATE. Retry: it commits or rolls back with the caller.
 **Watch:**
 - No balance check: a charge may take the wallet negative (debt). Callers refuse new work with `assertNotBlocked`.
 - A caller that needs the wallet lock takes it before `charge`, since `consume` has already locked the period.

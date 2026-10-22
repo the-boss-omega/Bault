@@ -55,7 +55,7 @@ Stops another site from writing through a visitor's browser, with no token for t
 #### `apps/api/src/shared/adapters/adapters.module.ts`, `apps/api/src/shared/billing/billing.port.ts` · 1.5 min · T4.4, T8.4, T6.1
 Two injection seams.
 - `AdaptersModule` — global: `PAYMENT_ADAPTER`, `SHIPPING_ADAPTER`, `EMAIL_ADAPTER` and `STORAGE_ADAPTER`, built in `packages/adapters/src/select.ts` so the worker chooses the same way. A sandbox payment, shipping or storage adapter fails the boot in production.
-- `BILLING_PORT`, `BillingPort` and `BillableAction` — how a module charges a fee without importing PAY. `PayModule` binds the port to `BillingService`. `charge` runs in the caller's `tx`, so the fee commits or rolls back with the work. `itemClass` and `feeActionType` select a narrower pricing rule.
+- `BILLING_PORT`, `BillingPort` and `BillableAction` — how a module charges a fee without importing PAY. `PayModule` binds the port to `BillingService`. `charge` runs in the caller's `tx`, so the fee commits or rolls back with the work. `itemClass` and `feeActionType` select a narrower pricing rule. It returns a `ChargeOutcome`: `charged` (the charge's id and amount), `covered` (the period and the allowance spent), or `free`.
 
 **Watch:** `BillingModule` and `NoopBillingAdapter` in the same file are imported by nothing.
 
