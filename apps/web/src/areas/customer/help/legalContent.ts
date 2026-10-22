@@ -96,7 +96,7 @@ const TERMS_OF_SERVICE: LegalDocument = {
     section(
       'shipping',
       '8. Shipping, insurance and customs',
-      'Shipping is priced from the carrier’s rate plus Bault’s handling fee and any insurance, add-on or rush packing you choose. A shipment you cannot pay for is held for payment for a limited period and then cancelled; cancelling a shipment after its service was paid for costs a restocking fee.',
+      'Shipping is priced from the carrier’s rate plus Bault’s handling fee and any insurance, add-on or rush packing you choose. A shipment you cannot pay for is held for payment for a limited period and then cancelled; cancelling a carrier shipment after its service was paid for costs a restocking fee. There is no restocking fee when the carrier refused the label, or for a show pickup or a hand delivery cancelled before the warehouse starts on it: before the show’s booking deadline, or before the delivery’s pickup window opens.',
       'Insurance is capped per parcel, and a parcel insured above a set value must be signed for; both figures are shown when you ship and under "Current figures".',
       'For an international shipment you declare the customs value of the contents. Bault does not change, reduce or omit it. Duty and tax at the destination are paid by the recipient.',
       'Items sent to Bault from outside the United States are imported by you. Customs clearance, duty, tax and carrier or broker charges are yours.',

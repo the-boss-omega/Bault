@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
+import { activeAccount, passwordOnly } from './helpers/mfa';
+import { sql } from './helpers/db';
 
 describe('ESC escrow and human fulfilment', () => {
   const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
@@ -350,7 +352,7 @@ describe('ESC escrow and human fulfilment', () => {
     expect(requested.body.quoteMinor).toBeNull();
     expect(requested.body.cost).toBeNull();
 
-    const premature = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);
+    const premature = await collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: 118_000 });
     expect(premature.status).toBe(409);
 
     const quoted = await operator.post(`/shipping/white-glove/${shipmentId}/quote`, {
@@ -369,7 +371,7 @@ describe('ESC escrow and human fulfilment', () => {
     });
 
     const before = await balanceOf(collector);
-    const accepted = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);
+    const accepted = await collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: 118_000 });
     expect(accepted.status).toBe(201);
     expect(accepted.body.cost).toBe(118_000);
     expect(await balanceOf(collector)).toBe(before - 118_000);
@@ -434,6 +436,118 @@ describe('ESC escrow and human fulfilment', () => {
     });
     expect(handed.status).toBe(201);
     expect(handed.body.itemCount).toBe(1);
+  });
+
+  it('gives a member back the pickup a cancelled pickup used, and charges no restocking fee', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const account = await activeAccount('pickup-cover');
+    const member = await passwordOnly(account);
+    const cashIn = await member.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 80_000,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `pickup-cover-${Date.now()}`,
+    });
+    expect(cashIn.status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
+    expect([200, 201]).toContain((await member.post('/membership/subscribe', { tier: 'trust' })).status);
+    const bins = (await operator.get('/custody/bins')).body as { id: string }[];
+    const card = (
+      await operator.post('/intake/items', {
+        ownerUsername: account.username,
+        typeClass: 'graded_slab',
+        binId: bins[0]!.id,
+        description: 'Pickup a member cancels',
+      })
+    ).body as { id: string };
+
+    const used = async () => {
+      const [row] = await sql<{ used: number | null }>(
+        `SELECT (consumed ->> 'show_pickup')::int AS used
+           FROM membership_period WHERE user_id = $1 ORDER BY period_start DESC LIMIT 1`,
+        [account.id],
+      );
+      return row?.used ?? 0;
+    };
+
+    const shows = (await member.get('/shipping/pickup/shows')).body as Array<{ id: string; open: boolean }>;
+    const before = await balanceOf(member);
+    const booked = await member.post('/shipping/pickup', { itemIds: [card.id], eventId: shows.find((s) => s.open)!.id });
+    expect(booked.status).toBe(201);
+    expect(await used()).toBe(1);
+    expect(await balanceOf(member)).toBe(before);
+
+    const cancelled = await member.post(`/shipping/shipments/${booked.body.id}/cancel`, { reason: 'Not going to the show.' });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.restockingFeeMinor).toBe(0);
+    expect(await used()).toBe(0);
+    expect(await balanceOf(member)).toBe(before);
+  });
+
+  it('charges the restocking fee to cancel a pickup only once the van is being packed', async () => {
+    const operator = await signIn(SEED.operator);
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 10_000);
+    const shows = (await collector.get('/shipping/pickup/shows')).body as Array<{ id: string; open: boolean; feeMinor: number }>;
+    const show = shows.find((s) => s.open)!;
+
+    const early = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    const late = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    const before = await balanceOf(collector);
+    const kept = (await collector.post('/shipping/pickup', { itemIds: [early.id], eventId: show.id })).body;
+    expect((await collector.get(`/shipping/shipments/${kept.id}/cancel-fee`)).body).toEqual({ restockingFeeMinor: 0 });
+    const free = await collector.post(`/shipping/shipments/${kept.id}/cancel`, { reason: 'Changed my plans.' });
+    expect(free.status).toBe(201);
+    expect(free.body.restockingFeeMinor).toBe(0);
+    expect(await balanceOf(collector)).toBe(before);
+
+    const booked = (await collector.post('/shipping/pickup', { itemIds: [late.id], eventId: show.id })).body;
+    const [{ deadline }] = await sql<{ deadline: Date }>(
+      'SELECT request_deadline AS deadline FROM consignment_event WHERE id = $1',
+      [show.id],
+    );
+    await sql(`UPDATE consignment_event SET request_deadline = now() - interval '1 minute' WHERE id = $1`, [show.id]);
+    try {
+      expect((await collector.get(`/shipping/shipments/${booked.id}/cancel-fee`)).body).toEqual({ restockingFeeMinor: 2_500 });
+      const charged = await collector.post(`/shipping/shipments/${booked.id}/cancel`, { reason: 'Too late to come.' });
+      expect(charged.status).toBe(201);
+      expect(charged.body.restockingFeeMinor).toBe(2_500);
+      expect(await balanceOf(collector)).toBe(before - 2_500);
+    } finally {
+      await sql('UPDATE consignment_event SET request_deadline = $2 WHERE id = $1', [show.id, deadline]);
+    }
+  });
+
+  it('charges no restocking fee to cancel an accepted hand delivery before its pickup window', async () => {
+    const operator = await signIn(SEED.operator);
+    const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 50_000);
+    const soon = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+    const requested = await collector.post('/shipping/white-glove', {
+      itemIds: [card.id],
+      pickupAddress: 'Bault NJ vault',
+      pickupFrom: soon(5),
+      pickupTo: soon(6),
+      deliveryAddress: 'The Langham, Boston MA',
+      deliverFrom: soon(6),
+      deliverTo: soon(7),
+      destinationCountry: 'US',
+      recipientName: 'Red Ashwood',
+    });
+    expect(requested.status).toBe(201);
+    const shipmentId = requested.body.id as string;
+    expect((await operator.post(`/shipping/white-glove/${shipmentId}/quote`, { quoteMinor: 30_000, notes: 'Base plus travel.' })).status).toBe(201);
+    const before = await balanceOf(collector);
+    expect((await collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: 30_000 })).status).toBe(201);
+
+    const cancelled = await collector.post(`/shipping/shipments/${shipmentId}/cancel`, { reason: 'Coming to the vault myself.' });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.restockingFeeMinor).toBe(0);
+    expect(await balanceOf(collector)).toBe(before);
   });
 
   it('refuses a hand-over whose scanned set does not match', async () => {

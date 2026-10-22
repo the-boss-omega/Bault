@@ -1855,6 +1855,7 @@ const he = {
   'ship.cancelReason': 'סיבת הביטול',
   'ship.cancelReasonLabel': 'למה?',
   'ship.cancelFree': 'עוד לא נגעו בחבילה — הביטול ללא עלות.',
+  'ship.cancelNoFee': 'הביטול ללא עלות, ומה ששולם חוזר לארנק.',
   'ship.cancelFeeWarning': 'החבילה כבר שולמה ונכנסה לתור. ביטול עכשיו כרוך בדמי החזרה למלאי של {amount}.',
   'market.alreadyBought': 'כבר קניתם את זה — הפריט בכספת שלכם. לא חויבתם פעמיים.',
   'ship.restockingCharged': 'דמי החזרה למלאי {amount}',
@@ -2077,6 +2078,7 @@ const he = {
   'ff.wg.awaitingQuote': 'ממתין למחיר',
   'ff.wg.accept': 'אישור',
   'ff.wg.accepted': 'אושר, {amount} נגבו.',
+  'ff.wg.quoteChanged': 'המחיר השתנה בינתיים, ולכן לא נגבה דבר. המחיר החדש מופיע ברשימה, ואפשר לאשר אותו.',
 
   'faq.tab.guides': 'מדריכים',
   'faq.tab.shows': 'לוח תערוכות',
@@ -4337,6 +4339,7 @@ const en: Record<MessageKey, string> = {
   'ship.cancelReason': 'Cancelled because',
   'ship.cancelReasonLabel': 'Why?',
   'ship.cancelFree': 'Nobody has touched it yet — cancelling costs nothing.',
+  'ship.cancelNoFee': 'Cancelling costs nothing, and what you paid comes back to your wallet.',
   'ship.cancelFeeWarning': 'This was paid for and queued for picking. Cancelling now charges a {amount} restocking fee.',
   'market.alreadyBought': 'You already bought this — it is in your vault. Nothing was charged twice.',
   'ship.restockingCharged': 'Restocking fee {amount}',
@@ -4559,6 +4562,7 @@ const en: Record<MessageKey, string> = {
   'ff.wg.awaitingQuote': 'Awaiting a price',
   'ff.wg.accept': 'Accept',
   'ff.wg.accepted': 'Accepted, {amount} charged.',
+  'ff.wg.quoteChanged': 'The quote changed while you were reading it, so nothing was charged. The new figure is in the list, ready to accept.',
 
   'faq.tab.guides': 'Guides',
   'faq.tab.shows': 'Show calendar',

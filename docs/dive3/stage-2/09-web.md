@@ -171,7 +171,7 @@ Tabs `browse`, `house`, `sell`, `listings`, `offers`, `trade`, `escrow`, `store`
 
 #### `apps/web/src/areas/customer/shipping/ShippingServicesPage.tsx` · 2 min · T13, T10.5, T10.6
 Tabs `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `history`, `not-accepted`.
-- `TrackingTab` lists `GET /shipping/shipments`. `ShipmentDrawer` pays, cancels with a reason, and shows `CustomsReadiness` outside the US.
+- `TrackingTab` lists `GET /shipping/shipments`. `ShipmentDrawer` pays, cancels with a reason after showing the fee the server names (`cancel-fee`), and shows `CustomsReadiness` outside the US.
 - `RechooseService` appears after a carrier refuses a label: it loads the shipment's rates and posts `select-rate`, and the server settles the difference.
 - `RequestTable` lists `GET /services/mine` and accepts or declines buyout and custom-request quotes.
 - `NotAcceptedTable` lists `GET /me/disposals`, arrivals Bault refused.
@@ -180,7 +180,7 @@ Tabs `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `his
 - `ShipmentComposer` re-quotes as answers change (`POST /shipping/quote`, which creates nothing); refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`. An address that `lacksRegion`, or that the server refuses with `address_region_required`, stops the quote and shows a link to edit it.
 - `HumanFulfilmentPanels.tsx` handles show pickup and hand delivery; `SharedParcelsTab` runs group shipments.
 
-**Watch:** if `commit`'s second call fails, the shipment already exists and only the error shows. `WhiteGloveQuotes` accepts with no amount, so the server charges whatever quote is current.
+**Watch:** if `commit`'s second call fails, the shipment already exists and only the error shows. `WhiteGloveQuotes` accepts naming the figure it shows; a `quote_changed` answer says so and reloads the list with the new figure.
 
 #### `apps/web/src/areas/customer/profile/ProfilePage.tsx`, `apps/web/src/areas/customer/profile/TwoFactorPanel.tsx`, `apps/web/src/areas/customer/support/SupportPage.tsx`, `apps/web/src/areas/customer/notifications/NotificationsPage.tsx` · 1.5 min · T7.1, T7.6, T14.4
 - `ProfilePage`: `PATCH /me/profile`, addresses on `/me/addresses`, and `/auth/password/change`. `AddressFields` shows a state or province list for a country with `regions`, free text elsewhere, and clears it when the country changes; a saved address that `lacksRegion` wears a warning badge. `TwoFactorPanel` drives setup, disable and recovery codes under `/auth/mfa`.

@@ -45,7 +45,7 @@ Bault earns on almost every action. Each price is either a pricing rule an admin
 - **Storage:** after an included period, a share of the item's own intake fee for every period it stays (T12.5).
 - **Services:** grading, photography, video review, condition inspection, cracking a slab, custom work.
 - **Trading:** commission on marketplace sales, a cut of consignment sales, an escrow fee, a service fee on swaps and gifts, and the margin on buyouts and store sales.
-- **Shipping:** handling on top of the carrier's rate, insurance premiums, add-ons, hand-delivery quotes, show-pickup fees, and a restocking fee when a paid shipment is cancelled.
+- **Shipping:** handling on top of the carrier's rate, insurance premiums, add-ons, hand-delivery quotes, show-pickup fees, and a restocking fee when a paid shipment is cancelled after work on it began.
 - **Money:** a cash-out fee, a chargeback fee, and daily interest on a wallet in debt.
 - **Memberships:** a monthly fee in exchange for allowances that replace many of the charges above.
 
@@ -1293,7 +1293,7 @@ Two ways out are a person, not a parcel. Both end with a hand-over: an operator 
 **Hand delivery** (white glove) is somebody driving the card there, so it is a quote, not a rate:
 1. The collector asks, with a pickup window at least 48 hours away, a delivery window and both addresses. The shipment is `requested`, with no price.
 2. Staff quote a figure with notes, under the shipment lock and only while `requested`. The published base is $1,000 domestic and $1,500 international, plus travel.
-3. The collector accepts: under the shipment lock, then the wallet lock, the quote is charged and the shipment becomes `rates_selected`. Acceptance takes whatever quote is current; there is no "the figure I saw" check.
+3. The collector accepts: under the shipment lock, then the wallet lock, the quote is charged and the shipment becomes `rates_selected`. Acceptance names the figure the collector saw. If the quote changed meanwhile, it is refused with 409 `quote_changed`, which carries the new figure, and nothing is charged.
 
 **Show pickup** sends the cards to a show Bault already attends, for the collector to collect there: cheap because the van is going anyway, capped per show, closed at the show's deadline. Booking charges on the spot (the show's fee or the `show_pickup` rule, which a membership may waive) and creates a `rates_selected` shipment, locking the show and recounting its places, then the wallet, then the period.
 
@@ -1314,7 +1314,7 @@ A parcel still unopened at the Delaware forwarding facility can ship straight ou
 #### T13.9 Edits, merges, cancellation and refunds
 
 A shipment can be edited or merged into another of the collector's only while `requested`: before that, nobody has walked to a shelf. It can be cancelled, with a reason, while `requested`, `awaiting_payment` or `rates_selected`; once `labeled`, the warehouse has it. Under the shipment lock and then the wallet lock:
-- from `rates_selected`, a $25 restocking fee is charged;
+- from `rates_selected`, a $25 restocking fee is charged only for work done: never when the carrier refused the label (its failure), for a show pickup only once the show's booking deadline has passed (the van is being packed), and for a hand delivery only once its pickup window has opened. `GET /shipping/shipments/:id/cancel-fee` answers what a cancel would charge now, and the drawer shows it;
 - if it was paid and has no tracking number, it refunds what was actually charged for it (every settled `shipping` charge on it) minus what was already refunded, as one `shipping_refund`, so a re-rate then a cancel cannot refund twice, and the cover returns to its cycle;
 - a direct-overnight parcel returns to the dock;
 - the shipment becomes `cancelled`, the only terminal status that frees its items, and the collector is told.

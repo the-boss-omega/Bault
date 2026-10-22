@@ -27,7 +27,7 @@ const { VaultPage } = await import('../../apps/web/src/areas/customer/vault/Vaul
 const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
 const { WalletPage } = await import('../../apps/web/src/areas/customer/finance/WalletPage');
 const { WhiteGloveQuotes } = await import('../../apps/web/src/areas/customer/shipping/HumanFulfilmentPanels');
-const { RechooseService } = await import('../../apps/web/src/areas/customer/shipping/ShippingServicesPage');
+const { RechooseService, ShipmentDrawer } = await import('../../apps/web/src/areas/customer/shipping/ShippingServicesPage');
 const { useI18n } = await import('../../apps/web/src/shared/i18n');
 
 function renderIn(ui: React.ReactElement) {
@@ -348,7 +348,24 @@ describe('a hand-delivery quote reaches the collector (F060)', () => {
     expect(await screen.findByText('$1,180.00')).toBeInTheDocument();
     expect(screen.queryByText('SHP-CARRIER1')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Accept' }));
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/shipping/white-glove/hd1/accept'));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/shipping/white-glove/hd1/accept', { quoteMinor: 118_000 }));
+  });
+
+  it('shows the new figure when the quote changed while the collector was reading', async () => {
+    const { ApiError } = await import('../../apps/web/src/shared/api');
+    get.mockResolvedValue([QUOTED]);
+    post.mockRejectedValue(
+      Object.assign(new ApiError('The quote changed to $1,500.00.'), { status: 409, code: 'quote_changed' }),
+    );
+    const user = userEvent.setup();
+    const onError = vi.fn();
+    const onChanged = vi.fn();
+    renderIn(<WhiteGloveQuotes reloadToken={0} onError={onError} onStatus={() => {}} onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(String(onError.mock.calls.at(-1)?.[0] ?? '')).toMatch(/the quote changed/i);
+    expect(onChanged).toHaveBeenCalled();
   });
 });
 
@@ -397,5 +414,41 @@ describe('a label the carrier refused can be re-chosen (fix 4)', () => {
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/shipping/shipments/s1/select-rate', { carrier: 'USPS', serviceLevel: 'Ground Advantage' }),
     );
+  });
+});
+
+describe('cancelling a shipment says what it will cost', () => {
+  const PICKUP = {
+    id: 'pk1',
+    code: 'SHP-PICKUP01',
+    status: 'rates_selected',
+    fulfilmentMethod: 'show_pickup',
+    itemIds: ['i1'],
+    destinationCountry: 'US',
+    declaredValueMinor: 0,
+    addOns: [],
+    labelRefused: null,
+  };
+
+  it('asks the server for the fee and says when there is none', async () => {
+    get.mockImplementation((path: string) =>
+      path === '/shipping/shipments/pk1/cancel-fee' ? Promise.resolve({ restockingFeeMinor: 0 }) : Promise.resolve([]),
+    );
+    const user = userEvent.setup();
+    renderIn(
+      <ShipmentDrawer
+        shipment={PICKUP as never}
+        locale="en"
+        t={(k: string) => k}
+        onClose={() => {}}
+        onChanged={() => {}}
+        onError={() => {}}
+        onStatus={() => {}}
+      />,
+    );
+    await user.click(await screen.findByRole('button', { name: 'ship.cancel' }));
+    expect(await screen.findByText('ship.cancelNoFee')).toBeInTheDocument();
+    expect(screen.queryByText('ship.cancelFeeWarning')).not.toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith('/shipping/shipments/pk1/cancel-fee');
   });
 });

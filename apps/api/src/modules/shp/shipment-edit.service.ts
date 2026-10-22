@@ -13,6 +13,7 @@ import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
 import { ShipmentService, type ShipmentActor, type ShipmentOptionsInput } from './shipment.service';
 import { MembershipService, type AppliedShippingCover } from '../mem/membership.service';
+import { consignmentEvent } from '../dis/consignment-event.schema';
 import {
   MAX_INSURED_VALUE_MINOR,
   RESTOCKING_FEE_MINOR,
@@ -203,6 +204,29 @@ export class ShipmentEditService {
     });
   }
 
+  private async restockingFee(tx: Database, cur: typeof shipment.$inferSelect, now: Date): Promise<number> {
+    if (ShipmentService.labelRefusal(cur)) return 0;
+    if (cur.fulfilmentMethod === 'show_pickup') {
+      if (!cur.pickupEventId) return 0;
+      const [show] = await tx
+        .select({ requestDeadline: consignmentEvent.requestDeadline })
+        .from(consignmentEvent)
+        .where(eq(consignmentEvent.id, cur.pickupEventId))
+        .limit(1);
+      return show && show.requestDeadline.getTime() <= now.getTime() ? RESTOCKING_FEE_MINOR : 0;
+    }
+    if (cur.fulfilmentMethod === 'hand_delivery') {
+      return cur.pickupFrom && cur.pickupFrom.getTime() <= now.getTime() ? RESTOCKING_FEE_MINOR : 0;
+    }
+    return RESTOCKING_FEE_MINOR;
+  }
+
+  async cancelFee(shipmentId: string, actor: ShipmentActor) {
+    const s = await this.shipments.loadFor(shipmentId, actor);
+    const restockingFeeMinor = s.status === 'rates_selected' ? await this.restockingFee(this.db, s, new Date()) : 0;
+    return { restockingFeeMinor };
+  }
+
   async cancel(shipmentId: string, actor: ShipmentActor, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
     const s = await this.shipments.loadFor(shipmentId, actor);
@@ -224,7 +248,7 @@ export class ShipmentEditService {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       assertCancellable(cur.status);
-      const feeMinor = cur.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
+      const feeMinor = cur.status === 'rates_selected' ? await this.restockingFee(tx as Database, cur, now) : 0;
       const paid = cur.status === 'rates_selected' && !cur.trackingNumber;
 
       if (ShipmentService.isDirect(cur)) await this.releaseDirectParcel(tx as Database, cur, actor.id);

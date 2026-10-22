@@ -549,7 +549,7 @@ function TrackingTab({
   );
 }
 
-function ShipmentDrawer({
+export function ShipmentDrawer({
   shipment,
   locale,
   t,
@@ -573,12 +573,12 @@ function ShipmentDrawer({
   useEffect(() => {
     void (async () => {
       try {
-        const svc = await api.get<{ restockingFeeMinor: number }>('/shipping/services');
-        setRestockingFeeMinor(svc.restockingFeeMinor ?? null);
+        const fee = await api.get<{ restockingFeeMinor: number }>(`/shipping/shipments/${shipment.id}/cancel-fee`);
+        setRestockingFeeMinor(fee.restockingFeeMinor ?? null);
       } catch {
       }
     })();
-  }, []);
+  }, [shipment.id]);
 
   const cancellable = ['requested', 'awaiting_payment', 'rates_selected'].includes(shipment.status);
   const payable = shipment.status === 'awaiting_payment';
@@ -736,11 +736,13 @@ function ShipmentDrawer({
             <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
           </label>
           <span className="field-hint">
-            {shipment.status === 'rates_selected'
-              ? t('ship.cancelFeeWarning', {
-                  amount: restockingFeeMinor === null ? '—' : formatUsd(restockingFeeMinor),
-                })
-              : t('ship.cancelFree')}
+            {shipment.status !== 'rates_selected'
+              ? t('ship.cancelFree')
+              : restockingFeeMinor === 0
+                ? t('ship.cancelNoFee')
+                : t('ship.cancelFeeWarning', {
+                    amount: restockingFeeMinor === null ? '—' : formatUsd(restockingFeeMinor),
+                  })}
           </span>
           <div className="row">
             <Button

@@ -55,10 +55,11 @@ The core: quote, create, rate, pay, read. Every `shp` service calls it; `apps/ap
 Changing a shipment after it is requested, behind `PATCH shipments/:id`, `shipments/:id/merge` and `shipments/:id/cancel`.
 - `update` — only while `requested`. It checks the cards again under the shipment lock, and its write is conditional on `requested`, so an edit can't land after payment.
 - `merge` — same owner and address. Adds the declared and insured values (insured capped), takes the bigger box, locks both rows in id order. The source becomes `cancelled` with `mergedIntoShipmentId`.
-- `cancel` — from `requested`, `awaiting_payment` or `rates_selected`. From `rates_selected` with no tracking number, it refunds the settled `shipping` charges less earlier `shipping_refund` credits, returns the cover and charges `RESTOCKING_FEE_MINOR`. Emits `shipment_cancelled`.
+- `cancel` — from `requested`, `awaiting_payment` or `rates_selected`. From `rates_selected` with no tracking number, it refunds the settled `shipping` charges less earlier `shipping_refund` credits, returns the cover and charges what `restockingFee` says. Emits `shipment_cancelled`.
+- `restockingFee` — `RESTOCKING_FEE_MINOR` for work done: none for a `labelRefusal`, a `show_pickup` only after its show's `requestDeadline`, a `hand_delivery` only after `pickupFrom`. `cancelFee` answers it for the drawer (`GET /shipping/shipments/:id/cancel-fee`).
 - `releaseDirectParcel` — returns a direct-overnight parcel to the state its `direct_shipped` event took it from.
 
-**Watch:** cancel doesn't clear `groupId`, so a group can still lock on cancelled members. A refused-label shipment still pays the restocking fee. A waived show pickup stores no `membershipCover`, so cancelling it doesn't give the allowance back.
+**Watch:** cancel doesn't clear `groupId`, so a group can still lock on cancelled members. `restockingFee` and `cancelFee` share one rule; change it in one place.
 
 #### `apps/api/src/modules/shp/dispatch.service.ts` · 3 min · T13.3, T15.1, T15.3
 Three steps, because a bought label is money no rollback returns.
@@ -73,8 +74,8 @@ Three steps, because a bought label is money no rollback returns.
 Hand delivery (white glove) and show pickup.
 - `requestHandDelivery` — a `hand_delivery` shipment with no price yet.
 - `quoteHandDelivery` — staff set `quoteMinor` under the shipment lock, only while `requested`.
-- `acceptQuote` — charges `quoteMinor`, then moves to `rates_selected` only if status and quote are unchanged.
-- `pickupShows`, `requestPickup` — free places are counted, not stored. Booking recounts under the show's row lock, applies `memberships.waive(…, 'show_pickup', …)` and charges at once.
+- `acceptQuote` — takes the figure the collector saw (`AcceptQuoteDto`); a different `quoteMinor` under the lock is 409 `quote_changed` with the new figure. Then it charges `quoteMinor` and moves to `rates_selected` only if status and quote are unchanged.
+- `pickupShows`, `requestPickup` — free places are counted, not stored. Booking recounts under the show's row lock, applies `memberships.waive(…, 'show_pickup', …)` and charges at once. A waived pickup stores its period as a `membershipCover` (`pickupCover`, `addOns.show_pickup`), so a cancel gives the allowance back through `returnShippingCover`.
 - `handOver` — closes a non-carrier shipment: set-equal scan, cards locked and checked, `shipped`, status `delivered`, `handed_over` emitted.
 
 **Watch:** accept carries no "the figure I saw", so a new quote just before acceptance is the one charged. `handOver` compares raw item ids, not barcodes as dispatch does.

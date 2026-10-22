@@ -315,7 +315,7 @@ describe('concurrency: money races', () => {
 
     const before = await balanceOf(collector);
     const res = await Promise.all(
-      Array.from({ length: 6 }, () => collector.post(`/shipping/white-glove/${shipmentId}/accept`)),
+      Array.from({ length: 6 }, () => collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: QUOTE })),
     );
     const after = await balanceOf(collector);
 
