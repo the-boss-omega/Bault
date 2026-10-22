@@ -21,8 +21,9 @@ ROLES_SQL="$ROOT/infra/production/roles.sql"
 die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$*"; }
 
+COMPOSE_FILES=(-f "$ROOT/infra/production/compose.yml")
 compose() {
-  docker compose --env-file "$PROD_ENV" -f "$ROOT/infra/production/compose.yml" "$@"
+  docker compose --env-file "$PROD_ENV" "${COMPOSE_FILES[@]}" "$@"
 }
 
 env_get() {
@@ -83,8 +84,15 @@ DOMAIN="$(env_get BAULT_DOMAIN "$PROD_ENV")"
 [ -n "$DOMAIN" ] || die "BAULT_DOMAIN is not set in $PROD_ENV"
 HTTPS_PORT="$(env_get BAULT_HTTPS_PORT "$PROD_ENV")"
 HTTPS_PORT="${HTTPS_PORT:-443}"
-OWNER_URL="$(env_get DIRECT_DATABASE_URL "$MIGRATE_ENV")"
+OWNER_URL="$(env_get HOST_DIRECT_DATABASE_URL "$MIGRATE_ENV")"
+[ -n "$OWNER_URL" ] || OWNER_URL="$(env_get DIRECT_DATABASE_URL "$MIGRATE_ENV")"
 [ -n "$OWNER_URL" ] || die "DIRECT_DATABASE_URL is not set in $MIGRATE_ENV"
+read -r -a EXTRA_FILES <<< "$(env_get BAULT_COMPOSE_EXTRA "$PROD_ENV")"
+for extra in "${EXTRA_FILES[@]+"${EXTRA_FILES[@]}"}"; do
+  [ -r "$ROOT/$extra" ] || die "BAULT_COMPOSE_EXTRA names $extra, which is not in $ROOT"
+  COMPOSE_FILES+=(-f "$ROOT/$extra")
+done
+DB_SIDECAR="$(env_get BAULT_DB_SIDECAR "$PROD_ENV")"
 
 CURRENT="$(cat "$STATE_DIR/CURRENT_TAG" 2>/dev/null || true)"
 if [ "$CURRENT" != "$TAG" ]; then
@@ -109,7 +117,7 @@ to run against the newer schema (see the top of this script). Only if a
 migration itself did the damage: stop the app, and restore the dump taken just
 before it (infra/ops/RESTORE.md) into a database you name explicitly:
 
-  docker compose --env-file $PROD_ENV -f $ROOT/infra/production/compose.yml stop api worker
+  docker compose --env-file $PROD_ENV ${COMPOSE_FILES[*]} stop api worker
   ./infra/ops/backup.sh restore ${BACKUP_FILE:-<dump file>} <database-url>
 ----------------------------------------------------------------------------
 EOF
@@ -133,6 +141,15 @@ fi
 
 step "1/7 pull images for $TAG"
 compose pull --quiet
+if [ -n "$DB_SIDECAR" ]; then
+  echo "==> starting the database connector ($DB_SIDECAR)"
+  compose up -d "$DB_SIDECAR"
+  deadline=$(( $(date +%s) + 60 ))
+  until pg_isready -q -d "$OWNER_URL"; do
+    [ "$(date +%s)" -lt "$deadline" ] || die "the database is not reachable through $DB_SIDECAR after 60s ($(compose logs --tail=5 "$DB_SIDECAR" 2>&1 | tail -n 1))"
+    sleep 2
+  done
+fi
 
 step "2/7 back up the database (as the owner)"
 if [ -r "$BACKUP_ENV" ]; then

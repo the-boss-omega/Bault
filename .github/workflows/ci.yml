@@ -238,6 +238,81 @@ jobs:
           psql "$DIRECT_DATABASE_URL" -c "SELECT tgrelid::regclass AS table, tgname FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1, 2;"
           [ "$triggers" = "11" ] && [ "$operators" = "4" ]
 
+  cloud-sql-privileges:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bault
+          POSTGRES_PASSWORD: bault
+          POSTGRES_DB: bault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bault -d bault"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      ADMIN_URL: postgres://bault:bault@localhost:5432/postgres
+      OWNER_URL: postgres://bault_owner:ci-owner-password@localhost:5432/bault_gcp
+      APP_URL: postgres://bault_app:ci-app-password@localhost:5432/bault_gcp
+      WORKER_URL: postgres://bault_worker:ci-worker-password@localhost:5432/bault_gcp
+      NODE_ENV: test
+      PAYMENT_PROVIDER: sandbox
+      STORAGE_PROVIDER: sandbox
+      STORAGE_ENDPOINT: http://localhost:9000
+      STORAGE_REGION: auto
+      STORAGE_BUCKET: bault-images
+      STORAGE_ACCESS_KEY: ci-unused
+      STORAGE_SECRET_KEY: ci-unused
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Build the API image
+        run: docker build -f apps/api/Dockerfile -t bault-api:ci .
+
+      - name: The roles Cloud SQL creates, and no superuser
+        env:
+          BAULT_OWNER_PASSWORD: ci-owner-password
+        run: psql "$ADMIN_URL" -X -v ON_ERROR_STOP=1 -v dbname=bault_gcp -f infra/gcp/cloudsql-emulate.sql
+
+      - name: The owner takes over its database
+        run: psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 -f infra/gcp/claim-database.sql
+
+      - name: Migrate with the image, as the owner
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL="$OWNER_URL" -e DIRECT_DATABASE_URL="$OWNER_URL" -e NODE_ENV \
+            -e PAYMENT_PROVIDER -e STORAGE_PROVIDER -e STORAGE_ENDPOINT -e STORAGE_REGION \
+            -e STORAGE_BUCKET -e STORAGE_ACCESS_KEY -e STORAGE_SECRET_KEY \
+            bault-api:ci node dist/db/migrate.js
+
+      - name: roles.sql as the owner, then again
+        env:
+          BAULT_APP_PASSWORD: ci-app-password
+          BAULT_WORKER_PASSWORD: ci-worker-password
+        run: |
+          psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 -f infra/production/roles.sql
+          psql "$OWNER_URL" -X -q -v ON_ERROR_STOP=1 -f infra/production/roles.sql > /dev/null
+
+      - name: The application roles are the ones production needs
+        run: |
+          [ "$(psql "$APP_URL" -XAtc 'show statement_timeout')" = 30s ]
+          [ "$(psql "$WORKER_URL" -XAtc 'show statement_timeout')" = 30s ]
+          if psql "$APP_URL" -XAtc 'update ledger_record set amount = amount where false' 2> /dev/null; then
+            echo "bault_app may update the ledger"; exit 1
+          fi
+          psql "$WORKER_URL" -X -v ON_ERROR_STOP=1 -c 'create table pgboss.ci_probe (x int)' -c 'drop table pgboss.ci_probe'
+          supers="$(psql "$ADMIN_URL" -XAtc "select count(*) from pg_roles where rolsuper and rolname in ('bault_owner', 'bault_app', 'bault_worker')")"
+          [ "$supers" = 0 ]
+
   secret-scan:
     runs-on: ubuntu-24.04
     env:
