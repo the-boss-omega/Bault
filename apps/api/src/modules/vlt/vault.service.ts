@@ -55,6 +55,56 @@ const TERMINAL: Array<'shipped' | 'donated' | 'consigned' | 'sold' | 'discarded'
 
 const LIVE: Array<'received' | 'stored' | 'listed' | 'at_grader'> = ['received', 'stored', 'listed', 'at_grader'];
 
+export type DepartureKind =
+  | 'shipped'
+  | 'donated'
+  | 'discarded'
+  | 'consigned'
+  | 'buyout'
+  | 'sold'
+  | 'gift'
+  | 'swap'
+  | 'escrow'
+  | 'left';
+
+export interface Departure {
+  kind: DepartureKind;
+  code: string | null;
+}
+
+const DEPARTED_STATE: Record<string, DepartureKind> = {
+  shipped: 'shipped',
+  donated: 'donated',
+  discarded: 'discarded',
+  consigned: 'consigned',
+  sold: 'buyout',
+};
+
+const TRANSFER_REASON: Record<string, DepartureKind> = {
+  donation: 'donated',
+  'remove commons — donated': 'donated',
+  'buyout accepted': 'buyout',
+  'consignment sale': 'consigned',
+  'gift transfer': 'gift',
+  swap: 'swap',
+};
+
+export function departureOf(event: {
+  eventType: string;
+  newState: string | null;
+  reason: string | null;
+}): Departure {
+  const reason = event.reason ?? '';
+  if (event.eventType === 'ownership_transfer') {
+    if (reason.startsWith('sale of listing')) return { kind: 'sold', code: null };
+    if (reason.startsWith('escrow ')) return { kind: 'escrow', code: reason.slice('escrow '.length) || null };
+    const kind = TRANSFER_REASON[reason];
+    if (kind) return { kind, code: null };
+  }
+  const byState = event.newState ? DEPARTED_STATE[event.newState] : undefined;
+  return { kind: byState ?? 'left', code: null };
+}
+
 @Injectable()
 export class VaultService {
   constructor(
@@ -206,24 +256,27 @@ export class VaultService {
         binBarcode: null,
         binZone: null,
         historical: true as const,
-        departureReason: withReason ? await this.departureReason(row.id, userId) : null,
+        departure: withReason ? await this.departure(row.id, userId) : null,
       })),
     );
   }
 
-  private async departureReason(itemId: string, userId: string): Promise<string | null> {
-    const [event] = await this.db
+  private async departure(itemId: string, userId: string): Promise<Departure | null> {
+    const events = await this.db
       .select({
         eventType: custodyEvent.eventType,
         reason: custodyEvent.reason,
         newState: custodyEvent.newState,
+        occurredAt: custodyEvent.occurredAt,
       })
       .from(custodyEvent)
       .where(and(eq(custodyEvent.itemId, itemId), this.departedFrom(userId)))
       .orderBy(sql`${custodyEvent.occurredAt} desc`)
-      .limit(1);
-    if (!event) return null;
-    return event.reason ?? event.newState ?? event.eventType;
+      .limit(5);
+    const last = events[0];
+    if (!last) return null;
+    const latest = events.filter((e) => toIso(e.occurredAt) === toIso(last.occurredAt)).map(departureOf);
+    return latest.find((d) => d.kind !== 'left') ?? latest[0]!;
   }
 
   private departedFrom(userId: string) {

@@ -58,14 +58,14 @@ The estimates include writing the failing test, the fix, and running the named s
 ### P1. Production has its platform custodian and its first administrator · 75 min · db, ops, CI · T5.3, T5.8, T7.2, T17.6
 **Why:** Only the seed creates `platform@bault.dev` and the first administrator, and the seed refuses production. On a new production database the house store, donations and the accounting summary fail with "Platform custodian account not seeded", and nobody can sign in to the console.
 **Where:**
-- `apps/api/src/db/migrations/` and `meta/_journal.json` (the latest is `0036_a_ledger_amount_is_never_zero`);
+- `apps/api/src/db/migrations/` and `meta/_journal.json` (the latest is `0037_an_address_names_its_state`);
 - the platform lookups: `ServiceRequestService.platformAccountId` (`dis/service.service.ts`), `HouseStoreService.platformAccountId` (`mkt/house-store.service.ts`), `PLATFORM_EMAIL` in `AccountingService.summary` (`adm/accounting.service.ts`);
 - `mkUser` in `apps/api/src/db/seed.ts`; `userAccount`, `accountStatus`, `userRole` in `acc/acc.schema.ts`;
 - `apps/api/tsconfig.build.json` (what ships in the image), the `migrate` service in `infra/production/compose.yml`, sections 4 and 5 of `infra/production/README.md`;
 - the `migrate-image` job in `.github/workflows/ci.yml`.
 
 **Task:**
-- Every migrated database has exactly one platform custodian, written by a new migration `0037`. Running it on a database that already has one changes nothing, and `pnpm db:reset` still works after it.
+- Every migrated database has exactly one platform custodian, written by a new migration `0038`. Running it on a database that already has one changes nothing, and `pnpm db:reset` still works after it.
 - A new command creates the first administrator from values given when it runs; no password is in the repository. It refuses, and changes nothing, when an administrator other than the platform account already exists. It runs from the API image the way `dist/db/migrate.js` does.
 - `infra/production/README.md` has the step, right after the first deploy.
 - CI's `migrate-image` job proves both against its empty database.
@@ -384,7 +384,7 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **Escrow lock order:** `EscrowService.settle` spends the raiser's waiver and debits the escrow fee without `LedgerService.lockWallet`; it never takes a wallet lock, so it closes no cycle, and the worst case is a raced balance going negative, which the debt sweep handles (`esc/escrow.service.ts`).
 - **Swap deadlock:** `TradeService.approve` charges the proposer and then the responder through `BillingService.charge`, writing their periods in no fixed order; two opposite swaps at the same instant between covered members can deadlock, and Postgres aborts one with nothing half-written (`mkt/trade.service.ts`).
 - **A lock duty in billing:** `BillingService.charge` takes no wallet lock, so a caller needing one must take it first; no caller now takes one after it (`pay/billing.service.ts`).
-- **Storage rules from the console:** `PricingSection` sends no `parameters` for `storage` or `storage_oversized`, so `runStorageFees` uses its defaults, which equal the seed's; until fixed, do not add storage rules from the console (`AdminConsole.tsx`, `apps/worker/src/jobs/storage-fee.ts`).
+- **Storage rules from the console:** `PricingSection` sends no `parameters` for `storage` or `storage_oversized`, so `runStorageFees` uses its defaults, which equal the seed's; until fixed, change storage prices with `pnpm prices:load`, which sends them, not from the console (`AdminConsole.tsx`, `apps/worker/src/jobs/storage-fee.ts`).
 - **Dead billing path:** `AdmService.runStorageFees` has no caller and still selects split lots; delete it and its mention in `billableActions` (`adm/adm.service.ts`).
 - **Review-queue end date:** `to=YYYY-MM-DD` leaves that day out (`WalletRequestService.listForReview`, `ReviewQueueQuery` in `pay/wallet-request.controller.ts`).
 - **Suspended session on public pages:** a suspended or closed account with a live cookie gets 403 on public routes until it signs out, which always works (`SessionAuthGuard.canActivate`).
@@ -409,7 +409,6 @@ None are needed. The mandatory tasks already put the owner in every layer and ev
 - **A card left free during a deal:** `EscrowService.receiveItem` neither holds nor marks the card; `settle` then refuses and the deal can be returned, so nothing is lost.
 - **Offer accept retry:** a retry answers 409 instead of a replay (`OfferService.accept`).
 - **Reprice racing a sale** can write a price onto a sold listing; the sale is right (`ListingService.reprice`).
-- **Departure reasons in English:** the History tab shows why a card left the vault in the machine's words, such as "remove commons — discarded" (`DisposalServicesService`, `CustodyService.changeState`); the register fix in #16 did not cover them.
 - **A suspended seller's storefront** is still served: `MarketReadService.storefront` selects the seller's `status` and never reads it.
 - **Decide: a reason for every hold.** DESIGN.md wants a frozen card to say who froze it and why, but `CustodyService.setHold` records only "hold placed"; giving it a reason is a small feature.
 - **Dead code in money:** `TopupService.topup`, and `isDuplicateOf`, `isOpenStatus`, `REQUESTER_TRANSITIONS` in `wallet-request.rules.ts`.

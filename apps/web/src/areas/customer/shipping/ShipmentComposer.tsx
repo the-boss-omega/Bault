@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../../../shared/api';
+import { api, ApiError } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
+import { ItemPick } from '../../../shared/ui/Serial';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import {
   boxLabel,
@@ -12,10 +14,10 @@ import {
   type QuotedRate,
   type ServiceCatalogue,
 } from '../../../shared/carriers';
-import { Button, EmptyState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation, IconShipping } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
-import { countryName, useShippingCountries } from '../../../shared/countries';
+import { countryName, lacksRegion, useShippingCountries } from '../../../shared/countries';
 
 interface Address {
   id: string;
@@ -23,6 +25,7 @@ interface Address {
   recipient: string;
   line1: string;
   city: string;
+  region: string | null;
   country: string;
   postalCode: string;
   isDefault: boolean;
@@ -30,6 +33,7 @@ interface Address {
 
 interface VaultItem {
   id: string;
+  serialNumber?: string;
   typeClass: string;
   description: string;
 }
@@ -62,6 +66,7 @@ export function ShipmentComposer({
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [refusedAddressId, setRefusedAddressId] = useState<string | null>(null);
 
   const selectedIds = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).map(([id]) => id),
@@ -69,6 +74,9 @@ export function ShipmentComposer({
   );
 
   const address = addresses.find((a) => a.id === addressId);
+  const regionMissing = Boolean(
+    address && (lacksRegion(address, countries) || refusedAddressId === address.id),
+  );
   const international = Boolean(address && address.country.toUpperCase() !== 'US');
   const insuredMinor = dollarsToCents(insured) ?? 0;
   const declaredMinor = dollarsToCents(declared) ?? 0;
@@ -110,7 +118,7 @@ export function ShipmentComposer({
   );
 
   useEffect(() => {
-    if (selectedIds.length === 0 || !addressId) {
+    if (selectedIds.length === 0 || !addressId || regionMissing) {
       setQuote(null);
       return;
     }
@@ -122,14 +130,19 @@ export function ShipmentComposer({
           onError(null);
         } catch (e) {
           setQuote(null);
-          onError((e as Error).message);
+          if (refusedForRegion(e)) {
+            setRefusedAddressId(addressId);
+            onError(null);
+          } else {
+            onError((e as Error).message);
+          }
         } finally {
           setQuoting(false);
         }
       })();
     }, 350);
     return () => clearTimeout(handle);
-  }, [selectedIds.length, addressId, body, onError]);
+  }, [selectedIds.length, addressId, regionMissing, body, onError]);
 
   function toggleItem(id: string) {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -167,7 +180,13 @@ export function ShipmentComposer({
       setSelected({});
       setQuote(null);
     } catch (e) {
-      onError((e as Error).message);
+      if (refusedForRegion(e)) {
+        setRefusedAddressId(addressId);
+        setQuote(null);
+        onError(null);
+      } else {
+        onError((e as Error).message);
+      }
     } finally {
       setBusy(false);
     }
@@ -196,9 +215,7 @@ export function ShipmentComposer({
               <li key={item.id}>
                 <label className="check">
                   <input type="checkbox" checked={!!selected[item.id]} onChange={() => toggleItem(item.id)} />
-                  <span>
-                    {item.typeClass} — {item.description}
-                  </span>
+                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                 </label>
               </li>
             ))}
@@ -238,6 +255,17 @@ export function ShipmentComposer({
                 ))}
               </select>
             </Field>
+
+            {regionMissing && address && (
+              <ErrorState
+                message={t('shipping.regionMissing', {
+                  label: address.label,
+                  country: countryName(address.country, countries),
+                })}
+                onRetry={() => navigate({ section: 'profile', tab: 'addresses' })}
+                retryLabel={t('shipping.editAddress')}
+              />
+            )}
 
             <Field label={t('ship.boxSize')} hint={t('ship.boxSizeHint')}>
               <select value={boxSize} onChange={(e) => setBoxSize(e.target.value)}>
@@ -302,9 +330,9 @@ export function ShipmentComposer({
                 <input type="checkbox" checked={addOns.includes(a.key)} onChange={() => toggleAddOn(a.key)} />
                 {t('ship.addon.gps_tracker')} — {formatUsd(a.priceMinor)}
               </label>
-              <span className="field-hint">
+              <div className="field-hint">
                 {t('ship.addonNeedsInsurance', { amount: formatUsd(a.requiresInsuranceMinor) })}
-              </span>
+              </div>
             </div>
           ))}
 
@@ -434,4 +462,8 @@ export function ShipmentComposer({
       </Panel>
     </>
   );
+}
+
+function refusedForRegion(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'address_region_required';
 }

@@ -90,7 +90,7 @@ Value rules shared across modules.
 **Watch:** `OneAtATime` holds within one process; each extra instance lets a burst overshoot by one call. An advisory lock would hold a pooled connection through every argon2 run.
 
 #### `apps/api/src/shared/errors/error-codes.ts`, `apps/api/src/shared/errors/app-error.ts`, `apps/api/src/shared/errors/pg-error.ts` · 1.5 min · T6.4
-- `ErrorCode` — the stable strings a client branches on, such as `account_suspended`, `email_unverified`, `insufficient_balance`, `rate_limited` and the `mfa_*` codes.
+- `ErrorCode` — the stable strings a client branches on, such as `account_suspended`, `email_unverified`, `insufficient_balance`, `rate_limited`, `address_region_required` and the `mfa_*` codes.
 - `AppError` — an `HttpException` whose body is `{ code, message, details }`. Helpers: `validation` (400), `unauthenticated` (401), `forbidden`, `emailUnverified` and `accountSuspended` (403), `notFound`, `conflict` (409), `tokenExpired` (410).
 - `pgErrorCode` — the SQLSTATE, found through up to five `cause` links, because Drizzle 0.45 wraps the driver's error.
 
@@ -122,7 +122,7 @@ The probes, under `/api/v1`. All are `@Public` and skip both rate limits.
 #### `apps/api/src/db/migrate.ts`, `apps/api/src/db/migrations/`, `apps/api/drizzle.config.ts` · 1.5 min · T5.3, T17.2
 Production runs `node dist/db/migrate.js` from the API image, as `bault_owner`, before a release serves.
 - `main` — on `DIRECT_DATABASE_URL`, because DDL needs a real session, not PgBouncer: Drizzle's `migrate` over `./src/db/migrations`, then `0001_append_only.sql`, every run.
-- The folder holds 37 files, `0000` to `0036`, and `meta/_journal.json` with a `tag` and a `when` for each. Drizzle records applied files in its own `drizzle` schema and applies a file only if its `when` is later than the newest one recorded, all pending files in one transaction.
+- The folder holds 38 files, `0000` to `0037`, and `meta/_journal.json` with a `tag` and a `when` for each. Drizzle records applied files in its own `drizzle` schema and applies a file only if its `when` is later than the newest one recorded, all pending files in one transaction.
 - `drizzle.config.ts` points drizzle-kit at `schema/index.ts` and this folder.
 
 **Watch:** a new file needs a journal entry with a larger `when`, or it is skipped silently. Snapshots stop at `0003` and later files are hand-written, so `pnpm db:generate` would diff against a stale state. An applied file never runs again: edit nothing that has shipped.

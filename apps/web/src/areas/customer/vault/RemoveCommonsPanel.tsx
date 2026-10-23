@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
 import { formatDate } from '../../../shared/money';
 import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
@@ -102,7 +103,7 @@ export function RemoveCommonsPanel({
                     onChange={() => toggle(it.id)}
                   />
                   <span>
-                    {it.description || it.typeClass}
+                    {itemName(t, it)}
                     <span className="hint" dir="ltr">
                       {' '}
                       {it.serialNumber}
@@ -171,7 +172,7 @@ export function RemoveCommonsPanel({
                 {selected.map((it) => (
                   <li key={it.id}>
                     <span>
-                      {it.description || it.typeClass}
+                      {itemName(t, it)}
                       <span className="hint" dir="ltr">
                         {' '}
                         {it.serialNumber}

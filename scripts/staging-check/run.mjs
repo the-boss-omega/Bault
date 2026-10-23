@@ -144,9 +144,9 @@ const DEPENDS = {
 };
 
 const ADDRESSES = {
-  domestic: { label: 'Staging check, home', recipient: 'Staging Check', line1: '417 Montgomery St', city: 'San Francisco', country: 'US', postalCode: '94104' },
-  international: { label: 'Staging check, abroad', recipient: 'Staging Check', line1: '290 Bremner Blvd', city: 'Toronto', country: 'CA', postalCode: 'M5V 3L9' },
-  unrateable: { label: 'Staging check, nowhere', recipient: 'Staging Check', line1: '1 Nowhere Rd', city: 'Nowhere', country: 'US', postalCode: '00000' },
+  domestic: { label: 'Staging check, home', recipient: 'Staging Check', line1: '417 Montgomery St', city: 'San Francisco', region: 'CA', country: 'US', postalCode: '94104' },
+  international: { label: 'Staging check, abroad', recipient: 'Staging Check', line1: '290 Bremner Blvd', city: 'Toronto', region: 'ON', country: 'CA', postalCode: 'M5V 3L9' },
+  unrateable: { label: 'Staging check, nowhere', recipient: 'Staging Check', line1: '1 Nowhere Rd', city: 'Nowhere', region: 'NY', country: 'US', postalCode: '00000' },
 };
 
 const FUNDING_MINOR = 150_000;

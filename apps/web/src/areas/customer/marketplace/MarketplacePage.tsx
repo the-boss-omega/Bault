@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
-import { ITEM_CLASSES, itemClassLabel } from '../../../shared/itemClasses';
+import { ITEM_CLASSES, itemClassLabel, itemName, itemPickText } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
@@ -253,7 +253,7 @@ export function MarketplacePage() {
                     <div className="card-art">
                       <CardPhotoThumb
                         serialNumber={listing.serialNumber}
-                        title={listing.description || listing.typeClass}
+                        title={itemName(t, listing)}
                       />
                     </div>
 
@@ -325,7 +325,7 @@ export function MarketplacePage() {
           body={
             <p>
               {t('market.buy.confirmBody', {
-                item: buying.description || buying.typeClass,
+                item: itemName(t, buying),
                 amount: formatUsd(buying.askingPrice),
               })}
             </p>
@@ -418,7 +418,7 @@ function SellPanel({
   onListed,
   onError,
 }: {
-  items: readonly { id: string; typeClass: string; description: string }[];
+  items: readonly { id: string; serialNumber?: string; typeClass: string; description: string }[];
   t: TranslateFn;
   onListed: () => Promise<void>;
   onError: (message: string) => void;
@@ -458,7 +458,7 @@ function SellPanel({
               <option value="">{t('market.selectItemOption')}</option>
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.typeClass} — {item.description}
+                  {itemPickText(t, item)}
                 </option>
               ))}
             </select>
@@ -526,7 +526,7 @@ function OfferDrawer({
   return (
     <DetailDrawer
       title={t('market.offer.title')}
-      subtitle={listing.description || listing.typeClass}
+      subtitle={itemName(t, listing)}
       onClose={onClose}
       dirty
       footer={

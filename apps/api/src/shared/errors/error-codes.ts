@@ -29,6 +29,7 @@ export const ErrorCode = {
   MFA_FACTOR_UNREADABLE: 'mfa_factor_unreadable',
   WEBHOOK_UNVERIFIED: 'webhook_unverified',
   OUTBOX_NOT_PARKED: 'outbox_not_parked',
+  ADDRESS_REGION_REQUIRED: 'address_region_required',
   INTERNAL: 'internal',
 } as const;
 

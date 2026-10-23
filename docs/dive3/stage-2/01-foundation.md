@@ -82,7 +82,7 @@ The carrier port: `ShippingAdapter` with `getRates`, `buyLabel`, `getTracking`.
 **Watch:** EasyPost's `labelObjectKey` is the carrier's label URL, not a key in Bault's bucket.
 
 #### `packages/adapters/src/email.ts` · 1.5 min · T14.4
-`EmailAdapter.send` takes a template and its variables. `renderEmail` builds `email_verification`, `password_reset` and `notification_event` as text and escaped HTML. `ConsoleEmailAdapter` prints the message, link included. `SmtpEmailAdapter` sends through nodemailer with `requireTLS`, and skips `verify()` so the API boots while the mail server is down.
+`EmailAdapter.send` takes a template and its variables. `renderEmail` builds each message as text and escaped HTML in the product's ink and custody green: `email_verification` and `password_reset` in Hebrew first, then English, each half in its own direction; `notification_event` in English, from the worker's sentence. `ConsoleEmailAdapter` prints the message, link included. `SmtpEmailAdapter` sends through nodemailer with `requireTLS`, and skips `verify()` so the API boots while the mail server is down.
 
 **Watch:** the console adapter puts reset links in the server log; that is why production refuses it.
 

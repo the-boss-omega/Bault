@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../../shared/api';
-import { useT } from '../../../shared/i18n';
+import { ApiError, api, apiErrorKey } from '../../../shared/api';
+import { useT, type TranslateFn } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 
 type State =
   | { status: 'working' }
   | { status: 'verified' }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; error: unknown };
 
 const verifying = new Map<string, Promise<unknown>>();
+
+function failure(t: TranslateFn, e: unknown): string {
+  if (e instanceof ApiError && e.status === 410) return t('auth.verifyLinkInvalid');
+  const key = apiErrorKey(e);
+  return key ? t(key) : (e as Error).message;
+}
 
 function verifyOnce(token: string): Promise<unknown> {
   const existing = verifying.get(token);
@@ -26,7 +32,7 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
   const t = useT();
   const [outcome, setOutcome] = useState<(State & { token: string }) | null>(null);
   const state: State = !token
-    ? { status: 'failed', message: '' }
+    ? { status: 'failed', error: null }
     : outcome?.token === token
       ? outcome
       : { status: 'working' };
@@ -39,7 +45,7 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
         if (live) setOutcome({ token, status: 'verified' });
       },
       (e: unknown) => {
-        if (live) setOutcome({ token, status: 'failed', message: (e as Error).message });
+        if (live) setOutcome({ token, status: 'failed', error: e });
       },
     );
     return () => {
@@ -75,7 +81,7 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
   return (
     <section className="auth-card">
       <h2>{t('auth.verifyTitle')}</h2>
-      <ErrorState message={token ? state.message : t('auth.verifyNoToken')} />
+      <ErrorState message={token ? failure(t, state.error) : t('auth.verifyNoToken')} />
       <p className="field-hint">{t('auth.verifyFailedHint')}</p>
       <ResendForm />
       <p className="auth-switch">

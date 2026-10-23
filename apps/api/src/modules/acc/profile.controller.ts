@@ -14,6 +14,7 @@ class CreateAddressDto {
   @IsString() recipient!: string;
   @IsString() line1!: string;
   @IsString() city!: string;
+  @IsOptional() @IsString() region?: string | null;
   @IsShippableCountry() country!: string;
   @IsString() postalCode!: string;
   @IsOptional() @IsBoolean() isDefault?: boolean;
@@ -24,6 +25,7 @@ class UpdateAddressDto {
   @IsOptional() @IsString() recipient?: string;
   @IsOptional() @IsString() line1?: string;
   @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() region?: string | null;
   @IsOptional() @IsShippableCountry() country?: string;
   @IsOptional() @IsString() postalCode?: string;
   @IsOptional() @IsBoolean() isDefault?: boolean;

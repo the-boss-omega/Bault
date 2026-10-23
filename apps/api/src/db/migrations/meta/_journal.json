@@ -260,6 +260,13 @@
       "when": 1785075200000,
       "tag": "0036_a_ledger_amount_is_never_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785075300000,
+      "tag": "0037_an_address_names_its_state",
+      "breakpoints": true
     }
   ]
 }

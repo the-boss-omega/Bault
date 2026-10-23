@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
+import { ItemPick } from '../../../shared/ui/Serial';
 import { useVaultItems } from '../../../shared/useVaultItems';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
@@ -161,9 +163,7 @@ export function ProposeTradePanel({
                       )
                     }
                   />
-                  <span>
-                    {item.typeClass} — {item.description}
-                  </span>
+                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                 </label>
               </li>
             ))}
@@ -188,10 +188,7 @@ export function ProposeTradePanel({
               <ul className="check-list list-unbounded">
                 {wanted.map((w) => (
                   <li key={w.id}>
-                    <span>
-                      {w.typeClass} — {w.description}{' '}
-                      <code dir="ltr">{w.serialNumber}</code>
-                    </span>
+                    <ItemPick serial={w.serialNumber} name={itemName(t, w)} />
                     <Button
                       size="sm"
                       variant="ghost"

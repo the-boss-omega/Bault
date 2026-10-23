@@ -129,7 +129,7 @@ export function GradingSubmissions() {
                       </span>
                     )}
                   </td>
-                  <td dir="ltr">{s.trackingNumber ?? '—'}</td>
+                  <td>{s.trackingNumber ? <code>{s.trackingNumber}</code> : '—'}</td>
                   <td>
                     {s.status === 'open' && (
                       <Button size="sm" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
