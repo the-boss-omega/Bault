@@ -1,179 +1,161 @@
-## 2.4 Money: the ledger, wallet requests, payments, pricing and accounting
+## 2.4 Money
 
-Every place money is recorded, priced, moved and reported. Read it in four passes: the ledger and the wallet lock; charges and pricing; cash-in, cash-out and payouts (with the webhook and a reversal after payment); then accounting and reconciliation. For each method that moves money, the entry names its locks in order, the `ledger_record` rows it writes, and what makes a retry harmless. About 40 minutes. Read `wallet-request.service.ts` slowly. The worker jobs that bill storage, renew memberships and accrue interest are in the worker area.
+This section covers every place money is recorded, priced, moved and reported. Read it in four passes. Start with the ledger and the wallet lock, then charges and pricing. Then read cash-in, cash-out and payouts, with the webhook and a reversal after payment. End with accounting and reconciliation. For each method that moves money, the entry names its locks in order, the `ledger_record` rows it writes and what makes a retry harmless. Read `wallet-request.service.ts` slowly. The worker section covers the jobs that bill storage, renew memberships and accrue interest. The section takes about 40 minutes.
 
-#### `apps/api/src/modules/pay/ledger.service.ts` · 2 min · T8.1, T8.2, T8.3
-The ledger writer and the wallet lock. `PayModule` is global, so every module that moves money injects `LedgerService`.
-- `record` — appends one row in the caller's `tx`. `amount` is always positive minor units; `direction` is the sign. The append-only trigger refuses UPDATE and DELETE, so only a compensating row undoes a mistake.
-- `lockWallet` — `pg_advisory_xact_lock(hashtextextended('wallet:' + userId, 0))`. It is released at COMMIT or ROLLBACK, works through PgBouncer in transaction mode, and re-taking it is a no-op. It needs a `tx`; outside one it would release at once.
-- `balanceOf` — credits minus debits. With `tx` it takes `lockWallet` first, so the check holds until the debit it guards commits. Without `tx` it is a plain read, for display and early refusals.
-- `list` — one user's rows, newest first.
-**Watch:** the lock order is fixed: business rows `FOR UPDATE` first (listing, item, request, shipment, deal), then the wallet, then the same user's membership period. The worker jobs `interest-accrual.ts` and `membership-renewal.ts` take the same key in raw SQL; rename the key and they stop serialising with the API. `EscrowService.settle` calls `waive` on the raiser's period without the raiser's wallet lock, the one known break (Stage 3).
+#### `apps/api/src/modules/pay/ledger.service.ts`
 
-#### `apps/api/src/modules/pay/pay.schema.ts` · 2 min · T5.3, T8.1, T8.2, T8.4
-The PAY tables. There is no stored balance anywhere.
+About 2 minutes. It builds on T8.1, T8.2 and T8.3.
 
-| `ledgerType` | Direction | Written in this area by |
-|---|---|---|
-| `credit_topup` | credit | `CheckoutService.checkout`, `settleInOneStep` (cash-in) |
-| `withdrawal` | debit | `debitCashOut` (the net) |
-| `fee` | debit | cash-out fee, chargeback fee, `BillingService.charge` for `marketplace_fee` |
-| `service_charge` | debit | `BillingService.charge` |
-| `chargeback` | debit | `ChargebackService.record` |
-| `payout_reversal` | credit | `recordPayoutOutcome`, `reversePaidPayout` |
+This file writes the ledger and owns the wallet lock. `PayModule` is global, so any module that moves money can inject `LedgerService`. Money changes only through `record`. It appends one row inside the caller's transaction `tx`. The `amount` is always a positive number of cents, and `direction` says whether the row is a credit or a debit. The database refuses UPDATE and DELETE on these rows, so the only way to undo a mistake is a second row that reverses it.
 
-- `ledgerRecord` — the other eight types come from other areas. `ledger_record_interest_daily_unique` allows one `interest` row per user per UTC day (the accrual job's retry guard); `ledger_record_amount_positive` is `NOT VALID`, so it binds new rows only.
-- `externalPayment` — money at a provider. `purpose` is `topup` or `payout`; `status` is free text: `pending`, `succeeded`, `failed`, `refused`, `reversed`.
-- `charge` — the priced reason behind a fee. `pricingRuleSnapshot` freezes the rule; accounting reads its keys (`cashOutFee`, `chargebackFee`, `escrowFeeBps`, `carrierCost`).
-- `walletRequest`, `walletRequestEvent` — the request and its append-only trail. `settledLedgerId` and `payoutPaymentId` link a request to the money it moved.
-- `withdrawal` — unused by the API; only the seed writes it.
-**Watch:** the retry guards are unique indexes in the migrations, not in this file: `wallet_request_settled_ledger_unique` (`0004`), `external_payment_provider_ref_unique` (`0017`), and `wallet_request_payout_payment_unique`, `external_payment_external_ref_unique` (per provider) and `external_payment_webhook_event_unique` (`0031`).
+`lockWallet` takes the wallet lock. It is a Postgres advisory lock on the key `wallet:` plus the user id, and it lasts until the transaction commits or rolls back. Taking it twice in one transaction is harmless. It only works inside a transaction, because outside one it would be released at once. `balanceOf` adds up the credits and subtracts the debits. When it gets a `tx`, it takes the wallet lock first, so the balance it returns stays true until the debit it guards is saved. Without a `tx` it is a plain read, which is fine for showing a balance but not for deciding to spend it. `list` returns one user's rows, newest first.
 
-#### `apps/api/src/modules/pay/wallet.service.ts` · 1 min · T8.1, T8.7, T8.9
-A thin view over the ledger.
-- `balance`, `ledgerList` — back `GET /finance/wallet` and `GET /finance/ledger`.
-- `cashOutQuote` — `cashOutSettlement` plus the fee bands; completion debits from the same function.
-- `assertNotBlocked` — 409 `NEGATIVE_BALANCE_BLOCKED` below zero.
-**Watch:** `ServiceRequestService` and `ShipmentService.create` call `assertNotBlocked` without `tx`, so it is a check at the door, not a guarantee.
+Every money path takes its locks in the same order. It locks the business rows first, such as the listing, the request or the shipment, then the wallet, then the user's membership period. The worker jobs `interest-accrual.ts` and `membership-renewal.ts` build the same lock key in raw SQL. If you rename the key here, they stop waiting for the API. `EscrowService.settle` breaks the order once, because it writes the raiser's period without taking the raiser's wallet lock.
 
-#### `apps/api/src/modules/pay/billing.service.ts` · 2 min · T8.4, T8.5, T12.3, T15.2
-`BillingService` implements `BILLING_PORT`, which INV, DIS and MKT call to charge a fixed-price action inside their own transaction.
-- `charge` — first `MembershipService.consume` on `allowanceFor(feeActionType ?? actionType)`; a covered action writes nothing. Then `tryPrice(feeActionType)`, else `price(actionType)`, with `itemClass`; zero writes nothing. Otherwise it inserts a settled `charge` and one debit: `fee` for `marketplace_fee`, else `service_charge`. Locks: none of its own; `consume` row-locks the period with a conditional UPDATE. Retry: it commits or rolls back with the caller.
-**Watch:**
-- No balance check: a charge may take the wallet negative (debt). Callers refuse new work with `assertNotBlocked`.
-- A caller that needs the wallet lock takes it before `charge`, since `consume` has already locked the period.
-- No `base` is passed, so an action priced here must have a `fixed` rule; `PricingService` refuses a percentage with nothing to take it of.
-- `BillingModule` in `shared/billing/billing.port.ts` binds the port to `NoopBillingAdapter`, which only logs. Nothing imports it; keep it that way.
+#### `apps/api/src/modules/pay/pay.schema.ts`
 
-#### `apps/api/src/modules/prc/pricing.service.ts` · 2 min · T8.4, T8.5, T5.5
-Finds the rule in force and computes the amount, for `BillingService` and the services that price their own fees.
-- `ruleInForce` — the rule for the action whose `item_class` is null or the given class, with `effective_from <= now()` and `effective_to` null or later. Class-specific first (`nulls last`), then newest; null when there is none.
-- `tryPrice` — null when no rule is in force. Otherwise `fixed` gives `value` in cents and `percentage` gives `applyBasisPoints` of `base`; a percentage with no `base` is a 400. Returns the `snapshot` callers store on the `charge`. Any other error, a database failure included, reaches the caller.
-- `price` — `tryPrice`, with a 400 when no rule is in force.
-- `createRule` — inserts a row effective now, never edits one. A percentage only for an action whose `percentOf` names its base, at most 10,000 bps.
-**Watch:** nothing writes `effective_to`, so only a newer rule for the same scope supersedes one, and a class-specific rule keeps beating a newer catch-all. The "in force" test is repeated in `PriceListService`, `PricingCoverageController`, `VaultService` and two worker jobs; change all of them.
+About 2 minutes. It builds on T5.3, T8.1, T8.2 and T8.4.
 
-#### `apps/api/src/modules/prc/price-list.service.ts` · 1.5 min · T8.5
-The public price list behind `GET /pricing/list`.
-- `publicList` — rules in force, the newest per `(actionType, itemClass)`, grouped into `PRICE_GROUPS` by `groupFor` (prefix first; an unknown action lands in `services`).
-**Watch:** it lists rules, not charges. A `code_constant` action (cash-out, chargeback and escrow fees) shows its rule while the code charges a constant.
+These are the PAY tables, and none of them stores a balance. Six `ledgerRecord` types are written in this section. `credit_topup` is a credit from `CheckoutService.checkout` and from `settleInOneStep` for a cash-in. `withdrawal` is the net debit in `debitCashOut`. `fee` is a debit for the cash-out fee, the chargeback fee and `BillingService.charge` on `marketplace_fee`. `service_charge` is a debit from `BillingService.charge` for other actions. `chargeback` is a debit from `ChargebackService.record`. `payout_reversal` is a credit from `recordPayoutOutcome` and `reversePaidPayout`. The other eight types come from other sections. `ledger_record_interest_daily_unique` allows one `interest` row per user per UTC day, which is the accrual job's retry guard. The check `ledger_record_amount_positive` is `NOT VALID`, so it binds only new rows.
 
-#### `apps/api/src/modules/prc/billable-actions.ts`, `apps/api/src/modules/prc/pricing-coverage.controller.ts` · 2 min · T8.5
-The launch gate for prices. No migration inserts a `pricing_rule`; only the seed does.
-- `billableActions` — every price the code charges, with its `PriceResolution`: `required` (the action fails without a rule), `fallback_rule`, `code_default`, `free_if_unpriced`, `code_constant`. Families derive from `GRADING_TIERS`, `CONSIGNMENT_CHANNELS`, `SHIPMENT_ADD_ONS` and `MEMBERSHIP_TIERS`. `percentOf` names the amount a percentage is taken of (the sale price, the agreed value, the amount cashed out); null means fixed prices only.
-- `coverage` — `ready` only when every action is `priced` or `code_constant`; `unknownRules` lists rules no code reads, usually a typo.
-- `PricingCoverageController.coverage` — `GET /admin/pricing/coverage`, admin only.
-**Watch:** `tests3/contract/pricing-coverage.test.ts` scans the source for literal action types; a new literal passed to `price` or `tryPrice` must be listed here.
+`externalPayment` is money at a provider. Its `purpose` is `topup` or `payout`, and its `status` is free text, one of `pending`, `succeeded`, `failed`, `refused` or `reversed`. `charge` is the priced reason behind a fee. Its `pricingRuleSnapshot` freezes the rule, and accounting reads the keys `cashOutFee`, `chargebackFee`, `escrowFeeBps` and `carrierCost` from it. `walletRequest` holds a request, and `walletRequestEvent` is its append-only trail. `settledLedgerId` and `payoutPaymentId` link a request to the money it moved. Only the seed writes `withdrawal`, and the API never uses it.
 
-#### `apps/api/src/modules/prc/prc.schema.ts`, `apps/api/src/modules/prc/prc.controller.ts`, `apps/api/src/modules/prc/prc.module.ts` · 1.5 min · T5.5, T6.2, T8.5
-- `pricingRule` — effective-dated rows: `actionType`, `itemClass` (null is the catch-all), `model` (`fixed` or `percentage`), `value` (cents or basis points), `billingTrigger`, `parameters` (storage terms), `effectiveFrom`, `effectiveTo`, `updatedBy`.
-- `PrcController` — `GET /pricing/list` (public), `GET /pricing/rules` (every rule ever, any signed-in user), `POST /pricing/rules` (admin, `CreateRuleDto`, `value` ≥ 0).
-- `PrcModule` — `@Global`, exports `PricingService` only.
-**Watch:** `actionType` is free text; a typo is a rule nothing charges, visible only in `unknownRules`.
+The other retry guards are unique indexes in the migrations. `wallet_request_settled_ledger_unique` from `0004` lets one ledger row settle only one request. `external_payment_provider_ref_unique` from `0017` allows one payment per provider reference. Migration `0031` adds `wallet_request_payout_payment_unique`, `external_payment_external_ref_unique`, which is unique per provider, and `external_payment_webhook_event_unique`.
 
-#### `apps/api/src/modules/pay/money-terms.ts` · 1.5 min · T8.6, T8.7, T8.8
-Pure figures for the cost of moving money.
-- `cashOutFeeMinor` — up to `CASHOUT_BAND_MINOR` ($100), 6% with a $0.99 floor; above it, $5 plus 1%. Rounded up.
-- `cashOutSettlement` — `{ grossMinor, feeMinor, netMinor }`. The gross leaves the wallet; a membership waiver only lowers the fee. Quote, payout and ledger all call it.
-- `CHARGEBACK_FEE_MINOR` — $25. `CASHOUT_FEE_ACTION` and `CHARGEBACK_FEE_ACTION` only name price-list rules.
-- `FUNDING_ROUTES`, `isInstantRoute` — a provider confirms `card` and `paypal_gs`; a person must see `paypal_ff` and `bank_transfer` arrive.
+#### `apps/api/src/modules/pay/wallet.service.ts`
 
-#### `apps/api/src/modules/pay/wallet-request.rules.ts` · 1.5 min · T8.6, T8.7
-The request lifecycle and limits, with no database. The SPA mirrors it in `apps/web/src/shared/walletRequests.ts`.
-- `WALLET_REQUEST_TRANSITIONS` — nine statuses. Main path `submitted → pending_review → approved → processing → completed`; a reviewer may skip `pending_review` and `processing`. A provider payout adds `paying → completed | payout_failed`. Only `reversePaidPayout` takes `completed → payout_failed`. Nothing leads from `paying` to `rejected`.
-- `canTransition` — the service's only legality check.
-- `OPEN_WALLET_REQUEST_STATUSES` — the four undecided statuses; `paying` is not open, its money has left.
-- `WALLET_REQUEST_LIMITS` — cash-in $10 to $20,000, cash-out $20 to $20,000.
-- `validateWalletRequestDraft` — every rule that needs no database; the balance is not one.
-**Watch:** `isDuplicateOf`, `isOpenStatus` and `REQUESTER_TRANSITIONS` have no caller. `submit` repeats the duplicate rule in SQL; change both.
+About 1 minute. It builds on T8.1, T8.7 and T8.9.
 
-#### `apps/api/src/modules/pay/wallet-request.service.ts` · 3 min · T8.6, T8.7, T15.2
-Every cash-in and cash-out, from submission to payout and reversal. Submitting never moves money; only a completion, a refused payout or a reversal after payment writes ledger rows. Reviewers are admins, and `assertSeparationOfDuties` bars the requester from deciding their own request.
-- `submit` — refuses an identical open request and a cash-out above `balanceOf`, both unlocked reads. Writes the request, a `submitted` event, outbox and audit.
-- `cancel`, `markUnderReview`, `approve`, `reject`, `markProcessing` — through `applyTransition`: request `FOR UPDATE`, `canTransition`, update, event, outbox (`wallet_request_<status>`), audit, one transaction.
-- `complete` — a cash-in, or a cash-out with `PAYOUT_MODE=manual` (a `payoutReference` required), goes to `settleInOneStep`; a cash-out in `provider` mode goes to `payOut` (a reference refused).
-- `lockForCompletion` — request `FOR UPDATE`, separation of duties; refuses `completed`, `paying`, an illegal move and a set `settledLedgerId`.
-- `debitCashOut` — freezes the fee at today's schedule, then `lockWallet`, `memberships.waive` on `cash_out_fee` (the period), and `balanceOf` against the gross.
-- `payOut` — step 1 commits the debit, a `pending` payment and `paying`; step 2 calls `createPayout` outside any transaction under `PAYOUT_PROVIDER_TIMEOUT_MS`; step 3 is `recordPayoutOutcome`. Silence, or any error but a `PaymentProviderError` with `refused`, is a 502 that leaves it `paying`. A refusal commits `payout_failed`, then answers 409.
-- `applyPayoutEvent` matches a webhook event by `payoutKey` (`sender_item_id`, `sender_batch_id`) or batch id. `reconcilePayouts` re-asks about `pending` payouts: a lookup by `externalRef`, or a re-send under the same key.
+`WalletService` is a thin view over the ledger. `balance` and `ledgerList` back `GET /finance/wallet` and `GET /finance/ledger`. `cashOutQuote` returns `cashOutSettlement` plus the fee bands, and completion debits from the same function. `assertNotBlocked` answers 409 `NEGATIVE_BALANCE_BLOCKED` when the balance is below zero. `ServiceRequestService`, `ShipmentService.create`, `DirectShipService` and `HumanFulfilmentService` call it without `tx`, so for them it is a check at the door and not a guarantee.
 
-| Method | Locks, in order | Ledger rows | Safe to retry because |
-|---|---|---|---|
-| `settleInOneStep`, cash-in | request | `credit_topup` | `lockForCompletion` refuses `completed` and a set `settledLedgerId`; the unique index backs it |
-| `settleInOneStep`, manual cash-out | request, wallet, period | `withdrawal` (net), `fee` with a `charge`; a `succeeded` `external_payment` | as above; a unique `external_ref` per provider stops one transfer paying two requests |
-| `payOut` | step 1: request, wallet, period; none during the call | `withdrawal`, `fee` | `paying` is refused; `provider_ref` is `payoutKey(id)`, unique, and the provider dedupes on it |
-| `recordPayoutOutcome` | request, payment (`FOR UPDATE`); wallet, period on refusal | success: none; refusal: `payout_reversal` for the gross | acts only on a `pending` payment of a `paying` request; a later word is logged and ignored |
-| `reversePaidPayout` | the caller's two row locks, then wallet, period | `payout_reversal` for the gross | the payment becomes `reversed`; the next event finds nothing `succeeded` |
+#### `apps/api/src/modules/pay/billing.service.ts`
 
-**Watch:**
-- `payingMetadata` reads the fee, net and waiver (for `restoreCounted`) from the `paying` event. Keep those fields.
-- A refusal and a reversal after payment both credit the gross, fee included (decision, Stage 3).
-- A reversal after payment arrives only by webhook; `reconcilePayouts` asks about `pending` payouts only, and no worker job runs it.
-- `listForReview` reads `to=2026-10-15` as that day's first midnight, so the day is left out (Stage 3).
-- One admin can approve and complete the same request (decision, Stage 3).
+About 2 minutes. It builds on T8.4, T8.5, T12.3 and T15.2.
 
-#### `apps/api/src/modules/pay/wallet-request.controller.ts` · 1.5 min · T6.2, T8.6, T8.7
-Routes and DTOs. Customer routes under `/finance/wallet-requests`; review routes under `/admin/wallet-requests` with `@Roles('admin')`; `POST /admin/payouts/reconcile` calls `reconcilePayouts`.
-- `SubmitWalletRequestDto` — one shape for both types; `validateWalletRequestDraft` decides what is required. `documentKey` must pass `IsObjectKey`.
-- `ReviewQueueQuery` — `QUEUE_DATE` plus strict ISO 8601, so a bad date is a 400, not a 500.
-- `ReconcileDto` — `olderThanMinutes` 0 to 10,080, `limit` 1 to 200.
-**Watch:** no route takes an idempotency key; a double-clicked Complete is safe because of the row lock and status checks.
+`BillingService` implements `BILLING_PORT`, which INV, DIS and MKT call to charge a fixed-price action inside their own transaction. `charge` first calls `MembershipService.consume` on `allowanceFor(feeActionType ?? actionType)`, and a covered action writes nothing. Then it prices the action with `tryPrice(feeActionType)`, or else with `price(actionType)`, and passes `itemClass`. A zero price writes nothing. Any other price inserts a settled `charge` and one debit. The debit is `fee` for `marketplace_fee` and `service_charge` for the rest. It takes no lock of its own, but `consume` row-locks the period with a conditional UPDATE. So a caller that needs the wallet lock must take it before `charge`, to keep the wallet ahead of the period. A retry is safe because the charge commits or rolls back with the caller.
 
-#### `apps/api/src/modules/pay/checkout.service.ts` · 2 min · T8.6, T6.5, T4.3
-Self-service top-up on an instant route, and the funding routes. `instantAvailable` is true only with `PAYMENT_PROVIDER=sandbox`, which production refuses at boot, so in production every cash-in is a reviewed request (T1.4).
-- `routes` — `FUNDING_ROUTES` with the bank and PayPal Friends & Family details from env; a route without details is `available: false`.
-- `checkout` — checks route and limits, inserts a `pending` `external_payment` with `provider_ref` `<route>:<idempotencyKey>` (`onConflictDoNothing`), then calls `createTopup` outside any transaction. `failed` marks it failed; a settled amount or currency other than asked marks it `refused` and credits nothing; otherwise one transaction moves it out of `pending` (conditional update) and writes one `credit_topup` and a `topup_settled` outbox row. Locks: none; a credit needs no balance check. Retry: `external_payment_provider_ref_unique` admits one request; a replay gets the first row with `replayed: true`; another user's identical key is `IDEMPOTENCY_KEY_REUSED`.
-**Watch:** a provider error is a 502 `PROVIDER_UNAVAILABLE` that leaves the row `pending` for good. Nothing re-asks the provider; reconciliation lists it under `pending`.
+`charge` checks no balance, so it may take the wallet into debt. Callers refuse new work with `assertNotBlocked` instead. No `base` is passed, so an action priced here must have a `fixed` rule. `PricingService` refuses a percentage that has nothing to take it of. `BillingModule` in `shared/billing/billing.port.ts` binds the port to `NoopBillingAdapter`, which only logs. Nothing imports it, and nothing should.
 
-#### `apps/api/src/modules/pay/topup.service.ts` · 2 min · T8.7, T15.3
-The payment webhook, and a method with no caller.
-- `handleWebhook` — `verifyWebhook` on the whole delivery. A `WebhookVerificationError` is a 400 `WEBHOOK_UNVERIFIED`: `refused` is logged as an error and reported, `malformed` as a warning. Any other error stays a 5xx, so PayPal retries. Then: no event id → `ignored`; an id already on a payment's `webhook_event_id` → `duplicate`; else `applyPayoutEvent`. Locks: none here; `recordPayoutOutcome` takes them.
-- `topup` — charges and credits directly. No route or test calls it.
-**Watch:** the duplicate check runs outside a transaction, and a payment keeps only its last event id (a reversal overwrites it). The status check under `recordPayoutOutcome`'s row locks is what makes a replay harmless. A `refused` signature usually means a stale `PAYPAL_WEBHOOK_ID`, and then every reversal after payment is lost. Capture events are acknowledged and ignored.
+#### `apps/api/src/modules/prc/pricing.service.ts`
 
-#### `apps/api/src/modules/pay/chargeback.service.ts` · 1.5 min · T8.8, T6.7, T14.3
-An operator records a card top-up taken back. It is manual because the provider reports chargebacks outside the API.
-- `record` — locks the `external_payment` `FOR UPDATE`, no wallet lock: no balance is checked, and a chargeback may push the wallet negative. Writes a `chargeback` debit for exactly the payment's amount and, unless `chargeFee` is false, a `charge` (`chargebackFee: true`) with a `fee` debit of `CHARGEBACK_FEE_MINOR`. Marks the payment `reversed`, audits `payment.chargeback`, emits `payment_reversed`. Retry: a second call finds `reversed` and gets a 409.
-- `reversible` — the 100 newest `succeeded` top-ups. `terms` — the fee.
-**Watch:** a cash-in credited through a wallet request has no `external_payment` row, so a bank recall of one cannot be recorded here.
+About 2 minutes. It builds on T8.4, T8.5 and T5.5.
 
-#### `apps/api/src/modules/pay/pay.controller.ts`, `apps/api/src/modules/pay/withdrawal.service.ts`, `apps/api/src/modules/pay/pay.module.ts` · 2 min · T6.1, T6.3, T8.6, T8.7
-The other `/finance/*` routes, the webhook route and the module.
-- Reads: `GET /finance/wallet`, `/finance/ledger`, `/finance/wallet/pending` (`openTotals`), `/finance/payments`, `/finance/cash-out-quote`, `/finance/funding-routes`.
-- The compatibility routes `POST /finance/wallet/topups` and `POST /finance/withdrawals` only raise a request and answer `status: 'pending_approval'`; `requestWithdrawal` falls back to `accountHolderName` for the beneficiary.
-- `POST /finance/withdrawals/confirm` — 410 from `WithdrawalService.retiredConfirmEndpoint`.
-- `GET /finance/chargebacks/reversible`, `POST /finance/chargebacks/:paymentId` — admin only.
-- `POST /webhooks/payment` — `@Public()` and exempt from the same-origin write check in `main.ts`; `handleWebhook`'s verification is its only guard.
-- `PayModule` — binds `BILLING_PORT` with `useExisting: BillingService`; exports `LedgerService`, `WalletService`, `WalletRequestService` and the port.
+`PricingService` finds the rule in force and computes the amount, for `BillingService` and the services that price their own fees. `ruleInForce` reads the action's rules whose `item_class` is null or the given class. A rule is in force when `effective_from` is not after now and `effective_to` is null or later. A class-specific rule beats the catch-all through `nulls last`, and then the newest rule wins. It returns null when no rule is in force. `tryPrice` answers null in that case. Otherwise a `fixed` rule gives `value` in cents, and a `percentage` rule gives `applyBasisPoints` of `base`. A percentage with no `base` is a 400. `tryPrice` returns the `snapshot` that callers store on the `charge`, and any other error, a database failure included, reaches the caller. `price` is `tryPrice` with a 400 when no rule is in force. `createRule` inserts a rule effective now and never edits one. It allows a percentage only for an action whose `percentOf` names its base, and at most 10,000 basis points.
 
-#### `apps/api/src/modules/adm/accounting.service.ts` · 3 min · T8.1, T8.10
-The accountant's reads, read-only and admin only. The ledger is single-entry: a fee leaves a customer and is credited to no Bault account, so revenue is computed here from rows.
-- `ledgerCsv` — keyset pages on `(occurred_at, id)`, 2,000 rows each, the cursor kept as Postgres text so microseconds survive. `csvField` defuses formula injection; `decimalAmount` uses integer arithmetic.
-- `parseDayRange` — both days included, UTC, at most `MAX_EXPORT_DAYS`. `parseMonth` — `YYYY-MM`. `recordExport` — audit row `accounting.ledger_export`.
-- `summary` — `byType` (count and total per type and direction); `revenue` (net `fee`, `service_charge` and `interest` rows, split into `REVENUE_LINES` by snapshot key and reference; `shipping_refund` and `service_refund` credits come off the line their charge was counted on, a custom request's off `custom_request_fee`, the rest off `service_charge`, totalled as `refundsMinor`; less `cashOutFeesReturnedMinor`; with carrier cost beside it); `customerMoney` (top-ups in, withdrawals out net of `payoutsReturnedMinor`, chargebacks); `balancesHeld` (every wallet at month end, the platform account apart).
-- `reconciliation` — gathers top-ups, payouts, withdrawal debits and rows citing a missing payment, and passes them to `reconcile`. `manualCashIns` are counted apart, since no provider reports them.
-**Watch:**
-- The platform account is found by `PLATFORM_EMAIL`, also hard-coded in `HouseStoreService` and `ServiceRequestService`.
-- A fee with no known snapshot key lands in `other_fee`.
-- A new refund type must be added to both the revenue query and `refundsMinor`, or it stays in revenue.
+Nothing writes `effective_to`. So a rule ends only when a newer rule for the same scope replaces it, and a class-specific rule keeps beating a newer catch-all. The in-force test is repeated in `PriceListService`, `PricingCoverageController`, `VaultService` and the worker jobs `storage-fee.ts` and `membership-renewal.ts`, so change them together.
 
-#### `apps/api/src/modules/adm/accounting.controller.ts` · 1 min · T8.10, T6.7
-`/admin/accounting/*`, admin only.
-- `ledgerCsv` — validates the range and audits before the first byte, then streams, waiting on `drain`. An error after the header destroys the socket, so a half file fails visibly.
-- `summary` — `month=YYYY-MM`. `reconciliation` — all time unless `from` or `to` is given.
+#### `apps/api/src/modules/prc/price-list.service.ts`
 
-#### `apps/api/src/modules/adm/reconciliation.ts` · 2 min · T8.10
-The pure rules for whether external payments and ledger rows agree. `reconcile` returns `checked`, `matched`, `mismatches` (newest first) and `pending`.
+About 1.5 minutes. It builds on T8.5.
 
-| Fact | Agrees when | Otherwise |
-|---|---|---|
-| top-up `succeeded` or `reversed` | exactly one `credit_topup` for the amount | `succeeded_without_credit`, `duplicate_credit`, `credit_amount_mismatch` |
-| top-up `reversed` | one `chargeback` for the amount | `reversed_without_chargeback`, `chargeback_amount_mismatch` |
-| top-up, other status | no credit or chargeback; `pending` is listed apart | `credit_without_settled_payment`, `chargeback_without_reversal` |
-| any top-up | no other row cites it | `unexpected_ledger_row` |
-| row citing a payment | the payment exists | `ledger_references_missing_payment` |
-| payout | a same-user withdrawal with its reference; payout = debit − fee | `payout_without_withdrawal`, `payout_amount_mismatch` |
-| payout `failed` or `reversed` | all of it credited back | `payout_failed_but_debited` |
-| withdrawal debit | a payout vouches for it | `withdrawal_without_payout` |
+`publicList` backs the public `GET /pricing/list`. It takes the rules in force and keeps the newest for each `actionType` and `itemClass`. `groupFor` sorts them into `PRICE_GROUPS`. It checks prefixes first, and an unknown action lands in `services`. The list shows rules, not charges. So a `code_constant` action, such as the cash-out, chargeback or escrow fee, shows its rule while the code charges a constant.
 
-**Watch:** a payout matches its debit by user and `provider_ref` (`payoutKey`), so one account's debit cannot vouch for another's payout. A debit whose request has no `payout_payment_id` is read from its `completed` event (`payoutRef`, `feeMinor`), and its withdrawal is the gross.
+#### `apps/api/src/modules/prc/billable-actions.ts`, `apps/api/src/modules/prc/pricing-coverage.controller.ts`
+
+About 2 minutes. It builds on T8.5.
+
+These files are the launch gate for prices. No migration inserts a `pricing_rule`, and only the seed does. `billableActions` lists every price the code charges, each with its `PriceResolution`. `required` means the action fails without a rule, and the others are `fallback_rule`, `code_default`, `free_if_unpriced` and `code_constant`. The families come from `GRADING_TIERS`, `CONSIGNMENT_CHANNELS`, `SHIPMENT_ADD_ONS` and `MEMBERSHIP_TIERS`. `percentOf` names the amount a percentage is taken of, such as the sale price, the agreed value or the amount cashed out. A null `percentOf` means the action takes fixed prices only. `coverage` is `ready` only when every action is `priced` or `code_constant`, and only a catch-all rule makes an action `priced`. Its `unknownRules` lists rules that no code reads, usually a typo. `PricingCoverageController.coverage` serves `GET /admin/pricing/coverage` to admins. `tests3/contract/pricing-coverage.test.ts` scans the source for literal action types, so a new literal passed to `price` or `tryPrice` must be listed here.
+
+#### `apps/api/src/modules/prc/prc.schema.ts`, `apps/api/src/modules/prc/prc.controller.ts`, `apps/api/src/modules/prc/prc.module.ts`
+
+About 1.5 minutes. It builds on T5.5, T6.2 and T8.5.
+
+`pricingRule` holds effective-dated rows. Each has an `actionType`, an `itemClass` where null is the catch-all, a `model` of `fixed` or `percentage`, and a `value` in cents or basis points. It also has `billingTrigger`, `parameters` for storage terms, `effectiveFrom`, `effectiveTo` and `updatedBy`. `actionType` is free text, so a typo makes a rule that nothing charges, and only `unknownRules` shows it. `PrcController` serves the public `GET /pricing/list`. `GET /pricing/rules` returns every rule ever made to any signed-in user. `POST /pricing/rules` is for admins and takes `CreateRuleDto` with a `value` of zero or more. `PrcModule` is global and exports only `PricingService`.
+
+#### `apps/api/src/modules/pay/money-terms.ts`
+
+About 1.5 minutes. It builds on T8.6, T8.7 and T8.8.
+
+This file holds pure figures for the cost of moving money. Up to `CASHOUT_BAND_MINOR`, which is $100, `cashOutFeeMinor` charges 6 percent with a $0.99 floor. Above the band it charges $5 plus 1 percent. It always rounds up. `cashOutSettlement` returns `grossMinor`, `feeMinor` and `netMinor`. The gross leaves the wallet, and a membership waiver only lowers the fee. The quote, the payout and the ledger all call it. `CHARGEBACK_FEE_MINOR` is $25. `CASHOUT_FEE_ACTION` and `CHARGEBACK_FEE_ACTION` only name price-list rules. `FUNDING_ROUTES` and `isInstantRoute` say which routes settle on their own. A provider confirms `card` and `paypal_gs`, and a person must see `paypal_ff` and `bank_transfer` arrive.
+
+#### `apps/api/src/modules/pay/wallet-request.rules.ts`
+
+About 1.5 minutes. It builds on T8.6 and T8.7.
+
+This file holds the request lifecycle and limits, with no database, and the SPA mirrors it in `apps/web/src/shared/walletRequests.ts`. `WALLET_REQUEST_TRANSITIONS` covers nine statuses. The main path runs from `submitted` through `pending_review`, `approved` and `processing` to `completed`. A reviewer may skip `pending_review` and `processing`. The requester may cancel while a request is `submitted` or `pending_review`, and a reviewer may reject any open request. A provider payout adds `paying`, which leads to `completed` or `payout_failed`. Only `reversePaidPayout` takes `completed` to `payout_failed`, and nothing leads from `paying` to `rejected`. `canTransition` is the service's only legality check.
+
+`OPEN_WALLET_REQUEST_STATUSES` lists the four undecided statuses. `paying` is not one, because its money has left. `WALLET_REQUEST_LIMITS` allows a cash-in of $10 to $20,000 and a cash-out of $20 to $20,000. `validateWalletRequestDraft` checks every rule that needs no database. The balance check needs the database, so it is not here. `isDuplicateOf`, `isOpenStatus` and `REQUESTER_TRANSITIONS` have no caller. `submit` repeats the duplicate rule in SQL, so change both.
+
+#### `apps/api/src/modules/pay/wallet-request.service.ts`
+
+About 3 minutes. It builds on T8.6, T8.7 and T15.2.
+
+This service runs every cash-in and cash-out, from submission to payout and reversal. Submitting never moves money. Only a completion, a refused payout or a reversal after payment writes ledger rows. Reviewers are admins, and `assertSeparationOfDuties` bars the requester from deciding their own request. One admin can still approve and complete the same request. Stage 3 records this as a decision.
+
+`submit` refuses an identical open request and a cash-out above `balanceOf`. Both checks read without a lock. It writes the request, a `submitted` event, an outbox row and an audit row. `cancel`, `markUnderReview`, `approve`, `reject` and `markProcessing` go through `applyTransition`. In one transaction it locks the request `FOR UPDATE`, checks `canTransition`, and writes the update, the event, the outbox row `wallet_request_<status>` and the audit row. `listForReview` reads a `to` of `2026-10-15` as that day's first midnight, so the day itself is left out. Stage 3 covers this.
+
+`complete` sends a cash-in to `settleInOneStep`. A cash-out goes there too when `PAYOUT_MODE` is `manual`, and then it needs a `payoutReference`. In `provider` mode a cash-out goes to `payOut`, and a reference is refused. `lockForCompletion` locks the request `FOR UPDATE` and checks separation of duties. It refuses a request that is `completed` or `paying`, a move that `canTransition` forbids, and a request whose `settledLedgerId` is set. `debitCashOut` fixes the fee at today's schedule. Then it takes `lockWallet`, calls `memberships.waive` on `cash_out_fee`, which locks the period, and checks `balanceOf` against the gross.
+
+For a cash-in, `settleInOneStep` locks only the request and writes one `credit_topup`. A retry is safe because the second call waits on the request lock, and `lockForCompletion` then refuses it as `completed`. For a manual cash-out it locks the request, then the wallet, then the period. It writes a `withdrawal` debit for the net, a `fee` debit with its `charge`, and a `succeeded` `external_payment`. The same check makes a retry safe. An external reference is unique per provider, so one transfer cannot pay two requests.
+
+`payOut` has three steps. Step 1 locks the request, then the wallet, then the period. It commits the `withdrawal` and `fee` debits, a `pending` payment and the `paying` status. Step 2 calls `createPayout` outside any transaction, under `PAYOUT_PROVIDER_TIMEOUT_MS`, and holds no lock. Step 3 is `recordPayoutOutcome`. Silence, or any error but a `PaymentProviderError` with `refused`, is a 502 that leaves the request `paying`. A refusal commits `payout_failed`, then answers 409. A retry is safe because `lockForCompletion` refuses `paying`. The payment's unique `provider_ref` is `payoutKey(id)`, and the provider dedupes on it.
+
+`recordPayoutOutcome` locks the request, then the payment, both `FOR UPDATE`. Apart from a reversal after payment, it acts only on a `pending` payment of a `paying` request. It logs and ignores a later answer, so a retry is safe. Success writes no ledger row. A refusal also locks the wallet, then the period, and writes a `payout_reversal` credit for the gross. `reversePaidPayout` runs under the caller's two row locks, then takes the wallet and the period. It writes a `payout_reversal` credit for the gross and marks the payment `reversed`, so a repeated event finds nothing `succeeded`. Both paths credit the gross, fee included. Stage 3 records this as a decision.
+
+`payingMetadata` reads the fee, the net and the waiver from the `paying` event, and `restoreCounted` needs the waiver. Keep those fields in that event. `applyPayoutEvent` matches a webhook event by `payoutKey`, through `sender_item_id` or `sender_batch_id`, or by the batch id. `reconcilePayouts` asks again about `pending` payouts, by a lookup on `externalRef` or a resend under the same key. It asks about nothing else, so a reversal after payment arrives only by webhook. No worker job runs it.
+
+#### `apps/api/src/modules/pay/wallet-request.controller.ts`
+
+About 1.5 minutes. It builds on T6.2, T8.6 and T8.7.
+
+`WalletRequestController` puts the customer routes under `/finance/wallet-requests`. Review routes sit under `/admin/wallet-requests` with `@Roles('admin')`, and `POST /admin/payouts/reconcile` calls `reconcilePayouts`. `SubmitWalletRequestDto` is one shape for both types, and `validateWalletRequestDraft` decides which fields are required. `documentKey` must pass `IsObjectKey`. `ReviewQueueQuery` checks dates with `QUEUE_DATE` and strict ISO 8601, so a bad date is a 400 and not a 500. `ReconcileDto` takes `olderThanMinutes` from 0 to 10,080 and `limit` from 1 to 200. No route takes an idempotency key. A double-clicked Complete is safe because of the row lock and the status checks.
+
+#### `apps/api/src/modules/pay/checkout.service.ts`
+
+About 2 minutes. It builds on T8.6, T6.5 and T4.3.
+
+`CheckoutService` lists the funding routes and runs self-service top-up on an instant route. `instantAvailable` is true only with `PAYMENT_PROVIDER=sandbox`, which production refuses at boot. So in production every cash-in is a reviewed request, as T1.4 explains. `routes` returns `FUNDING_ROUTES` with the bank and PayPal Friends and Family details from the environment, and a route without details is `available: false`.
+
+`checkout` checks the route and the limits. It inserts a `pending` `external_payment` with the `provider_ref` `<route>:<idempotencyKey>` through `onConflictDoNothing`, then calls `createTopup` outside any transaction. A `failed` answer marks the row `failed`. A settled amount or currency other than the one asked marks it `refused` and credits nothing. Otherwise one transaction records the answer with a conditional UPDATE that needs the row still `pending`. On `succeeded` it writes one `credit_topup` and a `topup_settled` outbox row. It takes no lock, because a credit needs no balance check.
+
+A retry is safe because `external_payment_provider_ref_unique` admits one row per reference. A replay gets the first row with `replayed: true`, and another user's identical key gets `IDEMPOTENCY_KEY_REUSED`. A provider error is a 502 `PROVIDER_UNAVAILABLE` that leaves the row `pending` for good. Nothing asks the provider again, and reconciliation lists the row under `pending`.
+
+#### `apps/api/src/modules/pay/topup.service.ts`
+
+About 2 minutes. It builds on T8.7 and T15.3.
+
+`TopupService` holds the payment webhook and one method with no caller. `handleWebhook` runs `verifyWebhook` on the whole delivery. A `WebhookVerificationError` becomes a 400 `WEBHOOK_UNVERIFIED`. A `refused` verification is logged as an error and reported, and a `malformed` one as a warning. Any other error stays a 5xx, so PayPal retries. An event with no id is `ignored`, and an id already on a payment's `webhook_event_id` is a `duplicate`. Any other event goes to `applyPayoutEvent`. `handleWebhook` takes no lock, and `recordPayoutOutcome` takes the locks.
+
+The duplicate check runs outside a transaction, and a payment keeps only its last event id, which a reversal overwrites. The status check under the row locks in `recordPayoutOutcome` is what makes a replay harmless. A `refused` signature usually means a stale `PAYPAL_WEBHOOK_ID`, and then every reversal after payment is lost. Capture events are acknowledged and ignored. `topup` charges and credits directly, and no route or test calls it.
+
+#### `apps/api/src/modules/pay/chargeback.service.ts`
+
+About 1.5 minutes. It builds on T8.8, T6.7 and T14.3.
+
+`ChargebackService` lets an admin record a card top-up that was taken back. It is manual because the provider reports chargebacks outside the API. `record` locks the `external_payment` `FOR UPDATE` and takes no wallet lock. It checks no balance, so a chargeback may push the wallet negative. It writes a `chargeback` debit for exactly the payment's amount. Unless `chargeFee` is false, it also writes a `charge` with `chargebackFee: true` and a `fee` debit of `CHARGEBACK_FEE_MINOR`. It marks the payment `reversed`, audits `payment.chargeback` and emits `payment_reversed`. A retry is safe because a second call finds `reversed` and gets a 409. `reversible` lists the 100 newest `succeeded` top-ups, and `terms` returns the fee. A cash-in credited through a wallet request has no `external_payment` row, so a bank recall of one cannot be recorded here.
+
+#### `apps/api/src/modules/pay/pay.controller.ts`, `apps/api/src/modules/pay/withdrawal.service.ts`, `apps/api/src/modules/pay/pay.module.ts`
+
+About 2 minutes. It builds on T6.1, T6.3, T8.6 and T8.7.
+
+`PayController` holds the other `/finance` routes and the webhook route. The reads are `GET /finance/wallet`, `/finance/ledger`, `/finance/wallet/pending` through `openTotals`, `/finance/payments`, `/finance/cash-out-quote` and `/finance/funding-routes`. `POST /finance/checkout` calls `CheckoutService.checkout`. The compatibility routes `POST /finance/wallet/topups` and `POST /finance/withdrawals` only raise a request and answer `status: 'pending_approval'`. `requestWithdrawal` falls back to `accountHolderName` for the beneficiary. `POST /finance/withdrawals/confirm` answers 410 from `WithdrawalService.retiredConfirmEndpoint`. `GET /finance/chargebacks/reversible` and `POST /finance/chargebacks/:paymentId` are for admins only.
+
+`POST /webhooks/payment` is `@Public()` and exempt from the same-origin write check in `main.ts`, so the verification in `handleWebhook` is its only guard. `PayModule` is global and binds `BILLING_PORT` with `useExisting: BillingService`. It exports `LedgerService`, `WalletService`, `WalletRequestService` and the port.
+
+#### `apps/api/src/modules/adm/accounting.service.ts`
+
+About 3 minutes. It builds on T8.1 and T8.10.
+
+`AccountingService` holds the accountant's reads, which are read-only and for admins. The ledger is single-entry. A fee leaves a customer and is credited to no Bault account, so this file computes revenue from the rows. `ledgerCsv` reads keyset pages of 2,000 rows on `occurred_at` and `id`, with the cursor kept as Postgres text so microseconds survive. `csvField` defuses formula injection, and `decimalAmount` uses integer arithmetic. `parseDayRange` includes both days, in UTC, up to `MAX_EXPORT_DAYS`. `parseMonth` reads `YYYY-MM`, and `recordExport` writes the audit row `accounting.ledger_export`.
+
+`summary` has four parts. `byType` counts and totals each type and direction. `revenue` nets the `fee`, `service_charge` and `interest` rows and splits them into `REVENUE_LINES` by snapshot key and reference. A `shipping_refund` or `service_refund` credit comes off the line its charge was counted on. A custom request's refund comes off `custom_request_fee`, and the rest come off `service_charge`. Their total is `refundsMinor`. Revenue also subtracts `cashOutFeesReturnedMinor` and shows the carrier cost beside the total. `customerMoney` gives top-ups in, withdrawals out net of `payoutsReturnedMinor`, and chargebacks. `balancesHeld` sums every wallet at month end, with the platform account apart. `reconciliation` gathers top-ups, payouts, withdrawal debits and rows citing a missing payment, and passes them to `reconcile`. It counts `manualCashIns` apart, because no provider reports them.
+
+A new refund type must be added to both the revenue query and `refundsMinor`, or it stays in revenue. The platform account is found by `PLATFORM_EMAIL`, which is also hard-coded in `HouseStoreService` and `ServiceRequestService`. A fee that matches no snapshot key and no reference lands in `other_fee`.
+
+#### `apps/api/src/modules/adm/accounting.controller.ts`
+
+About 1 minute. It builds on T8.10 and T6.7.
+
+`AccountingController` serves `/admin/accounting` to admins only. `ledgerCsv` validates the range and writes the audit row before the first byte. Then it streams the file and waits on `drain` when the socket is full. An error after the first bytes destroys the socket, so a half-written file fails visibly. `summary` takes `month` as `YYYY-MM`. `reconciliation` covers all time unless `from` or `to` is given.
+
+#### `apps/api/src/modules/adm/reconciliation.ts`
+
+About 2 minutes. It builds on T8.10.
+
+This file holds the pure rules for whether external payments and ledger rows agree. `reconcile` returns `checked`, `matched`, `mismatches` newest first, and `pending`.
+
+A top-up that is `succeeded` or `reversed` needs exactly one `credit_topup` for its amount. Otherwise it is `succeeded_without_credit`, `duplicate_credit` or `credit_amount_mismatch`. A `reversed` one also needs one `chargeback` for its amount, or it is `reversed_without_chargeback` or `chargeback_amount_mismatch`. A top-up in any other status with a credit is `credit_without_settled_payment`. A chargeback on a top-up that is not `reversed` is `chargeback_without_reversal`. A clean `pending` top-up goes under `pending`. Any other row citing a top-up is `unexpected_ledger_row`, and a row citing a missing payment is `ledger_references_missing_payment`.
+
+A payout needs a withdrawal debit of the same user with its reference, or it is `payout_without_withdrawal`. A `failed` payout with no withdrawal counts as matched. The payout must equal the debit less the fee, or it is `payout_amount_mismatch`. A `failed` or `reversed` payout must have its whole debit credited back, or it is `payout_failed_but_debited`. A clean `pending` payout goes under `pending`. A withdrawal debit that no payout vouches for is `withdrawal_without_payout`.
+
+Matching uses the user and the `provider_ref`, which is the `payoutKey`, so one account's debit cannot vouch for another's payout. A debit whose request has no `payout_payment_id` is read from its `completed` event through `payoutRef` and `feeMinor`, and its withdrawal is the gross.
