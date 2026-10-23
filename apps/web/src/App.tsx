@@ -337,6 +337,14 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const pageTitle = section === 'profile' ? t('profile.title') : spec ? t(spec.titleKey) : t('app.title');
   const sectionLabel = section === 'profile' ? t('profile.title') : spec ? t(spec.labelKey) : pageTitle;
   const tabKey = route.tab ? `${TAB_PREFIX[section] ?? ''}${route.tab}` : '';
+
+  useEffect(() => {
+    document.title = `${pageTitle} · Bault`;
+    return () => {
+      document.title = 'Bault';
+    };
+  }, [pageTitle]);
+
   const crumbs: Crumb[] = [
     { label: t('nav.home'), onClick: () => goto(fallback) },
     hasMessage(tabKey)

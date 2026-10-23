@@ -356,7 +356,7 @@ function NotAcceptedTable() {
                   <td data-label={t('ss.notAccepted.col.outcome')}>
                     {disposalOutcomeLabel(t, row.outcome)}
                   </td>
-                  <td data-label={t('ss.notAccepted.col.date')} dir="ltr">
+                  <td data-label={t('ss.notAccepted.col.date')}>
                     {formatDate(row.occurredAt, locale)}
                   </td>
                 </tr>

@@ -320,7 +320,7 @@ function ParcelsTab({
                         {parcelStatusLabel(t, p.status)}
                       </StatusBadge>
                     </td>
-                    <td data-label={t('inbound.parcels.col.updated')} dir="ltr">
+                    <td data-label={t('inbound.parcels.col.updated')}>
                       {formatDate(
                         p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt ?? '',
                         locale,

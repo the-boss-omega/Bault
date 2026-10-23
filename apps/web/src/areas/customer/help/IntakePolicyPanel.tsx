@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import {
+  disposalCategoryLabel,
+  disposalOutcomeLabel,
+  itemClassLabel,
+  itemClassOption,
+} from '../../../shared/itemClasses';
 import { EmptyState, ErrorState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconBox } from '../../../shared/ui/icons';
 
@@ -47,6 +53,11 @@ export function IntakePolicyPanel() {
   if (!policy) return <p className="hint">{t('grp.loading')}</p>;
 
   const refused = policy.refusedCategories.filter((c) => c.prohibited);
+  const className = (c: AcceptedClass) => (itemClassOption(c.key) ? itemClassLabel(t, c.key) : c.label);
+  const categoryName = (c: RefusedCategory) => {
+    const label = disposalCategoryLabel(t, c.key);
+    return label === c.key ? c.label : label;
+  };
   const judgement = policy.refusedCategories.filter((c) => !c.prohibited);
 
   return (
@@ -71,7 +82,7 @@ export function IntakePolicyPanel() {
                 {policy.acceptedClasses.map((c) => (
                   <tr key={c.key}>
                     <td data-label={t('policy.col.item')}>
-                      <span className="dt-primary">{c.label}</span>
+                      <span className="dt-primary">{className(c)}</span>
                     </td>
                     <td data-label={t('policy.col.storage')}>
                       {c.oversized ? (
@@ -106,8 +117,10 @@ export function IntakePolicyPanel() {
           {refused.map((c) => (
             <li key={c.key}>
               <span>
-                <strong>{c.label}</strong>
-                <span className="hint"> {c.reason}</span>
+                <strong>{categoryName(c)}</strong>{' '}
+                <span className="hint ltr-run" lang="en">
+                  {c.reason}
+                </span>
               </span>
             </li>
           ))}
@@ -120,8 +133,10 @@ export function IntakePolicyPanel() {
             {judgement.map((c) => (
               <li key={c.key}>
                 <span>
-                  <strong>{c.label}</strong>
-                  <span className="hint"> {c.reason}</span>
+                  <strong>{categoryName(c)}</strong>{' '}
+                  <span className="hint ltr-run" lang="en">
+                    {c.reason}
+                  </span>
                 </span>
               </li>
             ))}
@@ -132,7 +147,7 @@ export function IntakePolicyPanel() {
       <Panel title={t('policy.rules.title')}>
         <div className="stack">
           {policy.rules.map((r) => (
-            <div key={r.id}>
+            <div key={r.id} lang="en" className="ltr-run">
               <h3 className="panel-title" style={{ fontSize: 15, marginBottom: 4 }}>
                 {r.heading}
               </h3>
@@ -143,7 +158,7 @@ export function IntakePolicyPanel() {
           ))}
         </div>
         <p className="field-hint">
-          {t('policy.outcomes', { list: policy.outcomes.join(', ').replace(/_/g, ' ') })}
+          {t('policy.outcomes', { list: policy.outcomes.map((o) => disposalOutcomeLabel(t, o)).join(', ') })}
         </p>
       </Panel>
     </>

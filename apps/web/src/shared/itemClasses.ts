@@ -36,6 +36,20 @@ export function itemClassLabel(t: TranslateFn, key: string): string {
   return option ? t(option.labelKey) : key;
 }
 
+export function itemName(t: TranslateFn, item: { description?: string | null; typeClass: string }): string {
+  return item.description || itemClassLabel(t, item.typeClass);
+}
+
+export function itemPickText(
+  t: TranslateFn,
+  item: { serialNumber?: string | null; description?: string | null; typeClass: string },
+): string {
+  return [item.serialNumber, itemName(t, item)]
+    .filter((part): part is string => Boolean(part))
+    .map((part) => `\u2068${part}\u2069`)
+    .join(' · ');
+}
+
 export const DISPOSAL_CATEGORIES: readonly { key: string; labelKey: MessageKey }[] = [
   { key: 'gps_tracker', labelKey: 'disposal.category.gps_tracker' },
   { key: 'lithium_battery', labelKey: 'disposal.category.lithium_battery' },
