@@ -1,9 +1,12 @@
 import { CARRIER_SERVICES, DOMESTIC_COUNTRY } from './carriers';
+import { regionRequired, regionsOf, type Region } from './regions';
 
 export interface ShippingCountry {
   code: string;
   name: string;
   domestic: boolean;
+  regionRequired: boolean;
+  regions?: Region[];
 }
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -49,11 +52,16 @@ export function shippingCountries(): ShippingCountry[] {
   }
   const rows = [...codes]
     .filter((code) => COUNTRY_NAMES[code])
-    .map((code) => ({
-      code,
-      name: COUNTRY_NAMES[code]!,
-      domestic: code === DOMESTIC_COUNTRY,
-    }));
+    .map((code) => {
+      const regions = regionsOf(code);
+      return {
+        code,
+        name: COUNTRY_NAMES[code]!,
+        domestic: code === DOMESTIC_COUNTRY,
+        regionRequired: regionRequired(code),
+        ...(regions ? { regions } : {}),
+      };
+    });
   rows.sort((a, b) => (a.domestic === b.domestic ? a.name.localeCompare(b.name) : a.domestic ? -1 : 1));
   return rows;
 }

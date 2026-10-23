@@ -105,7 +105,7 @@ Response types, a status-to-tone map and label functions per domain, such as `ES
 
 #### `apps/web/src/shared/servicePrices.ts`, `apps/web/src/shared/countries.ts`, `apps/web/src/shared/useVaultItems.ts`, `apps/web/src/shared/Barcode.tsx`, `apps/web/src/shared/barcode128.ts`, `apps/web/src/shared/CardPhoto.tsx`, `apps/web/src/shared/ui/PhotoInput.tsx` · 1 min · T8.5, T9.3, T13.1
 - `useServicePrices` loads `GET /pricing/list` once per page load. `SERVICE_FEE_ACTION` maps a card service to its rule; `priceLabel` shows a percentage rule as a percentage, never dollars.
-- `useShippingCountries` and `useVaultItems` load `GET /shipping/countries` and `GET /vault/items`.
+- `useShippingCountries` and `useVaultItems` load `GET /shipping/countries` and `GET /vault/items`. `lacksRegion` says whether an address needs a state or province it doesn't have.
 - `barcodeSvg` draws Code 128B for `Barcode` and `printBarcodes`. `cardPhotoUrl` points at `/images/<SERIAL>` in the repo-root `assets/`, trying `.png`, then `.jpg`.
 - `PhotoInput` uploads each file when picked (`POST /media/uploads`) and hands the object keys to the form.
 
@@ -177,13 +177,13 @@ Tabs `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `his
 - `NotAcceptedTable` lists `GET /me/disposals`, arrivals Bault refused.
 
 #### `apps/web/src/areas/customer/shipping/ShipmentComposer.tsx`, `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx`, `apps/web/src/areas/customer/shipping/SharedParcelsTab.tsx` · 1 min · T13.1, T13.6, T13.7
-- `ShipmentComposer` re-quotes as answers change (`POST /shipping/quote`, which creates nothing); refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`.
+- `ShipmentComposer` re-quotes as answers change (`POST /shipping/quote`, which creates nothing); refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`. An address that `lacksRegion`, or that the server refuses with `address_region_required`, stops the quote and shows a link to edit it.
 - `HumanFulfilmentPanels.tsx` handles show pickup and hand delivery; `SharedParcelsTab` runs group shipments.
 
 **Watch:** if `commit`'s second call fails, the shipment already exists and only the error shows. `WhiteGloveQuotes` accepts with no amount, so the server charges whatever quote is current.
 
 #### `apps/web/src/areas/customer/profile/ProfilePage.tsx`, `apps/web/src/areas/customer/profile/TwoFactorPanel.tsx`, `apps/web/src/areas/customer/support/SupportPage.tsx`, `apps/web/src/areas/customer/notifications/NotificationsPage.tsx` · 1.5 min · T7.1, T7.6, T14.4
-- `ProfilePage`: `PATCH /me/profile`, addresses on `/me/addresses`, and `/auth/password/change`. `TwoFactorPanel` drives setup, disable and recovery codes under `/auth/mfa`.
+- `ProfilePage`: `PATCH /me/profile`, addresses on `/me/addresses`, and `/auth/password/change`. `AddressFields` shows a state or province list for a country with `regions`, free text elsewhere, and clears it when the country changes; a saved address that `lacksRegion` wears a warning badge. `TwoFactorPanel` drives setup, disable and recovery codes under `/auth/mfa`.
 - `SupportPage` runs tickets on `/support/tickets` and is the whole app for a suspended account. The warehouse reuses its `ThreadDrawer` with `staff` set.
 - `NotificationsPage` shows the shared feed and saves preferences with `PUT /notifications/preferences`.
 

@@ -466,6 +466,7 @@ describe('ESC escrow and human fulfilment', () => {
         recipient: 'Red Ashwood',
         line1: '12 Vine St',
         city: 'Trenton',
+        region: 'NJ',
         country: 'US',
         postalCode: '08608',
       })

@@ -58,14 +58,14 @@ The estimates include writing the failing test, the fix, and running the named s
 ### P1. Production has its platform custodian and its first administrator · 75 min · db, ops, CI · T5.3, T5.8, T7.2, T17.6
 **Why:** Only the seed creates `platform@bault.dev` and the first administrator, and the seed refuses production. On a new production database the house store, donations and the accounting summary fail with "Platform custodian account not seeded", and nobody can sign in to the console.
 **Where:**
-- `apps/api/src/db/migrations/` and `meta/_journal.json` (the latest is `0036_a_ledger_amount_is_never_zero`);
+- `apps/api/src/db/migrations/` and `meta/_journal.json` (the latest is `0037_an_address_names_its_state`);
 - the platform lookups: `ServiceRequestService.platformAccountId` (`dis/service.service.ts`), `HouseStoreService.platformAccountId` (`mkt/house-store.service.ts`), `PLATFORM_EMAIL` in `AccountingService.summary` (`adm/accounting.service.ts`);
 - `mkUser` in `apps/api/src/db/seed.ts`; `userAccount`, `accountStatus`, `userRole` in `acc/acc.schema.ts`;
 - `apps/api/tsconfig.build.json` (what ships in the image), the `migrate` service in `infra/production/compose.yml`, sections 4 and 5 of `infra/production/README.md`;
 - the `migrate-image` job in `.github/workflows/ci.yml`.
 
 **Task:**
-- Every migrated database has exactly one platform custodian, written by a new migration `0037`. Running it on a database that already has one changes nothing, and `pnpm db:reset` still works after it.
+- Every migrated database has exactly one platform custodian, written by a new migration `0038`. Running it on a database that already has one changes nothing, and `pnpm db:reset` still works after it.
 - A new command creates the first administrator from values given when it runs; no password is in the repository. It refuses, and changes nothing, when an administrator other than the platform account already exists. It runs from the API image the way `dist/db/migrate.js` does.
 - `infra/production/README.md` has the step, right after the first deploy.
 - CI's `migrate-image` job proves both against its empty database.
