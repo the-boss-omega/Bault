@@ -8,6 +8,7 @@ import { clampLimit } from '../../shared/query';
 import type { StorageAdapter } from '@bault/adapters';
 import { listing } from './mkt.schema';
 import { item, itemImage } from '../cst/cst.schema';
+import { userAccount } from '../acc/acc.schema';
 
 export type BrowseSort = 'newest' | 'price_asc' | 'price_desc';
 
@@ -58,9 +59,11 @@ export class BrowseService {
         typeClass: item.typeClass,
         conditionGrade: item.conditionGrade,
         description: item.description,
+        sellerUsername: userAccount.username,
       })
       .from(listing)
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
+      .leftJoin(userAccount, sql`${userAccount.id}::text = ${listing.sellerId}`)
       .where(and(...conditions))
       .orderBy(order)
       .limit(clampLimit(limit, { max: 200, fallback: 50 }));
@@ -82,9 +85,11 @@ export class BrowseService {
         typeClass: item.typeClass,
         conditionGrade: item.conditionGrade,
         description: item.description,
+        sellerUsername: userAccount.username,
       })
       .from(listing)
       .innerJoin(item, sql`${item.id}::text = ${listing.itemId}`)
+      .leftJoin(userAccount, sql`${userAccount.id}::text = ${listing.sellerId}`)
       .where(eq(listing.id, listingId))
       .limit(1);
     if (!row) throw AppError.notFound('Listing not found');

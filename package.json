@@ -2,7 +2,7 @@
   "name": "bault",
   "version": "0.1.0",
   "private": true,
-  "description": "Bault \u2014 collectibles vaulting & marketplace platform (modular monolith monorepo)",
+  "description": "Bault — collectibles vaulting & marketplace platform (modular monolith monorepo)",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": "^22.22.2 || >=24.15.0"
@@ -17,6 +17,11 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "users:remove-test": "node scripts/remove-test-users.mjs",
+    "staging:check": "node scripts/staging-check.mjs",
+    "prices:load": "node scripts/ops/prices.mjs",
+    "ops:load-test": "node scripts/ops/load-test.mjs",
+    "ops:security-check": "node scripts/ops/security-check.mjs",
+    "design:screens": "node scripts/design-screens.mjs",
     "db:reset": "pnpm --filter @bault/api db:seed",
     "typecheck": "pnpm -r typecheck",
     "test": "node scripts/test.mjs",
@@ -41,6 +46,7 @@
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "jsdom": "^30.0.1",
+    "playwright-core": "1.63.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",

@@ -33,7 +33,7 @@ export class VerificationService {
     });
     await this.email.send({
       to: email,
-      subject: 'Verify your Bault account',
+      subject: 'אימות החשבון ב־Bault · Verify your Bault account',
       template: 'email_verification',
       variables: { link: emailLink('verify-email', raw) },
     });

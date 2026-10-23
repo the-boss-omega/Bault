@@ -7,6 +7,7 @@ import { fullName, isValidNamePart, normalizeNamePart } from '../../shared/names
 import { userAccount } from './acc.schema';
 import { shippingAddress } from './address.schema';
 import { toCountryCode } from '../shp/countries';
+import { normalizeRegion } from '../shp/regions';
 import { MfaService } from './mfa/mfa.service';
 
 export interface ProfileView {
@@ -30,6 +31,7 @@ export interface AddressInput {
   recipient: string;
   line1: string;
   city: string;
+  region?: string | null;
   country: string;
   postalCode: string;
   isDefault?: boolean;
@@ -90,6 +92,8 @@ export class ProfileService {
   }
 
   async addAddress(userId: string, dto: AddressInput) {
+    const country = toCountryCode(dto.country) ?? dto.country;
+    const region = regionFor(country, dto.region);
     return this.db.transaction(async (tx) => {
       if (dto.isDefault) {
         await tx.update(shippingAddress).set({ isDefault: false }).where(eq(shippingAddress.userId, userId));
@@ -102,7 +106,8 @@ export class ProfileService {
           recipient: dto.recipient,
           line1: dto.line1,
           city: dto.city,
-          country: toCountryCode(dto.country) ?? dto.country,
+          region,
+          country,
           postalCode: dto.postalCode,
           isDefault: dto.isDefault ?? false,
         })
@@ -125,6 +130,10 @@ export class ProfileService {
       for (const f of ['label', 'recipient', 'line1', 'city', 'country', 'postalCode'] as const) {
         if (patch[f] === undefined) continue;
         set[f] = f === 'country' ? (toCountryCode(patch[f]!) ?? patch[f]) : patch[f];
+      }
+      if (patch.country !== undefined || patch.region !== undefined) {
+        const country = (set.country as string | undefined) ?? existing.country;
+        set.region = regionFor(country, patch.region !== undefined ? patch.region : existing.region);
       }
       if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
       if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
@@ -149,4 +158,10 @@ export class ProfileService {
     await this.db.delete(shippingAddress).where(eq(shippingAddress.id, id));
     return { deleted: true };
   }
+}
+
+function regionFor(country: string, value: string | null | undefined): string | null {
+  const result = normalizeRegion(country, value);
+  if ('problem' in result) throw AppError.validation(result.problem);
+  return result.region;
 }

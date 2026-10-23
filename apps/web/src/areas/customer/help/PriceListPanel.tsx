@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { formatUsd } from '../../../shared/money';
+import { itemClassLabel } from '../../../shared/itemClasses';
+import { Amount } from '../../../shared/ui/Serial';
 import { EmptyState, ErrorState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconReceipt } from '../../../shared/ui/icons';
 
@@ -52,7 +54,7 @@ export function PriceListPanel() {
           <EmptyState title={t('prices.none')} text={t('prices.noneText')} icon={<IconReceipt />} />
         ) : (
           <>
-            <p className="field-hint">{list.note}</p>
+            <p className="field-hint">{t('prices.note')}</p>
             {list.groups.map((g) => (
               <div key={g.group} style={{ marginBlockStart: 'var(--sp-5)' }}>
                 <h3 className="drawer-heading">{t(`prices.group.${g.group}` as MessageKey)}</h3>
@@ -69,15 +71,15 @@ export function PriceListPanel() {
                       {g.entries.map((e) => (
                         <tr key={`${e.actionType}:${e.itemClass ?? ''}`}>
                           <td className="dt-primary">
-                            {e.description}
+                            <span className="ltr-run">{e.description}</span>
                             {e.itemClass && (
                               <span className="dt-sub">
-                                {t('prices.forClass', { itemClass: e.itemClass })}
+                                {t('prices.forClass', { itemClass: itemClassLabel(t, e.itemClass) })}
                               </span>
                             )}
                           </td>
-                          <td dir="ltr">
-                            <strong>{priceOf(e)}</strong>
+                          <td>
+                            <Amount>{priceOf(e)}</Amount>
                           </td>
                           <td>
                             <StatusBadge tone="neutral" plain>

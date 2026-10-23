@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Client, SEED, intakeFor, signIn } from './helpers/http';
+import { Client, SEED, SEED_USERNAME, intakeFor, signIn } from './helpers/http';
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -15,7 +15,7 @@ function keysOf(value: unknown, into = new Set<string>()): Set<string> {
 }
 
 describe('MKT a listing, as an anonymous visitor sees it', () => {
-  it('shows the card and its price, and nothing about its owner, its shelf or its paperwork', async () => {
+  it('shows the card, its price and its seller’s username, and nothing else about its owner, its shelf or its paperwork', async () => {
     const operator = await signIn(SEED.operator);
     const upload = await operator.post('/media/uploads', { contentType: 'image/png', dataBase64: PNG, purpose: 'item_intake' });
     expect(upload.status).toBe(201);
@@ -46,6 +46,10 @@ describe('MKT a listing, as an anonymous visitor sees it', () => {
       'objectKey',
       'contentHash',
       'uploadedBy',
+      'email',
+      'firstName',
+      'lastName',
+      'legacyDisplayName',
     ]) {
       expect(keys.has(leaked), `${leaked} is in the public listing`).toBe(false);
     }
@@ -54,9 +58,10 @@ describe('MKT a listing, as an anonymous visitor sees it', () => {
       (l) => l.id === listing.id,
     );
     expect(browsed).toBeDefined();
-    for (const field of ['id', 'askingPrice', 'currency', 'itemId', 'serialNumber', 'typeClass', 'conditionGrade', 'description']) {
+    for (const field of ['id', 'askingPrice', 'currency', 'itemId', 'serialNumber', 'typeClass', 'conditionGrade', 'description', 'sellerUsername']) {
       expect(res.body[field], field).toEqual(browsed![field]);
     }
+    expect(res.body.sellerUsername).toBe(SEED_USERNAME.collector);
     expect(res.body.askingPrice).toBe(12_300);
     expect(res.body.description).toBe('Public listing page check');
     expect(res.body.status).toBe('active');

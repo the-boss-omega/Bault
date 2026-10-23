@@ -44,6 +44,7 @@ import {
   IconPlus,
   IconReceipt,
   IconServices,
+  IconShield,
   IconTag,
   IconUpload,
   IconWallet,
@@ -86,6 +87,10 @@ const TYPE_META: Record<string, { label: MessageKey; icon: ReactNode }> = {
   shipping_refund: { label: 'wallet.type.shipping_refund', icon: <IconPlus /> },
   service_refund: { label: 'wallet.type.service_refund', icon: <IconPlus /> },
   payout_reversal: { label: 'wallet.type.payout_reversal', icon: <IconPlus /> },
+  escrow_hold: { label: 'wallet.type.escrow_hold', icon: <IconShield /> },
+  escrow_release: { label: 'wallet.type.escrow_release', icon: <IconPlus /> },
+  escrow_refund: { label: 'wallet.type.escrow_refund', icon: <IconPlus /> },
+  chargeback: { label: 'wallet.type.chargeback', icon: <IconUpload /> },
 };
 
 function typeLabel(t: TranslateFn, type: string): string {
@@ -99,6 +104,10 @@ const REF_LABEL: Record<string, MessageKey> = {
   withdrawal: 'wallet.ref.withdrawal',
   external_payment: 'wallet.ref.external_payment',
   listing: 'wallet.ref.listing',
+  escrow_deal: 'wallet.ref.escrow_deal',
+  service_request: 'wallet.ref.service_request',
+  shipment: 'wallet.ref.shipment',
+  wallet_request: 'wallet.ref.wallet_request',
 };
 
 function refLabel(t: TranslateFn, referenceType: string): string {
@@ -787,8 +796,8 @@ function RequestsTab({
                     }
                   }}
                 >
-                  <td data-label={t('wallet.requests.col.code')} dir="ltr" className="dt-primary">
-                    {request.code}
+                  <td data-label={t('wallet.requests.col.code')} className="dt-primary">
+                    <Code value={request.code} />
                   </td>
                   <td data-label={t('wallet.requests.col.type')}>{requestTypeLabel(t, request.type)}</td>
                   <td data-label={t('wallet.requests.col.amount')} className="td-end num">

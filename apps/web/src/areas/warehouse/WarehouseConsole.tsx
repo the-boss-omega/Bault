@@ -5,6 +5,7 @@ import { isValidUsername, normalizeUsername } from '../../shared/names';
 import {
   DISPOSAL_CATEGORIES,
   DISPOSAL_OUTCOMES,
+  itemName,
 } from '../../shared/itemClasses';
 import { useRoute, useNavigation } from '../../shared/routing';
 import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
@@ -650,7 +651,7 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
               <td data-label={t('warehouse.lots.colLot')}>
                 <code dir="ltr">{lot.serialNumber}</code>
               </td>
-              <td data-label={t('warehouse.intake.description')}>{lot.description || lot.typeClass}</td>
+              <td data-label={t('warehouse.intake.description')}>{itemName(t, lot)}</td>
               <td data-label={t('warehouse.lots.colSize')} className="td-end num">
                 {lot.lotSize}
               </td>

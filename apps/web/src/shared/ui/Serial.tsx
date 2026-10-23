@@ -24,6 +24,14 @@ export function Serial({
   );
 }
 
+export function ItemPick({ serial, name }: { serial?: string | null; name: string }) {
+  return (
+    <span>
+      {serial && <Serial value={serial} quiet />} <span className="ltr-run">{name}</span>
+    </span>
+  );
+}
+
 export function Code({ value, className = '' }: { value: string; className?: string }) {
   return (
     <span className={`code-inline ${className}`.trim()} dir="ltr" translate="no">

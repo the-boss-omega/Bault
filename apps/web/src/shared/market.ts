@@ -18,6 +18,10 @@ export function listingStatusLabel(t: TranslateFn, status: string): string {
   return key ? t(key) : status;
 }
 
+export function storefrontHref(username: string): string {
+  return `#/marketplace/store?seller=${encodeURIComponent(username)}`;
+}
+
 export const OFFER_TONE: Record<string, StatusTone> = {
   pending: 'warning',
   accepted: 'success',
