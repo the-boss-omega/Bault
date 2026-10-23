@@ -134,14 +134,14 @@ function requiredRoleNames(raw: string): string[] {
 }
 
 type BaseEnv = z.infer<typeof BaseSchema>;
-type AddIssue = (issue: { path: (string | number)[]; message: string; code?: z.ZodIssueCode }) => void;
+type AddIssue = (issue: { path: (string | number)[]; message: string; code?: 'custom' }) => void;
 
 function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
   const ctx = { addIssue };
   const require = (key: keyof BaseEnv, when: string) => {
     if (String(env[key] ?? '').trim() === '') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: [key],
         message: `${key} is required when ${when}`,
       });
@@ -170,7 +170,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     }
     if (env.SMTP_REQUIRE_TLS === false && env.NODE_ENV !== 'development') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['SMTP_REQUIRE_TLS'],
         message:
           'SMTP_REQUIRE_TLS=false is for a local mail catcher in development only; anywhere else SMTP must use TLS',
@@ -186,7 +186,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
   if (env.MFA_ENCRYPTION_KEY && !isBase64Key(env.MFA_ENCRYPTION_KEY)) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['MFA_ENCRYPTION_KEY'],
       message: 'MFA_ENCRYPTION_KEY must be 32 random bytes, base64 — generate one with `openssl rand -base64 32`',
     });
@@ -198,7 +198,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     );
     if (unknown.length > 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['MFA_REQUIRED_ROLES'],
         message: `MFA_REQUIRED_ROLES names ${unknown.join(', ')}, which ${unknown.length === 1 ? 'is not a role' : 'are not roles'}. Use ${MFA_ROLES.join(', ')}.`,
       });
@@ -208,14 +208,14 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
   if (env.NODE_ENV === 'production') {
     if (!env.MFA_ENCRYPTION_KEY) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['MFA_ENCRYPTION_KEY'],
         message:
           'MFA_ENCRYPTION_KEY is required in production — generate one with `openssl rand -base64 32` and keep it with the other secrets',
       });
     } else if (env.MFA_ENCRYPTION_KEY === DEVELOPMENT_MFA_ENCRYPTION_KEY) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['MFA_ENCRYPTION_KEY'],
         message: 'MFA_ENCRYPTION_KEY is the published development key. Generate a real one with `openssl rand -base64 32`.',
       });
@@ -226,7 +226,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
       const missing = STAFF_ROLES.filter((r) => !named.includes(r));
       if (missing.length > 0) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['MFA_REQUIRED_ROLES'],
           message: `MFA_REQUIRED_ROLES must include ${STAFF_ROLES.join(' and ')} in production (missing: ${missing.join(', ')}). Leave it unset for the default.`,
         });
@@ -235,7 +235,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
     if (env.STORAGE_PROVIDER === 'sandbox') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['STORAGE_PROVIDER'],
         message:
           'STORAGE_PROVIDER=sandbox accepts photographs and discards them. Use STORAGE_PROVIDER=s3 ' +
@@ -245,7 +245,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
     if (env.SHIPPING_PROVIDER === 'sandbox') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['SHIPPING_PROVIDER'],
         message:
           'SHIPPING_PROVIDER=sandbox invents rates and cannot buy a label, so a shipment charged ' +
@@ -256,7 +256,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
     if (env.EMAIL_PROVIDER === 'console') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['EMAIL_PROVIDER'],
         message:
           'EMAIL_PROVIDER=console writes every message to the server log instead of sending it, so ' +
@@ -266,7 +266,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
     if (env.PAYMENT_PROVIDER === 'sandbox') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['PAYMENT_PROVIDER'],
         message:
           'PAYMENT_PROVIDER=sandbox settles every payment without contacting anybody. Use ' +
@@ -276,7 +276,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
     }
     if (env.EXPOSE_API_DOCS && !env.API_DOCS_PASSWORD) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['API_DOCS_PASSWORD'],
         message: 'API_DOCS_PASSWORD is required when EXPOSE_API_DOCS=true in production',
       });
@@ -284,7 +284,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
     if (env.TRUST_PROXY === 'loopback') {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['TRUST_PROXY'],
         message:
           'TRUST_PROXY=loopback is the development default. Name the proxy in front of the API ' +
@@ -294,7 +294,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
     if (env.APP_BASE_URL !== undefined && !env.APP_BASE_URL.startsWith('https://')) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['APP_BASE_URL'],
         message: 'APP_BASE_URL must be the public https:// origin of the app in production',
       });
@@ -304,7 +304,7 @@ function checkCombinations(env: Partial<BaseEnv>, addIssue: AddIssue): void {
 
 const EnvSchema = BaseSchema.superRefine((env, ctx) =>
   checkCombinations(env, (issue) =>
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message }),
+    ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message }),
   ),
 ).transform((env) => ({
   ...env,
