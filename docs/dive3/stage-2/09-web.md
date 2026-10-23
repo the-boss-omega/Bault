@@ -3,7 +3,7 @@
 `apps/web` is a React 19 single-page app built with Vite, with no router, state or form library: about 100 files and 30,000 lines, a third of them catalogue and stylesheet. Read boot, the shell and routing, the shared modules, then the screens: customer, warehouse, admin. Almost every screen loads with `api`, keeps state in `useState`, puts its tab and open record in the URL, and reports through `ErrorState` and `SuccessNote`, so after the first few read only what differs. Budget: 45 minutes.
 
 #### `apps/web/index.html`, `apps/web/src/main.tsx` · 1 min · T16.1, T16.4
-- `index.html` sets `lang="he"` and `dir="rtl"` before any script runs, so the first paint is Hebrew, right to left.
+- `index.html` sets `lang="he"` and `dir="rtl"` before any script runs, so the first paint is Hebrew, right to left. It links `favicon-32.png` and `apple-touch-icon.png` from `assets/`, the B the rail shows.
 - `main.tsx` nests `ThemeProvider`, `I18nProvider`, `ErrorBoundary` and `App`. The boundary sits inside the providers, so a crash still renders in the viewer's theme and direction.
 
 #### `apps/web/vite.config.ts`, `apps/web/proxy-target.ts` · 1 min · T3.5, T4.2, T16.3
@@ -17,6 +17,7 @@ Tokens first, then every component class.
 - The `:root` token block: three faces (`--font-mono` for codes only), ten type sizes, a 4px spacing scale, one `--radius`, one `--shadow-overlay`, and five accents with one job each: `--custody` (in Bault's care), `--brass` (money), `--frost` (held), `--amber` (warning), `--oxblood` (irreversible). A legacy block maps old names (`--navy`, `--gold`) onto them.
 - `[data-density='warehouse']` and `[data-density='marketing']` reset spacing and row height for the same components.
 - Only logical properties (`margin-inline-start`), so Hebrew and English are one layout, mirrored.
+- Mono comes only from `code`, `.code`, `.mono`, `.serial`, `.code-inline` and two counters. A cell or detail value with `dir="ltr"` stays in the UI face, so money, dates and e-mails in it are not set as codes.
 - `scripts/design-lint.mjs` enforces five rules: no physical properties (in CSS, class names or inline styles), no off-scale px lengths, no literal radius or shadow, no raw colour outside the token block, mono only on code selectors. A `design-lint-allow:` comment exempts a line.
 
 **Watch:** dark mode is two identical blocks, `:root:not([data-theme='light'])` inside the `prefers-color-scheme` query and `:root[data-theme='dark']`; change both. CI does not run the linter: run `node scripts/design-lint.mjs` yourself.
@@ -28,6 +29,7 @@ What to show before sign-in, then the shell.
 - After sign-in the role picks the first section: `admin`, `warehouse` or `vault`. `mustEnrolSecondFactor` holds staff on `ForcedEnrollmentPage`, because the API refuses them everything else.
 - `Workspace` filters `SECTIONS` by `requires` (`staff`, `admin`); a `suspended` account gets only `support`. The section comes from the hash, then the last visited one, then the role's fallback, which also replaces an unknown or forbidden section.
 - `<main key={section}>` remounts only on a section change; tabs, drawers and a language switch update in place.
+- `Workspace` sets `document.title` to the section's title and Bault, and puts back plain Bault when it unmounts.
 
 **Watch:** the rail filter is presentation. The API's role guards are the enforcement (T6.3).
 
@@ -45,7 +47,7 @@ The only HTTP client: `api.get`, `post`, `patch`, `put` and `del` call `/api/v1`
 - `apiErrorKey` maps a kind to an i18n key, or `null` for `client` errors, whose API message is more specific.
 - Only `post` takes extra headers, which is how an `Idempotency-Key` travels. Nothing retries automatically.
 
-**Watch:** keep the JSON content type on every write: the API's `jsonBodiesOnly` refuses any other (a CSRF defence), which is why uploads go as base64 JSON. Most screens show `(e as Error).message`, the API's English text, even in Hebrew; only `App.tsx` and `ProfilePage` use `apiErrorKey`.
+**Watch:** keep the JSON content type on every write: the API's `jsonBodiesOnly` refuses any other (a CSRF defence), which is why uploads go as base64 JSON. Most screens show `(e as Error).message`, the API's English text, even in Hebrew; only `App.tsx`, `ProfilePage`, `VerifyEmailPage` and `ResetPasswordPage` use `apiErrorKey`, and the last two word a stale link (410) themselves.
 
 #### `apps/web/src/shared/session.ts`, `apps/web/src/shared/twoFactor.ts`, `apps/web/src/shared/names.ts` · 1 min · T7.1, T7.4, T7.6
 - The cookie is httpOnly, so `loadProfile` (`GET /me/profile`) is the only way to know who is signed in. Concurrent calls share one request; `resetProfileRequest` clears it on sign-in, enrolment and sign-out.
@@ -71,7 +73,7 @@ The design-system primitives every screen is built from.
 - `Field` links its child to the hint or error (`role="alert"`). `MoneyField` is the amount input, `dir="ltr"` with a decimal keypad.
 - `ContextTabs` is an ARIA tab list whose arrow keys mirror in RTL. `Panel`, `StatusBadge`, `EmptyState` and `SkeletonTable` are presentational.
 - `DetailDrawer` and `ConfirmationModal` trap focus and return it to the opener; `isTopOverlay` gives Escape to the topmost. `dirty` stops an outside click closing a drawer; `busy` stops the modal closing mid-action.
-- `Serial`, `Code`, `Amount` and `LtrRun` isolate Latin runs (serials, bins, money) as left-to-right.
+- `Serial`, `Code`, `Amount` and `LtrRun` isolate Latin runs (serials, bins, money) as left-to-right. `ItemPick` names a card in a picker by its serial and description.
 
 **Watch:** any new serial, code, amount or e-mail on screen goes through these or gets `dir="ltr"`; otherwise it reorders inside Hebrew.
 
@@ -97,13 +99,13 @@ The client's copy of the cash-in and cash-out rules.
 **Watch:** nothing imports the API file. A limit or status changed there must be changed here.
 
 #### `apps/web/src/shared/market.ts`, `apps/web/src/shared/escrow.ts`, `apps/web/src/shared/parcels.ts`, `apps/web/src/shared/shipments.ts`, `apps/web/src/shared/carriers.ts`, `apps/web/src/shared/grading.ts`, `apps/web/src/shared/itemClasses.ts`, `apps/web/src/shared/serviceLabels.ts`, `apps/web/src/shared/support.ts`, `apps/web/src/shared/signIns.ts`, `apps/web/src/shared/notifications.ts`, `apps/web/src/shared/membership.ts` · 1 min · T2, T11.5, T12.2, T13.1
-Response types, a status-to-tone map and label functions per domain, such as `ESCROW_TONE`, `ruleLabel` (the rule a refused rate failed) and `ITEM_CLASSES`. `storefrontHref` builds a seller's page link.
+Response types, a status-to-tone map and label functions per domain, such as `ESCROW_TONE`, `ruleLabel` (the rule a refused rate failed) and `ITEM_CLASSES`. `itemName` and `itemPickText` name a card by its description, or its class in words when it has none. `storefrontHref` builds a seller's page link.
 
 **Watch:** `tierAction` repeats the proration in `MembershipService.subscribe` so the confirm button shows the exact charge; change both together. `tests/web/notification-catalogue.test.ts` fails when `EVENT_LABEL_KEY` and the API's events drift.
 
 #### `apps/web/src/shared/servicePrices.ts`, `apps/web/src/shared/countries.ts`, `apps/web/src/shared/useVaultItems.ts`, `apps/web/src/shared/Barcode.tsx`, `apps/web/src/shared/barcode128.ts`, `apps/web/src/shared/CardPhoto.tsx`, `apps/web/src/shared/ui/PhotoInput.tsx` · 1 min · T8.5, T9.3, T13.1
 - `useServicePrices` loads `GET /pricing/list` once per page load. `SERVICE_FEE_ACTION` maps a card service to its rule; `priceLabel` shows a percentage rule as a percentage, never dollars.
-- `useShippingCountries` and `useVaultItems` load `GET /shipping/countries` and `GET /vault/items`.
+- `useShippingCountries` and `useVaultItems` load `GET /shipping/countries` and `GET /vault/items`. `lacksRegion` says whether an address needs a state or province it doesn't have.
 - `barcodeSvg` draws Code 128B for `Barcode` and `printBarcodes`. `cardPhotoUrl` points at `/images/<SERIAL>` in the repo-root `assets/`, trying `.png`, then `.jpg`.
 - `PhotoInput` uploads each file when picked (`POST /media/uploads`) and hands the object keys to the form.
 
@@ -120,6 +122,7 @@ Response types, a status-to-tone map and label functions per domain, such as `ES
 #### `apps/web/src/areas/customer/vault/VaultPage.tsx` · 2 min · T9.6, T10.1, T12.6
 The collector's cards: search, three scope tabs (`active`, `hold`, `history`), a grid and an item drawer.
 - `GET /vault/items` and `GET /vault/counts` load together, debounced, so counts follow the search. `GET /vault/break-even` feeds the `Watch` badge.
+- A History row and its drawer say why the card left with `departureLabel`, from the API's `departure`; the class is named with `itemClassLabel`, never as its key.
 - `ItemDrawer` loads the item, its `/timeline` and its `/storage` forecast. `timelineDetail` (`apps/web/src/shared/itemTimeline.ts`, beside `STATE_META`) words each register entry in the page's language, with every code in its own isolated run (U+2068 to U+2069), so a Latin barcode can't reorder a Hebrew sentence.
 - `CARD_ACTIONS` lists the services, gated by `states`, `lotOnly` or `gradedOnly` and priced from `useServicePrices`.
 - Deslab and donation are irreversible: a `ConfirmationModal`, then the challenge (`/services/donation`) and its `confirmationToken` posted at once to `/services/donation/confirm` (T6.6).
@@ -140,6 +143,7 @@ Tabs `overview`, `transactions`, `cash-in`, `cash-out`, `requests`.
 - Loads `GET /finance/wallet`, `/finance/ledger`, `/finance/wallet-requests` and `/finance/wallet/pending`. Pending totals stay apart from the balance: none of it has moved.
 - `runningBalances` walks the whole ledger, oldest first, for each row's balance after. It relies on `LedgerService.list` returning every row; if that endpoint ever pages, the server must supply the figure.
 - `RequestDrawer` shows a request's history and cancels it while `canCancel` holds.
+- `TYPE_META` and `REF_LABEL` word every ledger type and reference type the API writes; a new one shows as its key until it is added to both and to both languages.
 
 #### `apps/web/src/areas/customer/finance/MoneyPanels.tsx`, `apps/web/src/areas/customer/finance/WalletRequestForms.tsx` · 1.5 min · T8.6, T8.7, T6.5, T1.4
 - `TopUpPanel` pays with `POST /finance/checkout`, sending `amountMinor`, `route` and `idempotencyKey`. A retry with the same route and amount reuses the key. After an `unreachable` or `server` error the key is kept, because the card may have been charged; an answer or any other refusal clears it.
@@ -173,13 +177,13 @@ Tabs `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `his
 - `NotAcceptedTable` lists `GET /me/disposals`, arrivals Bault refused.
 
 #### `apps/web/src/areas/customer/shipping/ShipmentComposer.tsx`, `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx`, `apps/web/src/areas/customer/shipping/SharedParcelsTab.tsx` · 1 min · T13.1, T13.6, T13.7
-- `ShipmentComposer` re-quotes as answers change (`POST /shipping/quote`, which creates nothing); refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`.
+- `ShipmentComposer` re-quotes as answers change (`POST /shipping/quote`, which creates nothing); refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`. An address that `lacksRegion`, or that the server refuses with `address_region_required`, stops the quote and shows a link to edit it.
 - `HumanFulfilmentPanels.tsx` handles show pickup and hand delivery; `SharedParcelsTab` runs group shipments.
 
 **Watch:** if `commit`'s second call fails, the shipment already exists and only the error shows. `WhiteGloveQuotes` accepts with no amount, so the server charges whatever quote is current.
 
 #### `apps/web/src/areas/customer/profile/ProfilePage.tsx`, `apps/web/src/areas/customer/profile/TwoFactorPanel.tsx`, `apps/web/src/areas/customer/support/SupportPage.tsx`, `apps/web/src/areas/customer/notifications/NotificationsPage.tsx` · 1.5 min · T7.1, T7.6, T14.4
-- `ProfilePage`: `PATCH /me/profile`, addresses on `/me/addresses`, and `/auth/password/change`. `TwoFactorPanel` drives setup, disable and recovery codes under `/auth/mfa`.
+- `ProfilePage`: `PATCH /me/profile`, addresses on `/me/addresses`, and `/auth/password/change`. `AddressFields` shows a state or province list for a country with `regions`, free text elsewhere, and clears it when the country changes; a saved address that `lacksRegion` wears a warning badge. `TwoFactorPanel` drives setup, disable and recovery codes under `/auth/mfa`.
 - `SupportPage` runs tickets on `/support/tickets` and is the whole app for a suspended account. The warehouse reuses its `ThreadDrawer` with `staff` set.
 - `NotificationsPage` shows the shared feed and saves preferences with `PUT /notifications/preferences`.
 

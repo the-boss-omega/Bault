@@ -12,6 +12,7 @@ Run every command as written; `<…>` is yours to fill in.
 | `roles.sql` | the three database roles (from the DB-roles package) |
 | `bootstrap.sh` | prepares the host: Docker, firewall, SSH, `deploy` user |
 | `deploy.sh` | pull, back up, migrate, roles, start, smoke-test |
+| `prices.json` | every price, loaded with `pnpm prices:load` (section 7) |
 
 ## Before you start
 
@@ -143,6 +144,115 @@ sudo -u deploy crontab /opt/bault/infra/ops/crontab.example   # replaces deploy'
 
 Settings in `/etc/bault/backup.env` (mode 600) as that file describes; the
 restore drill is `infra/ops/RESTORE.md`.
+
+## 7. Prices (the first deploy, and whenever a price changes)
+
+A fresh database has no prices: the coverage report is not ready, and every
+action that needs a price refuses or bills nothing. `prices.json` holds every
+price. Load it from your own checkout, not the server:
+
+```sh
+pnpm prices:load --url https://<domain> --dry-run   # what would change
+pnpm prices:load --url https://<domain>             # load what the server lacks
+pnpm prices:load --url https://<domain> --check     # exit 0 only when the server matches the file
+```
+
+It signs in as an administrator, asking for the password and the code from
+your authenticator app (or reading `BAULT_ADMIN_IDENTIFIER`,
+`BAULT_ADMIN_PASSWORD` and `BAULT_ADMIN_TOTP`), and stores neither. Each price
+becomes a rule through the admin API, with the storage terms the console's form
+cannot send and each membership's allowances from the tier catalogue. A run
+loads only what is missing; `--update` also replaces rules that differ from the
+file. A changed price is a new rule, so charges already made keep theirs.
+
+The file ships with the development seed's numbers and `"reviewed": false`, and
+the loader refuses it until you have decided every price and set
+`"reviewed": true`. On staging, `--allow-unreviewed` loads the placeholders.
+`escrow_fee`, `cash_out_fee` and `chargeback_fee` are charged from constants
+in the code; their rules only publish the figure, and CI fails if the file
+disagrees with the code.
+
+## 8. Check staging (from your own checkout)
+
+Staging runs this same stack with sandbox credentials: PayPal sandbox with
+`PAYOUT_MODE=provider`, an `EZTK` EasyPost test key, SMTP to your own inbox.
+One command walks the journeys and provider checks through the public API:
+
+```sh
+BAULT_PRODUCTION_HOST=<production domain> pnpm staging:check \
+  --url https://<staging domain> --target staging \
+  --admin <your admin email> --email <your inbox> \
+  --paypal-receiver <sandbox personal account>@personal.example.com --manual
+```
+
+Before it: the admin has two-factor on, every price is loaded (section 7,
+with `--allow-unreviewed` on staging), and the facility has a bin. It asks you
+to type the host, the admin password (never shown), the code from your phone,
+and the verify and reset links from your inbox. It creates three collectors named
+`chk…`, moves test money between them, and prints PASS, FAIL, SKIP or BY HAND
+per check; it exits 1 if anything failed. It refuses to run without
+`--target staging`, against `BAULT_PRODUCTION_HOST` or its `www.`, or with a
+PayPal receiver outside `.example.com`.
+
+What it checks, in order:
+- the API, its database, and the worker's outbox heartbeat;
+- the admin's two-factor sign-in, the price list, and a bin to stow into;
+- sign-up, the verify link, the reset link, the old password refused;
+- a cash-in approved and completed, to the cent;
+- intake, a listing that names its seller, a purchase that moves money and
+  ownership together;
+- a domestic label and an international label with customs (the EasyPost
+  services offered are printed), and an address EasyPost can't rate showing
+  the carrier's reason;
+- escrow from proposal to settlement, fee included;
+- a cash-out paid through PayPal with its webhook applied, the same cash-out
+  completed again paying nothing, and a forged webhook refused;
+- with `--manual`, a paid payout refunded in the sandbox credited back once.
+  Sign in to the PayPal sandbox as the receiver and refund the payment it
+  received; if PayPal offers no refund, rerun with a sandbox address that has
+  no account, so the payout waits unclaimed, and cancel it from the business
+  account. Either sends Bault the event that returns the money.
+
+Still by hand, because nothing outside the server can drive them:
+- the verify and reset emails landed in the inbox, not in spam;
+- Sentry shows the forged webhook (a `WebhookVerificationError`);
+- a label refused at dispatch, re-rated from the shipment drawer;
+- a delivered parcel sending its notification;
+- the requeue drill: stop SMTP, let a message park, restore SMTP, requeue it
+  from the console, and see it arrive.
+
+With it, the journeys take about 30 minutes, not 2 hours, and the provider
+checks about 2 hours, not 4.
+
+## 9. Checks before launch (on staging)
+
+From your own machine:
+
+```sh
+pnpm ops:security-check --url https://<domain>
+pnpm ops:load-test --url https://<staging domain> --target staging --rps <three times your busiest second>
+```
+
+`ops:security-check` exits 0 only when all of these pass: HTTP redirects to
+HTTPS; the certificate is trusted and has 14 days or more left; TLS 1.0 and
+1.1 are refused; SSL Labs grades every address A or A+ (a few minutes;
+`--skip-ssllabs` skips it, and `SSLLABS_EMAIL` selects its v4 API); the page, a
+script and the API carry security headers that grade A; the API docs are not
+served without a password; only 80 and 443 answer; and an administrator's
+password alone opens no session (it asks for that password and never sends a
+code). From `ADMIN_IP` port 22 answers too: pass `--from-admin-ip`, then run it
+once from another network, such as a phone hotspot, to see 22 closed.
+
+`ops:load-test` refuses anything but `--target staging`. It reads public
+listings, the price list and the tiers, a collector's vault, wallet and ledger,
+and signs in and out 6 times a minute, then prints p50, p95 and p99 per request
+and fails past `--max-p95` (1000 ms) or `--max-error-rate` (1%). It signs in as
+`BAULT_LOADTEST_IDENTIFIER` and `BAULT_LOADTEST_PASSWORD` (or asks): a collector
+on staging without two-factor. The API allows each address
+`RATE_LIMIT_PER_MINUTE` requests (300, five a second), so from one machine most
+of a larger test would be 429s. On staging only, raise it in
+`/etc/bault/production.env`, recreate the API (`bault up -d api`, with the alias
+from "Day to day"), run the test, then set it back the same way.
 
 ## Roll back
 

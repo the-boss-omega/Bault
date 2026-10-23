@@ -171,7 +171,7 @@ function TicketList({
                       {ticketStatusLabel(t, ticket.status)}
                     </StatusBadge>
                   </td>
-                  <td data-label={t('support.col.activity')} dir="ltr">
+                  <td data-label={t('support.col.activity')}>
                     {formatDateTime(ticket.lastMessageAt, locale)}
                   </td>
                   <td className="td-tight">

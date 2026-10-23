@@ -30,6 +30,34 @@ export interface TimelineEvent {
   params: TimelineParams;
 }
 
+export interface Departure {
+  kind:
+    | 'shipped'
+    | 'donated'
+    | 'discarded'
+    | 'consigned'
+    | 'buyout'
+    | 'sold'
+    | 'gift'
+    | 'swap'
+    | 'escrow'
+    | 'left';
+  code: string | null;
+}
+
+const DEPARTURE_LABEL: Record<Departure['kind'], MessageKey> = {
+  shipped: 'vault.departure.shipped',
+  donated: 'vault.departure.donated',
+  discarded: 'vault.departure.discarded',
+  consigned: 'vault.departure.consigned',
+  buyout: 'vault.departure.buyout',
+  sold: 'vault.departure.sold',
+  gift: 'vault.departure.gift',
+  swap: 'vault.departure.swap',
+  escrow: 'vault.departure.escrow',
+  left: 'vault.departure.left',
+};
+
 export const STATE_META: Record<string, { tone: StatusTone; label: MessageKey }> = {
   stored: { tone: 'success', label: 'vault.state.stored' },
   listed: { tone: 'info', label: 'vault.state.listed' },
@@ -118,4 +146,11 @@ export function timelineDetail(t: TranslateFn, event: TimelineEvent): string {
     return p.ruling ? [status, isolate(p.ruling)].filter(Boolean).join(' · ') : status;
   }
   return '';
+}
+
+export function departureLabel(t: TranslateFn, departure: Departure): string {
+  if (departure.kind === 'escrow') {
+    return departure.code ? t('vault.departure.escrow', { code: isolate(departure.code) }) : t('vault.departure.left');
+  }
+  return t(DEPARTURE_LABEL[departure.kind] ?? 'vault.departure.left');
 }

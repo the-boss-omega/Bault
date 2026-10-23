@@ -1,6 +1,6 @@
 ## 2.10 Infrastructure, CI and tests
 
-How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, then the tests. Budget: 20 minutes.
+How the code becomes images, runs locally and in production, is backed up, checked by CI and tested. Read the Dockerfiles, the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts, then the tests. Budget: 26 minutes.
 
 #### `apps/api/Dockerfile`, `apps/worker/Dockerfile` · 2 min · T17.1
 Multi-stage builds from the repo root on `node:22-slim`, pinned by digest: build the packages and the app, reinstall with `--prod`, run as UID 10001 with an exec-form `CMD` so SIGTERM reaches Node. The API image carries the migrations, so `node dist/db/migrate.js` runs from the release itself, and its `HEALTHCHECK` calls `/api/v1/healthz`. The worker has no port; `/api/v1/readyz/worker` reads its `worker_heartbeat` instead.
@@ -50,9 +50,25 @@ Prepares Ubuntu 24.04: Docker, ufw, age, rclone, the Postgres client, a `deploy`
 **Watch:** migrations run while the old release still serves, and rollback does not undo them: every migration must suit the previous code.
 
 #### `infra/production/README.md` and the `*.env.example` files · 1.5 min · T4.5, T17.2
-The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`, roles, deploy, nightly backup. `production.env.example` holds every production value (live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP, S3); `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs.
+The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`, roles, deploy, nightly backup, then the staging check. `production.env.example` holds every production value (live PayPal, `PAYOUT_MODE=manual`, EasyPost, SMTP, S3); `api.env.example`, `worker.env.example` and `migrate.env.example` hold each role's database URLs.
 
 **Watch:** no step creates the first administrator, or the `platform@bault.dev` account that `HouseStoreService`, `AccountingService` and `ServiceRequestService` look up by address. The seed is the only code that creates them, and it must never run in production.
+
+#### `infra/production/prices.json`, `scripts/ops/prices.mjs`, `scripts/ops/session.mjs` · 2 min · T8.5, T12.1, T7.6
+`pnpm prices:load --url <site>` puts every price on a fresh database. The file lists each rule as `"fixed": "$5.00"` or `"percent": "5%"`, with its trigger, its description (customers read it) and, for both storage rules, the terms the sweep reads.
+- `parsePriceFile` refuses a duplicate, a missing description, storage without its terms, and parameters on a membership: `withTierParameters` takes those from `GET /membership/tiers`, as the console does.
+- `plan` sorts each rule into load, same or differs against the rules in force (newest `effectiveFrom` per action and class); `gaps` names the actions coverage lists that the file lacks, and file actions the API does not know.
+- A run creates only what is missing; `--update` replaces what differs, `--dry-run` and `--check` write nothing, and `--check` exits 1 unless the server matches. `signInAdmin` asks for the password and the authenticator code, or reads them from the environment, and keeps the session cookie in memory only.
+- `tests/config/prices-file.test.ts` runs the file through `coverage` itself, so a new billable action without a price fails CI, and checks that the three code-constant fees publish exactly their constants.
+
+**Watch:** the file ships with the seed's numbers and `"reviewed": false`, and the loader refuses it until somebody has decided the prices; staging may pass `--allow-unreviewed`.
+
+#### `scripts/ops/load-test.mjs`, `scripts/ops/security-check.mjs` · 1.5 min · T17.7, T7.9, T7.6
+The Day 6 checks, run from outside.
+- `ops:load-test` sends `MIX` (public listings, the price list, a collector's vault and wallet) at a steady `--rps`, plus a few sign-ins a minute, and fails past `--max-p95` or `--max-error-rate`. It refuses anything but `--target staging`.
+- `ops:security-check` tests the HTTPS redirect, the certificate, that TLS 1.0 and 1.1 are refused, the SSL Labs grade, `gradeHeaders` on the page, a script and the API, `docsVerdict` on the docs paths, the open ports (nmap, or a connect scan of `COMMON_PORTS`), and `adminNeedsCode`: an administrator's password alone must open no session.
+
+**Watch:** the API limits each address to `RATE_LIMIT_PER_MINUTE`, so a load test from one machine measures the limiter unless staging raises it for the run.
 
 #### `infra/ops/backup.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md` · 2 min · T17.4
 - `dump` — `pg_dump` as the owner, checked, encrypted with age (only the public key on the host), checksummed, uploaded off the host; an unencrypted upload is refused.
@@ -79,6 +95,19 @@ The runbook, followed in order: bootstrap, check out the tag, fill `/etc/bault`,
 `pnpm test` runs `SUITES` in order: the five that need nothing, then `integration`, `core`, `concurrency`, `property` and `worker`, each after `db:seed`. It stops at the first failure, reseeds at the end unless `--no-reset`, and refuses `NODE_ENV=production`.
 
 **Watch:** it starts no API. The database suites need one running at `API_URL`, and two files start a second one from the build, so build first.
+
+#### `scripts/staging-check.mjs`, `scripts/staging-check/run.mjs` · 1.5 min · T17.2, T18.2
+`pnpm staging:check` walks the launch plan's staging journeys and provider checks through the public API, as your admin and three `chk…` collectors it creates.
+- `runStagingCheck` — the checks in `CHECKS` order. Each waits for the ones named in `DEPENDS`, and records pass, fail, skip or by hand. With `providers: 'sandbox'`, the checks only live PayPal and EasyPost can answer are skipped, and it sends the payout webhook itself.
+- `assertStagingTarget` — refuses without `--target staging`, refuses the production host, and refuses a PayPal receiver outside `.example.com`. The command then has the host typed back before it starts.
+- `tests/integration/staging-check.test.ts` runs it against the CI API, writing `verification_token` rows in place of the emailed links.
+
+**Watch:** it uses only the routes the web app uses. When a change alters one, that test fails with the check's own reason, so update the check in the same pull request.
+
+#### `scripts/design-screens.mjs` · 1 min · T16.4, T16.5
+`pnpm design:screens` captures every screen of a local, seeded Bault for a design review: each persona (`PERSONAS`), every section and tab, both languages, 390 and 1440 px, the three item sheets, and the verify and reset e-mails. It serves the production build with `vite preview` on 4173, the port the API takes writes from in development, and writes a contact sheet to the gitignored design-screens folder, flagged screens first (`inspect`: ids, cents, enum names, English words on a Hebrew page, sideways scrolling, console errors, failed calls).
+
+**Watch:** it signs in with the seed's password and enrols two-factor on the staff accounts, keeping their secrets in `.totp.json`, so `assertLocal` refuses any other machine. Start the API with `MFA_REQUIRED_ROLES=admin,warehouse_operator` to see the enrolment production shows.
 
 #### `tests/` and `tests3/`: the ten suites · 3 min · T15.3, T18.1
 `tests3/` drives each flow from the wrong side.

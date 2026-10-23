@@ -207,7 +207,7 @@ describe('the vault has a place for every state (F057)', () => {
                 lifecycleState: 'discarded',
                 historical: true,
                 departedAt: '2026-10-01T10:00:00.000Z',
-                departureReason: 'remove commons — discarded',
+                departure: { kind: 'discarded', code: null },
               },
             ]
           : { active: 0, hold: 0, history: 1 },
@@ -217,6 +217,8 @@ describe('the vault has a place for every state (F057)', () => {
     await waitFor(() => expect(screen.getAllByText(/Bulk common, culled/).length).toBeGreaterThan(0));
     expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/vault\/items\?scope=history/));
     expect(screen.getAllByText(/Discarded/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Discarded at your request').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/remove commons/)).toBeNull();
   });
 });
 
