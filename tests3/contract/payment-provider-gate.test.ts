@@ -1,22 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SandboxPaymentAdapter } from '@bault/adapters';
 
-/**
- * The sandbox payment adapter, and the boot gate that must stand between it and
- * production.
- *
- * `SandboxPaymentAdapter` is honest about being a sandbox: it settles everything
- * and verifies nothing. Bound in production, `POST /finance/checkout` with any
- * token (`pm_totally_fake` will do) would move a real balance, and any account
- * could mint unlimited store credit, spend it on other collectors' cards, and
- * cash it out to a bank account.
- *
- * These are unit-level assertions on purpose. The dangerous behaviour lives in
- * the adapter itself, and the guarantee wanted is about the adapter's own
- * contract (that it never pretends to be safe) plus the config rule that keeps
- * it away from production.
- */
-
 describe('the sandbox payment adapter is unsafe by design, and says so', () => {
   it('settles any charge without contacting a provider', async () => {
     const sandbox = new SandboxPaymentAdapter();
@@ -26,8 +10,6 @@ describe('the sandbox payment adapter is unsafe by design, and says so', () => {
       currency: 'USD',
       idempotencyKey: 'k',
     });
-    // This is the behaviour that makes it useful locally and lethal in
-    // production. Asserting it means nobody can "fix" it into looking safe.
     expect(result.status).toBe('succeeded');
   });
 
@@ -37,22 +19,10 @@ describe('the sandbox payment adapter is unsafe by design, and says so', () => {
       rawBody: JSON.stringify({ id: 'evt_forged', type: 'topup.settled', data: { amountMinor: 999_999_00 } }),
       headers: { 'paypal-transmission-sig': 'not-a-signature' },
     });
-    // It parses and returns. There is no signature check anywhere in it, which
-    // is why `POST /webhooks/payment` must never be reachable in production with
-    // this adapter behind it.
     expect(event.id).toBe('evt_forged');
   });
 });
 
-/**
- * The gate itself, as a decision table.
- *
- * The env schema and `createPaymentAdapter` (`packages/adapters/src/select.ts`)
- * refuse the sandbox in production and any provider without an implementation,
- * rather than degrading to something that takes fake money. This block states
- * that rule as a table; `tests/contract/adapter-selection.test.ts` drives the
- * factory itself.
- */
 describe('the production configuration rule', () => {
   const decide = (provider: string, nodeEnv: string): 'paypal' | 'sandbox' | 'refuse' => {
     const p = provider.trim().toLowerCase();
@@ -71,8 +41,6 @@ describe('the production configuration rule', () => {
   });
 
   it('refuses a named provider that has no implementation, rather than falling back', () => {
-    // The fallback is the whole danger: `PAYMENT_PROVIDER=stripe` with no Stripe
-    // adapter must not quietly run the sandbox.
     for (const env of ['development', 'test', 'production']) {
       expect(decide('stripe', env)).toBe('refuse');
       expect(decide('adyen', env)).toBe('refuse');
@@ -81,9 +49,6 @@ describe('the production configuration rule', () => {
   });
 
   it('allows PayPal everywhere, including production', () => {
-    // Real API, real signatures. `PAYPAL_ENVIRONMENT` decides whether the money
-    // is real — which is what makes running the whole product against PayPal's
-    // sandbox a production-SAFE way to test with no bank account.
     for (const env of ['development', 'test', 'production']) {
       expect(decide('paypal', env)).toBe('paypal');
     }

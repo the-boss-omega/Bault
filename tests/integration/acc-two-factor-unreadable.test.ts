@@ -6,24 +6,8 @@ import { MFA_PASSWORD, activeAccount, challenge, codeAt, enrol, passwordOnly } f
 import { sealSecret } from '../../apps/api/src/modules/acc/mfa/secret-box';
 import { generateTotpSecret } from '../../apps/api/src/modules/acc/mfa/totp';
 
-/**
- * A second factor the API can no longer read.
- *
- * The TOTP secret is sealed under `MFA_ENCRYPTION_KEY`. Change that key, or
- * lose it and generate a new one, and every factor sealed under the old one
- * stops opening. The person did nothing wrong and no code they type can work,
- * so the answer has to say what is wrong and who can fix it, not be a 500.
- *
- * Simulated by re-sealing an enrolled account's secret under a key the API does
- * not hold, which is exactly what a factor looks like to the API after the key
- * is changed.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 afterAll(closeDb);
 
-/** Re-seal the account's factor under another key, and return the plain secret it now holds. */
 async function sealUnderAnotherKey(accountId: string): Promise<Buffer> {
   const secret = generateTotpSecret();
   const otherKey = randomBytes(32);

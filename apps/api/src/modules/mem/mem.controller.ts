@@ -13,24 +13,17 @@ class SubscribeDto {
   tier!: string;
 }
 
-/** MEM endpoints: the public tier catalogue, and one member's own state. */
 @ApiTags('MEM')
 @Controller('membership')
 export class MemController {
   constructor(private readonly memberships: MembershipService) {}
 
-  /**
-   * The tiers and what they cover. Public, like `GET /pricing/list`: somebody
-   * deciding whether to subscribe must be able to read the terms before they
-   * have an account.
-   */
   @Public()
   @Get('tiers')
   tiers() {
     return this.memberships.catalogue();
   }
 
-  /** This account's tier and what is left of it this cycle. Null for non-members. */
   @Get('me')
   async me(@CurrentUser() user: AuthUser) {
     return { membership: await this.memberships.allowances(user.id) };

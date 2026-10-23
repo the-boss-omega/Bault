@@ -6,11 +6,6 @@ import {
   resolveApiProxyTarget,
 } from '../../apps/web/proxy-target';
 
-/**
- * Guards against `http proxy error: /api/v1/me/profile AggregateError
- * [ECONNREFUSED]`: the dev server must forward /api to the address the API
- * actually binds, and must refuse to start rather than proxy somewhere wrong.
- */
 describe('resolveApiProxyTarget', () => {
   it('defaults to the API loopback address on the documented port', () => {
     const resolved = resolveApiProxyTarget({});

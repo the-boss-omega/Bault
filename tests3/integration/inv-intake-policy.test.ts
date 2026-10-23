@@ -1,15 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, signIn } from '../../tests/integration/helpers/http';
 
-/**
- * The published intake policy, and the customs guidance that goes with it.
- *
- * Both are rules Bault enforces that a customer has to be able to read. So the
- * tests are mostly about the two properties that
- * make a published rule trustworthy — that it is REACHABLE by the person who
- * needs it, and that it CANNOT DRIFT from the rule actually being enforced.
- */
-
 interface AcceptedClass {
   key: string;
   label: string;
@@ -29,8 +20,6 @@ interface IntakePolicy {
 
 describe('the published intake policy', () => {
   it('is readable with no account at all', async () => {
-    // The failure this page closes is somebody posting a box without knowing the
-    // rule. Somebody deciding whether to use Bault has no session yet.
     const anonymous = new Client();
     const res = await anonymous.get('/content/intake-policy');
     expect(res.status).toBe(200);
@@ -45,8 +34,6 @@ describe('the published intake policy', () => {
     const published = policy.acceptedClasses.map((c) => c.key);
     expect(published.length).toBeGreaterThan(0);
 
-    // Every published class is one intake will really take. A page listing a
-    // class the validator rejects is worse than no page.
     for (const key of published) {
       const res = await operator.post('/intake/items', {
         ownerUsername: 'red',
@@ -56,8 +43,6 @@ describe('the published intake policy', () => {
       expect(res.status, `intake refused published class ${key}`).toBe(201);
     }
 
-    // …and a class that is NOT published is refused, which is the other half of
-    // "the list is closed".
     const refused = await operator.post('/intake/items', {
       ownerUsername: 'red',
       typeClass: 'vintage_car',
@@ -76,8 +61,6 @@ describe('the published intake policy', () => {
       expect(c.reason).not.toContain('No published reason');
     }
 
-    // The tracker rule is the one this page exists for — it must be there by
-    // name, since a collector learns it otherwise by losing an AirTag.
     const tracker = policy.refusedCategories.find((c) => c.key === 'gps_tracker');
     expect(tracker?.prohibited).toBe(true);
 
@@ -90,7 +73,6 @@ describe('the published intake policy', () => {
     const anonymous = new Client();
     const policy = (await anonymous.get('/content/intake-policy')).body as IntakePolicy;
 
-    // `no_value` is not a safety refusal and must not be presented as one.
     const noValue = policy.refusedCategories.find((c) => c.key === 'no_value');
     expect(noValue?.prohibited).toBe(false);
   });
@@ -103,8 +85,6 @@ describe('the published intake policy', () => {
     const threshold = policy.lotThreshold;
     expect(threshold).toBeGreaterThan(1);
 
-    // One under the published threshold is converted into individual items,
-    // exactly as the page says.
     const under = await operator.post('/intake/items', {
       ownerUsername: 'red',
       typeClass: 'trading_card',
@@ -116,7 +96,6 @@ describe('the published intake policy', () => {
     expect(Array.isArray(under.body)).toBe(true);
     expect(under.body).toHaveLength(threshold - 1);
 
-    // One at the threshold stays a single lot.
     const at = await operator.post('/intake/items', {
       ownerUsername: 'red',
       typeClass: 'trading_card',
@@ -131,15 +110,11 @@ describe('the published intake policy', () => {
 
 describe('destination customs guidance', () => {
   it('answers for a destination with no shipment and no account', async () => {
-    // Asked before you have a parcel, and often before you have an account:
-    // "can Bault even ship to my country, and what will I owe at the far end".
     const anonymous = new Client();
     const res = await anonymous.get('/shipping/destinations/AU');
     expect(res.status).toBe(200);
     expect(res.body.specific.name).toBe('Australia');
-    // Every destination-specific claim carries the authority that issues it.
     expect(res.body.specific.authority.url).toMatch(/^https:\/\//);
-    // And it names the clearance step Bault does NOT perform.
     expect(res.body.specific.notHandled.join(' ')).toMatch(/assembly order/i);
   });
 
@@ -152,8 +127,6 @@ describe('destination customs guidance', () => {
         ...body.specific.notes,
         ...body.specific.notHandled,
       ].join(' ');
-      // No percentages and no currency thresholds: those move, and a number
-      // Bault made up is a number somebody plans around.
       expect(prose, `${country} quotes a rate`).not.toMatch(/\d+\s?%/);
       expect(prose, `${country} quotes a threshold`).not.toMatch(/[$€£]\s?\d/);
     }
@@ -163,8 +136,6 @@ describe('destination customs guidance', () => {
     const collector = await signIn(SEED.collector);
     const res = await collector.get('/shipping/destinations/JP');
     expect(res.status).toBe(200);
-    // Not an error, not an invented paragraph — the universal rules, and an
-    // explicit null where the specific guidance would be.
     expect(res.body.specific).toBeNull();
     expect(res.body.universal.length).toBeGreaterThan(0);
   });
@@ -188,8 +159,6 @@ describe('customs readiness on a real shipment', () => {
     const operator = await signIn(SEED.operator);
     const collector = await signIn(SEED.collector);
 
-    // Something to send, booked in without ever being weighed — which is the
-    // case the estimated-weight warning exists for.
     const item = await operator.post('/intake/items', {
       ownerUsername: 'red',
       typeClass: 'graded_slab',
@@ -219,14 +188,10 @@ describe('customs readiness on a real shipment', () => {
     expect(res.status).toBe(200);
     expect(res.body.international).toBe(true);
 
-    // The universal rules always travel with the answer.
     expect(res.body.guidance.universal.length).toBeGreaterThan(0);
-    // …and Australia has written guidance, with its authority named.
     expect(res.body.guidance.specific.name).toBe('Australia');
     expect(res.body.guidance.specific.authority.url).toMatch(/abf\.gov\.au/);
 
-    // Nothing was weighed, so the estimate is surfaced rather than presented as
-    // a measurement — and it is a warning, not a refusal.
     const codes = (res.body.warnings as { code: string }[]).map((w) => w.code);
     expect(codes).toContain('estimated_weight');
     expect(res.body.ready).toBe(false);
@@ -246,6 +211,7 @@ describe('customs readiness on a real shipment', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -258,7 +224,6 @@ describe('customs readiness on a real shipment', () => {
     const res = await collector.get(`/shipping/shipments/${shipment.body.id}/customs/readiness`);
     expect(res.status).toBe(200);
     expect(res.body.international).toBe(false);
-    // No border, no guidance — rather than a page of rules that do not apply.
     expect(res.body.guidance.universal).toEqual([]);
     expect(res.body.guidance.specific).toBeNull();
   });

@@ -6,41 +6,18 @@ import {
   type DisposalOutcome,
 } from './item-classes';
 
-/**
- * What Bault accepts, what it refuses, and what happens to the difference,
- * published so a collector knows BEFORE they post a box.
- *
- * The lists are DERIVED, at request time, from the arrays the intake path
- * validates against (`ITEM_CLASSES` and `DISPOSAL_CATEGORIES`). A hand-written
- * policy page would be a second copy that drifts; here, adding a class
- * publishes it and removing one unpublishes it, because the page and the
- * validator read the same array.
- *
- * The prose that cannot be derived (what a refusal means for the collector)
- * states only what the code does, and describes no handling outcome the
- * disposal record cannot express.
- */
-
 export interface AcceptedClassPolicy {
   key: string;
   label: string;
-  /** Stored under the oversized terms: shorter included period, steeper fee. */
   oversized: boolean;
-  /** Whether this may be received as a single lot rather than as N items. */
   lotEligible: boolean;
-  /**
-   * The smallest count that is a lot for this class. Present only for classes
-   * that carry a threshold; anything under it is received as individual items.
-   */
   lotMinSize?: number;
-  /** What one typically weighs packed, used for a rate when nobody weighed it. */
   typicalWeightGrams: number;
 }
 
 export interface RefusedCategoryPolicy {
   key: string;
   label: string;
-  /** A safety or legal refusal, rather than a judgement about value. */
   prohibited: boolean;
   reason: string;
 }
@@ -53,15 +30,6 @@ export interface IntakePolicy {
   rules: { id: string; heading: string; body: string }[];
 }
 
-/**
- * Why each refusal category exists, in the collector's terms.
- *
- * Keyed off the same list the operator picks from, so a category with no reason
- * here is a bug that shows up as a missing sentence rather than as a page that
- * quietly omits a rule. `no_value` is deliberately phrased as the judgement it
- * is rather than as a refusal, because it is the one entry in that list that is
- * not about safety or legality.
- */
 const REFUSAL_REASON: Record<string, string> = {
   gps_tracker:
     'A tracker is a powered radio transmitter. Carriers restrict them in air freight, and a vault cannot store one that is still transmitting somebody’s location.',
@@ -79,10 +47,6 @@ const REFUSAL_REASON: Record<string, string> = {
     'Not a refusal. Some arrivals cost more to process and store than they are worth, and shelving them would bill you more than the cards could ever return. You are told what was found and what became of it.',
 };
 
-/**
- * The rules that are not a list: the things a collector needs stated in
- * sentences. Every one names a behaviour that exists in code.
- */
 const RULES: IntakePolicy['rules'] = [
   {
     id: 'closed-list',
@@ -127,13 +91,6 @@ const RULES: IntakePolicy['rules'] = [
   },
 ];
 
-/**
- * Build the published policy from the enforcing modules.
- *
- * Pure and dependency-free, which is why it is a function in a plain module
- * rather than a service: it reads two constant arrays and shapes them. That also
- * makes the drift guarantee testable without a database.
- */
 export function intakePolicy(): IntakePolicy {
   return {
     acceptedClasses: ITEM_CLASSES.map((c) => ({
@@ -148,8 +105,6 @@ export function intakePolicy(): IntakePolicy {
       key: c.key,
       label: c.label,
       prohibited: c.prohibited,
-      // An unreasoned category is a missing sentence, and says so out loud
-      // rather than rendering an empty paragraph.
       reason: REFUSAL_REASON[c.key] ?? 'No published reason for this category yet.',
     })),
     outcomes: DISPOSAL_OUTCOMES,

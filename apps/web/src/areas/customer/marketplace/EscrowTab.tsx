@@ -26,18 +26,6 @@ interface Detail {
   sellerId: string | null;
 }
 
-/**
- * A private deal with Bault standing in the middle.
- *
- * The screen is built around the two gates, because they are the product. A
- * seller is looking for one sentence ("the money is held, it is safe to send
- * the card") and a buyer for another ("we have looked at it and here is what we
- * found").
- *
- * The inspection finding is rendered before the release controls, and loudly
- * when it is negative, so a buyer cannot release without having read "this is a
- * PSA 8, not a PSA 10".
- */
 export function EscrowTab({ meId }: { meId: string | null }) {
   const { t, locale } = useI18n();
   const [deals, setDeals] = useState<EscrowDeal[] | null>(null);
@@ -48,7 +36,6 @@ export function EscrowTab({ meId }: { meId: string | null }) {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // The raise form.
   const [role, setRole] = useState<'buyer' | 'seller'>('seller');
   const [username, setUsername] = useState('');
   const [outsideName, setOutsideName] = useState('');
@@ -372,8 +359,6 @@ function DealDrawer({
         )}
       </dl>
 
-      {/* The gate. Rendered before any release control, and loudly when the
-          answer is no. */}
       {deal.inspectedAt && (
         <p className={`drawer-note ${mismatch ? 'drawer-note--hold' : 'drawer-note--archive'}`}>
           <IconAlert />

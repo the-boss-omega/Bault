@@ -1,11 +1,3 @@
-/**
- * Central schema barrel (T009/T010).
- *
- * Aggregates every module's tables into one `schema` object handed to Drizzle so
- * the client is fully typed and relational queries work. Each MODULE still owns
- * its own table definitions (plan.md: a module touches only its own tables);
- * this file only re-exports them for the DB client and drizzle-kit.
- */
 export * from '../../modules/acc/acc.schema';
 export * from '../../modules/acc/address.schema';
 export * from '../../modules/adm/adm.schema';

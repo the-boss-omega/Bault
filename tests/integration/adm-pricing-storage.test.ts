@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 
-/**
- * ADM — pricing rules (Requirement 14.1), automatic storage-fee billing
- * (Requirements 12.1 / 12.2) and disputes bound to real transactions (13.3).
- */
 describe('ADM pricing rules', () => {
   it('requires a description, value, scope and billing trigger on every rule', async () => {
     const admin = await signIn(SEED.admin);
@@ -20,10 +16,9 @@ describe('ADM pricing rules', () => {
     expect(complete.status).toBe(201);
     expect(complete.body.description).toBe('Handling surcharge for trading cards');
     expect(complete.body.billingTrigger).toBe('per_event');
-    expect(complete.body.itemClass).toBe('Trading Card'); // the rule's scope
-    expect(complete.body.currency).toBe('USD'); // Requirement 7.1
+    expect(complete.body.itemClass).toBe('Trading Card');
+    expect(complete.body.currency).toBe('USD');
 
-    // A rule with no description is rejected.
     const noDescription = await admin.post('/pricing/rules', {
       actionType: 'service',
       model: 'fixed',
@@ -32,7 +27,6 @@ describe('ADM pricing rules', () => {
     });
     expect(noDescription.status).toBe(400);
 
-    // A rule with no billing trigger is rejected.
     const noTrigger = await admin.post('/pricing/rules', {
       actionType: 'service',
       description: 'Missing its trigger',
@@ -78,8 +72,6 @@ describe('ADM storage fees are automatic only', () => {
     expect(runs.status).toBe(200);
     expect(Array.isArray(runs.body)).toBe(true);
 
-    // There is deliberately no way to trigger billing by hand — the daily worker
-    // sweep is the only producer of storage charges (Requirement 12.1).
     const manual = await admin.post('/admin/storage-fee-runs', { thresholdDays: 1 });
     expect(manual.status).toBe(404);
   });
@@ -105,7 +97,7 @@ describe('ADM disputes reference real transactions', () => {
       note: 'Buyer reports damage in transit.',
     });
     expect(res.status).toBe(201);
-    expect(res.body.code).toMatch(/^DSP-/); // Requirement 9.4
+    expect(res.body.code).toMatch(/^DSP-/);
     expect(res.body.transactionId).toBe(txns[0].id);
   });
 });

@@ -1,14 +1,3 @@
-/**
- * Which events go out by email, and what their subject line says.
- *
- * Mirrored BY VALUE from `apps/api/src/modules/not/event-types.ts`, because the
- * worker is independent of the Nest container and cannot import the API's
- * catalogue. Only the email default and the subject are needed here; category,
- * label and in-app settings are the API's business.
- *
- * Email is on by default only for money, custody of somebody's property
- * changing hands, and anything with a deadline attached.
- */
 const EMAIL_BY_DEFAULT = new Set([
   'item_received',
   'parcel_received',
@@ -28,6 +17,8 @@ const EMAIL_BY_DEFAULT = new Set([
   'custom_request_quoted',
   'custom_request_declined',
   'shipment_out',
+  'shipment_delivered',
+  'shipment_exception',
   'shipment_expired',
   'shipment_cancelled',
   'direct_ship_booked',
@@ -47,18 +38,10 @@ const EMAIL_BY_DEFAULT = new Set([
   'payment_reversed',
 ]);
 
-/**
- * An event not in the list defaults to email OFF, so a new emitter still
- * reaches the collector in-app and cannot start sending mail without an entry here.
- */
 export function defaultEmailEnabled(eventType: string): boolean {
   return EMAIL_BY_DEFAULT.has(eventType);
 }
 
-/**
- * The subject line, written to be readable in a notification bar with the rest
- * cut off: the subject of the sentence comes first and there are no pleasantries.
- */
 const SUBJECTS: Record<string, string> = {
   item_received: 'An item has been received into your vault',
   parcel_received: 'Your parcel has arrived',
@@ -82,6 +65,8 @@ const SUBJECTS: Record<string, string> = {
   custom_request_quoted: 'Your custom request has been priced',
   custom_request_declined: 'We cannot do that one',
   shipment_out: 'Your shipment is on its way',
+  shipment_delivered: 'Your shipment was delivered',
+  shipment_exception: 'There is a problem with your shipment',
   shipment_expired: 'An unpaid shipment was released',
   shipment_cancelled: 'Your shipment was cancelled',
   group_shipment_locked: 'Your shared parcel is closed to new members',

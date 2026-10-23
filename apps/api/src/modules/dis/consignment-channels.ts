@@ -1,31 +1,13 @@
-/**
- * Where a consigned card can actually be sold.
- *
- * Each channel below differs in the three things a seller actually decides on:
- * what it costs, what it accepts, and how long the money takes.
- *
- * The FEE recorded here is Bault's own cut, expressed as the `actionType` of a
- * pricing rule (`consignment_fee:<key>`) so the number itself stays in the
- * pricing table where every other price lives (Principle VI) and stays
- * admin-editable. A partner's own commission is deducted by the partner before
- * they remit, so it never passes through Bault's ledger and is quoted here as
- * guidance only.
- */
 import { formatMinor } from '../../shared/money';
 
 export interface ConsignmentChannel {
   key: string;
   label: string;
-  /** Only graded/slabbed items are accepted. */
   gradedOnly: boolean;
-  /** Minimum asking price, in minor units. Zero means no minimum. */
   minAskingMinor: number;
-  /** The seller must pick a specific card show. */
   requiresEvent: boolean;
-  /** Typical time from sale to the money landing, for setting expectations. */
   payoutDaysMin: number;
   payoutDaysMax: number;
-  /** Human note about the partner's own commission, which Bault never sees. */
   partnerFeeNote: string;
 }
 
@@ -44,7 +26,7 @@ export const CONSIGNMENT_CHANNELS: readonly ConsignmentChannel[] = [
     key: 'auction_house',
     label: 'Auction house',
     gradedOnly: true,
-    minAskingMinor: 5_000, // $50
+    minAskingMinor: 5_000,
     requiresEvent: false,
     payoutDaysMin: 42,
     payoutDaysMax: 70,
@@ -72,24 +54,15 @@ export function isKnownChannel(key: string): boolean {
   return BY_KEY.has(key);
 }
 
-/** The pricing-rule action type carrying Bault's cut for this channel. */
 export function channelFeeAction(key: string): string {
   return `consignment_fee:${key}`;
 }
 
-/** One rejected eligibility rule, named by the field that failed. */
 export interface EligibilityProblem {
   field: string;
   message: string;
 }
 
-/**
- * Whether this item, at this price, may go down this channel.
- *
- * Checked before the request is created rather than discovered when an operator
- * tries to fulfil it — a seller who is going to be told "graded cards only"
- * should be told before they are charged a service fee, not after.
- */
 export function checkEligibility(
   channel: ConsignmentChannel,
   input: { conditionGrade: string | null; askingMinor: number; eventId?: string | null },
@@ -97,8 +70,6 @@ export function checkEligibility(
   const problems: EligibilityProblem[] = [];
 
   if (channel.gradedOnly) {
-    // "Graded" means a grade was recorded by the third-party grading flow. A
-    // blank condition, or the literal "Raw", is not one.
     const grade = (input.conditionGrade ?? '').trim();
     if (!grade || /^raw$/i.test(grade)) {
       problems.push({

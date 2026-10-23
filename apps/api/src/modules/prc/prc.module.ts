@@ -4,7 +4,6 @@ import { PriceListService } from './price-list.service';
 import { PrcController } from './prc.controller';
 import { PricingCoverageController } from './pricing-coverage.controller';
 
-/** PRC module (pricing). Global — the single pricing source used by PAY/MKT/SHP/DIS. */
 @Global()
 @Module({
   controllers: [PrcController, PricingCoverageController],

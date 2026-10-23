@@ -2,18 +2,6 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Stopping the worker.
- *
- * Without a SIGTERM handler, Node outside a container dies on the spot; inside
- * one, as PID 1, the signal is ignored outright and Docker SIGKILLs the process
- * ten seconds later. Either way a job half way through (the nightly storage
- * sweep, interest accrual) is cut off mid-run, pg-boss never hears it stop, and
- * the job sits `active` until its lease expires.
- *
- * This starts a real worker against the suite's database, waits for it to come
- * up, sends SIGTERM to THAT process only, and expects a clean exit.
- */
 const WORKER_DIR = fileURLToPath(new URL('../../apps/worker', import.meta.url));
 
 describe('worker shutdown', () => {

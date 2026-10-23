@@ -1,14 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { legacyRedirect } from '../../apps/web/src/shared/routing';
 
-/**
- * Retired routes.
- *
- * Services is not a section of its own, so `#/services` and `#/shipping` are
- * dead URLs that users still hold in bookmarks and in the persisted
- * last-visited section. They must land somewhere useful rather than falling back
- * to the role's landing page.
- */
 describe('legacy route redirects', () => {
   const route = (section: string, tab: string | null = null) => ({ section, tab, params: {} });
 
@@ -20,12 +12,6 @@ describe('legacy route redirects', () => {
   });
 
   it('sends both halves of the old inbound workflow to the receiving bench', () => {
-    /**
-     * `parcels` and `intake` are one `receiving` tab, because a box is received,
-     * opened and its contents booked in as one piece of work. An operator's
-     * bookmark for either half should reach the bench rather than falling back
-     * to the section's landing tab.
-     */
     expect(legacyRedirect(route('warehouse', 'parcels'))).toEqual({
       section: 'warehouse',
       tab: 'receiving',

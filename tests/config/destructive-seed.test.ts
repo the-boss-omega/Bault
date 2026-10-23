@@ -6,19 +6,6 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/**
- * The seed refuses production, and so does the reset at the end of `pnpm test`.
- *
- * `apps/api/src/db/seed.ts` TRUNCATEs every table, the ledger, the custody
- * trail and the audit log included, because row triggers do not fire on
- * TRUNCATE. It also creates admin accounts whose password is in the source, and
- * `pnpm test` runs it after every run against whatever database `.env` names.
- *
- * Every case points the seed at 127.0.0.1:1, where nothing listens. A seed
- * that gets past the guard fails with ECONNREFUSED instead of touching any
- * database, which is exactly how these tests tell "refused" from "proceeded".
- */
-
 const ROOT = join(__dirname, '..', '..');
 const API_DIR = join(ROOT, 'apps', 'api');
 const SEED = join(API_DIR, 'src', 'db', 'seed.ts');
@@ -26,7 +13,6 @@ const TSX = pathToFileURL(createRequire(join(API_DIR, 'package.json')).resolve('
 
 const NOWHERE = 'postgres://nobody:nobody@127.0.0.1:1/nowhere';
 
-/** A configuration production accepts, so the env schema is not what stops it. */
 const PROD = {
   NODE_ENV: 'production',
   DATABASE_URL: NOWHERE,
@@ -50,17 +36,9 @@ const PROD = {
   SMTP_FROM: 'Bault <noreply@example.com>',
   APP_BASE_URL: 'https://app.example.com',
   TRUST_PROXY: 'uniquelocal',
-  // 32 bytes, base64: production requires a two-factor key and refuses the
-  // development one.
   MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
-/**
- * Run the seed from `cwd` with exactly `env` — nothing inherited, so a
- * developer's exported DATABASE_URL can never leak in. `loadEnv` still reads
- * the nearest `.env` above `cwd`, which is why the cases below run from a
- * scratch directory rather than from the repository.
- */
 function seed(cwd: string, env: Record<string, string>) {
   const r = spawnSync(process.execPath, ['--import', TSX, SEED], {
     cwd,
@@ -88,8 +66,6 @@ describe('the destructive seed', () => {
   }, 60_000);
 
   it('refuses NODE_ENV=production read from a .env file, even one that fails validation', () => {
-    // The development .env with only NODE_ENV flipped: sandbox providers, so
-    // `loadEnv` throws on it. The refusal must still be what is reported.
     const dir = mkdtempSync(join(scratch, 'dotenv-'));
     writeFileSync(join(dir, '.env'), `NODE_ENV=production\nDATABASE_URL=${NOWHERE}\nDIRECT_DATABASE_URL=${NOWHERE}\n`);
     const r = seed(dir, {});
@@ -105,7 +81,6 @@ describe('the destructive seed', () => {
     ]) {
       const r = seed(scratch, env);
       expect(r.output).not.toContain('Refusing to seed');
-      // Past the guard, it went for the database — which is not there.
       expect(r.output).toContain('ECONNREFUSED');
     }
   }, 120_000);
@@ -117,14 +92,6 @@ describe('the destructive seed', () => {
   }, 60_000);
 });
 
-/**
- * `pnpm test` ends by re-seeding. Under production it must refuse that reset,
- * and so refuse the run before the first suite writes anything.
- *
- * `npx` and `pnpm` are replaced on PATH by stubs that only record how they were
- * called, so the script's control flow is exercised without running a single
- * suite or touching a database.
- */
 describe('scripts/test.mjs', () => {
   let bin: string;
   let calls: string;

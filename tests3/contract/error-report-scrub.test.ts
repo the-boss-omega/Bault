@@ -1,18 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { scrubErrorEvent } from '@bault/adapters';
 
-/**
- * What an error report is allowed to carry off the platform.
- *
- * An exception report goes to a third party — Sentry — and is kept there, read
- * by whoever has access to the project, long after the request is forgotten. A
- * crash in the middle of `POST /auth/login` must not hand that third party the
- * password that was being checked, and no report at all may carry a session
- * cookie, which IS the account for as long as it is valid.
- *
- * Every case here is driven through the scrubber directly, the way the SDK's
- * `beforeSend` hook calls it, with the events shaped the way the SDK shapes them.
- */
 type Event = Parameters<typeof scrubErrorEvent>[0] & { message?: string; extra?: unknown };
 
 const crashDuring = (method: string, url: string, data?: unknown): Event => ({
@@ -54,6 +42,22 @@ describe('every report', () => {
   it('passes an event with no request through untouched', () => {
     const event: Event = { message: 'ledger invariant violated', extra: { orphanSettledCharges: 1 } };
     expect(scrubErrorEvent(event)).toEqual({ message: 'ledger invariant violated', extra: { orphanSettledCharges: 1 } });
+  });
+});
+
+describe('a failed query', () => {
+  const failed = 'Failed query: select * from user_account where email = $1 and last_name = $2\nparams: ann@example.test,Ashwood';
+
+  it('loses the values from the exception, the message and a logged stack, and keeps the SQL', () => {
+    const out = scrubErrorEvent({
+      message: failed,
+      exception: { values: [{ value: failed }] },
+      breadcrumbs: [{ message: `${failed}\n    at NodePgPreparedQuery.queryWithCache (session.cjs:66:15)` }],
+    } as Event & Record<string, unknown>) as Record<string, unknown>;
+    expect(leaks(out as Event, 'ann@example.test', 'Ashwood')).toEqual([]);
+    const text = JSON.stringify(out);
+    expect(text).toContain('where email = $1 and last_name = $2');
+    expect(text).toContain('queryWithCache');
   });
 });
 

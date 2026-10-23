@@ -1,15 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn, usernameOf, type Client } from '../../tests/integration/helpers/http';
 
-/**
- * Directed stow, scanning, and closing a box out.
- *
- * These cover the intake workflow as an operator actually walks it, rather than
- * as a form submits it: the system says where a thing goes, the operator drives
- * every step with the barcodes Bault itself printed, and a parcel cannot be
- * closed out against nothing. Requires a running API + seeded DB.
- */
-
 interface BinRow {
   id: string;
   serialNumber: string;
@@ -21,10 +12,6 @@ interface BinRow {
   facilityCode: string | null;
 }
 
-/**
- * A shelf serial: `BIN-` and eight characters from the unambiguous alphabet.
- * Notably NOT `BIN-A-001` — no zone in it, and no ordinal.
- */
 const BIN_SERIAL = /^BIN-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/;
 
 async function bins(operator: Client): Promise<BinRow[]> {
@@ -51,23 +38,15 @@ describe('directed stow', () => {
 
     for (const b of list) {
       expect(b.serialNumber).toMatch(BIN_SERIAL);
-      // One string on the label: the barcode IS the serial, as it is for an item.
       expect(b.barcode).toBe(b.serialNumber);
-      // The zone survives as a label, and is not part of the identity.
       expect(b.serialNumber).not.toContain(`-${b.zone.toUpperCase()}-`);
     }
-    // And they are distinct, which a per-zone counter could not promise across
-    // two operators building out the same zone at once.
     expect(new Set(list.map((b) => b.serialNumber)).size).toBe(list.length);
   });
 
   it('mints the serial itself, and refuses one a caller tries to name', async () => {
     const operator = await signIn(SEED.operator);
 
-    // A shelf that can be named is a shelf whose identity encodes a zone it may
-    // be moved out of and an ordinal that races the next operator. The create
-    // DTO carries no such field, and the API rejects unknown ones outright
-    // rather than accepting and quietly discarding them.
     const named = await operator.post('/custody/bins', { zone: 'A', barcode: 'BIN-A-001' });
     expect(named.status).toBe(400);
 
@@ -86,7 +65,6 @@ describe('directed stow', () => {
     expect(suggested.body.serialNumber).toMatch(BIN_SERIAL);
     expect(suggested.body.oversized).toBe(false);
 
-    // Nothing on any other eligible shelf is emptier than the one handed out.
     const stowable = (await operator.get('/custody/bins/stowable')).body as BinRow[];
     for (const b of stowable) {
       expect(b.itemCount).toBeGreaterThanOrEqual(suggested.body.itemCount);
@@ -101,8 +79,6 @@ describe('directed stow', () => {
     expect(created.status).toBe(201);
     expect(created.body.binId).toBe(suggested.body.id);
 
-    // The shelf it was sent to is one item fuller, so the next unit may well be
-    // directed somewhere else — that is the whole point of spreading the load.
     const after = (await bins(operator)).find((b) => b.id === suggested.body.id);
     expect(after?.itemCount).toBe(before + 1);
   });
@@ -113,7 +89,6 @@ describe('directed stow', () => {
 
     const created = await operator.post('/intake/items', {
       ownerUsername,
-      // A sealed case is oversized in the taxonomy.
       typeClass: 'sealed_case',
       description: 'Sealed case, oversized shelving',
       autoStow: true,
@@ -122,7 +97,6 @@ describe('directed stow', () => {
 
     const shelf = (await bins(operator)).find((b) => b.id === created.body.binId);
     expect(shelf?.oversized).toBe(true);
-    // And the storage terms were fixed from the same class at receipt.
     expect(created.body.oversized).toBe(true);
   });
 
@@ -162,7 +136,6 @@ describe('scanning', () => {
     expect(created.status).toBe(201);
     const destination = shelves.find((b) => b.id !== created.body.binId)!;
 
-    // Both ends of the move are the strings on the physical labels.
     const moved = await operator.post(`/custody/items/${created.body.barcode}/relocate`, {
       binId: destination.barcode,
     });
@@ -190,13 +163,6 @@ describe('scanning', () => {
 });
 
 describe('a card moved to another warehouse', () => {
-  /**
-   * A warehouse transfer records the card's new home as `EXT:<warehouse>/<bin>`
-   * in `item.bin_id`, which is free text. A read that joined that column to
-   * `bin.id` (a uuid) by casting it would make `invalid input syntax for type
-   * uuid` the answer to the shelf list, the stow suggestion and an auto-stowed
-   * intake, for every operator, not just the one who moved the card.
-   */
   it('still lists, suggests and stows after one card has left for another building', async () => {
     const operator = await signIn(SEED.operator);
     const ownerUsername = await usernameOf(SEED.collector);
@@ -220,7 +186,6 @@ describe('a card moved to another warehouse', () => {
 
     const list = await operator.get('/custody/bins');
     expect(list.status).toBe(200);
-    // The card is no longer on a Bault shelf, so no Bault shelf counts it.
     expect((list.body as BinRow[]).length).toBe(shelves.length);
 
     const suggested = await operator.get('/custody/bins/suggest');
@@ -229,7 +194,6 @@ describe('a card moved to another warehouse', () => {
     const stowed = await operator.post('/intake/items', { ownerUsername, typeClass: 'trading_card', autoStow: true });
     expect(stowed.status).toBe(201);
 
-    // The owner's vault joins the same column to find the shelf a card is on.
     const collector = await signIn(SEED.collector);
     const vault = await collector.get('/vault/items');
     expect(vault.status).toBe(200);
@@ -243,7 +207,6 @@ describe('a shelf out of service', () => {
     const operator = await signIn(SEED.operator);
     const ownerUsername = await usernameOf(SEED.collector);
 
-    // A shelf of its own, so taking it out of service disturbs nothing else.
     const made = await operator.post('/custody/bins', { zone: `RETIRE${Date.now() % 100000}` });
     expect(made.status).toBe(201);
     const shelf = made.body as BinRow;
@@ -262,7 +225,6 @@ describe('a shelf out of service', () => {
     });
     expect(refused.status).toBe(400);
 
-    // It comes back, because it was never deleted.
     const returned = await operator.patch(`/custody/bins/${shelf.id}`, { active: true });
     expect(returned.body.active).toBe(true);
   });
@@ -288,8 +250,6 @@ describe('a parcel is closed out against what came out of it', () => {
     });
     expect(opened.status).toBe(201);
 
-    // Nothing has come out of it yet, so closing it is refused rather than
-    // silently billed.
     const premature = await operator.post(`/parcels/${parcelId}/process`);
     expect(premature.status).toBe(409);
 
@@ -304,7 +264,6 @@ describe('a parcel is closed out against what came out of it', () => {
     expect(booked.status).toBe(201);
     expect(booked.body).toHaveLength(2);
 
-    // The bench can see the count without leaving the page.
     const queue = (await operator.get('/parcels')).body as { id: string; itemCount: number }[];
     expect(queue.find((p) => p.id === parcelId)?.itemCount).toBe(2);
 
@@ -312,7 +271,6 @@ describe('a parcel is closed out against what came out of it', () => {
     expect(closed.status).toBe(201);
     expect(closed.body.itemCount).toBe(2);
 
-    // …and it cannot be closed, or charged, twice.
     const again = await operator.post(`/parcels/${parcelId}/process`);
     expect(again.status).toBe(409);
   });

@@ -29,12 +29,6 @@ class RegisterParcelDto {
   @IsOptional() @IsString() expectedAt?: string;
 }
 
-/**
- * At most this many photographs on one step.
- *
- * Six is a box from every side plus the label. A cap exists so a bench cannot
- * accidentally attach a phone's whole camera roll to one parcel.
- */
 const MAX_PHOTOS = 6;
 
 class ReceiveParcelDto {
@@ -44,15 +38,9 @@ class ReceiveParcelDto {
   @IsOptional() @IsString() @MaxLength(120) trackingNumber?: string;
   @IsOptional() @IsBoolean() internationalOrigin?: boolean;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
-  /** Keys from `POST /media/uploads`, never image bytes on this route. */
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
-/**
- * A stack of boxes, booked in together: a courier drops a dozen at once and the
- * operator works down the pile. `ArrayMaxSize` is a sanity bound, not a
- * workflow limit.
- */
 class ReceiveManyDto {
   @IsArray()
   @ArrayNotEmpty()
@@ -66,15 +54,9 @@ class OpenParcelDto {
   @IsIn(['sound', 'packaging_damaged', 'contents_damaged'])
   condition!: 'sound' | 'packaging_damaged' | 'contents_damaged';
   @IsString() @MinLength(1) @MaxLength(1000) conditionNotes!: string;
-  /** What the arrival check actually saw: evidence, not a sentence about it. */
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_PHOTOS) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
-/**
- * The only way to close out a parcel that produced no items: the operator
- * states, in words, that it really did arrive empty. Absent, an empty parcel is
- * refused rather than billed (see `ParcelService.process`).
- */
 class ProcessParcelDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(1000) emptyReason?: string;
 }
@@ -87,15 +69,6 @@ class DisposeParcelDto {
   @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
 }
 
-/**
- * Inbound parcels and the addresses they are sent to.
- *
- * Roles are per method. The collector half (their addresses, their parcels,
- * registering one, cancelling one they registered) is ordinary account
- * functionality; the warehouse half is staff-only. A class-level role, as
- * `InvController` has, would put a collector's own inbound record behind a
- * warehouse permission.
- */
 @ApiTags('INV')
 @Controller()
 export class ParcelController {
@@ -104,9 +77,6 @@ export class ParcelController {
     private readonly parcels: ParcelService,
   ) {}
 
-  /* ---------------- collector ---------------- */
-
-  /** The addresses this collector ships purchases to, addressed to them. */
   @Get('me/inbound-addresses')
   inboundAddresses(@CurrentUser() user: AuthUser) {
     return this.facilities.inboundAddressesFor(user.id);
@@ -127,28 +97,16 @@ export class ParcelController {
     return this.parcels.cancelRegistration(user.id, id);
   }
 
-  /**
-   * One parcel in full. Staff may open any; a collector only their own, and the
-   * service answers `notFound` rather than `forbidden` on a miss, because
-   * telling a stranger that somebody else's parcel id exists is itself a leak.
-   */
   @Get('parcels/:id')
   detail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     const staff = user.role === 'warehouse_operator' || user.role === 'admin';
     return this.parcels.detailFor(user.id, id, staff);
   }
 
-  /**
-   * The live processing backlog. Readable by any signed-in caller: it is the
-   * honest answer to "how long is this taking", and it is about the queue rather
-   * than about anybody's parcel in particular.
-   */
   @Get('parcels/workflow/status')
   workflow() {
     return this.parcels.workflow();
   }
-
-  /* ---------------- warehouse ---------------- */
 
   @Roles('warehouse_operator', 'admin')
   @Get('parcels')
@@ -162,20 +120,12 @@ export class ParcelController {
     return this.parcels.receive(user.id, dto);
   }
 
-  /** Several arrivals in one gesture: all of them, or none. */
   @Roles('warehouse_operator', 'admin')
   @Post('parcels/receive/batch')
   receiveMany(@Body() dto: ReceiveManyDto, @CurrentUser() user: AuthUser) {
     return this.parcels.receiveMany(user.id, dto.parcels);
   }
 
-  /**
-   * The photographs on one parcel.
-   *
-   * Same visibility rule as the parcel itself: `detailFor` decides whether this
-   * caller may see the box at all, and the photographs follow it: a collector
-   * gets the pictures of their own arrival, which is the point of taking them.
-   */
   @Get('parcels/:id/photos')
   async photos(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     const staff = user.role === 'warehouse_operator' || user.role === 'admin';

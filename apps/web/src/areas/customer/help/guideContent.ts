@@ -1,49 +1,19 @@
-/**
- * Workflow guides: how each thing in Bault is actually done.
- *
- * There are no videos. Every guide carries a `video` field that is `null`, and
- * the page says so where a player would be.
- *
- * What is here is the written half: ordered steps, each naming the screen it
- * happens on, with a real hash route the reader can follow. A guide that names
- * `#/shipping-services/shipping` can be checked against the router.
- *
- * The rule is the FAQ's rule: every sentence is a factual statement about what
- * Bault does. Nothing is market advice, nothing is a claim about what cards are
- * worth, and nothing describes a capability that does not exist. When a workflow
- * has a constraint that surprises people, the guide states it.
- */
-
 export type GuideCategory = 'getting_started' | 'inbound' | 'vault' | 'selling' | 'outbound' | 'money';
 
 export interface GuideStep {
-  /** One action, in the imperative. */
   text: string;
-  /** The hash route this step happens on, when it happens on one. */
   route?: string;
-  /**
-   * A constraint worth knowing before the step. Present only where there is
-   * one.
-   */
   note?: string;
 }
 
 export interface Guide {
-  /** Stable slug used by deep links (`#/faq/guides?g=<id>`). */
   id: string;
   title: string;
   category: GuideCategory;
-  /** One sentence: what this gets you. */
   summary: string;
-  /** How long the reading takes, not how long the workflow takes. */
   minutes: number;
   steps: GuideStep[];
-  /**
-   * A recorded walkthrough, if one exists. It is `null` on every guide, and the
-   * page renders that as "no recording yet" instead of hiding the field.
-   */
   video: string | null;
-  /** Guides that answer the obvious next question. */
   related?: string[];
 }
 
@@ -390,7 +360,6 @@ export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
   'money',
 ];
 
-/** Free-text search across a guide's title, summary and step text. */
 export function matchesGuideSearch(g: Guide, needle: string): boolean {
   const q = needle.trim().toLowerCase();
   if (!q) return true;

@@ -1,23 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, SEED_USERNAME, fundWallet, signIn, type Client } from './helpers/http';
 
-/**
- * The exports an accountant needs.
- *
- * `ledger_record` is a single-entry wallet ledger: a fee comes off a customer
- * and is credited to no account of Bault's, so Bault's revenue is a sum these
- * reports have to run, and the ledger has to be compared with the money that
- * moved through PayPal. No tax logic is attempted here (that is an accountant's
- * call), only the three reports one needs to make it:
- *
- *   - every ledger row in a range, as CSV;
- *   - a month's totals, with Bault's revenue kept apart from customer money in
- *     and out and from the balances Bault holds for customers;
- *   - external payments reconciled against the ledger rows that cite them.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 type Summary = {
   byType: { type: string; direction: string; totalMinor: number }[];
   revenue: { lines: { key: string; totalMinor: number }[] };
@@ -26,7 +9,6 @@ type Summary = {
 const day = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
 const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
 
-/** Raise, approve and complete a cash-out for a seeded collector. */
 async function cashOut(email: string, amountMinor: number): Promise<string> {
   const customer = await signIn(email);
   const created = await customer.post('/finance/wallet-requests', {
@@ -73,8 +55,6 @@ describe('N40 ledger export', () => {
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(row).toHaveLength(10);
 
-    // The funding just made, as an accountant reads it: decimal dollars, the
-    // person by username, and what the money movement points at.
     const funding = rows.find(
       (r) =>
         r[3] === SEED_USERNAME.collector2 &&
@@ -103,7 +83,6 @@ describe('N40 ledger export', () => {
       'from=2026-13-01&to=2026-12-31',
       'from=yesterday&to=today',
       `from=${day(1)}&to=${day(-1)}`,
-      // Over a year in one request is a request to hold the whole ledger open.
       'from=2020-01-01&to=2026-01-01',
     ]) {
       const res = await admin.getText(`/admin/accounting/ledger.csv?${query}`);
@@ -133,9 +112,6 @@ describe('N40 monthly summary', () => {
     await fundWallet(SEED.collector2, 50_000);
     const balanceBefore = await balanceOf(golden);
     await cashOut(SEED.collector2, 20_000);
-    // A cash-out debits exactly what was asked for: the net that is
-    // paid out, as `withdrawal`, and the fee as a row of its own. Whatever the
-    // fee came to — a membership may waive it — it is inside the 20,000.
     const debited = balanceBefore - (await balanceOf(golden));
     const after = await read();
     expect(debited).toBe(20_000);
@@ -144,25 +120,21 @@ describe('N40 monthly summary', () => {
     expect(after.month).toBe(month);
     expect(after.currency).toBe('USD');
 
-    // Totals by ledger type and direction.
     expect(total(after, 'credit_topup', 'credit') - total(before, 'credit_topup', 'credit')).toBe(50_000);
     expect(total(after, 'withdrawal', 'debit') - total(before, 'withdrawal', 'debit')).toBe(20_000 - fee);
 
-    // Customer money in and out is not revenue...
     expect(after.customerMoney.inMinor - before.customerMoney.inMinor).toBe(50_000);
     expect(after.customerMoney.outMinor - before.customerMoney.outMinor).toBe(20_000 - fee);
-    // ...and the cash-out fee is, on its own line.
     expect(line(after, 'cash_out_fee') - line(before, 'cash_out_fee')).toBe(fee);
     expect(after.revenue.totalMinor - before.revenue.totalMinor).toBe(fee);
 
-    // Revenue is exactly the fee, service-charge and interest rows, net.
     const lines = after.revenue.lines as { totalMinor: number }[];
     expect(lines.reduce((a, l) => a + l.totalMinor, 0)).toBe(after.revenue.totalMinor);
     const net = (type: string) => total(after, type, 'debit') - total(after, type, 'credit');
-    expect(after.revenue.totalMinor).toBe(net('fee') + net('service_charge') + net('interest'));
+    expect(after.revenue.totalMinor).toBe(
+      net('fee') + net('service_charge') + net('interest') - after.revenue.cashOutFeesReturnedMinor,
+    );
 
-    // The balances Bault holds for customers moved by what came in less what
-    // the cash-out took — paid out and fee together; the fee is Bault's now.
     expect(after.balancesHeld.customerTotalMinor - before.balancesHeld.customerTotalMinor).toBe(
       50_000 - 20_000,
     );
@@ -240,10 +212,6 @@ describe('N40 reconciliation: external payments against the ledger', () => {
   });
 
   it('reports money that left a wallet with no payout behind it', async () => {
-    // The seed carries one: Golden's $1,000 withdrawal, written to the ledger
-    // with no payment recorded at any provider. On a live system that is
-    // precisely the row an accountant must be shown: a debit nobody can match to
-    // money that moved.
     const admin = await signIn(SEED.admin);
     const report = await reconcile(admin);
     const found = report.mismatches.find(
@@ -255,5 +223,60 @@ describe('N40 reconciliation: external payments against the ledger', () => {
     expect(found, JSON.stringify(report.mismatches.slice(0, 5))).toBeDefined();
     expect(found!.ledgerId).toBeTruthy();
     expect(found!.paymentId).toBeNull();
+  });
+});
+
+async function refusedCashOut(email: string, amountMinor: number): Promise<string> {
+  await fundWallet(email, amountMinor + 1_000);
+  const customer = await signIn(email);
+  const created = await customer.post('/finance/wallet-requests', {
+    type: 'cash_out',
+    amountMinor,
+    currency: 'USD',
+    destinationAccount: 'golden+payout-refused@example.test',
+    beneficiaryName: 'Golden Marsh',
+  });
+  expect(created.status).toBe(201);
+  const admin = await signIn(SEED.admin);
+  expect((await admin.post(`/admin/wallet-requests/${created.body.id}/approve`, {})).status).toBe(201);
+  expect((await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {})).status).toBe(409);
+  const detail = (await admin.get(`/admin/wallet-requests/${created.body.id}`)).body as { status: string };
+  expect(detail.status).toBe('payout_failed');
+  return created.body.id as string;
+}
+
+describe('N40 a refused payout that was credited back', () => {
+  const total = (s: Summary, type: string, direction: string) =>
+    s.byType.filter((r) => r.type === type && r.direction === direction).reduce((a, r) => a + r.totalMinor, 0);
+  const line = (s: Summary, key: string) => s.revenue.lines.find((l) => l.key === key)?.totalMinor ?? 0;
+
+  it('is neither money out nor revenue in the month it was reversed', async () => {
+    const admin = await signIn(SEED.admin);
+    const month = day(0).slice(0, 7);
+    const read = async () => (await admin.get(`/admin/accounting/summary?month=${month}`)).body;
+
+    const before = await read();
+    await refusedCashOut(SEED.collector2, 4_000);
+    const after = await read();
+
+    const fee = total(after, 'fee', 'debit') - total(before, 'fee', 'debit');
+    expect(fee).toBeGreaterThan(0);
+    expect(total(after, 'withdrawal', 'debit') - total(before, 'withdrawal', 'debit')).toBe(4_000 - fee);
+    expect(total(after, 'payout_reversal', 'credit') - total(before, 'payout_reversal', 'credit')).toBe(4_000);
+
+    expect(after.customerMoney.outMinor - before.customerMoney.outMinor).toBe(0);
+    expect(line(after, 'cash_out_fee') - line(before, 'cash_out_fee')).toBe(0);
+    expect(after.revenue.totalMinor - before.revenue.totalMinor).toBe(0);
+    expect(after.customerMoney.inMinor - before.customerMoney.inMinor).toBe(5_000);
+    expect(after.balancesHeld.customerTotalMinor - before.balancesHeld.customerTotalMinor).toBe(5_000);
+  });
+
+  it('is not reported as a mismatch', async () => {
+    const admin = await signIn(SEED.admin);
+    const requestId = await refusedCashOut(SEED.collector2, 3_000);
+    const report = (await admin.get('/admin/accounting/reconciliation')).body as {
+      mismatches: { kind: string; walletRequestId: string | null }[];
+    };
+    expect(report.mismatches.filter((m) => m.walletRequestId === requestId)).toEqual([]);
   });
 });

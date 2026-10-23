@@ -14,20 +14,6 @@ import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 import { FUNDING_ROUTES, isInstantRoute } from './money-terms';
 import { formatMinor } from '../../shared/money';
 
-/**
- * Self-service top-up: putting money in without waiting for a person.
- *
- * A route the provider settles (a card payment is CONFIRMED BY THE PROVIDER)
- * goes through here and moves the balance when the payment clears. A route
- * nothing confirms (a bank transfer, a PayPal Friends & Family payment) goes
- * through the wallet-request workflow and waits for somebody to see it arrive.
- *
- *  - The ledger is credited ONCE. The external payment row carries the
- *    provider's reference under a unique index, so a retried request and a
- *    double-clicked button converge on one credit.
- *  - A pending payment credits NOTHING. `succeeded` is the only status that
- *    moves a balance; anything else is recorded and left for reconciliation.
- */
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -37,26 +23,10 @@ export class CheckoutService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /**
-   * Whether a top-up can be taken here at all, with the configured provider.
-   *
-   * With PayPal, capture needs the id of an order the payer has approved at
-   * PayPal, and nothing in Bault creates an order or sends the payer to approve
-   * one. Until that flow exists, the instant routes are reported unavailable
-   * under PayPal and money comes in through reviewed cash-in requests. The
-   * sandbox keeps them, so development and the test suites exercise this code.
-   */
   private instantAvailable(): boolean {
     return loadEnv().PAYMENT_PROVIDER === 'sandbox';
   }
 
-  /**
-   * The routes money can come in by, and how to use each one.
-   *
-   * The manual routes carry their published account details, and a route with
-   * nothing configured is reported `available: false` with no particulars,
-   * never a placeholder somebody might wire money to.
-   */
   routes() {
     const env = loadEnv();
     const clean = (v: string) => (v.trim() === '' ? null : v.trim());
@@ -84,19 +54,11 @@ export class CheckoutService {
         }
         return { ...route, available: false, instructions: null };
       }),
-      /** A missing reference is the costliest mistake with a manual transfer. */
       referenceNote:
         'Put your username in the payment reference. It is the only thing that ties an arriving payment to your account.',
     };
   }
 
-  /**
-   * Take a payment now.
-   *
-   * `idempotencyKey` is the caller's, and it is what makes a double-clicked
-   * button harmless: the same key returns the same external payment row rather
-   * than taking the money twice.
-   */
   async checkout(
     userId: string,
     input: { amountMinor: number; route: string; idempotencyKey: string; paymentMethodToken?: string },
@@ -126,13 +88,6 @@ export class CheckoutService {
 
     const providerRef = `${input.route}:${input.idempotencyKey.trim()}`;
 
-    /**
-     * The payment is written down BEFORE the provider is asked, as `pending`,
-     * so a capture that succeeds followed by a database failure still leaves a
-     * row to find the money by. Claiming the reference first also settles a
-     * double-click: the unique index lets one request in, and the other is
-     * answered with what the first one recorded.
-     */
     const [pending] = await this.db
       .insert(externalPayment)
       .values({
@@ -147,7 +102,6 @@ export class CheckoutService {
       .onConflictDoNothing()
       .returning();
     if (!pending) {
-      // Already taken: return the original rather than charging again.
       const [existing] = await this.db
         .select()
         .from(externalPayment)
@@ -171,9 +125,6 @@ export class CheckoutService {
         paymentMethodToken: input.paymentMethodToken,
       });
     } catch (e) {
-      // The outcome is unknown (the provider may have taken the money before
-      // the connection dropped), so the row stays `pending` for reconciliation
-      // rather than being marked failed on a guess.
       throw new AppError(
         ErrorCode.PROVIDER_UNAVAILABLE,
         'The payment provider did not complete this payment. Nothing has been credited; if you were charged it will be reconciled.',
@@ -187,21 +138,6 @@ export class CheckoutService {
       throw new AppError(ErrorCode.CONFLICT, 'The payment was declined. Nothing has been charged.', 409);
     }
 
-    /**
-     * Credit what the PROVIDER says it took, or nothing.
-     *
-     * `amountMinor` is a number the caller sent; `settledAmountMinor` is what the
-     * provider reports actually moved. With PayPal a payer can approve an order
-     * for $1 while the client asks to be credited $5,000: the capture succeeds,
-     * and only the settled figure says for how much.
-     *
-     * A mismatch is refused (the payment is marked `refused`, nothing is
-     * credited) rather than reconciled downward, since crediting the smaller
-     * figure would silently accept an attempted fraud.
-     *
-     * `undefined` is tolerated because a provider is not obliged to report it
-     * (and the sandbox echoes the request).
-     */
     if (result.settledAmountMinor !== undefined && result.settledAmountMinor !== input.amountMinor) {
       await settle('refused');
       throw new AppError(
@@ -253,7 +189,6 @@ export class CheckoutService {
     });
   }
 
-  /** Every self-service payment this collector has made. */
   listMine(userId: string) {
     return this.db
       .select()

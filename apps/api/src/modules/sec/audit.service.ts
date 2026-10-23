@@ -11,11 +11,6 @@ export interface AuditEntry {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Writes immutable audit records (Principle II). INSERT only: the append-only
- * DB triggers reject any later UPDATE/DELETE. Accepts an optional transaction
- * handle so an audit row can commit atomically with the change it describes.
- */
 @Injectable()
 export class AuditService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}

@@ -5,7 +5,6 @@ import type { Database } from '../../db/client';
 import { ledgerRecord } from './pay.schema';
 import { money, type Money } from '../../shared/money';
 
-/** Single settlement currency for the MVP (spec Assumption). */
 export const DEFAULT_CURRENCY = 'USD';
 
 export interface LedgerEntry {
@@ -25,28 +24,13 @@ export interface LedgerEntry {
     | 'shipping_refund'
     | 'service_refund'
     | 'payout_reversal';
-  amount: number; // positive minor units
+  amount: number;
   direction: 'debit' | 'credit';
   currency?: string;
   referenceType?: string;
   referenceId?: string;
 }
 
-/**
- * Ledger service (Principles II & IV).
- *
- * `record` appends one immutable ledger row (INSERT only: the append-only DB
- * triggers forbid edits). `balanceOf` DERIVES the wallet balance as
- * sum(credits) − sum(debits); there is no stored balance to drift. Both take an
- * optional `tx` so a ledger write commits atomically with the operation causing it.
- *
- * A balance read inside a transaction LOCKS the wallet until that transaction
- * ends, so two spends by one user cannot both pass a check against the same
- * balance. There is no balance row to lock and no constraint can refuse an
- * overdraft (the balance is a SUM), so the lock is a per-user Postgres advisory
- * lock: the second check waits for the first spend to commit and then reads
- * the balance it left behind.
- */
 @Injectable()
 export class LedgerService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -64,28 +48,10 @@ export class LedgerService {
     });
   }
 
-  /**
-   * Serialize every balance-dependent decision for one user's wallet.
-   *
-   * A transaction-scoped advisory lock: released by COMMIT or ROLLBACK, so it
-   * cannot leak, and it works through PgBouncer in transaction mode. Re-taking
-   * it in the same transaction is a no-op.
-   *
-   * One lock order everywhere, so two operations can wait for each other but
-   * never deadlock: the rows the operation is about (listing, item, request,
-   * shipment, deal) first, then the wallet, then the same user's membership
-   * period, which waivers and covers write to.
-   */
   async lockWallet(userId: string, tx: Database): Promise<void> {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'wallet:' + userId}, 0))`);
   }
 
-  /**
-   * The derived balance. Inside a transaction it first locks the wallet (see the
-   * class comment), so a check made here holds until the debit it guards commits.
-   * Without `tx` it is a plain read, fine for display and for early refusals that
-   * are repeated under the lock before any money moves.
-   */
   async balanceOf(userId: string, tx?: Database): Promise<Money> {
     if (tx) await this.lockWallet(userId, tx);
     const exec = tx ?? this.db;

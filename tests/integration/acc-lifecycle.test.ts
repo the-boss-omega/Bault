@@ -2,29 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
 import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
-/**
- * Account lifecycle: register, verify, sign in, change password, sign out.
- * Requires a running API + seeded DB.
- */
 describe('ACC account lifecycle', () => {
   it('registers a new account in pending state with its chosen username and name', async () => {
     const c = new Client();
     const stamp = Date.now();
-    // Registered in the reserved fixture domain, so the account this test
-    // creates never surfaces in the product-facing Users table.
     const res = await c.post('/auth/register', {
       email: fixtureEmail('lifecycle'),
       username: `t${stamp}`,
       firstName: 'Lifecycle',
       lastName: 'Fixture',
       password: 'password123',
-      // A valid registration accepts the terms in force (acc-consent.test.ts).
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_verification');
-    // The customer-facing identifier is the username; new accounts get no
-    // intake ID.
     expect(res.body.username).toBe(`t${stamp}`);
     expect(res.body.firstName).toBe('Lifecycle');
     expect(res.body.lastName).toBe('Fixture');
@@ -37,7 +28,6 @@ describe('ACC account lifecycle', () => {
       firstName: 'No',
       lastName: 'Username',
       password: 'password123',
-      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(400);
@@ -49,7 +39,6 @@ describe('ACC account lifecycle', () => {
       email: fixtureEmail('no-name'),
       username: `n${Date.now()}`,
       password: 'password123',
-      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(400);
@@ -59,11 +48,10 @@ describe('ACC account lifecycle', () => {
     const c = new Client();
     const res = await c.post('/auth/register', {
       email: fixtureEmail('duplicate-username'),
-      username: 'red', // already taken by the seeded collector
+      username: 'red',
       firstName: 'Duplicate',
       lastName: 'Username',
       password: 'password123',
-      // Consent given, so the refusal below is for the reason under test.
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(400);
@@ -79,9 +67,6 @@ describe('ACC account lifecycle', () => {
 
   it('never lets a username be changed once registered (Requirement 4.1)', async () => {
     const c = await signIn(SEED.collector);
-    // UpdateProfileDto whitelists the two name parts only, and the global
-    // ValidationPipe runs with forbidNonWhitelisted — so a username field is
-    // rejected outright.
     const res = await c.patch('/me/profile', {
       firstName: 'Red',
       lastName: 'Ashwood',
@@ -96,14 +81,14 @@ describe('ACC account lifecycle', () => {
     const c = await signIn(SEED.collector2);
     const change = await c.post('/auth/password/change', {
       currentPassword: '11111111',
-      newPassword: '11111111', // no-op change; still must succeed
+      newPassword: '11111111',
     });
     expect(change.status).toBe(200);
 
     const out = await c.post('/auth/logout');
     expect(out.status).toBe(204);
     const after = await c.get('/me/profile');
-    expect(after.status).toBe(401); // session revoked
+    expect(after.status).toBe(401);
   });
 
   it('rejects an invalid verification token as expired/used', async () => {

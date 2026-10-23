@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apps/web/src/shared/api';
 import { loadProfile, resetProfileRequest } from '../../apps/web/src/shared/session';
 
-/**
- * React StrictMode runs the boot effect twice in development, which would send
- * the profile call twice. Concurrent callers share one request, so it goes once.
- */
 const realFetch = globalThis.fetch;
 let calls: string[];
 
@@ -27,7 +23,6 @@ function stubProfile(respond: () => Promise<Response>) {
   }) as typeof fetch;
 }
 
-/** Shaped like the real `GET /me/profile`: two name parts, no display name. */
 const PROFILE = {
   id: 'u1',
   role: 'admin',

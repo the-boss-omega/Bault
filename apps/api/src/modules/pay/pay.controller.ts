@@ -19,6 +19,7 @@ class TopupDto {
 class WithdrawRequestDto {
   @IsInt() @IsPositive() amountMinor!: number;
   @IsString() destinationAccount!: string;
+  @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
 }
 class WithdrawConfirmDto {
   @IsString() confirmationToken!: string;
@@ -26,32 +27,17 @@ class WithdrawConfirmDto {
 
 class CheckoutDto {
   @IsInt() @Min(1) amountMinor!: number;
-  /** A route the provider settles. A manual one is refused with the reason. */
   @IsString() route!: string;
-  /** The caller's own key. What makes a double-clicked button harmless. */
   @IsString() @MaxLength(120) idempotencyKey!: string;
-  /** A provider-side token. NEVER a card number (Principle IX). */
   @IsOptional() @IsString() @MaxLength(200) paymentMethodToken?: string;
 }
 
 class ChargebackDto {
   @IsString() @MaxLength(500) reason!: string;
   @IsOptional() @IsString() @MaxLength(140) providerCaseRef?: string;
-  /** False when Bault won the dispute and the provider charged no fee. */
   @IsOptional() @IsBoolean() chargeFee?: boolean;
 }
 
-/**
- * PAY endpoints: `/finance/*` and `/webhooks/payment`.
- *
- * No path may change a balance without an approved, completed wallet request.
- * The legacy `POST /finance/wallet/topups` and `POST /finance/withdrawals` keep
- * their URL and request body for older clients, but each only RAISES a wallet
- * request and returns `status: 'pending_approval'` with the request id and code,
- * so a client that reads `status` sees that nothing settled.
- * `POST /finance/withdrawals/confirm` refuses with a pointer to the request
- * workflow. `TopupService.handleWebhook` is the provider's callback.
- */
 @ApiTags('PAY')
 @Controller()
 export class PayController {
@@ -64,22 +50,11 @@ export class PayController {
     private readonly chargebacks: ChargebackService,
   ) {}
 
-  /**
-   * How money can come in, with the account details for the manual routes, so
-   * a customer who picks one knows how to send the money.
-   */
   @Get('finance/funding-routes')
   fundingRoutes() {
     return this.checkout.routes();
   }
 
-  /**
-   * Take a payment now, on a route the provider settles.
-   *
-   * Distinct from a cash-in REQUEST on purpose: a card payment is confirmed by
-   * the provider, so making it wait on a reviewer adds a delay that protects
-   * nobody. A route nothing confirms still goes through the request workflow.
-   */
   @Post('finance/checkout')
   pay(@CurrentUser() user: AuthUser, @Body() dto: CheckoutDto) {
     return this.checkout.checkout(user.id, dto);
@@ -90,14 +65,11 @@ export class PayController {
     return this.checkout.listMine(user.id);
   }
 
-  /** What a cash-out of this size costs and lands, before asking for one. */
   @Get('finance/cash-out-quote')
   cashOutQuote(@Query('amountMinor') amountMinor: string) {
     const amount = Number.parseInt(amountMinor ?? '0', 10);
     return this.wallet.cashOutQuote(Number.isFinite(amount) ? amount : 0);
   }
-
-  /* ---- Chargebacks. Operator-only: a provider tells us out of band. ---- */
 
   @Roles('admin')
   @Get('finance/chargebacks/reversible')
@@ -125,16 +97,11 @@ export class PayController {
     return this.wallet.ledgerList(user.id);
   }
 
-  /** Money in the wallet that is spoken for by open requests, for the summary. */
   @Get('finance/wallet/pending')
   pending(@CurrentUser() user: AuthUser) {
     return this.requests.openTotals(user.id);
   }
 
-  /**
-   * Legacy shim: raises a cash-in request instead of crediting the wallet.
-   * The balance does not move here; only an approved, completed request moves it.
-   */
   @Post('finance/wallet/topups')
   async topup(@CurrentUser() user: AuthUser, @Body() dto: TopupDto) {
     const created = await this.requests.submit(user.id, {
@@ -152,18 +119,15 @@ export class PayController {
     };
   }
 
-  /**
-   * Legacy shim: raises a cash-out request instead of issuing a confirmation
-   * challenge. Returns no `confirmationToken`, because a reviewer decides.
-   */
   @Post('finance/withdrawals')
   async requestWithdrawal(@CurrentUser() user: AuthUser, @Body() dto: WithdrawRequestDto) {
+    const beneficiaryName = dto.beneficiaryName?.trim() || (await this.requests.accountHolderName(user.id));
     const created = await this.requests.submit(user.id, {
       type: 'cash_out',
       amountMinor: dto.amountMinor,
       currency: 'USD',
       destinationAccount: dto.destinationAccount,
-      beneficiaryName: dto.destinationAccount,
+      beneficiaryName,
       notes: 'Raised through the legacy /finance/withdrawals endpoint.',
     });
     return {
@@ -174,29 +138,12 @@ export class PayController {
     };
   }
 
-  /**
-   * Retired: no customer path may pay money out directly. Answered with a 410
-   * naming its replacement rather than a silent success that moves nothing.
-   */
   @Post('finance/withdrawals/confirm')
   confirmWithdrawal(@CurrentUser() _user: AuthUser, @Body() _dto: WithdrawConfirmDto) {
     throw this.withdrawals.retiredConfirmEndpoint();
   }
 
   @Public()
-  /**
-   * A provider telling us something happened.
-   *
-   * Public, because a provider has no session, so the verification behind it
-   * is the only thing standing between this route and anyone on the internet.
-   * The WHOLE delivery is handed to the adapter: real verification needs the
-   * headers, not one signature string, and PayPal's is a call rather than a
-   * compare.
-   *
-   * An unverifiable delivery throws, which the global filter renders as a 4xx:
-   * a provider that gets a 4xx retries and eventually alerts a human, whereas a
-   * 200 would silently accept a body we could not authenticate.
-   */
   @Post('webhooks/payment')
   async webhook(@Req() req: Request) {
     const { outcome } = await this.topups.handleWebhook({
