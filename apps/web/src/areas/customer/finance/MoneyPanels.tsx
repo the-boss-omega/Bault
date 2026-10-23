@@ -30,17 +30,6 @@ interface RouteCatalogue {
   referenceNote: string;
 }
 
-/**
- * Putting money in.
- *
- * The screen's whole job is one distinction: a card or PayPal Goods & Services
- * payment is confirmed by the provider and settles now; a bank transfer or a
- * Friends & Family payment is confirmed by nothing and waits for somebody to
- * read a statement.
- *
- * Both are offered side by side with the trade-off stated, so a collector who
- * wants their balance now and one who wants to avoid a card fee can each pick.
- */
 export function TopUpPanel({
   onError,
   onStatus,
@@ -55,15 +44,6 @@ export function TopUpPanel({
   const [route, setRoute] = useState('card');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
-  /**
-   * The idempotency key of the top-up being attempted, and what it was for.
-   *
-   * The server dedupes on the key, so a retry must carry the key of the attempt
-   * it retries: after a network error the first press may well have charged
-   * the card, and a new key would make the second press another top-up. A
-   * different amount or route is a different top-up and gets a new key, and so
-   * does the next top-up once this one has an answer.
-   */
   const attempt = useRef<{ key: string; route: string; cents: number } | null>(null);
 
   useEffect(() => {
@@ -71,8 +51,6 @@ export function TopUpPanel({
       try {
         const loaded = await api.get<RouteCatalogue>('/finance/funding-routes');
         setCatalogue(loaded);
-        // Start on a route that can be used: keep the current one if the server
-        // reports it available, otherwise the first available one.
         setRoute((current) =>
           loaded.routes.some((r) => r.key === current && r.available)
             ? current
@@ -107,8 +85,6 @@ export function TopUpPanel({
         { amountMinor: cents, route, idempotencyKey: key },
       );
       attempt.current = null;
-      // A retry is answered with the first attempt's outcome, which can be a
-      // refusal the network swallowed the first time.
       if (result.status === 'failed' || result.status === 'refused') {
         onStatus(null);
         onError(t('money.notTaken'));
@@ -123,8 +99,6 @@ export function TopUpPanel({
       setAmount('');
       onChanged();
     } catch (e) {
-      // No answer, or a 5xx: whether the card was charged is unknown, so the
-      // key stays for the retry. Any other refusal took no money.
       const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
       if (!unknown) attempt.current = null;
       onError((e as Error).message);
@@ -160,8 +134,6 @@ export function TopUpPanel({
             </p>
           )}
 
-          {/* An instant route takes the money here. A manual one cannot, and
-              says so with the account details rather than a dead button. */}
           {chosen?.instant && chosen.available ? (
             <>
               <MoneyField
@@ -232,10 +204,6 @@ interface CashOutQuote {
   };
 }
 
-/**
- * What a cash-out actually lands: the whole fee schedule up front, and the
- * arithmetic as soon as an amount is typed, ending in the amount that arrives.
- */
 export function CashOutQuotePanel({ amount }: { amount: string }) {
   const { t } = useI18n();
   const [quote, setQuote] = useState<CashOutQuote | null>(null);

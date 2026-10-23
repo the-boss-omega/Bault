@@ -2,14 +2,6 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { SEED, signIn, type Client } from '../integration/helpers/http';
 import { closeDb, sql } from '../integration/helpers/db';
 
-/**
- * Resolving a support ticket is a status change with a notification attached:
- * the customer is told their ticket was resolved. Two staff pressing Resolve
- * together must resolve it once and tell the customer once.
- *
- * Requires a running API + a seeded DB.
- */
-
 afterAll(closeDb);
 
 type Res = Awaited<ReturnType<Client['post']>>;

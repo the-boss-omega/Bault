@@ -1,16 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, intakeFor, signIn } from './helpers/http';
 
-/**
- * Placing and lifting a hold from a scan.
- *
- * The warehouse hold panel asks the operator to scan the card, and a scan
- * produces the printed BARCODE; a person reading the label by eye types the
- * serial. The internal id is on no label. The hold routes take all three, as
- * the relocate route beside them does.
- *
- * Requires a running API + a freshly seeded DB.
- */
 describe('a hold by whatever the scanner produced', () => {
   it('places a hold by barcode and lifts it by serial', async () => {
     const operator = await signIn(SEED.operator);
@@ -21,12 +11,10 @@ describe('a hold by whatever the scanner produced', () => {
     expect(placed.status, JSON.stringify(placed.body)).toBe(201);
     expect(placed.body).toMatchObject({ status: 'hold_placed', changed: true, itemId: item.id });
 
-    // Lower case, as a person types it.
     const lifted = await operator.del(`/custody/items/${encodeURIComponent(String(item.serialNumber).toLowerCase())}/hold`);
     expect(lifted.status, JSON.stringify(lifted.body)).toBe(200);
     expect(lifted.body).toMatchObject({ status: 'hold_released', changed: true, itemId: item.id });
 
-    // One event each, on the right card.
     const history = (await operator.get(`/custody/items/${item.id}/history`)).body as { eventType: string }[];
     expect(history.filter((e) => e.eventType === 'hold_placed')).toHaveLength(1);
     expect(history.filter((e) => e.eventType === 'hold_released')).toHaveLength(1);

@@ -17,41 +17,14 @@ import { MfaService, codeInvalid, type SecondFactorProof } from './mfa/mfa.servi
 import type { AuthUser } from '../sec/auth-context';
 import { CURRENT_TERMS_VERSION } from './terms';
 
-/**
- * What a right password gets: a session or, for an account with two-factor
- * sign-in, a challenge that the second step turns into one.
- */
 export type LoginResult =
   | { kind: 'session'; user: AuthUser; rawToken: string; expiresAt: Date }
   | { kind: 'challenge'; challengeToken: string; expiresAt: Date };
 
-/**
- * Registration + login (Principle IX/X).
- *
- * Registration: hash the password with argon2, record the caller's chosen
- * USERNAME (immutable from this point on) plus their first and last name,
- * create the account in `pending` status, and email a verification link.
- * Login: verify credentials, refuse accounts that may not sign in, then mint a
- * session or a second-factor challenge.
- *
- * No intake ID is allocated: the username IS the customer-facing identifier, so
- * a second routing code would be one more thing to keep unique, print and
- * explain. Older accounts keep the one they were given.
- */
-
 @Injectable()
 export class AuthService {
-  /**
-   * What an identifier that matches nobody is verified against.
-   *
-   * Minted once per process by the same `argon2.hash` call registration uses,
-   * so it carries the same cost parameters as every real hash and can never
-   * drift from them. The password it hashes is random and thrown away, so
-   * nothing can match it.
-   */
   private readonly dummyHash = argon2.hash(randomBytes(32).toString('hex'));
 
-  /** Sign-ins for one identifier run one at a time; see `login`. */
   private readonly perIdentifier = new OneAtATime();
 
   constructor(
@@ -77,14 +50,6 @@ export class AuthService {
     termsVersion: string;
     termsAcceptedAt: Date;
   }> {
-    /**
-     * Consent first, before anything is looked up or hashed.
-     *
-     * Agreeing to an OLDER text is not agreeing to this one: a sign-up page left
-     * open across a change of terms sends the version it showed, so anything but
-     * the current version is refused. The page is told which version is in
-     * force so it can show it and ask again.
-     */
     const version = acceptedTermsVersion?.trim() ?? '';
     if (version !== CURRENT_TERMS_VERSION) {
       throw AppError.validation(
@@ -96,8 +61,6 @@ export class AuthService {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    // Normalized ONCE, here, so the unique index below is an index over exactly
-    // the values a person can type: "Red", " red " and "RED" are one account.
     const normalizedUsername = normalizeUsername(username);
     if (!isValidUsername(normalizedUsername)) {
       throw AppError.validation('Username must be 3-32 characters of letters, digits, dot, dash or underscore');
@@ -123,9 +86,6 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(password);
 
-    // This is the ONLY write of `username` anywhere in the platform.
-    // The pre-check above is a friendly error; the unique index is the guarantee,
-    // so a concurrent duplicate still fails rather than slipping through.
     let created: { id: string; termsVersion: string | null; termsAcceptedAt: Date | null } | undefined;
     try {
       [created] = await this.db
@@ -138,8 +98,6 @@ export class AuthService {
           lastName: last,
           status: 'pending',
           role: 'user',
-          // Written in the same INSERT as the account, so there is no instant at
-          // which an account exists without the record of what it agreed to.
           termsVersion: CURRENT_TERMS_VERSION,
           termsAcceptedAt: new Date(),
         })
@@ -167,43 +125,13 @@ export class AuthService {
     };
   }
 
-  /**
-   * `identifier` is EITHER the email or the username; one is enough, callers
-   * never send both. Usernames may not contain '@' (RegisterDto) and both columns
-   * are unique, so a single OR lookup resolves unambiguously.
-   */
   async login(identifier: string, password: string, origin: ClientOrigin = {}): Promise<LoginResult> {
-    // Same normalization as registration, so a username typed in any casing
-    // resolves to the row that was stored.
     const normalized = normalizeUsername(identifier);
 
-    /**
-     * One attempt at a time per identifier.
-     *
-     * The lockout reads "how many failures so far" and then verifies, so
-     * guesses fired at once would all read the same count before any of them
-     * wrote its failure. Queued per identifier, a burst is counted one by one.
-     */
     return this.perIdentifier.run(normalized, () => this.attempt(normalized, password, origin));
   }
 
   private async attempt(normalized: string, password: string, origin: ClientOrigin): Promise<LoginResult> {
-    /**
-     * Ten failures in fifteen minutes shut the identifier out for fifteen.
-     *
-     * Asked BEFORE the password is looked at, so the right password is refused
-     * too while the lock stands; otherwise the lock would be a signal ("the
-     * attempt that worked") rather than a stop.
-     *
-     * Keyed on what was TYPED, not on the account it resolves to. An identifier
-     * nobody owns therefore locks exactly like a real one, with the same words,
-     * and the lockout cannot be used to ask whether an account exists. The cost
-     * is that an account's email and username are counted separately.
-     *
-     * Refusals during the lock are not recorded: they are not guesses that were
-     * checked, and an attacker hammering a locked identifier should not be able
-     * to fill the log or extend anyone's lock.
-     */
     const secondsLeft = await this.attempts.lockedFor(normalized);
     if (secondsLeft > 0) throw this.attempts.lockedError(secondsLeft);
 
@@ -213,56 +141,22 @@ export class AuthService {
       .where(or(eq(userAccount.email, normalized), eq(userAccount.username, normalized)))
       .limit(1);
 
-    /**
-     * Same error, and the same TIME, whether the account is unknown or the
-     * password is wrong: both pay for exactly one argon2 verification, so a
-     * stopwatch cannot enumerate accounts. Recorded either way; the log says
-     * which, the response does not.
-     */
     const verified = await argon2.verify(u?.passwordHash ?? (await this.dummyHash), password);
     if (!u || !verified) {
       await this.attempts.record(normalized, u?.id ?? null, 'bad_credentials', origin);
       throw AppError.unauthenticated('Invalid credentials');
     }
-    /**
-     * The password was right; the address was never confirmed. This is the one
-     * sign-in refusal the person can resolve themselves, so it has its own error
-     * and the page can offer a fresh link (`POST /auth/verify-email/resend`).
-     */
     if (u.status === 'pending') {
       await this.attempts.record(normalized, u.id, 'unverified', origin);
       throw AppError.emailUnverified(
         'Your email address has not been confirmed yet. Check your inbox for the link we sent — we can send a fresh one.',
       );
     }
-    /**
-     * A SUSPENDED account may still authenticate, deliberately. The debt sweep
-     * suspends automatically, and a holder who could not sign in could not ask
-     * how to clear the debt.
-     *
-     * AUTHORIZATION does the work instead: `SessionAuthGuard` refuses every
-     * route except those marked `@AllowSuspended()`, which is the helpdesk and
-     * the profile probe the shell needs to render at all. The account can only
-     * explain itself and read the answer.
-     *
-     * `closed` remains a hard refusal: that state is terminal.
-     */
     if (u.status !== 'active' && u.status !== 'suspended') {
-      // `closed` and anything unrecognised: the password was right, the door stays shut.
       await this.attempts.record(normalized, u.id, 'refused', origin);
       throw AppError.accountSuspended();
     }
 
-    /**
-     * The password was right; for an enrolled account that is half of it.
-     *
-     * No session: a challenge, good for five minutes, for this account, once.
-     * Only here, after every refusal above has had its turn, so the answer to a
-     * WRONG password says nothing about whether the account has a second
-     * factor; only somebody who knows the password learns that. Logged as its
-     * own outcome: a right password followed by wrong codes is the pattern an
-     * administrator most needs to see.
-     */
     if (await this.mfa.isEnabled(u.id)) {
       const challenge = await this.mfa.issueChallenge(u.id, normalized);
       await this.attempts.record(normalized, u.id, 'mfa_challenged', origin);
@@ -274,18 +168,6 @@ export class AuthService {
     return { kind: 'session', user: { id: u.id, role: u.role, status: u.status, mfaEnabled: false }, rawToken, expiresAt };
   }
 
-  /**
-   * The second step: a challenge from the first, and a code from the app or a
-   * recovery code. A session, or a refusal.
-   *
-   * Under the same one-at-a-time queue as the first step, keyed on the
-   * identifier the challenge was issued for, so a burst of guesses is counted
-   * one by one exactly like a burst of passwords. Both locks are asked first:
-   * the identifier's (wrong passwords and wrong codes) and the account's (wrong
-   * codes through any identifier or signed-in route). A wrong code is logged
-   * against both. An unknown, used, expired or burned challenge is one answer
-   * (start again with the password) and is not a guess, so it is not counted.
-   */
   async completeSecondFactor(
     challengeToken: string,
     proof: SecondFactorProof,
@@ -319,7 +201,6 @@ export class AuthService {
   }
 }
 
-/** The second step has nothing to answer: start again with the password. */
 function challengeExpired(): AppError {
   return new AppError(
     ErrorCode.MFA_CHALLENGE_EXPIRED,
@@ -328,11 +209,6 @@ function challengeExpired(): AppError {
   );
 }
 
-/**
- * Postgres reports a violated UNIQUE index as SQLSTATE 23505. Read through
- * `pgErrorCode`, because a newer drizzle wraps the driver's error and keeps the
- * code on its `cause`.
- */
 function isUniqueViolation(e: unknown): boolean {
   return pgErrorCode(e) === '23505';
 }

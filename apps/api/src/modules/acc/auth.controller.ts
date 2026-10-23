@@ -10,30 +10,8 @@ import { AllowAnyStatus } from './allow-any-status.decorator';
 import { AllowWithoutMfa } from './mfa/allow-without-mfa.decorator';
 import { MfaService } from './mfa/mfa.service';
 
-/**
- * The bucket for routes that check a credential.
- *
- * Read from config rather than hard-coded: an inline `limit` OVERRIDES the
- * configured `auth` throttler and would leave `AUTH_RATE_LIMIT_PER_MINUTE`
- * doing nothing.
- *
- * The right number depends on the deployment. Collectors behind one office NAT
- * or one carrier's egress share an address, and a budget that locks them out
- * while barely inconveniencing a script that can rotate addresses is the worst
- * of both.
- */
 export const CREDENTIAL_ROUTE = loadEnv().AUTH_RATE_LIMIT_PER_MINUTE;
 
-/**
- * The routes that send mail to an address the CALLER chose.
- *
- * Password reset and verification resend are the two places where an
- * unauthenticated stranger can make Bault email somebody. Five a minute per IP
- * is far more than any human needs and destroys the value of pointing a script
- * at a mailbox. Deliberately NOT configurable: there is no deployment where a
- * higher number is the right answer, and the one place a low limit would hurt
- * (a shared office IP signing in) is the sign-in route, not this one.
- */
 const MAIL_ROUTE = 5;
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
@@ -53,7 +31,6 @@ import {
 
 const env = loadEnv();
 
-/** ACC auth endpoints: `/auth/*`. */
 @ApiTags('ACC')
 @Controller('auth')
 export class AuthController {
@@ -65,10 +42,6 @@ export class AuthController {
     private readonly mfa: MfaService,
   ) {}
 
-  /**
-   * The response names the account by its USERNAME: the permanent, unique,
-   * customer-facing identifier. No intake ID is returned (none is allocated).
-   */
   @Public()
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('register')
@@ -81,8 +54,6 @@ export class AuthController {
       dto.lastName,
       dto.acceptedTermsVersion,
     );
-    // The acceptance is returned as STORED, so the page can show the person
-    // exactly what was recorded against their account.
     return { status: 'pending_verification', username, firstName, lastName, termsVersion, termsAcceptedAt };
   }
 
@@ -103,17 +74,6 @@ export class AuthController {
     return { status: 'sent_if_pending' };
   }
 
-  /**
-   * The password step. For most accounts it opens a session. For an account
-   * with two-factor sign-in it opens NOTHING: it answers
-   * `{ status: 'mfa_required', challengeToken, expiresAt }` and the session
-   * comes from `POST /auth/login/mfa`. `Cache-Control: no-store` because the
-   * challenge is half a credential.
-   *
-   * `mfaEnrollmentRequired` tells the app, before it renders anything, that this
-   * account's role needs a second factor it does not have yet: every route but
-   * enrolment will refuse it, so the app goes straight to the enrolment screen.
-   */
   @Public()
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('login')
@@ -125,23 +85,11 @@ export class AuthController {
       return { status: 'mfa_required', challengeToken: result.challengeToken, expiresAt: result.expiresAt };
     }
     const { user, rawToken, expiresAt } = result;
-    /**
-     * Name the actor for the audit row. The audit interceptor records `req.user`
-     * once the handler returns, and sign-in has no user until it finishes, so it
-     * is set here for the interceptor to read.
-     */
     req.user = user;
     this.setSessionCookie(res, rawToken, expiresAt);
     return { id: user.id, role: user.role, mfaEnrollmentRequired: this.mfa.requiredFor(user.role) };
   }
 
-  /**
-   * The second sign-in step: the challenge plus a code from the authenticator
-   * app, or plus a recovery code. Public (there is no session yet) and metered
-   * by the same credential bucket as the password, because it checks a
-   * credential: without that, a stolen password would buy guesses at the code
-   * as fast as the network allowed, held back only by the lockout.
-   */
   @Public()
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('login/mfa')
@@ -157,16 +105,11 @@ export class AuthController {
       hasCode ? { code: dto.code! } : { recoveryCode: dto.recoveryCode! },
       this.origin(req),
     );
-    req.user = user; // the audit row's actor, as for the password step
+    req.user = user;
     this.setSessionCookie(res, rawToken, expiresAt);
     return { id: user.id, role: user.role, mfaEnrollmentRequired: false };
   }
 
-  /**
-   * Reachable before a required second factor is enrolled, and by an account
-   * of any status: a way out must always exist, and ending a session grants
-   * nothing.
-   */
   @AllowWithoutMfa()
   @AllowAnyStatus()
   @Post('logout')
@@ -195,11 +138,6 @@ export class AuthController {
     return { status: 'password_changed' };
   }
 
-  /**
-   * The caller's own cookie is passed down so their current session survives and
-   * every OTHER one they hold is ended. The count comes back so the page can say
-   * "signed out 3 other devices".
-   */
   @AuthBucket(CREDENTIAL_ROUTE)
   @Post('password/change')
   @HttpCode(200)
@@ -217,10 +155,6 @@ export class AuthController {
     return { status: 'password_changed', otherSessionsEnded };
   }
 
-  /**
-   * Sign out everywhere else, without changing the password: "somebody may be
-   * using my account" and "I want a new password" are separate worries.
-   */
   @Post('sessions/revoke-others')
   @HttpCode(200)
   async revokeOtherSessions(@CurrentUser() user: AuthUser, @Req() req: Request) {
@@ -228,16 +162,10 @@ export class AuthController {
     return { status: 'sessions_revoked', otherSessionsEnded: ended };
   }
 
-  /**
-   * The real client: `main.ts` trusts only the configured proxy hops
-   * (`TRUST_PROXY`, default loopback), so behind the tunnel this is the
-   * visitor, not 127.0.0.1.
-   */
   private origin(req: Request) {
     return { ip: req.ip ?? null, userAgent: req.headers['user-agent'] ?? null };
   }
 
-  /** The raw session cookie on this request, if there is one. */
   private rawSessionToken(req: Request): string | undefined {
     if (!req.headers.cookie) return undefined;
     return parseCookie(req.headers.cookie)[env.SESSION_COOKIE_NAME];
@@ -245,7 +173,7 @@ export class AuthController {
 
   private setSessionCookie(res: Response, rawToken: string, expiresAt: Date): void {
     res.cookie(env.SESSION_COOKIE_NAME, rawToken, {
-      httpOnly: true, // not readable by JS → mitigates XSS token theft (Principle IX)
+      httpOnly: true,
       secure: env.NODE_ENV === 'production',
       sameSite: 'lax',
       expires: expiresAt,

@@ -1,17 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { S3StorageAdapter, SandboxStorageAdapter } from '@bault/adapters';
 
-/**
- * The storage adapter contract.
- *
- * `SandboxStorageAdapter` returns the key and WRITES NOTHING. Wired in place of
- * a real store, every intake and arrival-condition photograph would be accepted
- * and discarded while `item_image` and `parcel_photo` rows recorded keys that
- * resolve to nothing. So the contract is stated as the thing the sandbox cannot
- * do: bytes put in come back out. The sandbox is tested for what it promises,
- * and asserted NOT to satisfy the round trip.
- */
-
 const CONFIG = {
   endpoint: process.env.STORAGE_ENDPOINT ?? 'http://localhost:9000',
   region: process.env.STORAGE_REGION ?? 'eu-central',
@@ -20,14 +9,6 @@ const CONFIG = {
   secretKey: process.env.STORAGE_SECRET_KEY ?? 'minioadmin',
 };
 
-/**
- * Whether there is a bucket to talk to.
- *
- * The S3 round trip needs the object store up (`docker compose -f
- * infra/docker-compose.yml up -d minio`). Without it these cases skip, since no
- * other suite needs MinIO, and the skip is LOUD so nobody mistakes it for a
- * pass.
- */
 let storeIsUp = false;
 
 beforeAll(async () => {
@@ -53,8 +34,6 @@ describe('the storage contract', () => {
     if (!storeIsUp) skip();
     const s3 = new S3StorageAdapter(CONFIG);
 
-    // Binary, not text: a signing bug that mangles high bytes passes a UTF-8
-    // test and corrupts every photograph.
     const body = Buffer.from(
       Array.from({ length: 2048 }, (_, i) => (i * 37 + 11) % 256),
     );
@@ -78,21 +57,10 @@ describe('the storage contract', () => {
     await s3.putObject({ key, body: Buffer.from('x'), contentType: 'image/png' });
 
     const url = await s3.getSignedUrl(key, 300);
-    // The URL goes into an <img src>, which cannot carry an Authorization
-    // header — so everything the request needs has to be in the query string.
     expect(url).toContain('X-Amz-Algorithm=AWS4-HMAC-SHA256');
     expect(url).toContain('X-Amz-Expires=300');
     expect(url).toContain('X-Amz-Signature=');
 
-    /**
-     * The SECRET must never appear — only the access key, which is public by
-     * design and belongs in `X-Amz-Credential`.
-     *
-     * Asserted against a sentinel rather than `CONFIG.secretKey`, because
-     * MinIO's default access key and secret are the SAME string (`minioadmin`)
-     * — so checking the real config cannot tell "the secret leaked" apart from
-     * "the access key is present, correctly".
-     */
     const sentinel = 'sk-this-must-never-be-in-a-url';
     const signed = await new S3StorageAdapter({
       ...CONFIG,
@@ -109,7 +77,6 @@ describe('the storage contract', () => {
     const key = `intake/test/${Date.now()}-private.png`;
     await s3.putObject({ key, body: Buffer.from('private'), contentType: 'image/png' });
 
-    // The bucket must not be public: a collector's card is private property.
     const res = await fetch(`${CONFIG.endpoint}/${CONFIG.bucket}/${key}`);
     expect(res.ok).toBe(false);
   });
@@ -122,12 +89,6 @@ describe('the storage contract', () => {
     ).rejects.toThrow(/Storage upload failed/);
   });
 
-  /**
-   * `encodeSegment` leaves dots alone, and the WHATWG URL parser resolves a `..`
-   * segment before the request is signed, so `intake/../other/x.png` would be a
-   * signed link into a DIFFERENT BUCKET on the same endpoint. Needs no object
-   * store: the refusal has to happen before any request is built.
-   */
   it('refuses a key with a dot segment instead of signing a path out of the bucket', async () => {
     const s3 = new S3StorageAdapter({ ...CONFIG, endpoint: 'http://127.0.0.1:9' });
     for (const key of ['intake/../other-bucket/x.png', './x.png', 'a/./b.png', '..', 'a/..']) {
@@ -137,7 +98,6 @@ describe('the storage contract', () => {
         key,
       ).rejects.toThrow(/segment/);
     }
-    // A dot inside a name is not a segment.
     await expect(s3.getSignedUrl('intake/2026/09/receipt.v2.png')).resolves.toContain('receipt.v2.png');
   });
 
@@ -150,10 +110,6 @@ describe('the storage contract', () => {
 });
 
 describe('the sandbox adapter', () => {
-  /**
-   * A good development sink that cannot satisfy the contract above, which is
-   * why the env schema and the adapter factory refuse it in production.
-   */
   it('accepts bytes and keeps none of them', async () => {
     const sandbox = new SandboxStorageAdapter();
     const result = await sandbox.putObject({
@@ -162,11 +118,8 @@ describe('the sandbox adapter', () => {
       contentType: 'image/png',
     });
 
-    // It answers as though it stored the object…
     expect(result.key).toBe('intake/2026/09/whatever.png');
 
-    // …and the URL it hands back is a fixed local string, not a signed one, so
-    // nothing it returns can be fetched by anybody.
     const url = await sandbox.getSignedUrl('intake/2026/09/whatever.png');
     expect(url).not.toContain('X-Amz-Signature');
   });

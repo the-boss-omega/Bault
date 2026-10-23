@@ -7,12 +7,6 @@ import { log } from '../../apps/worker/src/log';
 import { SEED, signIn } from '../integration/helpers/http';
 import { count, createMembership, createUser, ledger, testPool, warm } from './helpers/db';
 
-/**
- * Membership renewal.
- *
- * A cycle that has run out is renewed once: one new period row, one charge for
- * the fee. Never two, however many times or however many workers run the job.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();
@@ -48,9 +42,6 @@ describe('renewing a cycle that has run out', () => {
     const ms: string[] = [];
     for (let i = 0; i < 10; i += 1) ms.push(await createMembership(pool, await createUser(pool), { endsInMinutes: -1 }));
     await warm(pool);
-    // If each run stamped its own `now()` as the new period start, the ON
-    // CONFLICT on (membership_id, period_start) would never match and both runs
-    // would open a period and charge the fee.
     await Promise.all([renewMemberships(pool), renewMemberships(pool)]);
     for (const m of ms) {
       expect(await periods(pool, m)).toBe(1);
@@ -75,7 +66,6 @@ describe('an account that is no longer active (N9)', () => {
     expect(await fees(pool, m)).toBe(0);
     expect(await statusOf(pool, m)).toEqual({ status: 'active', live: false });
 
-    // Reinstated: the next run renews it like any other.
     await pool.query(`UPDATE user_account SET status = 'active' WHERE id = $1`, [user]);
     await renewMemberships(pool);
     expect(await fees(pool, m)).toBe(1);
@@ -83,22 +73,6 @@ describe('an account that is no longer active (N9)', () => {
   });
 });
 
-/**
- * A member upgrading at the moment the renewal job reaches their membership.
- *
- * Both touch the membership row and the wallet, and the lock order everywhere
- * is the row the operation is about, then the wallet (`LedgerService.lockWallet`).
- * Renewal takes them in that order. If subscribe took the wallet first, the two
- * could each hold one and wait for the other.
- *
- * Made deterministic by holding `ledger_record` for a moment: subscribe stops
- * at its balance read, after whatever it locks first and before the next lock.
- * Renewal is started then, and allowed to block before the table is released,
- * for longer than `deadlock_timeout`, so that if the cycle forms it is
- * subscribe's own deadlock check, the later one, that finds it.
- *
- * Needs the API, and signs in as a seeded collector.
- */
 describe('a member subscribing while their membership is being renewed', () => {
   const waitFor = async (what: string, check: () => Promise<boolean>, timeoutMs = 10_000) => {
     const until = Date.now() + timeoutMs;
@@ -116,7 +90,6 @@ describe('a member subscribing while their membership is being renewed', () => {
     const userId = rows[0]!.id;
     await ledger(pool, userId, 'credit', 100_000);
 
-    // Nothing else due, so the run below reaches this membership and only it.
     await renewMemberships(pool);
     const existing = await pool.query<{ id: string }>(`SELECT id FROM membership WHERE user_id = $1`, [userId]);
     if (existing.rows[0]) {
@@ -174,8 +147,6 @@ describe('a member subscribing while their membership is being renewed', () => {
     const res = await subscribing!;
     await renewing;
 
-    // The upgrade went through, and the renewal left the membership to it
-    // rather than renewing the old tier underneath it.
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     const m = await pool.query<{ tier: string; live: boolean }>(
       `SELECT tier, current_period_end > now() AS live FROM membership WHERE id = $1`,
@@ -186,16 +157,11 @@ describe('a member subscribing while their membership is being renewed', () => {
   });
 });
 
-/**
- * One membership whose renewal throws must not stop the others, and must not
- * be reported as a run that went well: the heartbeat is what alerts somebody.
- */
 describe('a renewal that fails for one membership', () => {
   it('renews the rest, logs the one that failed, and reports the run as failed', async () => {
     const good = await createMembership(pool, await createUser(pool), { endsInMinutes: -1 });
     const bad = await createMembership(pool, await createUser(pool), { endsInMinutes: -1 });
 
-    // Its new period cannot be written: any error inside its transaction will do.
     await pool.query(`
       CREATE OR REPLACE FUNCTION wk_fail_period_for() RETURNS trigger LANGUAGE plpgsql AS $fn$
       BEGIN
@@ -224,13 +190,10 @@ describe('a renewal that fails for one membership', () => {
       errors.mockRestore();
     }
 
-    // The good one is renewed regardless.
     expect(await periods(pool, good)).toBe(1);
     expect(await fees(pool, good)).toBe(1);
     expect(await periods(pool, bad)).toBe(0);
 
-    // The bad one is logged at error level by id, and the run is a failure
-    // that names it, which is what the heartbeat records.
     expect(logged.some(([, fields]) => (fields as { membershipId?: string } | undefined)?.membershipId === bad)).toBe(true);
     expect(outcome).toBeInstanceOf(Error);
     expect((outcome as Error).message).toContain(bad);
@@ -244,17 +207,6 @@ describe('a renewal that fails for one membership', () => {
   });
 });
 
-/**
- * A collector's very first subscribe, sent twice at once (a double click).
- *
- * Subscribe locks the membership row before the wallet, but a collector who
- * has never subscribed has no row to lock, so both requests get past that
- * read and meet at the wallet lock. The second must be told the membership was
- * just started, not fail on the unique user_id with a 500.
- *
- * Made deterministic by holding the collector's wallet lock from here until
- * both requests are waiting on it. Needs the API.
- */
 describe('two first subscribes at once', () => {
   it('starts one membership, charges it once, and answers the other with a 409', async () => {
     const userId = await createUser(pool);

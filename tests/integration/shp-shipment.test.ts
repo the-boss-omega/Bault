@@ -1,20 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
-/**
- * Create a MULTI-ITEM shipment request (Requirement 5.2) →
- * rates → select → scan-verified dispatch through the structured warehouse
- * fulfillment form (Requirement 5.3). Items move to `shipped` with a tracking
- * number; shipping is billed.
- */
 describe('SHP outbound shipping', () => {
-  /**
-   * The destination the UI builds from a saved Profile address (Req 5.1).
-   *
-   * The country and postal code are their own fields. A rate depends on
-   * both, and a formatted single line cannot be split back into them without
-   * guessing — which is how a parcel to Japan gets quoted a domestic price.
-   */
   const DESTINATION = {
     destinationAddress: 'Red, 1200 Market St, San Francisco 94102, US',
     destinationCountry: 'US',
@@ -37,14 +24,13 @@ describe('SHP outbound shipping', () => {
     const collector = await signIn(SEED.collector);
     await fundWallet(SEED.collector, 100000);
 
-    // ONE request covering EVERY selected item, with one Shipment ID (Req 5.2).
     const shipment = (
       await collector.post('/shipping/shipments', {
         itemIds: [itemA.id, itemB.id],
         ...DESTINATION,
       })
     ).body;
-    expect(shipment.code).toMatch(/^SHP-/); // Requirement 9.4
+    expect(shipment.code).toMatch(/^SHP-/);
     expect(shipment.itemIds).toHaveLength(2);
 
     const rates = (await collector.get(`/shipping/shipments/${shipment.id}/rates`)).body as {
@@ -59,7 +45,6 @@ describe('SHP outbound shipping', () => {
     });
     expect(selected.status).toBe(201);
 
-    // Operator closes the request with the structured fulfillment form (Req 5.3).
     const dispatched = await operator.post(`/shipping/shipments/${shipment.id}/dispatch`, {
       scannedItemIds: [itemA.id, itemB.id],
       ...FULFILLMENT,
@@ -99,11 +84,6 @@ describe('SHP outbound shipping', () => {
   });
 
   it('checks the labels the operator scanned, not the ids the bench was sent', async () => {
-    /**
-     * A scanner reads the barcode on the label (the id is printed nowhere), so
-     * that is what the bench sends and what has to match. Sending the
-     * shipment's own item ids back would compare the shipment with itself.
-     */
     const operator = await signIn(SEED.operator);
     const [itemA, itemB] = await Promise.all([
       intakeFor(operator, SEED.collector, { typeClass: 'trading_card' }),
@@ -123,19 +103,16 @@ describe('SHP outbound shipping', () => {
       serviceLevel: rates[0].serviceLevel,
     });
 
-    // The shipment says what is on each label, so the bench can check a scan.
     const detail = (await operator.get(`/shipping/shipments/${shipment.id}`)).body;
     expect(detail.items, 'the shipment does not say what is on its labels').toBeDefined();
     expect(detail.items.map((i: { barcode: string }) => i.barcode).sort()).toEqual([itemA.barcode, itemB.barcode].sort());
 
-    // One card short: refused, however the other was identified.
     const short = await operator.post(`/shipping/shipments/${shipment.id}/dispatch`, {
       scannedItemIds: [itemA.barcode],
       ...FULFILLMENT,
     });
     expect(short.status).toBe(409);
 
-    // Both labels, one read off by hand in lower case: accepted.
     const ok = await operator.post(`/shipping/shipments/${shipment.id}/dispatch`, {
       scannedItemIds: [itemA.barcode, String(itemB.serialNumber).toLowerCase()],
       ...FULFILLMENT,
@@ -163,7 +140,6 @@ describe('SHP outbound shipping', () => {
       serviceLevel: rates[0].serviceLevel,
     });
 
-    // No carrier / weight / notes → the request cannot be closed.
     const incomplete = await operator.post(`/shipping/shipments/${shipment.id}/dispatch`, {
       scannedItemIds: [item.id],
     });

@@ -17,20 +17,16 @@ import {
 } from '../../../shared/ui/primitives';
 import { IconBell } from '../../../shared/ui/icons';
 
-/** One switch: an event type on a channel. */
 interface ChannelPreference {
   channel: string;
   enabled: boolean;
-  /** True when this is the default rather than something the user chose. */
   isDefault: boolean;
-  /** Bad news cannot be switched off in the app. */
   mandatory: boolean;
 }
 
 interface PreferenceRow {
   eventType: string;
   category: string;
-  /** The server's own English label, used when this build has no translation. */
   label: string;
   channels: ChannelPreference[];
 }
@@ -41,20 +37,11 @@ interface PreferenceMatrix {
   events: PreferenceRow[];
 }
 
-/** Preferences are written with PUT through the shared client, so failures are `ApiError`s. */
 const putJson = (path: string, body: unknown) => api.put(`/notifications/${path}`, body);
 
 const TABS = ['feed', 'preferences'] as const;
 type NotificationsTab = (typeof TABS)[number];
 
-/**
- * Customer notification feed. Newest-first list plus per-event-type,
- * per-channel switches; the preference matrix comes from the server with its
- * defaults already resolved.
- *
- * The feed itself is owned by the shell (so the header bell and this page never
- * disagree); opening the page marks everything as seen.
- */
 export function NotificationsPage({
   feed,
   onSeen,
@@ -87,7 +74,6 @@ export function NotificationsPage({
     void loadPrefs();
   }, [loadPrefs]);
 
-  // Landing on the page means the user has looked at the feed.
   useEffect(() => {
     onSeen();
   }, [onSeen]);
@@ -104,7 +90,6 @@ export function NotificationsPage({
     }
   }
 
-  /** "Stop emailing me", in one action instead of one per event type. */
   async function toggleChannel(channel: string, enabled: boolean) {
     setSaving(true);
     try {
@@ -173,8 +158,6 @@ export function NotificationsPage({
               <SkeletonTable rows={6} columns={3} />
             ) : (
               <>
-                {/* The one thing somebody arriving here in irritation wants to
-                    say, without ticking a box per event type. */}
                 <div className="row" style={{ gap: 'var(--sp-2)', marginBlockEnd: 'var(--sp-4)', flexWrap: 'wrap' }}>
                   {prefs.channels.map((channel) => (
                     <span key={channel} className="row" style={{ gap: 'var(--sp-2)' }}>

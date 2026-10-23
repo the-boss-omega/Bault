@@ -6,17 +6,6 @@ import {
   type WithdrawalFacts,
 } from '../../apps/api/src/modules/adm/reconciliation';
 
-/**
- * The reconciliation rules, one fact pattern at a time.
- *
- * The integration suite proves the report against a live database, but the
- * live API cannot be made to produce most of the faults it exists to find (a
- * payment the provider took with no credit behind it, a credit minted for a
- * payment that failed), because the code refuses to create them. So the rules
- * are pinned here, on the pure function the service feeds, where every pattern
- * can be written down.
- */
-
 const AT = '2026-10-15T12:00:00.000Z';
 
 function topup(over: Partial<TopupFacts> = {}): TopupFacts {
@@ -174,13 +163,10 @@ describe('money out', () => {
   });
 
   it('matches a refused payout whose debit was credited back in full', () => {
-    // Older shape: the fee inside the withdrawal row.
     const r = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal({ reversedMinor: 20_000 })] });
     expect(r.mismatches).toEqual([]);
     expect(r.matched).toBe(1);
 
-    // Payout flow: the withdrawal is the net, the fee a row of its own, and the
-    // reversal gives back both.
     const net = withdrawal({ amount: 19_300, feeMinor: 0, debitedMinor: 20_000, reversedMinor: 20_000 });
     const flow = run({ payouts: [payout({ status: 'failed' })], withdrawals: [net] });
     expect(flow.mismatches).toEqual([]);
@@ -203,7 +189,6 @@ describe('money out', () => {
     expect(kinds(none)).toEqual(['payout_failed_but_debited']);
     expect(none.mismatches[0]).toMatchObject({ expectedMinor: 0, recordedMinor: 20_000 });
 
-    // The withdrawal came back and the fee did not.
     const part = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal({ reversedMinor: 19_300 })] });
     expect(kinds(part)).toEqual(['payout_failed_but_debited']);
     expect(part.mismatches[0]).toMatchObject({ expectedMinor: 0, recordedMinor: 700 });

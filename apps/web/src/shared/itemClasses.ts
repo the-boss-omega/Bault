@@ -1,32 +1,13 @@
 import type { MessageKey, TranslateFn } from './i18n';
 
-/**
- * The SPA's mirror of the API's item taxonomy.
- *
- * The keys here must match `apps/api/src/modules/inv/item-classes.ts` by value,
- * the same arrangement `walletRequests.ts` has with `wallet-request.rules.ts`.
- * The API enforces the list (an unknown class is rejected at intake); this
- * module lets the operator pick from it.
- *
- * Labels are message keys here instead of the API's English `label`, because
- * the intake console runs in Hebrew by default.
- */
-
 export interface ItemClassOption {
   key: string;
   labelKey: MessageKey;
-  /** Mirrors the API's flag; drives the oversized hint and bin lookup at intake. */
   oversized: boolean;
-  /** Mirrors the API's flag; hides the lot controls where they mean nothing. */
   lotEligible: boolean;
-  /**
-   * Mirrors the API's per-class threshold. Only cards carry one: the
-   * five-or-fewer rule is a card rule, and four sealed boxes are four boxes.
-   */
   lotMinSize?: number;
 }
 
-/** Mirrors the API's `LOT_MIN_SIZE`, the card-lot threshold. */
 export const LOT_MIN_SIZE = 6;
 
 export const ITEM_CLASSES: readonly ItemClassOption[] = [
@@ -50,18 +31,24 @@ export function itemClassOption(key: string): ItemClassOption | undefined {
   return CLASS_BY_KEY.get(key);
 }
 
-/**
- * Label for a class key. Falls back to the raw key, because historical items
- * carry free-text values from before the taxonomy existed.
- */
 export function itemClassLabel(t: TranslateFn, key: string): string {
   const option = CLASS_BY_KEY.get(key);
   return option ? t(option.labelKey) : key;
 }
 
-/* ============================================================
-   Disposal vocabulary
-   ============================================================ */
+export function itemName(t: TranslateFn, item: { description?: string | null; typeClass: string }): string {
+  return item.description || itemClassLabel(t, item.typeClass);
+}
+
+export function itemPickText(
+  t: TranslateFn,
+  item: { serialNumber?: string | null; description?: string | null; typeClass: string },
+): string {
+  return [item.serialNumber, itemName(t, item)]
+    .filter((part): part is string => Boolean(part))
+    .map((part) => `\u2068${part}\u2069`)
+    .join(' · ');
+}
 
 export const DISPOSAL_CATEGORIES: readonly { key: string; labelKey: MessageKey }[] = [
   { key: 'gps_tracker', labelKey: 'disposal.category.gps_tracker' },
@@ -95,7 +82,6 @@ export function disposalOutcomeLabel(t: TranslateFn, key: string): string {
   return option ? t(option.labelKey) : key;
 }
 
-/** One row of `GET /me/disposals` or `GET /intake/disposals`. */
 export interface ArrivalDisposal {
   id: string;
   code: string;
@@ -104,6 +90,5 @@ export interface ArrivalDisposal {
   description: string;
   notes: string;
   occurredAt: string;
-  /** Present only on the staff-wide list. */
   ownerUsername?: string | null;
 }

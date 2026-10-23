@@ -5,14 +5,6 @@ import { purgeExpiredSessions } from '../../apps/worker/src/jobs/session-cleanup
 import { JobName } from '../../apps/worker/src/jobs/registry';
 import { createUser, testPool } from './helpers/db';
 
-/**
- * Expired sign-in sessions are deleted a month after they stop working.
- *
- * Otherwise `login_session` grows by one row per sign-in forever, each holding
- * a token hash for a session nobody can use. A month is kept so
- * "was that me?" still has an answer for recent activity; the permanent record
- * of who signed in is `login_attempt`, which is append-only and untouched here.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();

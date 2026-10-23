@@ -19,7 +19,6 @@ import { makeItemBarcode, makeItemSerial } from '../inv/labels';
 import { transaction } from './mkt.schema';
 import { houseListing, houseOrder } from './house.schema';
 
-/** The account the store's takings are credited to — the same custodian that owns buyouts and donations. */
 const PLATFORM_EMAIL = 'platform@bault.dev';
 
 export interface HouseListingInput {
@@ -41,26 +40,6 @@ export interface HousePurchaseResult {
   replayed?: boolean;
 }
 
-/**
- * The Bault store: cards the business sells itself.
- *
- * A marketplace sale moves an item that already exists from one owner to
- * another. A store sale CREATES the item: Bault's own stock was never booked in,
- * so it has no serial, no barcode and no record.
- *
- * Ownership is the thing this system is the authority on, so the item is minted
- * in the purchase transaction, with the money: a serial, a barcode, the buyer as
- * sole owner, a custody event, lifecycle `received`, no bin. The buyer sees it
- * in their vault at once, and cannot list or ship it until it is on a shelf,
- * which is true.
- *
- * The part that cannot be transactional — finding the copy, sticking its label on
- * and shelving it — is an order in the warehouse queue, and `stow` finishes it.
- *
- * No intake fee is charged at either step. Intake is what Bault charges to take
- * custody of somebody else's card; this card was Bault's, and its price is the
- * whole of what the buyer pays for it arriving in their vault.
- */
 @Injectable()
 export class HouseStoreService {
   constructor(
@@ -73,11 +52,6 @@ export class HouseStoreService {
     private readonly media: MediaService,
   ) {}
 
-  /* ------------------------------------------------------------------
-     The shelf a collector sees
-     ------------------------------------------------------------------ */
-
-  /** What can be bought right now. A sold-out product is not a product on a shelf. */
   listForSale() {
     return this.db
       .select({
@@ -96,11 +70,6 @@ export class HouseStoreService {
       .orderBy(desc(houseListing.createdAt));
   }
 
-  /* ------------------------------------------------------------------
-     Managing the store (admin)
-     ------------------------------------------------------------------ */
-
-  /** Every product, sold out and removed included — the admin is the one who restocks. */
   listAll() {
     return this.db.select().from(houseListing).orderBy(desc(houseListing.createdAt));
   }
@@ -129,49 +98,46 @@ export class HouseStoreService {
     return created!;
   }
 
-  /** Reprice, restock, or take off sale. What was already sold is untouched either way. */
-  async update(id: string, patch: { askingPrice?: number; stock?: number; status?: 'active' | 'removed' }) {
-    const [updated] = await this.db
-      .update(houseListing)
-      .set({
-        ...(patch.askingPrice !== undefined ? { askingPrice: patch.askingPrice } : {}),
-        ...(patch.stock !== undefined ? { stock: patch.stock } : {}),
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(houseListing.id, id))
-      .returning();
-    if (!updated) throw AppError.notFound('Store listing not found');
-    return updated;
+  async update(
+    id: string,
+    patch: { askingPrice?: number; stock?: number; expectedStock?: number; status?: 'active' | 'removed' },
+  ) {
+    if (patch.stock !== undefined && patch.expectedStock === undefined) {
+      throw AppError.validation('Say which stock figure this replaces (expectedStock), so a copy sold meanwhile is not put back on sale.');
+    }
+    return this.db.transaction(async (tx) => {
+      const [current] = await tx.select().from(houseListing).where(eq(houseListing.id, id)).for('update').limit(1);
+      if (!current) throw AppError.notFound('Store listing not found');
+      if (patch.stock !== undefined && current.stock !== patch.expectedStock) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `The stock has changed since you read it: ${current.stock} left now. Check the figure and save again.`,
+          409,
+          { stock: current.stock },
+        );
+      }
+      const [updated] = await tx
+        .update(houseListing)
+        .set({
+          ...(patch.askingPrice !== undefined ? { askingPrice: patch.askingPrice } : {}),
+          ...(patch.stock !== undefined ? { stock: patch.stock } : {}),
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(houseListing.id, id))
+        .returning();
+      return updated!;
+    });
   }
 
-  /* ------------------------------------------------------------------
-     Buying one
-     ------------------------------------------------------------------ */
-
   async purchase(buyerId: string, listingId: string, idempotencyKey?: string): Promise<HousePurchaseResult> {
-    /**
-     * A generated key when the client sent none, NOT one derived from the buyer
-     * and the listing. The marketplace can derive one because a listing is a
-     * single item and can only ever be bought once; a store product has copies,
-     * and a key built from (buyer, product) would answer a collector's second
-     * copy with the receipt for their first.
-     */
     const key = idempotencyKey?.trim() || randomUUID();
     const endpoint = `house-purchase:${listingId}`;
 
     return this.db.transaction(async (tx): Promise<HousePurchaseResult> => {
-      /**
-       * The key is claimed before anything else, inside this transaction. The
-       * product lock below only QUEUES two requests, and each would then buy a
-       * copy; a second request with the same key waits on this claim instead and
-       * replays the first one's order.
-       */
       const { replay } = await this.idempotency.claim(tx as Database, key, endpoint, buyerId);
       if (replay) return { ...(replay.body as HousePurchaseResult), replayed: true };
 
-      // The lock is what makes the last copy sell once: a second buyer blocks
-      // here, then reads a stock of zero.
       const [product] = await tx
         .select()
         .from(houseListing)
@@ -195,7 +161,6 @@ export class HouseStoreService {
         throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
       }
 
-      // The item first, so the ledger rows can name the transaction that made it.
       const serialNumber = makeItemSerial();
       const created = await this.custody.createWithIntake(tx, {
         ownerId: buyerId,
@@ -206,7 +171,6 @@ export class HouseStoreService {
         conditionGrade: product.conditionGrade ?? undefined,
         oversized: itemClass(product.typeClass)?.oversized ?? false,
         actorId: buyerId,
-        // On the record, not on a shelf. `stow` moves it on.
         lifecycleState: 'received',
       });
 
@@ -220,8 +184,6 @@ export class HouseStoreService {
           sellerId: platformId,
           price,
           fee: 0,
-          // What was on the shelf at the moment it was bought, so a later
-          // reprice cannot rewrite what this buyer was charged for.
           frozenPricing: {
             source: 'house_store',
             houseListingId: product.id,
@@ -244,8 +206,6 @@ export class HouseStoreService {
 
       await tx
         .update(houseListing)
-        // Relative, so the `stock >= 0` CHECK refuses an oversell by itself
-        // rather than being handed an absolute figure it cannot question.
         .set({ stock: sql`${houseListing.stock} - 1`, updatedAt: new Date() })
         .where(eq(houseListing.id, product.id));
 
@@ -273,11 +233,6 @@ export class HouseStoreService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     The warehouse half
-     ------------------------------------------------------------------ */
-
-  /** Sold copies still in the store's box, oldest first — the order they were paid for. */
   queue() {
     return this.db
       .select({
@@ -303,14 +258,6 @@ export class HouseStoreService {
       .orderBy(asc(houseOrder.createdAt));
   }
 
-  /**
-   * The label is on the copy; put it on a shelf.
-   *
-   * The shelf rules are intake's: a named bin must be in service, and without one
-   * the directed stow picks the emptiest shelf of the right kind. A photograph of
-   * THIS copy may be attached here; the store listing only ever had a picture of
-   * the print.
-   */
   async stowOrder(
     operatorId: string,
     orderId: string,
@@ -332,8 +279,6 @@ export class HouseStoreService {
 
       const photoKeys = (input.photoKeys ?? []).map((k) => k.trim()).filter(Boolean);
       if (photoKeys.length > 0) {
-        // Bench photographs of this copy, so the same rule as intake: a key this
-        // API minted for an item, uploaded by this operator or moments ago.
         await this.media.assertAttachable(tx, photoKeys, { purpose: 'item_intake', actorId: operatorId });
         await tx.insert(itemImage).values(
           photoKeys.map((objectKey, index) => ({ itemId: it.id, type: 'intake' as const, version: index + 1, objectKey })),
@@ -345,8 +290,6 @@ export class HouseStoreService {
         .set({ status: 'stowed', stowedBy: operatorId, stowedAt: new Date() })
         .where(eq(houseOrder.id, order.id));
 
-      // The same event intake emits, so the buyer hears "it is in your vault" in
-      // the words every other arrival uses.
       await this.outbox.emit(tx, {
         aggregateType: 'item',
         aggregateId: it.id,

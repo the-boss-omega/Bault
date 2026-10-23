@@ -1,20 +1,8 @@
-/**
- * Minimal cookie-aware HTTP client for e2e integration tests.
- *
- * These suites run against a LIVE dev server (pnpm dev:api) with a freshly
- * migrated + seeded database. This keeps tests exercising the real HTTP stack,
- * guards, DB transactions, and append-only triggers — end to end.
- */
 export const BASE = process.env.API_URL ?? 'http://localhost:3000/api/v1';
 
 export class Client {
   private cookie = '';
 
-  /**
-   * `base` is for the suites that start a second API with a different
-   * configuration (the manual payout mode) and must talk to that one rather
-   * than the one under `API_URL`.
-   */
   constructor(private readonly base: string = BASE) {}
 
   async request(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -33,66 +21,37 @@ export class Client {
     return { status: res.status, body: json as any };
   }
 
-  /** True once a response has set a cookie, which for these routes is the session. */
   get hasSession(): boolean {
     return this.cookie !== '';
   }
 
   get = (p: string) => this.request('GET', p);
-  /** `headers` carries what a body cannot, such as an `Idempotency-Key`. */
   post = (p: string, b?: unknown, headers?: Record<string, string>) => this.request('POST', p, b, headers);
   patch = (p: string, b?: unknown) => this.request('PATCH', p, b);
-  /** For the two PUT routes, `/notifications/preferences` and `.../channel`. */
   put = (p: string, b?: unknown) => this.request('PUT', p, b);
   del = (p: string) => this.request('DELETE', p);
 
-  /**
-   * A GET whose body is not JSON — a CSV export, say — returned as text with
-   * the headers that describe it. `request` parses every body as JSON and
-   * would hand back `null` for exactly the responses whose content matters.
-   */
   async getText(path: string) {
     const res = await fetch(this.base + path, { headers: this.cookie ? { cookie: this.cookie } : {} });
     return { status: res.status, headers: res.headers, text: await res.text() };
   }
 }
 
-/**
- * Where accounts created BY TESTS live.
- *
- * These suites register real accounts against a real database. At `bault.dev`,
- * the seeded personas' domain, they would sit in the product-facing
- * Management > Users table, indistinguishable from customers. `.test` is
- * reserved by RFC 2606, so this domain can never be a real address, and
- * `AdmService.listUsers` filters it out by exact domain match.
- *
- * Mirrors `FIXTURE_EMAIL_DOMAIN` in `apps/api/src/shared/fixtures.ts`; matched
- * by value so the test tree and the API stay independent.
- */
 export const FIXTURE_EMAIL_DOMAIN = 'fixture.bault.test';
 
-/** A unique fixture address. `label` only aids debugging a failed run. */
 export function fixtureEmail(label: string): string {
   return `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@${FIXTURE_EMAIL_DOMAIN}`;
 }
 
-/** The accounts created by `pnpm --filter @bault/api db:seed`. */
 export const SEED_PASSWORD = '11111111';
 export const SEED = {
   collector: 'red@bault.dev',
   collector2: 'golden@bault.dev',
-  /**
-   * A third collector, seeded as a migrated account: it carries a legacy OW-
-   * intake ID, its migrated name is flagged for review, and its original single
-   * display name is kept read-only. Tests use it both as an ordinary third party
-   * and to prove the migrated-account paths work.
-   */
   collector3: 'veteran@bault.dev',
   operator: 'hermon@bault.dev',
   admin: 'eldar@bault.dev',
 } as const;
 
-/** The same accounts by username — login takes either identifier. */
 export const SEED_USERNAME = {
   collector: 'red',
   collector2: 'golden',
@@ -101,15 +60,6 @@ export const SEED_USERNAME = {
   admin: 'eldar',
 } as const;
 
-/**
- * Sign in a seeded account and return an authenticated client. `identifier` is
- * an email OR a username — login accepts either.
- *
- * A right password for an account with two-factor sign-in is a 200 too, but it
- * answers with a challenge and sets no cookie, so a client handed back then
- * would make every later request anonymously. That is refused here; the
- * two-factor suites sign such an account in with the helpers in `./mfa`.
- */
 export async function signIn(identifier: string, password = SEED_PASSWORD, base = BASE): Promise<Client> {
   const c = new Client(base);
   const res = await c.post('/auth/login', { identifier, password });
@@ -121,12 +71,6 @@ export async function signIn(identifier: string, password = SEED_PASSWORD, base 
   return c;
 }
 
-/**
- * The account's permanent USERNAME — the customer-facing identifier every
- * workflow names an account by. `/me/profile` returns no OW- intake code, so a
- * test that needs to name an owner asks for the username exactly as an operator
- * would.
- */
 export async function usernameOf(email: string): Promise<string> {
   const c = await signIn(email);
   const me = await c.get('/me/profile');
@@ -134,15 +78,6 @@ export async function usernameOf(email: string): Promise<string> {
   return me.body.username as string;
 }
 
-/**
- * Put money in a wallet the only way the platform allows: raise a cash-in
- * REQUEST as the customer, then have an administrator approve and complete it.
- * Submitting a request changes nothing, and only a completed request writes a
- * ledger row. There is no shortcut, including for tests.
- *
- * `customerEmail` must not be the admin's own account: separation of duties bars
- * an administrator from deciding a request they raised themselves.
- */
 export async function fundWallet(customerEmail: string, amountMinor: number): Promise<void> {
   if (customerEmail === SEED.admin) {
     throw new Error(
@@ -155,8 +90,6 @@ export async function fundWallet(customerEmail: string, amountMinor: number): Pr
     amountMinor,
     currency: 'USD',
     fundingSource: 'bank_transfer',
-    // Unique per call, so two fundings of the same amount are not refused as
-    // duplicates of one another.
     reference: `test-funding-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
   });
   if (created.status !== 201) {
@@ -175,7 +108,6 @@ export async function fundWallet(customerEmail: string, amountMinor: number): Pr
   }
 }
 
-/** Ids of the seeded bins. Intake requires a bin — it is mandatory (Req 10.3). */
 export async function binIds(operator: Client): Promise<string[]> {
   const bins = await operator.get('/custody/bins');
   const ids = (bins.body as { id: string }[]).map((b) => b.id);
@@ -183,16 +115,11 @@ export async function binIds(operator: Client): Promise<string[]> {
   return ids;
 }
 
-/**
- * Intake one fresh item for a seeded owner, with the mandatory bin filled in.
- * Returns the created item record.
- */
 export async function intakeFor(
   operator: Client,
   ownerEmail: string,
   overrides: Record<string, unknown> = {},
 ) {
-  // Routed by USERNAME, exactly as the warehouse intake form does it.
   const [ownerUsername, bins] = await Promise.all([usernameOf(ownerEmail), binIds(operator)]);
   const res = await operator.post('/intake/items', {
     ownerUsername,

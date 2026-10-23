@@ -1,17 +1,6 @@
 import { registerDecorator, type ValidationOptions } from 'class-validator';
 import { shippingCountries, toCountryCode } from './countries';
 
-/**
- * A country field that holds a code a carrier rule can read.
- *
- * Written as a decorator rather than an `@IsIn([...])` so the refusal can say
- * something useful: `@IsIn` would list every code, which is a data dump rather
- * than an instruction.
- *
- * A full country NAME is accepted and normalised, because a person who typed
- * "United States" has said something unambiguous; only a value that names no
- * destination at all is refused.
- */
 export function IsShippableCountry(options?: ValidationOptions) {
   return function (object: object, propertyName: string) {
     registerDecorator({

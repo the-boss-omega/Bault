@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 
-/** Reactive media query. */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia(query).matches,
@@ -18,7 +17,6 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-/** True when the visitor asked their OS to reduce motion. */
 export function usePrefersReducedMotion(): boolean {
   return useMediaQuery('(prefers-reduced-motion: reduce)');
 }
@@ -42,13 +40,6 @@ function readSeenAt(): string {
   }
 }
 
-/**
- * The notification feed behind both the header bell and the notifications page.
- *
- * The API has no read/unread flag, so "new" is derived on the client from the
- * timestamp of the last time the user actually looked at the feed. That keeps the
- * badge meaningful without inventing a backend field.
- */
 export function useNotificationFeed() {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +68,6 @@ export function useNotificationFeed() {
     try {
       localStorage.setItem(SEEN_KEY, now);
     } catch {
-      /* ignore */
     }
     setSeenAt(now);
   }, []);

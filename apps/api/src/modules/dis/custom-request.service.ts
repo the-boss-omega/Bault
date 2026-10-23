@@ -12,29 +12,17 @@ import { item } from '../cst/cst.schema';
 import { ledgerRecord } from '../pay/pay.schema';
 import { ServiceRequestService } from './service.service';
 
-/** What a collector has to say to ask for something. */
 export interface CustomRequestInput {
-  /** The collectible it is about. Optional — some asks are about a shipment. */
   itemId?: string;
   summary: string;
   detail: string;
 }
 
-/** What an operator must fill in to put a price on one. */
 export interface CustomQuoteForm {
   priceMinor: number;
-  /** What they will actually do, in the operator's words. */
   scope: string;
 }
 
-/**
- * The stages at which a custom request can still be priced.
- *
- * Once the collector has accepted a quote they have paid it, so quoting again
- * would put it back to `quoted` and their next Accept would charge them twice
- * for the same work. A re-quote BEFORE they answer is allowed, so an operator
- * who mistyped a figure can correct it before anybody has agreed to it.
- */
 export const QUOTABLE_STAGES: readonly string[] = ['awaiting_quote', 'quoted'];
 
 export function assertQuotable(kind: string, stage: unknown): void {
@@ -48,26 +36,6 @@ export function assertQuotable(kind: string, stage: unknown): void {
   }
 }
 
-/**
- * "Can you also…": the request the service list does not have a button for,
- * such as sleeving four cards before they ship, weighing a box, or checking a
- * seal is intact.
- *
- * Unlike a support ticket, it has a price, an operator queue, a completion and
- * a link to the collectible it is about. It is an ordinary service request:
- * same queue, same fulfilment form, same appearance in the item's timeline. The
- * one difference is that **nobody knows what it costs until somebody reads
- * it**, so it is quoted before it is billed, the same shape as `buyout`:
- *
- *   1. the collector describes what they want — FREE, and billed nothing;
- *   2. an operator quotes a price and a scope, or declines with a reason;
- *   3. the collector accepts the quote, and THAT is what bills the wallet;
- *   4. the operator does the work and completes it.
- *
- * ASKING IS FREE ON PURPOSE. A charge on the question would stop people asking,
- * and the questions are how Bault finds out which services it ought to be
- * selling as standard.
- */
 @Injectable()
 export class CustomRequestService {
   constructor(
@@ -78,7 +46,6 @@ export class CustomRequestService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /** Step 1 — the collector describes what they want. */
   async ask(requesterId: string, input: CustomRequestInput) {
     const summary = input.summary?.trim() ?? '';
     const detail = input.detail?.trim() ?? '';
@@ -95,12 +62,6 @@ export class CustomRequestService {
         if (!it || it.ownerId !== requesterId) throw AppError.forbidden('Not your item');
       }
 
-      /**
-       * `free: true` — this is the only service request that creates nothing to
-       * bill. The duplicate guard in `ServiceRequestService.create` is bypassed
-       * for the same reason: two different custom asks about one collectible are
-       * two different pieces of work, unlike two photo shoots.
-       */
       const created = await this.requests.create(tx, {
         type: 'custom',
         requesterId,
@@ -121,14 +82,6 @@ export class CustomRequestService {
     });
   }
 
-  /**
-   * Step 2 — an operator puts a price and a scope on it.
-   *
-   * The scope is required and is not decoration. A collector accepting a figure
-   * is agreeing to whatever the operator understood the ask to be, and "we will
-   * do it for $30" with nothing behind it is not something anybody can agree to
-   * — it is the same reason a buyout quote must carry its rationale.
-   */
   async quote(operatorId: string, requestId: string, form: CustomQuoteForm) {
     if (!Number.isInteger(form.priceMinor) || form.priceMinor <= 0) {
       throw AppError.validation('Quote an amount.');
@@ -162,19 +115,6 @@ export class CustomRequestService {
     });
   }
 
-  /**
-   * Step 2b — the operator says no, and says why.
-   *
-   * A decline is a real outcome. "We cannot do that" with no reason leaves the
-   * collector to guess whether to ask differently or stop asking.
-   *
-   * It can come after the collector has accepted and paid, when the operator
-   * picks the card up and finds the work cannot be done after all. Refusing the
-   * decline then would leave a paid request with no way to close it except
-   * completing work that was never done, so a decline after payment REFUNDS, in
-   * the same transaction: everything charged against the request comes back as
-   * a `service_refund`, and the request is closed.
-   */
   async declineToQuote(operatorId: string, requestId: string, reason: string) {
     const text = reason?.trim() ?? '';
     if (text.length < 5) throw AppError.validation('Say why this cannot be done.');
@@ -186,7 +126,6 @@ export class CustomRequestService {
         throw new AppError(ErrorCode.CONFLICT, 'That request is already closed.', 409);
       }
 
-      // The request, then the wallet: the order accepting the quote takes them in.
       await this.ledger.lockWallet(req.requesterId, tx as Database);
       const refundedMinor = await this.refundable(tx as Database, req.requesterId, req.id);
       if (refundedMinor > 0) {
@@ -220,11 +159,6 @@ export class CustomRequestService {
     });
   }
 
-  /**
-   * What has been charged against this request and not yet given back, from the
-   * ledger itself — so a refund is exactly what left the wallet for it, never a
-   * figure re-read from the quote.
-   */
   private async refundable(tx: Database, userId: string, requestId: string): Promise<number> {
     const [row] = await tx
       .select({
@@ -244,13 +178,6 @@ export class CustomRequestService {
     return Math.max(0, Number(row?.net ?? '0'));
   }
 
-  /**
-   * Step 3 — the collector accepts the quote, and only now is anything charged.
-   *
-   * The price is re-read from the request inside the transaction rather than
-   * trusted from the caller, so what is billed is what was quoted and not a
-   * figure supplied by whoever pressed the button.
-   */
   async acceptQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
@@ -276,17 +203,6 @@ export class CustomRequestService {
         );
       }
 
-      /**
-       * Written straight to the ledger rather than through the billing port.
-       *
-       * Every other charge in the platform resolves its amount from a pricing
-       * RULE — that is what `BillableAction` is for, and it deliberately carries
-       * no amount, so no caller can invent a figure. A custom request has no
-       * rule by definition: the price is the one an operator quoted for this
-       * piece of work and the collector then agreed to. It is recorded as an
-       * ordinary `fee` debit against the request, which is exactly how
-       * consignment records its commission.
-       */
       await this.ledger.record(
         {
           userId: requesterId,
@@ -307,7 +223,6 @@ export class CustomRequestService {
     });
   }
 
-  /** Step 3b — the collector says no. Nothing was charged, so nothing unwinds. */
   async declineQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
@@ -322,12 +237,6 @@ export class CustomRequestService {
     });
   }
 
-  /**
-   * Step 4 — the work is done.
-   *
-   * Refuses a request the collector has not accepted, so nobody can do
-   * unrequested work and then present it as complete.
-   */
   async complete(operatorId: string, requestId: string, notes: string) {
     const text = notes?.trim() ?? '';
     if (text.length < 5) throw AppError.validation('Record what was done.');

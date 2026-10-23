@@ -1,28 +1,11 @@
-/**
- * What escrow costs, and the rules that decide whether a deal can be raised.
- *
- * Pure data and predicates: it talks to nothing, so all of it is directly
- * testable, and the SPA mirrors the shape while fetching the actual figures
- * from `GET /escrow/terms`.
- */
 import { formatMinor } from '../../shared/money';
 
-/** Bault's cut, in basis points of the agreed value. */
-export const ESCROW_FEE_BPS = 100; // 1.00%
+export const ESCROW_FEE_BPS = 100;
 
-/** The smallest fee worth doing the work for. */
-export const ESCROW_MINIMUM_FEE_MINOR = 2_500; // $25
+export const ESCROW_MINIMUM_FEE_MINOR = 2_500;
 
-/**
- * The floor under a deal. Escrow is a person receiving, examining, holding and
- * then vaulting or shipping a card; below this the fee cannot cover that work.
- */
-export const ESCROW_MINIMUM_VALUE_MINOR = 50_000; // $500
+export const ESCROW_MINIMUM_VALUE_MINOR = 50_000;
 
-/**
- * The pricing-rule action for the escrow fee. The fee is charged from the
- * constants above; a rule under this action is only reported on the terms.
- */
 export const ESCROW_FEE_ACTION = 'escrow_fee';
 
 export function escrowFeeMinor(valueMinor: number): number {
@@ -35,12 +18,6 @@ export interface EscrowProblem {
   message: string;
 }
 
-/**
- * Whether this deal can be raised at all.
- *
- * Checked before anything is created, because every one of these is something
- * the raiser can still fix before anybody posts a card.
- */
 export function checkDeal(input: {
   valueMinor: number;
   description: string;
@@ -80,11 +57,6 @@ export function checkDeal(input: {
     });
   }
 
-  /**
-   * A card cannot be placed into a vault that does not exist: an external
-   * buyer's card has to be shipped to them. Refused at submission with the
-   * reason rather than discovered at settlement.
-   */
   if (input.settlement === 'buyer_vault') {
     const buyerIsExternal = input.raiserRole === 'seller' && !hasAccount;
     if (buyerIsExternal) {
@@ -98,12 +70,6 @@ export function checkDeal(input: {
   return problems;
 }
 
-/**
- * Who pays the fee.
- *
- * The party who RAISED the deal, because they chose the service and are
- * certainly a Bault account, which the other side may not be.
- */
 export function feePayer(deal: { raisedBy: string }): string {
   return deal.raisedBy;
 }

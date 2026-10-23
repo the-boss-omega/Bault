@@ -1,10 +1,5 @@
 import type { MessageKey, TranslateFn } from './i18n';
 
-/**
- * Service-request type/status labels, shared by the customer and operator views.
- * These map the API's wire values onto catalogue keys; use the helpers below so an
- * unrecognised value degrades to the raw string instead of a blank cell.
- */
 export const SERVICE_TYPE_KEY: Record<string, MessageKey> = {
   professional_photography: 'service.type.professional_photography',
   third_party_grading: 'service.type.third_party_grading',

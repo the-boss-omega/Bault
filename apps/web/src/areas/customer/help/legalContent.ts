@@ -1,73 +1,24 @@
-/**
- * Legal documents shown in FAQ & Legal > Legal Terms, and at sign-up.
- *
- * The Terms of Service, Privacy Policy and Cookie notice are drafts, and say so:
- *
- *   - Every draft carries `draft: true`, the banner in `DRAFT_NOTICE`, and the
- *     version in `TERMS_VERSION`. The banner is rendered above the text wherever
- *     a draft is shown: here and on the sign-up form.
- *   - Every statement in them describes something the code does, and names
- *     where; the commit that added them lists what each clause rests on. What
- *     the code cannot decide (the legal entity, the governing law, liability,
- *     lawful bases, retention periods) is left as a bracketed instruction to
- *     counsel. They are not ready to publish until a lawyer has replaced every
- *     bracket and removed the banner.
- *   - Figures that are configuration (the debt policy, the prices) are not
- *     printed; the documents point to where the app shows the current value:
- *     the "Current figures" panel above them, fed by `GET /content/account-terms`,
- *     and the price list.
- *
- * `TERMS_VERSION` is what sign-up sends and what the API records against the
- * account. It must equal `CURRENT_TERMS_VERSION` in
- * `apps/api/src/modules/acc/terms.ts`; the API refuses any other, and
- * `tests/web/faq-legal.test.ts` fails if the two disagree. Changing a single
- * word of a draft means a new version in both places.
- *
- * The Account Use & Balance Policy is Bault's own; every clause in it states a
- * rule the code enforces. The SIL Open Font License is reproduced because
- * shipping the fonts requires it. It names the fonts bundled in `assets/fonts`,
- * whose licence file is served at /fonts/OFL.txt.
- *
- * Body text is English and is not translated. Rendering a legal text in a
- * language its author did not write it in creates a second version that can
- * disagree with the first; the surrounding page chrome is localised, the
- * governing words are not.
- */
-
 export interface LegalSection {
-  /** Stable anchor id, used by the table of contents and deep links. */
   id: string;
   heading: string;
-  /** Verbatim body text. Rendered pre-wrapped: line breaks are meaningful. */
   body: string;
 }
 
 export interface LegalDocument {
   id: string;
   title: string;
-  /** Where the text comes from, shown under the title (an i18n key). */
   provenance: string;
-  /** ISO date this document was last revised by its author. */
   lastUpdated: string;
-  /** A plain-text file the viewer can offer for download, or null. */
   downloadPath: string | null;
-  /**
-   * True for a document that has not been reviewed by a lawyer. A draft is
-   * shown with `DRAFT_NOTICE` above it, and carries `version`.
-   */
   draft?: boolean;
-  /** The terms version this text belongs to, which sign-up records. */
   version?: string;
   sections: LegalSection[];
 }
 
-/** The version of the three drafts accepted at sign-up. See the API's `terms.ts`. */
 export const TERMS_VERSION = '2026-10-draft-1';
 
-/** Shown, verbatim and visibly, above every draft. */
 export const DRAFT_NOTICE = 'DRAFT — must be reviewed by a lawyer before launch';
 
-/** The documents accepted, together, by the sign-up checkbox. */
 export const CONSENT_DOCUMENT_IDS = ['terms-of-service', 'privacy-policy', 'cookie-notice'] as const;
 
 const section = (id: string, heading: string, ...paragraphs: string[]): LegalSection => ({
@@ -77,10 +28,6 @@ const section = (id: string, heading: string, ...paragraphs: string[]): LegalSec
 });
 
 const COUNSEL = (what: string) => `[TO BE COMPLETED BY COUNSEL: ${what}]`;
-
-/* ============================================================
-   Terms of Service — DRAFT
-   ============================================================ */
 
 const TERMS_OF_SERVICE: LegalDocument = {
   id: 'terms-of-service',
@@ -188,10 +135,6 @@ const TERMS_OF_SERVICE: LegalDocument = {
   ],
 };
 
-/* ============================================================
-   Privacy Policy — DRAFT
-   ============================================================ */
-
 const PRIVACY_POLICY: LegalDocument = {
   id: 'privacy-policy',
   title: 'Privacy Policy',
@@ -263,10 +206,6 @@ const PRIVACY_POLICY: LegalDocument = {
   ],
 };
 
-/* ============================================================
-   Cookie notice — DRAFT
-   ============================================================ */
-
 const COOKIE_NOTICE: LegalDocument = {
   id: 'cookie-notice',
   title: 'Cookie notice',
@@ -304,10 +243,6 @@ const COOKIE_NOTICE: LegalDocument = {
     ),
   ],
 };
-
-/* ============================================================
-   Published
-   ============================================================ */
 
 export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   TERMS_OF_SERVICE,

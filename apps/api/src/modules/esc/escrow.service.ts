@@ -27,7 +27,6 @@ import { MembershipService } from '../mem/membership.service';
 
 type Deal = typeof escrowDeal.$inferSelect;
 
-/** Who is asking. Staff may act on any deal; a collector only on their own. */
 export interface EscrowActor {
   id: string;
   role: string;
@@ -37,22 +36,6 @@ function isStaff(actor: EscrowActor): boolean {
   return actor.role === 'warehouse_operator' || actor.role === 'admin';
 }
 
-/**
- * Middleman and escrow on a private deal.
- *
- * A state machine with two gates:
- *
- *   proposed → agreed → funded → inspecting → awaiting_release → settled
- *                                                              ↘ returned
- *
- * The FUNDING gate stops a seller posting a card to a stranger who never had
- * the money. The INSPECTION gate stops a buyer paying for a card that is not
- * what it was said to be.
- *
- * A hold is a ledger DEBIT against the buyer, so the amount leaves their
- * spendable balance (Bault keeps no stored balances, Principle IV). A return
- * credits it straight back; a settlement credits the seller instead.
- */
 @Injectable()
 export class EscrowService {
   constructor(
@@ -64,14 +47,12 @@ export class EscrowService {
     private readonly memberships: MembershipService,
   ) {}
 
-  /** The published terms, so somebody can read the price before committing. */
   async terms() {
     const rule = await this.pricing.tryPrice(ESCROW_FEE_ACTION);
     return {
       feeBps: ESCROW_FEE_BPS,
       minimumFeeMinor: ESCROW_MINIMUM_FEE_MINOR,
       minimumValueMinor: ESCROW_MINIMUM_VALUE_MINOR,
-      /** A configured rule, reported only; the fee is charged from `ESCROW_FEE_BPS`. */
       configuredBps: rule?.snapshot ? rule.amount.amount : null,
     };
   }
@@ -101,7 +82,6 @@ export class EscrowService {
     });
   }
 
-  /** The two sides, resolved. `null` on a side means an external party. */
   private sides(deal: Deal): { buyerId: string | null; sellerId: string | null } {
     if (deal.raiserRole === 'buyer') {
       return { buyerId: deal.raisedBy, sellerId: deal.counterpartyUserId };
@@ -116,13 +96,6 @@ export class EscrowService {
     return row;
   }
 
-  /**
-   * Load a deal for a caller.
-   *
-   * A deal names two people and a price, so it is never addressable by id
-   * alone. `notFound` rather than `forbidden` on a miss: telling a stranger
-   * that some other pair's deal exists is itself a leak.
-   */
   private async loadFor(dealId: string, actor: EscrowActor): Promise<Deal> {
     const deal = await this.load(dealId);
     if (isStaff(actor)) return deal;
@@ -131,13 +104,6 @@ export class EscrowService {
     return deal;
   }
 
-  /**
-   * The deal again, under a row lock, still in a state that allows the step.
-   *
-   * Every step re-reads here inside its transaction before writing, so the
-   * second of two racing steps (a release and a return sent together) sees
-   * what the first one did and is refused.
-   */
   private async lockDeal(tx: Database, dealId: string, expected: readonly string[]): Promise<Deal> {
     const [row] = await tx.select().from(escrowDeal).where(eq(escrowDeal.id, dealId)).for('update').limit(1);
     if (!row) throw AppError.notFound('Deal not found');
@@ -154,10 +120,6 @@ export class EscrowService {
       );
     }
   }
-
-  /* ------------------------------------------------------------------
-     Raising
-     ------------------------------------------------------------------ */
 
   async raise(
     raiserId: string,
@@ -194,8 +156,6 @@ export class EscrowService {
     });
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
-    // Frozen here, so a later change to the fee does not reprice a deal two
-    // strangers already shook hands on (Principle V).
     const feeMinor = escrowFeeMinor(input.valueMinor);
 
     return this.db.transaction(async (tx) => {
@@ -238,13 +198,6 @@ export class EscrowService {
     });
   }
 
-  /**
-   * The other side agrees the terms.
-   *
-   * An account holder agrees for themselves. An external party cannot click
-   * anything, so an operator records that they agreed, and the record carries
-   * the operator's id so the confirmation is visibly second-hand.
-   */
   async agree(dealId: string, actor: EscrowActor, notes?: string) {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['proposed']);
@@ -284,21 +237,6 @@ export class EscrowService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     The money
-     ------------------------------------------------------------------ */
-
-  /**
-   * Hold the buyer's funds.
-   *
-   * Where the buyer holds a Bault balance this is a real ledger debit: the money
-   * leaves their spendable balance.
-   *
-   * Where the buyer is external, there is no wallet to debit. The money arrives
-   * off-platform and an operator attests to having received it; that is
-   * recorded as an attestation, with no ledger row, because the movement did
-   * not touch a Bault account.
-   */
   async fund(dealId: string, actor: EscrowActor, reference?: string) {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['agreed']);
@@ -344,8 +282,6 @@ export class EscrowService {
     }
 
     return this.db.transaction(async (tx) => {
-      // Under the deal lock and then the wallet lock, so two funding clicks
-      // cannot both pass the balance check and debit the hold twice.
       await this.lockDeal(tx, dealId, ['agreed']);
       const balance = await this.ledger.balanceOf(buyerId, tx);
       if (balance.amount < total) {
@@ -399,11 +335,6 @@ export class EscrowService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     The card, and the look at it
-     ------------------------------------------------------------------ */
-
-  /** The card has arrived and been booked into the vault. Operators only. */
   async receiveItem(dealId: string, operatorId: string, itemId: string) {
     const deal = await this.load(dealId);
     this.assertStatus(deal, ['funded']);
@@ -416,8 +347,6 @@ export class EscrowService {
         throw new AppError(ErrorCode.CONFLICT, `That item is ${it.lifecycleState}, not stored`, 409);
       }
       if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'That item is on hold', 409);
-      // The card a seller with an account puts into the deal has to be theirs,
-      // or settling would hand somebody else's card to the buyer.
       const { sellerId } = this.sides(deal);
       if (sellerId && it.ownerId !== sellerId) {
         throw new AppError(ErrorCode.CONFLICT, "That item is not the seller's", 409);
@@ -445,20 +374,12 @@ export class EscrowService {
         fromStatus: 'funded',
         toStatus: 'inspecting',
         actorId: operatorId,
-        // Who owned the card when it came in: settlement moves it only from them.
         metadata: { itemId, serialNumber: it.serialNumber, ownerId: it.ownerId },
       });
       return { status: 'inspecting' as const, itemId };
     });
   }
 
-  /**
-   * Record what the card turned out to be.
-   *
-   * The finding is written BEFORE either side is asked to release, so nobody
-   * agrees to something they have not been told. `matches: false` does not
-   * itself return the deal; it gives the buyer a reason to refuse.
-   */
   async inspect(
     dealId: string,
     operatorId: string,
@@ -505,17 +426,6 @@ export class EscrowService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     Release
-     ------------------------------------------------------------------ */
-
-  /**
-   * One side says it is satisfied. When both have, the deal settles.
-   *
-   * An external party's confirmation is attested by an operator, whose id is
-   * stored in `*ReleaseAttestedBy`, so a reader can always tell a first-hand
-   * confirmation from a second-hand one.
-   */
   async release(dealId: string, actor: EscrowActor, side?: 'buyer' | 'seller') {
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['awaiting_release']);
@@ -545,11 +455,6 @@ export class EscrowService {
         ? { buyerReleasedAt: now, buyerReleaseAttestedBy: attested ? actor.id : null }
         : { sellerReleasedAt: now, sellerReleaseAttestedBy: attested ? actor.id : null };
 
-    /**
-     * The release and, when it is the second one, the settlement, in ONE
-     * transaction under the deal lock, so both sides releasing at once cannot
-     * both settle and pay the seller twice.
-     */
     return this.custody.run(async (tx) => {
       const cur = await this.lockDeal(tx, dealId, ['awaiting_release']);
       const buyerDone = releasing === 'buyer' || cur.buyerReleasedAt !== null;
@@ -570,12 +475,6 @@ export class EscrowService {
     });
   }
 
-  /**
-   * Both sides are satisfied. Money to the seller, card to the buyer, fee taken.
-   *
-   * All of it in one transaction, so the seller is never paid without the card
-   * moving.
-   */
   private async settle(tx: Database, deal: Deal, actorId: string) {
     const dealId = deal.id;
     const { buyerId, sellerId } = this.sides(deal);
@@ -585,8 +484,6 @@ export class EscrowService {
       await this.assertOnItsWayToBuyer(tx, deal, sellerId);
     }
 
-    // The seller is paid what was agreed. Where they have no account the
-    // payout happens off-platform and is recorded rather than invented.
     if (sellerId) {
       await this.ledger.record(
         {
@@ -602,9 +499,6 @@ export class EscrowService {
       );
     }
 
-    // The fee falls on whoever raised the deal (`feePayer`). Their membership
-    // may waive it; the fee frozen on the deal is what they agreed to, and a
-    // waiver can only take from it (`MembershipService.waive`).
     const waiver = await this.memberships.waive(
       tx as Database,
       deal.raisedBy,
@@ -648,8 +542,6 @@ export class EscrowService {
       );
     }
 
-    // The card. Into the buyer's vault where they have one. An outside buyer's
-    // card has already left in a parcel (`assertOnItsWayToBuyer` above).
     if (deal.itemId && buyerId) {
       await this.custody.transferOwnership(tx, deal.itemId, buyerId, actorId, `escrow ${deal.code}`, {
         ownerId: sellerId ?? (await this.receivedFrom(tx, deal)),
@@ -681,18 +573,6 @@ export class EscrowService {
     return { status: 'settled' as const, paidMinor: deal.valueMinor, feeMinor: feeDue };
   }
 
-  /**
-   * An outside buyer is paid for with a parcel, so the seller is paid only once
-   * the parcel has gone. An outside buyer has no vault, so settlement moves no
-   * card; until the card is on its way the buyer's money stays held and the
-   * deal can still be returned. Settlement does not create the shipment itself
-   * because the deal carries no address, carrier or postage payer.
-   *
-   * "On its way" means a shipment of the seller's carrying this card that is
-   * past the point its owner can call it back: picked, packed, labelled or
-   * dispatched. A parcel that is merely paid for (`rates_selected`) does not
-   * count: the seller could cancel it the moment the money landed.
-   */
   private async assertOnItsWayToBuyer(tx: Database, deal: Deal, sellerId: string | null) {
     const [sent] = deal.itemId && sellerId
       ? await tx
@@ -717,13 +597,6 @@ export class EscrowService {
     }
   }
 
-  /**
-   * Who owned the card when it was booked into the deal, for a seller with no
-   * account. Settlement moves it only from them; if it has changed hands since,
-   * it is no longer the seller's to give. A deal booked in before the owner was
-   * recorded on the event falls back to the current owner, which still checks
-   * state and hold but cannot see a change of hands.
-   */
   private async receivedFrom(tx: Database, deal: Deal): Promise<string> {
     const [ev] = await tx
       .select({ metadata: escrowEvent.metadata })
@@ -738,15 +611,6 @@ export class EscrowService {
     return it.ownerId;
   }
 
-  /**
-   * Send it back.
-   *
-   * Money to the buyer, card stays with the seller. Open to either party and
-   * to staff from funding until settlement; the case it exists for is "the
-   * card is not what it was said to be", which an operator holding it finds.
-   *
-   * No fee is charged.
-   */
   async returnDeal(dealId: string, actor: EscrowActor, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
     const deal = await this.loadFor(dealId, actor);
@@ -756,8 +620,6 @@ export class EscrowService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
-      // Re-read under the lock: the refund must not follow a settlement (or a
-      // second return) that committed after the read above.
       const cur = await this.lockDeal(tx, dealId, ['funded', 'inspecting', 'awaiting_release']);
       if (cur.fundingSource === 'wallet' && buyerId) {
         await this.ledger.record(
@@ -801,15 +663,12 @@ export class EscrowService {
     });
   }
 
-  /** Called off before any money moved. */
   async cancel(dealId: string, actor: EscrowActor, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
     const deal = await this.loadFor(dealId, actor);
     this.assertStatus(deal, ['proposed', 'agreed']);
 
     return this.db.transaction(async (tx) => {
-      // Under the lock, so a cancel cannot land on a deal that was funded in
-      // between and strand the buyer's hold.
       const cur = await this.lockDeal(tx, dealId, ['proposed', 'agreed']);
       await tx
         .update(escrowDeal)
@@ -827,11 +686,6 @@ export class EscrowService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     Reading
-     ------------------------------------------------------------------ */
-
-  /** Every deal this person is a party to, either side, newest first. */
   async listMine(userId: string) {
     return this.db
       .select()
@@ -840,7 +694,6 @@ export class EscrowService {
       .orderBy(desc(escrowDeal.createdAt));
   }
 
-  /** The operator queue: everything that needs somebody to do something. */
   async queue() {
     return this.db
       .select()
@@ -864,12 +717,6 @@ export class EscrowService {
     return { deal, events, buyerId, sellerId };
   }
 
-  /**
-   * What this person currently has locked up in open deals.
-   *
-   * Derived, never stored. The wallet balance already excludes it (the hold was
-   * a real debit), so this answers "where did it go".
-   */
   async heldFor(userId: string) {
     const rows = await this.db
       .select({ valueMinor: escrowDeal.valueMinor, code: escrowDeal.code, id: escrowDeal.id })

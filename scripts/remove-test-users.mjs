@@ -1,48 +1,17 @@
 #!/usr/bin/env node
-/**
- * Remove the leftover integration-test accounts from the Users table.
- *
- * WHY THIS EXISTS
- * ---------------
- * The e2e suites register real accounts in a reserved fixture domain (see
- * `apps/api/src/shared/fixtures.ts`), which `AdmService.listUsers` filters out.
- * Older databases still hold accounts an earlier test helper made at
- * `bault.dev`, the seeded personas' domain, as `t<epoch-ms>@bault.dev`. They
- * look exactly like customers in Management > Users; this script clears them.
- *
- * SAFETY
- * ------
- * This deletes accounts, so it is built to refuse anything it is not certain
- * about:
- *
- *   - Dry run by default. It prints what it would delete and exits. Deleting
- *     requires an explicit `--apply`.
- *   - It matches ONE exact pattern: a local part of `t` followed by 10-19
- *     digits and nothing else, at `bault.dev`. It does not match on the
- *     substring "test", so a real customer at `test.family@…` is untouched.
- *   - The five seeded personas (eldar, hermon, red, golden, platform) are named
- *     in an explicit keep-list and can never be selected, whatever they match.
- *   - An account is skipped if it has items, ledger records, charges,
- *     shipments, service requests or shipping addresses. A test registration
- *     owns nothing; anything that does is not one, whatever its address looks like.
- *
- * USAGE
- *   node scripts/remove-test-users.mjs            # dry run, prints candidates
- *   node scripts/remove-test-users.mjs --apply    # actually delete
- */
 
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import pg from 'pg';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..');
 
-/** The exact shape the old test helper produced, anchored at both ends. */
+const pg = createRequire(resolve(repoRoot, 'apps/api/package.json'))('pg');
+
 const LEGACY_FIXTURE = /^t\d{10,19}@bault\.dev$/i;
 
-/** Seeded personas. Never candidates, regardless of anything else. */
 const PROTECTED = new Set([
   'eldar@bault.dev',
   'hermon@bault.dev',
@@ -51,7 +20,6 @@ const PROTECTED = new Set([
   'platform@bault.dev',
 ]);
 
-/** Tables that prove an account is in real use. */
 const ACTIVITY = [
   ['item', 'owner_id'],
   ['ledger_record', 'user_id'],
@@ -61,27 +29,39 @@ const ACTIVITY = [
   ['shipping_address', 'user_id'],
 ];
 
-function databaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  // Fall back to the repo .env, which is where the local URL normally lives.
+function envValue(key) {
+  if (process.env[key] !== undefined) return process.env[key];
+  let value;
   try {
-    const env = readFileSync(resolve(repoRoot, '.env'), 'utf8');
-    const line = env.split(/\r?\n/).find((l) => /^\s*DATABASE_URL\s*=/.test(l));
-    if (line) return line.replace(/^\s*DATABASE_URL\s*=\s*/, '').replace(/^["']|["']$/g, '').trim();
+    for (const line of readFileSync(resolve(repoRoot, '.env'), 'utf8').split(/\r?\n/)) {
+      const m = line.match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.*)$`));
+      if (m) value = m[1].trim().replace(/^["']|["']$/g, '');
+    }
   } catch {
-    /* no .env; fall through to the error below */
   }
+  return value;
+}
+
+function databaseUrl() {
+  const url = envValue('DATABASE_URL');
+  if (url) return url;
   throw new Error('DATABASE_URL is not set and no .env was found. Set it and retry.');
 }
 
 async function main() {
+  if (envValue('NODE_ENV') === 'production' && envValue('ALLOW_DESTRUCTIVE_SEED') !== 'yes-i-am-sure') {
+    throw new Error(
+      'Refusing to run: NODE_ENV=production. This script deletes accounts. If this database is ' +
+        'disposable, run it again with ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure.',
+    );
+  }
   const apply = process.argv.includes('--apply');
   const client = new pg.Client({ connectionString: databaseUrl() });
   await client.connect();
 
   try {
     const { rows } = await client.query(
-      'SELECT id, email, username, display_name, role, status, created_at FROM user_account ORDER BY created_at',
+      'SELECT id, email, username, role, status, created_at FROM user_account ORDER BY created_at',
     );
 
     const candidates = [];
@@ -89,7 +69,6 @@ async function main() {
       if (PROTECTED.has(row.email.toLowerCase())) continue;
       if (!LEGACY_FIXTURE.test(row.email)) continue;
 
-      // Prove it owns nothing before proposing to delete it.
       const activity = [];
       for (const [table, column] of ACTIVITY) {
         try {
@@ -99,8 +78,6 @@ async function main() {
           );
           if (hit.length > 0) activity.push(table);
         } catch (e) {
-          // A table or column that does not exist in this schema version is not
-          // evidence of safety: refuse the row rather than assume.
           activity.push(`${table}(unverifiable: ${e.message})`);
         }
       }
@@ -131,9 +108,6 @@ async function main() {
 
     await client.query('BEGIN');
     const ids = removable.map((c) => c.id);
-    // Verification tokens and login sessions are the only rows a bare
-    // registration can have produced; clear them first so the delete cannot
-    // trip a foreign key.
     await client.query('DELETE FROM verification_token WHERE user_id = ANY($1::uuid[])', [ids]);
     await client.query('DELETE FROM login_session WHERE user_id = ANY($1::uuid[])', [ids]);
     const del = await client.query('DELETE FROM user_account WHERE id = ANY($1::uuid[])', [ids]);

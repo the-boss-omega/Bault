@@ -31,6 +31,7 @@ import {
   type StatusTone,
 } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { serviceLabel, type QuotedRate } from '../../../shared/carriers';
 import { ShipmentComposer } from './ShipmentComposer';
 import { SharedParcelsTab } from './SharedParcelsTab';
 import { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } from './HumanFulfilmentPanels';
@@ -44,18 +45,6 @@ import {
   IconShipping,
 } from '../../../shared/ui/icons';
 
-/**
- * Shipping & Services: the operational section.
- *
- * Ordering a service is a thing you do to a card, so it lives in the Vault card
- * drawer; this section holds the operational half: getting cards out of the
- * vault, following them, and the ledger of every service request raised against
- * them.
- *
- * Every tab is backed by a real endpoint: tracking is `GET /shipping/shipments`
- * (scoped to the caller) and history is the terminal half of
- * `GET /services/mine`.
- */
 const TABS = ['overview', 'shipping', 'in-person', 'tracking', 'shared', 'requests', 'history', 'not-accepted'] as const;
 type SsTab = (typeof TABS)[number];
 
@@ -66,7 +55,6 @@ const STATUS_TONE: Record<string, StatusTone> = {
   cancelled: 'error',
 };
 
-/** Service requests that are still moving; everything else is history. */
 const OPEN_STATUSES = new Set(['requested', 'in_progress']);
 
 interface MyRequest {
@@ -89,7 +77,6 @@ interface Address {
   isDefault: boolean;
 }
 
-/** One-line rendering of a saved address, also persisted with the shipment. */
 export function formatAddress(a: Address): string {
   return `${a.recipient}, ${a.line1}, ${a.city} ${a.postalCode}, ${a.country}`;
 }
@@ -103,10 +90,6 @@ export function ShippingServicesPage() {
   const [requests, setRequests] = useState<MyRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  /**
-   * Bumped when a shipment is created, so the tracking list refetches and the
-   * new shipment is there the moment the user switches to that tab.
-   */
   const [shipmentsVersion, setShipmentsVersion] = useState(0);
 
   const tab: SsTab = (TABS as readonly string[]).includes(route.tab ?? '')
@@ -195,7 +178,6 @@ export function ShippingServicesPage() {
                   <IconServices />
                 </span>
                 <h3 className="card-title">{t('ss.tab.requests')}</h3>
-                {/* Says where services are ordered: from the card drawer. */}
                 <p className="card-desc">{t('ss.overview.requestsDesc')}</p>
                 <div className="actions">
                   <Button size="sm" variant="secondary" block onClick={() => goTab('requests')}>
@@ -222,9 +204,6 @@ export function ShippingServicesPage() {
         </TabPanel>
       )}
 
-      {/* The two routes out of the vault that are a person instead of a
-          parcel. Kept off the main Shipping tab on purpose: neither has a rate
-          to select. */}
       {tab === 'in-person' && (
         <TabPanel tab="in-person">
           <ShowPickupPanel
@@ -256,8 +235,6 @@ export function ShippingServicesPage() {
 
       {tab === 'tracking' && (
         <TabPanel tab="tracking">
-          {/* The open shipment lives in the URL, so Back closes the drawer
-              before it leaves the page (Requirement 37). */}
           <TrackingTab
             reloadToken={shipmentsVersion}
             openId={route.params.shipment ?? null}
@@ -318,23 +295,6 @@ export function ShippingServicesPage() {
   );
 }
 
-/* ============================================================
-   Arrivals that were not accepted
-   ============================================================ */
-
-/**
- * Things that arrived addressed to the signed-in collector and never reached
- * their vault: a prohibited item, a tracker found in a parcel, or something
- * given away because processing it cost more than it was worth.
- *
- * It lives here instead of in the Vault because these are the things that are
- * not in the vault, and showing them next to items the collector owns would
- * suggest they are holdings. This section holds the operational record of what
- * happened to a collector's property, which is what these are.
- *
- * Read-only by construction. The rows are append-only server-side, and there is
- * no action to offer: the decision was made at a warehouse bench.
- */
 function NotAcceptedTable() {
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<ArrivalDisposal[] | null>(null);
@@ -391,13 +351,12 @@ function NotAcceptedTable() {
                     <StatusBadge tone="warning">
                       {disposalCategoryLabel(t, row.category)}
                     </StatusBadge>
-                    {/* The operator's account of the decision, shown in the row. */}
                     <span className="dt-sub">{row.notes}</span>
                   </td>
                   <td data-label={t('ss.notAccepted.col.outcome')}>
                     {disposalOutcomeLabel(t, row.outcome)}
                   </td>
-                  <td data-label={t('ss.notAccepted.col.date')} dir="ltr">
+                  <td data-label={t('ss.notAccepted.col.date')}>
                     {formatDate(row.occurredAt, locale)}
                   </td>
                 </tr>
@@ -410,23 +369,6 @@ function NotAcceptedTable() {
   );
 }
 
-/* ============================================================
-   Tracking: every shipment of the signed-in user
-   ============================================================ */
-
-/**
- * The Shipment Tracking tab: a list backed by `GET /shipping/shipments`. A
- * shipment created on the Shipping tab appears here the moment it is created,
- * with no separate "add to tracking" step.
- *
- * Authorization is the endpoint's, not this component's: the API returns exactly
- * the shipments the caller may see (their own, or all of them for staff), so
- * there is no client-side filter that could be widened by accident.
- *
- * Status is whatever the API last recorded. The worker's tracking-refresh job
- * polls the carrier and updates the row, so reloading this tab shows the current
- * state without anyone re-entering anything.
- */
 function TrackingTab({
   reloadToken,
   openId,
@@ -435,7 +377,6 @@ function TrackingTab({
   onStatus,
   onPageError,
 }: {
-  /** Bumped by the Shipping tab after a create, so the list refetches. */
   reloadToken: number;
   openId: string | null;
   onOpen: (id: string) => void;
@@ -550,7 +491,6 @@ function TrackingTab({
                       {shipment.serviceLevel && <span className="dt-sub">{shipment.serviceLevel}</span>}
                     </td>
                     <td data-label={t('ss.tracking.col.trackingNumber')}>
-                      {/* Supplied by the carrier; nothing here is an internal id. */}
                       {shipment.trackingNumber ? (
                         <code dir="ltr">{shipment.trackingNumber}</code>
                       ) : (
@@ -563,7 +503,6 @@ function TrackingTab({
                       </StatusBadge>
                     </td>
                     <td data-label={t('ss.tracking.col.eta')}>
-                      {/* "—" until a rate is chosen and the carrier quotes a date. */}
                       {shipment.estimatedDeliveryAt ? (
                         <span dir="ltr">{formatDate(shipment.estimatedDeliveryAt, locale)}</span>
                       ) : (
@@ -610,7 +549,6 @@ function TrackingTab({
   );
 }
 
-/** One shipment in full. Opened from the list; never from a typed identifier. */
 function ShipmentDrawer({
   shipment,
   locale,
@@ -631,12 +569,6 @@ function ShipmentDrawer({
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  /**
-   * What cancelling would cost, fetched so the warning can name it.
-   *
-   * Loaded only when the drawer is open: it is one small published constant,
-   * not worth a request per list render.
-   */
   const [restockingFeeMinor, setRestockingFeeMinor] = useState<number | null>(null);
   useEffect(() => {
     void (async () => {
@@ -644,16 +576,10 @@ function ShipmentDrawer({
         const svc = await api.get<{ restockingFeeMinor: number }>('/shipping/services');
         setRestockingFeeMinor(svc.restockingFeeMinor ?? null);
       } catch {
-        /* the warning falls back to a dash; cancelling still works */
       }
     })();
   }, []);
 
-  /**
-   * A request that has not been picked can be called off for nothing; one that
-   * was already paid for costs the restocking fee. Both are the server's rule;
-   * this only decides whether to show the button at all.
-   */
   const cancellable = ['requested', 'awaiting_payment', 'rates_selected'].includes(shipment.status);
   const payable = shipment.status === 'awaiting_payment';
 
@@ -775,10 +701,11 @@ function ShipmentDrawer({
         <p className="field-hint">{t('ship.customsOnFile')}</p>
       )}
 
-      {/* What happens at the far end. Shown on any parcel crossing a border,
-          including one with nothing declared yet, which is the case most worth
-          warning about. */}
       {shipment.destinationCountry !== 'US' && <CustomsReadiness shipmentId={shipment.id} />}
+
+      {shipment.labelRefused && (
+        <RechooseService shipment={shipment} t={t} busy={busy} onChosen={(fn) => act(fn, t('ship.rechosen'))} />
+      )}
 
       {(payable || cancellable) && (
         <div className="row stack-top">
@@ -808,12 +735,9 @@ function ShipmentDrawer({
             <span className="field-label">{t('ship.cancelReasonLabel')}</span>
             <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
           </label>
-          {/* Said plainly before the button, not in a receipt afterwards. */}
           <span className="field-hint">
             {shipment.status === 'rates_selected'
               ? t('ship.cancelFeeWarning', {
-                  // Named, not implied: the figure is published on
-                  // `/shipping/services`.
                   amount: restockingFeeMinor === null ? '—' : formatUsd(restockingFeeMinor),
                 })
               : t('ship.cancelFree')}
@@ -842,9 +766,71 @@ function ShipmentDrawer({
   );
 }
 
-/* ============================================================
-   Service request tables (open / history)
-   ============================================================ */
+export function RechooseService({
+  shipment,
+  t,
+  busy,
+  onChosen,
+}: {
+  shipment: ShipmentSummary;
+  t: TranslateFn;
+  busy: boolean;
+  onChosen: (fn: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [rates, setRates] = useState<QuotedRate[] | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try {
+        setRates(await api.get<QuotedRate[]>(`/shipping/shipments/${shipment.id}/rates`));
+      } catch {
+        setRates([]);
+      }
+    })();
+  }, [shipment.id]);
+
+  const paid = shipment.cost ?? 0;
+  const eligible = (rates ?? []).filter((r) => r.eligible);
+  return (
+    <div className="stack stack--tight stack-top">
+      <p className="field-hint">{t('ship.labelRefused')}</p>
+      {shipment.labelRefused?.reason && (
+        <p className="hint">{t('ship.labelRefusedReason', { reason: shipment.labelRefused.reason })}</p>
+      )}
+      {eligible.map((r) => {
+        const difference = r.totalMinor - paid;
+        return (
+          <div key={r.serviceKey} className="row">
+            <span>
+              {serviceLabel(t, r)} · <span dir="ltr">{formatUsd(r.totalMinor)}</span>
+              <span className="detail-value-sub" dir="ltr">
+                {difference < 0
+                  ? t('ship.rechoose.refund', { amount: formatUsd(-difference) })
+                  : difference > 0
+                    ? t('ship.rechoose.extra', { amount: formatUsd(difference) })
+                    : t('ship.rechoose.same')}
+              </span>
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void onChosen(() =>
+                  api.post(`/shipping/shipments/${shipment.id}/select-rate`, {
+                    carrier: r.carrier,
+                    serviceLevel: r.serviceLevel,
+                  }),
+                )
+              }
+            >
+              {t('shipping.selectRate')}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function RequestTable({
   requests,
@@ -866,10 +852,6 @@ function RequestTable({
   const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false);
 
-  /**
-   * A buyout quote is a service request the collector has to answer: a number
-   * on the table that expires unless they say yes, so the row carries buttons.
-   */
   async function answerQuote(request: MyRequest, action: 'accept' | 'decline') {
     setBusy(true);
     try {
@@ -888,13 +870,6 @@ function RequestTable({
     }
   }
 
-  /**
-   * A custom request is the second thing a collector has to answer.
-   *
-   * The routes are separate from the buyout's because the two are opposite
-   * trades: accepting a buyout quote credits the wallet, and accepting a custom
-   * quote debits it. One shared handler would reduce that to a parameter.
-   */
   async function answerCustomQuote(request: MyRequest, action: 'accept' | 'decline') {
     setBusy(true);
     try {
@@ -939,17 +914,11 @@ function RequestTable({
                     <span className="date">{formatDate(request.createdAt, locale)}</span>
                   </td>
                   <td className="td-tight">
-                    {/*
-                      What the collector asked for, in their own words, so the
-                      row names the thing and not only the type.
-                    */}
                     {request.type === 'custom' && <CustomRequestRow request={request} />}
 
                     {request.type === 'custom' &&
                       (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
                         <div className="actions actions--row">
-                          {/* The amount is stated on the step above, beside the
-                              scope it buys, so the button does not repeat it. */}
                           <Button
                             size="sm"
                             variant="gold"
@@ -1012,20 +981,6 @@ function RequestTable({
   );
 }
 
-/**
- * A custom request, as a three-step register.
- *
- * Ask (free), then an operator proposes a price and a scope, then you accept.
- *
- * Drawn horizontally with the current step marked by the same custody rule that
- * marks an active tab and an active rail destination. Each step states its own
- * fact: the ask carries the summary; the proposal carries the amount and the
- * scope, because a collector accepting a figure is agreeing to whatever the
- * operator understood the ask to be; and the last step carries what was done.
- *
- * A declined request is not a fourth step; it is the second step answered "no",
- * so it takes the second step's position and states the reason.
- */
 function CustomRequestRow({ request }: { request: MyRequest }) {
   const { t } = useI18n();
   const fields = (request.typeFields as Record<string, unknown> | null) ?? {};
@@ -1034,7 +989,6 @@ function CustomRequestRow({ request }: { request: MyRequest }) {
   const scope = String(fields.scope ?? '');
   const declined = stage === 'declined';
 
-  /** Where the request has got to, as an index into the three steps. */
   const at = stage === 'awaiting_quote' ? 0 : stage === 'quoted' || declined ? 1 : 2;
 
   const steps = [
@@ -1084,10 +1038,6 @@ function CustomRequestRow({ request }: { request: MyRequest }) {
   );
 }
 
-/* ============================================================
-   Customs readiness
-   ============================================================ */
-
 interface ReadinessWarning {
   code: string;
   message: string;
@@ -1109,19 +1059,6 @@ interface Readiness {
   guidance: { universal: string[]; specific: DestinationSpecific | null };
 }
 
-/**
- * What will happen to this parcel at the border, before it leaves.
- *
- * The commercial invoice answers "what did you declare"; this answers the
- * question that comes first: "am I about to send this somewhere it will get
- * stuck, and what will the person receiving it owe".
- *
- * It never states a duty figure: thresholds move, so the destination's own
- * authority is linked instead. It reports instead of blocking, because an
- * estimated weight is a fact worth knowing and not grounds to refuse a parcel.
- * And it names what Bault does not do at the destination, such as lodging a
- * clearance instruction.
- */
 function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
   const { t } = useI18n();
   const [data, setData] = useState<Readiness | null>(null);
@@ -1131,7 +1068,6 @@ function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
       try {
         setData(await api.get<Readiness>(`/shipping/shipments/${shipmentId}/customs/readiness`));
       } catch {
-        /* guidance is additive; a shipment page still works without it */
       }
     })();
   }, [shipmentId]);
@@ -1195,7 +1131,6 @@ function CustomsReadiness({ shipmentId }: { shipmentId: string }) {
           </p>
         </>
       ) : (
-        /* No guidance written for this destination yet, and the page says so. */
         <p className="field-hint">{t('customs.noGuidance', { country: data.destinationCountry })}</p>
       )}
     </div>

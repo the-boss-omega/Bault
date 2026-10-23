@@ -4,14 +4,6 @@ import { readFileSync } from 'node:fs';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * Three screens that each had one way to show the wrong thing: the e-mail
- * verification page, the render-failure fallback, and the two-factor panel when
- * its first read fails.
- *
- * `api` is mocked at the module boundary, as in the other rendering suites.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -23,8 +15,6 @@ const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
 const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
 const { TwoFactorPanel } = await import('../../apps/web/src/areas/customer/profile/TwoFactorPanel');
-// `import.meta.url` is not a file URL under this suite's transform, so the
-// stylesheet is found from the working directory (the repository root).
 const STYLESHEET = 'apps/web/src/index.css';
 
 function renderIn(ui: React.ReactElement) {
@@ -36,11 +26,6 @@ beforeEach(() => {
   post.mockReset();
 });
 
-/* ============================================================
-   Verifying an e-mail address
-   ============================================================ */
-
-/** A promise the test settles by hand. */
 function deferred<T = unknown>() {
   let resolve!: (v: T) => void;
   let reject!: (e: unknown) => void;
@@ -53,13 +38,9 @@ function deferred<T = unknown>() {
 
 describe('the verification page', () => {
   it('spends the link once, and says it worked, when the app runs its effects twice (StrictMode)', async () => {
-    // The token is single-use: the first request spends it and a second one is
-    // refused. In development StrictMode mounts, unmounts and mounts again.
     post
       .mockResolvedValueOnce({ status: 'verified' })
       .mockRejectedValue(new Error('This link has expired or was already used.'));
-    // At the root, as `main.tsx` mounts it: React double-runs effects only for
-    // a tree that is strict from the top.
     render(
       <StrictMode>
         <I18nProvider>
@@ -86,7 +67,6 @@ describe('the verification page', () => {
 
     second.resolve({ status: 'verified' });
     expect(await screen.findByText(/your address is confirmed/i)).toBeInTheDocument();
-    // The first request answers last, and is about a link nobody is looking at.
     first.reject(new Error('This link has expired or was already used.'));
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.getByText(/your address is confirmed/i)).toBeInTheDocument();
@@ -94,14 +74,9 @@ describe('the verification page', () => {
   });
 });
 
-/* ============================================================
-   The render-failure fallback
-   ============================================================ */
-
 describe('the render-failure fallback', () => {
   let quiet: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
-    // React and the boundary both log the failure; it is expected here.
     quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
   afterEach(() => quiet.mockRestore());
@@ -127,14 +102,9 @@ describe('the render-failure fallback', () => {
         expect(css, `.${cls} is not defined in index.css`).toMatch(selector);
       }
     }
-    // The primary action looks like one.
     expect(buttons[0]).toHaveClass('btn--gold');
   });
 });
-
-/* ============================================================
-   The two-factor panel, when its first read fails
-   ============================================================ */
 
 describe('the two-factor panel', () => {
   it('offers to try again when the status cannot be read, and shows it once it can', async () => {

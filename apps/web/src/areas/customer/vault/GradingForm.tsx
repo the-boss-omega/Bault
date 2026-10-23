@@ -5,14 +5,6 @@ import { useI18n } from '../../../shared/i18n';
 import { tierLabel, type GradingTier } from '../../../shared/grading';
 import { Button, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
-/**
- * Send a card away to be graded, at a chosen service level, with a declared
- * value and the tier's declared-value ceiling and turnaround shown.
- *
- * Both rules are evaluated here as well as on the server, as in the consignment
- * form, so somebody is told "that is above this tier's ceiling" while they can
- * still change it, before a fee is charged. The server re-checks regardless.
- */
 export function GradingForm({
   item,
   onCancel,
@@ -54,8 +46,6 @@ export function GradingForm({
     if (cents > tier.maxDeclaredMinor) {
       problems.push(t('grade.problem.ceiling', { amount: formatUsd(tier.maxDeclaredMinor) }));
     }
-    // The inverse guard the server also applies: a common on the top tier is
-    // somebody paying several times what they need to.
     if (tier.requiresApproval && cents < threshold) {
       problems.push(t('grade.problem.tooLow', { amount: formatUsd(threshold) }));
     }

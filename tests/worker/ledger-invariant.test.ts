@@ -4,16 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { createUser, testPool } from './helpers/db';
 
-/**
- * The ledger-invariant monitor has to be HEARD when it finds something.
- *
- * Nobody watches stderr; an alert that only exists in a log nobody reads is not
- * an alert. A violation goes out at error level in the same JSON as every other
- * log line, so a log alert can match on it, and to the error tracker.
- *
- * The error tracker is a local HTTP server standing in for Sentry's ingest, so
- * the suite sees exactly what the SDK would send, with no account and no network.
- */
 const envelopes: string[] = [];
 let sentry: Server;
 let pool: Pool;
@@ -32,7 +22,6 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => sentry.listen(0, '127.0.0.1', resolve));
   const { port } = sentry.address() as AddressInfo;
   process.env.SENTRY_DSN = `http://publickey@127.0.0.1:${port}/42`;
-  // JSON lines, the way every deployed environment writes them.
   process.env.NODE_ENV = 'test';
   pool = testPool();
 });
@@ -43,7 +32,6 @@ afterAll(async () => {
   await new Promise<void>((resolve) => sentry.close(() => resolve()));
 });
 
-/** Everything the job writes to stdout and stderr while `fn` runs. */
 async function captureOutput(fn: () => Promise<void>): Promise<string[]> {
   const lines: string[] = [];
   const out = process.stdout.write.bind(process.stdout);
@@ -54,7 +42,6 @@ async function captureOutput(fn: () => Promise<void>): Promise<string[]> {
   };
   process.stdout.write = grab as typeof process.stdout.write;
   process.stderr.write = grab as typeof process.stderr.write;
-  // console.* in the job goes through the same streams.
   try {
     await fn();
   } finally {
@@ -70,8 +57,6 @@ describe('ledger invariant violations', () => {
     observability?.initErrorReporting();
     const { checkLedgerInvariants } = await import('../../apps/worker/src/jobs/ledger-invariant-check');
 
-    // A settled charge with no ledger row behind it: money billed that never
-    // reached anybody's balance.
     const user = await createUser(pool);
     const { rows } = await pool.query<{ id: string }>(
       `INSERT INTO charge (user_id, action_type, pricing_rule_snapshot, amount, currency, payment_means, status)
@@ -99,7 +84,6 @@ describe('ledger invariant violations', () => {
       expect(report, 'nothing reached the error tracker').toBeTruthy();
       expect(report!.startsWith('/api/42/envelope/')).toBe(true);
     } finally {
-      // `charge` is not append-only; leave the next suite a clean ledger.
       await pool.query(`DELETE FROM charge WHERE id = $1`, [rows[0]!.id]);
     }
   });

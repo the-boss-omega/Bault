@@ -15,26 +15,11 @@ class RecordDisposalDto {
   @IsString() @MinLength(1) @MaxLength(1000) notes!: string;
 }
 
-/**
- * Arrival disposals, and the vocabulary behind them.
- *
- * Roles are set PER METHOD rather than on the class: the write and the
- * warehouse-wide list are staff work, but a collector must be able to read
- * their own disposals. A class-level `@Roles('warehouse_operator', 'admin')`,
- * as `InvController` has, would lock the owner out of that record.
- */
 @ApiTags('INV')
 @Controller()
 export class DisposalController {
   constructor(private readonly disposals: DisposalService) {}
 
-  /**
-   * The taxonomy, served to whoever is drawing a form over it.
-   *
-   * Any signed-in caller may read it: the classes and categories are product
-   * vocabulary, not privileged information, and a collector reading their own
-   * disposal list needs the same labels the operator picked from.
-   */
   @Get('intake/vocabulary')
   vocabulary() {
     return {
@@ -56,7 +41,6 @@ export class DisposalController {
     return this.disposals.listAll();
   }
 
-  /** A collector's own record of what arrived for them and was not accepted. */
   @Get('me/disposals')
   listMine(@CurrentUser() user: AuthUser) {
     return this.disposals.listMine(user.id);

@@ -1,13 +1,5 @@
 import type { SVGProps } from 'react';
 
-/**
- * One icon system for the whole product: 24-box outline glyphs, 1.6 stroke,
- * rounded caps and joins. Nothing filled, no emoji, no illustrations. Size is
- * controlled by CSS (`width`/`height` on the parent rule), never per call site.
- *
- * Every icon is decorative by default (`aria-hidden`); the surrounding control
- * carries the accessible name.
- */
 type IconProps = SVGProps<SVGSVGElement>;
 
 function Svg({ children, ...rest }: IconProps) {
@@ -28,9 +20,6 @@ function Svg({ children, ...rest }: IconProps) {
   );
 }
 
-/* ---------- Navigation ---------- */
-
-/** Vault: a safe door with a spoked handle. */
 export function IconVault(p: IconProps) {
   return (
     <Svg {...p}>
@@ -42,7 +31,6 @@ export function IconVault(p: IconProps) {
   );
 }
 
-/** Wallet with a card slot and clasp. */
 export function IconWallet(p: IconProps) {
   return (
     <Svg {...p}>
@@ -53,7 +41,6 @@ export function IconWallet(p: IconProps) {
   );
 }
 
-/** Marketplace: a storefront with an awning. */
 export function IconMarketplace(p: IconProps) {
   return (
     <Svg {...p}>
@@ -65,7 +52,6 @@ export function IconMarketplace(p: IconProps) {
   );
 }
 
-/** Services: a service package / cube. */
 export function IconServices(p: IconProps) {
   return (
     <Svg {...p}>
@@ -75,7 +61,6 @@ export function IconServices(p: IconProps) {
   );
 }
 
-/** Shipping: a delivery truck. */
 export function IconShipping(p: IconProps) {
   return (
     <Svg {...p}>
@@ -88,12 +73,6 @@ export function IconShipping(p: IconProps) {
   );
 }
 
-/**
- * Shipping & Services: the same truck cab, with a wrench riding where the
- * trailer would be. One glyph has to stand for both halves of the merged
- * section, so the truck keeps the silhouette recognisable and the tool says
- * that more than postage happens here.
- */
 export function IconShippingServices(p: IconProps) {
   return (
     <Svg {...p}>
@@ -106,11 +85,6 @@ export function IconShippingServices(p: IconProps) {
   );
 }
 
-/**
- * FAQ & Legal: a document whose lower half carries a balance beam. The question
- * mark sits in the page's upper corner so the glyph reads as "the answers and
- * the terms" rather than as either one alone.
- */
 export function IconLegal(p: IconProps) {
   return (
     <Svg {...p}>
@@ -124,7 +98,6 @@ export function IconLegal(p: IconProps) {
   );
 }
 
-/** Archive: a lidded box, the marker for cards that have left the vault. */
 export function IconArchive(p: IconProps) {
   return (
     <Svg {...p}>
@@ -135,7 +108,6 @@ export function IconArchive(p: IconProps) {
   );
 }
 
-/** Ask: a speech bubble carrying a question mark. */
 export function IconAsk(p: IconProps) {
   return (
     <Svg {...p}>
@@ -146,7 +118,6 @@ export function IconAsk(p: IconProps) {
   );
 }
 
-/** Print: the classic printer body with a page feeding through it. */
 export function IconPrint(p: IconProps) {
   return (
     <Svg {...p}>
@@ -157,7 +128,6 @@ export function IconPrint(p: IconProps) {
   );
 }
 
-/** Warehouse: a wide building with bay doors. */
 export function IconWarehouse(p: IconProps) {
   return (
     <Svg {...p}>
@@ -170,7 +140,6 @@ export function IconWarehouse(p: IconProps) {
   );
 }
 
-/** Notifications bell. */
 export function IconBell(p: IconProps) {
   return (
     <Svg {...p}>
@@ -180,7 +149,6 @@ export function IconBell(p: IconProps) {
   );
 }
 
-/** Management: control sliders. */
 export function IconManagement(p: IconProps) {
   return (
     <Svg {...p}>
@@ -191,8 +159,6 @@ export function IconManagement(p: IconProps) {
     </Svg>
   );
 }
-
-/* ---------- Header & menus ---------- */
 
 export function IconUser(p: IconProps) {
   return (
@@ -239,8 +205,6 @@ export function IconShield(p: IconProps) {
     </Svg>
   );
 }
-
-/* ---------- Actions ---------- */
 
 export function IconPlus(p: IconProps) {
   return (
@@ -344,8 +308,6 @@ export function IconRefresh(p: IconProps) {
     </Svg>
   );
 }
-
-/* ---------- Status & data ---------- */
 
 export function IconAlert(p: IconProps) {
   return (
@@ -491,13 +453,6 @@ export function IconGavel(p: IconProps) {
   );
 }
 
-/* ---------- Decorative brand art ---------- */
-
-/**
- * Stylised vault door for the wallet hero: pure geometry, no photography, drawn
- * in `currentColor` at low opacity. The stylesheet hides `.hero-art`, so it is
- * not shown at present.
- */
 export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 320 320" fill="none" aria-hidden="true" focusable="false" {...props}>
@@ -515,12 +470,10 @@ export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
         <circle cx="160" cy="160" r="60" strokeWidth="2" opacity="0.65" />
         <circle cx="160" cy="160" r="26" strokeWidth="8" opacity="0.5" />
         <circle cx="160" cy="160" r="9" strokeWidth="2" opacity="0.8" />
-        {/* Handle spokes */}
         <g strokeWidth="7" opacity="0.6">
           <path d="M160 60v42M160 218v42M60 160h42M218 160h42" />
           <path d="M89 89l30 30M201 201l30 30M231 89l-30 30M119 201l-30 30" />
         </g>
-        {/* Bolt heads around the rim */}
         <g opacity="0.7">
           {Array.from({ length: 12 }, (_, i) => {
             const a = (i * Math.PI) / 6;
@@ -540,14 +493,6 @@ export function VaultDoorArt(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
-/* ============================================================
-   Theme
-   ============================================================
-   Three icons for three states. `system` gets a display, because "follow the
-   machine" is a different idea from "dark", and a variation of one of the other
-   two would make the cycle unreadable.
-   ============================================================ */
 
 export function IconSun(p: IconProps) {
   return (

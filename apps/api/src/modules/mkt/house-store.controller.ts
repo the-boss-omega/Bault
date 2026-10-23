@@ -24,7 +24,6 @@ class CreateHouseListingDto {
   @IsString() typeClass!: string;
   @IsString() @MaxLength(300) description!: string;
   @IsOptional() @IsString() @MaxLength(40) conditionGrade?: string;
-  /** A catalogue photo stem under assets/images, e.g. SN-CL10-0005. */
   @IsOptional() @IsString() @Matches(/^[A-Za-z0-9_-]{1,64}$/) photoRef?: string;
   @IsInt() @IsPositive() askingPrice!: number;
   @IsInt() @Min(1) stock!: number;
@@ -33,6 +32,7 @@ class CreateHouseListingDto {
 class UpdateHouseListingDto {
   @IsOptional() @IsInt() @IsPositive() askingPrice?: number;
   @IsOptional() @IsInt() @Min(0) stock?: number;
+  @IsOptional() @IsInt() @Min(0) expectedStock?: number;
   @IsOptional() @IsIn(['active', 'removed']) status?: 'active' | 'removed';
 }
 
@@ -42,13 +42,11 @@ class StowHouseOrderDto {
   @IsOptional() @IsArray() @ArrayMaxSize(6) @IsString({ each: true }) @IsObjectKey({ each: true }) photoKeys?: string[];
 }
 
-/** The Bault store — see HouseStoreService. */
 @ApiTags('MKT')
 @Controller('marketplace/house')
 export class HouseStoreController {
   constructor(private readonly store: HouseStoreService) {}
 
-  /** Public, like the marketplace shelf: somebody deciding whether to sign up may look. */
   @Public()
   @Get('listings')
   forSale() {

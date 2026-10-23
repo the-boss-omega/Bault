@@ -1,38 +1,7 @@
-# =============================================================================
-# The TLS edge. The one thing listening on the internet.
-#
-# Caddy obtains and renews the certificate for {$BAULT_DOMAIN} on its own (Let's
-# Encrypt over HTTP-01/TLS-ALPN-01, so ports 80 and 443 must both be reachable),
-# redirects http:// to https://, and hands every request to the web container,
-# whose nginx serves the SPA and proxies /api to the API.
-#
-# Everything here is read from the caddy container's environment, which
-# compose.yml fills from production.env:
-#   BAULT_DOMAIN           the public hostname, e.g. app.example.com
-#   BAULT_TRUSTED_PROXIES  empty, or Cloudflare's ranges (below)
-#   CADDY_LOCAL_CERTS      empty in production; `local_certs` for a rehearsal
-#                          with no public DNS (certificates from Caddy's own CA)
-# =============================================================================
 {
 	{$CADDY_LOCAL_CERTS}
 
 	servers {
-		# Whose word to take for the client's address.
-		#
-		# Directly on the internet (the default) nobody's: BAULT_TRUSTED_PROXIES
-		# is empty, the client is whoever opened the connection, and a
-		# CF-Connecting-IP header a visitor types is ignored.
-		#
-		# Behind Cloudflare's proxy every connection comes from Cloudflare, so
-		# without this every visitor is "a Cloudflare address" to the rate
-		# limiter and the sign-in log. Set BAULT_TRUSTED_PROXIES to Cloudflare's
-		# published ranges, space-separated, from
-		#   https://www.cloudflare.com/ips-v4  and  https://www.cloudflare.com/ips-v6
-		# and Caddy then takes the client from CF-Connecting-IP, but only on
-		# connections that really come from those ranges. The list changes
-		# rarely; re-check it when Cloudflare announces a change. Also set the
-		# zone's SSL mode to Full (strict): anything weaker lets Cloudflare talk
-		# to this origin without verifying its certificate.
 		trusted_proxies static {$BAULT_TRUSTED_PROXIES}
 		client_ip_headers CF-Connecting-IP
 	}
@@ -41,38 +10,19 @@
 {$BAULT_DOMAIN} {
 	encode zstd gzip
 
-	# Access log to stdout, collected with the container's other output.
 	log
 
 	header {
-		# HSTS is set here and only here. TLS ends at this server, and this is
-		# the one response path every request shares, the SPA document and the
-		# API alike. helmet's copy is switched off in apps/api/src/main.ts and
-		# the web image's nginx sets none: two sources for one header is how a
-		# max-age gets lowered by accident.
-		#
-		# No `preload`: submitting the domain to the browsers' preload list is
-		# a decision that is very hard to undo, and is the owner's to make.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		-Server
-		# Applied as the response is written, after the upstream's headers are
-		# in, so this value replaces any the upstream sent instead of joining it.
 		defer
 	}
 
 	request_body {
-		# Above the API's 16 MB JSON limit (a base64 photograph), and equal to
-		# nginx's client_max_body_size, so the API is the one that refuses an
-		# oversized upload, with a sentence instead of a bare 413.
 		max_size 25MB
 	}
 
 	reverse_proxy web:8080 {
-		# The client as Caddy determined it: the connecting address, or
-		# CF-Connecting-IP from a trusted Cloudflare hop. SET, not appended, so
-		# whatever X-Forwarded-For the visitor sent is discarded here. nginx
-		# appends its own hop, and the API (TRUST_PROXY = the docker network)
-		# walks back past both to this address.
 		header_up X-Forwarded-For {client_ip}
 
 		transport http {

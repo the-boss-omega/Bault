@@ -1,11 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
-/**
- * The SPA's vocabulary for the seller side of the marketplace: listings, offers
- * and counter-offers, swaps and gift transfers, and consignment channels.
- */
-
 export const LISTING_TONE: Record<string, StatusTone> = {
   active: 'success',
   sold: 'gold',
@@ -21,6 +16,10 @@ const LISTING_STATUS_KEY: Record<string, MessageKey> = {
 export function listingStatusLabel(t: TranslateFn, status: string): string {
   const key = LISTING_STATUS_KEY[status];
   return key ? t(key) : status;
+}
+
+export function storefrontHref(username: string): string {
+  return `#/marketplace/store?seller=${encodeURIComponent(username)}`;
 }
 
 export const OFFER_TONE: Record<string, StatusTone> = {
@@ -61,7 +60,6 @@ export function swapStatusLabel(t: TranslateFn, status: string): string {
   return key ? t(key) : status;
 }
 
-/** `GET /marketplace/listings/mine`. */
 export interface MyListing {
   id: string;
   itemId: string;
@@ -76,7 +74,6 @@ export interface MyListing {
   pendingOffers: number;
 }
 
-/** `GET /marketplace/offers/mine`. */
 export interface MyOffer {
   id: string;
   listingId: string;
@@ -89,17 +86,9 @@ export interface MyOffer {
   typeClass: string;
   description: string;
   buyerUsername: string | null;
-  /** Which side of the listing the caller is on, computed by the API. */
   direction: 'incoming' | 'outgoing';
-  /** The caller's own side, named rather than inferred from `direction`. */
   side: 'buyer' | 'seller';
-  /** Which side named the price currently on the table. */
   proposedBy: 'buyer' | 'seller';
-  /**
-   * Whether the ball is in the caller's court. The offer controls key off this,
-   * because whose move it is depends on who proposed the price, which
-   * `direction` does not say.
-   */
   yourTurn: boolean;
 }
 
@@ -110,7 +99,6 @@ export interface SwapItemRef {
   description: string;
 }
 
-/** `GET /marketplace/swaps`. */
 export interface MySwap {
   id: string;
   status: string;
@@ -125,10 +113,6 @@ export interface MySwap {
   createdAt: string;
   awaitingMe: boolean;
 }
-
-/* ============================================================
-   Consignment channels
-   ============================================================ */
 
 export interface ConsignmentChannel {
   key: string;

@@ -1,15 +1,5 @@
 import { loadEnv } from '@bault/config';
 
-/**
- * The worker's log, in the API's format.
- *
- * It writes the same line as the API's `StructuredLogger`: `level`, `time`,
- * `message`, `context`, then the fields, as one JSON object per line, and a
- * single human-readable line in development.
- *
- * Mirrored BY VALUE from `apps/api/src/shared/observability/logger.ts`, because
- * the worker cannot import the API. Change the shape in both places or in neither.
- */
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 } as const;
 export type LogLevel = keyof typeof LEVELS;
 
@@ -28,10 +18,6 @@ export interface Logger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-/**
- * Read lazily, on the first line written, so the configuration is what the
- * process has when it logs, not when this module was imported.
- */
 let settings: { threshold: number; json: boolean } | undefined;
 function resolved(): { threshold: number; json: boolean } {
   if (settings) return settings;
@@ -40,7 +26,6 @@ function resolved(): { threshold: number; json: boolean } {
   return settings;
 }
 
-/** An Error becomes its name, message and stack; JSON.stringify would make it `{}`. */
 function plain(value: unknown): unknown {
   if (value instanceof Error) {
     return { name: value.name, message: value.message, ...(value.stack ? { stack: value.stack } : {}) };

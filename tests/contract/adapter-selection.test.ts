@@ -14,13 +14,6 @@ import {
   createStorageAdapter,
 } from '@bault/adapters';
 
-/**
- * Which adapter a process gets for a configuration.
- *
- * The API and the worker both choose through these factories, so "what does
- * SHIPPING_PROVIDER=easypost give me" has one answer, and the production
- * refusals stand in front of the worker as well as the API.
- */
 const base = {
   NODE_ENV: 'development' as const,
   SHIPPING_PROVIDER: 'sandbox' as const,

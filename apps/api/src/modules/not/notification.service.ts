@@ -15,21 +15,10 @@ import {
   type NotificationChannel,
 } from './event-types';
 
-/**
- * Notification read model + preferences (NOT-01/NOT-02).
- *
- * Notifications are WRITTEN by the worker's outbox dispatch job; the API only
- * reads them (own feed) and manages preferences.
- *
- * Preferences are served as the whole matrix, every event type on every
- * channel with defaults filled in, so a settings screen can show what can be
- * turned off as well as what has been.
- */
 @Injectable()
 export class NotificationService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  /** The caller's own notifications, newest first. */
   listMine(userId: string) {
     return this.db
       .select()
@@ -38,15 +27,6 @@ export class NotificationService {
       .orderBy(sql`${notification.createdAt} desc`);
   }
 
-  /**
-   * The full preference matrix: every known event type, on every channel, with
-   * the user's choice where they made one and the default where they did not.
-   *
-   * The raw rows are still returned alongside it, because they are the only
-   * evidence of what the user actually decided as opposed to what they were
-   * given, and a settings screen that cannot tell those apart cannot offer
-   * "reset to defaults".
-   */
   async getPreferences(userId: string) {
     const rows = await this.db
       .select()
@@ -64,9 +44,7 @@ export class NotificationService {
         return {
           channel,
           enabled: explicit ?? defaultEnabled(event.key, channel),
-          /** True when this is the default rather than something they chose. */
           isDefault: explicit === undefined,
-          /** Bad news cannot be switched off in the app (see the catalogue). */
           mandatory: isMandatory(event.key, channel),
         };
       }),
@@ -75,7 +53,6 @@ export class NotificationService {
     return { categories: EVENT_CATEGORIES, channels: NOTIFICATION_CHANNELS, events: matrix, rows };
   }
 
-  /** Upsert one (user, event type, channel) preference. */
   async setPreference(userId: string, eventType: string, channel: string, enabled: boolean) {
     if (!isKnownChannel(channel)) throw AppError.validation(`Unknown channel "${channel}"`);
     if (!isKnownEventType(eventType)) throw AppError.validation(`Unknown event type "${eventType}"`);
@@ -117,14 +94,6 @@ export class NotificationService {
     });
   }
 
-  /**
-   * Turn a whole channel off in one action.
-   *
-   * The one thing somebody reaching this screen in irritation actually wants is
-   * "stop emailing me", and making them tick a box per event type to say it is
-   * a dark pattern. Mandatory in-app events are left alone, so the master
-   * switch cannot be used to route around them.
-   */
   async setChannel(userId: string, channel: string, enabled: boolean) {
     if (!isKnownChannel(channel)) throw AppError.validation(`Unknown channel "${channel}"`);
     let changed = 0;
@@ -136,7 +105,6 @@ export class NotificationService {
     return { channel, enabled, changed };
   }
 
-  /** Default per the catalogue: only an explicit row overrides it. */
   async isEnabled(userId: string, eventType: string, channel: NotificationChannel = 'in_app'): Promise<boolean> {
     const [row] = await this.db
       .select({ enabled: notificationPreference.enabled })

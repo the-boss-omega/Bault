@@ -6,14 +6,8 @@ import { AppError } from '../../shared/errors/app-error';
 import { item, itemChangeHistory } from '../cst/cst.schema';
 import { isKnownItemClass } from './item-classes';
 
-/** Fields an operator may correct. Owner/lifecycle/bin changes go through CST. */
 const CORRECTABLE = new Set(['description', 'conditionGrade', 'typeClass']);
 
-/**
- * Item field correction (T046). Every correction is applied AND recorded in the
- * item change-history (who/what/when) in the same transaction, so items are
- * never silently edited (Principle I's permanence guarantee).
- */
 @Injectable()
 export class CorrectionService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -31,17 +25,12 @@ export class CorrectionService {
         if (!CORRECTABLE.has(patch.field)) {
           throw AppError.validation(`Field not correctable: ${patch.field}`);
         }
-        // Intake enforces the taxonomy, so correction has to as well, or an item
-        // could be edited back into free text after being received under a known
-        // class. This is also the path by which a pre-taxonomy item gets a real
-        // class.
         if (patch.field === 'typeClass' && !isKnownItemClass(patch.value)) {
           throw AppError.validation(`Unknown item class "${patch.value}"`);
         }
         const oldValue = (current as Record<string, unknown>)[patch.field];
         await tx
           .update(item)
-          // dynamic column set is safe: key is whitelisted against CORRECTABLE above.
           .set({ [patch.field]: patch.value, updatedAt: new Date() } as Record<string, unknown>)
           .where(eq(item.id, itemId));
         await tx.insert(itemChangeHistory).values({

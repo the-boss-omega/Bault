@@ -2,17 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-/**
- * No other company's name anywhere in the SPA's source.
- *
- * The name checked is ShipMyCards, whose FAQ text (addresses, phone number,
- * payment account, a referral link) must never reach Bault's customers. A brand
- * check with an allowance cannot catch the thing it exists for, so this one has
- * none. It reads every file under `apps/web/src`, of
- * every type, so the name cannot come back in a comment, a fixture, a style
- * sheet or a string table. Case and spacing do not matter: "ShipMyCards",
- * "shipmycards.com" and "Ship My Cards" are all the same company.
- */
 const BRAND = /ship\s*my\s*cards/i;
 
 describe('the SPA source names no other company', () => {

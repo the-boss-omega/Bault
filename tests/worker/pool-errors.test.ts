@@ -3,20 +3,6 @@ import type { Pool } from 'pg';
 import { BASE } from '../integration/helpers/http';
 import { testPool } from './helpers/db';
 
-/**
- * A database restart must not kill the processes that use it.
- *
- * When Postgres or PgBouncer restarts, every idle connection a `pg` Pool is
- * holding gets an error, and the pool re-emits it as an `error` event. An
- * EventEmitter with no `error` listener THROWS, and here that throw happens in a
- * socket callback: an uncaught exception, and the process exits. A routine
- * database restart would take the API and the worker down with it.
- *
- * Simulated here the way it happens: the server ends the backends. Only this
- * database's backends, and never this test's own.
- *
- * Needs the API running.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();
@@ -44,7 +30,6 @@ const readyz = async () => {
 
 describe('when the database drops idle connections', () => {
   it('the API stays up and serves the next request', async () => {
-    // Make sure the API's pool is holding idle connections to be dropped.
     await Promise.all(Array.from({ length: 5 }, () => fetch(`${BASE}/readyz`)));
     await terminateIdleBackends(pool);
     await new Promise((r) => setTimeout(r, 500));
@@ -56,8 +41,6 @@ describe('when the database drops idle connections', () => {
     const { loadEnv } = await import('@bault/config');
     const worker = createPool(loadEnv().DIRECT_DATABASE_URL);
     try {
-      // Without a listener the dropped connection below is an uncaught
-      // exception, and vitest reports it as such.
       expect(worker.listenerCount('error')).toBeGreaterThan(0);
       await worker.query('select 1');
       await terminateIdleBackends(pool);
