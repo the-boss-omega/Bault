@@ -5,7 +5,6 @@ import type { Database } from '../../db/client';
 import { ledgerRecord } from './pay.schema';
 import { money, type Money } from '../../shared/money';
 
-/** Single settlement currency for the MVP (spec Assumption). */
 export const DEFAULT_CURRENCY = 'USD';
 
 export interface LedgerEntry {
@@ -21,22 +20,17 @@ export interface LedgerEntry {
     | 'escrow_hold'
     | 'escrow_release'
     | 'escrow_refund'
-    | 'chargeback';
-  amount: number; // positive minor units
+    | 'chargeback'
+    | 'shipping_refund'
+    | 'service_refund'
+    | 'payout_reversal';
+  amount: number;
   direction: 'debit' | 'credit';
   currency?: string;
   referenceType?: string;
   referenceId?: string;
 }
 
-/**
- * Ledger service (T059/T066, Principles II & IV).
- *
- * `record` appends one immutable ledger row (INSERT only — the append-only DB
- * triggers forbid edits). `balanceOf` DERIVES the wallet balance as
- * sum(credits) − sum(debits); there is no stored balance to drift. Both take an
- * optional `tx` so a ledger write commits atomically with the operation causing it.
- */
 @Injectable()
 export class LedgerService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -54,7 +48,12 @@ export class LedgerService {
     });
   }
 
+  async lockWallet(userId: string, tx: Database): Promise<void> {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'wallet:' + userId}, 0))`);
+  }
+
   async balanceOf(userId: string, tx?: Database): Promise<Money> {
+    if (tx) await this.lockWallet(userId, tx);
     const exec = tx ?? this.db;
     const [row] = await exec
       .select({

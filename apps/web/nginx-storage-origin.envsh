@@ -1,0 +1,16 @@
+#!/bin/sh
+
+if [ -z "${STORAGE_PUBLIC_ORIGIN:-}" ] && [ -n "${STORAGE_ENDPOINT:-}" ]; then
+  STORAGE_PUBLIC_ORIGIN=$(printf '%s' "$STORAGE_ENDPOINT" | sed -E 's|^([A-Za-z][A-Za-z0-9+.-]*://[^/?#]*).*$|\1|')
+fi
+
+if [ -n "${STORAGE_PUBLIC_ORIGIN:-}" ]; then
+  if ! printf '%s' "$STORAGE_PUBLIC_ORIGIN" | grep -Eq '^https?://([A-Za-z0-9-]+\.)*[A-Za-z0-9-]+(:[0-9]{1,5})?$'; then
+    echo "nginx-storage-origin: the storage origin (STORAGE_PUBLIC_ORIGIN, or the origin of STORAGE_ENDPOINT) is not of the form scheme://host[:port]; refusing to start" >&2
+    exit 1
+  fi
+else
+  echo "nginx-storage-origin: neither STORAGE_PUBLIC_ORIGIN nor STORAGE_ENDPOINT is set; the CSP allows no object-storage origin, so bucket images will not load" >&2
+fi
+
+export STORAGE_PUBLIC_ORIGIN="${STORAGE_PUBLIC_ORIGIN:-}"

@@ -1,9 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { and, desc, eq, gte, inArray, isNull, lte, ne, or } from 'drizzle-orm';
+import { loadEnv } from '@bault/config';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
+import { pgErrorCode } from '../../shared/errors/pg-error';
 import { prefixedId } from '../../shared/ids';
 import { fullName } from '../../shared/names';
 import { userAccount } from '../acc/acc.schema';
@@ -11,10 +13,10 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { AuditService } from '../sec/audit.service';
 import type { AuthUser } from '../sec/auth-context';
 import { PAYMENT_ADAPTER } from '../../shared/adapters/adapters.module';
-import type { PaymentAdapter } from '@bault/adapters';
+import { PaymentProviderError, paypalPayoutItemOutcome, type PaymentAdapter } from '@bault/adapters';
 import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { charge, externalPayment, ledgerRecord, walletRequest, walletRequestEvent } from './pay.schema';
-import { cashOutFeeMinor } from './money-terms';
+import { cashOutSettlement } from './money-terms';
 import {
   canTransition,
   OPEN_WALLET_REQUEST_STATUSES,
@@ -27,35 +29,39 @@ import { MembershipService } from '../mem/membership.service';
 
 export type RequestActor = Pick<AuthUser, 'id' | 'role'>;
 
+export const PAYOUT_PROVIDER_TIMEOUT_MS = 20_000;
+
+export const MANUAL_PAYOUT_PROVIDER = 'manual';
+
+export function payoutKey(requestId: string): string {
+  return `wallet_request:${requestId}`;
+}
+
+export function payoutEventOutcome(type: string): 'succeeded' | 'pending' | 'failed' | 'reversed' | null {
+  const t = (type ?? '').toUpperCase();
+  if (t.startsWith('PAYMENT.PAYOUTS-ITEM.')) {
+    const suffix = t.slice('PAYMENT.PAYOUTS-ITEM.'.length);
+    if (PAYOUT_CAME_BACK.has(suffix)) return 'reversed';
+    return paypalPayoutItemOutcome(suffix === 'SUCCEEDED' ? 'SUCCESS' : suffix);
+  }
+  if (t.startsWith('PAYMENT.PAYOUTSBATCH.')) return t.endsWith('.DENIED') ? 'failed' : 'pending';
+  return null;
+}
+
+const PAYOUT_CAME_BACK = new Set(['REFUNDED', 'REVERSED', 'RETURNED']);
+
 export interface WalletRequestFilters {
   type?: WalletRequestType;
   status?: WalletRequestStatus;
   userId?: string;
-  /** ISO date (inclusive) bounds on `created_at`. */
   from?: string;
   to?: string;
 }
 
-/**
- * Cash-in / cash-out REQUESTS (Requirements 7 & 8).
- *
- * The invariant this service exists to hold: **submitting a request never moves
- * money**. A submission writes one `wallet_request` row and one
- * `wallet_request_event` row and stops. The wallet balance — which is derived
- * from `ledger_record` and nothing else (Principle IV) — changes at exactly one
- * moment in this file, in `complete()`, and only for a request an authorized
- * reviewer has already approved.
- *
- * Separation of duties is enforced rather than assumed: the account that raised a
- * request can never be the account that reviews it, even when that account is an
- * admin reviewing their own cash-out.
- *
- * Every transition appends to `wallet_request_event`, which is registered with
- * the append-only guards in `0001_append_only.sql` — so the review trail cannot
- * be edited or deleted afterwards, by anyone, including this service.
- */
 @Injectable()
 export class WalletRequestService {
+  private readonly logger = new Logger(WalletRequestService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly ledger: LedgerService,
@@ -75,18 +81,6 @@ export class WalletRequestService {
     }
   }
 
-  /* ---------------------------------------------------------------------------
-     Submission
-     ------------------------------------------------------------------------- */
-
-  /**
-   * Raise a request. Validates the draft, refuses a duplicate of an open request,
-   * and — for a cash-out — refuses an amount the wallet cannot currently cover.
-   *
-   * The balance check here is a courtesy that fails fast at submission time. It
-   * is NOT the guarantee: the binding check happens again inside `complete()`,
-   * because a balance can fall between submission and approval.
-   */
   async submit(userId: string, draft: WalletRequestDraft) {
     const currency = (draft.currency || DEFAULT_CURRENCY).toUpperCase();
     const normalized: WalletRequestDraft = { ...draft, currency };
@@ -96,9 +90,6 @@ export class WalletRequestService {
       throw AppError.validation(violations[0]?.message ?? 'Invalid wallet request', { violations });
     }
 
-    // Duplicate guard: an identical request that is still somebody's open work.
-    // The reference is part of the identity — see `isDuplicateOf` for why two
-    // same-amount transfers with different references are not duplicates.
     const reference = normalized.reference ?? null;
     const [duplicate] = await this.db
       .select({ id: walletRequest.id, code: walletRequest.code, status: walletRequest.status })
@@ -109,7 +100,6 @@ export class WalletRequestService {
           eq(walletRequest.type, normalized.type),
           eq(walletRequest.amount, normalized.amountMinor),
           eq(walletRequest.currency, currency),
-          // `= NULL` is never true in SQL, so the no-reference case needs IS NULL.
           reference === null ? isNull(walletRequest.reference) : eq(walletRequest.reference, reference),
           inArray(walletRequest.status, [...OPEN_WALLET_REQUEST_STATUSES]),
         ),
@@ -186,11 +176,20 @@ export class WalletRequestService {
     });
   }
 
-  /* ---------------------------------------------------------------------------
-     Reads
-     ------------------------------------------------------------------------- */
+  async accountHolderName(userId: string): Promise<string | null> {
+    const [u] = await this.db
+      .select({
+        firstName: userAccount.firstName,
+        lastName: userAccount.lastName,
+        legacyDisplayName: userAccount.legacyDisplayName,
+      })
+      .from(userAccount)
+      .where(eq(userAccount.id, userId))
+      .limit(1);
+    if (!u) return null;
+    return fullName(u.firstName, u.lastName) || u.legacyDisplayName?.trim() || null;
+  }
 
-  /** The caller's own requests, newest first. Never anyone else's. */
   listMine(userId: string) {
     return this.db
       .select()
@@ -199,10 +198,6 @@ export class WalletRequestService {
       .orderBy(desc(walletRequest.createdAt));
   }
 
-  /**
-   * The review queue. Admin-only, and filterable by type, user, status and date
-   * because a reviewer works a slice of the queue, not the whole of it.
-   */
   async listForReview(actor: RequestActor, filters: WalletRequestFilters = {}) {
     this.assertReviewer(actor);
 
@@ -234,15 +229,6 @@ export class WalletRequestService {
     }));
   }
 
-  /**
-   * One request, with its full audit history. Owner or reviewer only.
-   *
-   * Carries the SAME joined identity fields as the queue (`listForReview`), so
-   * the review drawer names the customer it is about. Without them the drawer
-   * showed a request with "Customer —" beside a queue row that named the person
-   * perfectly well; a reviewer deciding someone's money should not have to go
-   * back to the table to find out whose.
-   */
   async detail(requestId: string, actor: RequestActor) {
     const request = await this.loadFor(requestId, actor);
 
@@ -263,21 +249,20 @@ export class WalletRequestService {
       .where(eq(walletRequestEvent.requestId, requestId))
       .orderBy(walletRequestEvent.occurredAt);
 
+    const [payout] = request.payoutPaymentId
+      ? await this.db.select().from(externalPayment).where(eq(externalPayment.id, request.payoutPaymentId)).limit(1)
+      : [];
+
     return {
       ...request,
       username: owner?.username ?? null,
       email: owner?.email ?? null,
       customerName: fullName(owner?.firstName, owner?.lastName),
+      payout: payout ?? null,
       history,
     };
   }
 
-  /**
-   * Load a request on behalf of a caller.
-   *
-   * `notFound` rather than `forbidden` when a non-owner asks: confirming that
-   * some other customer's request id exists is itself a disclosure.
-   */
   private async loadFor(requestId: string, actor: RequestActor) {
     const [row] = await this.db.select().from(walletRequest).where(eq(walletRequest.id, requestId)).limit(1);
     if (!row) throw AppError.notFound('Wallet request not found');
@@ -287,11 +272,6 @@ export class WalletRequestService {
     return row;
   }
 
-  /* ---------------------------------------------------------------------------
-     Transitions
-     ------------------------------------------------------------------------- */
-
-  /** The requester withdraws their own request while it is still open. */
   async cancel(requestId: string, actor: RequestActor, reason?: string) {
     const request = await this.loadFor(requestId, actor);
     if (request.userId !== actor.id) {
@@ -300,7 +280,6 @@ export class WalletRequestService {
     return this.applyTransition(request.id, 'cancelled', actor, { reason: reason ?? null, actorRole: 'user' });
   }
 
-  /** Reviewer moves a request into review. */
   async markUnderReview(requestId: string, actor: RequestActor) {
     this.assertReviewer(actor);
     return this.applyTransition(requestId, 'pending_review', actor, {});
@@ -324,186 +303,212 @@ export class WalletRequestService {
     });
   }
 
-  /** Reviewer marks the money movement as under way with the payment provider. */
   async markProcessing(requestId: string, actor: RequestActor, note?: string) {
     this.assertReviewer(actor);
     return this.applyTransition(requestId, 'processing', actor, { reason: note ?? null });
   }
 
-  /**
-   * Completion — THE ONLY PLACE A WALLET REQUEST MOVES MONEY.
-   *
-   * In one transaction: re-check the invariants that could have changed since
-   * approval, append the single `ledger_record` row that is the money movement,
-   * link it to the request (`settled_ledger_id`, which carries a partial unique
-   * index so a second settlement is impossible at the database), and record the
-   * transition.
-   */
-  async complete(requestId: string, actor: RequestActor, note?: string) {
+  async complete(requestId: string, actor: RequestActor, options: { note?: string; payoutReference?: string } = {}) {
     this.assertReviewer(actor);
+    const note = options.note;
+    const reference = options.payoutReference?.trim() || null;
 
-    return this.db.transaction(async (tx) => {
-      // `for('update')` so two reviewers pressing Complete at the same moment
-      // serialize here rather than racing to write two ledger rows.
-      const [request] = await tx
-        .select()
-        .from(walletRequest)
-        .where(eq(walletRequest.id, requestId))
-        .for('update')
-        .limit(1);
-      if (!request) throw AppError.notFound('Wallet request not found');
+    const [peek] = await this.db
+      .select({ type: walletRequest.type })
+      .from(walletRequest)
+      .where(eq(walletRequest.id, requestId))
+      .limit(1);
+    if (!peek) throw AppError.notFound('Wallet request not found');
 
-      this.assertSeparationOfDuties(request.userId, actor);
-
-      if (request.status === 'completed') {
-        throw AppError.conflict(ErrorCode.CONFLICT, 'This request has already been completed.');
+    if (peek.type === 'cash_out') {
+      if (loadEnv().PAYOUT_MODE === 'provider') {
+        if (reference) {
+          throw AppError.validation(
+            'Cash-outs here are paid through the payment provider, so there is no payout reference to record. Do not pay this by hand.',
+            { field: 'payoutReference' },
+          );
+        }
+        return this.payOut(requestId, actor, note);
       }
-      if (!canTransition(request.status, 'completed')) {
-        throw AppError.conflict(
-          ErrorCode.CONFLICT,
-          `A request that is ${request.status} cannot be completed; approve it first.`,
+      if (!reference) {
+        throw AppError.validation(
+          'Payouts are made by hand here. Record the reference of the payment you sent — a PayPal transaction id or a bank transfer reference.',
+          { field: 'payoutReference' },
         );
       }
-      if (request.settledLedgerId) {
-        throw AppError.conflict(ErrorCode.CONFLICT, 'This request has already settled.');
-      }
+    }
+    return this.settleInOneStep(requestId, actor, note, peek.type === 'cash_out' ? reference : null);
+  }
 
-      // Re-check the balance at the moment money actually moves. Approval may
-      // have happened when the wallet was healthy and a purchase may have
-      // drained it since; completing anyway would overdraw a derived balance.
-      /**
-       * The cash-out fee.
-       *
-       * Frozen here rather than at submission, because the schedule is a
-       * platform rule and the request may have sat in review across a change to
-       * it — but quoted to the collector at submission from the same function,
-       * so the two agree unless somebody deliberately moved the schedule.
-       */
-      const grossFeeMinor = request.type === 'cash_out' ? cashOutFeeMinor(request.amount) : 0;
-      // A membership may waive it. Only ever less than the fee quoted at
-      // submission, never more — see `MembershipService.waive`.
-      const waiver =
-        grossFeeMinor > 0
-          ? await this.memberships.waive(tx as Database, request.userId, 'cash_out_fee', grossFeeMinor)
-          : { waivedMinor: 0, tier: null };
-      const feeMinor = grossFeeMinor - waiver.waivedMinor;
+  private async lockForCompletion(tx: Database, requestId: string, actor: RequestActor, to: WalletRequestStatus) {
+    const [request] = await tx
+      .select()
+      .from(walletRequest)
+      .where(eq(walletRequest.id, requestId))
+      .for('update')
+      .limit(1);
+    if (!request) throw AppError.notFound('Wallet request not found');
 
-      if (request.type === 'cash_out') {
-        const balance = await this.ledger.balanceOf(request.userId, tx);
-        // The FEE has to fit too. Completing a cash-out that clears the balance
-        // and then charging a fee against it would overdraw an account by an
-        // amount the collector was told about and never agreed to fund.
-        const needed = request.amount + feeMinor;
-        if (balance.amount < needed) {
-          throw AppError.conflict(
-            ErrorCode.INSUFFICIENT_BALANCE,
-            'The balance no longer covers this cash-out and its fee; it cannot be completed.',
-            { availableMinor: balance.amount, requestedMinor: request.amount, feeMinor },
-          );
-        }
-      }
+    this.assertSeparationOfDuties(request.userId, actor);
 
-      /**
-       * The payout rail.
-       *
-       * `WithdrawalService.confirm` had a `createPayout` call in it and nothing
-       * routed to it any more, so a completed cash-out wrote a ledger debit and
-       * moved no actual money — the request said settled and the collector's
-       * bank account never heard about it.
-       *
-       * The provider is called BEFORE the ledger row is written, and a failure
-       * aborts the transaction. The alternative — debit first, pay out after —
-       * loses the collector's money whenever the provider is down.
-       */
-      let payoutRef: string | null = null;
-      if (request.type === 'cash_out') {
-        const payout = await this.payment.createPayout({
-          userId: request.userId,
-          amountMinor: request.amount - feeMinor,
-          currency: request.currency ?? DEFAULT_CURRENCY,
-          idempotencyKey: `wallet_request:${request.id}`,
-          destinationToken: request.destinationAccount ?? '',
-        });
-        if (payout.status === 'failed') {
-          throw AppError.conflict(
-            ErrorCode.CONFLICT,
-            'The payout was refused by the provider. Nothing has been debited.',
-            { providerRef: payout.providerRef },
-          );
-        }
-        payoutRef = payout.providerRef;
+    if (request.status === 'completed') {
+      throw AppError.conflict(ErrorCode.CONFLICT, 'This request has already been completed.');
+    }
+    if (request.status === 'paying') {
+      throw AppError.conflict(
+        ErrorCode.CONFLICT,
+        'This payout has already been sent to the provider. It settles when the provider confirms it, or by reconciliation.',
+      );
+    }
+    if (!canTransition(request.status, to)) {
+      throw AppError.conflict(
+        ErrorCode.CONFLICT,
+        `A request that is ${request.status} cannot be completed; approve it first.`,
+      );
+    }
+    if (request.settledLedgerId) {
+      throw AppError.conflict(ErrorCode.CONFLICT, 'This request has already settled.');
+    }
+    return request;
+  }
 
-        const [ep] = await tx
-          .insert(externalPayment)
-          .values({
-            userId: request.userId,
-            provider: 'payout',
-            providerRef: payout.providerRef,
-            purpose: 'payout',
-            status: payout.status,
-            amount: request.amount - feeMinor,
-            currency: request.currency ?? DEFAULT_CURRENCY,
-          })
-          .returning({ id: externalPayment.id });
-        if (!ep) throw AppError.validation('Failed to record the payout');
-      }
+  private async debitCashOut(tx: Database, request: typeof walletRequest.$inferSelect) {
+    const grossFeeMinor = cashOutSettlement(request.amount).feeMinor;
+    await this.ledger.lockWallet(request.userId, tx);
+    const waiver =
+      grossFeeMinor > 0
+        ? await this.memberships.waive(tx, request.userId, 'cash_out_fee', grossFeeMinor)
+        : { waivedMinor: 0, tier: null, periodId: undefined };
+    const settlement = cashOutSettlement(request.amount, waiver.waivedMinor);
+    const currency = request.currency ?? DEFAULT_CURRENCY;
 
-      // The money movement itself: one append-only ledger row, recorded the same
-      // way every other movement in the platform is (Principle IV).
-      const [ledgerRow] = await tx
-        .insert(ledgerRecord)
+    const balance = await this.ledger.balanceOf(request.userId, tx);
+    if (balance.amount < settlement.grossMinor) {
+      throw AppError.conflict(
+        ErrorCode.INSUFFICIENT_BALANCE,
+        'The balance no longer covers this cash-out; it cannot be completed.',
+        { availableMinor: balance.amount, requestedMinor: request.amount, feeMinor: settlement.feeMinor },
+      );
+    }
+
+    const [ledgerRow] = await tx
+      .insert(ledgerRecord)
+      .values({
+        userId: request.userId,
+        type: 'withdrawal',
+        amount: settlement.netMinor,
+        direction: 'debit',
+        currency,
+        referenceType: 'wallet_request',
+        referenceId: request.id,
+      })
+      .returning({ id: ledgerRecord.id });
+    if (!ledgerRow) throw AppError.validation('Failed to record the money movement');
+
+    if (settlement.feeMinor > 0) {
+      const [c] = await tx
+        .insert(charge)
         .values({
           userId: request.userId,
-          type: request.type === 'cash_in' ? 'credit_topup' : 'withdrawal',
-          amount: request.amount,
-          direction: request.type === 'cash_in' ? 'credit' : 'debit',
-          currency: request.currency ?? DEFAULT_CURRENCY,
-          referenceType: 'wallet_request',
+          actionType: 'service',
+          pricingRuleSnapshot: {
+            cashOutFee: true,
+            grossMinor: settlement.grossMinor,
+            feeMinor: settlement.feeMinor,
+            netMinor: settlement.netMinor,
+            ...(waiver.waivedMinor > 0 ? { membershipWaiver: waiver } : {}),
+          },
+          amount: settlement.feeMinor,
+          currency,
+          paymentMeans: 'wallet',
+          status: 'settled',
           referenceId: request.id,
         })
-        .returning({ id: ledgerRecord.id });
-      if (!ledgerRow) throw AppError.validation('Failed to record the money movement');
+        .returning({ id: charge.id });
+      if (!c) throw AppError.validation('Failed to charge the cash-out fee');
+      await this.ledger.record(
+        {
+          userId: request.userId,
+          type: 'fee',
+          amount: settlement.feeMinor,
+          direction: 'debit',
+          currency,
+          referenceType: 'charge',
+          referenceId: c.id,
+        },
+        tx,
+      );
+    }
 
-      /**
-       * The fee, as its own charge and its own ledger row.
-       *
-       * Deliberately NOT netted off the withdrawal row. A collector asking for
-       * $200 and receiving $193 should be able to see both numbers on their
-       * statement; a single $200 debit next to a $193 arrival is the shape of a
-       * question to support.
-       */
-      if (feeMinor > 0) {
-        const [c] = await tx
-          .insert(charge)
+    return { ledgerRowId: ledgerRow.id, settlement, currency, waiver };
+  }
+
+  private async settleInOneStep(requestId: string, actor: RequestActor, note: string | undefined, reference: string | null) {
+    return this.db.transaction(async (tx) => {
+      const request = await this.lockForCompletion(tx as Database, requestId, actor, 'completed');
+      const currency = request.currency ?? DEFAULT_CURRENCY;
+
+      let ledgerRowId: string;
+      let feeMinor = 0;
+      let netMinor = request.amount;
+      let paymentId: string | null = null;
+
+      if (request.type === 'cash_out') {
+        const debit = await this.debitCashOut(tx as Database, request);
+        ledgerRowId = debit.ledgerRowId;
+        feeMinor = debit.settlement.feeMinor;
+        netMinor = debit.settlement.netMinor;
+
+        const [taken] = await tx
+          .select({ id: externalPayment.id })
+          .from(externalPayment)
+          .where(and(eq(externalPayment.provider, MANUAL_PAYOUT_PROVIDER), eq(externalPayment.externalRef, reference!)))
+          .limit(1);
+        if (taken) {
+          throw AppError.conflict(ErrorCode.CONFLICT, 'That payment reference is already recorded against another payout.', {
+            field: 'payoutReference',
+          });
+        }
+        let ep: { id: string } | undefined;
+        try {
+          [ep] = await tx
+            .insert(externalPayment)
+            .values({
+              userId: request.userId,
+              provider: MANUAL_PAYOUT_PROVIDER,
+              providerRef: payoutKey(request.id),
+              externalRef: reference,
+              purpose: 'payout',
+              status: 'succeeded',
+              amount: netMinor,
+              currency,
+            })
+            .returning({ id: externalPayment.id });
+        } catch (e) {
+          if (pgErrorCode(e) === '23505') {
+            throw AppError.conflict(ErrorCode.CONFLICT, 'That payment reference is already recorded against another payout.', {
+              field: 'payoutReference',
+            });
+          }
+          throw e;
+        }
+        if (!ep) throw AppError.validation('Failed to record the payout');
+        paymentId = ep.id;
+      } else {
+        const [ledgerRow] = await tx
+          .insert(ledgerRecord)
           .values({
             userId: request.userId,
-            actionType: 'service',
-            pricingRuleSnapshot: {
-              cashOutFee: true,
-              grossMinor: request.amount,
-              feeMinor,
-              netMinor: request.amount - feeMinor,
-            },
-            amount: feeMinor,
-            currency: request.currency ?? DEFAULT_CURRENCY,
-            paymentMeans: 'wallet',
-            status: 'settled',
+            type: 'credit_topup',
+            amount: request.amount,
+            direction: 'credit',
+            currency,
+            referenceType: 'wallet_request',
             referenceId: request.id,
           })
-          .returning({ id: charge.id });
-        if (!c) throw AppError.validation('Failed to charge the cash-out fee');
-        await this.ledger.record(
-          {
-            userId: request.userId,
-            type: 'fee',
-            amount: feeMinor,
-            direction: 'debit',
-            currency: request.currency ?? DEFAULT_CURRENCY,
-            referenceType: 'charge',
-            referenceId: c.id,
-          },
-          tx,
-        );
+          .returning({ id: ledgerRecord.id });
+        if (!ledgerRow) throw AppError.validation('Failed to record the money movement');
+        ledgerRowId = ledgerRow.id;
       }
 
       const completedAt = new Date();
@@ -511,7 +516,9 @@ export class WalletRequestService {
         .update(walletRequest)
         .set({
           status: 'completed',
-          settledLedgerId: ledgerRow.id,
+          settledLedgerId: ledgerRowId,
+          payoutPaymentId: paymentId,
+          payoutReference: reference,
           completedAt,
           updatedAt: completedAt,
         })
@@ -519,7 +526,7 @@ export class WalletRequestService {
         .returning();
       if (!updated) throw AppError.validation('Failed to complete the request');
 
-      await this.appendEvent(tx, {
+      await this.appendEvent(tx as Database, {
         requestId: request.id,
         actorId: actor.id,
         actorRole: actor.role,
@@ -527,31 +534,15 @@ export class WalletRequestService {
         toStatus: 'completed',
         reason: note ?? null,
         metadata: {
-          ledgerRecordId: ledgerRow.id,
+          ledgerRecordId: ledgerRowId,
           amountMinor: request.amount,
           currency: request.currency,
           feeMinor,
-          netMinor: request.amount - feeMinor,
-          payoutRef,
+          netMinor,
+          ...(paymentId ? { paymentId, payoutReference: reference, payoutMode: 'manual' } : {}),
         },
       });
-
-      await this.outbox.emit(tx, {
-        aggregateType: 'wallet_request',
-        aggregateId: request.id,
-        eventType: 'wallet_request_completed',
-        payload: {
-          requestId: request.id,
-          code: request.code,
-          type: request.type,
-          status: 'completed',
-          userId: request.userId,
-          amountMinor: request.amount,
-          feeMinor,
-          netMinor: request.amount - feeMinor,
-        },
-      });
-
+      await this.emitCompleted(tx as Database, updated, feeMinor, netMinor);
       await this.audit.record(
         {
           actorId: actor.id,
@@ -560,26 +551,483 @@ export class WalletRequestService {
           targetId: request.id,
           metadata: {
             fromStatus: request.status,
-            ledgerRecordId: ledgerRow.id,
+            ledgerRecordId: ledgerRowId,
             amountMinor: request.amount,
             requesterId: request.userId,
+            ...(reference ? { payoutReference: reference } : {}),
           },
         },
         tx,
       );
-
       return updated;
     });
   }
 
-  /**
-   * Separation of duties.
-   *
-   * An admin is a customer too — they have a wallet and may raise their own
-   * cash-out. Nothing about the `admin` role should let them decide their own
-   * money, so the requester is barred from every reviewer action on their own
-   * request regardless of role.
-   */
+  private async payOut(requestId: string, actor: RequestActor, note: string | undefined) {
+    const started = await this.db.transaction(async (tx) => {
+      const request = await this.lockForCompletion(tx as Database, requestId, actor, 'paying');
+      const debit = await this.debitCashOut(tx as Database, request);
+
+      const [payment] = await tx
+        .insert(externalPayment)
+        .values({
+          userId: request.userId,
+          provider: this.payment.providerName,
+          providerRef: payoutKey(request.id),
+          purpose: 'payout',
+          status: 'pending',
+          amount: debit.settlement.netMinor,
+          currency: debit.currency,
+        })
+        .returning();
+      if (!payment) throw AppError.validation('Failed to record the payout');
+
+      const now = new Date();
+      const [updated] = await tx
+        .update(walletRequest)
+        .set({ status: 'paying', settledLedgerId: debit.ledgerRowId, payoutPaymentId: payment.id, updatedAt: now })
+        .where(eq(walletRequest.id, request.id))
+        .returning();
+      if (!updated) throw AppError.validation('Failed to start the payout');
+
+      await this.appendEvent(tx as Database, {
+        requestId: request.id,
+        actorId: actor.id,
+        actorRole: actor.role,
+        fromStatus: request.status,
+        toStatus: 'paying',
+        reason: note ?? null,
+        metadata: {
+          ledgerRecordId: debit.ledgerRowId,
+          paymentId: payment.id,
+          amountMinor: request.amount,
+          currency: request.currency,
+          feeMinor: debit.settlement.feeMinor,
+          netMinor: debit.settlement.netMinor,
+          waivedMinor: debit.waiver.waivedMinor,
+          waiverPeriodId: debit.waiver.periodId ?? null,
+        },
+      });
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'wallet_request.pay',
+          targetEntity: 'wallet_request',
+          targetId: request.id,
+          metadata: { fromStatus: request.status, paymentId: payment.id, amountMinor: request.amount, requesterId: request.userId },
+        },
+        tx,
+      );
+      return { request: updated, payment };
+    });
+
+    const { request, payment } = started;
+    let answer: { status: 'succeeded' | 'pending' | 'failed'; externalRef: string | null } | null = null;
+    let reason: string | null = null;
+    try {
+      const result = await this.payment.createPayout({
+        userId: request.userId,
+        amountMinor: payment.amount,
+        currency: payment.currency,
+        idempotencyKey: payment.providerRef,
+        destinationToken: request.destinationAccount ?? '',
+        signal: AbortSignal.timeout(PAYOUT_PROVIDER_TIMEOUT_MS),
+      });
+      answer = { status: result.status, externalRef: result.providerRef };
+    } catch (e) {
+      reason = e instanceof Error ? e.message.slice(0, 200) : 'unknown';
+      if (e instanceof PaymentProviderError && e.refused) answer = { status: 'failed', externalRef: null };
+    }
+
+    if (!answer) {
+      throw new AppError(
+        ErrorCode.PROVIDER_UNAVAILABLE,
+        `The payout provider did not answer, so this payout's outcome is unknown. ${request.code} stays debited and paying; ` +
+          'the provider\'s notification or a reconciliation will settle it. Do not pay it again by hand.',
+        502,
+        { requestId: request.id, paymentId: payment.id, reason },
+      );
+    }
+
+    const settled = await this.recordPayoutOutcome(payment.id, answer, { source: 'provider', actor, reason });
+    if (answer.status === 'failed') {
+      throw AppError.conflict(
+        ErrorCode.CONFLICT,
+        `The provider refused this payout. ${request.code} is closed as payout failed and the collector's money is back in their wallet.`,
+        { requestId: request.id, paymentId: payment.id, reason },
+      );
+    }
+    return settled ?? request;
+  }
+
+  async recordPayoutOutcome(
+    paymentId: string,
+    outcome: { status: 'succeeded' | 'pending' | 'failed' | 'reversed'; externalRef: string | null },
+    context: { source: 'provider' | 'webhook' | 'reconcile'; actor?: RequestActor | null; webhookEventId?: string | null; reason?: string | null },
+  ) {
+    return this.db.transaction(async (tx) => {
+      const [request] = await tx
+        .select()
+        .from(walletRequest)
+        .where(eq(walletRequest.payoutPaymentId, paymentId))
+        .for('update')
+        .limit(1);
+      if (!request) return null;
+      const [payment] = await tx
+        .select()
+        .from(externalPayment)
+        .where(eq(externalPayment.id, paymentId))
+        .for('update')
+        .limit(1);
+      if (!payment) return null;
+      if (payment.status !== 'pending' || request.status !== 'paying') {
+        if (outcome.status === 'reversed' && payment.status === 'succeeded' && request.status === 'completed') {
+          return this.reversePaidPayout(tx as Database, request, payment, outcome.externalRef, context);
+        }
+        if (outcome.status !== 'pending' && outcome.status !== payment.status) {
+          this.logger.warn(
+            `Payout ${paymentId} (${request.code}) is ${payment.status}; a later "${outcome.status}" from ${context.source} ` +
+              `changed nothing${context.reason ? ` (${context.reason})` : ''}`,
+          );
+        }
+        return request;
+      }
+      const status = outcome.status === 'reversed' ? 'failed' : outcome.status;
+
+      const externalRef = outcome.externalRef ?? payment.externalRef;
+      const now = new Date();
+
+      if (status === 'pending') {
+        if (externalRef && externalRef !== payment.externalRef) {
+          await tx.update(externalPayment).set({ externalRef, updatedAt: now }).where(eq(externalPayment.id, paymentId));
+          const [updated] = await tx
+            .update(walletRequest)
+            .set({ payoutReference: externalRef, updatedAt: now })
+            .where(eq(walletRequest.id, request.id))
+            .returning();
+          return updated ?? request;
+        }
+        return request;
+      }
+
+      await tx
+        .update(externalPayment)
+        .set({
+          status,
+          externalRef,
+          webhookEventId: context.webhookEventId ?? payment.webhookEventId,
+          updatedAt: now,
+        })
+        .where(eq(externalPayment.id, paymentId));
+
+      const actorId = context.actor?.id ?? null;
+      const actorRole = context.actor?.role ?? 'system';
+      const meta = await this.payingMetadata(tx as Database, request.id);
+      const feeMinor = Number(meta.feeMinor ?? 0);
+      const netMinor = Number(meta.netMinor ?? payment.amount);
+
+      if (status === 'succeeded') {
+        const [updated] = await tx
+          .update(walletRequest)
+          .set({ status: 'completed', payoutReference: externalRef, completedAt: now, updatedAt: now })
+          .where(eq(walletRequest.id, request.id))
+          .returning();
+        if (!updated) throw AppError.validation('Failed to complete the request');
+        await this.appendEvent(tx as Database, {
+          requestId: request.id,
+          actorId,
+          actorRole,
+          fromStatus: 'paying',
+          toStatus: 'completed',
+          reason: null,
+          metadata: { source: context.source, paymentId, externalRef, webhookEventId: context.webhookEventId ?? null },
+        });
+        await this.emitCompleted(tx as Database, updated, feeMinor, netMinor);
+        await this.audit.record(
+          {
+            actorId,
+            action: 'wallet_request.complete',
+            targetEntity: 'wallet_request',
+            targetId: request.id,
+            metadata: { fromStatus: 'paying', source: context.source, paymentId, externalRef, requesterId: request.userId },
+          },
+          tx,
+        );
+        return updated;
+      }
+
+      await this.ledger.lockWallet(request.userId, tx as Database);
+      await this.ledger.record(
+        {
+          userId: request.userId,
+          type: 'payout_reversal',
+          amount: request.amount,
+          direction: 'credit',
+          currency: request.currency ?? DEFAULT_CURRENCY,
+          referenceType: 'wallet_request',
+          referenceId: request.id,
+        },
+        tx,
+      );
+      if (typeof meta.waiverPeriodId === 'string' && Number(meta.waivedMinor ?? 0) > 0) {
+        await this.memberships.restoreCounted(tx as Database, meta.waiverPeriodId, 'cash_out_fee');
+      }
+      const [updated] = await tx
+        .update(walletRequest)
+        .set({ status: 'payout_failed', payoutReference: externalRef, updatedAt: now })
+        .where(eq(walletRequest.id, request.id))
+        .returning();
+      if (!updated) throw AppError.validation('Failed to record the failed payout');
+      await this.appendEvent(tx as Database, {
+        requestId: request.id,
+        actorId,
+        actorRole,
+        fromStatus: 'paying',
+        toStatus: 'payout_failed',
+        reason: context.reason ?? 'The provider did not pay this out.',
+        metadata: {
+          source: context.source,
+          paymentId,
+          externalRef,
+          webhookEventId: context.webhookEventId ?? null,
+          reversedMinor: request.amount,
+        },
+      });
+      await this.outbox.emit(tx, {
+        aggregateType: 'wallet_request',
+        aggregateId: request.id,
+        eventType: 'wallet_request_payout_failed',
+        payload: {
+          requestId: request.id,
+          code: request.code,
+          type: request.type,
+          status: 'payout_failed',
+          userId: request.userId,
+          amountMinor: request.amount,
+        },
+      });
+      await this.audit.record(
+        {
+          actorId,
+          action: 'wallet_request.payout_failed',
+          targetEntity: 'wallet_request',
+          targetId: request.id,
+          metadata: { source: context.source, paymentId, reversedMinor: request.amount, requesterId: request.userId },
+        },
+        tx,
+      );
+      return updated;
+    });
+  }
+
+  private async payingMetadata(tx: Database, requestId: string): Promise<Record<string, unknown>> {
+    const [started] = await tx
+      .select({ metadata: walletRequestEvent.metadata })
+      .from(walletRequestEvent)
+      .where(and(eq(walletRequestEvent.requestId, requestId), eq(walletRequestEvent.toStatus, 'paying')))
+      .limit(1);
+    return (started?.metadata as Record<string, unknown> | null) ?? {};
+  }
+
+  private async reversePaidPayout(
+    tx: Database,
+    request: typeof walletRequest.$inferSelect,
+    payment: typeof externalPayment.$inferSelect,
+    externalRefIn: string | null,
+    context: { source: 'provider' | 'webhook' | 'reconcile'; actor?: RequestActor | null; webhookEventId?: string | null; reason?: string | null },
+  ) {
+    const now = new Date();
+    const externalRef = externalRefIn ?? payment.externalRef;
+    const actorId = context.actor?.id ?? null;
+    const actorRole = context.actor?.role ?? 'system';
+    const meta = await this.payingMetadata(tx, request.id);
+
+    await this.ledger.lockWallet(request.userId, tx);
+    await this.ledger.record(
+      {
+        userId: request.userId,
+        type: 'payout_reversal',
+        amount: request.amount,
+        direction: 'credit',
+        currency: request.currency ?? DEFAULT_CURRENCY,
+        referenceType: 'wallet_request',
+        referenceId: request.id,
+      },
+      tx,
+    );
+    if (typeof meta.waiverPeriodId === 'string' && Number(meta.waivedMinor ?? 0) > 0) {
+      await this.memberships.restoreCounted(tx, meta.waiverPeriodId, 'cash_out_fee');
+    }
+    await tx
+      .update(externalPayment)
+      .set({
+        status: 'reversed',
+        externalRef,
+        webhookEventId: context.webhookEventId ?? payment.webhookEventId,
+        updatedAt: now,
+      })
+      .where(eq(externalPayment.id, payment.id));
+    const [updated] = await tx
+      .update(walletRequest)
+      .set({ status: 'payout_failed', updatedAt: now })
+      .where(eq(walletRequest.id, request.id))
+      .returning();
+    if (!updated) throw AppError.validation('Failed to record the reversed payout');
+    await this.appendEvent(tx, {
+      requestId: request.id,
+      actorId,
+      actorRole,
+      fromStatus: 'completed',
+      toStatus: 'payout_failed',
+      reason: context.reason ?? 'The provider took this payout back after paying it.',
+      metadata: {
+        source: context.source,
+        paymentId: payment.id,
+        externalRef,
+        webhookEventId: context.webhookEventId ?? null,
+        reversedMinor: request.amount,
+        afterPaid: true,
+      },
+    });
+    await this.outbox.emit(tx, {
+      aggregateType: 'wallet_request',
+      aggregateId: request.id,
+      eventType: 'wallet_request_payout_failed',
+      payload: {
+        requestId: request.id,
+        code: request.code,
+        type: request.type,
+        status: 'payout_failed',
+        userId: request.userId,
+        amountMinor: request.amount,
+      },
+    });
+    await this.audit.record(
+      {
+        actorId,
+        action: 'wallet_request.payout_reversed',
+        targetEntity: 'wallet_request',
+        targetId: request.id,
+        metadata: {
+          source: context.source,
+          paymentId: payment.id,
+          webhookEventId: context.webhookEventId ?? null,
+          reversedMinor: request.amount,
+          requesterId: request.userId,
+        },
+      },
+      tx,
+    );
+    this.logger.warn(`Payout ${payment.id} (${request.code}) came back after it was paid; ${request.amount} credited back`);
+    return updated;
+  }
+
+  async reconcilePayouts(actor: RequestActor, options: { olderThanMinutes?: number; limit?: number } = {}) {
+    this.assertReviewer(actor);
+    const olderThan = Math.max(0, options.olderThanMinutes ?? 15);
+    const cutoff = new Date(Date.now() - olderThan * 60_000);
+    const stale = await this.db
+      .select({ payment: externalPayment, request: walletRequest })
+      .from(externalPayment)
+      .innerJoin(walletRequest, eq(walletRequest.payoutPaymentId, externalPayment.id))
+      .where(
+        and(
+          eq(externalPayment.purpose, 'payout'),
+          eq(externalPayment.status, 'pending'),
+          ne(externalPayment.provider, MANUAL_PAYOUT_PROVIDER),
+          lte(externalPayment.updatedAt, cutoff),
+        ),
+      )
+      .orderBy(externalPayment.updatedAt)
+      .limit(Math.min(Math.max(1, options.limit ?? 50), 200));
+
+    const summary = { checked: 0, succeeded: 0, failed: 0, pending: 0, unanswered: 0 };
+    for (const { payment, request } of stale) {
+      summary.checked += 1;
+      if (payment.provider !== this.payment.providerName) {
+        summary.unanswered += 1;
+        continue;
+      }
+      let result;
+      try {
+        const signal = AbortSignal.timeout(PAYOUT_PROVIDER_TIMEOUT_MS);
+        result = payment.externalRef
+          ? await this.payment.getPayout(payment.externalRef, { signal })
+          : await this.payment.createPayout({
+              userId: request.userId,
+              amountMinor: payment.amount,
+              currency: payment.currency,
+              idempotencyKey: payment.providerRef,
+              destinationToken: request.destinationAccount ?? '',
+              signal,
+            });
+      } catch {
+        summary.unanswered += 1;
+        continue;
+      }
+      await this.recordPayoutOutcome(
+        payment.id,
+        { status: result.status, externalRef: result.providerRef },
+        { source: 'reconcile', actor },
+      );
+      summary[result.status] += 1;
+    }
+    return summary;
+  }
+
+  async applyPayoutEvent(event: { id: string; type: string; data: Record<string, unknown> }): Promise<'applied' | 'unmatched' | 'ignored'> {
+    const status = payoutEventOutcome(event.type);
+    if (!status) return 'ignored';
+
+    const data = event.data ?? {};
+    const pick = (...path: string[]): string | null => {
+      let cur: unknown = data;
+      for (const key of path) cur = cur && typeof cur === 'object' ? (cur as Record<string, unknown>)[key] : undefined;
+      return typeof cur === 'string' && cur.trim() !== '' ? cur : null;
+    };
+    const keys = [pick('payout_item', 'sender_item_id'), pick('sender_item_id'), pick('batch_header', 'sender_batch_header', 'sender_batch_id')].filter(
+      (k): k is string => k !== null,
+    );
+    const batchId = pick('payout_batch_id') ?? pick('batch_header', 'payout_batch_id');
+
+    const matches = [
+      ...(keys.length > 0 ? [inArray(externalPayment.providerRef, keys)] : []),
+      ...(batchId ? [eq(externalPayment.externalRef, batchId)] : []),
+    ];
+    if (matches.length === 0) return 'unmatched';
+    const [payment] = await this.db
+      .select({ id: externalPayment.id })
+      .from(externalPayment)
+      .where(and(eq(externalPayment.purpose, 'payout'), or(...matches)))
+      .limit(1);
+    if (!payment) return 'unmatched';
+
+    await this.recordPayoutOutcome(
+      payment.id,
+      { status, externalRef: batchId },
+      { source: 'webhook', webhookEventId: status === 'pending' ? null : event.id, reason: `Provider event ${event.type}` },
+    );
+    return 'applied';
+  }
+
+  private async emitCompleted(tx: Database, request: typeof walletRequest.$inferSelect, feeMinor: number, netMinor: number) {
+    await this.outbox.emit(tx, {
+      aggregateType: 'wallet_request',
+      aggregateId: request.id,
+      eventType: 'wallet_request_completed',
+      payload: {
+        requestId: request.id,
+        code: request.code,
+        type: request.type,
+        status: 'completed',
+        userId: request.userId,
+        amountMinor: request.amount,
+        feeMinor,
+        netMinor,
+      },
+    });
+  }
+
   private assertSeparationOfDuties(requesterId: string, actor: RequestActor): void {
     if (requesterId === actor.id) {
       throw AppError.forbidden(
@@ -588,11 +1036,6 @@ export class WalletRequestService {
     }
   }
 
-  /**
-   * The shared transition path: legality, separation of duties, the row update,
-   * the append-only event, the notification and the audit record — in one
-   * transaction, so a state change is never visible without its trail.
-   */
   private async applyTransition(
     requestId: string,
     toStatus: WalletRequestStatus,
@@ -613,8 +1056,6 @@ export class WalletRequestService {
         .limit(1);
       if (!request) throw AppError.notFound('Wallet request not found');
 
-      // The requester may only cancel; every other transition is a reviewer's,
-      // and a reviewer may never act on their own request.
       if (toStatus !== 'cancelled') this.assertSeparationOfDuties(request.userId, actor);
 
       if (!canTransition(request.status, toStatus)) {
@@ -677,7 +1118,6 @@ export class WalletRequestService {
     });
   }
 
-  /** One immutable row per state change (Requirement 8: acting user, timestamp, from, to, reason). */
   private async appendEvent(
     tx: Database,
     entry: {
@@ -701,7 +1141,6 @@ export class WalletRequestService {
     });
   }
 
-  /** Open requests, used by the wallet summary so a user sees pending money. */
   async openTotals(userId: string) {
     const rows = await this.db
       .select({ type: walletRequest.type, amount: walletRequest.amount })

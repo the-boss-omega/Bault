@@ -13,15 +13,6 @@ import { DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { ServiceRequestService } from './service.service';
 
-/**
- * Donation (T098, Principles I & VII) — Opus-tier, irreversible.
- *
- * Two-step confirmed. On confirm, in ONE transaction: the item's ownership moves
- * to the platform custodian (so it leaves the donor's vault WITHOUT the record
- * ever being deleted and while keeping exactly one owner), its lifecycle becomes
- * the terminal `donated`, a billable service request is recorded, and an outbox
- * event is emitted. The custody event + completed request are the final record.
- */
 @Injectable()
 export class DonationService {
   constructor(
@@ -32,7 +23,6 @@ export class DonationService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /** Step 1: validate and return a confirmation challenge. */
   async request(ownerId: string, itemId: string) {
     const [it] = await this.db.select().from(item).where(eq(item.id, itemId)).limit(1);
     if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
@@ -41,7 +31,6 @@ export class DonationService {
     return this.confirmation.issue(ownerId, 'donation', { itemId });
   }
 
-  /** Step 2: consume the confirmation and execute the donation atomically. */
   async confirm(ownerId: string, confirmationToken: string) {
     const { itemId } = await this.confirmation.consume<{ itemId: string }>(ownerId, 'donation', confirmationToken);
 
@@ -50,11 +39,9 @@ export class DonationService {
       const req = await this.requests.create(tx, { type: 'donation', requesterId: ownerId, itemId });
       if (!req) throw AppError.validation('Failed to create donation request');
 
-      await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'donation');
+      await this.custody.transferOwnership(tx, itemId, platformId, ownerId, 'donation', { ownerId });
       await this.custody.changeState(tx, itemId, 'donated', ownerId, 'donated');
 
-      // A donation is an ownership-changing transaction, so it is recorded like
-      // any other (Requirement 13.1) — price null, since no money changes hands.
       const [txn] = await tx
         .insert(transaction)
         .values({

@@ -2,26 +2,16 @@ import { cloneElement, isValidElement, useId } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
-/* ============================================================
-   Buttons
-   ============================================================ */
-
 type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: 'md' | 'sm';
   block?: boolean;
-  /** Shows a spinner, disables the control and announces `aria-busy`. */
   loading?: boolean;
   icon?: ReactNode;
 }
 
-/**
- * The one button in the product. `gold` is the single primary action per view;
- * everything else is `secondary` or `ghost` so common and rare actions never
- * carry the same visual weight.
- */
 export function Button({
   variant = 'secondary',
   size = 'md',
@@ -45,16 +35,6 @@ export function Button({
     .filter(Boolean)
     .join(' ');
   return (
-    /**
-     * A busy button is disabled AND says so.
-     *
-     * Every submit in this app was a plain button whose only feedback was that
-     * nothing happened for a moment — so people press twice, and on a
-     * money-moving form that is a real problem rather than an aesthetic one.
-     * `aria-busy` announces it, `disabled` prevents the second press, and the
-     * spinner replaces the icon rather than sitting next to it so the control
-     * does not change width mid-action.
-     */
     <button
       type={type}
       className={classes}
@@ -68,25 +48,6 @@ export function Button({
   );
 }
 
-/**
- * A labelled form control.
- *
- * Replaces the pattern this app repeated everywhere:
- *
- *   <label class="field"><span class="field-label">Caption</span>
- *     <input/><span class="field-hint">Help</span></label>
- *
- * which associates the control with its label only by NESTING. The consequence
- * is that the label's accessible name is the caption and the hint run together,
- * so a screen reader announces "Owner usernameThe customer's permanent
- * identifier as shown on the parcel" as the name of the field. It also made the
- * hint unclickable-but-focus-stealing and defeated `getByLabelText` in tests,
- * which is how it was found.
- *
- * Here the label points at the control by id, the hint is attached with
- * `aria-describedby` where it belongs, and an error message replaces the hint
- * and sets `aria-invalid` so the failure is announced rather than only coloured.
- */
 export function Field({
   label,
   hint,
@@ -98,19 +59,6 @@ export function Field({
   label: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
-  /**
-   * The id of the control this labels.
-   *
-   * OPTIONAL, and omitting it is the better call in most places. It was
-   * required, which meant every conversion away from the wrapping-label pattern
-   * had to invent an id — and an id written as a literal is wrong the moment the
-   * field renders inside a list, because then there are several of it. Left out,
-   * the field mints one with `useId` and attaches it to its child, which is
-   * unique per instance by construction.
-   *
-   * Pass it explicitly only when something outside needs to point at the control
-   * (a `ref`, a test, an `aria-controls` elsewhere on the page).
-   */
   htmlFor?: string;
   children: ReactNode;
   className?: string;
@@ -119,15 +67,6 @@ export function Field({
   const id = htmlFor ?? generated;
   const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
 
-  /**
-   * When the id is ours, put it on the control — otherwise the label points at
-   * nothing and the whole exercise is decoration. `describedBy` goes on with it,
-   * so the hint is announced as a DESCRIPTION rather than becoming part of the
-   * field's name, which is the bug this component exists to fix.
-   *
-   * Only a single element child can be given an id; anything else (a fragment, a
-   * group of radios) is left alone and should pass `htmlFor` itself.
-   */
   const control =
     htmlFor === undefined && isValidElement(children)
       ? cloneElement(children as ReactElement<Record<string, unknown>>, {
@@ -156,29 +95,6 @@ export function Field({
   );
 }
 
-/**
- * An amount somebody types, with its currency mark.
- *
- * This existed as a hand-assembled shape repeated in nine files:
- *
- *   <div class="field">
- *     <span class="field-label">Amount</span>
- *     <div class="money-input"><span aria-hidden>$</span><input inputmode="decimal"></div>
- *   </div>
- *
- * A `<span>` caption and a `<div>` wrapper — so nothing associated the label
- * with the control. Some sites had grown an `id` and an `htmlFor` over time;
- * five had not, and the axe sweep caught two of them (the wallet's cash-in form
- * and the escrow form) because those were the screens it visited. The other
- * three — the shipment composer, the consignment form and the grading form —
- * have the identical shape and are converted with them: every one is a place
- * where somebody types a number that moves real money.
- *
- * The association cannot be forgotten here, because the component owns both
- * ends of it. `dir="ltr"` because an amount is a Latin run whatever the page
- * direction, `inputMode="decimal"` for the numeric keypad, and `spellCheck` off
- * because a red squiggle under a number is noise.
- */
 export function MoneyField({
   label,
   hint,
@@ -192,7 +108,6 @@ export function MoneyField({
   label: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
-  /** `$` for money, `%` for a rate. Decorative — the label says which. */
   mark?: string;
   value: string;
   onChange: (value: string) => void;
@@ -234,7 +149,6 @@ export function MoneyField({
   );
 }
 
-/** Icon-only control. `label` is required — it becomes the accessible name. */
 export function IconButton({
   label,
   children,
@@ -255,11 +169,6 @@ export function IconButton({
   );
 }
 
-/* ============================================================
-   Surfaces
-   ============================================================ */
-
-/** White rounded card with an optional titled header and tool slot. */
 export function Panel({
   title,
   subtitle,
@@ -296,16 +205,8 @@ export function Panel({
   );
 }
 
-/* ============================================================
-   Status
-   ============================================================ */
-
 export type StatusTone = 'success' | 'warning' | 'error' | 'info' | 'gold' | 'violet' | 'neutral';
 
-/**
- * Status badge. Colour is never the only signal — the label always states the
- * status in words, so the pill is readable without colour perception.
- */
 export function StatusBadge({
   tone = 'neutral',
   children,
@@ -321,10 +222,6 @@ export function StatusBadge({
     </span>
   );
 }
-
-/* ============================================================
-   States: empty / error / loading
-   ============================================================ */
 
 export function EmptyState({
   title,
@@ -347,10 +244,6 @@ export function EmptyState({
   );
 }
 
-/**
- * Inline error, shown where the failure happened rather than as a page takeover,
- * so the shell and the rest of the data stay usable.
- */
 export function ErrorState({
   title,
   message,
@@ -378,15 +271,6 @@ export function ErrorState({
   );
 }
 
-/**
- * A short confirmation banner.
- *
- * `tone="warning"` is the same shape in amber with the alert glyph, for a
- * message that is informational rather than celebratory — a flagged legacy name
- * awaiting confirmation, say. It stays `role="status"` (polite) in both tones:
- * neither case is an error, and neither should interrupt a screen reader
- * mid-sentence.
- */
 export function SuccessNote({
   children,
   tone = 'success',
@@ -402,7 +286,6 @@ export function SuccessNote({
   );
 }
 
-/** Layout-preserving table skeleton: same row height, same column count. */
 export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="dt-wrap" aria-hidden="true">
@@ -430,10 +313,6 @@ export function SkeletonBlock({ className = '' }: { className?: string }) {
   return <div className={`skel ${className}`} aria-hidden="true" />;
 }
 
-/* ============================================================
-   Metric card
-   ============================================================ */
-
 export function MetricCard({
   label,
   value,
@@ -459,20 +338,11 @@ export function MetricCard({
   );
 }
 
-/* ============================================================
-   Contextual tabs
-   ============================================================ */
-
 export interface ContextTab {
   key: string;
   label: string;
 }
 
-/**
- * Local tab strip. These only switch content inside the current section — the
- * rail, header and shell stay mounted. Implemented as a real ARIA tab list so
- * arrow keys move between tabs.
- */
 export function ContextTabs({
   tabs,
   active,
@@ -489,7 +359,6 @@ export function ContextTabs({
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);
     if (index < 0) return;
-    // In RTL the visual arrow direction is mirrored, matching the tab order.
     const rtl = document.documentElement.dir === 'rtl';
     const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
     const back = rtl ? 'ArrowRight' : 'ArrowLeft';
@@ -531,7 +400,6 @@ export function ContextTabs({
   );
 }
 
-/** The content region a `ContextTabs` strip controls. */
 export function TabPanel({ tab, children }: { tab: string; children: ReactNode }) {
   return (
     <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={-1} className="stack">
@@ -540,11 +408,6 @@ export function TabPanel({ tab, children }: { tab: string; children: ReactNode }
   );
 }
 
-/* ============================================================
-   Small compositions
-   ============================================================ */
-
-/** Centred "view all …" action at the foot of a preview table. */
 export function ViewAllLink({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
     <button type="button" className="link-more" onClick={onClick}>
@@ -554,7 +417,6 @@ export function ViewAllLink({ children, onClick }: { children: ReactNode; onClic
   );
 }
 
-/** One label/value line inside a detail drawer. */
 export function DetailRow({
   label,
   children,

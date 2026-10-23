@@ -1,0 +1,90 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Pool } from 'pg';
+import { createUser, testPool } from './helpers/db';
+
+const envelopes: string[] = [];
+let sentry: Server;
+let pool: Pool;
+const saved = { ...process.env };
+
+beforeAll(async () => {
+  sentry = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      envelopes.push(`${req.url}\n${raw}`);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{}');
+    });
+  });
+  await new Promise<void>((resolve) => sentry.listen(0, '127.0.0.1', resolve));
+  const { port } = sentry.address() as AddressInfo;
+  process.env.SENTRY_DSN = `http://publickey@127.0.0.1:${port}/42`;
+  process.env.NODE_ENV = 'test';
+  pool = testPool();
+});
+
+afterAll(async () => {
+  process.env = saved;
+  await pool.end();
+  await new Promise<void>((resolve) => sentry.close(() => resolve()));
+});
+
+async function captureOutput(fn: () => Promise<void>): Promise<string[]> {
+  const lines: string[] = [];
+  const out = process.stdout.write.bind(process.stdout);
+  const err = process.stderr.write.bind(process.stderr);
+  const grab = (chunk: unknown) => {
+    lines.push(...String(chunk).split('\n').filter(Boolean));
+    return true;
+  };
+  process.stdout.write = grab as typeof process.stdout.write;
+  process.stderr.write = grab as typeof process.stderr.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = out;
+    process.stderr.write = err;
+  }
+  return lines;
+}
+
+describe('ledger invariant violations', () => {
+  it('are logged at error level as JSON and reported to the error tracker', async () => {
+    const observability = await import('../../apps/worker/src/observability').catch(() => null);
+    observability?.initErrorReporting();
+    const { checkLedgerInvariants } = await import('../../apps/worker/src/jobs/ledger-invariant-check');
+
+    const user = await createUser(pool);
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO charge (user_id, action_type, pricing_rule_snapshot, amount, currency, payment_means, status)
+       VALUES ($1, 'service', '{}'::jsonb, 100, 'USD', 'wallet', 'settled') RETURNING id`,
+      [user],
+    );
+    try {
+      const lines = await captureOutput(() => checkLedgerInvariants(pool));
+
+      const parsed = lines.map((l) => {
+        try {
+          return JSON.parse(l) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      });
+      const alert = parsed.find((l) => l && l.level === 'error');
+      expect(alert, `no JSON error line among: ${lines.join(' | ')}`).toBeTruthy();
+      expect(alert!.message).toMatch(/ledger invariant/i);
+      expect(alert!.orphanSettledCharges).toBeGreaterThanOrEqual(1);
+      expect(typeof alert!.time).toBe('string');
+
+      await observability?.flushErrorReporting(5_000);
+      const report = envelopes.find((e) => e.includes('ledger invariant'));
+      expect(report, 'nothing reached the error tracker').toBeTruthy();
+      expect(report!.startsWith('/api/42/envelope/')).toBe(true);
+    } finally {
+      await pool.query(`DELETE FROM charge WHERE id = $1`, [rows[0]!.id]);
+    }
+  });
+});

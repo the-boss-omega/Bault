@@ -7,7 +7,6 @@ import { CustodyService } from '../cst/custody.service';
 import { item, itemImage } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
 
-/** Fields the operator MUST fill to close a photography request (Requirement 5.4). */
 export interface PhotographyFulfillment {
   objectKey: string;
   shotCount: number;
@@ -24,12 +23,6 @@ const REQUIRED: readonly (keyof PhotographyFulfillment)[] = [
   'notes',
 ];
 
-/**
- * Professional photography (T096). The owner orders it (billable); an operator
- * later uploads the photos, which are added as a NEW professional image version
- * on the item (immutable versioning — Principle IX). Intake photos are untouched.
- * The request only closes once the structured fulfillment form is complete (5.4).
- */
 @Injectable()
 export class PhotographyService {
   constructor(
@@ -46,14 +39,11 @@ export class PhotographyService {
     });
   }
 
-  /**
-   * Operator completes the request with the structured fulfillment form, attaching
-   * a new professional image version. Incomplete forms are rejected (Req 5.4).
-   */
   async complete(operatorId: string, requestId: string, form: PhotographyFulfillment) {
     return this.db.transaction(async (tx) => {
-      const req = await this.requests.get(requestId);
-      this.requests.assertAccepted(req); // operator must accept before completing
+      const req = await this.requests.get(requestId, tx);
+      this.requests.assertAccepted(req);
+      if (req.type !== 'professional_photography') throw AppError.validation('Not a photography request');
       if (!req.itemId) throw AppError.validation('Request has no item');
 
       const [latest] = await tx

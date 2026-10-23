@@ -2,11 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apps/web/src/shared/api';
 import { loadProfile, resetProfileRequest } from '../../apps/web/src/shared/session';
 
-/**
- * The Vite log reported the failed profile call twice — `(x2)` — because React
- * StrictMode runs the boot effect twice in development. The fix is here, not in
- * StrictMode: concurrent callers share one request.
- */
 const realFetch = globalThis.fetch;
 let calls: string[];
 
@@ -28,7 +23,6 @@ function stubProfile(respond: () => Promise<Response>) {
   }) as typeof fetch;
 }
 
-/** Shaped like the real `GET /me/profile`: two name parts, no display name. */
 const PROFILE = {
   id: 'u1',
   role: 'admin',
@@ -38,6 +32,8 @@ const PROFILE = {
   lastName: 'Cohen',
   fullName: 'Eldar Cohen',
   nameReviewRequired: false,
+  mfaEnabled: true,
+  mfaRequired: true,
 };
 
 function ok(body: unknown, delayMs = 0): () => Promise<Response> {

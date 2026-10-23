@@ -1,16 +1,22 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { answerQuestion } from '../../apps/web/src/areas/customer/help/FaqLegalPage';
 import { FAQ } from '../../apps/web/src/areas/customer/help/faqContent';
-import { LEGAL_DOCUMENTS, PENDING_DOCUMENTS } from '../../apps/web/src/areas/customer/help/legalContent';
+import {
+  CONSENT_DOCUMENT_IDS,
+  DRAFT_NOTICE,
+  LEGAL_DOCUMENTS,
+  TERMS_VERSION,
+} from '../../apps/web/src/areas/customer/help/legalContent';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
+import * as moneyTerms from '../../apps/api/src/modules/pay/money-terms';
+import * as escrowTerms from '../../apps/api/src/modules/esc/escrow-terms';
+import * as shippingOptions from '../../apps/api/src/modules/shp/shipping-options';
+import { PASSWORD_MIN } from '../../apps/web/src/shared/names';
 
-/**
- * FAQ & Legal content and the Ask placeholder.
- *
- * The Ask contract is the strict one: the assistant is not connected, and until
- * it is, every query must come back as exactly `#1DDD` — not "starts with", not
- * "contains", and never with an explanation appended that a reader could mistake
- * for a real answer.
- */
+const ROOT = join(__dirname, '..', '..');
+
 describe('Ask placeholder', () => {
   const queries = [
     'What are the storage fees?',
@@ -42,21 +48,25 @@ describe('Ask placeholder', () => {
   });
 });
 
-describe('FAQ content copied from Ship My Cards', () => {
-  it('records where the content came from and when it was verified', () => {
-    expect(FAQ.source.url).toBe('https://www.shipmycards.com/faq/');
-    expect(FAQ.source.retrieved).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+function textOf(entry: (typeof FAQ.entries)[number]): string {
+  const parts = [entry.question, entry.baultNote];
+  for (const block of entry.blocks) {
+    if (block.kind === 'ul') for (const li of block.items) parts.push(li.text, ...(li.items ?? []));
+    else parts.push(block.text);
+  }
+  return parts.join('\n');
+}
+const ALL_FAQ_TEXT = FAQ.entries.map(textOf).join('\n');
+
+describe('FAQ: Bault’s own answers', () => {
+  it('records when it was last checked against the code', () => {
+    expect(FAQ.reviewed.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(FAQ.reviewed.entryCount).toBe(FAQ.entries.length);
+    expect(FAQ.entries.length).toBeGreaterThanOrEqual(20);
   });
 
-  it('carries the complete source accordion', () => {
-    expect(FAQ.entries).toHaveLength(31);
-    expect(FAQ.source.entryCount).toBe(FAQ.entries.length);
-  });
-
-  it('preserves the source ordering', () => {
-    const indexes = FAQ.entries.map((e) => e.sourceIndex);
-    expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
-    expect(indexes).toEqual(Array.from({ length: FAQ.entries.length }, (_, i) => i));
+  it('numbers its entries in order', () => {
+    expect(FAQ.entries.map((e) => e.sourceIndex)).toEqual(FAQ.entries.map((_, i) => i));
   });
 
   it('gives every entry a unique, stable deep-link id', () => {
@@ -65,135 +75,104 @@ describe('FAQ content copied from Ship My Cards', () => {
     for (const id of ids) expect(id).toMatch(/^[a-z0-9-]+$/);
   });
 
-  it('states, for every entry, whether Bault supports the workflow', () => {
+  it('files every entry under a known category, and every category has entries', () => {
+    for (const entry of FAQ.entries) expect(FAQ.categoryOrder).toContain(entry.category);
+    for (const category of FAQ.categoryOrder) {
+      expect(FAQ.entries.some((e) => e.category === category), `${category} is empty`).toBe(true);
+    }
+  });
+
+  it('gives every question a short answer and a full one', () => {
     for (const entry of FAQ.entries) {
       expect(['adapted', 'partial', 'unavailable']).toContain(entry.availability);
-      // No entry is imported silently: each carries a note saying what Bault
-      // does differently, or why the entry does not apply.
-      expect(entry.baultNote.trim().length).toBeGreaterThan(20);
+      expect(entry.question.trim()).toMatch(/\?$/);
+      expect(entry.baultNote.trim().length, `${entry.id} has no short answer`).toBeGreaterThan(40);
+      expect(entry.blocks.length, `${entry.id} has no full answer`).toBeGreaterThan(0);
     }
   });
 
-  /**
-   * The rot guard.
-   *
-   * `availability` and `baultNote` were captured once and left alone while the
-   * product was built out underneath them. By the time anybody looked, seventeen
-   * entries marked `unavailable` described capabilities Bault had been shipping
-   * for weeks — the FAQ was telling paying customers Bault could not do things
-   * it does.
-   *
-   * A test cannot re-audit the API from here. What it CAN do is catch the shape
-   * of that failure: a flat denial sitting on an entry that says Bault supports
-   * the thing. Those two cannot both be true, and it is exactly the
-   * contradiction that accumulated last time.
-   */
-  const DENIALS = [
-    /\bBault has no\b/i,
-    /\bBault offers no\b/i,
-    /\bBault does not provide\b/i,
-    /\bBault cannot\b/i,
-    /\bBault operates no\b/i,
-    /\bBault publishes no\b/i,
-    /\bBault exposes no\b/i,
-    /\bno such capability\b/i,
-  ];
-
-  it('never denies a capability on an entry that says Bault supports it', () => {
-    const offenders: string[] = [];
-    for (const entry of FAQ.entries) {
-      if (entry.availability !== 'adapted') continue;
-      for (const denial of DENIALS) {
-        if (denial.test(entry.baultNote)) offenders.push(`[${entry.sourceIndex}] ${entry.id}`);
-      }
-    }
-    expect(offenders, `marked "adapted" but denies the capability: ${offenders.join(' | ')}`).toEqual(
-      [],
-    );
-  });
-
-  it('explains, on every entry, what Bault actually does', () => {
-    for (const entry of FAQ.entries) {
-      // A one-line shrug is how a stale entry hides. Every note has to make a
-      // real statement about Bault's own behaviour.
-      expect(entry.baultNote.length, `${entry.id} has a stub note`).toBeGreaterThan(60);
-      expect(entry.baultNote, `${entry.id} never mentions Bault`).toMatch(/Bault/);
-    }
-  });
-
-  it('marks a partial entry as partial rather than as absent', () => {
-    // The partials are the audit's real gaps: the mechanism exists and part of
-    // what the source describes does not. Collapsing them into "unavailable" is
-    // what made a live capability read as an absence.
-    const partial = FAQ.entries.filter((e) => e.availability === 'partial');
-    expect(partial.length).toBeGreaterThan(0);
-    for (const entry of partial) {
-      // A partial has to name the missing part, or it is just a shrug.
-      expect(entry.baultNote, `${entry.id} does not name its limit`).toMatch(
-        /\bdoes NOT\b|\bhas no\b|\bno video\b|is ShipMyCards'/,
-      );
-    }
-  });
-
-  it('files every entry under a known category', () => {
-    for (const entry of FAQ.entries) {
-      expect(FAQ.categoryOrder).toContain(entry.category);
-    }
-  });
-
-  it('has answer content for every question', () => {
-    for (const entry of FAQ.entries) {
-      expect(entry.question.trim()).not.toBe('');
-      expect(entry.blocks.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('keeps the source wording rather than a summary', () => {
-    // Spot-check verbatim fragments, including the typography the source uses.
-    const first = FAQ.entries[0]!;
-    expect(first.question).toBe('How does ShipMyCards work?');
-    expect(JSON.stringify(first.blocks)).toContain(
-      'ShipMyCards acts as your hands and feet in the hobby',
-    );
-    const all = JSON.stringify(FAQ.entries);
-    expect(all).toContain('—'); // em dash survived extraction
-    expect(all).toContain('’'); // curly apostrophe survived extraction
-  });
-
-  it('keeps the source bullet lists', () => {
-    // The first extraction pass silently dropped every <ul> in the source — the
-    // answers still looked plausible, but the fee tables, benefit lists and
-    // restriction lists had vanished. Assert the structure is present so a
-    // regression in the extractor cannot pass as "content copied".
-    const lists = FAQ.entries.flatMap((e) => e.blocks.filter((b) => b.kind === 'ul'));
-    expect(lists.length).toBe(48);
-    const items = lists.flatMap((l) => (l.kind === 'ul' ? l.items : []));
-    expect(items.length).toBe(174);
-    // Nested lists (the Arizona/Oregon fee tables) survive too.
-    expect(items.filter((i) => i.items && i.items.length > 0).length).toBe(12);
-  });
-
-  it('reproduces a known list verbatim', () => {
-    const entry = FAQ.entries.find((e) => e.id === 'how-does-shipmycards-work')!;
-    const list = entry.blocks.find((b) => b.kind === 'ul');
-    expect(list).toBeDefined();
-    const texts = list!.kind === 'ul' ? list!.items.map((i) => i.text) : [];
-    expect(texts).toContain('**Send cards for grading**');
-    expect(texts.some((t) => t.includes('Combine multiple purchases'))).toBe(true);
+  it('names no other company and links to no other company', () => {
+    expect(ALL_FAQ_TEXT).not.toMatch(/ship\s*my\s*cards/i);
+    const links = [...ALL_FAQ_TEXT.matchAll(/\[\[[^|\]]*\|([^\]]*)\]\]/g)].map((m) => m[1]!);
+    expect(links.length).toBeGreaterThan(0);
+    for (const href of links) expect(href, href).toMatch(/^#\/[a-z-]+(\/[a-z-]+)?$/);
   });
 
   it('carries no raw HTML into the renderer', () => {
-    const all = JSON.stringify(FAQ.entries);
-    expect(all).not.toMatch(/<\/?(script|div|span|p|ul|li|a|strong)\b/i);
+    expect(ALL_FAQ_TEXT).not.toMatch(/<\/?(script|div|span|p|ul|li|a|strong)\b/i);
+  });
+
+  it('quotes no dollar amount or percentage the code does not charge', () => {
+    const m = moneyTerms;
+    const e = escrowTerms;
+    const s = shippingOptions;
+    const allowedMinor = new Set<number>([
+      m.CASHOUT_SMALL_MINIMUM_MINOR,
+      m.CASHOUT_BAND_MINOR,
+      m.CASHOUT_LARGE_FIXED_MINOR,
+      m.CHARGEBACK_FEE_MINOR,
+      e.ESCROW_MINIMUM_FEE_MINOR,
+      e.ESCROW_MINIMUM_VALUE_MINOR,
+      s.RESTOCKING_FEE_MINOR,
+      s.MAX_INSURED_VALUE_MINOR,
+      s.SIGNATURE_REQUIRED_ABOVE_MINOR,
+      s.INSURANCE_MINIMUM_PREMIUM_MINOR,
+      ...s.SHIPMENT_ADD_ONS.map((a) => a.requiresInsuranceMinor),
+    ]);
+    const allowedBps = new Set<number>([
+      m.CASHOUT_SMALL_BPS,
+      m.CASHOUT_LARGE_BPS,
+      e.ESCROW_FEE_BPS,
+      s.INSURANCE_PREMIUM_BPS,
+    ]);
+
+    const dollars = [...ALL_FAQ_TEXT.matchAll(/\$([\d,]+)(?:\.(\d{2}))?/g)];
+    expect(dollars.length).toBeGreaterThan(0);
+    for (const [raw, whole, cents] of dollars) {
+      const minor = Number(whole!.replace(/,/g, '')) * 100 + Number(cents ?? 0);
+      expect(allowedMinor.has(minor), `${raw} is not a charged constant`).toBe(true);
+    }
+    for (const [raw, pct] of ALL_FAQ_TEXT.matchAll(/(\d+(?:\.\d+)?)%/g)) {
+      expect(allowedBps.has(Math.round(Number(pct) * 100)), `${raw} is not a charged constant`).toBe(true);
+    }
+  });
+
+  it('quotes no period or length the code does not apply', () => {
+    const source = (path: string) => readFileSync(join(ROOT, path), 'utf8');
+    const cullDays = Number(/CULL_WINDOW_DAYS = (\d+)/.exec(source('apps/api/src/modules/dis/disposal-services.service.ts'))![1]);
+    const emailHours = Number(
+      /EMAIL_TTL_MS = (\d+) \* 60 \* 60 \* 1000/.exec(source('apps/api/src/modules/acc/verification.service.ts'))![1],
+    );
+    const days = new Set([cullDays, shippingOptions.PAYMENT_WINDOW_DAYS]);
+    for (const [raw, n] of ALL_FAQ_TEXT.matchAll(/(\d+)[- ]days?\b/g)) {
+      expect(days.has(Number(n)), `${raw}`).toBe(true);
+    }
+    for (const [raw, n] of ALL_FAQ_TEXT.matchAll(/(\d+) hours?\b/g)) {
+      expect(Number(n), raw).toBe(emailHours);
+    }
+    for (const [raw, n] of ALL_FAQ_TEXT.matchAll(/at least (\d+) characters/g)) {
+      expect(Number(n), raw).toBe(PASSWORD_MIN);
+    }
+  });
+
+  it('sends a reader to the app for every figure that is configuration', () => {
+    const debt = textOf(FAQ.entries.find((e) => e.id === 'negative-balance')!);
+    expect(debt).toMatch(/current figures/i);
+    expect(debt).not.toMatch(/\d+ days|\d+(\.\d+)?%|\$\d/);
+    const storage = textOf(FAQ.entries.find((e) => e.id === 'what-does-storage-cost')!);
+    expect(storage).toMatch(/#\/faq\/prices/);
+    expect(storage).not.toMatch(/\d+ days|\d+(\.\d+)?%|\$\d/);
   });
 });
 
 describe('Legal documents', () => {
-  it('publishes only text that genuinely governs Bault', () => {
+  it('publishes only documents with a date and real sections', () => {
     expect(LEGAL_DOCUMENTS.length).toBeGreaterThan(0);
     for (const doc of LEGAL_DOCUMENTS) {
       expect(doc.lastUpdated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(doc.sections.length).toBeGreaterThan(0);
+      const ids = doc.sections.map((s) => s.id);
+      expect(new Set(ids).size).toBe(ids.length);
       for (const section of doc.sections) {
         expect(section.id).toMatch(/^[a-z0-9-]+$/);
         expect(section.body.trim()).not.toBe('');
@@ -201,20 +180,94 @@ describe('Legal documents', () => {
     }
   });
 
-  it('names the unwritten documents without inventing text for them', () => {
-    expect(PENDING_DOCUMENTS).toContain('legal.pending.terms');
-    expect(PENDING_DOCUMENTS).toContain('legal.pending.privacy');
-    // They are message KEYS, not prose: there is no body text to mistake for
-    // a real agreement.
-    for (const key of PENDING_DOCUMENTS) expect(key).toMatch(/^legal\.pending\.[a-z]+$/);
+  it('has a Terms of Service, a Privacy Policy and a Cookie notice, each a visibly marked draft', () => {
+    expect(DRAFT_NOTICE).toBe('DRAFT — must be reviewed by a lawyer before launch');
+    for (const id of CONSENT_DOCUMENT_IDS) {
+      const doc = LEGAL_DOCUMENTS.find((d) => d.id === id);
+      expect(doc, `${id} is missing`).toBeDefined();
+      expect(doc!.draft).toBe(true);
+      expect(doc!.version).toBe(TERMS_VERSION);
+    }
+    expect(TERMS_VERSION).toMatch(/^\d{4}-\d{2}-draft-\d+$/);
   });
 
-  it('reproduces the font licence verbatim, since doing so is a condition of use', () => {
-    const ofl = LEGAL_DOCUMENTS.find((d) => d.id === 'ofl-1-1');
-    expect(ofl).toBeDefined();
-    const text = ofl!.sections.map((s) => s.body).join('\n');
+  it('records the same terms version the API accepts at registration', () => {
+    expect(TERMS_VERSION).toBe(CURRENT_TERMS_VERSION);
+  });
+
+  const docText = (id: string) =>
+    LEGAL_DOCUMENTS.find((d) => d.id === id)!.sections.map((s) => `${s.heading}\n${s.body}`).join('\n');
+
+  it('states in the terms what the code does with money', () => {
+    const tos = docText('terms-of-service');
+    for (const fact of [/interest/i, /negative/i, /suspend/i, /fee/i, /grace period/i, /chargeback|reverse/i]) {
+      expect(tos).toMatch(fact);
+    }
+    expect(tos).toMatch(/current figures/i);
+    expect(tos).not.toMatch(/\d+ days|\d+(\.\d+)?%|\$\d/);
+  });
+
+  it('names every processor the code sends personal data to', () => {
+    const privacy = docText('privacy-policy');
+    for (const processor of [/PayPal/, /EasyPost/, /email provider/i, /S3/]) expect(privacy).toMatch(processor);
+    expect(privacy).toMatch(/IP address/);
+    expect(privacy).toMatch(/user-agent/i);
+  });
+
+  it('names the one cookie and every browser-storage key the SPA writes', () => {
+    const notice = docText('cookie-notice');
+    expect(notice).toMatch(/exactly one cookie/i);
+    expect(notice).toMatch(/httpOnly/);
+
+    const keys = new Set<string>();
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry)) {
+          const text = readFileSync(full, 'utf8');
+          if (!text.includes('localStorage.setItem(')) continue;
+          for (const m of text.matchAll(/=\s*'(bault\.[A-Za-z.]+)'/g)) keys.add(m[1]!);
+        }
+      }
+    };
+    walk(join(ROOT, 'apps', 'web', 'src'));
+    expect(keys.size).toBeGreaterThan(0);
+    for (const key of keys) expect(notice, `${key} is not in the cookie notice`).toContain(key);
+  });
+
+  it('describes the debt policy without copying its configuration into prose', () => {
+    const debt = LEGAL_DOCUMENTS.find((d) => d.id === 'account-use-policy')!.sections.find((s) => s.id === 'debt')!;
+    expect(debt.body).toMatch(/current figures/i);
+    expect(debt.body).not.toMatch(/\d+ days|\d+(\.\d+)?%|\$\d/);
+  });
+
+  it('licenses the fonts that actually ship, and serves the licence it links to', () => {
+    const ofl = LEGAL_DOCUMENTS.find((d) => d.id === 'ofl-1-1')!;
+    const text = ofl.sections.map((s) => s.body).join('\n');
     expect(text).toContain('SIL OPEN FONT LICENSE Version 1.1');
     expect(text).toContain('THE FONT SOFTWARE IS PROVIDED "AS IS"');
-    expect(ofl!.downloadPath).toBe('/fonts/OFL.txt');
+
+    const shipped = readdirSync(join(ROOT, 'assets', 'fonts')).filter((f) => f.endsWith('.woff2'));
+    expect(shipped.length).toBeGreaterThan(0);
+    const families: Record<string, string> = {
+      'plex-sans-hebrew-': 'IBM Plex Sans Hebrew',
+      'plex-sans-': 'IBM Plex Sans',
+      'plex-mono-': 'IBM Plex Mono',
+      'frank-ruhl-': 'Frank Ruhl Libre',
+    };
+    for (const file of shipped) {
+      const prefix = Object.keys(families).find((p) => file.startsWith(p));
+      expect(prefix, `${file} is a font nobody licensed`).toBeDefined();
+      expect(text).toContain(families[prefix!]!);
+    }
+    expect(text).not.toMatch(/Libertinus/);
+
+    expect(ofl.downloadPath).toBe('/fonts/OFL.txt');
+    const served = join(ROOT, 'assets', ofl.downloadPath!.replace(/^\//, ''));
+    expect(existsSync(served), `${served} does not exist`).toBe(true);
+    const file = readFileSync(served, 'utf8');
+    expect(file).toContain('SIL OPEN FONT LICENSE Version 1.1');
+    for (const family of new Set(Object.values(families))) expect(file).toContain(family);
   });
 });

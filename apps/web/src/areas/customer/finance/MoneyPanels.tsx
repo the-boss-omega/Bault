@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../../shared/api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
@@ -30,19 +30,6 @@ interface RouteCatalogue {
   referenceNote: string;
 }
 
-/**
- * Putting money in.
- *
- * The screen's whole job is the distinction the product was missing: a card or
- * PayPal Goods & Services payment is confirmed by the provider and settles now;
- * a bank transfer or a Friends & Family payment is confirmed by nothing and has
- * to wait for somebody to read a statement.
- *
- * Both are offered, side by side, with the trade-off stated rather than implied.
- * A collector who wants their balance in ten seconds and a collector who wants
- * to avoid a card fee are both right, and neither should have to guess which
- * button does which.
- */
 export function TopUpPanel({
   onError,
   onStatus,
@@ -57,11 +44,18 @@ export function TopUpPanel({
   const [route, setRoute] = useState('card');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const attempt = useRef<{ key: string; route: string; cents: number } | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
-        setCatalogue(await api.get<RouteCatalogue>('/finance/funding-routes'));
+        const loaded = await api.get<RouteCatalogue>('/finance/funding-routes');
+        setCatalogue(loaded);
+        setRoute((current) =>
+          loaded.routes.some((r) => r.key === current && r.available)
+            ? current
+            : (loaded.routes.find((r) => r.available)?.key ?? current),
+        );
       } catch (e) {
         onError((e as Error).message);
       }
@@ -78,18 +72,24 @@ export function TopUpPanel({
 
   async function pay() {
     if (cents === null) return;
+    const current = attempt.current;
+    const key =
+      current && current.route === route && current.cents === cents
+        ? current.key
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    attempt.current = { key, route, cents };
     setBusy(true);
     try {
       const result = await api.post<{ status: string; amountMinor: number; replayed: boolean }>(
         '/finance/checkout',
-        {
-          amountMinor: cents,
-          route,
-          // A key the SERVER can dedupe on. Regenerated per attempt so a genuine
-          // second top-up is not mistaken for a retry of the first.
-          idempotencyKey: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-        },
+        { amountMinor: cents, route, idempotencyKey: key },
       );
+      attempt.current = null;
+      if (result.status === 'failed' || result.status === 'refused') {
+        onStatus(null);
+        onError(t('money.notTaken'));
+        return;
+      }
       onStatus(
         result.status === 'succeeded'
           ? t('money.paid', { amount: formatUsd(result.amountMinor) })
@@ -99,6 +99,8 @@ export function TopUpPanel({
       setAmount('');
       onChanged();
     } catch (e) {
+      const unknown = e instanceof ApiError && (e.kind === 'unreachable' || e.kind === 'server');
+      if (!unknown) attempt.current = null;
       onError((e as Error).message);
     } finally {
       setBusy(false);
@@ -132,9 +134,7 @@ export function TopUpPanel({
             </p>
           )}
 
-          {/* An instant route takes the money here. A manual one cannot, and
-              says so with the account details rather than a dead button. */}
-          {chosen?.instant ? (
+          {chosen?.instant && chosen.available ? (
             <>
               <MoneyField
                 label={t('money.amount')}
@@ -204,13 +204,6 @@ interface CashOutQuote {
   };
 }
 
-/**
- * What a cash-out actually lands.
- *
- * Cashing out was free and no figure was quoted anywhere. This shows the whole
- * schedule up front and the specific arithmetic as soon as an amount is typed —
- * the number that matters is not the fee, it is what arrives.
- */
 export function CashOutQuotePanel({ amount }: { amount: string }) {
   const { t } = useI18n();
   const [quote, setQuote] = useState<CashOutQuote | null>(null);

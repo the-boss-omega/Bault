@@ -1,0 +1,53 @@
+# =============================================================================
+# What the image builds may see.
+#
+# There was no .dockerignore, so `docker build .` sent the whole checkout to the
+# daemon: every node_modules tree (which `COPY packages/` then laid over the
+# ones the image had just installed), the host's dist/ folders, .git, 8 MB of
+# research photographs in assets1/, and `.env` — the developer's real
+# credentials, one `COPY . .` away from being baked into a layer anybody with
+# pull access can read.
+#
+# The Dockerfiles copy named paths, so nothing below is needed by a build. What
+# is listed is what must never reach the build context at all.
+# =============================================================================
+
+# Installed and built on the host. The images install and build their own, for
+# their own platform; a host copy would replace them with whatever the laptop
+# happened to have.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/coverage
+
+# Secrets. Never in a build context, so never in a layer.
+**/.env
+**/.env.*
+!.env.example
+
+# Version control and documentation.
+.git
+docs
+specs
+DIVE1.md
+
+# Tests ship in no image.
+tests
+tests3
+
+# Reference material, not product.
+assets1
+
+# AI tool folders. Kept in the repository (that is a separate decision) and
+# kept out of every image.
+.claude
+.agents
+.specify
+.github/agents
+.github/prompts
+
+# Local operator output.
+backups
+_local
+.playwright-cli
+*.log

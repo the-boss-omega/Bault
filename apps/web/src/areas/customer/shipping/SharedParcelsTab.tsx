@@ -32,20 +32,6 @@ interface Group {
   members: GroupMember[];
 }
 
-/**
- * Shipping together — several collectors, one parcel, one payer.
- *
- * Three people at a convention with cards in the vault and one hotel address
- * between them. The obvious implementation would have been one shipment
- * carrying everybody's cards, and it is the wrong one: an item has exactly one
- * owner, and a shipment that moves somebody else's card is a custody event they
- * never authorised.
- *
- * So what this screen shows is a group of SHIPMENTS, not a shipment of several
- * people's items. Each collector keeps their own request; the group says they
- * travel together and who is paying the carrier. Nobody is ever added to one —
- * you join with a request of your own, to the same address, or you are not in it.
- */
 export function SharedParcelsTab({
   reloadToken,
   onChanged,
@@ -73,8 +59,6 @@ export function SharedParcelsTab({
         api.get<ShipmentSummary[]>('/shipping/shipments'),
       ]);
       setGroups(mine);
-      // Only an unrated request can open or join a group — once a service is
-      // chosen the parcel has been paid for and is on its way to a bench.
       setShipments(all.filter((s) => s.status === 'requested' && !s.groupId));
     } catch (e) {
       onError((e as Error).message);

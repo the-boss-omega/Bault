@@ -1,19 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
-/**
- * The SPA's copy of the wallet-request rules and vocabulary.
- *
- * Mirrors `apps/api/src/modules/pay/wallet-request.rules.ts` by value — same
- * statuses, same limits, same funding sources — so a form can refuse an amount
- * before the round trip and can never permit one the API will reject. Matched by
- * `tests/web/wallet-requests.test.ts`.
- *
- * Nothing here decides anything: the API is the authority on whether a request
- * is valid and on when money moves. This module exists so the UI can be honest
- * about the rules while it types, not so it can enforce them.
- */
-
 export type WalletRequestType = 'cash_in' | 'cash_out';
 
 export type WalletRequestStatus =
@@ -23,20 +10,22 @@ export type WalletRequestStatus =
   | 'rejected'
   | 'processing'
   | 'completed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'paying'
+  | 'payout_failed';
 
-/** In display order — this is also the order the review queue groups by. */
 export const WALLET_REQUEST_STATUSES: readonly WalletRequestStatus[] = [
   'submitted',
   'pending_review',
   'approved',
   'processing',
+  'paying',
   'completed',
+  'payout_failed',
   'rejected',
   'cancelled',
 ];
 
-/** Statuses that still represent somebody's open work. */
 export const OPEN_WALLET_REQUEST_STATUSES: readonly WalletRequestStatus[] = [
   'submitted',
   'pending_review',
@@ -48,7 +37,6 @@ export function isOpenRequest(status: string): boolean {
   return (OPEN_WALLET_REQUEST_STATUSES as readonly string[]).includes(status);
 }
 
-/** A requester may withdraw their own request only while nobody has decided it. */
 export function canCancel(status: string): boolean {
   return status === 'submitted' || status === 'pending_review';
 }
@@ -64,7 +52,6 @@ export type FundingSource = (typeof FUNDING_SOURCES)[number];
 export const MAX_NOTE_LENGTH = 500;
 export const MAX_REFERENCE_LENGTH = 120;
 
-/** One wallet request, as both the customer list and the review queue see it. */
 export interface WalletRequest {
   id: string;
   code: string;
@@ -80,19 +67,18 @@ export interface WalletRequest {
   documentKey: string | null;
   notes: string | null;
   settledLedgerId: string | null;
+  payoutReference?: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Present on the review queue only (joined from the account). */
   username?: string | null;
   customerName?: string | null;
   email?: string | null;
 }
 
-/** One immutable row of the request's audit history. */
 export interface WalletRequestEvent {
   id: string;
   requestId: string;
@@ -104,8 +90,17 @@ export interface WalletRequestEvent {
   occurredAt: string;
 }
 
+export interface WalletRequestPayout {
+  id: string;
+  provider: string;
+  status: string;
+  amount: number;
+  externalRef: string | null;
+}
+
 export interface WalletRequestDetail extends WalletRequest {
   history: WalletRequestEvent[];
+  payout?: WalletRequestPayout | null;
 }
 
 export function statusLabel(t: TranslateFn, status: string): string {
@@ -121,22 +116,18 @@ export function fundingSourceLabel(t: TranslateFn, source: string | null): strin
   return t(`wallet.request.funding.${source}` as MessageKey);
 }
 
-/**
- * Status → badge tone. `completed` is the only green: it is the only status at
- * which money has actually moved, and the colour should not suggest otherwise
- * for `approved`, where nothing has yet.
- */
 export const WALLET_REQUEST_TONE: Record<string, StatusTone> = {
   submitted: 'info',
   pending_review: 'warning',
   approved: 'gold',
   processing: 'info',
+  paying: 'info',
   completed: 'success',
   rejected: 'error',
+  payout_failed: 'error',
   cancelled: 'neutral',
 };
 
-/** One rejected rule, keyed by field so a form can put it under the right input. */
 export interface DraftProblem {
   field: string;
   messageKey: MessageKey;
@@ -151,15 +142,9 @@ export interface WalletRequestDraftInput {
   beneficiaryName?: string;
   notes?: string;
   reference?: string;
-  /** Available balance in minor units; only consulted for a cash-out. */
   availableMinor?: number;
 }
 
-/**
- * Validate what the form can validate. Deliberately mirrors the API's checks so
- * the user is told the rule while typing, and returns MESSAGE KEYS rather than
- * sentences so every message is translated like the rest of the interface.
- */
 export function validateDraft(draft: WalletRequestDraftInput): DraftProblem[] {
   const problems: DraftProblem[] = [];
   const limits = WALLET_REQUEST_LIMITS[draft.type];
@@ -213,17 +198,6 @@ export function validateDraft(draft: WalletRequestDraftInput): DraftProblem[] {
   return problems;
 }
 
-/**
- * Whether an identical request is already open.
- *
- * Identity is type + amount + currency + REFERENCE, matching the API's
- * `isDuplicateOf`. The reference is part of it because it is the only field that
- * distinguishes two genuinely different transfers of the same amount; a
- * double-click repeats it (or carries none), which is what this catches.
- *
- * The API refuses the duplicate outright — this only lets the form say so BEFORE
- * the submission rather than turning a double-click into an error banner.
- */
 export function findOpenDuplicate(
   existing: readonly WalletRequest[],
   draft: {
@@ -248,10 +222,6 @@ export function findOpenDuplicate(
   );
 }
 
-/**
- * Free-text search over the customer's own request list: code, type, status,
- * reference and amount, so the box matches what is on screen.
- */
 export function matchesRequestSearch(request: WalletRequest, needle: string): boolean {
   const q = needle.trim().toLowerCase();
   if (!q) return true;

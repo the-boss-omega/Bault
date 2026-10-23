@@ -1,22 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn, intakeFor, fundWallet, usernameOf } from '../../tests/integration/helpers/http';
 
-/**
- * Whole journeys, and the transitions that must not be possible.
- *
- * Two things this covers that no other suite does.
- *
- * FIRST, the modules nobody had tested: the helpdesk end to end, arrival
- * disposals from both sides, the admin surface, consignment and buyout. A module
- * with no test is a module whose first bug is found by a customer.
- *
- * SECOND, ILLEGAL transitions. Every state machine here is written out as an
- * adjacency list in its service, and every one of those lists is a claim that
- * can be wrong. The happy-path suites walk the legal edges; these walk the
- * illegal ones, which is where a missing guard actually costs something —
- * closing a parcel twice, shipping a sold card, cancelling a paid shipment.
- */
-
 describe('the helpdesk, end to end', () => {
   it('runs a ticket from opening to resolution, with both sides able to write', async () => {
     const collector = await signIn(SEED.collector);
@@ -30,11 +14,9 @@ describe('the helpdesk, end to end', () => {
     expect(opened.status).toBe(201);
     const ticketId = opened.body.id as string;
 
-    // It appears on the collector's own list…
     const mine = await collector.get('/support/tickets');
     expect((mine.body as { id: string }[]).some((t) => t.id === ticketId)).toBe(true);
 
-    // …and in the staff queue.
     const queue = await operator.get('/support/queue');
     expect(queue.status).toBe(200);
     expect((queue.body as { id: string }[]).some((t) => t.id === ticketId)).toBe(true);
@@ -42,7 +24,6 @@ describe('the helpdesk, end to end', () => {
     const count = await operator.get('/support/queue/count');
     expect(count.status).toBe(200);
 
-    // Staff take it, answer it, and the collector can answer back.
     const assigned = await operator.post(`/support/tickets/${ticketId}/assign`, {});
     expect(assigned.status).toBe(201);
 
@@ -96,13 +77,11 @@ describe('arrivals that were not accepted', () => {
     expect(recorded.status).toBe(201);
     expect(recorded.body.code).toMatch(/^DSL-/);
 
-    // The owner sees the record of their own property.
     const collector = await signIn(SEED.collector);
     const mine = await collector.get('/me/disposals');
     expect(mine.status).toBe(200);
     expect((mine.body as { code: string }[]).some((d) => d.code === recorded.body.code)).toBe(true);
 
-    // Another collector does not.
     const other = await signIn(SEED.collector2);
     const theirs = await other.get('/me/disposals');
     expect((theirs.body as { code: string }[]).some((d) => d.code === recorded.body.code)).toBe(
@@ -148,15 +127,12 @@ describe('illegal parcel transitions', () => {
     expect(received.status).toBe(201);
     const id = received.body.id as string;
 
-    // received → processed is not an edge: it has not been opened.
     const early = await operator.post(`/parcels/${id}/process`, {});
     expect(early.status).toBe(409);
 
-    // A parcel at a storing facility cannot be forwarded onward.
     const forwarded = await operator.post(`/parcels/${id}/forward`, {});
     expect(forwarded.status).toBeGreaterThanOrEqual(400);
 
-    // Opening requires a recorded finding — "sound" must be asserted, not defaulted.
     const noFinding = await operator.post(`/parcels/${id}/open`, { condition: 'sound' });
     expect(noFinding.status).toBe(400);
     const blankFinding = await operator.post(`/parcels/${id}/open`, {
@@ -171,14 +147,12 @@ describe('illegal parcel transitions', () => {
     });
     expect(opened.status).toBe(201);
 
-    // opened → opened is not an edge either.
     const reopened = await operator.post(`/parcels/${id}/open`, {
       condition: 'sound',
       conditionNotes: 'Opening it again.',
     });
     expect(reopened.status).toBe(409);
 
-    // Only an unclaimed parcel can be attributed to an account.
     const claimed = await operator.post(`/parcels/${id}/claim`, {
       ownerUsername: collectorUsername,
     });
@@ -198,14 +172,12 @@ describe('illegal parcel transitions', () => {
 
     const id = received.body.id as string;
 
-    // An unclaimed parcel is somebody's property and is not opened.
     const opened = await operator.post(`/parcels/${id}/open`, {
       condition: 'sound',
       conditionNotes: 'Trying to open an unattributed parcel.',
     });
     expect(opened.status).toBeGreaterThanOrEqual(400);
 
-    // Attributing it puts it back on the normal path.
     const username = await usernameOf(SEED.collector);
     const claimed = await operator.post(`/parcels/${id}/claim`, { ownerUsername: username });
     expect(claimed.status).toBe(201);
@@ -271,6 +243,7 @@ describe('an item cannot be in two places at once', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -299,7 +272,6 @@ describe('an item cannot be in two places at once', () => {
     });
     expect(moved.status).toBe(409);
 
-    // Released, it moves.
     const released = await operator.del(`/custody/items/${item.id}/hold`);
     expect([200, 204]).toContain(released.status);
     const again = await operator.post(`/custody/items/${item.id}/relocate`, {
@@ -326,7 +298,6 @@ describe('the vault as the owner sees it', () => {
 
     const timeline = await collector.get(`/vault/items/${item.id}/timeline`);
     expect(timeline.status).toBe(200);
-    // Every item has at least its intake on the trail.
     expect((timeline.body as unknown[]).length).toBeGreaterThan(0);
   });
 });
@@ -375,16 +346,6 @@ describe('the admin surface', () => {
 });
 
 describe('notification preferences', () => {
-  /**
-   * Driven against `collector3` and restored afterwards, on purpose.
-   *
-   * `/notifications/preferences/channel` is a MASTER switch: it turns a channel
-   * off for every event at once. Running it against a shared seeded account and
-   * walking away broke `not-channels-and-content.test.ts`, which asserts that
-   * account's default email matrix — a suite-order-dependent failure that only
-   * appears in a full run. The suite has no per-test isolation, so a test that
-   * mutates account-level settings has to put them back.
-   */
   it('round-trips a per-event and a per-channel switch, and restores them', async () => {
     const collector = await signIn(SEED.collector3);
 
@@ -409,8 +370,6 @@ describe('notification preferences', () => {
       (body as { events: { eventType: string; channels: { channel: string; enabled: boolean }[] }[] })
         .events.find((e) => e.eventType === key)!
         .channels.find((c) => c.channel === 'email')!.enabled;
-    // The master switch really did reach every event, which is what makes it a
-    // master switch and why it has to be put back.
     expect(emailFor(after.body, 'item_sold')).toBe(false);
 
     await collector.put('/notifications/preferences/channel', { channel: 'email', enabled: true });
@@ -461,8 +420,6 @@ describe('consignment and buyout', () => {
     expect(requested.status).toBe(201);
     const requestId = requested.body.id as string;
 
-    // A quote before staff have accepted the request is refused: the service
-    // workflow is requested → accepted → in progress, and quoting is work.
     const premature = await operator.post(`/services/buyout/${requestId}/quote`, {
       offerMinor: 25_00,
       rationale: 'Quoting before accepting.',
@@ -473,7 +430,6 @@ describe('consignment and buyout', () => {
     const accepted = await operator.post(`/services/requests/${requestId}/accept`, {});
     expect(accepted.status).toBe(201);
 
-    // A quote must carry a rationale and an explicit verification.
     const unverified = await operator.post(`/services/buyout/${requestId}/quote`, {
       offerMinor: 25_00,
       rationale: 'Looks fine',
@@ -491,7 +447,6 @@ describe('consignment and buyout', () => {
     const declined = await collector.post(`/services/buyout/${requestId}/decline`, {});
     expect(declined.status).toBe(201);
 
-    // Declined: the card is still the collector's.
     const vault = await collector.get('/vault/items');
     expect((vault.body as { id: string }[]).some((i) => i.id === item.id)).toBe(true);
   });

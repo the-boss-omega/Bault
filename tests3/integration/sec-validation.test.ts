@@ -1,19 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, signIn, intakeFor, fixtureEmail } from '../../tests/integration/helpers/http';
-
-/**
- * Input validation, and what the API does with input nobody sensible would send.
- *
- * The happy-path suites prove the product works when it is driven correctly.
- * This one drives it incorrectly on purpose, because the difference between a
- * 400 and a 500 is the difference between a rejected request and an unhandled
- * exception with a stack trace, and the difference between a rejected negative
- * amount and an accepted one is money.
- *
- * The rule applied throughout: a bad request is the CALLER's fault and must come
- * back 4xx. A 5xx means the API met something it did not anticipate, and in a
- * financial system that is a defect regardless of what the caller sent.
- */
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
 describe('money amounts', () => {
   it('refuses a negative, zero or absurd cash-in amount', async () => {
@@ -88,6 +75,7 @@ describe('money amounts', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -104,12 +92,6 @@ describe('money amounts', () => {
 });
 
 describe('identifiers that do not exist or are the wrong shape', () => {
-  /**
-   * The uuid columns are the trap. Postgres raises `invalid input syntax for
-   * type uuid` on a non-uuid comparison and the whole query dies with a 500 —
-   * which is exactly the bug the shelf-scanning work hit. Anything taking an id
-   * from the URL has to survive a caller typing rubbish into it.
-   */
   const RUBBISH = ['not-a-uuid', '00000000-0000-0000-0000-000000000000', '1 OR 1=1', '../../etc/passwd'];
 
   it('answers 4xx, never 5xx, for a malformed or unknown id on every read route', async () => {
@@ -161,8 +143,6 @@ describe('identifiers that do not exist or are the wrong shape', () => {
 describe('payload shape', () => {
   it('refuses unknown fields rather than silently ignoring them', async () => {
     const operator = await signIn(SEED.operator);
-    // forbidNonWhitelisted is on globally; a typo'd field should be a 400 rather
-    // than a request that appears to work and quietly does something else.
     const res = await operator.post('/intake/items', {
       ownerUsername: 'red',
       typeClass: 'trading_card',
@@ -205,8 +185,6 @@ describe('payload shape', () => {
 
     const read = await collector.get(`/support/tickets/${created.body.id}`);
     expect(read.status).toBe(200);
-    // Round-trips verbatim: escaping is the renderer's job, and a value mangled
-    // on the way in can never be un-mangled later.
     expect(JSON.stringify(read.body)).toContain('script');
   });
 
@@ -219,7 +197,6 @@ describe('payload shape', () => {
     });
     expect(created.status).toBe(201);
 
-    // The table it names is still there and still populated.
     const operator = await signIn(SEED.operator);
     const report = await operator.get('/custody/report?cut=shelf');
     expect(report.status).toBe(200);
@@ -237,6 +214,7 @@ describe('registration and identity', () => {
         firstName: 'Test',
         lastName: 'Person',
         username: `u${Date.now()}`,
+        acceptedTermsVersion: CURRENT_TERMS_VERSION,
       });
       expect(res.status, `${email} was accepted`).toBeGreaterThanOrEqual(400);
       expect(res.status).toBeLessThan(500);
@@ -250,7 +228,8 @@ describe('registration and identity', () => {
       password: 'a-good-password-1',
       firstName: 'Test',
       lastName: 'Person',
-      username: 'red', // already seeded
+      username: 'red',
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);
@@ -264,14 +243,13 @@ describe('registration and identity', () => {
       firstName: 'Test',
       lastName: 'Person',
       username: `weak${Date.now()}`,
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);
   });
 
   it('will not let an account change its username', async () => {
-    // Immutable by database trigger (Requirement 4.1). The API must not offer a
-    // route that appears to work and then fails at the database.
     const collector = await signIn(SEED.collector);
     const res = await collector.patch('/me/profile', { username: 'somethingelse' });
     expect(res.status).toBeGreaterThanOrEqual(400);
@@ -297,6 +275,31 @@ describe('quantity and size limits', () => {
     }
   });
 
+  it('refuses a listing limit that is not a positive whole number, and caps a large one (N3)', async () => {
+    const operator = await signIn(SEED.operator);
+    const seller = await signIn(SEED.collector);
+    for (let i = 0; i < 3; i += 1) {
+      const card = await intakeFor(operator, SEED.collector, { description: `N3 listing ${i}` });
+      await seller.post('/marketplace/listings', { itemId: card.id, askingPrice: 10_00 + i });
+    }
+
+    const guest = new Client();
+    for (const limit of ['abc', '-1', '0', '1.5', '1e3', ' ']) {
+      const res = await guest.get(`/marketplace/listings?limit=${encodeURIComponent(limit)}`);
+      expect(res.status, `limit=${JSON.stringify(limit)} was accepted`).toBe(400);
+    }
+
+    const two = await guest.get('/marketplace/listings?limit=2');
+    expect(two.status).toBe(200);
+    expect((two.body as unknown[]).length).toBe(2);
+
+    const huge = await guest.get('/marketplace/listings?limit=500');
+    expect(huge.status).toBe(200);
+    expect((huge.body as unknown[]).length).toBeLessThanOrEqual(200);
+
+    expect((await guest.get('/marketplace/listings')).status).toBe(200);
+  });
+
   it('refuses a shipment with no items at all', async () => {
     const collector = await signIn(SEED.collector);
     const address = await collector.post('/me/addresses', {
@@ -304,6 +307,7 @@ describe('quantity and size limits', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -324,6 +328,7 @@ describe('quantity and size limits', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -331,8 +336,6 @@ describe('quantity and size limits', () => {
       itemIds: [item.id, item.id],
       addressId: address.body.id,
     });
-    // Either refused, or de-duplicated — but never a parcel that thinks it
-    // contains two of a thing that exists once.
     if (res.status === 201) {
       expect(res.body.itemIds).toHaveLength(1);
     } else {

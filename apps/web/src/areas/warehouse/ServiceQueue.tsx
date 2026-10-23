@@ -17,7 +17,6 @@ import {
 } from '../../shared/ui/primitives';
 import { IconAsk, IconCheck, IconClose, IconServices } from '../../shared/ui/icons';
 
-/** Service status → badge tone. Colour never carries the meaning alone. */
 const STATUS_TONE: Record<string, StatusTone> = {
   requested: 'warning',
   in_progress: 'info',
@@ -36,13 +35,6 @@ interface QueueItem {
   typeFields: Record<string, unknown> | null;
 }
 
-/**
- * Operator service queue. Shows pending + accepted service requests. An operator
- * ACCEPTS or DENIES a pending request, then CLOSES an accepted one by filling the
- * type-specific STRUCTURED FULFILLMENT FORM (Requirement 5.4) — the same
- * customer-request → warehouse-form pattern the shipment flow uses. A request
- * cannot be closed until every required field is filled and the item is verified.
- */
 export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | void }) {
   const t = useT();
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
@@ -159,23 +151,11 @@ function QueueActions({
     );
   }
 
-  // A condition inspection is one row PER AREA, so it cannot be a flat field
-  // list like its neighbours and gets its own form.
   if (q.type === 'condition_inspection') return <InspectionFulfillment q={q} onAct={onAct} t={t} />;
 
-  // status === 'in_progress' → close with the type-specific fulfillment form.
   return <FulfillmentForm q={q} onAct={onAct} t={t} />;
 }
 
-/**
- * Record what was found, one line per area the customer asked about.
- *
- * The areas are read off the REQUEST rather than offered as a free choice: the
- * customer paid to have specific areas looked at, and an operator answering a
- * different set is answering a different question. The API refuses a submission
- * that leaves any requested area unanswered, because a report that silently
- * omits the corners reads as "nothing wrong" when it means "nobody looked".
- */
 function InspectionFulfillment({
   q,
   onAct,
@@ -281,11 +261,6 @@ function InspectionFulfillment({
   );
 }
 
-/**
- * One field of a fulfillment form. `money` fields are typed and shown in
- * dollars; they are converted to the minor units the API stores at submit time,
- * so no operator ever has to reason in cents.
- */
 interface FieldSpec {
   name: string;
   label: MessageKey;
@@ -294,11 +269,6 @@ interface FieldSpec {
   width?: string;
 }
 
-/**
- * Per-service-type required fields. Every form ends with an explicit
- * `itemVerified` confirmation plus free-text notes, mirroring the shipment
- * fulfillment form. The API rejects an incomplete submission independently.
- */
 const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; fields: FieldSpec[] }> = {
   professional_photography: {
     endpoint: (id) => `/services/photography/${id}/complete`,
@@ -328,14 +298,6 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
       { name: 'notes', label: 'queue.fulfill.notes', kind: 'text', initial: '', width: '12rem' },
     ],
   },
-  /**
-   * A buyout QUOTE, not a completion.
-   *
-   * The request stays in progress afterwards: quoting is putting a number on
-   * the table, and the customer still has to accept or decline it. That is why
-   * this form posts to `/quote` rather than to a `/complete` like its
-   * neighbours — the money only moves when the owner says yes.
-   */
   buyout: {
     endpoint: (id) => `/services/buyout/${id}/quote`,
     ok: 'queue.msg.buyoutQuoted',
@@ -345,15 +307,6 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
       { name: 'itemVerified', label: 'queue.fulfill.itemVerified', kind: 'checkbox', initial: false },
     ],
   },
-  /**
-   * A custom request is QUOTED, like a buyout, and for the same reason: nobody
-   * knows what it costs until an operator reads what was asked for.
-   *
-   * `scope` is required and is not a note. The collector is about to agree to a
-   * figure, and what they are agreeing to is this sentence — "we will do it for
-   * $30" with nothing behind it is not something anybody can accept. The ask
-   * itself is shown above the form so it can be read without leaving the row.
-   */
   custom: {
     endpoint: (id) => `/services/custom/${id}/quote`,
     ok: 'queue.msg.customQuoted',
@@ -378,11 +331,6 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
       { name: 'notes', label: 'queue.fulfill.notes', kind: 'text', initial: '', width: '12rem' },
     ],
   },
-  /**
-   * De-slab records what the card looked like once it was OUT of the holder.
-   * That field is not paperwork: the grade is cleared when this closes, and this
-   * is what replaces it, so a card that came out with a bent corner says so.
-   */
   deslab: {
     endpoint: (id) => `/services/deslab/${id}/complete`,
     ok: 'queue.msg.deslabDone',
@@ -398,11 +346,6 @@ const FORMS: Record<string, { endpoint: (id: string) => string; ok: MessageKey; 
       { name: 'notes', label: 'queue.fulfill.notes', kind: 'text', initial: '', width: '12rem' },
     ],
   },
-  /**
-   * Closing this actually runs `breakLot` — every card in the lot becomes its
-   * own item with its own serial, bin and intake charge. There is no undo, which
-   * is why the verification tick is not decoration.
-   */
   batch_split: {
     endpoint: (id) => `/services/lot-split/${id}/complete`,
     ok: 'queue.msg.lotSplitDone',
@@ -446,8 +389,6 @@ function FulfillmentForm({
 
   if (!spec) return <span className="hint">{t('queue.fulfill.noForm')}</span>;
 
-  // Complete = every text field non-blank, every number/amount positive, every
-  // confirmation checkbox ticked. The API enforces exactly the same rule.
   const complete = spec.fields.every((f) => {
     const v = values[f.name];
     if (f.kind === 'checkbox') return v === true;
@@ -456,7 +397,6 @@ function FulfillmentForm({
     return typeof v === 'string' && v.trim() !== '';
   });
 
-  /** Dollars → minor units for every `money` field, everything else verbatim. */
   function payload(): Record<string, string | number | boolean> {
     const out: Record<string, string | number | boolean> = { ...values };
     for (const f of spec!.fields) {
@@ -468,12 +408,6 @@ function FulfillmentForm({
 
   return (
     <div className="fulfill-form">
-      {/*
-        What the collector actually asked for.
-        A custom row otherwise reads "A custom request" — the type, not the
-        thing — and the operator is being asked to price something they cannot
-        see without opening another screen.
-      */}
       {q.type === 'custom' && (
         <div className="ask-notice">
           <IconAsk />

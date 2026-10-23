@@ -2,16 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The screens a collector actually looks at.
- *
- * Three things are worth asserting about a page that reads from an API, and none
- * of them are visible to a type checker: that it shows something sensible while
- * loading, that it shows the REASON when the call fails rather than an empty
- * frame, and that an empty result reads as "nothing here yet" rather than as a
- * broken page.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -34,6 +24,11 @@ const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { AccountPill } = await import('../../apps/web/src/shared/ui/PageHeader');
 const { IntakePolicyPanel } = await import('../../apps/web/src/areas/customer/help/IntakePolicyPanel');
 const { VaultPage } = await import('../../apps/web/src/areas/customer/vault/VaultPage');
+const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
+const { WalletPage } = await import('../../apps/web/src/areas/customer/finance/WalletPage');
+const { WhiteGloveQuotes } = await import('../../apps/web/src/areas/customer/shipping/HumanFulfilmentPanels');
+const { RechooseService } = await import('../../apps/web/src/areas/customer/shipping/ShippingServicesPage');
+const { useI18n } = await import('../../apps/web/src/shared/i18n');
 
 function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
@@ -42,6 +37,7 @@ function renderIn(ui: React.ReactElement) {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  window.location.hash = '';
 });
 
 describe('the account pill in the header', () => {
@@ -58,9 +54,6 @@ describe('the account pill in the header', () => {
   });
 
   it('falls back to the role for the one frame after sign-in where the username is not loaded yet', () => {
-    // The login response does not carry a username; it arrives with the profile
-    // request. Rendering a bare "@" for that frame would flash a broken
-    // identifier on every single sign-in.
     renderIn(<AccountPill roleLabel="Collector" suspended={false} />);
     expect(screen.getByText('Collector')).toBeInTheDocument();
     expect(screen.queryByText('@')).not.toBeInTheDocument();
@@ -96,8 +89,6 @@ describe('the published intake policy', () => {
     renderIn(<IntakePolicyPanel />);
     await screen.findByText('Trading card');
 
-    // Telling somebody their box of commons was "prohibited" would be a false
-    // statement about their property, made by the platform that destroyed it.
     const refused = screen.getByRole('heading', { name: /will not go into a vault/i }).closest('section')!;
     expect(within(refused).getByText('GPS tracker')).toBeInTheDocument();
     expect(within(refused).queryByText('No processing value')).not.toBeInTheDocument();
@@ -156,8 +147,6 @@ describe('the vault', () => {
       Promise.resolve(path.startsWith('/vault/items') ? [ITEM] : { stored: 1 }),
     );
     renderIn(<VaultPage />);
-    // The description appears in the card and again in its detail affordance;
-    // what matters is that the catalogue line reached the screen at all.
     await waitFor(() => expect(screen.getAllByText(/Rayquaza ex/).length).toBeGreaterThan(0));
   });
 
@@ -166,15 +155,6 @@ describe('the vault', () => {
       Promise.resolve(path.startsWith('/vault/items') ? [] : {}),
     );
     renderIn(<VaultPage />);
-    /**
-     * An empty state is a sentence, not the absence of one — the difference
-     * between "nothing in your vault yet" and a page that looks broken.
-     *
-     * The wording moved twice: away from "No active cards", because a vault
-     * holds comics and sealed boxes too, and towards something that says what to
-     * do about it. The matcher is deliberately loose about the exact phrasing
-     * and strict about there being one.
-     */
     await waitFor(() => {
       const empty = screen.queryByText(/nothing (in your vault|to show)|no (active )?(cards|items)/i);
       expect(empty, 'the vault renders no empty state at all').toBeTruthy();
@@ -185,5 +165,237 @@ describe('the vault', () => {
     get.mockRejectedValue(new Error('Could not reach the vault.'));
     renderIn(<VaultPage />);
     expect(await screen.findByText(/could not reach the vault/i)).toBeInTheDocument();
+  });
+});
+
+describe('the vault has a place for every state (F057)', () => {
+  const base = {
+    barcode: 'SN-X',
+    typeClass: 'trading_card',
+    conditionGrade: 'Raw',
+    binBarcode: null,
+    isLot: false,
+    lotSize: 1,
+    oversized: false,
+  };
+
+  it('shows a card away at the grader among the cards the collector holds, saying where it is', async () => {
+    get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith('/vault/items')
+          ? [{ ...base, id: 'g1', serialNumber: 'SN-GRADE-0001', description: 'Rayquaza at PSA', lifecycleState: 'at_grader' }]
+          : { active: 1, hold: 0, history: 0 },
+      ),
+    );
+    renderIn(<VaultPage />);
+    await waitFor(() => expect(screen.getAllByText(/Rayquaza at PSA/).length).toBeGreaterThan(0));
+    expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/vault\/items\?scope=active/));
+    expect(screen.getAllByText('At the grader').length).toBeGreaterThan(0);
+  });
+
+  it('keeps a discarded card in History, labelled as discarded', async () => {
+    window.location.hash = '#/vault/history';
+    get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith('/vault/items')
+          ? [
+              {
+                ...base,
+                id: 'd1',
+                serialNumber: 'SN-CULL-0001',
+                description: 'Bulk common, culled',
+                lifecycleState: 'discarded',
+                historical: true,
+                departedAt: '2026-10-01T10:00:00.000Z',
+                departure: { kind: 'discarded', code: null },
+              },
+            ]
+          : { active: 0, hold: 0, history: 1 },
+      ),
+    );
+    renderIn(<VaultPage />);
+    await waitFor(() => expect(screen.getAllByText(/Bulk common, culled/).length).toBeGreaterThan(0));
+    expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/vault\/items\?scope=history/));
+    expect(screen.getAllByText(/Discarded/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Discarded at your request').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/remove commons/)).toBeNull();
+  });
+});
+
+describe('removing commons acts only on what is on screen (F056)', () => {
+  const recent = new Date().toISOString();
+  const card = (id: string, description: string) => ({
+    id,
+    serialNumber: `SN-${id.toUpperCase()}`,
+    typeClass: 'trading_card',
+    description,
+    lifecycleState: 'stored',
+    holdFlag: false,
+    receivedAt: recent,
+  });
+  const ALL = [card('a', 'Common Alpha'), card('b', 'Common Beta'), card('c', 'Common Gamma')];
+
+  it('does not send a ticked card that a search has since hidden', async () => {
+    post
+      .mockResolvedValueOnce({ confirmationToken: 'tok-1' })
+      .mockResolvedValueOnce({ count: 1 });
+    const user = userEvent.setup();
+    const onDone = vi.fn();
+    const { rerender } = renderIn(
+      <RemoveCommonsPanel items={ALL} windowDays={30} onDone={onDone} onError={() => {}} />,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: /Common Alpha/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Common Beta/ }));
+
+    rerender(
+      <I18nProvider>
+        <RemoveCommonsPanel items={[ALL[0]!]} windowDays={30} onDone={onDone} onError={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Remove 1 items/ }));
+    await user.click(screen.getByRole('button', { name: /Remove them/ }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(post).toHaveBeenNthCalledWith(1, '/services/remove-commons', { itemIds: ['a'], outcome: 'donate' });
+  });
+
+  it('names the cards in the confirmation, so nothing is removed unseen', async () => {
+    const user = userEvent.setup();
+    renderIn(<RemoveCommonsPanel items={ALL} windowDays={30} onDone={() => {}} onError={() => {}} />);
+    await user.click(screen.getByRole('checkbox', { name: /Common Gamma/ }));
+    await user.click(screen.getByRole('button', { name: /Remove 1 items/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/SN-C/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/SN-A/)).not.toBeInTheDocument();
+  });
+});
+
+describe('the wallet running balance (F055)', () => {
+  const LEDGER = Array.from({ length: 10 }, (_, i) => {
+    const credit = i % 2 === 1;
+    return {
+      id: `l${i}`,
+      type: credit ? 'credit_topup' : 'service_charge',
+      amount: credit ? 2_000 : 500,
+      direction: credit ? 'credit' : 'debit',
+      currency: 'USD',
+      referenceType: null,
+      referenceId: null,
+      occurredAt: new Date(Date.UTC(2026, 9, 10 - i, 12)).toISOString(),
+    };
+  });
+
+  function walletApi(path: string) {
+    if (path === '/finance/wallet') return Promise.resolve({ amount: 7_500, currency: 'USD' });
+    if (path === '/finance/ledger') return Promise.resolve(LEDGER);
+    if (path === '/finance/wallet/pending') return Promise.resolve({ cashInMinor: 0, cashOutMinor: 0, count: 0 });
+    return Promise.resolve([]);
+  }
+
+  function balances(): string[] {
+    const table = screen.getByRole('table');
+    return within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => {
+        const cells = within(row).getAllByRole('cell');
+        return cells[cells.length - 1]!.textContent ?? '';
+      });
+  }
+
+  it('shows the wallet balance against the newest movement, though only six are listed', async () => {
+    get.mockImplementation(walletApi);
+    renderIn(<WalletPage />);
+    await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').length).toBe(7));
+    expect(balances()[0]).toContain('$75.00');
+    expect(balances()).toEqual(['$75.00', '$80.00', '$60.00', '$65.00', '$45.00', '$50.00']);
+  });
+
+  it('does not change a movement’s balance when the list is filtered', async () => {
+    window.location.hash = '#/wallet/transactions';
+    get.mockImplementation(walletApi);
+    const user = userEvent.setup();
+    renderIn(<WalletPage />);
+    await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').length).toBe(11));
+    const before = balances()[0];
+    expect(before).toContain('$75.00');
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filters' }), 'service_charge');
+    await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').length).toBe(6));
+    expect(balances()[0]).toBe(before);
+  });
+});
+
+describe('a hand-delivery quote reaches the collector (F060)', () => {
+  const QUOTED = {
+    id: 'hd1',
+    code: 'SHP-HAND0001',
+    status: 'requested',
+    fulfilmentMethod: 'hand_delivery',
+    quoteMinor: 118_000,
+    quoteNotes: '$1,000 base plus $180 travel.',
+  };
+
+  it('shows the quoted figure with a way to accept it', async () => {
+    get.mockResolvedValue([QUOTED, { ...QUOTED, id: 'c1', code: 'SHP-CARRIER1', fulfilmentMethod: 'carrier', quoteMinor: null }]);
+    post.mockResolvedValue({ status: 'rates_selected', cost: 118_000 });
+    const user = userEvent.setup();
+    const onStatus = vi.fn();
+    renderIn(<WhiteGloveQuotes reloadToken={0} onError={() => {}} onStatus={onStatus} onChanged={() => {}} />);
+
+    expect(await screen.findByText('$1,180.00')).toBeInTheDocument();
+    expect(screen.queryByText('SHP-CARRIER1')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/shipping/white-glove/hd1/accept'));
+  });
+});
+
+describe('a label the carrier refused can be re-chosen (fix 4)', () => {
+  const RATE = (serviceKey: string, carrier: string, serviceLevel: string, totalMinor: number) => ({
+    serviceKey,
+    carrier,
+    serviceLevel,
+    totalMinor,
+    eligible: true,
+    costMinor: totalMinor,
+    handlingMinor: 0,
+    insurancePremiumMinor: 0,
+    addOnsMinor: 0,
+    problems: [],
+  });
+
+  it('shows what each service does to what was paid, and chooses one', async () => {
+    get.mockResolvedValue([
+      RATE('usps_ground', 'USPS', 'Ground Advantage', 645),
+      RATE('usps_priority', 'USPS', 'Priority Mail', 1_293),
+      RATE('fedex_2day', 'FedEx', '2Day', 2_254),
+    ]);
+    const onChosen = vi.fn(async (fn: () => Promise<unknown>) => {
+      await fn();
+    });
+    const user = userEvent.setup();
+    function Rechoose() {
+      const { t } = useI18n();
+      return (
+        <RechooseService
+          shipment={{ id: 's1', cost: 1_293, labelRefused: { at: null, reason: 'EasyPost 422: rate expired' } } as never}
+          t={t}
+          busy={false}
+          onChosen={onChosen}
+        />
+      );
+    }
+    renderIn(<Rechoose />);
+
+    expect(await screen.findByText('$6.48 back')).toBeInTheDocument();
+    expect(screen.getByText('No change in price')).toBeInTheDocument();
+    expect(screen.getByText('$9.61 more')).toBeInTheDocument();
+    expect(screen.getByText(/rate expired/)).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button')[0]!);
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/shipping/shipments/s1/select-rate', { carrier: 'USPS', serviceLevel: 'Ground Advantage' }),
+    );
   });
 });

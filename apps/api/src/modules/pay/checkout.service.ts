@@ -14,28 +14,6 @@ import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 import { FUNDING_ROUTES, isInstantRoute } from './money-terms';
 import { formatMinor } from '../../shared/money';
 
-/**
- * Self-service top-up — putting money in without waiting for a person.
- *
- * Bault had no payment page. `POST /finance/wallet/topups` had been reduced to a
- * shim that raises a cash-in request for a human to approve, which is right for
- * a bank transfer and wrong for a card: a card payment is CONFIRMED BY THE
- * PROVIDER, so making it wait on a reviewer adds a delay that protects nobody.
- *
- * The distinction this service draws is exactly that one. A route the provider
- * settles goes through here and moves the balance when the payment clears. A
- * route nothing confirms — a bank transfer, a PayPal Friends & Family payment —
- * goes through the wallet-request workflow and waits for somebody to look at a
- * statement, because that is genuinely the only way to know it arrived.
- *
- * Two properties matter more than the flow:
- *
- *  - The ledger is credited ONCE. The external payment row carries the
- *    provider's reference under a unique index, so a retried request, a
- *    duplicated webhook and a double-clicked button all converge on one credit.
- *  - A pending payment credits NOTHING. `succeeded` is the only status that
- *    moves a balance; anything else is recorded and left for the webhook.
- */
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -45,13 +23,10 @@ export class CheckoutService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /**
-   * The routes money can come in by, and how to use each one.
-   *
-   * The manual routes carry their published account details, and a route with
-   * nothing configured is reported `available: false` with no particulars —
-   * never a placeholder somebody might wire money to.
-   */
+  private instantAvailable(): boolean {
+    return loadEnv().PAYMENT_PROVIDER === 'sandbox';
+  }
+
   routes() {
     const env = loadEnv();
     const clean = (v: string) => (v.trim() === '' ? null : v.trim());
@@ -70,7 +45,7 @@ export class CheckoutService {
     return {
       limits: WALLET_REQUEST_LIMITS.cash_in,
       routes: FUNDING_ROUTES.map((route) => {
-        if (route.instant) return { ...route, available: true, instructions: null };
+        if (route.instant) return { ...route, available: this.instantAvailable(), instructions: null };
         if (route.key === 'bank_transfer') {
           return { ...route, available: bankPublished, instructions: bankPublished ? bank : null };
         }
@@ -79,22 +54,11 @@ export class CheckoutService {
         }
         return { ...route, available: false, instructions: null };
       }),
-      /**
-       * Said once, here, because it is the single most expensive mistake a
-       * collector can make with a manual transfer.
-       */
       referenceNote:
         'Put your username in the payment reference. It is the only thing that ties an arriving payment to your account.',
     };
   }
 
-  /**
-   * Take a payment now.
-   *
-   * `idempotencyKey` is the caller's, and it is what makes a double-clicked
-   * button harmless: the same key returns the same external payment row rather
-   * than taking the money twice.
-   */
   async checkout(
     userId: string,
     input: { amountMinor: number; route: string; idempotencyKey: string; paymentMethodToken?: string },
@@ -104,6 +68,12 @@ export class CheckoutService {
     if (!isInstantRoute(input.route)) {
       throw AppError.validation(
         `${route.label} is not settled by a provider, so it cannot be taken here. Raise a cash-in request instead and we will reconcile it against the statement.`,
+      );
+    }
+    if (!this.instantAvailable()) {
+      throw AppError.conflict(
+        ErrorCode.CONFLICT,
+        `${route.label} top-ups are not available yet. Raise a cash-in request by bank transfer or PayPal Friends & Family and it will be reviewed.`,
       );
     }
 
@@ -118,49 +88,58 @@ export class CheckoutService {
 
     const providerRef = `${input.route}:${input.idempotencyKey.trim()}`;
 
-    // Already taken. Returning the original rather than charging again is the
-    // whole point of the key.
-    const [existing] = await this.db
-      .select()
-      .from(externalPayment)
-      .where(and(eq(externalPayment.userId, userId), eq(externalPayment.providerRef, providerRef)))
-      .limit(1);
-    if (existing) {
+    const [pending] = await this.db
+      .insert(externalPayment)
+      .values({
+        userId,
+        provider: input.route,
+        providerRef,
+        purpose: 'topup',
+        status: 'pending',
+        amount: input.amountMinor,
+        currency: DEFAULT_CURRENCY,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (!pending) {
+      const [existing] = await this.db
+        .select()
+        .from(externalPayment)
+        .where(and(eq(externalPayment.userId, userId), eq(externalPayment.providerRef, providerRef)))
+        .limit(1);
+      if (!existing) {
+        throw AppError.conflict(ErrorCode.IDEMPOTENCY_KEY_REUSED, 'That idempotency key has already been used.');
+      }
       return { status: existing.status, paymentId: existing.id, amountMinor: existing.amount, replayed: true };
     }
+    const settle = (status: string) =>
+      this.db.update(externalPayment).set({ status, updatedAt: new Date() }).where(eq(externalPayment.id, pending.id));
 
-    const result = await this.payment.createTopup({
-      userId,
-      amountMinor: input.amountMinor,
-      currency: DEFAULT_CURRENCY,
-      idempotencyKey: providerRef,
-      paymentMethodToken: input.paymentMethodToken,
-    });
+    let result;
+    try {
+      result = await this.payment.createTopup({
+        userId,
+        amountMinor: input.amountMinor,
+        currency: DEFAULT_CURRENCY,
+        idempotencyKey: providerRef,
+        paymentMethodToken: input.paymentMethodToken,
+      });
+    } catch (e) {
+      throw new AppError(
+        ErrorCode.PROVIDER_UNAVAILABLE,
+        'The payment provider did not complete this payment. Nothing has been credited; if you were charged it will be reconciled.',
+        502,
+        { paymentId: pending.id, reason: e instanceof Error ? e.message.slice(0, 200) : 'unknown' },
+      );
+    }
 
     if (result.status === 'failed') {
+      await settle('failed');
       throw new AppError(ErrorCode.CONFLICT, 'The payment was declined. Nothing has been charged.', 409);
     }
 
-    /**
-     * Credit what the PROVIDER says it took, or nothing.
-     *
-     * This is the guard the whole rail turns on. `amountMinor` is a number the
-     * caller sent; `settledAmountMinor` is what the provider reports actually
-     * moved. With PayPal the two can differ in exactly the way that matters: a
-     * payer approves an order for $1 and the client asks to be credited $5,000.
-     * Capturing succeeds — a real order really was approved — and only the
-     * settled figure says for how much.
-     *
-     * A mismatch is refused rather than reconciled downward, and the payment row
-     * is not written. Crediting the smaller figure would silently accept a
-     * request that was trying to defraud us; refusing leaves the money with
-     * PayPal, where a support ticket can sort out an honest client bug.
-     *
-     * `undefined` is tolerated because a provider is not obliged to report it
-     * (and the sandbox echoes the request). It is a check on a claim, not a
-     * requirement that every provider make one.
-     */
     if (result.settledAmountMinor !== undefined && result.settledAmountMinor !== input.amountMinor) {
+      await settle('refused');
       throw new AppError(
         ErrorCode.CONFLICT,
         `The provider settled ${formatMinor(result.settledAmountMinor)} but this cash-in asked ` +
@@ -169,6 +148,7 @@ export class CheckoutService {
       );
     }
     if (result.settledCurrency !== undefined && result.settledCurrency !== DEFAULT_CURRENCY) {
+      await settle('refused');
       throw new AppError(
         ErrorCode.CONFLICT,
         `The provider settled in ${result.settledCurrency}, not ${DEFAULT_CURRENCY}. Nothing has been credited.`,
@@ -178,16 +158,9 @@ export class CheckoutService {
 
     return this.db.transaction(async (tx) => {
       const [ep] = await tx
-        .insert(externalPayment)
-        .values({
-          userId,
-          provider: input.route,
-          providerRef,
-          purpose: 'topup',
-          status: result.status,
-          amount: input.amountMinor,
-          currency: DEFAULT_CURRENCY,
-        })
+        .update(externalPayment)
+        .set({ status: result.status, updatedAt: new Date() })
+        .where(and(eq(externalPayment.id, pending.id), eq(externalPayment.status, 'pending')))
         .returning();
       if (!ep) throw AppError.validation('Failed to record the payment');
 
@@ -216,7 +189,6 @@ export class CheckoutService {
     });
   }
 
-  /** Every self-service payment this collector has made. */
   listMine(userId: string) {
     return this.db
       .select()

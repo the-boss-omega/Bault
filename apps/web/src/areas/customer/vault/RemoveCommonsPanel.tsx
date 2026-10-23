@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
 import { formatDate } from '../../../shared/money';
 import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
@@ -16,20 +17,6 @@ interface CullItem {
   receivedAt?: string | null;
 }
 
-/**
- * The bulk cull — cards worth less than the storage they are about to accrue.
- *
- * A collector who sends in a shoebox gets back a vault containing forty commons
- * they never wanted individually catalogued, and every one of them starts
- * costing storage the day the included period ends. Culling them one at a time
- * through the donation flow is forty confirmations.
- *
- * Two things about this are deliberate. It is FREE, because charging somebody to
- * stop charging them is indefensible. And it is limited to a window after
- * arrival, which is why the ineligible cards are still LISTED here, greyed, with
- * the reason on them — a card that quietly vanished from this list would read as
- * a bug, where "the window closed for this one" reads as the rule it is.
- */
 export function RemoveCommonsPanel({
   items,
   windowDays,
@@ -49,7 +36,6 @@ export function RemoveCommonsPanel({
 
   const cutoff = Date.now() - windowDays * 86_400_000;
 
-  /** Eligibility mirrors the server's checks so the reason is visible up front. */
   const rows = useMemo(
     () =>
       items.map((it) => {
@@ -68,6 +54,14 @@ export function RemoveCommonsPanel({
 
   const eligible = rows.filter((r) => !r.reason);
 
+  const selected = useMemo(() => {
+    const visible = new Map(eligible.map((r) => [r.it.id, r.it]));
+    return chosen.flatMap((id) => {
+      const it = visible.get(id);
+      return it ? [it] : [];
+    });
+  }, [chosen, eligible]);
+
   function toggle(id: string) {
     setChosen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -76,7 +70,7 @@ export function RemoveCommonsPanel({
     setBusy(true);
     try {
       const challenge = await api.post<{ confirmationToken: string }>('/services/remove-commons', {
-        itemIds: chosen,
+        itemIds: selected.map((it) => it.id),
         outcome,
       });
       const result = await api.post<{ count: number }>('/services/remove-commons/confirm', {
@@ -109,7 +103,7 @@ export function RemoveCommonsPanel({
                     onChange={() => toggle(it.id)}
                   />
                   <span>
-                    {it.description || it.typeClass}
+                    {itemName(t, it)}
                     <span className="hint" dir="ltr">
                       {' '}
                       {it.serialNumber}
@@ -154,10 +148,10 @@ export function RemoveCommonsPanel({
             <Button
               variant="danger"
               icon={<IconAlert />}
-              disabled={busy || chosen.length === 0}
+              disabled={busy || selected.length === 0}
               onClick={() => setConfirming(true)}
             >
-              {t('cull.submit', { count: chosen.length })}
+              {t('cull.submit', { count: selected.length })}
             </Button>
             {eligible.length === 0 && <span className="field-hint">{t('cull.noneEligible')}</span>}
           </div>
@@ -168,11 +162,26 @@ export function RemoveCommonsPanel({
         <ConfirmationModal
           title={t('cull.confirmTitle')}
           body={
-            <p>
-              {outcome === 'discard'
-                ? t('cull.confirmDiscard', { count: chosen.length })
-                : t('cull.confirmDonate', { count: chosen.length })}
-            </p>
+            <>
+              <p>
+                {outcome === 'discard'
+                  ? t('cull.confirmDiscard', { count: selected.length })
+                  : t('cull.confirmDonate', { count: selected.length })}
+              </p>
+              <ul className="check-list list-unbounded">
+                {selected.map((it) => (
+                  <li key={it.id}>
+                    <span>
+                      {itemName(t, it)}
+                      <span className="hint" dir="ltr">
+                        {' '}
+                        {it.serialNumber}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
           }
           confirmLabel={t('cull.confirmAction')}
           cancelLabel={t('ui.cancel')}

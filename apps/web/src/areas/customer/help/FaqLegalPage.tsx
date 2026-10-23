@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { formatDate } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -13,21 +14,11 @@ import {
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
-import { LEGAL_DOCUMENTS, PENDING_DOCUMENTS } from './legalContent';
+import { LEGAL_DOCUMENTS } from './legalContent';
+import { DraftBanner } from './LegalDocumentView';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
 
-/**
- * How each availability value is presented.
- *
- * Three values rather than the original two, because "Bault has no such
- * capability" and "Bault does most of this but not the part about lodging a
- * broker instruction" are different answers, and collapsing them into one
- * badge made the second look like the first. `partial` is warned rather than
- * greyed out: it is a thing Bault does, with a stated limit, so hiding it
- * behind the "not relevant" filter would bury a capability people have.
- */
-/** Whether any catalogued entry is outright unavailable — see the filter. */
 const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
 
 const AVAILABILITY_TONE: Record<FaqAvailability, 'info' | 'warning' | 'neutral'> = {
@@ -51,18 +42,6 @@ const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
 const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
 type HelpTab = (typeof TABS)[number];
 
-/**
- * FAQ & Legal.
- *
- * Six contextual tabs on the shared shell: Ask (the placeholder assistant),
- * Guides (Bault's own workflow walkthroughs), FAQ (the copied Ship My Cards
- * content), Shows (the card-show calendar, from real rows), Contact (how to
- * reach a person) and Legal Terms (the documents that genuinely govern Bault).
- *
- * The tab lives in the route, so a link can open any of them; the FAQ's `q`
- * param deep-links a single answer open and the Guides' `g` param a single
- * guide.
- */
 export function FaqLegalPage() {
   const { t } = useI18n();
   const route = useRoute();
@@ -93,9 +72,6 @@ export function FaqLegalPage() {
           <FaqPanel />
         </TabPanel>
       )}
-      {/* Sits after the FAQ because it is the answer the FAQ keeps pointing at:
-          what may be sent at all. Before the prices, because whether Bault will
-          take the thing comes before what keeping it costs. */}
       {tab === 'policy' && <IntakePolicyPanel />}
 
       {tab === 'prices' && (
@@ -122,22 +98,6 @@ export function FaqLegalPage() {
   );
 }
 
-/* ============================================================
-   Ask
-   ============================================================ */
-
-/**
- * The single seam a real assistant will be wired into.
- *
- * Every query resolves to exactly `#1DDD` and nothing else — no answer text, no
- * heuristics, no lookup against the FAQ. It is deliberately `async` and
- * deliberately ignores its argument so that swapping the body for a real call is
- * the only change needed at the integration point; every caller already awaits
- * it and already handles a pending state.
- *
- * It performs NO network request. That is a requirement of this placeholder, not
- * an implementation detail: nothing typed into Ask leaves the browser.
- */
 export async function answerQuestion(_query: string): Promise<string> {
   return '#1DDD';
 }
@@ -148,11 +108,6 @@ interface Turn {
   answer: string | null;
 }
 
-/**
- * A conversation surface that is real UI on a placeholder brain: the transcript,
- * the pending state, the keyboard handling and the live region are all what the
- * connected version will use. Only `answerQuestion` changes.
- */
 function AskPanel() {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
@@ -161,7 +116,6 @@ function AskPanel() {
   const nextId = useRef(1);
   const logRef = useRef<HTMLDivElement>(null);
 
-  // Keep the newest turn in view without stealing focus from the input.
   useEffect(() => {
     const log = logRef.current;
     if (log) log.scrollTop = log.scrollHeight;
@@ -185,8 +139,6 @@ function AskPanel() {
 
   return (
     <Panel title={t('faq.ask.title')} subtitle={t('faq.ask.subtitle')}>
-      {/* Unobtrusive, but never hidden: the assistant is not connected, and a
-          user should know that before they read its reply as an answer. */}
       <p className="ask-notice" role="note">
         <IconAsk />
         <span>{t('faq.ask.notConnected')}</span>
@@ -236,11 +188,6 @@ function AskPanel() {
   );
 }
 
-/* ============================================================
-   FAQ
-   ============================================================ */
-
-/** Flatten an entry to the plain text the search matches against. */
 function searchableText(entry: FaqEntry): string {
   const parts: string[] = [entry.question, entry.category];
   for (const block of entry.blocks) {
@@ -255,7 +202,6 @@ function searchableText(entry: FaqEntry): string {
   return parts.join(' \n ').toLowerCase();
 }
 
-// Built once: the catalogue is static, so re-deriving it per keystroke is waste.
 const SEARCH_INDEX = new Map(FAQ.entries.map((e) => [e.id, searchableText(e)]));
 
 function FaqPanel() {
@@ -265,9 +211,6 @@ function FaqPanel() {
 
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string>('all');
-  // The imported catalogue is mostly ShipMyCards workflows Bault does not have.
-  // Default to the entries that describe something Bault actually does, and let
-  // the reader opt into the full copied source set.
   const [showAll, setShowAll] = useState(false);
 
   const openId = route.params.q ?? null;
@@ -282,8 +225,6 @@ function FaqPanel() {
     });
   }, [q, category, showAll]);
 
-  // A deep link may point at an entry the current filters hide. Reveal it rather
-  // than opening nothing — the link is the stronger signal of intent.
   useEffect(() => {
     if (!openId) return;
     const entry = FAQ.entries.find((e) => e.id === openId);
@@ -323,11 +264,6 @@ function FaqPanel() {
             ))}
           </div>
 
-          {/* Offered only when there is something to reveal. Every entry in the
-              catalogue currently describes something Bault does, in whole or in
-              part, so a permanent "also show what does not apply" control would
-              be a toggle that changes nothing — and would imply a set of
-              excluded answers that does not exist. */}
           {HAS_UNAVAILABLE && (
             <label className="check">
               <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
@@ -336,25 +272,10 @@ function FaqPanel() {
           )}
         </div>
 
-        {/*
-          The provenance notice.
-
-          This catalogue is third-party text reproduced verbatim, and it stays
-          that way: the brand rename to Bault covered the product's own strings
-          and deliberately did NOT rewrite quoted copy. Renaming inside a
-          quotation would attribute another company's policies — and services
-          Bault's own badges say it does not offer — to Bault.
-
-          So the notice is stated as a quotation, above the entries rather than
-          below them, and carries the source link.
-        */}
         <p className="infobox faq-source">
-          {t('faq.sourceNote', { count: FAQ.source.entryCount, date: formatDate(FAQ.source.retrieved, locale) })}{' '}
-          <a href={FAQ.source.url} target="_blank" rel="noreferrer noopener" dir="ltr">
-            {FAQ.source.url}
-          </a>
+          {t('faq.reviewedNote', { count: FAQ.reviewed.entryCount, date: formatDate(FAQ.reviewed.date, locale) })}
         </p>
-        <p className="hint">{t('faq.quotedNotice')}</p>
+        <p className="hint">{t('faq.ownNotice')}</p>
       </Panel>
 
       <Panel title={t('faq.resultsTitle', { count: results.length })} flush>
@@ -387,11 +308,6 @@ function FaqPanel() {
   );
 }
 
-/**
- * One question. A real `<button>` drives the disclosure, so Enter/Space work and
- * screen readers get `aria-expanded` and `aria-controls` for free; the answer
- * region is labelled by its own trigger.
- */
 function FaqItem({
   entry,
   open,
@@ -405,7 +321,6 @@ function FaqItem({
 }) {
   const ref = useRef<HTMLLIElement>(null);
 
-  // A deep-linked answer scrolls itself into view once, on open.
   useEffect(() => {
     if (open) ref.current?.scrollIntoView({ block: 'nearest' });
   }, [open]);
@@ -440,19 +355,13 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        {/* Bault's own note comes FIRST: the copied answer below it describes
-            another company's service, and the reader needs that framing before
-            they read it as Bault policy. */}
-        <p className={`faq-note faq-note--${entry.availability}`}>
+        <p className={`faq-note faq-note--${entry.availability}`} lang="en" dir="ltr">
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
 
-        {/* The copied source answer, verbatim. Held in English and LTR
-            regardless of the app locale — translating published policy text
-            would change what it says. */}
         <div className="faq-source-answer" lang="en" dir="ltr">
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
@@ -466,8 +375,6 @@ function FaqItem({
 function FaqBlockView({ block }: { block: FaqBlock }) {
   if (block.kind === 'p') return <p>{renderInline(block.text)}</p>;
   if (block.kind === 'h') {
-    // Source levels start at h4 inside an accordion; clamp so the page's own
-    // heading order is not broken by the copied content.
     const Tag = (block.level >= 5 ? 'h5' : 'h4') as 'h4' | 'h5';
     return <Tag>{renderInline(block.text)}</Tag>;
   }
@@ -489,12 +396,6 @@ function FaqBlockView({ block }: { block: FaqBlock }) {
   );
 }
 
-/**
- * Render the two inline markers the extracted content carries: `**bold**` and
- * `[[label|url]]`. Deliberately not a Markdown parser and deliberately not
- * `dangerouslySetInnerHTML` — the source is third-party text, so it is rendered
- * as React nodes and can never inject markup.
- */
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /\[\[([^|\]]*)\|([^\]]*)\]\]|\*\*([^*]+)\*\*/g;
@@ -508,21 +409,27 @@ function renderInline(text: string): ReactNode[] {
     } else {
       const label = (match[1] ?? '').replace(/\*\*/g, '');
       const href = match[2] ?? '';
-      nodes.push(
-        <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
-          {label}
-        </a>,
-      );
+      if (href.startsWith('#/')) {
+        nodes.push(
+          <a key={key++} href={href}>
+            {label}
+          </a>,
+        );
+      } else if (href.startsWith('https://')) {
+        nodes.push(
+          <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
+            {label}
+          </a>,
+        );
+      } else {
+        nodes.push(label);
+      }
     }
     last = pattern.lastIndex;
   }
   if (last < text.length) nodes.push(text.slice(last));
   return nodes;
 }
-
-/* ============================================================
-   Legal
-   ============================================================ */
 
 function LegalPanel() {
   const { t, locale } = useI18n();
@@ -546,20 +453,7 @@ function LegalPanel() {
 
   return (
     <>
-      {/* Said plainly and first: Bault's own terms do not exist yet, so nobody
-          mistakes the licence below for an agreement with Bault. */}
-      <Panel title={t('legal.pendingTitle')} subtitle={t('legal.pendingSubtitle')}>
-        <ul className="legal-pending">
-          {PENDING_DOCUMENTS.map((key) => (
-            <li key={key}>
-              <StatusBadge tone="warning" plain>
-                {t('legal.notPublished')}
-              </StatusBadge>
-              <span>{t(key as MessageKey)}</span>
-            </li>
-          ))}
-        </ul>
-      </Panel>
+      <CurrentFiguresPanel />
 
       <Panel
         title={doc.title}
@@ -582,8 +476,10 @@ function LegalPanel() {
           </div>
         }
       >
+        {doc.draft && <DraftBanner doc={doc} />}
         <p className="hint">
           {t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}
+          {doc.version && <> · {t('legal.version', { version: doc.version })}</>}
         </p>
 
         {LEGAL_DOCUMENTS.length > 1 && (
@@ -640,5 +536,102 @@ function LegalPanel() {
         </div>
       </Panel>
     </>
+  );
+}
+
+export interface AccountTerms {
+  termsVersion: string;
+  debt: { graceDays: number; interestBpsPerDay: number; suspendBelowMinor: number };
+  cashOut: { bandMinor: number; smallBps: number; smallMinimumMinor: number; largeFixedMinor: number; largeBps: number };
+  chargebackFeeMinor: number;
+  escrow: { feeBps: number; minimumFeeMinor: number; minimumValueMinor: number };
+  shipping: {
+    restockingFeeMinor: number;
+    paymentWindowDays: number;
+    insurancePremiumBps: number;
+    insuranceMinimumPremiumMinor: number;
+    maxInsuredValueMinor: number;
+    signatureRequiredAboveMinor: number;
+  };
+  removeCommonsWindowDays: number;
+}
+
+function CurrentFiguresPanel() {
+  const { t } = useI18n();
+  const [terms, setTerms] = useState<AccountTerms | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .get<AccountTerms>('/content/account-terms')
+      .then((value) => {
+        if (live) setTerms(value);
+      })
+      .catch(() => {
+        if (live) setFailed(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const rows: Array<[string, string]> = terms
+    ? [
+        [t('legal.figures.graceDays'), t('legal.figures.days', { days: terms.debt.graceDays })],
+        [t('legal.figures.interest'), t('legal.figures.perDay', { rate: bpsToPercent(terms.debt.interestBpsPerDay) })],
+        [t('legal.figures.suspend'), formatUsd(terms.debt.suspendBelowMinor)],
+        [
+          t('legal.figures.cashOut'),
+          t('legal.figures.cashOutValue', {
+            smallPct: bpsToPercent(terms.cashOut.smallBps),
+            min: formatUsd(terms.cashOut.smallMinimumMinor),
+            band: formatUsd(terms.cashOut.bandMinor),
+            fixed: formatUsd(terms.cashOut.largeFixedMinor),
+            largePct: bpsToPercent(terms.cashOut.largeBps),
+          }),
+        ],
+        [t('legal.figures.chargeback'), formatUsd(terms.chargebackFeeMinor)],
+        [t('legal.figures.restocking'), formatUsd(terms.shipping.restockingFeeMinor)],
+        [t('legal.figures.paymentWindow'), t('legal.figures.days', { days: terms.shipping.paymentWindowDays })],
+        [
+          t('legal.figures.insurance'),
+          t('legal.figures.insuranceValue', {
+            max: formatUsd(terms.shipping.maxInsuredValueMinor),
+            pct: bpsToPercent(terms.shipping.insurancePremiumBps),
+            min: formatUsd(terms.shipping.insuranceMinimumPremiumMinor),
+            sig: formatUsd(terms.shipping.signatureRequiredAboveMinor),
+          }),
+        ],
+        [
+          t('legal.figures.escrow'),
+          t('legal.figures.escrowValue', {
+            pct: bpsToPercent(terms.escrow.feeBps),
+            min: formatUsd(terms.escrow.minimumFeeMinor),
+            floor: formatUsd(terms.escrow.minimumValueMinor),
+          }),
+        ],
+        [t('legal.figures.termsVersion'), terms.termsVersion],
+      ]
+    : [];
+
+  return (
+    <Panel title={t('legal.figures.title')} subtitle={t('legal.figures.subtitle')}>
+      {failed ? (
+        <p className="hint">{t('legal.figures.unavailable')}</p>
+      ) : !terms ? (
+        <p className="hint">{t('legal.figures.loading')}</p>
+      ) : (
+        <dl className="legal-figures">
+          {rows.map(([label, value]) => (
+            <div key={label} className="legal-figure">
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <p className="hint">{t('legal.figures.prices')}</p>
+    </Panel>
   );
 }

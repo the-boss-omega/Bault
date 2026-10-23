@@ -1,16 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, signIn } from './helpers/http';
 
-/**
- * US4 / Scenario E — the wallet, after cash in and cash out became REQUESTS.
- *
- * The property these tests defend is the one the request workflow exists for:
- * **a balance changes only when an approved request is completed.** Submitting
- * one changes nothing. Approving one changes nothing. The single ledger row
- * appears at completion and nowhere else.
- *
- * Every amount on the platform is USD in cents (Requirement 7.1).
- */
 describe('PAY wallet requests', () => {
   it('reports the wallet balance in USD', async () => {
     const client = await signIn(SEED.collector);
@@ -32,7 +22,6 @@ describe('PAY wallet requests', () => {
     expect(created.status).toBe(201);
     expect(created.body.status).toBe('submitted');
     expect(created.body.code).toMatch(/^WR-/);
-    // No ledger row is written on submission, so no settlement link exists yet.
     expect(created.body.settledLedgerId).toBeFalsy();
 
     const after = (await client.get('/finance/wallet')).body.amount as number;
@@ -54,7 +43,6 @@ describe('PAY wallet requests', () => {
 
     const admin = await signIn(SEED.admin);
 
-    // Approval alone is a decision, not a payment.
     const approved = await admin.post(`/admin/wallet-requests/${requestId}/approve`, {});
     expect(approved.status).toBe(201);
     expect((await client.get('/finance/wallet')).body.amount).toBe(before);
@@ -98,35 +86,21 @@ describe('PAY wallet requests', () => {
     await admin.post(`/admin/wallet-requests/${created.body.id}/approve`, {});
     await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {});
 
-    /**
-     * Cashing out now carries a fee, so the balance moves by the gross AND the
-     * fee. Asserted against the QUOTE rather than a hard-coded figure: the
-     * claim worth defending is that the collector is charged exactly what they
-     * were told before they asked, and a literal here would go stale the moment
-     * the schedule moved.
-     */
     const quote = (await client.get('/finance/cash-out-quote?amountMinor=5000')).body as {
+      amountMinor: number;
       feeMinor: number;
     };
     expect(quote.feeMinor).toBeGreaterThan(0);
-    expect((await client.get('/finance/wallet')).body.amount).toBe(before - 5_000 - quote.feeMinor);
+    expect((await client.get('/finance/wallet')).body.amount).toBe(before - quote.amountMinor);
 
     const ledger = (await client.get('/finance/ledger')).body as { type: string; direction: string }[];
     expect(ledger.some((r) => r.type === 'withdrawal' && r.direction === 'debit')).toBe(true);
-    // The fee is its own row, not netted off the withdrawal.
     expect(ledger.some((r) => r.type === 'fee' && r.direction === 'debit')).toBe(true);
   });
 
   it('rejects a cash-out larger than the balance', async () => {
-    // The amount must be over the balance AND inside the published limits —
-    // otherwise the amount rule rejects it first, with a 400, and this never
-    // reaches the balance check it means to exercise. `collector3` is the
-    // migrated account and carries little or no money, so one cent over its
-    // balance is comfortably under the $20,000 ceiling.
     const client = await signIn(SEED.collector3);
     const balance = (await client.get('/finance/wallet')).body.amount as number;
-    // Over the balance, at or above the $20 minimum, and under the $20,000
-    // ceiling — all three, or the amount rule answers before the balance rule.
     const amountMinor = Math.max(balance + 1, 2_000);
     expect(amountMinor).toBeLessThan(2_000_000);
 
@@ -145,7 +119,7 @@ describe('PAY wallet requests', () => {
     const client = await signIn(SEED.collector);
     const res = await client.post('/finance/wallet-requests', {
       type: 'cash_out',
-      amountMinor: 9_000_000, // above the $20,000 ceiling
+      amountMinor: 9_000_000,
       currency: 'USD',
       destinationAccount: 'IL62 0108 0000 0009 9999 999',
       beneficiaryName: 'Red Ashwood',
@@ -173,8 +147,6 @@ describe('PAY wallet requests', () => {
     expect(second.status).toBe(409);
     expect(second.body.error.details.existingCode).toBe(first.body.code);
 
-    // Cancelling the first frees the amount again — the guard is about
-    // simultaneous identical requests, not about the amount forever.
     await client.post(`/finance/wallet-requests/${first.body.id}/cancel`, {});
     const third = await client.post('/finance/wallet-requests', {
       type: 'cash_in',
@@ -190,7 +162,7 @@ describe('PAY wallet requests', () => {
     const client = await signIn(SEED.collector);
     const tooSmall = await client.post('/finance/wallet-requests', {
       type: 'cash_in',
-      amountMinor: 1, // one cent, below the $10 minimum
+      amountMinor: 1,
       currency: 'USD',
       fundingSource: 'bank_transfer',
     });
@@ -249,7 +221,6 @@ describe('PAY wallet requests', () => {
       occurredAt: string;
     }[];
     expect(history.map((e) => e.toStatus)).toEqual(['submitted', 'pending_review', 'rejected']);
-    // Every row names who acted and when; the rejection names why.
     for (const event of history) {
       expect(event.actorId).toBeTruthy();
       expect(event.occurredAt).toBeTruthy();
@@ -307,16 +278,10 @@ describe('PAY wallet requests', () => {
     const second = await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {});
     expect(second.status).toBe(409);
 
-    // Credited once, not twice.
     expect((await client.get('/finance/wallet')).body.amount).toBe(before + 9_100);
   });
 });
 
-/**
- * Who may do what. These are the separation-of-duties and authorization rules;
- * the API is the enforcement and the UI merely reflects it, so they are tested
- * here rather than assumed from the buttons that happen to be rendered.
- */
 describe('PAY wallet request permissions', () => {
   it('does not let a collector reach the review queue or its actions', async () => {
     const client = await signIn(SEED.collector);
@@ -349,7 +314,6 @@ describe('PAY wallet request permissions', () => {
     });
     expect(created.status).toBe(201);
 
-    // Same account, admin role, own request: refused on every reviewer action.
     expect((await admin.post(`/admin/wallet-requests/${created.body.id}/approve`, {})).status).toBe(403);
     expect((await admin.post(`/admin/wallet-requests/${created.body.id}/complete`, {})).status).toBe(403);
     expect(
@@ -374,7 +338,6 @@ describe('PAY wallet request permissions', () => {
     const mine = (await red.get('/finance/wallet-requests')).body as { id: string }[];
     expect(mine.some((r) => r.id === created.body.id)).toBe(false);
 
-    // And a direct fetch by id reports not-found rather than confirming it exists.
     expect((await red.get(`/finance/wallet-requests/${created.body.id}`)).status).toBe(404);
     await golden.post(`/finance/wallet-requests/${created.body.id}/cancel`, {});
   });
@@ -398,11 +361,6 @@ describe('PAY wallet request permissions', () => {
   });
 });
 
-/**
- * Backward compatibility for clients still calling the pre-request endpoints.
- * They keep working, at the same URLs, but they raise a request rather than
- * moving money — and they say so in the response.
- */
 describe('PAY legacy endpoint compatibility', () => {
   it('turns the legacy top-up endpoint into a cash-in request', async () => {
     const client = await signIn(SEED.collector2);
@@ -428,11 +386,34 @@ describe('PAY legacy endpoint compatibility', () => {
     });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_approval');
-    // No confirmation token: there is nothing a token could confirm now.
     expect(res.body.confirmationToken).toBeUndefined();
     expect((await client.get('/finance/wallet')).body.amount).toBe(before);
 
     await client.post(`/finance/wallet-requests/${res.body.requestId}/cancel`, {});
+  });
+
+  it('names the account holder as the beneficiary of a legacy withdrawal, or the name it was given', async () => {
+    await fundWallet(SEED.collector2, 20_000);
+    const client = await signIn(SEED.collector2);
+    const profile = (await client.get('/me/profile')).body as { fullName: string };
+    const beneficiaryOf = async (requestId: string) =>
+      ((await client.get(`/finance/wallet-requests/${requestId}`)).body as { beneficiaryName: string | null })
+        .beneficiaryName;
+
+    const destinationAccount = 'IL62 0108 0000 0009 9999 999';
+    const derived = await client.post('/finance/withdrawals', { amountMinor: 3_010, destinationAccount });
+    expect(derived.status, JSON.stringify(derived.body)).toBe(201);
+    expect(await beneficiaryOf(derived.body.requestId)).toBe(profile.fullName);
+    await client.post(`/finance/wallet-requests/${derived.body.requestId}/cancel`, {});
+
+    const named = await client.post('/finance/withdrawals', {
+      amountMinor: 3_020,
+      destinationAccount,
+      beneficiaryName: 'G. Marsh Holdings',
+    });
+    expect(named.status, JSON.stringify(named.body)).toBe(201);
+    expect(await beneficiaryOf(named.body.requestId)).toBe('G. Marsh Holdings');
+    await client.post(`/finance/wallet-requests/${named.body.requestId}/cancel`, {});
   });
 
   it('answers the retired withdrawal-confirm endpoint with a 410', async () => {

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../errors/app-error';
@@ -7,14 +7,6 @@ import { ErrorCode } from '../errors/error-codes';
 import { generateToken, hashToken } from '../tokens';
 import { confirmationToken } from './confirmation.schema';
 
-/**
- * Two-step confirmation primitive (T017, Principle VII).
- *
- * `issue` records a pending irreversible action and returns a short-lived raw
- * token (returned to the client as the confirmation challenge). `consume`
- * validates the token, marks it used (single-use), and returns the stored
- * payload so the caller can now execute the action.
- */
 @Injectable()
 export class ConfirmationService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -61,12 +53,18 @@ export class ConfirmationService {
       throw AppError.tokenExpired('Confirmation token expired or already used');
     }
 
-    // Single-use: append-only tables use compensating rows, but confirmation tokens
-    // are transient operational state (not history), so a guarded UPDATE is correct here.
-    await this.db
+    const [claimed] = await this.db
       .update(confirmationToken)
       .set({ consumedAt: new Date() })
-      .where(eq(confirmationToken.id, row.id));
+      .where(
+        and(
+          eq(confirmationToken.id, row.id),
+          isNull(confirmationToken.consumedAt),
+          gt(confirmationToken.expiresAt, new Date()),
+        ),
+      )
+      .returning({ id: confirmationToken.id });
+    if (!claimed) throw AppError.tokenExpired('Confirmation token expired or already used');
 
     return row.payload as T;
   }

@@ -1,0 +1,280 @@
+{
+  "reviewed": false,
+  "readme": "Every price Bault charges or publishes, loaded with `pnpm prices:load`. These numbers are the development seed's placeholders. Prices are your decision: review every one, then set reviewed to true. Fixed prices are in dollars (\"$5.00\"), percentages of the amount they apply to (\"5%\"). Storage parameters are days and basis points of the intake fee. Membership rules take their allowances from the tier catalogue in the code, so they carry none here. escrow_fee, cash_out_fee and chargeback_fee are charged from constants in the code; their rules only publish the figure and must equal those constants (CI checks).",
+  "currency": "USD",
+  "rules": [
+    {
+      "actionType": "intake",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake handling fee per received item"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "trading_card",
+      "fixed": "$1.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A single card"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "graded_slab",
+      "fixed": "$1.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A graded card, priced as a single card"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "oversized_card",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: An oversized card"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "sealed_pack",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A sealed pack"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "sealed_box",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A sealed box"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "sealed_case",
+      "fixed": "$20.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A sealed case"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "collection_box",
+      "fixed": "$10.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A collection box"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "comic_raw",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A comic book"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "comic_graded",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A graded comic"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "memorabilia",
+      "fixed": "$20.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: Memorabilia"
+    },
+    {
+      "actionType": "intake",
+      "itemClass": "small_collectible",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: A small collectible"
+    },
+    {
+      "actionType": "intake_lot",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Intake: a lot, booked as one item"
+    },
+    {
+      "actionType": "storage",
+      "fixed": "$1.00",
+      "billingTrigger": "daily",
+      "description": "180 days included, then 10% of the item intake fee every 90 days",
+      "parameters": {
+        "freeDays": 180,
+        "periodDays": 90,
+        "percentOfIntakeBps": 1000
+      }
+    },
+    {
+      "actionType": "storage_oversized",
+      "fixed": "$5.00",
+      "billingTrigger": "daily",
+      "description": "90 days included, then the full intake fee again every 90 days",
+      "parameters": {
+        "freeDays": 90,
+        "periodDays": 90,
+        "percentOfIntakeBps": 10000
+      }
+    },
+    {
+      "actionType": "service",
+      "fixed": "$20.00",
+      "billingTrigger": "per_event",
+      "description": "Flat fee for a value-added service request"
+    },
+    {
+      "actionType": "shipping",
+      "fixed": "$0.00",
+      "billingTrigger": "per_event",
+      "description": "Handling surcharge added on top of the carrier rate"
+    },
+    {
+      "actionType": "marketplace_fee",
+      "percent": "5%",
+      "billingTrigger": "per_event",
+      "description": "Marketplace commission charged to the seller on every sale"
+    },
+    {
+      "actionType": "consignment_fee:card_show",
+      "percent": "10%",
+      "billingTrigger": "per_event",
+      "description": "Bault commission on a card-show consignment sale"
+    },
+    {
+      "actionType": "consignment_fee:auction_house",
+      "percent": "1%",
+      "billingTrigger": "per_event",
+      "description": "Bault commission on an auction-house consignment sale"
+    },
+    {
+      "actionType": "consignment_fee:ebay_partner",
+      "percent": "1%",
+      "billingTrigger": "per_event",
+      "description": "Bault commission on an eBay partner consignment sale"
+    },
+    {
+      "actionType": "grading_fee:psa_value",
+      "fixed": "$25.00",
+      "billingTrigger": "per_event",
+      "description": "PSA Value — up to $499, 45–65 days"
+    },
+    {
+      "actionType": "grading_fee:psa_regular",
+      "fixed": "$75.00",
+      "billingTrigger": "per_event",
+      "description": "PSA Regular — up to $1,499, 20–30 days"
+    },
+    {
+      "actionType": "grading_fee:psa_express",
+      "fixed": "$150.00",
+      "billingTrigger": "per_event",
+      "description": "PSA Express — up to $4,999, 10–15 days"
+    },
+    {
+      "actionType": "grading_fee:psa_walkthrough",
+      "fixed": "$300.00",
+      "billingTrigger": "per_event",
+      "description": "PSA Walkthrough — no ceiling, 5–10 days, needs approval"
+    },
+    {
+      "actionType": "grading_fee:bgs_standard",
+      "fixed": "$65.00",
+      "billingTrigger": "per_event",
+      "description": "BGS Standard — up to $1,499, 25–40 days"
+    },
+    {
+      "actionType": "service_fee:video_review",
+      "fixed": "$10.00",
+      "billingTrigger": "per_event",
+      "description": "A short video of the card turned under a light"
+    },
+    {
+      "actionType": "service_fee:condition_inspection",
+      "fixed": "$15.00",
+      "billingTrigger": "per_event",
+      "description": "Per-area condition report against a fixed severity scale"
+    },
+    {
+      "actionType": "service_fee:deslab",
+      "fixed": "$5.00",
+      "billingTrigger": "per_event",
+      "description": "Cracking a graded card out of its holder. Irreversible."
+    },
+    {
+      "actionType": "shipping_rush",
+      "fixed": "$10.00",
+      "billingTrigger": "per_event",
+      "description": "Same-day picking and packing, ahead of the standard queue"
+    },
+    {
+      "actionType": "shipping_addon:gps_tracker",
+      "fixed": "$30.00",
+      "billingTrigger": "per_event",
+      "description": "GPS tracker placed in the parcel; handed over after delivery"
+    },
+    {
+      "actionType": "cash_out_fee",
+      "percent": "1%",
+      "billingTrigger": "per_event",
+      "description": "Cash-out fee: 6% (min $0.99) under $100, otherwise $5.00 + 1%"
+    },
+    {
+      "actionType": "chargeback_fee",
+      "fixed": "$25.00",
+      "billingTrigger": "per_event",
+      "description": "Handling fee when a card payment into your wallet is reversed"
+    },
+    {
+      "actionType": "escrow_fee",
+      "percent": "1%",
+      "billingTrigger": "per_event",
+      "description": "Middleman fee on a private deal, 1% of the agreed value"
+    },
+    {
+      "actionType": "white_glove:domestic",
+      "fixed": "$1000.00",
+      "billingTrigger": "per_event",
+      "description": "Hand delivery within the United States, before travel"
+    },
+    {
+      "actionType": "white_glove:international",
+      "fixed": "$1500.00",
+      "billingTrigger": "per_event",
+      "description": "Hand delivery outside the United States, before travel"
+    },
+    {
+      "actionType": "show_pickup",
+      "fixed": "$15.00",
+      "billingTrigger": "per_event",
+      "description": "Collect your cards in person at a show Bault is attending"
+    },
+    {
+      "actionType": "membership:folio",
+      "fixed": "$39.00",
+      "billingTrigger": "monthly",
+      "description": "Folio membership — storage for 60 items, 4 intakes a month"
+    },
+    {
+      "actionType": "membership:registry",
+      "fixed": "$199.00",
+      "billingTrigger": "monthly",
+      "description": "Registry membership — storage for 200 items, 10 intakes a month"
+    },
+    {
+      "actionType": "membership:trust",
+      "fixed": "$699.00",
+      "billingTrigger": "monthly",
+      "description": "Trust membership — storage for 750 items, 25 intakes a month"
+    },
+    {
+      "actionType": "parcel_processing",
+      "fixed": "$2.00",
+      "billingTrigger": "per_event",
+      "description": "Per-package fee for receiving, opening and cataloguing a parcel"
+    },
+    {
+      "actionType": "parcel_forwarding",
+      "fixed": "$4.00",
+      "billingTrigger": "per_event",
+      "description": "Second leg, charged only to parcels sent to a forwarding address"
+    }
+  ]
+}

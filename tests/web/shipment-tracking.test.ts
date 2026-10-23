@@ -6,13 +6,6 @@ import {
 } from '../../apps/web/src/shared/shipments';
 import { legacyRedirect } from '../../apps/web/src/shared/routing';
 
-/**
- * Shipment tracking search.
- *
- * The tracking tab stopped being a lookup and became a list, so search is now
- * the ONLY way a user narrows it down. That makes "search finds the shipment"
- * a correctness property rather than a convenience, and it is pinned here.
- */
 function shipment(overrides: Partial<ShipmentSummary> = {}): ShipmentSummary {
   return {
     id: '9f1b2c3d-0000-4000-8000-000000000001',
@@ -70,7 +63,6 @@ describe('shipment search', () => {
 
   it('searches by carrier tracking number', () => {
     expect(rows.filter((s) => matchesShipmentSearch(s, '9400111899223456781234'))).toHaveLength(1);
-    // A partial tracking number is the realistic case — people paste fragments.
     expect(rows.filter((s) => matchesShipmentSearch(s, 'SBX-SEED'))).toHaveLength(1);
   });
 
@@ -81,7 +73,6 @@ describe('shipment search', () => {
 
   it('searches by creation date', () => {
     expect(rows.filter((s) => matchesShipmentSearch(s, '2026-08-05'))).toHaveLength(1);
-    // A whole month narrows rather than matching everything.
     expect(rows.filter((s) => matchesShipmentSearch(s, '2026-07'))).toHaveLength(1);
   });
 
@@ -91,8 +82,6 @@ describe('shipment search', () => {
   });
 
   it('does not require the internal id — and does not match on it either', () => {
-    // The internal id is never presented as something to search for; it exists
-    // for React keys and the drawer route.
     expect(matchesShipmentSearch(rows[0]!, '9f1b2c3d-0000-4000-8000-000000000001')).toBe(false);
   });
 
@@ -105,7 +94,6 @@ describe('shipment search', () => {
 
 describe('shipment status tones', () => {
   it('covers every status the API enum can produce', () => {
-    // Mirrors `shipmentStatus` in apps/api/src/modules/shp/shp.schema.ts.
     const apiStatuses = [
       'requested',
       'rates_selected',
@@ -151,7 +139,6 @@ describe('retired wallet tabs still resolve', () => {
   });
 
   it('does not redirect a same-named tab in another section', () => {
-    // `LEGACY_TABS` is keyed by section precisely so this cannot happen.
     expect(legacyRedirect(route('vault', 'topup'))).toBeNull();
   });
 });

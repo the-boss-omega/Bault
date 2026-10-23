@@ -1,0 +1,33 @@
+{
+	{$CADDY_LOCAL_CERTS}
+
+	servers {
+		trusted_proxies static {$BAULT_TRUSTED_PROXIES}
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+{$BAULT_DOMAIN} {
+	encode zstd gzip
+
+	log
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+		defer
+	}
+
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy web:8080 {
+		header_up X-Forwarded-For {client_ip}
+
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+	}
+}

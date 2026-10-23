@@ -1,0 +1,53 @@
+# =============================================================================
+# Bault — nightly backup, for the `deploy` user's crontab on the production host.
+#
+#   sudo install -d -m 700 -o deploy -g deploy /var/backups/bault /var/log/bault
+#   sudo -u deploy crontab infra/ops/crontab.example      # REPLACES that user's crontab
+#
+# /etc/bault/backup.env (mode 600, owned by deploy) holds what the job needs,
+# and nothing else:
+#
+#   DIRECT_DATABASE_URL='postgres://bault_owner:<pw>@<host>:<port>/<db>?sslmode=verify-full&sslrootcert=/etc/bault/db-ca.crt'
+#
+# QUOTE that URL. The job below sources this file with `.`, and an unquoted `&`
+# ends the assignment there: the shell backgrounds it, DIRECT_DATABASE_URL is
+# never set, and every nightly dump fails. (deploy.sh reads the file literally
+# and drops the quotes, so the same file serves both.)
+#   BACKUP_DIR=/var/backups/bault
+#   BACKUP_RETAIN_DAYS=14
+#   BACKUP_AGE_RECIPIENT=age1...            # the PUBLIC key; the private one is not on this host
+#   BACKUP_UPLOAD=rclone:backup:<backup-bucket>/nightly
+#   RCLONE_CONFIG_BACKUP_TYPE=s3            # the remote `backup`, defined here, no rclone.conf
+#   RCLONE_CONFIG_BACKUP_PROVIDER=Other     # AWS on AWS
+#   RCLONE_CONFIG_BACKUP_ENDPOINT=https://<region>.your-objectstorage.com   # omit on AWS
+#   RCLONE_CONFIG_BACKUP_REGION=<region>
+#   RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID=...  # a key for the backup bucket only, PutObject only
+#   RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY=...
+#
+# rclone is what infra/production/bootstrap.sh installs. `BACKUP_UPLOAD=s3://…`
+# with AWS_* variables and BACKUP_S3_ENDPOINT also works, but needs the aws cli,
+# which Ubuntu 24.04 does not package; without the tool the job fails before
+# it dumps anything.
+#
+# The backup bucket is in a different account from the database and from the
+# image bucket, with versioning (or object lock) on and a lifecycle rule for
+# retention, so this host's key can add backups and cannot remove them.
+#
+# 01:17 UTC: off the hour, and before the worker's 02:00 storage-fee and 03:00
+# interest runs, so the dump is the day's state before the nightly money jobs
+# touch it. pg_dump reads one consistent snapshot and takes no locks that block
+# the API.
+#
+# A failed run must reach a person. The job's own output goes to the log, so
+# cron would have nothing to mail; the `|| echo` prints one line only when the
+# dump fails, and cron mails that line to MAILTO (the host must be able to send
+# mail). Better still, the commented variant pings a dead-man's-switch monitor
+# ONLY on success, so silence (a run that failed, or never started because the
+# host was down) is what raises the alarm.
+# =============================================================================
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=ops@example.com
+
+17 1 * * * cd /opt/bault && set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump >> /var/log/bault/backup.log 2>&1 || echo "Bault nightly backup FAILED on $(hostname); see /var/log/bault/backup.log"
+# 17 1 * * * cd /opt/bault && set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump >> /var/log/bault/backup.log 2>&1 && curl -fsS -m 10 --retry 3 https://hc-ping.com/<check-uuid> > /dev/null

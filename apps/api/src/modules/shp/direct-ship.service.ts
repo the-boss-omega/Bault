@@ -17,29 +17,6 @@ import { carrierService, DIRECT_OVERNIGHT_FACILITY, DIRECT_OVERNIGHT_KEY, DOMEST
 import { insurancePremiumMinor, signatureForced, MAX_INSURED_VALUE_MINOR } from './shipping-options';
 import { formatMinor } from '../../shared/money';
 
-/**
- * Ship it straight out of the tax-free site, overnight, instead of vaulting it.
- *
- * This is the one ShipMyCards markets as Direct-from-Oregon; Bault's tax-free
- * forwarding facility is in Delaware, so it is Direct-from-Delaware here.
- *
- * The insight it is built on is that the normal path is slow for a reason that
- * has nothing to do with the collector. A parcel that lands at the forwarding
- * site is trucked to the vault — days of transit and a forwarding fee — booked
- * in as items, and only then shipped out. Somebody who bought a card to have it
- * in their hand on Saturday is paying for a round trip they did not want.
- *
- * So this bypasses the vault entirely: the goods never become items, never get a
- * serial, never accrue storage. That is exactly why it has to be a PARCEL
- * operation rather than a shipment of stored items — there is nothing in the
- * vault to ship. It also means every one of its constraints is a real one:
- *
- *   - it leaves from Delaware, so the parcel has to still be there;
- *   - it is an overnight envelope, so five cards and no more;
- *   - it is domestic, because an overnight international parcel is a different
- *     product at a different price;
- *   - and it is $100 flat, which is the whole proposition.
- */
 @Injectable()
 export class DirectShipService {
   constructor(
@@ -50,7 +27,6 @@ export class DirectShipService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /** The offer, so a collector staring at an arrived parcel can see it. */
   terms() {
     const service = carrierService(DIRECT_OVERNIGHT_KEY);
     return {
@@ -64,13 +40,6 @@ export class DirectShipService {
     };
   }
 
-  /**
-   * Whether THIS parcel qualifies, and why not if it does not.
-   *
-   * Answered before anybody commits, because "the parcel already left Delaware"
-   * is a fact the collector cannot change and should learn from a disabled
-   * button rather than from a refused payment.
-   */
   async eligibility(userId: string, parcelId: string) {
     const { row, site } = await this.loadParcel(userId, parcelId);
     const reasons: string[] = [];
@@ -97,15 +66,6 @@ export class DirectShipService {
     return { row, site };
   }
 
-  /**
-   * Send it.
-   *
-   * The card count is stated by the collector rather than counted, because
-   * nobody has opened the parcel — that is the entire point of the service. It
-   * is checked against the envelope's limit, and an operator who opens it at the
-   * bench and finds nine cards has a request that says five and a discrepancy
-   * worth recording.
-   */
   async request(
     userId: string,
     parcelId: string,
@@ -151,24 +111,27 @@ export class DirectShipService {
     const premium = insurancePremiumMinor(insuredValueMinor);
     const total = service.flatCostMinor! + premium;
 
-    const balance = await this.wallet.balance(userId);
-    if (balance.amount < total) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        `Direct overnight is ${formatMinor(total)} and your balance is ${formatMinor(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
-        409,
-      );
-    }
-
     const now = new Date();
     return this.db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
+      if (!locked || locked.ownerId !== userId) throw AppError.notFound('Parcel not found');
+      if (locked.status !== 'received' || locked.forwardedAt) {
+        throw new AppError(ErrorCode.CONFLICT, `It is already ${locked.status} — direct shipping only works before it is opened.`, 409);
+      }
+      const balance = await this.ledger.balanceOf(userId, tx);
+      if (balance.amount < total) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          `Direct overnight is ${formatMinor(total)} and your balance is ${formatMinor(balance.amount)}. Top up first — this one cannot wait, the parcel is sitting at the dock.`,
+          409,
+        );
+      }
+
       const [created] = await tx
         .insert(shipment)
         .values({
           code: newShipmentCode(),
           userId,
-          // Deliberately empty: nothing was ever booked into the vault, so there
-          // is no item to name. The parcel is the contents.
           itemIds: [],
           destinationAddress: formatted,
           recipientName: input.recipientName?.trim() || recipientName,
@@ -229,8 +192,6 @@ export class DirectShipService {
         tx,
       );
 
-      // The parcel is answered for. It is not forwarded, not opened and never
-      // becomes items — the trail says so, permanently.
       await tx
         .update(parcel)
         .set({ status: 'processed', processedAt: now, updatedAt: now })

@@ -1,0 +1,459 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { sql, type SQL } from 'drizzle-orm';
+import { DRIZZLE } from '../../db/db.module';
+import type { Database } from '../../db/client';
+import { AppError } from '../../shared/errors/app-error';
+import { AuditService } from '../sec/audit.service';
+import {
+  reconcile,
+  type OrphanLedgerFacts,
+  type PayoutFacts,
+  type TopupFacts,
+  type WithdrawalFacts,
+} from './reconciliation';
+
+const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+export const MAX_EXPORT_DAYS = 366;
+
+const EXPORT_BATCH = 2_000;
+
+const DAY_MS = 86_400_000;
+
+const PLATFORM_EMAIL = 'platform@bault.dev';
+
+export const REVENUE_LINES = [
+  'service_charge',
+  'marketplace_fee',
+  'consignment_fee',
+  'escrow_fee',
+  'cash_out_fee',
+  'chargeback_fee',
+  'custom_request_fee',
+  'other_fee',
+  'interest',
+] as const;
+
+function parseDay(value: string | undefined, name: string): Date {
+  const m = DAY.exec(value ?? '');
+  if (!m) throw AppError.validation(`${name} must be a date written YYYY-MM-DD`);
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.toISOString().slice(0, 10) !== value) throw AppError.validation(`${name} is not a real date`);
+  return d;
+}
+
+export function parseDayRange(from: string | undefined, to: string | undefined) {
+  const start = parseDay(from, 'from');
+  const endDay = parseDay(to, 'to');
+  if (endDay < start) throw AppError.validation('from must not be after to');
+  const days = Math.round((endDay.getTime() - start.getTime()) / DAY_MS) + 1;
+  if (days > MAX_EXPORT_DAYS) {
+    throw AppError.validation(`One export covers at most ${MAX_EXPORT_DAYS} days; ask for a shorter range`);
+  }
+  return { from: from!, to: to!, start, end: new Date(endDay.getTime() + DAY_MS) };
+}
+
+export function parseMonth(month: string | undefined) {
+  const m = MONTH.exec(month ?? '');
+  if (!m) throw AppError.validation('month must be written YYYY-MM');
+  const start = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+  const end = new Date(Date.UTC(Number(m[1]), Number(m[2]), 1));
+  return { month: month!, start, end };
+}
+
+export function csvField(value: string | number | null): string {
+  if (value === null) return '';
+  let s = String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function decimalAmount(minor: number): string {
+  const sign = minor < 0 ? '-' : '';
+  const abs = Math.abs(minor);
+  return `${sign}${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}
+
+export const LEDGER_CSV_HEADER = [
+  'occurred_at',
+  'ledger_id',
+  'user_id',
+  'username',
+  'type',
+  'direction',
+  'amount',
+  'currency',
+  'reference_type',
+  'reference_id',
+].join(',');
+
+interface LedgerExportRow extends Record<string, unknown> {
+  id: string;
+  occurred_at: string;
+  cursor_at: string;
+  user_id: string;
+  username: string | null;
+  type: string;
+  direction: string;
+  amount: string;
+  currency: string;
+  reference_type: string | null;
+  reference_id: string | null;
+}
+
+@Injectable()
+export class AccountingService {
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly audit: AuditService,
+  ) {}
+
+  async *ledgerCsv(range: { start: Date; end: Date }): AsyncGenerator<string> {
+    yield `${LEDGER_CSV_HEADER}\r\n`;
+    let cursor: { at: string; id: string } | null = null;
+    for (;;) {
+      const after: SQL = cursor
+        ? sql`AND (l.occurred_at, l.id) > (${cursor.at}::timestamptz, ${cursor.id}::uuid)`
+        : sql``;
+      const result: { rows: LedgerExportRow[] } = await this.db.execute<LedgerExportRow>(sql`
+        SELECT l.id::text AS id,
+               to_char(l.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at,
+               l.occurred_at::text AS cursor_at,
+               l.user_id, u.username, l.type::text AS type, l.direction::text AS direction,
+               l.amount::text AS amount, l.currency, l.reference_type, l.reference_id
+          FROM ledger_record l
+          LEFT JOIN user_account u ON u.id::text = l.user_id
+         WHERE l.occurred_at >= ${range.start.toISOString()}::timestamptz
+           AND l.occurred_at <  ${range.end.toISOString()}::timestamptz
+           ${after}
+         ORDER BY l.occurred_at, l.id
+         LIMIT ${EXPORT_BATCH}`);
+      const rows: LedgerExportRow[] = result.rows;
+      if (rows.length === 0) return;
+      yield rows
+        .map(
+          (r) =>
+            [
+              csvField(r.occurred_at),
+              csvField(r.id),
+              csvField(r.user_id),
+              csvField(r.username),
+              csvField(r.type),
+              csvField(r.direction),
+              csvField(decimalAmount(Number(r.amount))),
+              csvField(r.currency),
+              csvField(r.reference_type),
+              csvField(r.reference_id),
+            ].join(',') + '\r\n',
+        )
+        .join('');
+      if (rows.length < EXPORT_BATCH) return;
+      const last: LedgerExportRow = rows[rows.length - 1]!;
+      cursor = { at: last.cursor_at, id: last.id };
+    }
+  }
+
+  recordExport(actorId: string, range: { from: string; to: string }) {
+    return this.audit.record({
+      actorId,
+      action: 'accounting.ledger_export',
+      targetEntity: 'ledger_record',
+      metadata: { from: range.from, to: range.to },
+    });
+  }
+
+  async summary(month: { month: string; start: Date; end: Date }) {
+    const from = month.start.toISOString();
+    const to = month.end.toISOString();
+
+    const byType = (
+      await this.db.execute<{ type: string; direction: string; count: number; total: string }>(sql`
+        SELECT type::text AS type, direction::text AS direction, count(*)::int AS count, sum(amount)::text AS total
+          FROM ledger_record
+         WHERE occurred_at >= ${from}::timestamptz AND occurred_at < ${to}::timestamptz
+         GROUP BY type, direction
+         ORDER BY type, direction`)
+    ).rows.map((r) => ({ type: r.type, direction: r.direction, count: r.count, totalMinor: Number(r.total) }));
+
+    const revenueRows = (
+      await this.db.execute<{ key: string; total: string }>(sql`
+        SELECT CASE
+                 WHEN l.type = 'interest' THEN 'interest'
+                 WHEN l.type = 'service_charge' THEN 'service_charge'
+                 WHEN c.pricing_rule_snapshot ? 'escrowFeeBps' THEN 'escrow_fee'
+                 WHEN c.pricing_rule_snapshot ->> 'cashOutFee' = 'true' THEN 'cash_out_fee'
+                 WHEN c.pricing_rule_snapshot ->> 'chargebackFee' = 'true' THEN 'chargeback_fee'
+                 WHEN l.reference_type = 'listing' THEN 'marketplace_fee'
+                 WHEN s.type::text = 'consignment' THEN 'consignment_fee'
+                 WHEN s.type::text = 'custom' THEN 'custom_request_fee'
+                 ELSE 'other_fee'
+               END AS key,
+               sum(CASE WHEN l.direction = 'debit' THEN l.amount ELSE -l.amount END)::text AS total
+          FROM ledger_record l
+          LEFT JOIN charge c ON l.reference_type = 'charge' AND c.id::text = l.reference_id
+          LEFT JOIN service_request s ON l.reference_type = 'service_request' AND s.id::text = l.reference_id
+         WHERE l.type IN ('fee', 'service_charge', 'interest')
+           AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz
+         GROUP BY 1`)
+    ).rows;
+    const [returned] = (
+      await this.db.execute<{ total: string; fee: string }>(sql`
+        SELECT COALESCE(sum(l.amount), 0)::text AS total,
+               COALESCE(sum(LEAST(l.amount, COALESCE(f.amount, 0))), 0)::text AS fee
+          FROM ledger_record l
+          LEFT JOIN LATERAL (
+            SELECT sum(c.amount) AS amount
+              FROM charge c
+             WHERE c.reference_id = l.reference_id
+               AND c.pricing_rule_snapshot ->> 'cashOutFee' = 'true'
+          ) f ON TRUE
+         WHERE l.type = 'payout_reversal' AND l.direction = 'credit'
+           AND l.reference_type = 'wallet_request'
+           AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz`)
+    ).rows;
+    const returnedFeeMinor = Number(returned?.fee ?? 0);
+    const returnedPayoutMinor = Number(returned?.total ?? 0) - returnedFeeMinor;
+
+    const revenueBy = new Map(revenueRows.map((r) => [r.key, Number(r.total)]));
+    revenueBy.set('cash_out_fee', (revenueBy.get('cash_out_fee') ?? 0) - returnedFeeMinor);
+    const lines = REVENUE_LINES.map((key) => ({ key, totalMinor: revenueBy.get(key) ?? 0 }));
+
+    const [carrier] = (
+      await this.db.execute<{ total: string }>(sql`
+        SELECT COALESCE(sum((c.pricing_rule_snapshot ->> 'carrierCost')::bigint), 0)::text AS total
+          FROM ledger_record l
+          JOIN charge c ON l.reference_type = 'charge' AND c.id::text = l.reference_id
+         WHERE l.type = 'service_charge' AND l.direction = 'debit'
+           AND c.pricing_rule_snapshot ? 'carrierCost'
+           AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz`)
+    ).rows;
+
+    const sumOf = (type: string, direction: string) =>
+      byType.filter((r) => r.type === type && r.direction === direction).reduce((a, r) => a + r.totalMinor, 0);
+    const inMinor = sumOf('credit_topup', 'credit');
+    const outMinor = sumOf('withdrawal', 'debit') - returnedPayoutMinor;
+    const reversedMinor = sumOf('chargeback', 'debit');
+
+    const asOf = month.end.getTime() > Date.now() ? new Date() : month.end;
+    const [platform] = (
+      await this.db.execute<{ id: string }>(sql`SELECT id::text AS id FROM user_account WHERE email = ${PLATFORM_EMAIL} LIMIT 1`)
+    ).rows;
+    const platformId = platform?.id ?? null;
+    const [held] = (
+      await this.db.execute<{
+        customer_total: string;
+        owed_to: string;
+        owed_by: string;
+        accounts: number;
+        platform: string;
+      }>(sql`
+        WITH b AS (
+          SELECT user_id, sum(CASE WHEN direction = 'credit' THEN amount ELSE -amount END) AS bal
+            FROM ledger_record
+           WHERE occurred_at < ${asOf.toISOString()}::timestamptz
+           GROUP BY user_id
+        )
+        SELECT COALESCE(sum(bal) FILTER (WHERE user_id IS DISTINCT FROM ${platformId}), 0)::text AS customer_total,
+               COALESCE(sum(bal) FILTER (WHERE user_id IS DISTINCT FROM ${platformId} AND bal > 0), 0)::text AS owed_to,
+               COALESCE(-sum(bal) FILTER (WHERE user_id IS DISTINCT FROM ${platformId} AND bal < 0), 0)::text AS owed_by,
+               (count(*) FILTER (WHERE user_id IS DISTINCT FROM ${platformId} AND bal <> 0))::int AS accounts,
+               COALESCE(sum(bal) FILTER (WHERE user_id = ${platformId}), 0)::text AS platform
+          FROM b`)
+    ).rows;
+
+    return {
+      month: month.month,
+      from,
+      to,
+      currency: 'USD',
+      byType,
+      revenue: {
+        totalMinor: lines.reduce((a, l) => a + l.totalMinor, 0),
+        lines,
+        cashOutFeesReturnedMinor: returnedFeeMinor,
+        carrierCostOnShippingChargesMinor: Number(carrier?.total ?? 0),
+      },
+      customerMoney: {
+        inMinor,
+        outMinor,
+        payoutsReturnedMinor: returnedPayoutMinor,
+        reversedMinor,
+        netMinor: inMinor - outMinor - reversedMinor,
+      },
+      balancesHeld: {
+        asOf: asOf.toISOString(),
+        customerTotalMinor: Number(held?.customer_total ?? 0),
+        owedToCustomersMinor: Number(held?.owed_to ?? 0),
+        owedByCustomersMinor: Number(held?.owed_by ?? 0),
+        accountsWithBalance: held?.accounts ?? 0,
+        platformAccountMinor: Number(held?.platform ?? 0),
+      },
+      note:
+        'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows, ' +
+        'less the cash-out fees given back when a payout was refused or returned. ' +
+        'No tax has been applied or separated; which lines are taxable is for the accountant.',
+    };
+  }
+
+  async reconciliation(range: { start: Date; end: Date } | null) {
+    const epWindow = range
+      ? sql`AND ep.created_at >= ${range.start.toISOString()}::timestamptz AND ep.created_at < ${range.end.toISOString()}::timestamptz`
+      : sql``;
+    const ledgerWindow = range
+      ? sql`AND l.occurred_at >= ${range.start.toISOString()}::timestamptz AND l.occurred_at < ${range.end.toISOString()}::timestamptz`
+      : sql``;
+
+    const topups = (
+      await this.db.execute<Record<string, unknown>>(sql`
+        WITH refs AS (
+          SELECT reference_id,
+                 count(*) FILTER (WHERE type = 'credit_topup' AND direction = 'credit')::int AS credit_count,
+                 COALESCE(sum(amount) FILTER (WHERE type = 'credit_topup' AND direction = 'credit'), 0)::text AS credit_sum,
+                 count(*) FILTER (WHERE type = 'chargeback' AND direction = 'debit')::int AS chargeback_count,
+                 COALESCE(sum(amount) FILTER (WHERE type = 'chargeback' AND direction = 'debit'), 0)::text AS chargeback_sum,
+                 count(*) FILTER (WHERE NOT ((type = 'credit_topup' AND direction = 'credit')
+                                          OR (type = 'chargeback' AND direction = 'debit')))::int AS other_count
+            FROM ledger_record
+           WHERE reference_type = 'external_payment'
+           GROUP BY reference_id
+        )
+        SELECT ep.id::text AS id, ep.user_id, u.username, ep.provider, ep.status, ep.amount::text AS amount,
+               ep.created_at,
+               COALESCE(r.credit_count, 0) AS credit_count, COALESCE(r.credit_sum, '0') AS credit_sum,
+               COALESCE(r.chargeback_count, 0) AS chargeback_count, COALESCE(r.chargeback_sum, '0') AS chargeback_sum,
+               COALESCE(r.other_count, 0) AS other_count
+          FROM external_payment ep
+          LEFT JOIN refs r ON r.reference_id = ep.id::text
+          LEFT JOIN user_account u ON u.id::text = ep.user_id
+         WHERE ep.purpose = 'topup' ${epWindow}`)
+    ).rows.map(
+      (r): TopupFacts => ({
+        id: String(r.id),
+        userId: String(r.user_id),
+        username: (r.username as string | null) ?? null,
+        provider: String(r.provider),
+        status: String(r.status),
+        amount: Number(r.amount),
+        createdAt: r.created_at as Date,
+        creditCount: Number(r.credit_count),
+        creditSum: Number(r.credit_sum),
+        chargebackCount: Number(r.chargeback_count),
+        chargebackSum: Number(r.chargeback_sum),
+        otherCount: Number(r.other_count),
+      }),
+    );
+
+    const payouts = (
+      await this.db.execute<Record<string, unknown>>(sql`
+        SELECT ep.id::text AS id, ep.user_id, u.username, ep.status, ep.amount::text AS amount,
+               ep.provider_ref, ep.created_at
+          FROM external_payment ep
+          LEFT JOIN user_account u ON u.id::text = ep.user_id
+         WHERE ep.purpose = 'payout' ${epWindow}`)
+    ).rows.map(
+      (r): PayoutFacts => ({
+        id: String(r.id),
+        userId: String(r.user_id),
+        username: (r.username as string | null) ?? null,
+        status: String(r.status),
+        amount: Number(r.amount),
+        providerRef: String(r.provider_ref),
+        createdAt: r.created_at as Date,
+      }),
+    );
+
+    const withdrawals = (
+      await this.db.execute<Record<string, unknown>>(sql`
+        SELECT l.id::text AS ledger_id, l.user_id, u.username, l.amount::text AS amount, l.occurred_at,
+               CASE WHEN l.reference_type = 'wallet_request' THEN l.reference_id END AS wallet_request_id,
+               COALESCE(pp.provider_ref, ev.metadata ->> 'payoutRef') AS payout_ref,
+               CASE WHEN pp.id IS NOT NULL THEN '0' ELSE COALESCE(ev.metadata ->> 'feeMinor', '0') END AS fee_minor,
+               (l.amount + CASE WHEN pp.id IS NOT NULL THEN COALESCE(fee.amount, 0) ELSE 0 END)::text AS debited_minor,
+               COALESCE(rv.amount, 0)::text AS reversed_minor
+          FROM ledger_record l
+          LEFT JOIN user_account u ON u.id::text = l.user_id
+          LEFT JOIN wallet_request wr
+            ON l.reference_type = 'wallet_request' AND wr.id::text = l.reference_id
+          LEFT JOIN external_payment pp ON pp.id::text = wr.payout_payment_id::text
+          LEFT JOIN LATERAL (
+            SELECT e.metadata
+              FROM wallet_request_event e
+             WHERE l.reference_type = 'wallet_request'
+               AND e.request_id = l.reference_id
+               AND e.to_status = 'completed'
+             ORDER BY e.occurred_at DESC
+             LIMIT 1
+          ) ev ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT sum(c.amount) AS amount
+              FROM charge c
+             WHERE c.reference_id = wr.id::text
+               AND c.pricing_rule_snapshot ->> 'cashOutFee' = 'true'
+          ) fee ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT sum(r.amount) AS amount
+              FROM ledger_record r
+             WHERE l.reference_type = 'wallet_request'
+               AND r.type = 'payout_reversal' AND r.direction = 'credit'
+               AND r.reference_type = 'wallet_request' AND r.reference_id = l.reference_id
+          ) rv ON TRUE
+         WHERE l.type = 'withdrawal' AND l.direction = 'debit' ${ledgerWindow}`)
+    ).rows.map(
+      (r): WithdrawalFacts => ({
+        ledgerId: String(r.ledger_id),
+        userId: String(r.user_id),
+        username: (r.username as string | null) ?? null,
+        amount: Number(r.amount),
+        occurredAt: r.occurred_at as Date,
+        walletRequestId: (r.wallet_request_id as string | null) ?? null,
+        payoutRef: (r.payout_ref as string | null) ?? null,
+        feeMinor: Number(r.fee_minor),
+        debitedMinor: Number(r.debited_minor),
+        reversedMinor: Number(r.reversed_minor),
+      }),
+    );
+
+    const orphans = (
+      await this.db.execute<Record<string, unknown>>(sql`
+        SELECT l.id::text AS ledger_id, l.user_id, u.username, l.type::text AS type, l.direction::text AS direction,
+               l.amount::text AS amount, l.reference_id, l.occurred_at
+          FROM ledger_record l
+          LEFT JOIN external_payment ep ON ep.id::text = l.reference_id
+          LEFT JOIN user_account u ON u.id::text = l.user_id
+         WHERE l.reference_type = 'external_payment' AND ep.id IS NULL ${ledgerWindow}`)
+    ).rows.map(
+      (r): OrphanLedgerFacts => ({
+        ledgerId: String(r.ledger_id),
+        userId: String(r.user_id),
+        username: (r.username as string | null) ?? null,
+        type: String(r.type),
+        direction: String(r.direction),
+        amount: Number(r.amount),
+        referenceId: (r.reference_id as string | null) ?? null,
+        occurredAt: r.occurred_at as Date,
+      }),
+    );
+
+    const [manual] = (
+      await this.db.execute<{ count: number; total: string }>(sql`
+        SELECT count(*)::int AS count, COALESCE(sum(amount), 0)::text AS total
+          FROM ledger_record l
+         WHERE l.type = 'credit_topup' AND l.direction = 'credit' AND l.reference_type = 'wallet_request'
+               ${ledgerWindow}`)
+    ).rows;
+
+    const report = reconcile({ topups, payouts, withdrawals, orphans });
+    return {
+      from: range?.start.toISOString() ?? null,
+      to: range?.end.toISOString() ?? null,
+      ...report,
+      manualCashIns: {
+        count: manual?.count ?? 0,
+        totalMinor: Number(manual?.total ?? 0),
+        reconcileAgainst: 'the bank and PayPal account statements',
+      },
+      checkedAt: new Date().toISOString(),
+    };
+  }
+}

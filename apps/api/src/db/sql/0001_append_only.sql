@@ -125,22 +125,57 @@ END;
 $$;
 
 -- =============================================================================
--- COMPATIBILITY — allow `uuid = text` joins.
+-- COMPATIBILITY — allow `uuid = text` comparisons.
 --
 -- Primary keys are `uuid` but reference columns (owner_id, requester_id,
 -- item_id, ...) are `text`, so JOINs compare uuid = text, for which Postgres has
--- no built-in operator. This implicit I/O cast lets those comparisons coerce the
--- text side to uuid, fixing every cross-table JOIN. Idempotent.
+-- no built-in operator.
+--
+-- This used to be `CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT`. Creating
+-- a cast between two built-in types needs a SUPERUSER, which no managed
+-- Postgres gives you, so a fresh managed database could not be migrated at all
+-- (checked: as a database owner without superuser the migration stopped at
+-- `CreateCast`). Operators need only the right to create objects in `public`,
+-- which the database owner has.
+--
+-- The functions are single-expression SQL, IMMUTABLE and STRICT, so the planner
+-- inlines them: `uuid_col = text_col` is planned as `uuid_col = text_col::uuid`,
+-- exactly what the implicit cast produced, and uuid indexes still apply.
+-- A database that already has the cast keeps it; an exact-match operator is
+-- chosen ahead of a cast, so the two agree. Idempotent.
 -- =============================================================================
+CREATE OR REPLACE FUNCTION public.bault_uuid_eq_text(uuid, text) RETURNS boolean
+  LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS 'SELECT $1 = $2::uuid';
+CREATE OR REPLACE FUNCTION public.bault_text_eq_uuid(text, uuid) RETURNS boolean
+  LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS 'SELECT $1::uuid = $2';
+CREATE OR REPLACE FUNCTION public.bault_uuid_ne_text(uuid, text) RETURNS boolean
+  LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS 'SELECT $1 <> $2::uuid';
+CREATE OR REPLACE FUNCTION public.bault_text_ne_uuid(text, uuid) RETURNS boolean
+  LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS 'SELECT $1::uuid <> $2';
+
 DO $$
+DECLARE
+  spec record;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_cast c
-    JOIN pg_type s ON s.oid = c.castsource
-    JOIN pg_type t ON t.oid = c.casttarget
-    WHERE s.typname = 'text' AND t.typname = 'uuid'
-  ) THEN
-    EXECUTE 'CREATE CAST (text AS uuid) WITH INOUT AS IMPLICIT';
-  END IF;
+  FOR spec IN
+    SELECT * FROM (VALUES
+      ('=',  'uuid', 'text', 'public.bault_uuid_eq_text'),
+      ('=',  'text', 'uuid', 'public.bault_text_eq_uuid'),
+      ('<>', 'uuid', 'text', 'public.bault_uuid_ne_text'),
+      ('<>', 'text', 'uuid', 'public.bault_text_ne_uuid')
+    ) AS v(op, lefttype, righttype, fn)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_operator
+      WHERE oprname = spec.op
+        AND oprleft = spec.lefttype::regtype
+        AND oprright = spec.righttype::regtype
+    ) THEN
+      EXECUTE format(
+        'CREATE OPERATOR public.%s (LEFTARG = %s, RIGHTARG = %s, FUNCTION = %s)',
+        spec.op, spec.lefttype, spec.righttype, spec.fn
+      );
+    END IF;
+  END LOOP;
 END;
 $$;

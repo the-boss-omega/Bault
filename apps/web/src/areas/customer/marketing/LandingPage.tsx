@@ -1,51 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
-import { formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatUsd } from '../../../shared/money';
 import { navigate } from '../../../shared/routing';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
 import { Button } from '../../../shared/ui/primitives';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
+import type { AccountTerms } from '../help/FaqLegalPage';
 
-/**
- * The front door, and the first one this product has ever had.
- *
- * `AuthShell` says it in its own comment: THERE IS NO MARKETING SITE. The whole
- * application sat behind authentication, and the only anonymous surface was a
- * sign-in form with a photograph beside it. That form is a good shop window and
- * a bad front door: it answers "get me back in", and it does not answer the
- * question somebody arriving for the first time is actually asking, which is
- * what this is and what it will cost.
- *
- * So this page is that answer, and it is built out of the same argument the rest
- * of the product makes rather than out of a separate marketing voice:
- *
- *   - THE PITCH IS A REAL ITEM. The same photograph, the same `Serial`, the same
- *     custody line and the same custody green the signed-in product uses, on the
- *     same dark photography stage. A landing page that promises a different
- *     product than the one behind it is a lie told twice, so the serial and the
- *     caption are imported from `AuthPage` rather than retyped — there is one
- *     definition of the card on the stage, and it cannot drift.
- *   - THE PRICES ARE FETCHED, NEVER WRITTEN. `GET /pricing/list` is public
- *     precisely so somebody without an account can read what it costs, and it
- *     returns the rules the billing engine charges from. Hard-coding "from $5"
- *     into a landing page would be the one figure in the product that no rule
- *     backs. When the request fails the figures are OMITTED and the page says
- *     so — never a placeholder that could be read as "free".
- *   - THE WORDING IS TRANSLATED, THE FIGURES ARE NOT. A rule's `description`
- *     comes out of the database in English; printing it on the Hebrew page would
- *     put an English sentence in the middle of a Hebrew table. The label for each
- *     featured rule is a catalogue key here and the NUMBER comes from the server,
- *     which is the same split `servicePrices.ts` makes for the service buttons.
- *
- * It is `marketing` density — the generous end of the same scale the vault and
- * the warehouse sit on — and it introduces no component the product did not
- * already have. A section is a heading and a rule, not a floating card.
- */
-
-/** The rules worth putting on a front page, in the order somebody meets them. */
 const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
   { actionType: 'intake', labelKey: 'landing.price.intake' },
   { actionType: 'storage', labelKey: 'landing.price.storage' },
@@ -56,10 +20,8 @@ const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
 
 interface PriceEntry {
   actionType: string;
-  /** Null on a catch-all rule; set on a class-specific one. */
   itemClass?: string | null;
   model: 'fixed' | 'percentage';
-  /** Cents for a fixed rule, basis points for a percentage one. */
   value: number;
   parameters: Record<string, unknown> | null;
 }
@@ -68,21 +30,19 @@ interface PriceList {
   groups: { group: string; entries: PriceEntry[] }[];
 }
 
-/**
- * A rule in the units it is actually stated in.
- *
- * A percentage rule stores basis points and a fixed one stores cents, so running
- * both through `formatUsd` turns 5% into "$5.00" — the exact error a price label
- * exists to prevent. Zero is formatted rather than suppressed: the handling rule
- * really is $0.00, and that is a fact worth printing, not an absence to hide.
- */
 function priceOf(entry: PriceEntry): string {
   return entry.model === 'percentage'
     ? `${(entry.value / 100).toFixed(entry.value % 100 === 0 ? 0 : 2)}%`
     : formatUsd(entry.value);
 }
 
-/** A finite number out of a rule's `parameters`, or null when it is not one. */
+function cashOutOf(terms: Partial<AccountTerms> | null | undefined): AccountTerms['cashOut'] | null {
+  const c = terms?.cashOut;
+  if (!c) return null;
+  const figures = [c.bandMinor, c.smallBps, c.smallMinimumMinor, c.largeFixedMinor, c.largeBps];
+  return figures.every((n) => typeof n === 'number' && Number.isFinite(n)) ? c : null;
+}
+
 function param(entry: PriceEntry | undefined, key: string): number | null {
   const raw = entry?.parameters?.[key];
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
@@ -92,6 +52,7 @@ export function LandingPage() {
   const { t } = useI18n();
   const [prices, setPrices] = useState<Map<string, PriceEntry> | null>(null);
   const [pricesFailed, setPricesFailed] = useState(false);
+  const [cashOut, setCashOut] = useState<AccountTerms['cashOut'] | null | undefined>(undefined);
 
   useEffect(() => {
     let live = true;
@@ -99,15 +60,6 @@ export function LandingPage() {
       .get<PriceList>('/pricing/list')
       .then((list) => {
         if (!live) return;
-        /**
-         * One entry per action — and for intake, the CARD rule specifically.
-         *
-         * Intake is priced per class now, so the list carries a dozen `intake`
-         * rules. Keyed by action alone, whichever came last would have been shown
-         * as "the" intake price: a sealed case's $20 on the front page of a
-         * service most people use for single cards. The single-card rule is the
-         * honest headline; the full list is one click away in Help.
-         */
         const byAction = new Map<string, PriceEntry>();
         for (const group of list.groups ?? []) {
           for (const entry of group.entries ?? []) {
@@ -119,7 +71,6 @@ export function LandingPage() {
         setPrices(byAction);
       })
       .catch(() => {
-        // A price that cannot be fetched is omitted, not guessed.
         if (live) setPricesFailed(true);
       });
     return () => {
@@ -127,20 +78,36 @@ export function LandingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let live = true;
+    void api
+      .get<AccountTerms>('/content/account-terms')
+      .then((terms) => {
+        if (live) setCashOut(cashOutOf(terms));
+      })
+      .catch(() => {
+        if (live) setCashOut(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const cashOutTerms = cashOut
+    ? t('legal.figures.cashOutValue', {
+        smallPct: bpsToPercent(cashOut.smallBps),
+        min: formatUsd(cashOut.smallMinimumMinor),
+        band: formatUsd(cashOut.bandMinor),
+        fixed: formatUsd(cashOut.largeFixedMinor),
+        largePct: bpsToPercent(cashOut.largeBps),
+      })
+    : null;
+
   const storage = prices?.get('storage');
   const freeDays = param(storage, 'freeDays');
   const periodDays = param(storage, 'periodDays');
   const percentBps = param(storage, 'percentOfIntakeBps');
 
-  /**
-   * Storage is the one featured rule whose figure is not its `value`.
-   *
-   * `value` on the storage rule is a fallback base for an item with no intake
-   * charge to take a proportion of; the real terms live in `parameters`, and the
-   * worker's sweep reads them. Printing the $1.00 would be quoting a number
-   * nobody is ever charged, so the terms are phrased from the parameters and
-   * omitted entirely when they are not there.
-   */
   const storageTerms =
     freeDays !== null && periodDays !== null && percentBps !== null
       ? t('landing.price.storageTerms', {
@@ -171,7 +138,6 @@ export function LandingPage() {
         </div>
       </header>
 
-      {/* ---- The stage. The one dark surface, and the whole pitch. ---- */}
       <section className="landing-stage" aria-labelledby="landing-headline">
         <div className="landing-stage-photo">
           <CardPhotoThumb serialNumber={LANDING_SERIAL} title={LANDING_TITLE} />
@@ -183,8 +149,6 @@ export function LandingPage() {
           </h1>
           <p className="landing-lede">{t('landing.hero.lede')}</p>
 
-          {/* The custody line: what the platform actually knows about this
-              object, in the components that state it everywhere else. */}
           <dl className="landing-custody">
             <div>
               <dt>{t('vault.serial')}</dt>
@@ -217,7 +181,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- Three promises, as ruled entries rather than three cards ---- */}
       <section className="landing-section" aria-labelledby="landing-promises">
         <h2 className="landing-h2" id="landing-promises">
           {t('landing.promises.title')}
@@ -240,7 +203,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- What it costs, read from the rules that do the charging ---- */}
       <section className="landing-section" aria-labelledby="landing-prices">
         <h2 className="landing-h2" id="landing-prices">
           {t('landing.prices.title')}
@@ -250,10 +212,6 @@ export function LandingPage() {
         {pricesFailed ? (
           <p className="hint">{t('landing.prices.unavailable')}</p>
         ) : (
-          /* `.dt-wrap` is the product's own scroller for a register that
-             outgrows its column. Two columns will not, on any screen this page
-             is read on — but a table is the one element allowed to be wider
-             than the page, and only inside this. */
           <div className="dt-wrap">
             <table className="data-table landing-price-table">
               <thead>
@@ -268,6 +226,7 @@ export function LandingPage() {
                 {FEATURED.map(({ actionType, labelKey }) => {
                   const entry = prices?.get(actionType);
                   const isStorage = actionType === 'storage';
+                  const isCashOut = actionType === 'cash_out_fee';
                   return (
                     <tr key={actionType}>
                       <th scope="row">
@@ -277,10 +236,15 @@ export function LandingPage() {
                         )}
                       </th>
                       <td className="num">
-                        {/* Until the list arrives, and if it never does, the cell
-                          is empty rather than holding a figure nobody quoted. */}
-                        {entry !== undefined && !isStorage && (
+                        {entry !== undefined && !isStorage && !isCashOut && (
                           <span className="amount">{priceOf(entry)}</span>
+                        )}
+                        {isCashOut && (
+                          <span className="landing-included">
+                            {cashOut === undefined
+                              ? t('grp.loading')
+                              : (cashOutTerms ?? t('landing.price.unavailable'))}
+                          </span>
                         )}
                         {isStorage && storageTerms !== null && (
                           <span className="landing-included">
@@ -298,7 +262,6 @@ export function LandingPage() {
         <p className="landing-footnote">{t('landing.prices.footnote')}</p>
       </section>
 
-      {/* ---- How a card moves, in the order the work happens ---- */}
       <section className="landing-section" aria-labelledby="landing-journey">
         <h2 className="landing-h2" id="landing-journey">
           {t('landing.journey.title')}
@@ -317,7 +280,6 @@ export function LandingPage() {
         </ol>
       </section>
 
-      {/* ---- And the three ways it leaves ---- */}
       <section className="landing-section" aria-labelledby="landing-out">
         <h2 className="landing-h2" id="landing-out">
           {t('landing.out.title')}
@@ -340,7 +302,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- The close ---- */}
       <section className="landing-close" aria-labelledby="landing-close-h">
         <h2 className="landing-h2" id="landing-close-h">
           {t('landing.close.title')}

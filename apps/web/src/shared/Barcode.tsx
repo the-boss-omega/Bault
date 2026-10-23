@@ -3,31 +3,13 @@ import { barcodeSvg, type BarcodeOptions } from './barcode128';
 import { useT } from './i18n';
 import { IconPrint } from './ui/icons';
 
-/**
- * Scannable Code 128 barcode + a button that hands the label to the operating
- * system's print dialog.
- *
- * Rendering: the encoder returns SVG markup, injected with
- * `dangerouslySetInnerHTML`. That is safe here because the markup is produced
- * entirely by our own encoder — every payload character is validated against
- * Code 128B and the caption is XML-escaped, so no caller-supplied string reaches
- * the DOM unescaped.
- *
- * Printing: `printBarcode` writes a minimal, self-contained label document into a
- * hidden same-origin iframe and calls `print()` on it, which is what opens the
- * computer's print dialog / printer software with the barcode image. An iframe
- * rather than `window.open` avoids popup blockers, and INLINE SVG rather than an
- * `<img src="data:…">` avoids the classic blank-page race where the dialog opens
- * before the image has decoded.
- */
 export function Barcode({ value, options }: { value: string; options?: BarcodeOptions }) {
   const t = useT();
-  // Encoding is pure and cheap, but memoize so re-renders don't re-encode.
   const svg = useMemo(() => {
     try {
       return barcodeSvg(value, options);
     } catch {
-      return null; // an unencodable payload degrades to plain text, never a crash
+      return null;
     }
   }, [value, options]);
 
@@ -41,45 +23,22 @@ export function Barcode({ value, options }: { value: string; options?: BarcodeOp
   );
 }
 
-/** One label to print: the payload that scans, and the line a human reads. */
 export interface PrintableLabel {
   value: string;
   caption?: string;
 }
 
-/**
- * Open the print dialog with a one-label document.
- *
- * The iframe is removed after the dialog closes. `onafterprint` fires in every
- * modern browser, but a timeout backstop guarantees cleanup even where it does
- * not (older Safari), so repeated printing never leaks iframes into the DOM.
- */
 export function printBarcode(value: string, caption?: string): void {
   printBarcodes([{ value, caption }]);
 }
 
-/**
- * Print a whole run in ONE dialog, one label per page.
- *
- * `printBarcode` handled a single label, which was right when the bench booked in
- * one unit at a time. It books in a box now, and twelve units meant twelve trips
- * to the print dialog — twelve confirmations, and no way for an operator who
- * missed one to tell which.
- *
- * `page-break-after` on every label but the last is what makes a run of twelve
- * come out as twelve label-stock pages rather than twelve barcodes crammed onto
- * one sheet. The last one is exempt so a single-label print does not eject a
- * blank page after it.
- */
 export function printBarcodes(labels: readonly PrintableLabel[]): void {
-  // Print at a larger module width than the screen: 3 modules keeps the
-  // narrowest bar above the ~0.25mm most laser scanners need at 300dpi.
   const printable = labels
     .map((label) => {
       try {
         return { ...label, svg: barcodeSvg(label.value, { moduleWidth: 3, height: 90, showText: true }) };
       } catch {
-        return null; // an unencodable payload is skipped, never printed blank
+        return null;
       }
     })
     .filter((l): l is PrintableLabel & { svg: string } => l !== null);
@@ -124,8 +83,6 @@ export function printBarcodes(labels: readonly PrintableLabel[]): void {
       `.label { text-align: center; page-break-after: always; break-after: page;` +
       ` display: flex; flex-direction: column; align-items: center;` +
       ` justify-content: center; min-height: 100vh; }` +
-      // The last label does not eject a page after it, so printing one label
-      // does not push a blank sheet out behind it.
       `.label.last { page-break-after: auto; break-after: auto; }` +
       `.label svg { display: block; margin: 0 auto; }` +
       `.label .caption { margin-top: 6px; font-size: 12px; }` +
@@ -141,19 +98,11 @@ export function printBarcodes(labels: readonly PrintableLabel[]): void {
   };
   win.onafterprint = cleanup;
 
-  // The document is fully inline, so it is ready as soon as write/close returns;
-  // focus() is required for the dialog to attach to the iframe in Firefox.
   win.focus();
   win.print();
   window.setTimeout(cleanup, 60_000);
 }
 
-/**
- * Print every label in a run, in one dialog.
- *
- * Offered beside the labels an intake just produced. Disabled-by-absence rather
- * than disabled-and-grey: with nothing to print there is nothing to render.
- */
 export function BarcodePrintAllButton({
   labels,
   className = 'btn btn--gold',
@@ -176,7 +125,6 @@ export function BarcodePrintAllButton({
   );
 }
 
-/** Print button, rendered next to a barcode wherever one is displayed. */
 export function BarcodePrintButton({
   value,
   caption,
@@ -201,7 +149,6 @@ export function BarcodePrintButton({
   );
 }
 
-/** The common pairing: the scannable symbol plus its print button. */
 export function BarcodeLabel({
   value,
   caption,

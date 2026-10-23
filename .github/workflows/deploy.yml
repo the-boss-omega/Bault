@@ -1,0 +1,96 @@
+name: Deploy (optional)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy (v*), as published by release.yml
+        required: true
+        type: string
+      environment:
+        description: Where to deploy
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+
+    steps:
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] \
+            || { echo "::error::'$TAG' is not a release tag (v1.2.3 or v1.2.3-rc1)"; exit 1; }
+
+      - name: Check the host is reachable from this runner
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          [ -n "$DEPLOY_HOST" ] || { echo "::error::DEPLOY_HOST is not set on the environment"; exit 1; }
+          if ! timeout 15 bash -c 'exec 3<>"/dev/tcp/$1/22"' _ "$DEPLOY_HOST" 2>/dev/null; then
+            echo "::error::Cannot reach ${DEPLOY_HOST}:22 from this runner. The host's firewall admits SSH from ADMIN_IP only (infra/production/bootstrap.sh), and GitHub-hosted runners are not ADMIN_IP. Deploy by hand from ADMIN_IP: ssh deploy@${DEPLOY_HOST}, then cd /opt/bault && ./infra/production/deploy.sh <tag> (infra/production/README.md, section 5). To use this workflow, run it on a self-hosted runner the firewall admits."
+            exit 1
+          fi
+          echo "reached ${DEPLOY_HOST}:22"
+
+      - name: Check the release images exist
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for image in bault-api bault-worker bault-web; do
+            ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${TAG}"
+            docker buildx imagetools inspect "$ref" > /dev/null \
+              || { echo "::error::${ref} not found; was ${TAG} released?"; exit 1; }
+            echo "found ${ref}"
+          done
+          docker logout ghcr.io
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "::error::DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS must be set on the environment"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Run the deployment on the host
+        env:
+          TAG: ${{ inputs.tag }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          [ -n "$DEPLOY_HOST" ] || { echo "::error::DEPLOY_HOST is not set on the environment"; exit 1; }
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes \
+              -o ConnectTimeout=15 \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -o ServerAliveInterval=30 \
+              "deploy@${DEPLOY_HOST}" \
+              "cd /opt/bault && ./infra/production/deploy.sh '${TAG}'"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

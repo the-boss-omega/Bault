@@ -17,6 +17,8 @@ const OUTCOME_TONE: Record<SignInOutcome, StatusTone> = {
   bad_credentials: 'error',
   unverified: 'warning',
   refused: 'error',
+  mfa_challenged: 'info',
+  mfa_failed: 'error',
 };
 
 const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
@@ -24,25 +26,12 @@ const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
   bad_credentials: 'admin.signIns.outcome.bad_credentials',
   unverified: 'admin.signIns.outcome.unverified',
   refused: 'admin.signIns.outcome.refused',
+  mfa_challenged: 'admin.signIns.outcome.mfa_challenged',
+  mfa_failed: 'admin.signIns.outcome.mfa_failed',
 };
 
-/**
- * Who signed in, and who tried to.
- *
- * Until `login_attempt` existed this screen could not have been built: a failed
- * sign-in was not recorded anywhere, and a successful one was an audit row with
- * the user left empty. The question an administrator most needs answered —
- * *is somebody guessing passwords?* — had the answer "we would never know".
- *
- * The figures come first because they are what decides whether to read the
- * table at all. The `suspicious` list is the pattern pulled out of the rows —
- * five or more failures against one identifier in a day — so it is not left to
- * somebody scanning two hundred lines for a repeat.
- *
- * The identifier is what was TYPED, so a burst against an address that has no
- * account shows up as clearly as one against an address that does. The password
- * is not in this log, in any form.
- */
+const ROUTINE: ReadonlySet<SignInOutcome> = new Set(['success', 'mfa_challenged']);
+
 export function SignInsSection({ onError }: { onError: (m: string) => void }) {
   const { t, locale } = useI18n();
   const [log, setLog] = useState<SignInLog | null>(null);
@@ -144,7 +133,7 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
               </thead>
               <tbody>
                 {log.attempts.map((a) => (
-                  <tr key={a.id} className={a.outcome === 'success' ? undefined : 'is-attention'}>
+                  <tr key={a.id} className={ROUTINE.has(a.outcome) ? undefined : 'is-attention'}>
                     <td data-label={t('admin.signIns.col.when')}>
                       <span dir="ltr">{formatDateTime(a.occurredAt, locale)}</span>
                     </td>
@@ -152,9 +141,6 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                       <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>
                     </td>
                     <td data-label={t('admin.signIns.col.account')}>
-                      {/* The account it resolved to — or, when it resolved to
-                          nothing, exactly what was typed, so a stranger's guess
-                          is as visible as a member's typo. */}
                       <span className="ltr-run">{a.username ? `@${a.username}` : a.identifier}</span>
                       {!a.userId && <span className="hint"> · {t('admin.signIns.noAccount')}</span>}
                     </td>

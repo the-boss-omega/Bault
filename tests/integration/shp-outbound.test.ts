@@ -1,22 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 
-/**
- * Section 8 — outbound shipping.
- *
- * The old flow's shape was right and almost everything inside it was synthetic:
- * two invented prices that were the same two prices for every parcel Bault had
- * ever quoted, because the rate request hard-coded the destination and assumed
- * 500 g per item.
- *
- * So the tests worth having are the ones that would still pass against the old
- * stub if the change were cosmetic: a quote that MOVES when the parcel gets
- * heavier or the destination gets further, a service that refuses a parcel it
- * cannot legally carry, an insurance figure that forces a signature, and a
- * request that can be changed, merged and called off after it exists.
- *
- * Requires a running API + a freshly seeded DB.
- */
 describe('SHP outbound shipping', () => {
   async function itemFor(cls = 'trading_card', weightGrams?: number) {
     const operator = await signIn(SEED.operator);
@@ -38,6 +22,7 @@ describe('SHP outbound shipping', () => {
     recipient: 'Red Ashwood',
     line1: '12 Vine St',
     city: 'Trenton',
+    region: 'NJ',
     country: 'US',
     postalCode: '08608',
   };
@@ -50,8 +35,6 @@ describe('SHP outbound shipping', () => {
     postalCode: '100-0001',
   };
 
-  /* ---------------- quoting ---------------- */
-
   it('publishes the carrier line-up with the limits that decide what you can use', async () => {
     const collector = await signIn(SEED.collector);
     const res = await collector.get('/shipping/services');
@@ -59,7 +42,6 @@ describe('SHP outbound shipping', () => {
 
     const services = res.body.services as Array<Record<string, unknown>>;
     expect(services.length).toBeGreaterThan(3);
-    // The limits ARE the product — a line-up without them is the old stub.
     for (const s of services) {
       expect(typeof s.maxWeightGrams).toBe('number');
       expect(typeof s.maxInsuredValueMinor).toBe('number');
@@ -78,7 +60,6 @@ describe('SHP outbound shipping', () => {
 
     expect(quote.rates.length).toBeGreaterThan(0);
     expect(quote.destination.country).toBe('US');
-    // Nothing was created — that is the entire point of a quote.
     const after = ((await collector.get('/shipping/shipments')).body as unknown[]).length;
     expect(after).toBe(before);
   });
@@ -108,8 +89,6 @@ describe('SHP outbound shipping', () => {
     expect(cheapest(lightFar)).toBeGreaterThan(cheapest(lightHome));
   });
 
-  /* ---------------- the box ---------------- */
-
   it('publishes the boxes a parcel can go out in', async () => {
     const collector = await signIn(SEED.collector);
     const boxes = (await collector.get('/shipping/services')).body.boxes as Array<{ key: string; dimensionsCm: { length: number }; maxContentsGrams: number }>;
@@ -133,8 +112,6 @@ describe('SHP outbound shipping', () => {
     const mailer = await quote('rigid_mailer');
     const large = await quote('large');
 
-    // Nobody chose: the packer's rule chooses — the smallest box the contents
-    // fit — and the quote says it was chosen for them, as the reference does.
     expect(unchosen.boxSize).toBe('rigid_mailer');
     expect(unchosen.boxAutoSelected).toBe(true);
     expect(mailer.boxSize).toBe('rigid_mailer');
@@ -153,7 +130,6 @@ describe('SHP outbound shipping', () => {
     ).body;
     expect(quote.optionProblems.map((p: { rule: string }) => p.rule)).toContain('box_contents');
 
-    // And a request cannot be created around it — the quote was the courtesy.
     const created = await collector.post('/shipping/shipments', {
       itemIds: [item.id],
       addressId: us,
@@ -187,7 +163,6 @@ describe('SHP outbound shipping', () => {
     expect(selected.status).toBe(201);
     expect(selected.body.cost).toBe(quoted.totalMinor);
 
-    // The warehouse sees the box it has to pack it in.
     const operator = await signIn(SEED.operator);
     expect((await operator.get(`/shipping/shipments/${s.id}`)).body.boxSize).toBe('large');
   });
@@ -208,8 +183,6 @@ describe('SHP outbound shipping', () => {
     const a = pick(standard);
     const b = pick(rushed);
     expect(b.totalMinor).toBeGreaterThan(a.totalMinor);
-    // The surcharge sits in HANDLING, and the carrier's own promise is unchanged
-    // — rush is Bault packing faster, not FedEx flying faster.
     expect(b.handlingMinor).toBeGreaterThan(a.handlingMinor);
     expect(b.estimatedDays).toBe(a.estimatedDays);
   });
@@ -223,7 +196,7 @@ describe('SHP outbound shipping', () => {
       await collector.post('/shipping/quote', {
         itemIds: [item.id],
         addressId: jp,
-        declaredValueMinor: 300_000, // $3,000 — far over ePacket's $400
+        declaredValueMinor: 300_000,
         insuredValueMinor: 300_000,
       })
     ).body;
@@ -234,7 +207,6 @@ describe('SHP outbound shipping', () => {
     expect(rules).toContain('customs_value');
     expect(rules).toContain('insurance');
 
-    // Something still can carry it — a refusal everywhere would be a dead end.
     expect(quote.rates.some((r: { eligible: boolean }) => r.eligible)).toBe(true);
     expect(quote.rates.some((r: { recommended: boolean }) => r.recommended)).toBe(true);
   });
@@ -256,8 +228,6 @@ describe('SHP outbound shipping', () => {
     const collector = await signIn(SEED.collector);
     const us = await addressFor(collector, US);
 
-    // Asked for $2,000 of cover and no signature — the signature is not refused,
-    // it is applied, because the cover would not pay without one.
     const created = (
       await collector.post('/shipping/shipments', {
         itemIds: [item.id],
@@ -277,7 +247,7 @@ describe('SHP outbound shipping', () => {
     const res = await collector.post('/shipping/shipments', {
       itemIds: [item.id],
       addressId: us,
-      insuredValueMinor: 900_000, // $9,000 against a $5,000 cap
+      insuredValueMinor: 900_000,
       signatureRequired: true,
     });
     expect(res.status).toBe(400);
@@ -294,8 +264,6 @@ describe('SHP outbound shipping', () => {
     });
     expect(res.status).toBe(400);
   });
-
-  /* ---------------- changing a request ---------------- */
 
   it('adds and removes items while the request has not been picked', async () => {
     const { item: a } = await itemFor();
@@ -346,7 +314,6 @@ describe('SHP outbound shipping', () => {
     const after = (await collector.get(`/shipping/shipments/${target.id}`)).body;
     expect((after.itemIds as string[]).sort()).toEqual([a.id, b.id].sort());
 
-    // The absorbed request is not deleted — somebody wrote its code down.
     const absorbed = (await collector.get(`/shipping/shipments/${source.id}`)).body;
     expect(absorbed.status).toBe('cancelled');
     expect(absorbed.mergedIntoShipmentId).toBe(target.id);
@@ -384,10 +351,8 @@ describe('SHP outbound shipping', () => {
       reason: 'Picked the wrong card.',
     });
     expect(cancelled.status).toBe(201);
-    // Nothing had been done, so nothing is owed.
     expect(cancelled.body.restockingFeeMinor).toBe(0);
 
-    // And the item can go on a new request, which is what cancelling is FOR.
     const again = await collector.post('/shipping/shipments', { itemIds: [item.id], addressId: us });
     expect(again.status).toBe(201);
   });
@@ -405,20 +370,72 @@ describe('SHP outbound shipping', () => {
       eligible: boolean;
     }>;
     const pick = rates.find((r) => r.eligible)!;
+    const beforePaying = (await collector.get('/finance/wallet')).body.amount as number;
     const selected = await collector.post(`/shipping/shipments/${s.id}/select-rate`, {
       carrier: pick.carrier,
       serviceLevel: pick.serviceLevel,
     });
     expect(selected.body.status).toBe('rates_selected');
+    const paid = selected.body.cost as number;
+    expect(paid).toBeGreaterThan(0);
+    expect((await collector.get('/finance/wallet')).body.amount).toBe(beforePaying - paid);
 
     const cancelled = await collector.post(`/shipping/shipments/${s.id}/cancel`, {
       reason: 'Changed my mind after it was queued.',
     });
     expect(cancelled.status).toBe(201);
-    expect(cancelled.body.restockingFeeMinor).toBeGreaterThan(0);
+    const fee = cancelled.body.restockingFeeMinor as number;
+    expect(fee).toBeGreaterThan(0);
+
+    expect(cancelled.body.refundedMinor).toBe(paid);
+    expect((await collector.get('/finance/wallet')).body.amount).toBe(beforePaying - fee);
+    const ledger = (await collector.get('/finance/ledger')).body as Array<{
+      type: string;
+      amount: number;
+      direction: string;
+      referenceId: string | null;
+    }>;
+    expect(
+      ledger.some((r) => r.type === 'shipping_refund' && r.direction === 'credit' && r.amount === paid && r.referenceId === s.id),
+    ).toBe(true);
   });
 
-  /* ---------------- choosing, and paying ---------------- */
+  it('gives back the membership cover a cancelled parcel had spent', async () => {
+    const operator = await signIn(SEED.operator);
+    await fundWallet(SEED.operator, 20_000);
+    const joined = await operator.post('/membership/subscribe', { tier: 'folio' });
+    expect([200, 201]).toContain(joined.status);
+
+    const item = await intakeFor(operator, SEED.operator);
+    const us = await addressFor(operator, { ...US, recipient: 'Hermon Vale' });
+    const s = (await operator.post('/shipping/shipments', { itemIds: [item.id], addressId: us })).body;
+    const rates = (await operator.get(`/shipping/shipments/${s.id}/rates`)).body as Array<{
+      carrier: string;
+      serviceLevel: string;
+      eligible: boolean;
+      membershipCover: { postageMinor: number } | null;
+    }>;
+    const covered = rates.find((r) => r.eligible && (r.membershipCover?.postageMinor ?? 0) > 0)!;
+    expect(covered).toBeTruthy();
+
+    const usedBefore = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    const balanceBefore = (await operator.get('/finance/wallet')).body.amount as number;
+    const selected = await operator.post(`/shipping/shipments/${s.id}/select-rate`, {
+      carrier: covered.carrier,
+      serviceLevel: covered.serviceLevel,
+    });
+    expect(selected.body.status).toBe('rates_selected');
+    const spent = (await operator.get('/membership/me')).body.membership.postage.usedMinor as number;
+    expect(spent).toBe(usedBefore + covered.membershipCover!.postageMinor);
+
+    const cancelled = await operator.post(`/shipping/shipments/${s.id}/cancel`, { reason: 'Not needed after all.' });
+    expect(cancelled.status).toBe(201);
+
+    expect((await operator.get('/membership/me')).body.membership.postage.usedMinor).toBe(usedBefore);
+    expect((await operator.get('/finance/wallet')).body.amount).toBe(
+      balanceBefore - (cancelled.body.restockingFeeMinor as number),
+    );
+  });
 
   it('picks a carrier for you and records that it did', async () => {
     const { item } = await itemFor();
@@ -432,20 +449,10 @@ describe('SHP outbound shipping', () => {
     expect(chosen.body.carrier).toBeTruthy();
 
     const after = (await collector.get(`/shipping/shipments/${s.id}`)).body;
-    // Who decided is answerable-for, so it is recorded rather than inferred.
     expect(after.serviceMode).toBe('simple');
   });
 
   it('holds a shipment the wallet cannot cover instead of forcing it into debt', async () => {
-    // `veteran` is seeded with an empty wallet. It is topped up by exactly the
-    // intake fee — enough to stay positive, since a NEGATIVE balance would block
-    // the request outright and the condition under test is the narrower one: a
-    // collector who can raise a request and cannot pay the postage.
-    //
-    // Three sealed cases to Australia, insured to the ceiling, so the total is
-    // unambiguously beyond a wallet holding small change. Every top-up below is
-    // spent exactly, so running this suite twice against one database does not
-    // leave a balance behind that would defeat it.
     await fundWallet(SEED.collector3, 6_000);
     const operator = await signIn(SEED.operator);
     const cases = [];
@@ -488,30 +495,22 @@ describe('SHP outbound shipping', () => {
       carrier: pick.carrier,
       serviceLevel: pick.serviceLevel,
     });
-    // Held, not charged. The old behaviour drove the wallet negative, which
-    // blocked every other service the collector had.
     expect(selected.body.status).toBe('awaiting_payment');
     expect(selected.body.shortfallMinor).toBe(pick.totalMinor - before.amount);
     expect(selected.body.paymentDueAt).toBeTruthy();
 
-    // Paying while still short is refused rather than half-done.
     const early = await broke.post(`/shipping/shipments/${s.id}/pay`);
     expect(early.status).toBe(409);
 
-    // Exactly the shortfall, so the wallet ends where it started: at zero.
     await fundWallet(SEED.collector3, selected.body.shortfallMinor as number);
     const paid = await broke.post(`/shipping/shipments/${s.id}/pay`);
     expect(paid.status).toBe(201);
     expect(paid.body.status).toBe('rates_selected');
-    // The price was frozen when the service was chosen, not re-quoted on
-    // payment day (Principle V).
     expect(paid.body.paid).toBe(pick.totalMinor);
 
     const after = (await broke.get('/finance/wallet')).body;
     expect(after.amount).toBe(0);
   });
-
-  /* ---------------- customs ---------------- */
 
   it('produces a commercial invoice whose lines add up to the declared value', async () => {
     const { item: a } = await itemFor();
@@ -529,7 +528,6 @@ describe('SHP outbound shipping', () => {
 
     const invoice = (await collector.get(`/shipping/shipments/${s.id}/customs`)).body;
     expect(invoice.lines).toHaveLength(2);
-    // The apportionment must not lose a cent — the last line absorbs rounding.
     expect(invoice.totals.valueMinor).toBe(12_345);
     for (const line of invoice.lines) {
       expect(line.hsCode).toBeTruthy();
@@ -547,8 +545,6 @@ describe('SHP outbound shipping', () => {
     expect(res.status).toBe(400);
   });
 
-  /* ---------------- shared parcels ---------------- */
-
   it('lets two collectors ship to one address without either owning the other cards', async () => {
     const operator = await signIn(SEED.operator);
     const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
@@ -562,6 +558,7 @@ describe('SHP outbound shipping', () => {
       recipient: 'Front desk — Bault group',
       line1: '400 Boardwalk',
       city: 'Atlantic City',
+      region: 'NJ',
       country: 'US',
       postalCode: '08401',
     };
@@ -583,14 +580,11 @@ describe('SHP outbound shipping', () => {
     expect(joined.status).toBe(201);
     expect(joined.body.memberCount).toBe(2);
 
-    // Each collector still owns exactly their own cards — the group carries no
-    // items at all, which is the whole reason it is a separate thing.
     const described = (await red.get(`/shipping/groups/${group.id}`)).body;
     const payer = described.members.find((m: { isPayer: boolean }) => m.isPayer);
     expect(payer.shipmentId).toBe(redShip.id);
     expect(described.totalItems).toBe(2);
 
-    // Only the payer may close it.
     const wrongHand = await golden.post(`/shipping/groups/${group.id}/lock`);
     expect(wrongHand.status).toBe(403);
 
@@ -612,6 +606,7 @@ describe('SHP outbound shipping', () => {
       recipient: 'Golden Marsh',
       line1: '9 Other Rd',
       city: 'Newark',
+      region: 'NJ',
       country: 'US',
       postalCode: '07102',
     });
@@ -629,8 +624,6 @@ describe('SHP outbound shipping', () => {
     expect(joined.status).toBe(400);
   });
 
-  /* ---------------- direct from the tax-free site ---------------- */
-
   it('publishes the direct-overnight terms', async () => {
     const collector = await signIn(SEED.collector);
     const res = await collector.get('/shipping/direct/terms');
@@ -646,8 +639,6 @@ describe('SHP outbound shipping', () => {
     const us = await addressFor(collector, US);
     await fundWallet(SEED.collector, 30_000);
 
-    // Registered against the DELAWARE forwarding site — the one the overnight
-    // service leaves from.
     const registered = await collector.post('/me/parcels', {
       facilityCode: 'DE',
       carrier: 'UPS',
@@ -657,7 +648,6 @@ describe('SHP outbound shipping', () => {
     expect(registered.status).toBe(201);
     const parcelId = registered.body.id as string;
 
-    // Not eligible until it physically arrives.
     const early = (await collector.get(`/shipping/direct/${parcelId}/eligibility`)).body;
     expect(early.eligible).toBe(false);
 
@@ -671,7 +661,6 @@ describe('SHP outbound shipping', () => {
     const now = (await collector.get(`/shipping/direct/${parcelId}/eligibility`)).body;
     expect(now.eligible).toBe(true);
 
-    // More cards than the envelope carries.
     const tooMany = await collector.post(`/shipping/direct/${parcelId}`, {
       addressId: us,
       cardCount: 9,
@@ -685,17 +674,82 @@ describe('SHP outbound shipping', () => {
     });
     expect(shipped.status).toBe(201);
     expect(shipped.body.shipmentCode).toMatch(/^SHP-/);
-    // $100 flat plus the insurance premium, and nothing else — no intake, no
-    // storage, no forwarding fee, because it never entered the vault.
     expect(shipped.body.costMinor).toBeGreaterThanOrEqual(10_000);
 
-    // The parcel is answered for and cannot be sent twice.
     const again = await collector.post(`/shipping/direct/${parcelId}`, { addressId: us, cardCount: 1 });
     expect(again.status).toBe(409);
 
-    // And nothing was booked into the vault off the back of it.
     const shipment = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
     expect(shipment.itemIds).toHaveLength(0);
     expect(shipment.serviceKey).toBe('direct_overnight');
+
+    const form = { carrier: 'FedEx', packageWeightGrams: 180, fulfillmentNotes: 'Overnight envelope, two slabs.' };
+    const wrongParcel = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: 'PKG-NOTTHIS1',
+      ...form,
+    });
+    expect(wrongParcel.status).toBe(409);
+
+    const out = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: registered.body.code,
+      ...form,
+    });
+    expect(out.status).toBe(201);
+    expect(out.body.trackingNumber).toBeTruthy();
+
+    const gone = (await collector.get(`/shipping/shipments/${shipped.body.shipmentId}`)).body;
+    expect(gone.status).toBe('shipped');
+    expect(gone.trackingNumber).toBe(out.body.trackingNumber);
+
+    const twice = await operator.post(`/shipping/shipments/${shipped.body.shipmentId}/dispatch`, {
+      scannedParcel: registered.body.code,
+      ...form,
+    });
+    expect(twice.status).toBe(409);
+  });
+
+  it('puts a direct-overnight parcel back at the dock when its shipment is cancelled', async () => {
+    const collector = await signIn(SEED.collector);
+    const operator = await signIn(SEED.operator);
+    const us = await addressFor(collector, US);
+    await fundWallet(SEED.collector, 30_000);
+
+    const registered = await collector.post('/me/parcels', {
+      facilityCode: 'DE',
+      carrier: 'UPS',
+      trackingNumber: `DIRECT-CANCEL-${Date.now()}`,
+      declaredContents: 'One slab',
+    });
+    expect(registered.status).toBe(201);
+    const parcelId = registered.body.id as string;
+    expect(
+      (await operator.post('/parcels/receive', {
+        facilityCode: 'DE',
+        addressedTo: 'red',
+        trackingNumber: registered.body.trackingNumber,
+      })).status,
+    ).toBe(201);
+
+    const before = (await collector.get('/finance/wallet')).body.amount as number;
+    const shipped = await collector.post(`/shipping/direct/${parcelId}`, { addressId: us, cardCount: 1 });
+    expect(shipped.status).toBe(201);
+    expect((await collector.get(`/parcels/${parcelId}`)).body.parcel.status).toBe('processed');
+
+    const cancelled = await collector.post(`/shipping/shipments/${shipped.body.shipmentId}/cancel`, {
+      reason: 'Sending it to the vault instead.',
+    });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.refundedMinor).toBe(shipped.body.costMinor);
+    expect((await collector.get('/finance/wallet')).body.amount).toBe(before - (cancelled.body.restockingFeeMinor as number));
+
+    const after = (await collector.get(`/parcels/${parcelId}`)).body;
+    expect(after.parcel.status).toBe('received');
+    expect(after.parcel.processedAt).toBeNull();
+    expect(after.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: 'direct_cancelled', fromStatus: 'processed', toStatus: 'received' }),
+      ]),
+    );
+    expect((await collector.get(`/shipping/direct/${parcelId}/eligibility`)).body.eligible).toBe(true);
   });
 });

@@ -5,19 +5,6 @@ import { useI18n } from '../../../shared/i18n';
 import { channelLabel, type ConsignmentChannel, type ConsignmentEvent } from '../../../shared/market';
 import { Button, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
-/**
- * Choose where a card is sold, and for how much.
- *
- * Consignment used to be a single button that posted `channel: 'eBay'`. The
- * seller could not choose a route, could not see what each one cost or how long
- * it took, and could not set a price — the three things that actually differ
- * between them.
- *
- * Eligibility is mirrored from the API rather than only enforced there, so a
- * seller is told "graded cards only" before they submit and are charged a
- * service fee, not after. The API re-checks everything regardless; this is the
- * courtesy, not the control.
- */
 export function ConsignmentForm({
   item,
   onCancel,
@@ -55,10 +42,6 @@ export function ConsignmentForm({
   const channel = useMemo(() => channels.find((c) => c.key === channelKey), [channels, channelKey]);
   const cents = dollarsToCents(price);
 
-  /**
-   * The same three rules the API enforces, evaluated here for the message rather
-   * than for the decision.
-   */
   const problems: string[] = [];
   if (channel) {
     const grade = (item.conditionGrade ?? '').trim();

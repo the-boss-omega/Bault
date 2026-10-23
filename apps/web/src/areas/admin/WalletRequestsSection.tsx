@@ -24,13 +24,6 @@ import {
 import { ConfirmationModal, DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { IconReceipt } from '../../shared/ui/icons';
 
-/**
- * Which reviewer actions the request's CURRENT status permits.
- *
- * The same adjacency the API enforces in `wallet-request.rules.ts`, so a button
- * never offers a transition the server would refuse. `cancelled` belongs to the
- * requester, not to a reviewer, and is deliberately absent.
- */
 export function reviewerActions(status: string): readonly string[] {
   switch (status) {
     case 'submitted':
@@ -46,23 +39,6 @@ export function reviewerActions(status: string): readonly string[] {
   }
 }
 
-/**
- * Where authorized administrators process cash-in and cash-out requests
- * (Requirement 8).
- *
- * Everything a reviewer needs is on one screen: the filtered queue, the full
- * detail of the selected request, its immutable audit history, and only the
- * actions its current status allows.
- *
- * Two rules are made VISIBLE here, not merely enforced behind the screen:
- *
- *   - SEPARATION OF DUTIES. A request the signed-in admin raised themselves
- *     offers no actions at all, and says why. The API refuses those calls too;
- *     this is the explanation, not the enforcement.
- *   - COMPLETION IS THE MONEY. "Complete" is the only action that changes a
- *     balance. It is one of two behind a confirmation dialog, and that dialog
- *     names the amount, the customer, and the fact that it cannot be undone.
- */
 export function WalletRequestsSection({
   currentUserId,
   onMsg,
@@ -82,10 +58,9 @@ export function WalletRequestsSection({
   const [rejecting, setRejecting] = useState<WalletRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [completing, setCompleting] = useState<WalletRequest | null>(null);
+  const [payoutReference, setPayoutReference] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Filtering is server-side, so a reviewer works a real slice of the queue
-  // rather than one page of it narrowed down in the browser.
   const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (typeFilter !== 'all') params.set('type', typeFilter);
@@ -116,7 +91,6 @@ export function WalletRequestsSection({
     [onError],
   );
 
-  /** One reviewer action; refreshes the queue and the open drawer together. */
   async function act(request: WalletRequest, action: string, body?: Record<string, unknown>) {
     setBusy(true);
     try {
@@ -136,6 +110,23 @@ export function WalletRequestsSection({
       setRejecting(null);
       setCompleting(null);
       setRejectReason('');
+      setPayoutReference('');
+    }
+  }
+
+  async function reconcile() {
+    setBusy(true);
+    try {
+      const r = await api.post<{ checked: number; succeeded: number; failed: number; pending: number }>(
+        '/admin/payouts/reconcile',
+        {},
+      );
+      onMsg(t('admin.requests.reconciled', { ...r }));
+      await load();
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -149,6 +140,9 @@ export function WalletRequestsSection({
         flush
         tools={
           <>
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void reconcile()}>
+              {t('admin.requests.reconcile')}
+            </Button>
             <label className="control">
               <select
                 value={typeFilter}
@@ -281,8 +275,6 @@ export function WalletRequestsSection({
           confirmLabel={t('admin.requests.reject')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
-          // A rejection without a reason is not a decision anyone can audit, so
-          // Confirm stays unavailable until one is typed.
           busy={busy || rejectReason.trim().length === 0}
           onConfirm={() => void act(rejecting, 'reject', { reason: rejectReason.trim() })}
           onCancel={() => {
@@ -296,19 +288,40 @@ export function WalletRequestsSection({
         <ConfirmationModal
           title={t('admin.requests.completeTitle')}
           body={
-            <p>
-              {t('admin.requests.completeBody', {
-                code: completing.code,
-                amount: formatUsd(completing.amount),
-                customer: completing.customerName || completing.username || completing.email || '—',
-              })}
-            </p>
+            <>
+              <p>
+                {t('admin.requests.completeBody', {
+                  code: completing.code,
+                  amount: formatUsd(completing.amount),
+                  customer: completing.customerName || completing.username || completing.email || '—',
+                })}
+              </p>
+              {completing.type === 'cash_out' && (
+                <Field label={t('admin.requests.payoutReferenceLabel')} hint={t('admin.requests.payoutReferenceHint')}>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={payoutReference}
+                    onChange={(e) => setPayoutReference(e.target.value)}
+                  />
+                </Field>
+              )}
+            </>
           }
           confirmLabel={t('admin.requests.complete')}
           cancelLabel={t('ui.cancel')}
           busy={busy}
-          onConfirm={() => void act(completing, 'complete')}
-          onCancel={() => setCompleting(null)}
+          onConfirm={() =>
+            void act(
+              completing,
+              'complete',
+              payoutReference.trim() ? { payoutReference: payoutReference.trim() } : undefined,
+            )
+          }
+          onCancel={() => {
+            setCompleting(null);
+            setPayoutReference('');
+          }}
         />
       )}
     </>
@@ -348,8 +361,6 @@ function WalletRequestDrawer({
               variant={action === 'complete' ? 'gold' : action === 'reject' ? 'danger' : 'secondary'}
               disabled={busy}
               onClick={() => {
-                // The two consequential ones go through a dialog; the rest are
-                // ordinary queue movements and take effect immediately.
                 if (action === 'reject') onRequestReject();
                 else if (action === 'complete') onRequestComplete();
                 else onAct(action);
@@ -404,10 +415,21 @@ function WalletRequestDrawer({
         {request.rejectionReason && (
           <DetailRow label={t('wallet.requests.rejectionReason')}>{request.rejectionReason}</DetailRow>
         )}
-        {/* The proof that completion, and only completion, moved money. */}
         {request.settledLedgerId && (
           <DetailRow label={t('wallet.requests.settledLedger')}>
             <code dir="ltr">{request.settledLedgerId}</code>
+          </DetailRow>
+        )}
+        {request.payout && (
+          <DetailRow label={t('admin.requests.payoutStatus')}>
+            <span dir="ltr">
+              {request.payout.status} · {formatUsd(request.payout.amount)} · {request.payout.provider}
+            </span>
+          </DetailRow>
+        )}
+        {request.payoutReference && (
+          <DetailRow label={t('admin.requests.payoutReference')}>
+            <code dir="ltr">{request.payoutReference}</code>
           </DetailRow>
         )}
       </dl>

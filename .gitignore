@@ -24,6 +24,9 @@ coverage/
 
 # Local data volumes
 /data/
+# Database dumps from infra/ops/backup.sh (its default BACKUP_DIR). Every
+# customer's account, address and balance: never in version control.
+backups/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 
@@ -31,3 +34,11 @@ coverage/
 # publicDir, so anything left in it ships in the bundle and is downloadable
 # from any deployed URL.
 _local/
+
+# Which release infra/production/deploy.sh last deployed, written into the
+# host's checkout (/opt/bault).
+/CURRENT_TAG
+/PREVIOUS_TAG
+
+# What pnpm design:screens captures, regenerated on every run.
+/design-screens/

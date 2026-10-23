@@ -1,22 +1,18 @@
-import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { Public } from '../../modules/acc/public.decorator';
+import { AppError } from '../errors/app-error';
+import { ErrorCode } from '../errors/error-codes';
+import { workerHeartbeat } from './heartbeat.schema';
 
-/**
- * Health checks (T022).
- *  - /healthz  liveness: the process is up (no dependencies checked).
- *  - /readyz   readiness: the database answers a trivial query.
- * Used by the load balancer / orchestrator to route traffic only to ready nodes.
- *
- * Both are @Public: the callers are probes (load balancer, container
- * orchestrator, the local `pnpm dev` readiness gate) that have no session
- * cookie. Behind the global SessionAuthGuard they answered 401 and were useless
- * as probes. Neither response exposes anything beyond "up" and "db reachable".
- */
+const OUTBOX_DISPATCH = 'outbox.dispatch';
+
 @ApiTags('meta')
+@SkipThrottle({ default: true, auth: true })
 @Controller()
 export class HealthController {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -27,16 +23,6 @@ export class HealthController {
     return { status: 'ok' };
   }
 
-  /**
-   * Readiness, answered with a STATUS CODE.
-   *
-   * This used to catch the failure and return `{ status: 'degraded', db: false }`
-   * with a 200. A load balancer reads the code, not the body — so a node whose
-   * database had gone away announced itself as healthy and kept taking traffic,
-   * which is the one thing a readiness probe exists to prevent. The body is
-   * unchanged for anything reading it by hand; what changed is that a degraded
-   * node now answers 503 and is pulled out of rotation.
-   */
   @Public()
   @Get('readyz')
   async ready(): Promise<{ status: 'ok'; db: true }> {
@@ -47,4 +33,45 @@ export class HealthController {
     }
     return { status: 'ok', db: true };
   }
+
+  @Public()
+  @Get('readyz/worker')
+  async worker(): Promise<{ status: 'ok'; worker: true; jobs: Record<string, JobBeat> }> {
+    let rows: { jobName: string; lastSuccessAt: Date | null; lastErrorAt: Date | null; fresh: boolean }[];
+    try {
+      rows = await this.db
+        .select({
+          jobName: workerHeartbeat.jobName,
+          lastSuccessAt: workerHeartbeat.lastSuccessAt,
+          lastErrorAt: workerHeartbeat.lastErrorAt,
+          fresh: sql<boolean>`coalesce(${workerHeartbeat.lastSuccessAt} > now() - interval '5 minutes', false)`,
+        })
+        .from(workerHeartbeat);
+    } catch {
+      throw new ServiceUnavailableException({ status: 'degraded', db: false });
+    }
+
+    const jobs: Record<string, JobBeat> = {};
+    for (const row of rows) {
+      jobs[row.jobName] = {
+        lastSuccessAt: row.lastSuccessAt ? row.lastSuccessAt.toISOString() : null,
+        lastErrorAt: row.lastErrorAt ? row.lastErrorAt.toISOString() : null,
+      };
+    }
+
+    if (!rows.some((r) => r.jobName === OUTBOX_DISPATCH && r.fresh)) {
+      throw new AppError(
+        ErrorCode.INTERNAL,
+        'The worker has not dispatched the outbox in the last five minutes.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+        { jobs },
+      );
+    }
+    return { status: 'ok', worker: true, jobs };
+  }
+}
+
+interface JobBeat {
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
 }

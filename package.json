@@ -17,15 +17,22 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "users:remove-test": "node scripts/remove-test-users.mjs",
+    "staging:check": "node scripts/staging-check.mjs",
+    "prices:load": "node scripts/ops/prices.mjs",
+    "ops:load-test": "node scripts/ops/load-test.mjs",
+    "ops:security-check": "node scripts/ops/security-check.mjs",
+    "design:screens": "node scripts/design-screens.mjs",
     "db:reset": "pnpm --filter @bault/api db:seed",
     "typecheck": "pnpm -r typecheck",
     "test": "node scripts/test.mjs",
     "test:seeded": "pnpm --filter @bault/api db:migrate && pnpm db:reset && pnpm test",
     "test:all-parallel": "vitest run",
     "test:web": "vitest run --project web",
+    "test:config": "vitest run --project config",
     "test:integration": "vitest run --no-file-parallelism --project integration",
     "test:concurrency": "vitest run --no-file-parallelism --project concurrency",
     "test:property": "vitest run --no-file-parallelism --project property",
+    "test:worker": "vitest run --no-file-parallelism --project worker",
     "test:contract": "vitest run --project contract",
     "test:core": "vitest run --no-file-parallelism --project core",
     "test:core-contract": "vitest run --project core-contract",
@@ -39,9 +46,26 @@
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "jsdom": "^30.0.1",
+    "playwright-core": "1.63.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "proxy-addr": "^2.0.8",
+      "multer": "^2.4.0",
+      "qs": "^6.16.0",
+      "js-yaml": "^5.4.1",
+      "shell-quote": "^1.11.0",
+      "brace-expansion@<2": "^1.1.20",
+      "brace-expansion@>=4": "^5.0.11",
+      "browserslist": "^4.28.7",
+      "fast-uri": "^3.1.7",
+      "nanoid@<4": "^3.3.18",
+      "source-map-js": "^1.2.2",
+      "undici@>=8": "^8.10.2"
+    }
   }
 }

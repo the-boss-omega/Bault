@@ -1,9 +1,22 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsPositive, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { Roles } from '../sec/roles.decorator';
 import { CurrentUser } from '../sec/current-user.decorator';
 import type { AuthUser } from '../sec/auth-context';
+import { IsObjectKey } from '../../shared/object-key';
 import { WalletRequestService } from './wallet-request.service';
 import {
   FUNDING_SOURCES,
@@ -11,15 +24,11 @@ import {
   MAX_REFERENCE_LENGTH,
   MAX_REJECTION_REASON_LENGTH,
   SUPPORTED_CURRENCIES,
+  WALLET_REQUEST_TRANSITIONS,
   type WalletRequestStatus,
   type WalletRequestType,
 } from './wallet-request.rules';
 
-/**
- * Cash-in and cash-out share one submission shape. Which fields are REQUIRED
- * depends on the type, and that rule lives in `validateWalletRequestDraft` rather
- * than in decorators, so the API and the SPA enforce exactly the same thing.
- */
 class SubmitWalletRequestDto {
   @IsIn(['cash_in', 'cash_out']) type!: WalletRequestType;
   @IsInt() @IsPositive() amountMinor!: number;
@@ -28,8 +37,7 @@ class SubmitWalletRequestDto {
   @IsOptional() @IsString() @MaxLength(140) destinationAccount?: string;
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
-  /** Object key of an already-uploaded document — never the document itself. */
-  @IsOptional() @IsString() @MaxLength(400) documentKey?: string;
+  @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
   @IsOptional() @IsString() @MaxLength(MAX_NOTE_LENGTH) notes?: string;
 }
 
@@ -45,20 +53,30 @@ class RejectDto {
   @IsString() @MinLength(1) @MaxLength(MAX_REJECTION_REASON_LENGTH) reason!: string;
 }
 
-/**
- * Wallet request endpoints.
- *
- * `/finance/wallet-requests*` is the customer surface: submit, list your own,
- * open one, cancel your own. `/admin/wallet-requests*` is the review surface and
- * carries `@Roles('admin')` — the guard is the enforcement, and the service
- * re-checks separation of duties so an admin still cannot decide their own.
- */
+class CompleteDto extends ReviewNoteDto {
+  @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) payoutReference?: string;
+}
+
+const QUEUE_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+const queueDate = (field: string) => ({ message: `${field} has to be a date, written YYYY-MM-DD or as an ISO 8601 time.` });
+
+class ReviewQueueQuery {
+  @IsOptional() @IsIn(['cash_in', 'cash_out']) type?: WalletRequestType;
+  @IsOptional() @IsIn(Object.keys(WALLET_REQUEST_TRANSITIONS)) status?: WalletRequestStatus;
+  @IsOptional() @IsString() @MaxLength(64) userId?: string;
+  @IsOptional() @Matches(QUEUE_DATE, queueDate('from')) @IsISO8601({ strict: true }, queueDate('from')) from?: string;
+  @IsOptional() @Matches(QUEUE_DATE, queueDate('to')) @IsISO8601({ strict: true }, queueDate('to')) to?: string;
+}
+
+class ReconcileDto {
+  @IsOptional() @IsInt() @Min(0) @Max(10_080) olderThanMinutes?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(200) limit?: number;
+}
+
 @ApiTags('PAY')
 @Controller()
 export class WalletRequestController {
   constructor(private readonly requests: WalletRequestService) {}
-
-  /* ---- Customer ---- */
 
   @Post('finance/wallet-requests')
   submit(@CurrentUser() user: AuthUser, @Body() dto: SubmitWalletRequestDto) {
@@ -90,19 +108,10 @@ export class WalletRequestController {
     return this.requests.cancel(id, user, dto.reason);
   }
 
-  /* ---- Review (admin only) ---- */
-
   @Roles('admin')
   @Get('admin/wallet-requests')
-  queue(
-    @CurrentUser() user: AuthUser,
-    @Query('type') type?: WalletRequestType,
-    @Query('status') status?: WalletRequestStatus,
-    @Query('userId') userId?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.requests.listForReview(user, { type, status, userId, from, to });
+  queue(@CurrentUser() user: AuthUser, @Query() q: ReviewQueueQuery) {
+    return this.requests.listForReview(user, { type: q.type, status: q.status, userId: q.userId, from: q.from, to: q.to });
   }
 
   @Roles('admin')
@@ -135,10 +144,15 @@ export class WalletRequestController {
     return this.requests.markProcessing(id, user, dto.note);
   }
 
-  /** The only endpoint in the platform that settles a wallet request. */
   @Roles('admin')
   @Post('admin/wallet-requests/:id/complete')
-  complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ReviewNoteDto) {
-    return this.requests.complete(id, user, dto.note);
+  complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CompleteDto) {
+    return this.requests.complete(id, user, { note: dto.note, payoutReference: dto.payoutReference });
+  }
+
+  @Roles('admin')
+  @Post('admin/payouts/reconcile')
+  reconcile(@CurrentUser() user: AuthUser, @Body() dto: ReconcileDto) {
+    return this.requests.reconcilePayouts(user, { olderThanMinutes: dto.olderThanMinutes, limit: dto.limit });
   }
 }

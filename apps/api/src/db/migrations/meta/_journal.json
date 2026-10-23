@@ -218,6 +218,55 @@
       "when": 1785074600000,
       "tag": "0030_a_downgrade_is_not_a_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1785074700000,
+      "tag": "0031_money_that_leaves_comes_back_when_it_does_not_arrive",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785074800000,
+      "tag": "0032_a_worker_that_can_run_twice",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1785074900000,
+      "tag": "0033_the_terms_somebody_agreed_to",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785075000000,
+      "tag": "0034_who_uploaded_it_and_who_keeps_guessing",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785075100000,
+      "tag": "0035_a_second_factor",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1785075200000,
+      "tag": "0036_a_ledger_amount_is_never_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785075300000,
+      "tag": "0037_an_address_names_its_state",
+      "breakpoints": true
     }
   ]
 }

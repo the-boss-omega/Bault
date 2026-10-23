@@ -1,17 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BASE, SEED, signIn } from './helpers/http';
 
-/**
- * The local-development contract between the SPA and the API.
- *
- * These assertions are the ones that were violated when the web app booted
- * against a backend nobody had started: the frontend asks `/api/v1/me/profile`
- * on first paint, and `pnpm dev` gates on `/api/v1/healthz` before it lets Vite
- * start. Both must behave exactly as the orchestration assumes.
- *
- * Runs against a live API (`pnpm dev` or `pnpm dev:api`) with a seeded database,
- * like every other suite in tests/integration.
- */
 const ORIGIN = new URL(BASE).origin;
 const WEB_URL = process.env.WEB_URL ?? 'http://localhost:5173';
 
@@ -24,7 +13,6 @@ async function reachable(url: string): Promise<boolean> {
   }
 }
 
-/** The Vite dev server is optional — only `pnpm dev:api` is required to run these. */
 const webUp = await reachable(WEB_URL);
 
 describe('dev readiness endpoints', () => {
@@ -61,8 +49,6 @@ describe('GET /me/profile — the SPA boot request', () => {
   });
 });
 
-// Skipped rather than failed when only the API is running — the suite must not
-// depend on a second process being up, and must not sleep waiting for one.
 describe.skipIf(!webUp)('through the Vite dev proxy', () => {
   it('proxies /api/v1/healthz from the web origin to the API', async () => {
     const res = await fetch(`${WEB_URL}/api/v1/healthz`);
@@ -80,7 +66,6 @@ describe.skipIf(!webUp)('through the Vite dev proxy', () => {
 
     const setCookie = login.headers.get('set-cookie');
     expect(setCookie, 'the proxy must pass Set-Cookie back to the browser').toBeTruthy();
-    // No Domain rewrite: the cookie must stay host-only for the dev origin.
     expect(setCookie?.toLowerCase()).not.toContain('domain=');
 
     const profile = await fetch(`${WEB_URL}/api/v1/me/profile`, {

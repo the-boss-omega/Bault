@@ -5,6 +5,7 @@ import { isValidUsername, normalizeUsername } from '../../shared/names';
 import {
   DISPOSAL_CATEGORIES,
   DISPOSAL_OUTCOMES,
+  itemName,
 } from '../../shared/itemClasses';
 import { useRoute, useNavigation } from '../../shared/routing';
 import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
@@ -42,64 +43,24 @@ import { SupportQueue } from './SupportQueue';
 import type { InboundAddress, ParcelWorkflow } from '../../shared/parcels';
 import { boxLabel } from '../../shared/carriers';
 
-/**
- * A shelf, as the console sees one.
- *
- * `itemCount` is what replaced `capacity`. The difference is not cosmetic: the
- * old field was a number an operator typed once and nothing enforced, which the
- * console then divided into to draw a utilisation bar and an amber "near
- * capacity" badge that meant nothing. This is a count of what is actually on
- * the shelf. It informs; it does not adjudicate.
- */
 interface Bin {
   id: string;
-  /**
-   * The shelf's identity, minted rather than named.
-   *
-   * It used to be `BIN-<zone>-<nnn>`, counted up per zone — a name, with a
-   * name's problems: it raced between two operators building out the same zone,
-   * it leaked how much shelving the building has, and it baked the zone into the
-   * shelf's identity, so moving a shelf between zones meant renaming it and
-   * invalidating the label stuck to it. The zone below is now purely a label.
-   */
   serialNumber: string;
   barcode: string;
   zone: string;
-  /** Oversized shelving — the kind that takes a sealed case, not a card. */
   oversized: boolean;
-  /** A shelf out of service is never deleted, only stopped being stowed into. */
   active: boolean;
   itemCount: number;
   facilityId: string | null;
   facilityCode: string | null;
 }
 
-/** `GET /custody/bins/suggest` — where the system says to put the next thing. */
 interface ReportRow {
   key: string | null;
   label: string | null;
   count: number;
 }
 
-/**
- * ONE RECEIVING TAB, not two.
- *
- * `parcels` and `intake` were separate tabs, and the split cut the single piece
- * of work they describe in half. Every intake begins with a parcel: a box is
- * received, it is opened, and its contents are booked in. Pressing "Book
- * contents" on the parcel bench SWITCHED TABS to a form on another screen, and
- * closing the box out happened over there too — so the operator moved back and
- * forth between two places to work through one box, and the count of what had
- * come out of it was visible on one of them at a time.
- *
- * They are now one tab that reads top to bottom the way the work goes: receive
- * the stack, see the queue, book the contents of the box you are holding, close
- * it out. Nothing navigates; "Book contents" points the bench below at that box.
- *
- * What moved to `inventory` — relocate, hold, break-lot, disposal — is work on
- * cards that are ALREADY on a shelf. It was on the intake tab only because that
- * is where the scan fields happened to live.
- */
 const TABS = ['overview', 'receiving', 'inventory', 'shipments', 'locations', 'services', 'support'] as const;
 type WarehouseTab = (typeof TABS)[number];
 
@@ -110,21 +71,6 @@ const CUT_LABEL: Record<string, MessageKey> = {
   item_class: 'warehouse.report.cut.itemClass',
 };
 
-/**
- * Warehouse console (T054), rebuilt on the shared application shell.
- *
- * The rail, header and workspace are exactly the ones every other section uses;
- * only the contextual tabs below the title belong to the warehouse.
- *
- * The inbound half of it now reads left to right the way the physical work
- * does: a box arrives and is received, it is opened and checked, its contents
- * are booked in one unit at a time onto a shelf the system directs the operator
- * to, and the box is closed out against the count of what came out of it. What
- * is gone is the arrangement where booking contents in meant leaving the parcel
- * bench for a different tab, choosing a shelf from a dropdown of every shelf in
- * the company, and coming back to close the box with nothing checking that
- * anything had been booked at all.
- */
 export function WarehouseConsole() {
   const { t } = useI18n();
   const route = useRoute();
@@ -138,24 +84,7 @@ export function WarehouseConsole() {
   const [queueCount, setQueueCount] = useState<number | null>(null);
   const [inbound, setInbound] = useState<ParcelWorkflow | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /**
-   * The parcel the operator is working through, set by "Book contents" on the
-   * parcel bench and read by the intake panel.
-   *
-   * It is held here rather than in either panel because it is the one piece of
-   * state the two share: pressing Book contents on a box has to open the intake
-   * form already pointed at that box, which is the whole difference between one
-   * workflow and two screens that happen to be adjacent.
-   */
   const [focusParcelId, setFocusParcelId] = useState<string>('');
-  /**
-   * Bumped after a batch of arrivals is booked in, to remount the queue below.
-   *
-   * Receiving used to live INSIDE the queue component, so it could just reload
-   * itself. It is its own panel now — the two are different jobs at the same
-   * bench — and this is the one thread between them: boxes were received, so the
-   * list of boxes is stale.
-   */
   const [queueVersion, setQueueVersion] = useState(0);
 
   const tab: WarehouseTab = (TABS as readonly string[]).includes(route.tab ?? '')
@@ -187,13 +116,6 @@ export function WarehouseConsole() {
     }
   }, []);
 
-  /**
-   * Run a receive and refresh what it invalidated.
-   *
-   * Shaped like the queue's own `act` so the receiving panel does not have to
-   * know anything about the console: hand it a call and a sentence, and it
-   * reports whichever of the two happened.
-   */
   const receiveParcels = useCallback(
     async (fn: () => Promise<unknown>, ok: string) => {
       try {
@@ -213,14 +135,6 @@ export function WarehouseConsole() {
     void loadSummary();
   }, [loadBins, loadSummary]);
 
-  /**
-   * Items in stock, and how much shelving is in service.
-   *
-   * There is no "bins near capacity" figure any more, and there is nothing to
-   * put in its place derived from bins — a shelf has no fullness the database
-   * knows about. The honest "act now" number on an inbound bench is the backlog
-   * of boxes, which is what the overview shows instead.
-   */
   const stats = useMemo(() => {
     const rows = shelfRows ?? [];
     const total = rows.reduce((sum, r) => sum + r.count, 0);
@@ -231,19 +145,6 @@ export function WarehouseConsole() {
   const tabs = TABS.map((key) => ({ key, label: t(`warehouse.tab.${key}` as MessageKey) }));
 
   return (
-    /*
-      The whole console runs at WAREHOUSE density.
-
-      This screen is worked standing up, one hand on a scanner, and it was set at
-      exactly the same rhythm as the wallet: 24px panel padding, 16px field gaps,
-      56px table rows. The receiving bench needed three panels and 1,900px of
-      scroll to do one job.
-
-      `data-density` swaps four variables — panel padding, section gap, group
-      gap, row height — and drops the base size to 13px. Nothing else changes:
-      the same Panel, the same Register, the same Field, measured for the job
-      instead of rewritten for it.
-    */
     <div data-density="warehouse">
       <ContextTabs
         label={t('warehouse.title')}
@@ -251,9 +152,6 @@ export function WarehouseConsole() {
         active={tab}
         onSelect={goTab}
         actions={
-          /* Secondary, not primary. The bench below has the primary action of
-             every screen it appears on, and two gold buttons on one screen is
-             the same as none. */
           <Button variant="secondary" icon={<IconPlus />} onClick={() => goTab('receiving')}>
             {t('warehouse.addInventory')}
           </Button>
@@ -338,21 +236,14 @@ export function WarehouseConsole() {
 
       {tab === 'receiving' && (
         <TabPanel tab="receiving">
-          {/* 1. The stack that just came off the van. */}
           <ReceiveParcels onReceived={receiveParcels} />
 
-          {/* 2. What is on the bench, and what each box needs next. */}
           <ParcelQueue
             key={queueVersion}
             onChanged={loadSummary}
             onBookContents={(parcelId) => {
               setFocusParcelId(parcelId);
-              // Same page, so the bench below is brought into view rather than
-              // the operator being moved to it.
               requestAnimationFrame(() => {
-                // Optional-called: bringing the bench into view is a courtesy,
-                // and an environment without smooth scrolling (or a bench that
-                // has not painted yet) must not take the click down with it.
                 document
                   .getElementById('intake-bench')
                   ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
@@ -360,7 +251,6 @@ export function WarehouseConsole() {
             }}
           />
 
-          {/* 3. Emptying the box, and closing it out at the end of that. */}
           <Panel
             id="intake-bench"
             title={t('warehouse.intake.legend')}
@@ -371,25 +261,12 @@ export function WarehouseConsole() {
               onLog={append}
               onDone={async () => {
                 await loadSummary();
-                /*
-                 * The BOX is stale too, not only the counters.
-                 *
-                 * Booking a unit out of a parcel changes that parcel's row —
-                 * its unit count, and the line under its button that reads
-                 * "Nothing has come out of this parcel yet". Only `loadSummary`
-                 * ran here, so after an intake the queue still said nothing had
-                 * come out of the box while the bench three inches below it said
-                 * one unit had. Two statements about the same box, contradicting
-                 * each other on one screen.
-                 */
                 setQueueVersion((v) => v + 1);
               }}
               onParcelClosed={() => setFocusParcelId('')}
             />
           </Panel>
 
-          {/* 4. Cards sold from the Bault store: on the record already, still in
-              the store's box. Label them and put them on a shelf. */}
           <HouseOrdersPanel onLog={append} />
 
           {log.length > 0 && (
@@ -406,11 +283,6 @@ export function WarehouseConsole() {
 
       {tab === 'inventory' && (
         <TabPanel tab="inventory">
-          {/*
-            Work on cards ALREADY on a shelf. It sat on the intake tab only
-            because that is where the scan fields happened to live, and it made
-            the receiving bench a page of five unrelated forms.
-          */}
           <Panel title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
             <RelocatePanel onLog={append} onDone={loadSummary} />
           </Panel>
@@ -448,8 +320,6 @@ export function WarehouseConsole() {
       {tab === 'services' && (
         <TabPanel tab="services">
           <ServiceQueue onChanged={loadSummary} />
-          {/* The batch sits under the queue because it is the step AFTER
-              accepting a grading request, not a separate job. */}
           <GradingSubmissions />
         </TabPanel>
       )}
@@ -462,10 +332,6 @@ export function WarehouseConsole() {
     </div>
   );
 }
-
-/* ============================================================
-   Inventory report
-   ============================================================ */
 
 function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
   const [cut, setCut] = useState('shelf');
@@ -525,13 +391,6 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
   );
 }
 
-/**
- * The inventory table. On the shelf cut each row is joined to its bin so the
- * operator sees where the shelf is, what kind of shelving it is, and whether it
- * is still in service — the three things that decide whether more goods can go
- * there. What it no longer shows is a utilisation ratio, because the denominator
- * it was drawn against was a number nobody enforced.
- */
 function InventoryRows({
   rows,
   loading,
@@ -610,19 +469,6 @@ function InventoryRows({
   );
 }
 
-/* ============================================================
-   Intake
-   ============================================================ */
-
-/**
- * Move something that is already in the vault to another shelf.
- *
- * Both fields take what a scanner produces. The item field accepts the SN-
- * barcode printed on the item's own label (or its serial); the shelf field
- * accepts the BIN- barcode on the shelf. Before this, both ends of a relocate
- * demanded the internal id — a string that is printed on nothing — so the one
- * way this form could not be driven was with the scanner it was named after.
- */
 function RelocatePanel({
   onLog,
   onDone,
@@ -673,18 +519,6 @@ function RelocatePanel({
   );
 }
 
-/**
- * Place or lift a hold, by scan.
- *
- * Shaped like `RelocatePanel` deliberately: it is the same gesture at the same
- * bench — scan the card, press the thing. The two actions sit side by side
- * rather than behind a toggle, because an operator holding a card knows which
- * one they mean and a toggle would make them read before acting.
- *
- * The API is idempotent and now says so, so scanning a card that is already
- * frozen reports that it was already frozen instead of claiming the hold was
- * just placed.
- */
 function HoldPanel({
   onLog,
   onDone,
@@ -761,11 +595,6 @@ interface OpenLot {
   lotSize: number;
 }
 
-/**
- * Break Lot service (Requirement 10.5). A lot is stored and counted as ONE item;
- * breaking it intakes each contained item individually, so every contained item
- * becomes a standalone item with its own record, label, bin and charge.
- */
 function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: () => Promise<void> }) {
   const { t } = useI18n();
   const [lots, setLots] = useState<OpenLot[] | null>(null);
@@ -822,7 +651,7 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
               <td data-label={t('warehouse.lots.colLot')}>
                 <code dir="ltr">{lot.serialNumber}</code>
               </td>
-              <td data-label={t('warehouse.intake.description')}>{lot.description || lot.typeClass}</td>
+              <td data-label={t('warehouse.intake.description')}>{itemName(t, lot)}</td>
               <td data-label={t('warehouse.lots.colSize')} className="td-end num">
                 {lot.lotSize}
               </td>
@@ -839,26 +668,6 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
   );
 }
 
-/* ============================================================
-   Arrivals that were not accepted
-   ============================================================ */
-
-/**
- * Record something that arrived for a collector and did not go into their vault:
- * a prohibited item, a GPS tracker riding along in the parcel, or a box of
- * commons worth less than the cost of processing it.
- *
- * The physical act already happened at a bench — a battery came out of an
- * AirTag, a bottle went in a bin, a box went to a youth club. Nothing here
- * performs any of that or can check that it was done. What this form does is
- * make the decision a RECORD: which of the permitted outcomes occurred, in whose
- * name, and why. The collector is notified the moment it is filed, so nothing
- * addressed to them can vanish silently.
- *
- * Notes are mandatory, matching the fulfillment forms elsewhere in this console.
- * This row is the only account of why somebody's property was destroyed, and it
- * has to read as one.
- */
 function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t } = useI18n();
   const [ownerUsername, setOwnerUsername] = useState('');
@@ -948,30 +757,27 @@ function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
   );
 }
 
-/* ============================================================
-   Shipment fulfillment
-   ============================================================ */
-
 interface ShipmentDetail {
   id: string;
   code: string | null;
   status: string;
   carrier: string | null;
+  serviceKey: string | null;
   itemIds: string[];
+  items?: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
+  directParcel?: { code: string; trackingNumber: string | null } | null;
   destinationAddress: string;
   boxSize: string | null;
 }
 
-/**
- * Structured shipment fulfillment (Requirement 5.3). The operator loads the
- * shipment, verifies EVERY item, and fills the required carrier / weight / notes
- * fields before the request can be closed.
- */
+const sameCode = (a: string | null | undefined, b: string) => Boolean(a) && a!.trim().toUpperCase() === b.trim().toUpperCase();
+
 function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
   const { t } = useI18n();
   const [shipmentId, setShipmentId] = useState('');
   const [detail, setDetail] = useState<ShipmentDetail | null>(null);
-  const [verified, setVerified] = useState<Record<string, boolean>>({});
+  const [scans, setScans] = useState<string[]>([]);
+  const [scanInput, setScanInput] = useState('');
   const [carrier, setCarrier] = useState('DHL');
   const [weight, setWeight] = useState('500');
   const [notes, setNotes] = useState('');
@@ -981,7 +787,8 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
     try {
       const s = await api.get<ShipmentDetail>(`/shipping/shipments/${shipmentId}`);
       setDetail(s);
-      setVerified({});
+      setScans([]);
+      setScanInput('');
       setError(null);
       if (s.carrier) setCarrier(s.carrier);
     } catch (e) {
@@ -989,14 +796,44 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
     }
   }
 
-  const allVerified = detail ? detail.itemIds.every((id) => verified[id]) : false;
-  const complete = allVerified && carrier !== '' && weight !== '' && notes.trim() !== '';
+  const direct = detail !== null && detail.itemIds.length === 0 && detail.serviceKey === 'direct_overnight';
+
+  const expected = useMemo(
+    () =>
+      detail
+        ? detail.itemIds.map(
+            (id) => detail.items?.find((i) => i.id === id) ?? { id, serialNumber: null, barcode: null, description: null },
+          )
+        : [],
+    [detail],
+  );
+
+  const itemFor = (code: string) =>
+    expected.find((i) => sameCode(i.id, code) || sameCode(i.barcode, code) || sameCode(i.serialNumber, code));
+  const parcelMatches = (code: string) =>
+    Boolean(detail?.directParcel) &&
+    (sameCode(detail!.directParcel!.code, code) || sameCode(detail!.directParcel!.trackingNumber, code));
+
+  const scannedIds = new Set(scans.map((c) => itemFor(c)?.id).filter((id): id is string => Boolean(id)));
+  const strays = direct ? scans.filter((c) => !parcelMatches(c)) : scans.filter((c) => !itemFor(c));
+  const allScanned = direct
+    ? scans.length === 1 && strays.length === 0
+    : expected.length > 0 && expected.every((i) => scannedIds.has(i.id)) && strays.length === 0;
+  const complete = allScanned && carrier !== '' && weight !== '' && notes.trim() !== '';
+
+  function addScan() {
+    const code = scanInput.trim();
+    setScanInput('');
+    if (!code) return;
+    if (direct) setScans([code]);
+    else setScans((prev) => (prev.some((c) => sameCode(c, code)) ? prev : [...prev, code]));
+  }
 
   async function completeShipment() {
     if (!detail || !complete) return;
     try {
       const res = await api.post<{ trackingNumber: string }>(`/shipping/shipments/${detail.id}/dispatch`, {
-        scannedItemIds: detail.itemIds,
+        ...(direct ? { scannedParcel: scans[0] } : { scannedItemIds: scans }),
         carrier,
         packageWeightGrams: Number(weight),
         fulfillmentNotes: notes,
@@ -1005,6 +842,7 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
       setDetail(null);
       setShipmentId('');
       setNotes('');
+      setScans([]);
     } catch (e) {
       setError((e as Error).message);
       onLog(t('warehouse.log.dispatchError', { message: (e as Error).message }));
@@ -1036,27 +874,81 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
           <p className="infobox" dir="auto">
             {detail.destinationAddress}
           </p>
-          {/* The collector was quoted for this box. Packing it in a bigger one
-              ships a parcel that costs more than they paid. */}
-          <p className="field-hint">
-            {detail.boxSize
-              ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
-              : t('warehouse.dispatch.anyBox')}
-          </p>
+          {!direct && (
+            <p className="field-hint">
+              {detail.boxSize
+                ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
+                : t('warehouse.dispatch.anyBox')}
+            </p>
+          )}
+
+          <div className="row">
+            <Field
+              className="field--grow"
+              label={t(direct ? 'warehouse.dispatch.scanParcel' : 'warehouse.dispatch.scan')}
+              hint={
+                direct
+                  ? t('warehouse.dispatch.scanParcelHint', { code: detail.directParcel?.code ?? '—' })
+                  : t('warehouse.dispatch.scanHint')
+              }
+            >
+              <input
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addScan();
+                  }
+                }}
+                placeholder={direct ? 'PKG-…' : 'SN-…'}
+                dir="ltr"
+                autoComplete="off"
+              />
+            </Field>
+            <Button variant="secondary" disabled={!scanInput.trim()} onClick={addScan} style={{ alignSelf: 'end' }}>
+              {t('warehouse.dispatch.addScan')}
+            </Button>
+          </div>
 
           <div className="field">
-            <span className="field-label">{t('warehouse.itemsVerified')}</span>
+            <span className="field-label">
+              {direct
+                ? detail.directParcel?.code
+                : t('warehouse.dispatch.progress', { scanned: scannedIds.size, total: expected.length })}
+            </span>
             <ul className="check-list">
-              {detail.itemIds.map((id) => (
-                <li key={id}>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={!!verified[id]}
-                      onChange={() => setVerified((p) => ({ ...p, [id]: !p[id] }))}
-                    />
-                    <code dir="ltr">{id}</code>
-                  </label>
+              {!direct &&
+                expected.map((i) => (
+                  <li key={i.id}>
+                    <span>
+                      <code dir="ltr">{i.serialNumber ?? i.id}</code>
+                      {i.description && <span className="hint"> {i.description}</span>}
+                    </span>
+                    <StatusBadge tone={scannedIds.has(i.id) ? 'success' : 'neutral'}>
+                      {t(scannedIds.has(i.id) ? 'warehouse.dispatch.scanned' : 'warehouse.dispatch.notScanned')}
+                    </StatusBadge>
+                  </li>
+                ))}
+              {direct && scans.length === 1 && strays.length === 0 && (
+                <li>
+                  <code dir="ltr">{scans[0]}</code>
+                  <StatusBadge tone="success">{t('warehouse.dispatch.scanned')}</StatusBadge>
+                </li>
+              )}
+              {strays.map((code) => (
+                <li key={code}>
+                  <code dir="ltr">{code}</code>
+                  <StatusBadge tone="error">
+                    {t(direct ? 'warehouse.dispatch.wrongParcel' : 'warehouse.dispatch.notInShipment')}
+                  </StatusBadge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setScans((prev) => prev.filter((c) => c !== code))}
+                  >
+                    {t('warehouse.dispatch.removeScan', { code })}
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -1096,29 +988,6 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
   );
 }
 
-/* ============================================================
-   Locations (bins & shelves)
-   ============================================================ */
-
-/**
- * Shelving.
- *
- * Creating one asks for the two things the stow assignment needs, plus the zone
- * label: which building the shelf is in, and whether it is oversized storage.
- *
- * It used to ask for two more. A CAPACITY, which nothing enforced and which the
- * table then drew a utilisation bar against — a number that produced a red badge
- * and no decision. And a BARCODE, which is why shelves ended up called
- * `BIN-A-001`: given a field, an operator names the thing. The serial is minted
- * by the API now and cannot be typed, because a shelf that can be named is a
- * shelf whose identity encodes a zone it might be moved out of and an ordinal
- * that races the next operator to claim it.
- *
- * A shelf is never deleted: items reference their bin forever, and the transfer
- * ledger references bins that items left long ago. Taking one out of service is
- * a flag. It keeps everything it holds, stops being handed out by the directed
- * stow, and empties as its contents are picked.
- */
 function BinsPanel({
   bins,
   reloadBins,
@@ -1140,14 +1009,10 @@ function BinsPanel({
     void (async () => {
       try {
         const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
-        // Only a storing site can hold a shelf. A forwarding facility holds
-        // nothing by definition — everything that lands there is sent onward —
-        // so offering one here would invite a bin in a building with no shelves.
         const storing = list.filter((f) => f.role === 'primary');
         setFacilities(storing);
         if (storing[0]) setFacilityCode(storing[0].code);
       } catch {
-        /* the API defaults a new bin to the primary facility on its own */
       }
     })();
   }, []);
@@ -1250,9 +1115,6 @@ function BinsPanel({
               <tbody>
                 {bins.map((b) => (
                   <tr key={b.id}>
-                    {/* Shelf labels get printed and stuck on the physical bin. The
-                        serial is printed under the bars because it is what an
-                        operator reads out when the scanner will not read. */}
                     <td dir="ltr">
                       <div className="barcode-label">
                         <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />

@@ -1,15 +1,4 @@
-# =============================================================================
-# Bault SPA — production image
-#
-# `vite build` produced static assets and nothing served them. This is the
-# missing half, and it is also where the Content-Security-Policy lives: the API
-# turns CSP off deliberately (`main.ts`) on the grounds that "the CSP that
-# matters belongs on whatever serves the front end". This is that thing.
-#
-# Built from the REPO ROOT:
-#   docker build -f apps/web/Dockerfile -t bault-web .
-# =============================================================================
-FROM node:20-slim AS build
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build
 WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -27,21 +16,18 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/web/ apps/web/
-# Card photographs and the self-hosted font subsets: vite's publicDir points at
-# the repo-root assets/ folder, so the build fails without it.
 COPY assets/ assets/
 
 RUN pnpm --filter @bault/web build
 
-# -----------------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
-# A template, not a finished file: the image's entrypoint substitutes the
-# variables below (and ONLY defined variables, so nginx's own $uri and $host are
-# left alone) into /etc/nginx/conf.d/default.conf when the container starts.
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+COPY apps/web/nginx-security-headers.conf /etc/nginx/templates/bault/security-headers.conf.template
+COPY --chmod=0755 apps/web/nginx-storage-origin.envsh /docker-entrypoint.d/15-bault-storage-origin.envsh
 ENV API_UPSTREAM=http://api:3000
+ENV NGINX_ENVSUBST_FILTER='^(API_UPSTREAM|STORAGE_PUBLIC_ORIGIN)$'
 
 EXPOSE 8080
 

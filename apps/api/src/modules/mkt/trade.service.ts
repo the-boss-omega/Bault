@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -13,15 +13,6 @@ import { item } from '../cst/cst.schema';
 import { swapProposal, transaction } from './mkt.schema';
 import { DEFAULT_CURRENCY } from '../pay/ledger.service';
 
-/**
- * Swaps & gift transfers (T089/T090, Principles V, VII, VIII).
- *
- * Both are modeled as a `swap_proposal` with DUAL approval. A swap exchanges two
- * item sets; a gift transfer is the degenerate case with an empty requested set.
- * Execution is atomic: mutual ownership transfers (custody events), a billable
- * service charge, an irreversible Transaction, and an outbox event — all in one
- * transaction, and only once BOTH parties have approved.
- */
 @Injectable()
 export class TradeService {
   constructor(
@@ -60,7 +51,6 @@ export class TradeService {
     });
   }
 
-  /** Gift transfer, step 1: two-step confirmation on the sender's side. */
   async initiateTransfer(fromUserId: string, itemId: string, toUserId: string) {
     if (fromUserId === toUserId) {
       throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'Cannot transfer to yourself', 403);
@@ -69,7 +59,6 @@ export class TradeService {
     return this.confirmation.issue(fromUserId, 'transfer', { itemId, toUserId });
   }
 
-  /** Gift transfer, step 2: sender confirms → a pending transfer awaits recipient approval. */
   async confirmTransfer(fromUserId: string, confirmationToken: string) {
     const { itemId, toUserId } = await this.confirmation.consume<{ itemId: string; toUserId: string }>(
       fromUserId,
@@ -84,7 +73,6 @@ export class TradeService {
     return { status: 'awaiting_recipient_approval', swapId: s.id };
   }
 
-  /** Approve (responder consents). Executes atomically once BOTH sides approve. */
   async approve(actorId: string, swapId: string) {
     return this.custody.run(async (tx) => {
       const [s] = await tx.select().from(swapProposal).where(eq(swapProposal.id, swapId)).for('update').limit(1);
@@ -104,22 +92,23 @@ export class TradeService {
       const requested = s.requestedItemIds as string[];
       const isTransfer = requested.length === 0;
 
-      // Mutual ownership transfers (each writes a custody event in this tx).
+      await this.custody.lockItems(tx, [...offered, ...requested]);
       for (const id of offered) {
-        await this.custody.transferOwnership(tx, id, s.responderId, actorId, isTransfer ? 'gift transfer' : 'swap');
+        await this.custody.transferOwnership(tx, id, s.responderId, actorId, isTransfer ? 'gift transfer' : 'swap', {
+          ownerId: s.proposerId,
+        });
       }
       for (const id of requested) {
-        await this.custody.transferOwnership(tx, id, s.proposerId, actorId, 'swap');
+        await this.custody.transferOwnership(tx, id, s.proposerId, actorId, 'swap', { ownerId: s.responderId });
       }
 
-      // Billable (Principle VI): a service charge to the proposer (+ responder for a swap).
       await this.billing.charge(tx, { userId: s.proposerId, actionType: 'service' });
       if (!isTransfer) await this.billing.charge(tx, { userId: s.responderId, actionType: 'service' });
 
       const [txn] = await tx
         .insert(transaction)
         .values({
-          code: prefixedId(ID_PREFIX.transaction), // TXN-XXXXXXXX (Requirement 9.4)
+          code: prefixedId(ID_PREFIX.transaction),
           type: isTransfer ? 'transfer' : 'swap',
           itemIds: [...offered, ...requested],
           fee: 0,
@@ -133,8 +122,6 @@ export class TradeService {
         aggregateType: 'swap',
         aggregateId: swapId,
         eventType: isTransfer ? 'transfer_completed' : 'swap_completed',
-        // Both sides are notified (Requirement 6.1) — the dispatcher fans a
-        // `recipientIds` array out to one notification per participant.
         payload: { transactionId: txn.id, recipientIds: [s.proposerId, s.responderId] },
       });
       return { status: 'executed', transactionId: txn.id };
@@ -145,7 +132,12 @@ export class TradeService {
     const [s] = await this.db.select().from(swapProposal).where(eq(swapProposal.id, swapId)).limit(1);
     if (!s) throw AppError.notFound('Proposal not found');
     if (actorId !== s.proposerId && actorId !== s.responderId) throw AppError.forbidden('Not a participant');
-    await this.db.update(swapProposal).set({ status: 'rejected', updatedAt: new Date() }).where(eq(swapProposal.id, swapId));
+    const [rejected] = await this.db
+      .update(swapProposal)
+      .set({ status: 'rejected', updatedAt: new Date() })
+      .where(and(eq(swapProposal.id, swapId), eq(swapProposal.status, 'pending')))
+      .returning({ id: swapProposal.id });
+    if (!rejected) throw new AppError(ErrorCode.CONFLICT, 'Proposal not pending', 409);
     return { status: 'rejected' };
   }
 

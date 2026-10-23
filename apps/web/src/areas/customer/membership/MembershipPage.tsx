@@ -16,27 +16,6 @@ import {
   type TierCatalogue,
 } from '../../../shared/membership';
 
-/**
- * Membership: what the tiers cover, what you are on, and what is left.
- *
- * The screen is one argument, made in the order somebody actually asks it:
- *
- *   1. WHAT AM I ON, and how much of it is left this cycle — only when there is
- *      an answer. A non-member is not shown an empty version of this.
- *   2. WHAT ARE THE TIERS, as one comparison table rather than three cards side
- *      by side. `DESIGN.md` rejects the identical-rounded-cards pattern, and a
- *      pricing page is the single place it is most tempting: three tiles, one
- *      scaled up with a "most popular" ribbon. A register with a column per tier
- *      is also simply easier to read, because the thing anybody wants to do is
- *      compare one row across the columns, and that is a row.
- *   3. WHAT IS NOT INCLUDED, published on the same screen and not in terms.
- *
- * THE CONFIRMATION IS THE FEATURE. Subscribing is a recurring charge, which is
- * the most consequential kind of button in the product — so the price, the
- * cycle, and the sentence about what happens when an allowance runs out are all
- * on the control, and the control confirms before it charges. `.offer` exists
- * precisely so a price and its button cannot be rendered apart.
- */
 export function MembershipPage() {
   const { t, locale } = useI18n();
   const [catalogue, setCatalogue] = useState<TierCatalogue | null>(null);
@@ -80,11 +59,6 @@ export function MembershipPage() {
         scheduledTier?: string;
         effectiveFrom?: string;
       }>('/membership/subscribe', { tier: tier.key });
-      /**
-       * Three outcomes, three sentences. A downgrade and "keep my tier" both
-       * charge nothing, and the old notice told the second one that a move "takes
-       * effect at the end of the cycle" — about a move nobody had asked for.
-       */
       setNotice(
         res.scheduledTier
           ? t('membership.scheduled', {
@@ -121,11 +95,6 @@ export function MembershipPage() {
 
   const tierOrder = catalogue?.tiers.map((x) => x.key) ?? [];
 
-  /**
-   * What the member is agreeing to, in the sentence that sits beside the
-   * confirm button. Four cases, because the same button can mean a charge, a
-   * smaller charge, no charge today, or no charge at all.
-   */
   function confirmSentence(action: TierAction, tier: MembershipTier): string {
     const days = catalogue?.cycleDays ?? 30;
     switch (action.kind) {
@@ -156,7 +125,6 @@ export function MembershipPage() {
       {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
       {notice && <SuccessNote>{notice}</SuccessNote>}
 
-      {/* ---- What I am on, and what is left ---- */}
       {mine && catalogue && (
         <Panel
           title={t('membership.current.title', { tier: t(tierNameKey(mine.tier)) })}
@@ -183,10 +151,6 @@ export function MembershipPage() {
                       <span className="amount">
                         {t('membership.leftOf', { left: counts.remaining, total: counts.allowed })}
                       </span>
-                      {/* The same proportion bar the Break-Even Watch uses. It
-                          goes amber before it says anything, which is the point:
-                          running out is not an error, it is a thing to know
-                          about before you plan around it. */}
                       <span
                         className={usedFraction(counts) >= 1 ? 'proportion proportion--over' : 'proportion'}
                         role="img"
@@ -227,7 +191,6 @@ export function MembershipPage() {
         </Panel>
       )}
 
-      {/* ---- The tiers, as one table ---- */}
       <Panel title={t('membership.tiers.title')} subtitle={t('membership.tiers.subtitle')}>
         {catalogue && (
           <div className="dt-wrap">
@@ -283,14 +246,9 @@ export function MembershipPage() {
           </div>
         )}
 
-        {/*
-          The buy controls, one per tier, each an `.offer`: the price is part of
-          the component, so it is not possible to render the button without it.
-        */}
         <div className="mem-offers">
           {catalogue?.tiers.map((tier) => {
             const action = tierAction(mine, tier, tierOrder);
-            // The tier you are on, with nothing pending, is not a button at all.
             const isCurrent =
               action.kind === 'keep' && mine?.status === 'active' && !mine.scheduledTier;
             return (
@@ -302,10 +260,6 @@ export function MembershipPage() {
                   </span>
                 </div>
 
-                {/* The price and the control are ONE component. It is not
-                    possible to render the button without the figure beside it,
-                    which is the rule for every paid action in this product and
-                    matters most on the one that recurs. */}
                 <div className="offer-price">
                   <span className="amount">
                     {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
@@ -337,7 +291,6 @@ export function MembershipPage() {
         </div>
       </Panel>
 
-      {/* ---- What no tier covers ---- */}
       <Panel title={t('membership.uncovered.title')} subtitle={t('membership.uncovered.subtitle')}>
         <ul className="mem-uncovered">
           {catalogue?.uncovered.map((key) => (
@@ -348,14 +301,6 @@ export function MembershipPage() {
     </>
   );
 }
-
-/* ------------------------------------------------------------------
-   Catalogue keys → message keys.
-
-   The API answers with stable identifiers and the catalogue holds the words, so
-   a tier's name is translated rather than shipped from the server in English —
-   the same split the landing page makes for prices.
-   ------------------------------------------------------------------ */
 
 function tierNameKey(key: string): MessageKey {
   return `membership.tier.${key}` as MessageKey;

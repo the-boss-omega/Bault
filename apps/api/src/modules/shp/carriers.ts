@@ -1,45 +1,5 @@
-/**
- * The carrier line-up, and the limits that actually decide what you can use.
- *
- * Bault had a rate list and no constraints. `SandboxShippingAdapter` returned
- * "DHL Standard", "DHL Express" and "USPS Standard" at fixed invented prices,
- * regardless of where the parcel was going, what it weighed or what was in it —
- * and the rate request hard-coded the destination as country `IL`, postal code
- * `00000`, with every item assumed to be 500 g.
- *
- * That is a shape, not a shipping product. A real carrier line-up is defined by
- * what each service REFUSES:
- *
- *   - ePacket goes only to countries the carrier has a contract with, caps out
- *     at 4 lb, will not carry more than $400 of declared customs value, and will
- *     not insure past $500;
- *   - ePost carries more weight and more insurance but is slower;
- *   - FedEx International prices on DIMENSIONAL weight, which is why a light
- *     parcel in a big box costs what a heavy one does;
- *   - domestic services do not cross a border at all.
- *
- * Those limits are the product. A collector choosing "the cheap one" for a
- * $3,000 slab going to Germany needs to be told, before they pay, that the cheap
- * one will not insure it — not after a claim is refused.
- *
- * This module is pure data plus predicates. It talks to nothing, so all of it is
- * directly testable, and `apps/web/src/shared/carriers.ts` mirrors the SHAPE by
- * value while the SPA fetches the actual list from `GET /shipping/services`.
- */
+import { DIM_DIVISOR, type BillingIncrement, type Rate } from '@bault/adapters';
 
-import { DIM_DIVISOR, type BillingIncrement } from '@bault/adapters';
-
-/** Where the parcel is going. Country is ISO 3166-1 alpha-2. */
-/**
- * Where a parcel is going.
- *
- * `country` + `postalCode` were once the whole of it, which was enough for the
- * sandbox's crude distance band and is NOT enough for a real carrier — EasyPost
- * rates on the origin/destination pair and needs a street. The extra fields are
- * optional so a free-text destination still quotes (and is refused by the real
- * adapter with a sentence naming what is missing) rather than failing at the
- * type level.
- */
 export interface Destination {
   country: string;
   postalCode: string;
@@ -49,15 +9,6 @@ export interface Destination {
   region?: string;
 }
 
-/**
- * Where a stored shipment is going, as a carrier needs it.
- *
- * The snapshot when there is one; otherwise the country/postcode pair, which is
- * all a shipment created before the snapshot existed ever recorded. A carrier
- * that needs a street will refuse the fallback with a sentence naming what is
- * missing, which is the right failure — quoting against a guessed street would
- * be worse.
- */
 export function destinationOf(s: {
   destinationDetail: unknown;
   destinationCountry: string;
@@ -76,71 +27,29 @@ export function destinationOf(s: {
 }
 
 export interface CarrierService {
-  /** Stable key. Named by pricing rules and stored on the shipment. */
   key: string;
   carrier: string;
   serviceLevel: string;
-  /** Domestic services never cross a border; international ones always do. */
   scope: 'domestic' | 'international';
-  /**
-   * The countries this service reaches. Empty means "anywhere in scope" —
-   * ePacket is the one that carries a real contracted list.
-   */
   countries: readonly string[];
   maxWeightGrams: number;
-  /** The most customs value the service will carry. 0 = no ceiling. */
   maxCustomsValueMinor: number;
-  /** The most it will insure. 0 = will not insure at all. */
   maxInsuredValueMinor: number;
-  /** Whether a signature can be demanded on this service. */
   signatureAvailable: boolean;
   transitDaysMin: number;
   transitDaysMax: number;
-  /**
-   * Dimensional-weight divisor, published because it is the reason a light
-   * parcel in a big box is priced like a heavy one. Absent means the service
-   * prices on actual weight only.
-   */
   dimDivisor?: number;
-  /**
-   * The unit this service meters weight in.
-   *
-   * Published rather than kept inside the adapter, because it is the reason a
-   * quote for 1.1 lb and one for 1.9 lb come back identical, and a collector
-   * shaving grams off a parcel deserves to know it will not help.
-   */
   billingIncrement: BillingIncrement;
-  /** Longest single side the service accepts, in cm. 0 = no limit. */
   maxLongestSideCm: number;
-  /**
-   * The most the three sides may add up to, in cm. 0 = no limit.
-   *
-   * ePacket is the one with a real figure here: 24 inches on the longest side
-   * and 36 inches for length + width + height. A large or extra-large Bault box
-   * exceeds the second one before anything is put in it, which is a refusal the
-   * catalogue could not previously express — so the cheapest international
-   * service was being offered for parcels it would have rejected at the counter.
-   */
   maxDimensionSumCm: number;
-  /**
-   * A flat price that ignores weight and distance entirely. Only the
-   * direct-overnight service has one — see {@link DIRECT_OVERNIGHT_KEY}.
-   */
   flatCostMinor?: number;
-  /** A hard cap on how many items may travel on this service. */
   maxItems?: number;
-  /** Only offered when every item is already at this facility code. */
   requiresOriginFacility?: string;
+  easypost?: { carrier: string; services: readonly string[] };
 }
 
-/** The United States. Both facilities are here, so this is the domestic country. */
 export const DOMESTIC_COUNTRY = 'US';
 
-/**
- * The countries ePacket is contracted to. Not a policy Bault sets — it is the
- * carrier's list, and shipping to anywhere else on this service is simply not a
- * thing that can be bought.
- */
 const EPACKET_COUNTRIES = [
   'AU', 'AT', 'BE', 'BR', 'CA', 'CH', 'CN', 'CZ', 'DE', 'DK',
   'ES', 'FI', 'FR', 'GB', 'GR', 'HK', 'HU', 'IE', 'IL', 'IT',
@@ -148,10 +57,8 @@ const EPACKET_COUNTRIES = [
   'SE', 'SG',
 ] as const;
 
-/** The direct-from-Delaware overnight service. Its rules are unlike any other. */
 export const DIRECT_OVERNIGHT_KEY = 'direct_overnight';
 
-/** The forwarding facility the overnight service leaves from. */
 export const DIRECT_OVERNIGHT_FACILITY = 'DE';
 
 export const CARRIER_SERVICES: readonly CarrierService[] = [
@@ -161,15 +68,16 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     serviceLevel: 'Ground Advantage',
     scope: 'domestic',
     countries: [DOMESTIC_COUNTRY],
-    maxWeightGrams: 31_751, // 70 lb
+    maxWeightGrams: 31_751,
     maxCustomsValueMinor: 0,
-    maxInsuredValueMinor: 500_000, // $5,000
+    maxInsuredValueMinor: 500_000,
     signatureAvailable: true,
     transitDaysMin: 3,
     transitDaysMax: 6,
     billingIncrement: 'ounce',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    easypost: { carrier: 'USPS', services: ['GroundAdvantage'] },
   },
   {
     key: 'usps_priority',
@@ -186,6 +94,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'pound',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
+    easypost: { carrier: 'USPS', services: ['Priority'] },
   },
   {
     key: 'fedex_2day',
@@ -193,7 +102,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     serviceLevel: '2Day',
     scope: 'domestic',
     countries: [DOMESTIC_COUNTRY],
-    maxWeightGrams: 68_039, // 150 lb
+    maxWeightGrams: 68_039,
     maxCustomsValueMinor: 0,
     maxInsuredValueMinor: 500_000,
     signatureAvailable: true,
@@ -203,6 +112,7 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
     dimDivisor: DIM_DIVISOR,
+    easypost: { carrier: 'FedEx', services: ['FEDEX_2_DAY'] },
   },
   {
     key: 'epacket',
@@ -210,15 +120,15 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     serviceLevel: 'International',
     scope: 'international',
     countries: EPACKET_COUNTRIES,
-    maxWeightGrams: 1_814, // 4 lb
-    maxCustomsValueMinor: 40_000, // $400
-    maxInsuredValueMinor: 50_000, // $500
+    maxWeightGrams: 1_814,
+    maxCustomsValueMinor: 40_000,
+    maxInsuredValueMinor: 50_000,
     signatureAvailable: false,
     transitDaysMin: 10,
     transitDaysMax: 24,
     billingIncrement: 'ounce',
-    maxLongestSideCm: 60.96, // 24 in
-    maxDimensionSumCm: 91.44, // 36 in, L+W+H
+    maxLongestSideCm: 60.96,
+    maxDimensionSumCm: 91.44,
   },
   {
     key: 'epost',
@@ -226,9 +136,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     serviceLevel: 'International',
     scope: 'international',
     countries: [],
-    maxWeightGrams: 9_072, // 20 lb
+    maxWeightGrams: 9_072,
     maxCustomsValueMinor: 0,
-    maxInsuredValueMinor: 200_000, // $2,000
+    maxInsuredValueMinor: 200_000,
     signatureAvailable: true,
     transitDaysMin: 7,
     transitDaysMax: 16,
@@ -252,18 +162,9 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
     dimDivisor: DIM_DIVISOR,
+    easypost: { carrier: 'FedEx', services: ['FEDEX_INTERNATIONAL_PRIORITY', 'INTERNATIONAL_PRIORITY'] },
   },
   {
-    /**
-     * Straight out of the tax-free forwarding site, overnight, instead of being
-     * trucked to the vault first and shipped from there.
-     *
-     * Every rule on it is a real constraint rather than a preference: it leaves
-     * from one specific building, so every item has to already be there; it is
-     * an envelope, so it takes five cards and no more; and it is domestic
-     * because an overnight international parcel is a different product at a
-     * different price.
-     */
     key: DIRECT_OVERNIGHT_KEY,
     carrier: 'FedEx',
     serviceLevel: 'Direct Overnight',
@@ -278,9 +179,10 @@ export const CARRIER_SERVICES: readonly CarrierService[] = [
     billingIncrement: 'continuous',
     maxLongestSideCm: 0,
     maxDimensionSumCm: 0,
-    flatCostMinor: 10_000, // $100 flat
+    flatCostMinor: 10_000,
     maxItems: 5,
     requiresOriginFacility: DIRECT_OVERNIGHT_FACILITY,
+    easypost: { carrier: 'FedEx', services: ['PRIORITY_OVERNIGHT', 'STANDARD_OVERNIGHT'] },
   },
 ];
 
@@ -290,34 +192,35 @@ export function carrierService(key: string): CarrierService | undefined {
   return BY_KEY.get(key);
 }
 
-/** Resolve by the carrier/service pair the shipment stores. */
+export function rateFor<R extends Rate>(service: CarrierService, rates: readonly R[]): R | undefined {
+  const exact = rates.find((r) => r.carrier === service.carrier && r.serviceLevel === service.serviceLevel);
+  if (exact) return exact;
+  const ep = service.easypost;
+  if (!ep) return undefined;
+  for (const code of ep.services) {
+    const hit = rates.find((r) => r.carrier.toLowerCase() === ep.carrier.toLowerCase() && r.serviceLevel === code);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 export function findService(carrier: string, serviceLevel: string): CarrierService | undefined {
   return CARRIER_SERVICES.find((s) => s.carrier === carrier && s.serviceLevel === serviceLevel);
 }
 
-/** What a parcel is, as far as choosing a service goes. */
 export interface ParcelProfile {
   destination: Destination;
   weightGrams: number;
-  /**
-   * Outer dimensions of the chosen box, in cm. Sent to the carrier, which bills
-   * dimensional weight itself. Absent when nobody chose a box.
-   */
   dimensionsCm?: { length: number; width: number; height: number };
-  /** What the chosen box weighs. Absent when nobody chose a box. */
   packagingGrams?: number;
   itemCount: number;
-  /** Total declared customs value. Zero on a domestic parcel. */
   customsValueMinor: number;
-  /** What the collector wants covered. Zero means no insurance. */
   insuredValueMinor: number;
   signatureRequired: boolean;
-  /** Facility code every item currently sits in, when they all share one. */
   originFacilityCode?: string | null;
 }
 
 export interface ServiceProblem {
-  /** The rule that failed, so the SPA can phrase it without parsing English. */
   rule:
     | 'scope'
     | 'country'
@@ -329,14 +232,6 @@ export interface ServiceProblem {
     | 'origin_facility'
     | 'dimensions';
   message: string;
-  /**
-   * The limit that was exceeded, already formatted ("$500.00", "4.0 lb", "5").
-   *
-   * Sent separately so the SPA can translate the SENTENCE while keeping the
-   * number — a Hebrew reader being handed "ePacket International insures up to
-   * $500.00" in English loses the phrasing, and being handed a translated
-   * sentence with no figure in it loses the only actionable part.
-   */
   limit?: string;
 }
 
@@ -344,7 +239,6 @@ function usd(minor: number): string {
   return `$${(minor / 100).toFixed(2)}`;
 }
 
-/** Centimetres as inches, because every carrier limit is published in them. */
 function inches(cm: number): string {
   return `${Math.round(cm / 2.54)} in`;
 }
@@ -353,13 +247,6 @@ function lb(grams: number): string {
   return `${(grams / 453.592).toFixed(1)} lb`;
 }
 
-/**
- * Every reason this service cannot carry this parcel.
- *
- * All of them, not the first — somebody whose parcel is both too heavy and too
- * valuable for ePacket should learn both facts at once rather than fixing one
- * and being refused again.
- */
 export function checkService(service: CarrierService, parcel: ParcelProfile): ServiceProblem[] {
   const problems: ServiceProblem[] = [];
   const international = parcel.destination.country !== DOMESTIC_COUNTRY;
@@ -383,8 +270,6 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
       limit: parcel.destination.country,
     });
   }
-  // The box counts towards the ceiling once it is known: a carrier weighs the
-  // parcel, not what is inside it.
   if (parcel.weightGrams + (parcel.packagingGrams ?? 0) > service.maxWeightGrams) {
     problems.push({
       rule: 'weight',
@@ -415,20 +300,6 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
       message: `${service.carrier} ${service.serviceLevel} cannot collect a signature.`,
     });
   }
-  /**
-   * The box is too big for this service, whatever is in it.
-   *
-   * ePacket is the one that carries real figures — 24 inches on the longest
-   * side, 36 inches for the three sides added together — and a large Bault box
-   * breaks the second one empty. The catalogue could not express this before, so
-   * the cheapest international service was offered for parcels a counter would
-   * have handed straight back.
-   *
-   * Only checked when a box is known. With no dimensions there is nothing to
-   * measure, and refusing on a number nobody supplied would be worse than
-   * quoting optimistically — which is itself an argument for `chooseBox` always
-   * producing one.
-   */
   if (parcel.dimensionsCm) {
     const { length, width, height } = parcel.dimensionsCm;
     const longest = Math.max(length, width, height);
@@ -464,7 +335,6 @@ export function checkService(service: CarrierService, parcel: ParcelProfile): Se
   return problems;
 }
 
-/** Services that can actually carry this parcel. */
 export function eligibleServices(parcel: ParcelProfile): CarrierService[] {
   return CARRIER_SERVICES.filter((s) => checkService(s, parcel).length === 0);
 }

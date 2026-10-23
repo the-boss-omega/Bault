@@ -7,13 +7,14 @@ import { PasswordService } from './password.service';
 import { ProfileService } from './profile.service';
 import { SessionService } from './session.service';
 import { SessionAuthGuard } from './session-auth.guard';
+import { LoginAttemptService } from './login-attempts.service';
+import { MfaController } from './mfa/mfa.controller';
+import { MfaService } from './mfa/mfa.service';
+import { MfaEnrollmentGuard } from './mfa/mfa-enrollment.guard';
+import { MFA_POLICY, mfaPolicyProvider } from './mfa/mfa-policy';
 
-/**
- * ACC module (identity & auth). Exports SessionService + SessionAuthGuard so the
- * global auth guard (registered in AppModule) can resolve sessions.
- */
 @Module({
-  controllers: [AuthController, ProfileController],
+  controllers: [AuthController, ProfileController, MfaController],
   providers: [
     AuthService,
     VerificationService,
@@ -21,7 +22,11 @@ import { SessionAuthGuard } from './session-auth.guard';
     ProfileService,
     SessionService,
     SessionAuthGuard,
+    LoginAttemptService,
+    MfaService,
+    MfaEnrollmentGuard,
+    mfaPolicyProvider,
   ],
-  exports: [SessionService, SessionAuthGuard],
+  exports: [SessionService, SessionAuthGuard, MfaService, MfaEnrollmentGuard, MFA_POLICY],
 })
 export class AccModule {}

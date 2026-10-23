@@ -13,22 +13,6 @@ import {
 import { IconAlert, IconBox, IconLocation } from '../../shared/ui/icons';
 import { YieldChart } from './YieldChart';
 
-/**
- * Shelf Yield — what a shelf earns against the occupancy it consumes.
- *
- * The operator half of the engine behind Break-Even Watch. The design problem this
- * screen solves is that a yield table is a wall of numbers, and the job a person
- * brings to it is not "read the numbers" — it is **find the worst shelf**. So
- * the worst shelf is at the top, every row carries a bar as well as a figure so
- * the comparison happens by looking rather than by reading, and the two things
- * that need acting on (dead items, long-idle stock) are called out rather than
- * left to be inferred from a column.
- *
- * The headline says REVENUE, never profit. Bault's rent, labour and insurance
- * are not in this database, and a margin computed without them would be a
- * confident number about something nobody measured.
- */
-
 interface ShelfRow {
   binId: string;
   serialNumber: string;
@@ -77,14 +61,6 @@ interface Yield {
   };
 }
 
-/**
- * A figure and its bar.
- *
- * The bar is scaled against the best performer on screen rather than an
- * absolute maximum: the question is always "which of these is worst", and a
- * bar scaled to a number nobody has reached would flatten every row into the
- * same short stub.
- */
 function YieldCell({ value, best }: { value: number | null; best: number }) {
   const { t } = useI18n();
   if (value === null) {
@@ -139,7 +115,6 @@ export function ShelfYieldPanel() {
 
   return (
     <>
-      {/* The four numbers that decide whether to act, before any table. */}
       <div className="metric-grid">
         <MetricCard
           label={t('yield.metric.revenue')}
@@ -240,17 +215,6 @@ export function ShelfYieldPanel() {
       </Panel>
 
       <Panel title={t('yield.zones.title')} subtitle={t('yield.zones.subtitle')} flush>
-        {/*
-          The question this screen exists to answer — which part of the building
-          pays for itself — was being asked of three tables of numbers and a
-          progress bar in a cell whose scale was never stated. One chart, in the
-          product's only chart style: graphite bars, one accent on the zone
-          earning least per shelf-month, tabular labels, a stated maximum.
-
-          It sits ABOVE the table rather than replacing it. The chart answers
-          "which one", the table answers "by how much", and they are different
-          questions.
-        */}
         {zones !== null && zones.length > 0 && (
           <div className="panel-note">
             <YieldChart
