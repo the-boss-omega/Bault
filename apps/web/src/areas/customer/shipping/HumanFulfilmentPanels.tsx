@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
+import { ItemPick } from '../../../shared/ui/Serial';
 import { formatDate, formatUsd } from '../../../shared/money';
 import type { PickupShow, WhiteGloveTerms } from '../../../shared/escrow';
 import type { ShipmentSummary } from '../../../shared/shipments';
@@ -10,6 +12,7 @@ import { useShippingCountries } from '../../../shared/countries';
 
 interface VaultItem {
   id: string;
+  serialNumber?: string;
   typeClass: string;
   description: string;
 }
@@ -110,9 +113,7 @@ export function ShowPickupPanel({
                       checked={!!selected[item.id]}
                       onChange={() => setSelected((p) => ({ ...p, [item.id]: !p[item.id] }))}
                     />
-                    <span>
-                      {item.typeClass} — {item.description}
-                    </span>
+                    <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                   </label>
                 </li>
               ))}
@@ -241,9 +242,7 @@ export function WhiteGlovePanel({
                     checked={!!selected[item.id]}
                     onChange={() => setSelected((p) => ({ ...p, [item.id]: !p[item.id] }))}
                   />
-                  <span>
-                    {item.typeClass} — {item.description}
-                  </span>
+                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                 </label>
               </li>
             ))}

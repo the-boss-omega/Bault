@@ -123,6 +123,7 @@ describe('an address names its country by code', () => {
       recipient: 'Red Ashwood',
       line1: '1 Test St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'United States',
       postalCode: '08608',
     });

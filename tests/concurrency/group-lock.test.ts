@@ -11,6 +11,7 @@ const SHARED = {
   recipient: 'Front desk — Bault group',
   line1: '400 Boardwalk',
   city: 'Atlantic City',
+  region: 'NJ',
   country: 'US',
   postalCode: '08401',
 };

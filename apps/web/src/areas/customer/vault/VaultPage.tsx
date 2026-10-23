@@ -3,7 +3,17 @@ import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { BarcodeLabel } from '../../../shared/Barcode';
-import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { itemClassLabel, itemName } from '../../../shared/itemClasses';
+import {
+  STATE_META,
+  departureLabel,
+  stateLabel,
+  timelineDetail,
+  timelineKindLabel,
+  type Departure,
+  type TimelineEvent,
+} from '../../../shared/itemTimeline';
 import { formatDate, formatUsd } from '../../../shared/money';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -14,10 +24,9 @@ import {
   SkeletonBlock,
   StatusBadge,
   SuccessNote,
-  type StatusTone,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { Serial } from '../../../shared/ui/Serial';
+import { Code, Serial } from '../../../shared/ui/Serial';
 import {
   IconAlert,
   IconAsk,
@@ -67,7 +76,7 @@ interface VaultItem {
   receivedAt?: string | null;
   historical?: boolean;
   departedAt?: string | null;
-  departureReason?: string | null;
+  departure?: Departure | null;
   stillOwned?: boolean;
 }
 
@@ -76,12 +85,6 @@ interface ItemMedia {
   type: string;
   version: number;
   url: string;
-}
-
-interface TimelineEvent {
-  at: string;
-  kind: string;
-  summary: string;
 }
 
 interface StorageStatus {
@@ -101,24 +104,6 @@ interface VaultCounts {
   active: number;
   hold: number;
   history: number;
-}
-
-const STATE_META: Record<string, { tone: StatusTone; label: MessageKey }> = {
-  stored: { tone: 'success', label: 'vault.state.stored' },
-  listed: { tone: 'info', label: 'vault.state.listed' },
-  sold: { tone: 'gold', label: 'vault.state.sold' },
-  'on-hold': { tone: 'error', label: 'vault.state.onHold' },
-  received: { tone: 'info', label: 'vault.state.received' },
-  shipped: { tone: 'violet', label: 'vault.state.shipped' },
-  donated: { tone: 'success', label: 'vault.state.donated' },
-  consigned: { tone: 'info', label: 'vault.state.consigned' },
-  at_grader: { tone: 'violet', label: 'vault.state.atGrader' },
-  discarded: { tone: 'neutral', label: 'vault.state.discarded' },
-};
-
-function stateLabel(t: TranslateFn, state: string): string {
-  const meta = STATE_META[state];
-  return meta ? t(meta.label) : state;
 }
 
 const SCOPES = ['active', 'hold', 'history'] as const;
@@ -155,11 +140,6 @@ interface CardAction {
 }
 
 type FormKind = 'consignment' | 'grading' | 'inspection' | 'custom';
-
-function timelineKindLabel(t: TranslateFn, kind: string): string {
-  const key = `timeline.${kind}` as MessageKey;
-  return hasMessage(key) ? t(key) : kind.replace(/_/g, ' ');
-}
 
 const CARD_ACTIONS: readonly CardAction[] = [
   {
@@ -511,7 +491,7 @@ function CardTile({
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
   const frozen = Boolean(item.holdFlag) && !historical;
-  const name = item.description || item.typeClass;
+  const name = itemName(t, item);
 
   return (
     <li
@@ -573,14 +553,14 @@ function CardTile({
                 {t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}
               </span>
             )}
-            {item.departureReason && (
-              <span className="card-sub ltr-run">{item.departureReason}</span>
-            )}
+            {item.departure && <span className="card-sub">{departureLabel(t, item.departure)}</span>}
           </>
         ) : (
-          <span className="code-inline">
-            {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
-          </span>
+          item.binBarcode ? (
+            <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} />
+          ) : (
+            <span>{t('vault.noBin')}</span>
+          )
         )}
       </div>
 
@@ -759,7 +739,7 @@ function StoragePanel({
             {storage.nextChargeAt && (
               <div className="detail-row">
                 <dt className="detail-label">{t('vault.storage.next')}</dt>
-                <dd className="detail-value" dir="ltr">
+                <dd className="detail-value">
                   {formatDate(storage.nextChargeAt, locale)}
                   <span className="detail-value-sub">
                     {t('vault.storage.nextAmount', {
@@ -865,14 +845,8 @@ function ItemDrawer({
     }
   }
 
-  const name = item.description || item.typeClass;
+  const name = itemName(t, item);
   const frozen = Boolean(item.holdFlag) && !historical;
-  const holdReason = frozen
-    ? ((events ?? [])
-        .find((e) => e.kind === 'hold_placed')
-        ?.summary
-        .replace(/^\s*hold placed\s*[—–-]\s*/i, '') ?? null)
-    : null;
 
   return (
     <>
@@ -915,14 +889,7 @@ function ItemDrawer({
               <p className="frozen-reason">
                 <IconClock />
                 <span>
-                  {holdReason ? (
-                    <>
-                      {t('vault.frozen.reason', { reason: '' })}{' '}
-                      <span className="ltr-run">{holdReason}</span>{' '}
-                    </>
-                  ) : (
-                    <>{t('vault.frozen.reason', { reason: '' })} </>
-                  )}
+                  {t('vault.frozen.reason', { reason: '' })}{' '}
                   {t('vault.frozen.actionsNote')}
                 </span>
               </p>
@@ -938,7 +905,7 @@ function ItemDrawer({
         <dl className="detail-list">
           <div className="detail-row">
             <dt className="detail-label">{t('vault.class')}</dt>
-            <dd className="detail-value">{item.typeClass}</dd>
+            <dd className="detail-value">{itemClassLabel(t, item.typeClass)}</dd>
           </div>
           <div className="detail-row">
             <dt className="detail-label">{t('vault.item.condition')}</dt>
@@ -950,23 +917,23 @@ function ItemDrawer({
               {item.departedAt && (
                 <div className="detail-row">
                   <dt className="detail-label">{t('vault.historical.dateLabel')}</dt>
-                  <dd className="detail-value" dir="ltr">
+                  <dd className="detail-value">
                     {formatDate(item.departedAt, locale)}
                   </dd>
                 </div>
               )}
-              {item.departureReason && (
+              {item.departure && (
                 <div className="detail-row">
                   <dt className="detail-label">{t('vault.historical.reasonLabel')}</dt>
-                  <dd className="detail-value">{item.departureReason}</dd>
+                  <dd className="detail-value">{departureLabel(t, item.departure)}</dd>
                 </div>
               )}
             </>
           ) : (
             <div className="detail-row">
               <dt className="detail-label">{t('vault.item.bin')}</dt>
-              <dd className="detail-value" dir="ltr">
-                {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
+              <dd className="detail-value">
+                {item.binBarcode ? <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} /> : t('vault.noBin')}
               </dd>
             </div>
           )}
@@ -1102,15 +1069,18 @@ function ItemDrawer({
               <EmptyState title={t('vault.historyEmpty')} />
             ) : (
               <ul className="timeline">
-                {events.map((event, index) => (
-                  <li key={`${event.at}-${index}`}>
-                    <span className="hint date">{formatDate(event.at, locale)}</span>
-                    <div>
-                      <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
-                      <p className="register-entry ltr-run">{event.summary}</p>
-                    </div>
-                  </li>
-                ))}
+                {events.map((event, index) => {
+                  const detail = timelineDetail(t, event);
+                  return (
+                    <li key={`${event.at}-${index}`}>
+                      <span className="hint date">{formatDate(event.at, locale)}</span>
+                      <div>
+                        <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
+                        {detail && <p className="register-entry">{detail}</p>}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -1124,7 +1094,7 @@ function ItemDrawer({
             <>
               <p>
                 {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                  item: `${item.typeClass} — ${item.description}`,
+                  item: `\u2068${itemName(t, item)}\u2069`,
                 })}
               </p>
               {(() => {

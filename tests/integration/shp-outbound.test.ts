@@ -22,6 +22,7 @@ describe('SHP outbound shipping', () => {
     recipient: 'Red Ashwood',
     line1: '12 Vine St',
     city: 'Trenton',
+    region: 'NJ',
     country: 'US',
     postalCode: '08608',
   };
@@ -557,6 +558,7 @@ describe('SHP outbound shipping', () => {
       recipient: 'Front desk — Bault group',
       line1: '400 Boardwalk',
       city: 'Atlantic City',
+      region: 'NJ',
       country: 'US',
       postalCode: '08401',
     };
@@ -604,6 +606,7 @@ describe('SHP outbound shipping', () => {
       recipient: 'Golden Marsh',
       line1: '9 Other Rd',
       city: 'Newark',
+      region: 'NJ',
       country: 'US',
       postalCode: '07102',
     });

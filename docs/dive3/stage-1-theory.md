@@ -960,7 +960,7 @@ An operator places or lifts a hold by scanning the item; setting the value it al
 
 - **Relocation** takes an item scan and a shelf scan, is refused on a held item, and writes a `relocate` event and a bin transfer naming both shelves.
 - **Corrections** change description, grade or class (a known one), each with a change-history row.
-- **Reports** count items by shelf, owner, condition or class, also as a PDF. An item's timeline merges every recorded event about it; a collector sees their own through the vault, which checks ownership first.
+- **Reports** count items by shelf, owner, condition or class, also as a PDF. An item's timeline merges every recorded event about it; a collector sees their own through the vault, which checks ownership first. Each entry is a kind and its parameters (shelves by label, states, amounts in minor units), never a sentence and never an id: the web app words it in the reader's language.
 
 #### T9.7 Leaving custody
 
@@ -1074,7 +1074,7 @@ Trading moves two people's property and money at once, so these flows lean harde
 
 #### T11.1 Listings
 
-A seller lists a card they own that is `stored`, not held and not committed (not in an open escrow deal, an open shipment, or an open buyout, consignment or donation). It becomes `listed`. An active listing can be repriced. Removing one takes a confirmation token, returns the card to `stored`, and closes its open offers. Browsing is public: the list, a seller's page, and a listing's detail, which carries only the browse fields, the status and signed image links, never the owner, bin or barcode.
+A seller lists a card they own that is `stored`, not held and not committed (not in an open escrow deal, an open shipment, or an open buyout, consignment or donation). It becomes `listed`. An active listing can be repriced. Removing one takes a confirmation token, returns the card to `stored`, and closes its open offers. Browsing is public: the list, a seller's page, and a listing's detail, which carries only the browse fields, the status and signed image links, never an account id, the bin or the barcode. Each listing names its seller by username, the name their public page already shows, and links to that page.
 
 #### T11.2 Offers
 
@@ -1238,7 +1238,7 @@ Shipping is where Bault spends money with an outside company on a collector's be
 
 #### T13.1 Creating and quoting
 
-A shipment names the items, a destination (a saved or typed address), optional insurance and declared value, a signature, rush, add-ons, a box, and notes. Creation is refused on a negative balance. Every item must be the collector's, `stored`, not held, and on no other open shipment (`requested`, `awaiting_payment`, `rates_selected`, `picking`, `packed`, `labeled`). The checks run again with the items locked inside the creating transaction, so two clicks cannot put one card on two parcels; edits and hand-delivery requests re-check the same way.
+A shipment names the items, a destination (a saved or typed address), optional insurance and declared value, a signature, rush, add-ons, a box, and notes. A saved address in the US or Canada names its state or province by its two-letter code, because carriers will not print a label without it; elsewhere it is optional. An address saved before that rule is refused at the quote, with `address_region_required` and the address's id, until the collector adds it. Creation is refused on a negative balance. Every item must be the collector's, `stored`, not held, and on no other open shipment (`requested`, `awaiting_payment`, `rates_selected`, `picking`, `packed`, `labeled`). The checks run again with the items locked inside the creating transaction, so two clicks cannot put one card on two parcels; edits and hand-delivery requests re-check the same way.
 
 The parcel is measured from its items: a recorded weight where somebody weighed one, otherwise the class's typical weight times the lot size, flagged as an estimate. A non-US destination gets per-item customs lines, and Bault never invents or lowers a declared value. The full address is frozen on the shipment, so editing the saved address later does not move the parcel.
 

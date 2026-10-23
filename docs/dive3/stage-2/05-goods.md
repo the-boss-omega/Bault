@@ -85,7 +85,7 @@ Where things go, and what a scan means.
 The staff read model and bin management.
 - `createBin` — mints the serial (`makeBinSerial`) in the given facility, else the first `primary`. `setBinActive` retires a shelf; bins are never deleted.
 - `report` / `reportPdf` — counts by `Cut` (`shelf`, `owner`, `condition`, `item_class`).
-- `itemTimeline` — custody events, corrections, moves, sales, shipments, offers and disputes for one item, merged.
+- `itemTimeline` — custody events, corrections, moves, sales, shipments, offers and disputes for one item, merged into `TimelineEvent`s: a `kind` and its `params`. `binLabels` resolves every shelf id to a `BinLabel` (barcode and zone) in one query; amounts stay in minor units. No sentence and no id leaves the API: the web app's `timelineDetail` words each entry.
 - `reconcile` — only the total item count and a timestamp.
 
 **Watch:** `report` counts every item ever received, including those that left, and a split lot as well as its cards.
@@ -122,7 +122,7 @@ What the vault shows about storage. `STANDARD_STORAGE` (180 free days, then 10% 
 #### `apps/api/src/modules/vlt/vault.service.ts` · 2 min · T12.6, T9.6, T9.7
 The owner's read model.
 - `listOwned` — `VaultScope` is `active` (`LIVE` states, no hold), `hold` (`holdFlag` or `on-hold`) or `history`.
-- `listHistory` — owned items in a `TERMINAL` state, plus items the owner once held, recovered from `custody_event` (`departedFrom`) because a sale moves `owner_id`. No bin or current owner is shown; `hasHeld` still lets a past owner open the `timeline`.
+- `listHistory` — owned items in a `TERMINAL` state, plus items the owner once held, recovered from `custody_event` (`departedFrom`) because a sale moves `owner_id`. No bin or current owner is shown; `hasHeld` still lets a past owner open the `timeline`. `departure` says why each card left: `departureOf` turns the custody event into a kind (`shipped`, `donated`, `sold`, `escrow` with its code, and so on), so no custody note reaches the screen.
 - `storageFor` — the past is counted from `charge` rows. Only `nextChargeAt` is computed, using `storageCover` and `coveredByMembership`, a SQL copy of the worker's `COVERED`.
 - `itemCard` — signed image URLs, custody history, open service requests.
 

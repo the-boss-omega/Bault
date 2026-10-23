@@ -98,7 +98,7 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
                         {ticketStatusLabel(t, row.status, true)}
                       </StatusBadge>
                     </td>
-                    <td dir="ltr">{formatDateTime(row.lastMessageAt, locale)}</td>
+                    <td>{formatDateTime(row.lastMessageAt, locale)}</td>
                     <td className="td-tight">
                       <div className="actions">
                         <Button size="sm" variant="gold" onClick={() => openRecord('ticket', row.id)}>

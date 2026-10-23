@@ -282,6 +282,7 @@ describe('one customer against another customer', () => {
       recipient: 'Somebody Else',
       line1: '1 Nowhere',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -310,6 +311,7 @@ describe('one customer against another customer', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -332,6 +334,7 @@ describe('one customer against another customer', () => {
       recipient: 'Red Ashwood',
       line1: '9 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });

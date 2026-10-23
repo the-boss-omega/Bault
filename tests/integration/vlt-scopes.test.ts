@@ -6,7 +6,8 @@ describe('VLT scopes cover every state', () => {
     id: string;
     lifecycleState: string;
     historical?: boolean;
-    departureReason?: string | null;
+    serialNumber?: string;
+    departure?: { kind: string; code: string | null } | null;
   }
 
   async function scope(c: Client, name: 'active' | 'hold' | 'history', q: string): Promise<Row[]> {
@@ -54,7 +55,16 @@ describe('VLT scopes cover every state', () => {
     const row = history.find((r) => r.id === card.id);
     expect(row, 'a card shipped home is missing from History').toBeDefined();
     expect(row!.lifecycleState).toBe('shipped');
-    expect(row!.departureReason).toBeTruthy();
+    expect(row!.departure).toEqual({ kind: 'shipped', code: null });
+  });
+
+  it('names why a card left in the reader\'s terms, not the custody log\'s words', async () => {
+    const collector = await signIn(SEED.collector);
+    const history = await scope(collector, 'history', 'SN-EVS194-0009');
+    const donated = history.find((r) => r.serialNumber === 'SN-EVS194-0009');
+    expect(donated, 'the seeded donated card is missing from History').toBeDefined();
+    expect(donated!.departure).toEqual({ kind: 'donated', code: null });
+    expect(JSON.stringify(history)).not.toContain('departureReason');
   });
 
   it('shows a card that is away at the grader with the cards the collector holds (F057)', async () => {

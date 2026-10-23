@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { eq, inArray } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -16,6 +16,7 @@ import {
   needsCustoms,
 } from './shipping-options';
 import type { Destination, ParcelProfile } from './carriers';
+import { regionRequired } from './regions';
 import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
 export interface CustomsLine {
@@ -117,6 +118,14 @@ export class ParcelProfileService {
         .where(eq(shippingAddress.id, input.addressId))
         .limit(1);
       if (!a || a.userId !== userId) throw AppError.notFound('Address not found');
+      if (!a.region && regionRequired(a.country)) {
+        throw new AppError(
+          ErrorCode.ADDRESS_REGION_REQUIRED,
+          `Add the state or province to the address "${a.label}": carriers will not ship to ${a.country.toUpperCase()} without it.`,
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          { addressId: a.id },
+        );
+      }
       return {
         destination: {
           country: a.country.toUpperCase(),
@@ -124,8 +133,9 @@ export class ParcelProfileService {
           name: a.recipient,
           street1: a.line1,
           city: a.city,
+          ...(a.region ? { region: a.region } : {}),
         },
-        formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${a.postalCode}, ${a.country}`,
+        formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${[a.region, a.postalCode].filter(Boolean).join(' ')}, ${a.country}`,
         recipientName: a.recipient,
       };
     }

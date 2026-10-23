@@ -139,6 +139,20 @@ describe('the EasyPost adapter', () => {
     expect(parcel.weight).toBeCloseTo(13.4, 1);
   });
 
+  it('sends each address’s state or province as the state the carrier reads', async () => {
+    stubFetch(() => SHIPMENT_RESPONSE);
+    await adapter().getRates({
+      destination: DESTINATION,
+      origin: ORIGIN,
+      items: [{ weightGrams: 60 }],
+      rush: false,
+    });
+
+    const sent = JSON.parse(String(calls[0]!.init.body)).shipment;
+    expect(sent.to_address.state).toBe('IL');
+    expect(sent.from_address.state).toBe('NJ');
+  });
+
   it('asks for the signature at RATE time, so the quoted price is the charged price', async () => {
     stubFetch(() => SHIPMENT_RESPONSE);
     await adapter().getRates({
