@@ -1,22 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, signIn } from './helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
-/**
- * The figures the legal documents and the FAQ point at.
- *
- * The numbers the daily sweeps use are environment variables, so a document
- * that stated them as prose would go false, unnoticed, the moment
- * `WALLET_DEBT_INTEREST_BPS` changed. The documents say the current figures are
- * shown in the app, and this is where the app gets them: from the same
- * configuration and constants the charging code reads.
- *
- * Requires a running API.
- */
 describe('NOT published account terms', () => {
   it('is public, so the terms can be read before signing up', async () => {
     const res = await new Client().get('/content/account-terms');
     expect(res.status).toBe(200);
-    expect(res.body.termsVersion).toBe('2026-10-draft-1');
+    expect(res.body.termsVersion).toBe(CURRENT_TERMS_VERSION);
   });
 
   it('publishes the debt policy the sweeps apply', async () => {

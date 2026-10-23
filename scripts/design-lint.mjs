@@ -1,31 +1,4 @@
 #!/usr/bin/env node
-/**
- * The design-system linter.
- *
- * A plain Node script, no dependencies, that fails on the specific ways a design
- * system rots, and only on those, because a linter that reports style opinions
- * gets switched off within a week.
- *
- * It checks five things, and each one is a rule from DESIGN.md that a person
- * could break by accident in a hurry:
- *
- *   1. PHYSICAL PROPERTIES. `margin-left`, `padding-right`, `left:`, `right:`,
- *      `text-align: left/right` in CSS; `ml-`/`mr-`/`pl-`/`pr-`/`text-left`/
- *      `text-right` class names and physical inline styles in TSX. Bault is
- *      bilingual and mirrors through logical properties; one physical property
- *      is one screen that does not.
- *   2. OFF-SCALE VALUES. A px length that is not on the 4px spacing scale, not
- *      on the type scale, and not one of the handful of legitimate exceptions.
- *   3. HARDCODED RADIUS / SHADOW. A `border-radius` or `box-shadow` that is not
- *      a token, outside the token block.
- *   4. RAW COLOUR. A hex or rgb() literal outside the token block. Every colour
- *      in this product has a name and a job.
- *   5. MONO MISUSE. `--font-mono` applied to a selector that is not a code.
- *
- * Usage:
- *   node scripts/design-lint.mjs          # report and exit non-zero on findings
- *   node scripts/design-lint.mjs --quiet  # only the summary line
- */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,38 +8,27 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const webSrc = join(repoRoot, 'apps', 'web', 'src');
 const cssFile = join(webSrc, 'index.css');
 
-/**
- * The token block is where colours, radii and shadows are ALLOWED to be
- * literals: that is what a token is. Everything after it must use the names.
- */
 const TOKEN_BLOCK_END = '/* ============================================================\n   Application shell';
 
-/** Lengths that are legitimately off the 4px scale, and why. */
 const ALLOWED_PX = new Set([
-  '1px', // the border weight
-  '2px', // the focus ring, the state rail, the active tab mark
-  '3px', // the radius, and the wider state rail on a register row
-  '5px', // the register's ruling tick
-  '6px', // the status dot
-  '7px', // input padding-block
-  '10px', // input padding-inline
+  '1px',
+  '2px',
+  '3px',
+  '5px',
+  '6px',
+  '7px',
+  '10px',
   '11px',
   '0px',
 ]);
 
 const TYPE_PX = new Set(['12px', '13px', '14px', '16px', '18px', '22px', '28px', '36px', '48px', '64px']);
 
-/**
- * The scale is "a multiple of 4", not an enumerated list. A list would flag
- * every legitimate `min-width: 140px` on a flex basis; a multiple of 4 catches
- * quarter-point nudges like 12.5px and 13.5px and nothing else.
- */
 function onScale(value) {
   const n = Number.parseFloat(value);
   return Number.isInteger(n) && n % 4 === 0;
 }
 
-/** Selectors that are genuinely codes and may take the mono face. */
 const CODE_SELECTORS = [
   '.code',
   'code',
@@ -87,10 +49,6 @@ function report(file, line, message) {
   findings.push({ file, line, message });
 }
 
-/* ------------------------------------------------------------------ CSS */
-
-/* Normalised: the working tree is CRLF on Windows and every offset below
-   assumes single-character line endings. */
 const css = readFileSync(cssFile, 'utf8').split('\r\n').join('\n');
 const tokenEnd = css.indexOf(TOKEN_BLOCK_END);
 if (tokenEnd < 0) throw new Error('token block marker not found in index.css');
@@ -98,7 +56,6 @@ const cssLines = css.split('\n');
 const tokenEndLine = css.slice(0, tokenEnd).split('\n').length;
 const rel = relative(repoRoot, cssFile).split(sep).join('/');
 
-/** Strip comments so prose about `margin-left` is not a finding about one. */
 function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
 }
@@ -139,7 +96,6 @@ cssCode.forEach((line, i) => {
   }
   if (n <= tokenEndLine) return;
 
-  // A breakpoint is a device width, not a spacing decision.
   const inMediaQuery = /@media/.test(line);
   if (!inMediaQuery) {
     for (const m of line.matchAll(/(?<![\w-])(\d+(?:\.\d+)?px)/g)) {
@@ -155,13 +111,11 @@ cssCode.forEach((line, i) => {
     report(rel, n, `hardcoded shadow — there is one, and it is for overlays: ${line.trim()}`);
   }
   for (const m of line.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g)) {
-    // rgba() over a token is how a scrim is written; a scrim is a legitimate literal.
     if (/rgba\(\s*(?:17|0)\s*,/.test(line) && /background|box-shadow/.test(line)) continue;
     report(rel, n, `raw colour ${m[0]} — every colour has a name: ${line.trim()}`);
   }
 });
 
-/* Mono misuse: walk each rule that sets --font-mono and check its selector. */
 const monoRules = [...cssCode.entries()].filter(([, l]) => /font-family:\s*var\(--font-mono\)/.test(l));
 for (const [i] of monoRules) {
   let j = i;
@@ -182,8 +136,6 @@ for (const [i] of monoRules) {
     report(rel, i + 1, `mono on a non-code selector (${selector.trim().slice(0, 60)}) — mono is for serials, bins and barcodes`);
   }
 }
-
-/* ------------------------------------------------------------------ TSX */
 
 function walk(dir) {
   const out = [];
@@ -209,8 +161,6 @@ for (const file of walk(webSrc)) {
       }
     });
 }
-
-/* ---------------------------------------------------------------- report */
 
 if (!quiet) {
   const byFile = new Map();

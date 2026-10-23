@@ -1,0 +1,21 @@
+-- 0036 — A ledger amount is never zero, and never negative.
+--
+-- `ledger_record.amount` is always positive and `direction` carries the sign;
+-- the schema said so in a comment and nothing enforced it. A negative amount
+-- on a debit is a credit nobody approved, and a zero row is a movement that
+-- moved nothing but still reads as one on a statement. Every writer already
+-- guards against both (a free action, a waived fee and a parcel the tier paid
+-- for entirely write no row at all); this is the floor under them, so a bug in
+-- between fails loudly instead of writing a wallet movement that runs the
+-- wrong way.
+--
+-- NOT VALID, on purpose: the constraint holds for every row written from now
+-- on, and existing rows are not re-checked. The ledger is append-only (no
+-- UPDATE or DELETE gets past 0001_append_only.sql), so a historical zero row in
+-- production could never be corrected, and validating here would make this
+-- migration impossible to apply instead of making the data right. Once
+-- `SELECT count(*) FROM ledger_record WHERE amount <= 0` is 0 on production,
+-- `ALTER TABLE "ledger_record" VALIDATE CONSTRAINT "ledger_record_amount_positive"`
+-- marks it validated.
+ALTER TABLE "ledger_record" DROP CONSTRAINT IF EXISTS "ledger_record_amount_positive";--> statement-breakpoint
+ALTER TABLE "ledger_record" ADD CONSTRAINT "ledger_record_amount_positive" CHECK ("amount" > 0) NOT VALID;

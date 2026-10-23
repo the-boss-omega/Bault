@@ -6,25 +6,9 @@ import { loadEnv } from '@bault/config';
 import { AppError } from '../../shared/errors/app-error';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { ALLOW_SUSPENDED_KEY } from './allow-suspended.decorator';
+import { ALLOW_ANY_STATUS_KEY } from './allow-any-status.decorator';
 import { SessionService } from './session.service';
 
-/**
- * Global authentication + account-status guard.
- *
- * Steps for every request:
- *   1. Read the session cookie; if present, resolve it to an AuthUser.
- *   2. If the account is not `active`, BLOCK it, even on public routes: a
- *      suspended or closed account is barred from every action.
- *   3. Attach the user to the request.
- *   4. Public routes (@Public) pass regardless; all others require a user (401).
- *
- * ONE EXCEPTION, at step 2. A route marked `@AllowSuspended()` (the helpdesk and
- * the profile probe) is reachable by a SUSPENDED account, so a holder suspended
- * automatically for debt can still ask for help. `closed` is never let through:
- * that state is terminal.
- *
- * Runs before MfaEnrollmentGuard and RolesGuard.
- */
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
   private readonly cookieName = loadEnv().SESSION_COOKIE_NAME;
@@ -44,15 +28,21 @@ export class SessionAuthGuard implements CanActivate {
       ctx.getClass(),
     ]);
 
+    const allowAnyStatus = this.reflector.getAllAndOverride<boolean>(ALLOW_ANY_STATUS_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
+
     const req = ctx.switchToHttp().getRequest<Request>();
     const raw = this.readSessionCookie(req);
 
     if (raw) {
       const user = await this.sessions.resolve(raw);
       if (user) {
-        // `suspended` may pass on an explicitly-marked route; `closed` never does.
         const permitted =
-          user.status === 'active' || (allowSuspended === true && user.status === 'suspended');
+          user.status === 'active' ||
+          allowAnyStatus === true ||
+          (allowSuspended === true && user.status === 'suspended');
         if (!permitted) throw AppError.accountSuspended();
         req.user = user;
       }

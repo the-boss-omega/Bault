@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { and, count, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { toString as qrToString } from 'qrcode';
@@ -15,21 +15,13 @@ import { LoginAttemptService } from '../login-attempts.service';
 import { SessionService, type ClientOrigin } from '../session.service';
 import { MFA_POLICY, type MfaPolicy } from './mfa-policy';
 import { generateRecoveryCodes, hashRecoveryCode, normalizeRecoveryCode } from './recovery-codes';
-import { deriveSubkey, keyFromBase64, openSecret, sealSecret } from './secret-box';
+import { UnreadableSecretError, deriveSubkey, keyFromBase64, openSecret, sealSecret } from './secret-box';
 import { base32Encode, generateTotpSecret, matchTotp, otpauthUri } from './totp';
 
-/** How long the second sign-in step stays open after a right password. */
 const CHALLENGE_TTL_MINUTES = 5;
-/**
- * Wrong codes one challenge absorbs before it is burned. Each password proof
- * then buys at most this many guesses at the code, on top of the per-identifier
- * and per-account lockouts that count every one of them.
- */
 const CHALLENGE_MAX_FAILURES = 5;
-/** The name an authenticator app files the account under. */
 const ISSUER = 'Bault';
 
-/** The second factor offered at sign-in: a code from the app, or a recovery code. */
 export type SecondFactorProof = { code: string } | { recoveryCode: string };
 
 export type Redemption =
@@ -41,21 +33,11 @@ export type Redemption =
 type Exec = Database;
 type Factor = typeof mfaFactor.$inferSelect;
 
-/**
- * Two-factor sign-in (TOTP): enrolment, the second sign-in step, recovery
- * codes, turning it off, and an administrator's reset.
- *
- * Every state change that spends something (a code's time step, a recovery
- * code, a challenge) is a conditional UPDATE inside the transaction that acts
- * on it, so two requests carrying the same thing cannot both succeed: the
- * second one's UPDATE waits for the first to commit, re-reads the row, and no
- * longer matches. The in-process queue in `AuthService` already serialises one
- * API's sign-ins per identifier; this is what holds across API processes.
- */
 @Injectable()
 export class MfaService {
   private readonly key: Buffer;
   private readonly recoveryKey: Buffer;
+  private readonly logger = new Logger('MfaService');
 
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
@@ -68,7 +50,6 @@ export class MfaService {
     this.recoveryKey = deriveSubkey(this.key, 'recovery-codes');
   }
 
-  /** Whether this role must enrol (`MFA_REQUIRED_ROLES`). */
   requiredFor(role: Role): boolean {
     return this.policy.requiredRoles.includes(role);
   }
@@ -82,7 +63,6 @@ export class MfaService {
     return Boolean(f?.enabledAt);
   }
 
-  /** What the account-security screen shows. Never a secret, never a recovery code. */
   async status(user: AuthUser) {
     const [f] = await this.db
       .select({ enabledAt: mfaFactor.enabledAt })
@@ -102,17 +82,6 @@ export class MfaService {
     };
   }
 
-  /**
-   * Start enrolment: a fresh secret, as a provisioning URI, as text to type and
-   * as a QR code to scan.
-   *
-   * Nothing is enabled yet. The secret is stored, encrypted, so the
-   * confirmation can check a code against it, and a second setup replaces a
-   * pending one; but an ENABLED factor is never overwritten here, by the
-   * condition on the upsert itself rather than by a read beforehand that two
-   * requests could both pass. Changing an enrolled authenticator means turning
-   * it off (or an administrator's reset) first.
-   */
   async beginSetup(userId: string) {
     const [u] = await this.db
       .select({ username: userAccount.username })
@@ -134,37 +103,15 @@ export class MfaService {
       .returning({ userId: mfaFactor.userId });
     if (written.length === 0) throw alreadyEnabled();
 
-    // The username, not the email: it is what the account is called everywhere
-    // in Bault, and the label sits on a phone screen anybody nearby can read.
     const uri = otpauthUri({ issuer: ISSUER, account: u.username, secret });
     const svg = await qrToString(uri, { type: 'svg', errorCorrectionLevel: 'M', margin: 2 });
     return {
       otpauthUri: uri,
       secret: base32Encode(secret),
-      // A data URL rather than markup, so the app shows it with an <img> and
-      // never has to put server-made SVG into the page as HTML.
       qrCode: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
     };
   }
 
-  /**
-   * Finish enrolment with a code from the app (the only proof that the secret
-   * reached it) and hand out the recovery codes, once.
-   *
-   * The step that code belongs to is recorded as used, so the code on the screen
-   * at enrolment cannot then be typed again at sign-in by whoever watched it.
-   *
-   * The password is checked first, because a session is not proof of who holds
-   * it: whoever had lifted a cookie could otherwise enrol their own phone, and
-   * from then on the owner's password alone would no longer get the owner in. A
-   * wrong password is a failure for the lockout, like on every other route that
-   * checks it. Same refusal for a wrong password and a wrong code, so this
-   * route does not tell a session thief which of the two they got right.
-   *
-   * Every OTHER session of the account ends in the same transaction. Turning on
-   * a second factor is what somebody does when they suspect the password is
-   * known, and a session opened with it before must not outlive that decision.
-   */
   async confirmSetup(
     user: AuthUser,
     password: string,
@@ -215,11 +162,6 @@ export class MfaService {
     });
   }
 
-  /**
-   * A new set of recovery codes, for a current code. The old set stops working
-   * in the same transaction that makes the new one, so there is no moment with
-   * both, and none with neither.
-   */
   async regenerateRecoveryCodes(user: AuthUser, code: string, origin: ClientOrigin) {
     await this.refuseWhileLocked(user.id);
     const recoveryCodes = await this.db.transaction(async (tx) => {
@@ -239,18 +181,6 @@ export class MfaService {
     return { recoveryCodes };
   }
 
-  /**
-   * Turn two-factor sign-in off: the password AND a current code, and never for
-   * a role that requires it.
-   *
-   * Both, because a session left open on a shared machine should not be enough
-   * to strip the account's second factor and leave the password as the only
-   * thing between a stranger and it. One answer for either being wrong, so a
-   * stolen session cannot use this route to find out whether it has guessed the
-   * password. The password is checked first, outside the transaction (argon2 is
-   * slow and a connection should not wait on it), and a wrong one spends
-   * nothing.
-   */
   async disable(user: AuthUser, password: string, code: string, origin: ClientOrigin): Promise<void> {
     if (this.requiredFor(user.role)) {
       throw new AppError(
@@ -266,7 +196,6 @@ export class MfaService {
       .where(eq(userAccount.id, user.id))
       .limit(1);
     if (!u) throw AppError.notFound('Account not found');
-    // Refused before anything is spent if there is nothing to turn off.
     await this.enabledFactor(this.db, user.id);
 
     const passwordRight = await argon2.verify(u.passwordHash, password);
@@ -288,17 +217,6 @@ export class MfaService {
     }
   }
 
-  /**
-   * An administrator removes ANOTHER account's second factor: the way back for
-   * somebody who lost their phone and their recovery codes.
-   *
-   * Never one's own: an administrator who could reset their own would make the
-   * second factor a formality for exactly the accounts that matter most, and
-   * the request would be reviewed by nobody. Every session the account holds
-   * ends in the same transaction: whoever is signed in as them now (possibly
-   * the person whose phone was taken) must sign in again, with the password
-   * alone, and enrol afresh. Audited in that transaction too.
-   */
   async resetFor(actorId: string, targetId: string): Promise<{ sessionsEnded: number }> {
     if (actorId === targetId) {
       throw AppError.validation(
@@ -336,19 +254,6 @@ export class MfaService {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // The second sign-in step
-  // ---------------------------------------------------------------------------
-
-  /**
-   * What a right password earns an enrolled account instead of a session.
-   *
-   * Stored as a hash, like every other token here; the raw value exists only in
-   * the response. Expiry is the database's clock, which is the clock that checks
-   * it. The account's spent and expired challenges are cleared as a new one is
-   * made, so the table holds a handful of rows per account rather than one per
-   * sign-in forever.
-   */
   async issueChallenge(userId: string, identifier: string): Promise<{ challengeToken: string; expiresAt: Date }> {
     await this.db
       .delete(mfaChallenge)
@@ -371,7 +276,6 @@ export class MfaService {
     return { challengeToken, expiresAt: row!.expiresAt };
   }
 
-  /** A challenge that can still be answered, or null. Read-only: deciding happens in `redeemChallenge`. */
   async findChallenge(rawToken: string): Promise<{ id: string; userId: string; identifier: string } | null> {
     const [c] = await this.db
       .select({ id: mfaChallenge.id, userId: mfaChallenge.userId, identifier: mfaChallenge.identifier })
@@ -388,13 +292,6 @@ export class MfaService {
     return c ?? null;
   }
 
-  /**
-   * Answer a challenge. One transaction: the challenge row is locked, the code
-   * or recovery code is spent by its conditional UPDATE, the challenge is
-   * consumed and the session opened. All of that, or (on a wrong code) only the
-   * challenge's failure count, which is committed rather than rolled back so
-   * the five-guess limit holds.
-   */
   async redeemChallenge(challengeId: string, proof: SecondFactorProof, origin: ClientOrigin): Promise<Redemption> {
     return this.db.transaction(async (tx) => {
       const [c] = await tx
@@ -408,8 +305,6 @@ export class MfaService {
         .where(eq(mfaChallenge.id, challengeId))
         .for('update')
         .limit(1);
-      // Re-checked under the lock: another request may have used or burned it
-      // since `findChallenge` read it.
       if (!c || c.consumedAt || !c.live || c.failedAttempts >= CHALLENGE_MAX_FAILURES) return { status: 'expired' };
 
       const consume = () =>
@@ -420,13 +315,10 @@ export class MfaService {
         .from(userAccount)
         .where(eq(userAccount.id, c.userId))
         .limit(1);
-      // Closed between the two steps: the door that was open a minute ago is not.
       if (!u || (u.status !== 'active' && u.status !== 'suspended')) {
         await consume();
         return { status: 'refused' };
       }
-      // Reset by an administrator between the two steps: the password alone
-      // signs in now, so this challenge has nothing left to ask.
       const [f] = await tx
         .select()
         .from(mfaFactor)
@@ -455,10 +347,17 @@ export class MfaService {
     });
   }
 
-  // ---------------------------------------------------------------------------
-
   private open(f: Factor): Buffer {
-    return openSecret(this.key, f.secretCiphertext, f.userId);
+    try {
+      return openSecret(this.key, f.secretCiphertext, f.userId);
+    } catch (e) {
+      if (!(e instanceof UnreadableSecretError)) throw e;
+      this.logger.error(
+        `Two-factor secret of account ${f.userId} does not open (${e.message}). ` +
+          'If MFA_ENCRYPTION_KEY was changed or lost, restore it; otherwise an administrator resets two-factor sign-in for the account.',
+      );
+      throw factorUnreadable(Boolean(f.enabledAt));
+    }
   }
 
   private async enabledFactor(exec: Exec, userId: string): Promise<Factor> {
@@ -471,12 +370,6 @@ export class MfaService {
     return f;
   }
 
-  /**
-   * Accept a TOTP code once. The step it belongs to must be LATER than the last
-   * one accepted, and that comparison is in the UPDATE that records it, so a
-   * replay fails, and of two submissions of one code at the same moment the
-   * second waits for the first's row lock, re-reads `last_used_step`, and fails.
-   */
   private async spendTotp(exec: Exec, f: Factor, rawCode: string): Promise<boolean> {
     const step = matchTotp(this.open(f), normalizeCode(rawCode), Date.now());
     if (step === null) return false;
@@ -494,7 +387,6 @@ export class MfaService {
     return spent.length === 1;
   }
 
-  /** Accept a recovery code once: `used_at` is set only where it was still empty. */
   private async spendRecoveryCode(exec: Exec, userId: string, raw: string): Promise<boolean> {
     const normal = normalizeRecoveryCode(raw);
     if (!normal) return false;
@@ -512,7 +404,6 @@ export class MfaService {
     return used.length === 1;
   }
 
-  /** The old set goes, a new one is stored as HMACs, and the plain codes are returned: the only time they exist. */
   private async replaceRecoveryCodes(exec: Exec, userId: string): Promise<string[]> {
     await exec.delete(mfaRecoveryCode).where(eq(mfaRecoveryCode.userId, userId));
     const codes = generateRecoveryCodes();
@@ -525,7 +416,6 @@ export class MfaService {
     return codes;
   }
 
-  /** Everything two-factor about an account, gone: the factor, its recovery codes, its open challenges. */
   private async removeFactor(exec: Exec, userId: string): Promise<void> {
     await exec.delete(mfaFactor).where(eq(mfaFactor.userId, userId));
     await exec.delete(mfaRecoveryCode).where(eq(mfaRecoveryCode.userId, userId));
@@ -540,7 +430,6 @@ export class MfaService {
     if (wait > 0) throw this.attempts.lockedError(wait);
   }
 
-  /** What a signed-in account's wrong codes are logged against: its username, as sign-in would type it. */
   private async identifierOf(userId: string): Promise<string> {
     const [u] = await this.db
       .select({ username: userAccount.username })
@@ -551,7 +440,6 @@ export class MfaService {
   }
 }
 
-/** Authenticator apps show "123 456"; people paste it like that. */
 function normalizeCode(code: string): string {
   return code.replace(/\s/g, '');
 }
@@ -563,16 +451,19 @@ function alreadyEnabled(): AppError {
   );
 }
 
-/** One refusal for a wrong password and a wrong code, so neither is confirmed on its own. */
+function factorUnreadable(enabled: boolean): AppError {
+  return AppError.conflict(
+    ErrorCode.MFA_FACTOR_UNREADABLE,
+    enabled
+      ? 'Your two-factor sign-in cannot be checked: its secret can no longer be read on our side, so no code will work. Ask an administrator to reset two-factor sign-in for your account, then sign in with your password and set it up again.'
+      : 'This two-factor setup can no longer be read on our side. Start the setup again; that replaces it.',
+  );
+}
+
 function passwordOrCodeWrong(): AppError {
   return new AppError(ErrorCode.MFA_CODE_INVALID, 'The password or the code is not right.', HttpStatus.BAD_REQUEST);
 }
 
-/**
- * A wrong code. 401 at the sign-in step, where it is an authentication failure;
- * 400 on the signed-in routes, where a 401 would read to the app as "your
- * session has ended".
- */
 export function codeInvalid(status: HttpStatus.UNAUTHORIZED | HttpStatus.BAD_REQUEST): AppError {
   return new AppError(ErrorCode.MFA_CODE_INVALID, 'That code is not right. Check the time on your phone and try the current one.', status);
 }

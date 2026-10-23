@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, intakeFor, signIn } from './helpers/http';
 
-/**
- * Value-added services with the operator ACCEPT → COMPLETE workflow, where
- * COMPLETE requires the structured warehouse fulfillment form (Requirement 5.4).
- * Requires a running API + seeded DB.
- */
 describe('DIS value-added services', () => {
   async function freshItem() {
     const operator = await signIn(SEED.operator);
@@ -21,16 +16,10 @@ describe('DIS value-added services', () => {
     notes: 'Front and back captured.',
   };
 
-  /**
-   * A grading request names a TIER and a declared value, because a grader
-   * prices on exactly those two things. `psa_regular` is used here rather than
-   * the top tier deliberately: the walkthrough tier requires an admin to sign
-   * off before the card may join a submission, which is its own test.
-   */
   const GRADING_REQUEST = (itemId: string) => ({
     itemId,
     tier: 'psa_regular',
-    declaredMinor: 50_000, // $500 — inside psa_regular's $1,499 ceiling
+    declaredMinor: 50_000,
   });
 
   const GRADING_FORM = {
@@ -46,7 +35,6 @@ describe('DIS value-added services', () => {
     const collector = await signIn(SEED.collector);
     const req = (await collector.post('/services/photography', { itemId: item.id })).body;
 
-    // Completing before acceptance is rejected.
     const early = await operator.post(`/services/photography/${req.id}/complete`, PHOTO_FORM);
     expect(early.status).toBe(409);
 
@@ -62,7 +50,6 @@ describe('DIS value-added services', () => {
     const req = (await collector.post('/services/photography', { itemId: item.id })).body;
     await operator.post(`/services/requests/${req.id}/accept`);
 
-    // Missing notes/lighting, and the item was never verified.
     const partial = await operator.post(`/services/photography/${req.id}/complete`, {
       objectKey: 'photos/pro-2.jpg',
       shotCount: 3,
@@ -70,7 +57,6 @@ describe('DIS value-added services', () => {
     });
     expect(partial.status).toBe(400);
 
-    // The request is still open until a COMPLETE form arrives.
     const still = (await operator.get(`/services/requests/${req.id}`)).body;
     expect(still.status).toBe('in_progress');
   });
@@ -86,6 +72,29 @@ describe('DIS value-added services', () => {
 
     const card = (await collector.get(`/vault/items/${item.id}`)).body;
     expect(card.item.conditionGrade).toBe('PSA 10');
+  });
+
+  it('refuses to record a grade against a request that is not for grading', async () => {
+    const { operator, item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    const photo = (await collector.post('/services/photography', { itemId: item.id })).body;
+    await operator.post(`/services/requests/${photo.id}/accept`);
+
+    const wrong = await operator.post(`/services/grading/${photo.id}/complete`, GRADING_FORM);
+    expect(wrong.status).toBe(400);
+    expect((await collector.get(`/vault/items/${item.id}`)).body.item.conditionGrade).not.toBe('PSA 10');
+    expect((await operator.get(`/services/requests/${photo.id}`)).body.status).toBe('in_progress');
+  });
+
+  it('refuses to attach photographs to a request that is not for photography', async () => {
+    const { operator, item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    const grading = (await collector.post('/services/grading', GRADING_REQUEST(item.id))).body;
+    await operator.post(`/services/requests/${grading.id}/accept`);
+
+    const wrong = await operator.post(`/services/photography/${grading.id}/complete`, PHOTO_FORM);
+    expect(wrong.status).toBe(400);
+    expect((await operator.get(`/services/requests/${grading.id}`)).body.status).toBe('in_progress');
   });
 
   it('operator can deny a pending request', async () => {
@@ -117,7 +126,6 @@ describe('DIS value-added services', () => {
     const vault = (await collector.get('/vault/items')).body as { id: string }[];
     expect(vault.some((i) => i.id === item.id)).toBe(false);
 
-    // Every transaction on the platform is recorded (Requirement 13.1).
     const admin = await signIn(SEED.admin);
     const txns = (await admin.get('/admin/transactions')).body as { type: string }[];
     expect(txns.some((t) => t.type === 'transfer')).toBe(true);

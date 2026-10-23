@@ -38,9 +38,7 @@ class ItemDto {
 }
 class GradingDto {
   @IsString() itemId!: string;
-  /** A tier from the catalogue — it fixes turnaround, ceiling and price. */
   @IsString() tier!: string;
-  /** What the card is worth, in minor units. The tier's ceiling applies to it. */
   @IsInt() @IsPositive() declaredMinor!: number;
 }
 
@@ -109,9 +107,7 @@ class ConfirmDto {
 class ConsignDto {
   @IsString() itemId!: string;
   @IsString() channel!: string;
-  /** What the owner wants for it. Channels enforce their own minimums. */
   @IsInt() @IsPositive() askingMinor!: number;
-  /** Required by channels that sell at a specific show. */
   @IsOptional() @IsString() eventId?: string;
 }
 
@@ -120,12 +116,6 @@ class BuyoutQuoteDto {
   @IsString() @IsNotEmpty() rationale!: string;
   @IsBoolean() @Equals(true) itemVerified!: boolean;
 }
-
-/*
- * Structured warehouse fulfillment forms (Requirement 5.4). Same pattern as the
- * shipment dispatch form: a customer request can only be closed once the operator
- * has filled EVERY required field, including an explicit item-verified confirmation.
- */
 
 class PhotographyFulfillmentDto {
   @IsString() @IsNotEmpty() @IsObjectKey() objectKey!: string;
@@ -159,14 +149,6 @@ class WarehouseTransferDto {
   @IsString() @IsNotEmpty() notes!: string;
 }
 
-/** DIS endpoints (`/services/*`). */
-
-/**
- * Asking for something the service list does not offer.
- *
- * `detail` has a real minimum because somebody has to PRICE this by reading it.
- * "please help" is not a thing anybody can quote.
- */
 class CustomRequestDto {
   @IsOptional() @IsString() itemId?: string;
   @IsString() @MinLength(3) @MaxLength(120) summary!: string;
@@ -175,7 +157,6 @@ class CustomRequestDto {
 
 class CustomQuoteDto {
   @IsInt() @IsPositive() priceMinor!: number;
-  /** What will actually be done — the thing the collector is agreeing to. */
   @IsString() @MinLength(10) @MaxLength(1000) scope!: string;
 }
 
@@ -203,13 +184,11 @@ export class DisController {
     private readonly lotSplits: LotSplitService,
   ) {}
 
-  /** A customer's own service requests (pending / accepted / done / denied). */
   @Get('mine')
   mine(@CurrentUser() user: AuthUser) {
     return this.requests.listMine(user.id);
   }
 
-  /** Operator queue: pending + accepted requests to act on. */
   @Roles('warehouse_operator', 'admin')
   @Get('queue')
   queue() {
@@ -221,7 +200,6 @@ export class DisController {
     return this.requests.get(id);
   }
 
-  // Operator approval workflow --------------------------------------------------
   @Roles('warehouse_operator', 'admin')
   @Post('requests/:id/accept')
   accept(@Param('id') id: string) {
@@ -233,7 +211,6 @@ export class DisController {
     return this.requests.deny(id);
   }
 
-  // Photography -----------------------------------------------------------------
   @Post('photography')
   requestPhoto(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
     return this.photography.request(user.id, dto.itemId);
@@ -244,15 +221,6 @@ export class DisController {
     return this.photography.complete(user.id, id, dto);
   }
 
-  // Grading ---------------------------------------------------------------------
-  /**
-   * The tier catalogue.
-   *
-   * Served before the form is drawn, because the three things that differ
-   * between tiers (the value ceiling, the turnaround, and whether a manager has
-   * to agree) are exactly what a collector needs to see BEFORE choosing one,
-   * not after being rejected for choosing wrong.
-   */
   @Get('grading/tiers')
   gradingTiers() {
     return this.grading.tiers();
@@ -263,7 +231,6 @@ export class DisController {
     return this.grading.request(user.id, dto.itemId, dto.tier, dto.declaredMinor);
   }
 
-  /** A card past the walkthrough threshold needs a manager before it leaves. */
   @Roles('admin')
   @Post('grading/:requestId/approval')
   approveGrading(
@@ -280,8 +247,6 @@ export class DisController {
     return this.grading.complete(user.id, id, dto);
   }
 
-  /* ---- Grading submissions: the batch that physically goes to the grader ---- */
-
   @Roles('warehouse_operator', 'admin')
   @Get('grading/submissions')
   listSubmissions() {
@@ -294,7 +259,6 @@ export class DisController {
     return this.grading.openSubmission(dto.gradingBody);
   }
 
-  /** Accepted, approved requests waiting for a batch to this grading body. */
   @Roles('warehouse_operator', 'admin')
   @Get('grading/submissions/ready')
   readyForSubmission(@Query('gradingBody') gradingBody: string) {
@@ -307,10 +271,6 @@ export class DisController {
     return this.grading.addToSubmission(dto.requestId, id);
   }
 
-  /**
-   * Ship the batch. Every card still waiting for a grade becomes `at_grader`,
-   * so it cannot be sold or shipped while it is away.
-   */
   @Roles('warehouse_operator', 'admin')
   @Post('grading/submissions/:id/ship')
   shipSubmission(
@@ -331,8 +291,6 @@ export class DisController {
     return this.grading.closeSubmission(id);
   }
 
-  // Video review and condition inspection ---------------------------------------
-  /** The closed list of areas an inspection may be asked to look at. */
   @Get('inspection/areas')
   inspectionAreas() {
     return { areas: INSPECTION_AREAS };
@@ -368,7 +326,6 @@ export class DisController {
     return this.media.completeInspection(user.id, id, dto);
   }
 
-  // Crack a slab (two-step confirmed — the holder does not go back on) ----------
   @Post('deslab')
   requestDeslab(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
     return this.disposals.requestDeslab(user.id, dto.itemId);
@@ -389,8 +346,6 @@ export class DisController {
     return this.disposals.completeDeslab(user.id, id, dto);
   }
 
-  // Remove commons (the bulk cull) ----------------------------------------------
-  /** The window, so the vault can grey out cards that are past it. */
   @Get('remove-commons/window')
   cullWindow() {
     return { windowDays: CULL_WINDOW_DAYS };
@@ -406,7 +361,6 @@ export class DisController {
     return this.disposals.confirmCull(user.id, dto.confirmationToken);
   }
 
-  // Lot split, asked for by the owner --------------------------------------------
   @Post('lot-split')
   requestLotSplit(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
     return this.lotSplits.request(user.id, dto.itemId);
@@ -422,7 +376,6 @@ export class DisController {
     return this.lotSplits.complete(user.id, id, dto);
   }
 
-  // Donation (two-step confirmation; no operator step) --------------------------
   @Post('donation')
   requestDonation(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
     return this.donation.request(user.id, dto.itemId);
@@ -432,42 +385,21 @@ export class DisController {
     return this.donation.confirm(user.id, dto.confirmationToken);
   }
 
-  // Consignment -----------------------------------------------------------------
-  /**
-   * The consignment channel catalogue, and the shows that are still open.
-   *
-   * Served together because a seller picks one after the other, and the card
-   * show channel is unusable without the list of shows.
-   */
   @Get('consignment/channels')
   async channels() {
     return { channels: CONSIGNMENT_CHANNELS, events: await this.consignment.listEvents() };
   }
-
-  /* ---- Buyout: Bault buys the card outright ---- */
 
   @Post('buyout')
   requestBuyout(@CurrentUser() user: AuthUser, @Body() dto: ItemDto) {
     return this.buyouts.request(user.id, dto.itemId);
   }
 
-  /* ----------------------------------------------------------------
-     Custom requests — asking for something the service list lacks
-     ---------------------------------------------------------------- */
-
-  /**
-   * A collector describes what they want. Costs nothing.
-   *
-   * Deliberately free: a charge on the QUESTION would stop people asking, and
-   * the questions are how Bault finds out which services it should be selling
-   * as standard. The money moves only when a quote is accepted.
-   */
   @Post('custom')
   askForSomething(@CurrentUser() user: AuthUser, @Body() dto: CustomRequestDto) {
     return this.custom.ask(user.id, dto);
   }
 
-  /** An operator prices it, and states what they will actually do. */
   @Roles('warehouse_operator', 'admin')
   @Post('custom/:requestId/quote')
   quoteCustom(
@@ -478,7 +410,6 @@ export class DisController {
     return this.custom.quote(user.id, requestId, dto);
   }
 
-  /** Or says it cannot be done, and why — a refusal with no reason is a dead end. */
   @Roles('warehouse_operator', 'admin')
   @Post('custom/:requestId/decline')
   declineCustom(
@@ -489,19 +420,16 @@ export class DisController {
     return this.custom.declineToQuote(user.id, requestId, dto.reason);
   }
 
-  /** The collector agrees to the quote. THIS is what charges the wallet. */
   @Post('custom/:requestId/accept-quote')
   acceptCustomQuote(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
     return this.custom.acceptQuote(user.id, requestId);
   }
 
-  /** Or turns it down. Nothing was charged, so nothing unwinds. */
   @Post('custom/:requestId/decline-quote')
   declineCustomQuote(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
     return this.custom.declineQuote(user.id, requestId);
   }
 
-  /** The work is done. Refused unless the collector accepted the quote first. */
   @Roles('warehouse_operator', 'admin')
   @Post('custom/:requestId/complete')
   completeCustom(
@@ -512,7 +440,6 @@ export class DisController {
     return this.custom.complete(user.id, requestId, dto.notes);
   }
 
-  /** An operator puts a figure on an accepted buyout request. */
   @Roles('warehouse_operator', 'admin')
   @Post('buyout/:requestId/quote')
   quoteBuyout(
@@ -523,7 +450,6 @@ export class DisController {
     return this.buyouts.quote(user.id, requestId, dto);
   }
 
-  /** The owner takes the offer — this is what moves the card and the money. */
   @Post('buyout/:requestId/accept')
   acceptBuyout(@CurrentUser() user: AuthUser, @Param('requestId') requestId: string) {
     return this.buyouts.accept(user.id, requestId);
@@ -544,7 +470,6 @@ export class DisController {
     return this.consignment.complete(user.id, id, dto);
   }
 
-  // Warehouse transfer ----------------------------------------------------------
   @Roles('warehouse_operator', 'admin')
   @Post('warehouse-transfer')
   warehouseTransfer(@CurrentUser() user: AuthUser, @Body() dto: WarehouseTransferDto) {

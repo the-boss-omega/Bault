@@ -3,22 +3,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 import { closeDb, sql } from './helpers/db';
 
-/**
- * Parked outbox messages, and putting one back in the queue.
- *
- * A message whose dispatch fails five times is left undispatched, with its
- * error, for a person to look at. These pin the administrator's view of them,
- * which must not hand out what a payload carries, and the requeue, which must
- * happen once however many times it is asked for.
- *
- * The rows are planted with SQL: making the real dispatcher fail five times on
- * purpose is the worker suite's business, and what matters here is what the
- * API does with a row that is in that state.
- */
-
 const planted: string[] = [];
 afterAll(async () => {
-  // Nothing left behind for a worker to deliver or retry.
   if (planted.length > 0) {
     await sql(`UPDATE outbox_message SET dispatched_at = now() WHERE id = ANY($1::uuid[])`, [planted]);
   }
@@ -74,11 +60,9 @@ describe('the list of parked messages', () => {
     expect(row).toHaveProperty('createdAt');
     expect(row).toHaveProperty('lastAttemptAt');
     expect(row).not.toHaveProperty('payload');
-    // Not the token, not the reset link, not the address — anywhere in the answer.
     const text = JSON.stringify(res.body);
     expect(text).not.toContain(token);
     expect(text).not.toContain(email);
-    // A message still being retried is not parked.
     expect((res.body as { id: string }[]).some((r) => r.id === notParked)).toBe(false);
   });
 
@@ -108,7 +92,6 @@ describe('requeueing a parked message', () => {
 
     const [adminRow] = await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [SEED.admin]);
     expect(await requeueAudits(id)).toEqual([{ actor_id: adminRow!.id }]);
-    // And it is no longer listed as parked.
     const list = await admin.get('/admin/outbox/parked');
     expect((list.body as { id: string }[]).some((r) => r.id === id)).toBe(false);
   });

@@ -12,42 +12,17 @@ import {
   type WithdrawalFacts,
 } from './reconciliation';
 
-/**
- * What an accountant needs from the ledger, and deliberately nothing more.
- *
- * `ledger_record` is a single-entry WALLET ledger: a fee comes off a customer
- * and is credited to no account of Bault's, so Bault's revenue is a sum of
- * rows, computed here. Alongside it: the ledger export, a monthly summary, and
- * a comparison with the money that actually moved through the provider.
- *
- * Read-only, admin-only, computed from the rows that exist. It does NOT apply
- * tax, issue invoices or decide which lines are taxable revenue: that depends
- * on the legal entity and where it trades, which is for an accountant.
- */
-
-/** One calendar day, UTC: `2026-10-15`. */
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
-/** One calendar month: `2026-10`. */
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
-/**
- * The widest range one export may cover.
- *
- * The export streams, so memory is not the limit, but one request holding a
- * read open across years of ledger competes with every customer's for the
- * database. A year at a time is what an accountant asks for anyway.
- */
 export const MAX_EXPORT_DAYS = 366;
 
-/** Rows fetched per round trip while streaming. */
 const EXPORT_BATCH = 2_000;
 
 const DAY_MS = 86_400_000;
 
-/** The platform's own custodian account: its balance is Bault's, not a customer's. */
 const PLATFORM_EMAIL = 'platform@bault.dev';
 
-/** Revenue lines, in the order they are reported. Every key is always present. */
 export const REVENUE_LINES = [
   'service_charge',
   'marketplace_fee',
@@ -64,17 +39,10 @@ function parseDay(value: string | undefined, name: string): Date {
   const m = DAY.exec(value ?? '');
   if (!m) throw AppError.validation(`${name} must be a date written YYYY-MM-DD`);
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  // Date.UTC rolls 2026-02-31 over into March; a date that does not survive the
-  // round trip was not a date.
   if (d.toISOString().slice(0, 10) !== value) throw AppError.validation(`${name} is not a real date`);
   return d;
 }
 
-/**
- * `from` and `to` are whole UTC days and BOTH are included: `from=2026-10-01
- * &to=2026-10-31` is October, as a person would write it. Internally the range
- * is half-open, ending at midnight after `to`.
- */
 export function parseDayRange(from: string | undefined, to: string | undefined) {
   const start = parseDay(from, 'from');
   const endDay = parseDay(to, 'to');
@@ -94,13 +62,6 @@ export function parseMonth(month: string | undefined) {
   return { month: month!, start, end };
 }
 
-/**
- * One CSV field, RFC 4180, with formula injection defused.
- *
- * A username may begin with `-`, and a spreadsheet opening this file treats a
- * cell starting `=`, `+`, `-` or `@` as a formula. A leading apostrophe makes it
- * text.
- */
 export function csvField(value: string | number | null): string {
   if (value === null) return '';
   let s = String(value);
@@ -108,7 +69,6 @@ export function csvField(value: string | number | null): string {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Minor units as a decimal amount: 1234 → "12.34". Integer arithmetic only. */
 export function decimalAmount(minor: number): string {
   const sign = minor < 0 ? '-' : '';
   const abs = Math.abs(minor);
@@ -149,15 +109,6 @@ export class AccountingService {
     private readonly audit: AuditService,
   ) {}
 
-  /**
-   * Every ledger row in the range, as CSV lines, a batch at a time.
-   *
-   * Keyset-paginated on (occurred_at, id) rather than OFFSET, so the thousandth
-   * batch costs what the first does, and a row written while the export runs
-   * cannot shift a page boundary and be emitted twice. The cursor carries the
-   * timestamp as Postgres TEXT: a JavaScript Date would drop the microseconds
-   * and re-read every row that shares the last millisecond.
-   */
   async *ledgerCsv(range: { start: Date; end: Date }): AsyncGenerator<string> {
     yield `${LEDGER_CSV_HEADER}\r\n`;
     let cursor: { at: string; id: string } | null = null;
@@ -203,12 +154,6 @@ export class AccountingService {
     }
   }
 
-  /**
-   * Who exported which part of the ledger.
-   *
-   * GETs are not audited by the interceptor, and this one hands every customer's
-   * money movements, by username, to whoever asked. That is worth a row.
-   */
   recordExport(actorId: string, range: { from: string; to: string }) {
     return this.audit.record({
       actorId,
@@ -218,22 +163,6 @@ export class AccountingService {
     });
   }
 
-  /**
-   * A month's totals, with Bault's revenue kept apart from customer money.
-   *
-   * Three things an accountant must never add together:
-   *
-   *   REVENUE: what Bault charged (fees, service charges, escrow and cash-out
-   *     fees, interest). Debits net of any credit of the same type.
-   *   CUSTOMER MONEY IN AND OUT: top-ups and cash-ins, cash-outs, and payments
-   *     the cardholder took back. Money passing through, not earned.
-   *   BALANCES HELD: what every customer wallet adds up to at the end of the
-   *     month: money Bault holds that belongs to somebody else, net of what
-   *     customers in debt owe it.
-   *
-   * Movements between customers (a purchase and the matching sale credit, an
-   * escrow hold and its release) appear in `byType` and in none of the three.
-   */
   async summary(month: { month: string; start: Date; end: Date }) {
     const from = month.start.toISOString();
     const to = month.end.toISOString();
@@ -247,14 +176,6 @@ export class AccountingService {
          ORDER BY type, direction`)
     ).rows.map((r) => ({ type: r.type, direction: r.direction, count: r.count, totalMinor: Number(r.total) }));
 
-    /**
-     * Revenue, split by what was charged for.
-     *
-     * The ledger type alone cannot tell an escrow fee from a cash-out fee
-     * (both are `fee`), but every fee written through a charge carries its
-     * reason in the charge's snapshot, and the marketplace and consignment
-     * commissions name the listing or the request they came from.
-     */
     const revenueRows = (
       await this.db.execute<{ key: string; total: string }>(sql`
         SELECT CASE
@@ -276,17 +197,28 @@ export class AccountingService {
            AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz
          GROUP BY 1`)
     ).rows;
+    const [returned] = (
+      await this.db.execute<{ total: string; fee: string }>(sql`
+        SELECT COALESCE(sum(l.amount), 0)::text AS total,
+               COALESCE(sum(LEAST(l.amount, COALESCE(f.amount, 0))), 0)::text AS fee
+          FROM ledger_record l
+          LEFT JOIN LATERAL (
+            SELECT sum(c.amount) AS amount
+              FROM charge c
+             WHERE c.reference_id = l.reference_id
+               AND c.pricing_rule_snapshot ->> 'cashOutFee' = 'true'
+          ) f ON TRUE
+         WHERE l.type = 'payout_reversal' AND l.direction = 'credit'
+           AND l.reference_type = 'wallet_request'
+           AND l.occurred_at >= ${from}::timestamptz AND l.occurred_at < ${to}::timestamptz`)
+    ).rows;
+    const returnedFeeMinor = Number(returned?.fee ?? 0);
+    const returnedPayoutMinor = Number(returned?.total ?? 0) - returnedFeeMinor;
+
     const revenueBy = new Map(revenueRows.map((r) => [r.key, Number(r.total)]));
+    revenueBy.set('cash_out_fee', (revenueBy.get('cash_out_fee') ?? 0) - returnedFeeMinor);
     const lines = REVENUE_LINES.map((key) => ({ key, totalMinor: revenueBy.get(key) ?? 0 }));
 
-    /**
-     * Postage inside the shipping charges.
-     *
-     * A shipping charge is one line to the customer and one `service_charge` on
-     * the ledger, but most of it is the carrier's rate, which Bault pays on.
-     * Reported beside the revenue, not subtracted from it, because whether it
-     * is revenue and a cost, or a pass-through, is the accountant's call.
-     */
     const [carrier] = (
       await this.db.execute<{ total: string }>(sql`
         SELECT COALESCE(sum((c.pricing_rule_snapshot ->> 'carrierCost')::bigint), 0)::text AS total
@@ -300,16 +232,9 @@ export class AccountingService {
     const sumOf = (type: string, direction: string) =>
       byType.filter((r) => r.type === type && r.direction === direction).reduce((a, r) => a + r.totalMinor, 0);
     const inMinor = sumOf('credit_topup', 'credit');
-    const outMinor = sumOf('withdrawal', 'debit');
+    const outMinor = sumOf('withdrawal', 'debit') - returnedPayoutMinor;
     const reversedMinor = sumOf('chargeback', 'debit');
 
-    /**
-     * Every wallet as it stood at the end of the month (or now, for the month
-     * still running), the platform's own account apart. The platform account
-     * is the custodian that buys cards outright and sells from the house store;
-     * its balance is Bault's money, and counting it as a customer's would
-     * overstate what Bault owes.
-     */
     const asOf = month.end.getTime() > Date.now() ? new Date() : month.end;
     const [platform] = (
       await this.db.execute<{ id: string }>(sql`SELECT id::text AS id FROM user_account WHERE email = ${PLATFORM_EMAIL} LIMIT 1`)
@@ -346,11 +271,13 @@ export class AccountingService {
       revenue: {
         totalMinor: lines.reduce((a, l) => a + l.totalMinor, 0),
         lines,
+        cashOutFeesReturnedMinor: returnedFeeMinor,
         carrierCostOnShippingChargesMinor: Number(carrier?.total ?? 0),
       },
       customerMoney: {
         inMinor,
         outMinor,
+        payoutsReturnedMinor: returnedPayoutMinor,
         reversedMinor,
         netMinor: inMinor - outMinor - reversedMinor,
       },
@@ -363,12 +290,12 @@ export class AccountingService {
         platformAccountMinor: Number(held?.platform ?? 0),
       },
       note:
-        'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows. ' +
+        'Single-entry wallet ledger: revenue is the net of fee, service_charge and interest rows, ' +
+        'less the cash-out fees given back when a payout was refused or returned. ' +
         'No tax has been applied or separated; which lines are taxable is for the accountant.',
     };
   }
 
-  /** External payments against the ledger rows that cite them. See `reconciliation.ts`. */
   async reconciliation(range: { start: Date; end: Date } | null) {
     const epWindow = range
       ? sql`AND ep.created_at >= ${range.start.toISOString()}::timestamptz AND ep.created_at < ${range.end.toISOString()}::timestamptz`
@@ -436,21 +363,14 @@ export class AccountingService {
       }),
     );
 
-    /**
-     * Every debit that sent money out of a wallet, with the payout it belongs to.
-     *
-     * Two shapes. A cash-out completed through the payout flow links its
-     * request to its payment (`wallet_request.payout_payment_id`), and its
-     * withdrawal row is the NET, the fee being a row of its own. An older one
-     * recorded the reference and the fee in its `completed` event, and its
-     * withdrawal row is the gross. A debit with neither has no payout to point at.
-     */
     const withdrawals = (
       await this.db.execute<Record<string, unknown>>(sql`
         SELECT l.id::text AS ledger_id, l.user_id, u.username, l.amount::text AS amount, l.occurred_at,
                CASE WHEN l.reference_type = 'wallet_request' THEN l.reference_id END AS wallet_request_id,
                COALESCE(pp.provider_ref, ev.metadata ->> 'payoutRef') AS payout_ref,
-               CASE WHEN pp.id IS NOT NULL THEN '0' ELSE COALESCE(ev.metadata ->> 'feeMinor', '0') END AS fee_minor
+               CASE WHEN pp.id IS NOT NULL THEN '0' ELSE COALESCE(ev.metadata ->> 'feeMinor', '0') END AS fee_minor,
+               (l.amount + CASE WHEN pp.id IS NOT NULL THEN COALESCE(fee.amount, 0) ELSE 0 END)::text AS debited_minor,
+               COALESCE(rv.amount, 0)::text AS reversed_minor
           FROM ledger_record l
           LEFT JOIN user_account u ON u.id::text = l.user_id
           LEFT JOIN wallet_request wr
@@ -465,6 +385,19 @@ export class AccountingService {
              ORDER BY e.occurred_at DESC
              LIMIT 1
           ) ev ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT sum(c.amount) AS amount
+              FROM charge c
+             WHERE c.reference_id = wr.id::text
+               AND c.pricing_rule_snapshot ->> 'cashOutFee' = 'true'
+          ) fee ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT sum(r.amount) AS amount
+              FROM ledger_record r
+             WHERE l.reference_type = 'wallet_request'
+               AND r.type = 'payout_reversal' AND r.direction = 'credit'
+               AND r.reference_type = 'wallet_request' AND r.reference_id = l.reference_id
+          ) rv ON TRUE
          WHERE l.type = 'withdrawal' AND l.direction = 'debit' ${ledgerWindow}`)
     ).rows.map(
       (r): WithdrawalFacts => ({
@@ -476,6 +409,8 @@ export class AccountingService {
         walletRequestId: (r.wallet_request_id as string | null) ?? null,
         payoutRef: (r.payout_ref as string | null) ?? null,
         feeMinor: Number(r.fee_minor),
+        debitedMinor: Number(r.debited_minor),
+        reversedMinor: Number(r.reversed_minor),
       }),
     );
 
@@ -513,11 +448,6 @@ export class AccountingService {
       from: range?.start.toISOString() ?? null,
       to: range?.end.toISOString() ?? null,
       ...report,
-      /**
-       * Credited by a person against a bank statement, through a reviewed
-       * wallet request. No provider reports them, so nothing here can check
-       * them; they are counted so their absence is not mistaken for a pass.
-       */
       manualCashIns: {
         count: manual?.count ?? 0,
         totalMinor: Number(manual?.total ?? 0),

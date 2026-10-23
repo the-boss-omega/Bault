@@ -11,17 +11,8 @@ import {
   normalizeUsername,
 } from '../../apps/web/src/shared/names';
 
-/**
- * The person-name and username rules, as the SPA enforces them.
- *
- * These cases are deliberately the same ones the API's `shared/names.ts` is held
- * to. The two modules are copies matched BY VALUE — neither imports the other —
- * so this file is what turns a silent drift between them into a failing test.
- */
-
 describe('username: unique, permanent, normalized', () => {
   it('normalizes to a single canonical form', () => {
-    // "Red", " red " and "RED" must be one account, not three.
     expect(normalizeUsername('Red')).toBe('red');
     expect(normalizeUsername('  red  ')).toBe('red');
     expect(normalizeUsername('RED')).toBe('red');
@@ -66,15 +57,12 @@ describe('name parts: first and last, validated', () => {
   });
 
   it('rejects control characters that could smuggle a line break into a label', () => {
-    // Built from code points rather than written literally, so this source file
-    // contains no control characters of its own.
     const control = (code: number) => 'Red' + String.fromCodePoint(code) + 'Ashwood';
-    expect(isValidNamePart(control(0x0a))).toBe(false); // line feed
-    expect(isValidNamePart(control(0x0d))).toBe(false); // carriage return
-    expect(isValidNamePart(control(0x00))).toBe(false); // NUL
-    expect(isValidNamePart(control(0x1b))).toBe(false); // ESC (terminal escapes)
-    expect(isValidNamePart(control(0x1f))).toBe(false); // last control code point
-    // U+0020 is the first NON-control code point and is perfectly ordinary.
+    expect(isValidNamePart(control(0x0a))).toBe(false);
+    expect(isValidNamePart(control(0x0d))).toBe(false);
+    expect(isValidNamePart(control(0x00))).toBe(false);
+    expect(isValidNamePart(control(0x1b))).toBe(false);
+    expect(isValidNamePart(control(0x1f))).toBe(false);
     expect(isValidNamePart(control(0x20))).toBe(true);
   });
 });
@@ -85,8 +73,6 @@ describe('full name is derived, never stored', () => {
   });
 
   it('degrades gracefully when a part is missing', () => {
-    // A migrated account may legitimately have no last name yet (see the 0004
-    // migration rule); it must render as the first name, not "Red undefined".
     expect(fullName('Ana Maria van der Berg', null)).toBe('Ana Maria van der Berg');
     expect(fullName(null, 'Ashwood')).toBe('Ashwood');
     expect(fullName(null, null)).toBe('');

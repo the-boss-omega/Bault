@@ -26,13 +26,6 @@ import {
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { IconAsk, IconPlus } from '../../../shared/ui/icons';
 
-/**
- * Support: the one place a person can ask Bault a question.
- *
- * Two workflows depend on a human: cash in and cash out are reviewed by a
- * person, and an account suspended for debt cannot fix itself. This page is
- * reachable by a suspended account when nothing else is.
- */
 const TABS = ['tickets', 'new'] as const;
 type SupportTab = (typeof TABS)[number];
 
@@ -69,8 +62,6 @@ export function SupportPage({ suspended = false }: { suspended?: boolean }) {
     <>
       <ContextTabs label={t('support.title')} tabs={tabs} active={tab} onSelect={goTab} />
 
-      {/* A locked-out reader needs to know why they are here before anything
-          else on the page makes sense. */}
       {suspended && <SuccessNote tone="warning">{t('support.suspendedNotice')}</SuccessNote>}
       {status && <SuccessNote>{status}</SuccessNote>}
       {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
@@ -180,7 +171,7 @@ function TicketList({
                       {ticketStatusLabel(t, ticket.status)}
                     </StatusBadge>
                   </td>
-                  <td data-label={t('support.col.activity')} dir="ltr">
+                  <td data-label={t('support.col.activity')}>
                     {formatDateTime(ticket.lastMessageAt, locale)}
                   </td>
                   <td className="td-tight">
@@ -276,18 +267,6 @@ function NewTicketForm({
   );
 }
 
-/* ============================================================
-   The thread, shared by the customer page and the staff queue
-   ============================================================ */
-
-/**
- * One ticket, its whole conversation, and the reply box.
- *
- * Exported because the staff queue renders exactly the same thread. The only
- * difference is `staff`, which adds the resolve control and flips the status
- * wording: "waiting for you" and "waiting for them" are the same fact read from
- * opposite sides.
- */
 export function ThreadDrawer({
   ticketId,
   staff,
@@ -400,8 +379,6 @@ export function ThreadDrawer({
                     {formatDateTime(m.createdAt, locale)}
                   </span>
                 </div>
-                {/* pre-wrap: somebody typing a list or a tracking number on its
-                    own line meant those line breaks. */}
                 <p style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{m.body}</p>
               </li>
             ))}
@@ -419,5 +396,4 @@ export function ThreadDrawer({
   );
 }
 
-/** Re-exported so the staff queue can label rows the same way. */
 export type { TranslateFn };

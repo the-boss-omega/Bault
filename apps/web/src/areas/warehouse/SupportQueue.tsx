@@ -20,15 +20,6 @@ import {
 } from '../../shared/ui/primitives';
 import { IconAsk } from '../../shared/ui/icons';
 
-/**
- * The staff side of the helpdesk.
- *
- * Ordered longest-waiting first, which is the API's ordering: a queue sorted
- * newest-first keeps ignoring whoever has been ignored longest.
- *
- * The thread itself is deliberately the same component the customer sees, so
- * the two sides are always shown the same conversation.
- */
 export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | void }) {
   const { t, locale } = useI18n();
   const route = useRoute();
@@ -93,9 +84,6 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
                     </td>
                     <td>
                       <code dir="ltr">{row.customerUsername ?? '—'}</code>
-                      {/* A locked-out customer asking about being locked out is
-                          the ticket most likely to be urgent and least likely to
-                          be obvious from the subject line. */}
                       {row.customerStatus === 'suspended' && (
                         <span className="dt-sub">
                           <StatusBadge tone="error" plain>
@@ -110,7 +98,7 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
                         {ticketStatusLabel(t, row.status, true)}
                       </StatusBadge>
                     </td>
-                    <td dir="ltr">{formatDateTime(row.lastMessageAt, locale)}</td>
+                    <td>{formatDateTime(row.lastMessageAt, locale)}</td>
                     <td className="td-tight">
                       <div className="actions">
                         <Button size="sm" variant="gold" onClick={() => openRecord('ticket', row.id)}>

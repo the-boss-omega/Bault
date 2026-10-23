@@ -5,14 +5,6 @@ import { useI18n } from '../../../shared/i18n';
 import { channelLabel, type ConsignmentChannel, type ConsignmentEvent } from '../../../shared/market';
 import { Button, Field, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
-/**
- * Choose where a card is sold, and for how much: the channel, what each one
- * costs and how long it takes, and the asking price.
- *
- * Eligibility is mirrored from the API, so a seller is told "graded cards only"
- * before they submit and are charged a service fee. The API re-checks
- * everything regardless.
- */
 export function ConsignmentForm({
   item,
   onCancel,
@@ -50,10 +42,6 @@ export function ConsignmentForm({
   const channel = useMemo(() => channels.find((c) => c.key === channelKey), [channels, channelKey]);
   const cents = dollarsToCents(price);
 
-  /**
-   * The same three rules the API enforces, evaluated here for the message; the
-   * API makes the decision.
-   */
   const problems: string[] = [];
   if (channel) {
     const grade = (item.conditionGrade ?? '').trim();

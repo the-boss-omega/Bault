@@ -8,18 +8,8 @@ import { AuditService } from '../sec/audit.service';
 import { outboxMessage } from '../not/outbox/outbox.schema';
 import { PARKED_AFTER_ATTEMPTS } from './outbox-parking';
 
-/** The most parked messages the console lists at once. */
 const LIST_LIMIT = 500;
 
-/**
- * Parked outbox messages: the administrator's view of them, and the way to put
- * one back in the queue.
- *
- * The dispatcher parks a message after it has failed `PARKED_AFTER_ATTEMPTS`
- * times (a mail server that was down, a payload it could not read). This is the
- * supported way to see what is parked and why, and to requeue it once the cause
- * is fixed.
- */
 @Injectable()
 export class OutboxAdminService {
   constructor(
@@ -27,15 +17,6 @@ export class OutboxAdminService {
     private readonly audit: AuditService,
   ) {}
 
-  /**
-   * What failed and when, and NOT what the message carries.
-   *
-   * A payload is whatever its emitter put in it: the address a password reset
-   * was asked for, possibly a token or a sign-in link. So the payload never
-   * leaves the database through this route, only the NAMES of its fields.
-   * `aggregateId` is left out for the same reason (for a reset request it is the
-   * email address). The error text is scrubbed of anything shaped like a token.
-   */
   async listParked() {
     const rows = await this.db
       .select({
@@ -59,19 +40,6 @@ export class OutboxAdminService {
     }));
   }
 
-  /**
-   * Put one parked message back for the dispatcher, once.
-   *
-   * The attempt count goes back to zero, which is the only thing the dispatcher
-   * reads to decide a message is parked, so the next run picks it up and it gets
-   * the full number of tries again. Its last error stays on the row as history.
-   *
-   * The UPDATE is the check: it matches only a row that is undispatched AND has
-   * used up its attempts. With two requests at once, the second UPDATE waits for
-   * the first, re-reads the row, finds it no longer parked and matches nothing,
-   * so the message is requeued and audited exactly once. The audit row commits
-   * with the requeue, in the same transaction, or not at all.
-   */
   async requeue(actorId: string, id: string): Promise<{ id: string; status: 'requeued' }> {
     return this.db.transaction(async (tx) => {
       const [row] = await tx
@@ -116,20 +84,10 @@ export class OutboxAdminService {
   }
 }
 
-/** Undispatched, with every attempt used: what the dispatcher has given up on. */
 function parked() {
   return and(isNull(outboxMessage.dispatchedAt), gte(outboxMessage.attempts, PARKED_AFTER_ATTEMPTS));
 }
 
-/**
- * Error text with anything shaped like a credential taken out.
- *
- * An error is whatever the failing code said, and a failing send can quote the
- * link it was sending. Three shapes are removed: a `token=`, `code=`, `secret=`,
- * `password=` or `key=` parameter's value; a run of 32 or more hex digits (every
- * token Bault mints is hex); and a run of 40 or more base64 characters. A UUID
- * survives (its groups are short), because it is how a person finds the row.
- */
 export function redactSecrets(text: string): string {
   return text
     .replace(/\b(token|code|secret|password|key)=([^&\s#"']+)/gi, '$1=[redacted]')

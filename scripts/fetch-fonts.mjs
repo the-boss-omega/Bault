@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-/**
- * Download the product's typefaces into `assets/fonts/` and write the
- * `@font-face` block that points at them.
- *
- * The files themselves ARE checked in, because a build must never depend on a
- * font CDN being up. This script records where they came from and with which
- * unicode-ranges: running it regenerates both the binaries and
- * `apps/web/src/fonts.css` from one source of truth.
- *
- * Only the subsets Bault actually renders are kept: `latin` (the Latin UI and
- * every catalogue string), `latin-ext` (European collector names and set titles)
- * and `hebrew` (the default locale). Cyrillic, Greek and Vietnamese are dropped,
- * which is most of the weight.
- *
- *   node scripts/fetch-fonts.mjs
- */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,24 +8,13 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const fontDir = join(repoRoot, 'assets', 'fonts');
 const cssOut = join(repoRoot, 'apps', 'web', 'src', 'fonts.css');
 
-/** Chrome UA, so Google Fonts serves woff2 rather than the ttf fallback. */
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-/** Subsets we render. Everything else in the CSS is discarded. */
 const KEEP = new Set(['latin', 'latin-ext', 'hebrew']);
 
-/**
- * The four families, and the job each one has. `slug` becomes the filename
- * stem, so a file on disk names its own family and weight without a lookup.
- */
 const FAMILIES = [
   { slug: 'plex-sans', query: 'IBM+Plex+Sans:wght@400;500;600', family: 'IBM Plex Sans' },
-  /**
-   * Hebrew only. Plex Sans Hebrew also ships a Latin subset (the same Latin
-   * design), but IBM Plex Sans is declared first and covers those codepoints, so
-   * the browser would never fetch the duplicate.
-   */
   {
     slug: 'plex-sans-hebrew',
     query: 'IBM+Plex+Sans+Hebrew:wght@400;500;600',
@@ -49,22 +22,9 @@ const FAMILIES = [
     subsets: ['hebrew'],
   },
   { slug: 'plex-mono', query: 'IBM+Plex+Mono:wght@400;500', family: 'IBM Plex Mono' },
-  /**
-   * The display face, for BOTH scripts.
-   *
-   * Frank Ruhl Libre is a Hebrew family WITH a Latin companion drawn for it, so
-   * the two scripts share a skeleton, an axis of contrast and a vertical rhythm
-   * by construction, with no second Latin serif to pair. The specimen check is
-   * in docs/design/type-specimen.html.
-   */
   { slug: 'frank-ruhl', query: 'Frank+Ruhl+Libre:wght@500;700', family: 'Frank Ruhl Libre' },
 ];
 
-/**
- * Google's CSS is a flat run of `/* subset *\/ @font-face { … }` blocks. Parsed
- * with a regex rather than a CSS parser because the shape is fixed and a parser
- * dependency to fetch four families is not worth it.
- */
 function parseFaces(css) {
   const faces = [];
   const re = /\/\*\s*([a-z-]+)\s*\*\/\s*@font-face\s*\{([^}]+)\}/g;
@@ -93,8 +53,6 @@ async function main() {
     if (faces.length === 0) throw new Error(`${fam.family}: no kept subsets`);
 
     for (const face of faces) {
-      // A variable-weight file reports a range like "400 600"; it is one file
-      // per subset, so the stem drops the weight entirely.
       const variable = face.weight.includes(' ');
       const stem = variable
         ? `${fam.slug}-${face.subset}`

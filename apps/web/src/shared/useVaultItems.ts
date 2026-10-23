@@ -3,6 +3,7 @@ import { api } from './api';
 
 export interface VaultItem {
   id: string;
+  serialNumber: string;
   typeClass: string;
   description: string;
   conditionGrade: string | null;
@@ -10,11 +11,6 @@ export interface VaultItem {
   barcode: string;
 }
 
-/**
- * Loads the signed-in customer's vault items for an item picker, so forms send a
- * real item UUID rather than a typed barcode or name. `storedOnly` keeps only
- * items eligible for services, shipping and listing.
- */
 export function useVaultItems(storedOnly = false) {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [error, setError] = useState<string | null>(null);

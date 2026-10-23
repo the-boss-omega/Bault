@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, binIds, intakeFor, signIn, usernameOf } from './helpers/http';
 
-/**
- * Intake creates item + custody + charge; correction keeps history; relocate
- * logs custody AND a transfer-ledger row (Req 10.3/10.4).
- * Requires a running API + seeded DB.
- */
 describe('INV intake & custody', () => {
   it('intakes an item for the routed owner, then the owner sees it in their vault', async () => {
     const operator = await signIn(SEED.operator);
@@ -15,19 +10,15 @@ describe('INV intake & custody', () => {
     });
     expect(item.ownerId).toBeTruthy();
     expect(item.lifecycleState).toBe('stored');
-    // Every item is shelved on intake — a bin is mandatory (Requirement 10.3).
     expect(item.binId).toBeTruthy();
-    // Item labels carry the SN- prefix (Requirement 9.2), and the barcode is the serial.
     expect(item.serialNumber).toMatch(/^SN-/);
     expect(item.barcode).toBe(item.serialNumber);
     const itemId = item.id as string;
 
-    // Custody history has the intake event.
     const history = await operator.get(`/custody/items/${itemId}/history`);
     expect(history.status).toBe(200);
     expect(history.body.some((e: any) => e.eventType === 'intake')).toBe(true);
 
-    // Owner sees it in their vault, with the bin resolved to a readable label.
     const collector = await signIn(SEED.collector);
     const vault = await collector.get('/vault/items');
     const mine = (vault.body as any[]).find((i) => i.id === itemId);
@@ -35,12 +26,6 @@ describe('INV intake & custody', () => {
     expect(mine.binBarcode).toBeTruthy();
   });
 
-  /**
-   * Every item ends up on a shelf (Requirement 10.3). An intake may name a bin,
-   * or ask for one with `autoStow`; one that does neither has nowhere to put the
-   * goods and is refused. The directed-stow half of that is covered in
-   * `tests3/integration/inv-stow.test.ts`.
-   */
   it('rejects an intake that neither names a bin nor asks for one', async () => {
     const operator = await signIn(SEED.operator);
     const ownerUsername = await usernameOf(SEED.collector);
@@ -53,7 +38,6 @@ describe('INV intake & custody', () => {
     const created = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card', quantity: 3 });
     expect(Array.isArray(created)).toBe(true);
     expect(created).toHaveLength(3);
-    // Each copy is individually tracked with its own unique label.
     const barcodes = new Set((created as any[]).map((i) => i.barcode));
     expect(barcodes.size).toBe(3);
   });
@@ -74,9 +58,39 @@ describe('INV intake & custody', () => {
     const broken = await operator.post(`/intake/items/${lot.id}/break-lot`);
     expect(broken.status).toBe(201);
     expect(broken.body.producedCount).toBe(4);
-    // Once broken it is no longer offered for breaking again.
     const second = await operator.post(`/intake/items/${lot.id}/break-lot`);
     expect(second.status).toBe(400);
+  });
+
+  it('stops counting a split lot as shelf stock or as storage that accrues (F006)', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const collector = await signIn(SEED.collector);
+    const lot = await intakeFor(operator, SEED.collector, { typeClass: 'sealed_box', isLot: true, lotSize: 3 });
+    const binCount = async () =>
+      ((await operator.get('/custody/bins')).body as { id: string; itemCount: number }[]).find((b) => b.id === lot.binId)!
+        .itemCount;
+    const yieldCount = async () =>
+      ((await admin.get('/admin/shelf-yield')).body.shelves as { binId: string; itemCount: number }[]).find(
+        (s) => s.binId === lot.binId,
+      )?.itemCount ?? 0;
+    const shelfBefore = await binCount();
+    const yieldBefore = await yieldCount();
+
+    const broken = await operator.post(`/intake/items/${lot.id}/break-lot`);
+    expect(broken.status).toBe(201);
+
+    expect(await binCount()).toBe(shelfBefore - 1 + 3);
+    expect(await yieldCount()).toBe(yieldBefore - 1 + 3);
+
+    const storage = await collector.get(`/vault/items/${lot.id}/storage`);
+    expect(storage.status).toBe(200);
+    expect(storage.body.nextChargeAt).toBeNull();
+
+    const watch = (await collector.get('/vault/break-even')).body as {
+      items: { itemId: string; projectedYearMinor: number }[];
+    };
+    expect(watch.items.find((i) => i.itemId === lot.id)?.projectedYearMinor).toBe(0);
   });
 
   it('records a correction in change history and relocates with source + destination', async () => {
@@ -97,11 +111,9 @@ describe('INV intake & custody', () => {
     const history = await operator.get(`/custody/items/${itemId}/history`);
     const move = (history.body as any[]).find((e) => e.eventType === 'relocate');
     expect(move).toBeTruthy();
-    // Both the OLD and the NEW bin are recorded (Requirement 10.4).
     expect(move.prevBinId).toBe(item.binId);
     expect(move.newBinId).toBe(destination);
 
-    // …and the move also lands on the dedicated transfer ledger.
     const timeline = await operator.get(`/custody/items/${itemId}/timeline`);
     expect((timeline.body as any[]).some((e) => e.kind === 'bin_transfer')).toBe(true);
   });

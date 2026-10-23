@@ -10,28 +10,12 @@ import { assertTransition, type LifecycleState } from './lifecycle';
 
 type Tx = Database;
 
-/** What a caller of `transferOwnership` believes is true of the item. */
 export interface TransferExpectation {
-  /** Who owns it now. Anyone else and the transfer is refused. */
   ownerId: string;
-  /** The lifecycle states it may move from. Defaults to `stored` only. */
   fromStates?: readonly LifecycleState[];
-  /** Whether an item on hold may move. Defaults to false. */
   allowHold?: boolean;
 }
 
-/**
- * CST custody service (T043, Principles I–III): THE correctness kernel.
- *
- * Every mutation of an item's owner, bin, or lifecycle state goes through this
- * service, and each one writes a custody_event in the SAME transaction as the
- * change. The one exception is the admin item editor (`AdmService.updateItem`),
- * which writes the same custody events itself. Because custody_event is append-only
- * (DB triggers), the chain of custody can never be forged or gapped.
- *
- * All methods take a transaction handle `tx` so the caller composes them with
- * other work (charge, outbox event, ...) into one atomic commit.
- */
 @Injectable()
 export class CustodyService {
   constructor(
@@ -39,7 +23,6 @@ export class CustodyService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /** Load an item FOR UPDATE inside a transaction (serializes concurrent changes). */
   private async lockItem(tx: Tx, itemId: string) {
     const [row] = await tx
       .select()
@@ -51,25 +34,12 @@ export class CustodyService {
     return row;
   }
 
-  /**
-   * Lock several items at once, always in id order.
-   *
-   * Two operations that each lock the same cards in a different order (a swap
-   * of A for B and another of B for A) would otherwise deadlock. Taking every
-   * lock up front, in one global order, means one simply waits for the other.
-   */
   async lockItems(tx: Tx, itemIds: readonly string[]) {
     const rows = [];
     for (const id of [...new Set(itemIds)].sort()) rows.push(await this.lockItem(tx, id));
     return rows;
   }
 
-  /**
-   * Lock an item and check it is still what the caller decided on: this owner,
-   * one of these states, and not on hold. For the paths that change an item
-   * without transferring it (a discard, a split) but decided to on an earlier
-   * read, exactly like `transferOwnership`.
-   */
   async lockExpecting(tx: Tx, itemId: string, expect: TransferExpectation) {
     const current = await this.lockItem(tx, itemId);
     CustodyService.assertExpected(current, expect);
@@ -104,11 +74,6 @@ export class CustodyService {
     CustodyService.assertNotSplitLot(current);
   }
 
-  /**
-   * A lot that has been split is a record of where its cards came from, not a
-   * thing that still exists: every card in it is now its own item. Selling,
-   * shipping or giving away the parent would hand over the same cards twice.
-   */
   private static assertNotSplitLot(current: { id: string; isLot: boolean; lotBroken: boolean }) {
     if (current.isLot && current.lotBroken) {
       throw new AppError(
@@ -120,7 +85,6 @@ export class CustodyService {
     }
   }
 
-  /** Create a brand-new item and its first custody event (intake). */
   async createWithIntake(
     tx: Tx,
     input: {
@@ -132,23 +96,13 @@ export class CustodyService {
       conditionGrade?: string;
       binId?: string;
       sourceBatchId?: string;
-      /** The inbound parcel this item was unpacked from, when there was one. */
       sourceParcelId?: string;
-      /** Fixes the storage terms at receipt (see `item.oversized`). */
       oversized?: boolean;
-      /** What it weighed on the bench, if anybody put it on one. */
       weightGrams?: number;
       isLot?: boolean;
       lotSize?: number;
       actorId: string;
-      /** 'intake' for a normal arrival, 'batch_split' when produced by splitting a batch. */
       eventType?: 'intake' | 'batch_split';
-      /**
-       * `stored` (the default) for something documented on the bench and put on a
-       * shelf in the same gesture. `received` for something that is on the record
-       * and not yet on a shelf: a card sold from the Bault store, owned from the
-       * moment it is paid for and shelved when an operator gets to it.
-       */
       lifecycleState?: 'stored' | 'received';
     },
   ) {
@@ -165,12 +119,10 @@ export class CustodyService {
         sourceBatchId: input.sourceBatchId,
         sourceParcelId: input.sourceParcelId,
         oversized: input.oversized ?? false,
-        // Null rather than a guess: this column means "somebody measured it",
-        // and the class's typical weight stands in everywhere it is absent.
         weightGrams: input.weightGrams && input.weightGrams > 0 ? input.weightGrams : null,
         isLot: input.isLot ?? false,
         lotSize: input.lotSize ?? 1,
-        lifecycleState: input.lifecycleState ?? 'stored', // received → stored on documentation
+        lifecycleState: input.lifecycleState ?? 'stored',
         receivedAt: new Date(),
       })
       .returning();
@@ -185,7 +137,6 @@ export class CustodyService {
       actorId: input.actorId,
       reason: input.eventType ?? 'intake',
     });
-    // Record the first shelving in the dedicated transfer ledger (Requirement 10.4).
     if (input.binId) {
       await tx.insert(binTransfer).values({
         itemId: created.id,
@@ -198,7 +149,6 @@ export class CustodyService {
     return created;
   }
 
-  /** Move an item to a new bin; logs a relocate custody event AND a transfer-ledger row. */
   async relocate(tx: Tx, itemId: string, newBinId: string, actorId: string) {
     const current = await this.lockItem(tx, itemId);
     if (current.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
@@ -212,7 +162,6 @@ export class CustodyService {
       actorId,
       reason: 'scan relocate',
     });
-    // Dedicated transfer ledger records BOTH source and destination bin (Req 10.4).
     await tx.insert(binTransfer).values({
       itemId,
       fromBinId: current.binId,
@@ -222,16 +171,6 @@ export class CustodyService {
     });
   }
 
-  /**
-   * Transfer ownership (sale/swap/transfer/gift); logs an ownership_transfer event.
-   *
-   * The caller says who it believes owns the item, and in what state, and the
-   * transfer happens only if that is still true under the row lock. Callers
-   * decide on an earlier read (a swap proposal, a listing, a deal), and the card
-   * may have changed hands since. Every path that moves ownership, apart from the
-   * admin editor, comes through here, so the check lives here and no caller can
-   * forget it.
-   */
   async transferOwnership(
     tx: Tx,
     itemId: string,
@@ -252,11 +191,8 @@ export class CustodyService {
     });
   }
 
-  /** Change lifecycle state through a validated transition; logs a state_change event. */
   async changeState(tx: Tx, itemId: string, newState: LifecycleState, actorId: string, reason: string) {
     const current = await this.lockItem(tx, itemId);
-    // Back to the shelf is always allowed; anything else would move cards that
-    // now exist as separate items.
     if (newState !== 'stored' && current.lifecycleState !== newState) CustodyService.assertNotSplitLot(current);
     assertTransition(current.lifecycleState as LifecycleState, newState);
     await tx.update(item).set({ lifecycleState: newState, updatedAt: new Date() }).where(eq(item.id, itemId));
@@ -270,11 +206,6 @@ export class CustodyService {
     });
   }
 
-  /**
-   * Returns whether anything actually changed. Setting a hold to the value it
-   * already has writes no custody event and returns false, so the bench is told
-   * that nothing happened.
-   */
   async setHold(tx: Tx, itemId: string, hold: boolean, actorId: string): Promise<boolean> {
     const current = await this.lockItem(tx, itemId);
     if (current.holdFlag === hold) return false;
@@ -285,8 +216,6 @@ export class CustodyService {
       actorId,
       reason: hold ? 'hold placed' : 'hold released',
     });
-    // Placing a hold notifies the owner: emit the domain event in the SAME tx
-    // (transactional outbox, Principle XI); the worker turns it into a notification.
     if (hold) {
       await this.outbox.emit(tx, {
         aggregateType: 'item',
@@ -298,7 +227,6 @@ export class CustodyService {
     return true;
   }
 
-  /** Convenience wrapper: run a unit of work in a transaction. */
   run<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
     return this.db.transaction(work);
   }

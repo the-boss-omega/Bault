@@ -1,12 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
-/**
- * The SPA's vocabulary for inbound parcels.
- *
- * Statuses come straight from the API's `parcel_status` enum and are listed in
- * full, because a status the UI cannot name renders as a raw enum value.
- */
 export type ParcelStatus =
   | 'expected'
   | 'received'
@@ -20,8 +14,6 @@ export const PARCEL_TONE: Record<string, StatusTone> = {
   received: 'info',
   opened: 'warning',
   processed: 'success',
-  // Somebody's property with no owner attached: the one state that needs a
-  // person to act.
   unclaimed: 'error',
   disposed: 'violet',
 };
@@ -51,14 +43,12 @@ export function parcelConditionLabel(t: TranslateFn, condition: string): string 
   return key ? t(key) : condition.replace(/_/g, ' ');
 }
 
-/** The arrival check options an operator picks from when opening a parcel. */
 export const PARCEL_CONDITIONS: readonly { key: string; labelKey: MessageKey }[] = [
   { key: 'sound', labelKey: 'parcel.condition.sound' },
   { key: 'packaging_damaged', labelKey: 'parcel.condition.packaging_damaged' },
   { key: 'contents_damaged', labelKey: 'parcel.condition.contents_damaged' },
 ];
 
-/** One row of `GET /me/parcels`. */
 export interface ParcelSummary {
   id: string;
   code: string;
@@ -78,23 +68,14 @@ export interface ParcelSummary {
   facilityName: string | null;
 }
 
-/** One row of `GET /parcels`, the warehouse queue. */
 export interface ParcelQueueRow extends Omit<ParcelSummary, 'declaredContents'> {
   addressedTo: string | null;
   ownerUsername: string | null;
   declaredContents: string | null;
   facilityRole: string | null;
-  /**
-   * How many vault items have been booked out of this parcel so far.
-   *
-   * The bench's reconciliation figure: an opened box showing zero has had
-   * nothing taken out of it yet, and the API refuses to close it in that state
-   * without a stated reason.
-   */
   itemCount: number;
 }
 
-/** `GET /me/inbound-addresses`. */
 export interface InboundAddress {
   facilityId: string;
   code: string;
@@ -111,7 +92,6 @@ export interface InboundAddress {
   forwardingDays: number | null;
 }
 
-/** `GET /parcels/workflow/status`. */
 export interface ParcelWorkflow {
   awaitingOpen: number;
   awaitingProcessing: number;
@@ -120,13 +100,6 @@ export interface ParcelWorkflow {
   oldestWaitingHours: number | null;
 }
 
-/**
- * The address block, as a person would write it on a label.
- *
- * Returned as lines rather than one joined string so the UI can render it in a
- * `<pre>`-like block and offer a copy button that copies exactly what a seller
- * needs to paste into a checkout.
- */
 export function addressLines(address: InboundAddress): string[] {
   return [
     address.careOf,
@@ -136,16 +109,11 @@ export function addressLines(address: InboundAddress): string[] {
   ];
 }
 
-/** Basis points → a display percentage, e.g. 6625 → "6.625%". */
 export function taxRateLabel(bps: number): string {
   if (bps === 0) return '0%';
   return `${(bps / 100).toFixed(3).replace(/\.?0+$/, '')}%`;
 }
 
-/**
- * What a purchase of `amountMinor` would cost in destination sales tax at this
- * address. Guidance only: Bault is not the seller and remits nobody's tax.
- */
 export function estimatedTaxMinor(amountMinor: number, bps: number): number {
   return Math.round((amountMinor * bps) / 10_000);
 }

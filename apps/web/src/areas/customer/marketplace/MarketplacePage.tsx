@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
-import { ITEM_CLASSES, itemClassLabel } from '../../../shared/itemClasses';
+import { ITEM_CLASSES, itemClassLabel, itemName, itemPickText } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
-import { Amount, Serial } from '../../../shared/ui/Serial';
+import { Amount, Code, Serial } from '../../../shared/ui/Serial';
+import { storefrontHref } from '../../../shared/market';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
@@ -36,17 +37,13 @@ interface Listing {
   typeClass: string;
   conditionGrade: string | null;
   description: string;
+  sellerUsername: string | null;
   imageUrl?: string;
 }
 
 const TABS = ['browse', 'house', 'sell', 'listings', 'offers', 'trade', 'escrow', 'store'] as const;
 type MarketTab = (typeof TABS)[number];
 
-/**
- * Marketplace. Browse, buy or make an offer on active listings; list one of your
- * own stored items for sale, chosen from a vault dropdown. Prices are entered
- * and shown in dollars; the cents the API stores are produced at submit time.
- */
 export function MarketplacePage() {
   const { t } = useI18n();
   const route = useRoute();
@@ -55,13 +52,6 @@ export function MarketplacePage() {
   const [listings, setListings] = useState<Listing[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /**
-   * The browse filters live in the URL, so a filtered shelf can be linked,
-   * bookmarked and reloaded. `setParams` merges and drops empties, so an
-   * unfiltered browse is `#/marketplace/browse` and a filtered one is
-   * `#/marketplace/browse?type=trading_card&max=200`. It replaces instead of
-   * pushing, so typing does not add one history entry per keystroke.
-   */
   const q = route.params.q ?? '';
   const type = route.params.type ?? '';
   const condition = route.params.condition ?? '';
@@ -78,15 +68,7 @@ export function MarketplacePage() {
   const [buying, setBuying] = useState<Listing | null>(null);
   const [offering, setOffering] = useState<Listing | null>(null);
   const { items, reload: reloadItems } = useVaultItems(true);
-  /** The reader's own username, so the storefront tab can open on their shop. */
   const [myUsername, setMyUsername] = useState<string | undefined>(undefined);
-  /**
-   * The reader's own id.
-   *
-   * Escrow is the one screen that has to know which side of a row the reader is
-   * on (a deal names two people and the next step is different for each), and a
-   * username cannot answer that, because a deal stores ids.
-   */
   const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -102,11 +84,6 @@ export function MarketplacePage() {
     ? (route.tab as MarketTab)
     : 'browse';
 
-  /**
-   * Filtering happens on the server, not over the rows already fetched: the
-   * query is capped, so narrowing a page in the client would hide matches that
-   * fell off the end of an unfiltered page.
-   */
   const query = useMemo(() => {
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
@@ -131,8 +108,6 @@ export function MarketplacePage() {
     }
   }, []);
 
-  // Search as you type: debounce a refetch on every change so results update
-  // from a partial query.
   useEffect(() => {
     const handle = setTimeout(() => void loadListings(query), 250);
     return () => clearTimeout(handle);
@@ -140,8 +115,6 @@ export function MarketplacePage() {
 
   async function buy(listing: Listing) {
     try {
-      // A replay is not a second purchase, and must not be reported as one, or
-      // a double-clicked button would say "Purchased" twice.
       const result = await api.post<{ replayed?: boolean }>(
         `/marketplace/listings/${listing.id}/purchase`,
       );
@@ -167,17 +140,7 @@ export function MarketplacePage() {
 
       {tab === 'browse' && (
         <TabPanel tab="browse">
-          {/*
-            No section header over the shelf: the tab strip already says
-            "Browse". The search is the first filter, the count is the result,
-            and both live in the filter bar.
-          */}
           <Panel flush>
-            {/*
-              The filter bar. Ordered the way somebody narrows a shelf: what they
-              are looking for, what kind of thing, what condition it is in, what
-              they are willing to pay, and only then how to order what is left.
-            */}
             <div className="filter-bar" role="group" aria-label={t('market.filters')}>
               <div className="search field--grow">
                 <IconSearch />
@@ -240,8 +203,6 @@ export function MarketplacePage() {
                 </select>
               </Field>
 
-              {/* Offered only when there is something to clear, so the bar does
-                  not carry a permanently dead control. */}
               {filtered && (
                 <Button size="sm" variant="ghost" onClick={clearFilters}>
                   {t('market.filter.clear')}
@@ -271,8 +232,6 @@ export function MarketplacePage() {
               <EmptyState
                 title={t('market.empty.title')}
                 text={filtered ? t('market.empty.searchText') : t('market.empty.text')}
-                /* An empty shelf caused by a filter has a way out; an empty shelf
-                   because nothing is for sale does not. */
                 action={
                   filtered ? (
                     <Button size="sm" onClick={clearFilters}>
@@ -291,17 +250,14 @@ export function MarketplacePage() {
                 </li>
                 {listings.map((listing) => (
                   <li key={listing.id} className="card card--interactive card--listing">
-                    {/* The photograph is the pitch: a fixed 4:5 stage, the shape
-                        of a slab, so a shelf of listings lines up. */}
                     <div className="card-art">
                       <CardPhotoThumb
                         serialNumber={listing.serialNumber}
-                        title={listing.description || listing.typeClass}
+                        title={itemName(t, listing)}
                       />
                     </div>
 
                     <div className="card-id">
-                      {/* The price is the first text line. */}
                       <p className="price">
                         <Amount>{formatUsd(listing.askingPrice)}</Amount>
                       </p>
@@ -311,6 +267,7 @@ export function MarketplacePage() {
                       <p className="card-desc" title={listing.description || undefined}>
                         {listing.description || '—'}
                       </p>
+                      {listing.sellerUsername && <SellerLine t={t} username={listing.sellerUsername} />}
                     </div>
 
                     <div className="card-state">
@@ -319,9 +276,6 @@ export function MarketplacePage() {
                     </div>
 
                     <div className="actions">
-                      {/* Buying is irreversible and settles from the wallet;
-                          making an offer opens a negotiation. So they carry
-                          different weights. */}
                       <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
                         {t('market.buy')}
                       </Button>
@@ -371,7 +325,7 @@ export function MarketplacePage() {
           body={
             <p>
               {t('market.buy.confirmBody', {
-                item: buying.description || buying.typeClass,
+                item: itemName(t, buying),
                 amount: formatUsd(buying.askingPrice),
               })}
             </p>
@@ -423,7 +377,7 @@ export function MarketplacePage() {
 
       {tab === 'store' && (
         <TabPanel tab="store">
-          <StorefrontPanel myUsername={myUsername} onError={setError} />
+          <StorefrontPanel seller={route.params.seller} myUsername={myUsername} onError={setError} />
         </TabPanel>
       )}
 
@@ -442,9 +396,21 @@ export function MarketplacePage() {
   );
 }
 
-/* ============================================================
-   Sell one of your own stored items
-   ============================================================ */
+function SellerLink({ t, username }: { t: TranslateFn; username: string }) {
+  return (
+    <a href={storefrontHref(username)} aria-label={t('market.store.of', { username })}>
+      <Code value={`@${username}`} />
+    </a>
+  );
+}
+
+function SellerLine({ t, username }: { t: TranslateFn; username: string }) {
+  return (
+    <p className="card-sub">
+      {t('market.listing.soldBy')} <SellerLink t={t} username={username} />
+    </p>
+  );
+}
 
 function SellPanel({
   items,
@@ -452,7 +418,7 @@ function SellPanel({
   onListed,
   onError,
 }: {
-  items: readonly { id: string; typeClass: string; description: string }[];
+  items: readonly { id: string; serialNumber?: string; typeClass: string; description: string }[];
   t: TranslateFn;
   onListed: () => Promise<void>;
   onError: (message: string) => void;
@@ -492,7 +458,7 @@ function SellPanel({
               <option value="">{t('market.selectItemOption')}</option>
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.typeClass} — {item.description}
+                  {itemPickText(t, item)}
                 </option>
               ))}
             </select>
@@ -527,10 +493,6 @@ function SellPanel({
   );
 }
 
-/* ============================================================
-   Make an offer
-   ============================================================ */
-
 function OfferDrawer({
   listing,
   t,
@@ -564,7 +526,7 @@ function OfferDrawer({
   return (
     <DetailDrawer
       title={t('market.offer.title')}
-      subtitle={listing.description || listing.typeClass}
+      subtitle={itemName(t, listing)}
       onClose={onClose}
       dirty
       footer={
@@ -585,6 +547,14 @@ function OfferDrawer({
             {formatUsd(listing.askingPrice)}
           </dd>
         </div>
+        {listing.sellerUsername && (
+          <div className="detail-row">
+            <dt className="detail-label">{t('market.listing.soldBy')}</dt>
+            <dd className="detail-value">
+              <SellerLink t={t} username={listing.sellerUsername} />
+            </dd>
+          </div>
+        )}
       </dl>
 
       <div className="field" style={{ marginBlockStart: 'var(--sp-5)' }}>

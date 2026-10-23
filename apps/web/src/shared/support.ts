@@ -1,42 +1,20 @@
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
-/**
- * The SPA's vocabulary for the helpdesk.
- *
- * Ticket status answers one question, whose turn it is, so the labels are
- * phrased from the reader's side ("Waiting for you") instead of as internal
- * states.
- */
 export type TicketStatus = 'open' | 'awaiting_customer' | 'resolved';
 
-/**
- * The tone follows whose turn it is:
- *
- *   open               frost: somebody else holds it; there is nothing to do
- *   awaiting_customer  amber: it is waiting on the customer
- *   resolved           custody green: closed
- *
- * Frost is the tone a frozen item takes too: the next move belongs to somebody else.
- */
 export const TICKET_TONE: Record<string, StatusTone> = {
   open: 'info',
   awaiting_customer: 'warning',
   resolved: 'success',
 };
 
-/** Customer-facing labels. */
 const STATUS_KEY: Record<string, MessageKey> = {
   open: 'support.status.open',
   awaiting_customer: 'support.status.awaitingCustomer',
   resolved: 'support.status.resolved',
 };
 
-/**
- * Staff-facing labels for the same statuses. Kept separate because whose turn
- * it is reverses with the reader: "waiting for you" to a customer is "waiting
- * for them" to the person working the queue.
- */
 const STAFF_STATUS_KEY: Record<string, MessageKey> = {
   open: 'support.staffStatus.open',
   awaiting_customer: 'support.staffStatus.awaitingCustomer',
@@ -80,7 +58,6 @@ export interface SupportTicket {
 export interface SupportQueueRow extends SupportTicket {
   assignedTo: string | null;
   customerUsername: string | null;
-  /** So staff can see at a glance who is locked out and asking about it. */
   customerStatus: string | null;
 }
 

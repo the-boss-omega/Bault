@@ -6,30 +6,12 @@ import { Roles } from '../sec/roles.decorator';
 import type { AuthUser } from '../sec/auth-context';
 import { MediaService, type UploadPurpose } from './media.service';
 
-/**
- * No `@MaxLength` on the payload: the media service measures the base64 BEFORE
- * decoding it and refuses an oversized photo in megabytes, and the 16 MB body
- * cap in `main.ts` bounds the memory.
- */
 class UploadDto {
   @IsString() @MinLength(1) contentType!: string;
   @IsString() @MinLength(1) dataBase64!: string;
   @IsIn(['item_intake', 'parcel']) purpose!: UploadPurpose;
 }
 
-/**
- * Uploading an image.
- *
- * Splitting upload from attach keeps the booking routes small and lets a bench
- * upload three photographs while the operator is still typing the description.
- *
- * STAFF ONLY, so a collector cannot put ten megabytes of anything in the
- * private bucket, as often as they like, at Bault's expense. Every caller in
- * the SPA is on the warehouse console (receiving, the parcel queue, the intake
- * bench, shelving a store order); no customer screen uploads. When one needs
- * to, it gets its own purpose and its own rule, rather than this route opening
- * up again.
- */
 @ApiTags('MED')
 @Controller('media')
 export class MedController {

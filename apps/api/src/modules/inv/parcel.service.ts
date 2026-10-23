@@ -22,23 +22,6 @@ export type ParcelStatus =
   | 'unclaimed'
   | 'disposed';
 
-/**
- * The parcel lifecycle, as an explicit adjacency list.
- *
- * Written out rather than scattered through `if (status === …)` checks, for the
- * same reason `wallet-request.rules.ts` does it: the set of legal moves is a
- * product decision and belongs somewhere a person can read it in one go.
- *
- *   expected ──▶ received ──▶ opened ──▶ processed
- *                    │
- *                    ├──▶ unclaimed ──▶ disposed
- *                    └──▶ disposed          ▲
- *                                           │
- *                             (refused outright, e.g. prohibited)
- *
- * `unclaimed → received` is the claim path: an owner turns up, or an operator
- * works out whose it was, and the parcel rejoins the normal flow.
- */
 const TRANSITIONS: Record<ParcelStatus, readonly ParcelStatus[]> = {
   expected: ['received', 'disposed'],
   received: ['opened', 'unclaimed', 'disposed'],
@@ -68,47 +51,20 @@ export interface RegisterParcelInput {
 
 export interface ReceiveParcelInput {
   facilityCode: string;
-  /** The username written on the label. May resolve to nothing (see `receive`). */
   addressedTo?: string;
   carrier?: string;
   trackingNumber?: string;
   internationalOrigin?: boolean;
   notes?: string;
-  /**
-   * Object keys of photographs of the box as it turned up, already uploaded via
-   * `POST /media/uploads`. Keys, never bytes: the same convention the wallet
-   * request uses for its supporting document.
-   */
   photoKeys?: string[];
 }
 
 export interface OpenParcelInput {
   condition: 'sound' | 'packaging_damaged' | 'contents_damaged';
   conditionNotes: string;
-  /** Photographs of what the arrival check found. */
   photoKeys?: string[];
 }
 
-/**
- * Inbound parcels.
- *
- * A collector buys from a third-party seller, ships to a Bault address, and the
- * parcel travels through: registered (optionally) → received → opened → the
- * contents booked into their vault → processed.
- *
- * Two things about this service are worth stating up front.
- *
- * FIRST, an arrival with no resolvable owner is a first-class state, not an
- * error. Refusing to record a parcel because the label is wrong would mean the
- * platform's answer to "somebody's property is on our shelf and we don't know
- * whose" is to have no record of it at all. It is held as `unclaimed`, with
- * whatever was written on the label preserved verbatim.
- *
- * SECOND, the per-package fee is charged at exactly one point, `process`, and
- * only once. The fee is for the work of unpacking and cataloguing, so it is
- * charged when that work is done. (Forwarding is separate work with its own
- * fee; see `forward`.)
- */
 @Injectable()
 export class ParcelService {
   constructor(
@@ -117,10 +73,6 @@ export class ParcelService {
     private readonly outbox: OutboxService,
     private readonly media: MediaService,
   ) {}
-
-  /* ------------------------------------------------------------------
-     Writing the trail
-     ------------------------------------------------------------------ */
 
   private async writeEvent(
     tx: Database,
@@ -160,18 +112,6 @@ export class ParcelService {
     return row;
   }
 
-  /* ------------------------------------------------------------------
-     Customer side
-     ------------------------------------------------------------------ */
-
-  /**
-   * Tell Bault a parcel is on its way.
-   *
-   * Optional by design: a parcel that turns up unannounced is received exactly
-   * the same way. Registering one buys two things: the collector can watch it,
-   * and the operator receiving it has a tracking number to match against, which
-   * is what turns a mystery box into somebody's property before it is opened.
-   */
   async register(userId: string, input: RegisterParcelInput) {
     const fac = await this.facilityByCode(input.facilityCode);
 
@@ -184,9 +124,6 @@ export class ParcelService {
 
     const tracking = input.trackingNumber?.trim() || null;
     if (tracking) {
-      // The same tracking number twice is a person clicking twice, not two
-      // parcels. Scoped to still-open registrations so a genuinely reused
-      // carrier number years later is not blocked.
       const [existing] = await this.db
         .select({ id: parcel.id, code: parcel.code })
         .from(parcel)
@@ -228,14 +165,13 @@ export class ParcelService {
         parcelId: row.id,
         eventType: 'registered',
         toStatus: 'expected',
-        actorId: null, // the collector's own act, not an operator's
+        actorId: null,
         facilityId: fac.id,
       });
       return row;
     });
   }
 
-  /** A collector's own parcels, newest first. */
   listMine(userId: string) {
     return this.db
       .select({
@@ -262,7 +198,6 @@ export class ParcelService {
       .orderBy(desc(parcel.createdAt));
   }
 
-  /** One parcel the caller owns, with its trail and the items it produced. */
   async detailFor(userId: string, parcelId: string, staff: boolean) {
     const row = await this.load(parcelId);
     if (!staff && row.ownerId !== userId) throw AppError.notFound('Parcel not found');
@@ -286,12 +221,6 @@ export class ParcelService {
     return { parcel: row, events, items };
   }
 
-  /**
-   * Cancel a registration that was never going to arrive.
-   *
-   * Only an `expected` parcel, and only its owner. Once something physical is on
-   * a shelf, no customer action can make the record of it go away.
-   */
   async cancelRegistration(userId: string, parcelId: string) {
     return this.db.transaction(async (tx) => {
       const [row] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
@@ -315,31 +244,10 @@ export class ParcelService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     Warehouse side
-     ------------------------------------------------------------------ */
-
-  /**
-   * Book a physical arrival in.
-   *
-   * `addressedTo` is whatever the label says. It is normalised and looked up; if
-   * it resolves, the parcel belongs to that account, and if it does not, the
-   * parcel is `unclaimed` and the raw string is preserved so a human can work out
-   * later what was meant. Either way a record exists from the moment the box is
-   * on the shelf.
-   *
-   * A matching `expected` registration is adopted rather than duplicated: the
-   * collector already told us this was coming, and creating a second row would
-   * leave them watching a parcel that will never move.
-   */
   async receive(operatorId: string, input: ReceiveParcelInput) {
     return this.db.transaction((tx) => this.receiveIn(tx, operatorId, input));
   }
 
-  /**
-   * One arrival, inside a transaction the CALLER owns, so `receiveMany` can put
-   * the whole stack in one transaction.
-   */
   private async receiveIn(tx: Database, operatorId: string, input: ReceiveParcelInput) {
     const fac = await this.facilityByCode(input.facilityCode);
     const label = normalizeUsername(input.addressedTo ?? '');
@@ -355,13 +263,13 @@ export class ParcelService {
       ownerId = owner?.id ?? null;
     }
 
-    // Adopt a pre-registration when the tracking number matches one.
     let existing: typeof parcel.$inferSelect | undefined;
     if (tracking) {
       [existing] = await tx
         .select()
         .from(parcel)
         .where(and(eq(parcel.trackingNumber, tracking), eq(parcel.status, 'expected')))
+        .for('update')
         .limit(1);
     }
 
@@ -371,7 +279,7 @@ export class ParcelService {
     {
       if (existing) {
         assertTransition('expected', nextStatus);
-        await tx
+        const [adopted] = await tx
           .update(parcel)
           .set({
             status: nextStatus,
@@ -386,7 +294,9 @@ export class ParcelService {
             notes: input.notes?.trim() || existing.notes,
             updatedAt: now,
           })
-          .where(eq(parcel.id, existing.id));
+          .where(and(eq(parcel.id, existing.id), eq(parcel.status, 'expected')))
+          .returning({ id: parcel.id });
+        if (!adopted) throw new AppError(ErrorCode.CONFLICT, 'This parcel was booked in a moment ago.', 409);
         await this.writeEvent(tx, {
           parcelId: existing.id,
           eventType: 'received',
@@ -440,15 +350,6 @@ export class ParcelService {
     }
   }
 
-  /**
-   * Book several arrivals in one gesture: a courier drops a dozen, and the
-   * operator works down the stack.
-   *
-   * ALL OR NOTHING, on purpose. A partial success would leave the operator
-   * reading a list of results to work out which four of seven boxes are now on
-   * the system, which is worse than fixing one row and pressing the button
-   * again. The refusal names the row by its position on screen.
-   */
   async receiveMany(operatorId: string, inputs: readonly ReceiveParcelInput[]) {
     return this.db.transaction(async (tx) => {
       const created = [];
@@ -456,9 +357,6 @@ export class ParcelService {
         try {
           created.push(await this.receiveIn(tx, operatorId, input));
         } catch (e) {
-          // Rethrowing inside the transaction is what rolls the earlier rows
-          // back; the position is added so the operator can find the row on
-          // screen, since the rest of the message is about one box.
           const reason = e instanceof Error ? e.message : 'could not be recorded';
           throw AppError.validation(`Parcel ${index + 1} of ${inputs.length}: ${reason}`);
         }
@@ -467,16 +365,6 @@ export class ParcelService {
     });
   }
 
-  /**
-   * Record photographs against a parcel.
-   *
-   * Silently ignores an empty list so every caller can pass the field through
-   * without checking it.
-   *
-   * The keys are checked by `MediaService.assertAttachable` in this
-   * transaction, so a key nobody uploaded, or one uploaded for something other
-   * than a parcel, is refused before it is stored and later signed.
-   */
   private async attachPhotos(
     tx: Database,
     parcelId: string,
@@ -492,7 +380,6 @@ export class ParcelService {
     );
   }
 
-  /** Every photograph on a parcel, newest first, with a readable URL. */
   async photos(parcelId: string) {
     const rows = await this.db
       .select()
@@ -502,13 +389,6 @@ export class ParcelService {
     return this.media.signAll(rows);
   }
 
-  /**
-   * Move a parcel from a forwarding facility to the primary one.
-   *
-   * This is what the tax-free address costs: a second leg, several days, and a
-   * forwarding fee. Charged here rather than at processing because it is a
-   * separate piece of work that a parcel sent to the primary address never incurs.
-   */
   async forward(operatorId: string, parcelId: string) {
     return this.db.transaction(async (tx) => {
       const [row] = await tx.select().from(parcel).where(eq(parcel.id, parcelId)).for('update').limit(1);
@@ -533,9 +413,6 @@ export class ParcelService {
       if (!to) throw AppError.validation('Forwarding destination is not configured');
 
       const now = new Date();
-      // Only a parcel with a known owner can be billed; an unclaimed one is
-      // forwarded anyway, because leaving it at a site that stores nothing helps
-      // nobody, and the cost is written off rather than charged to a stranger.
       if (row.ownerId) {
         await this.billing.charge(tx, {
           userId: row.ownerId,
@@ -575,13 +452,6 @@ export class ParcelService {
     });
   }
 
-  /**
-   * Open it and record what the check found.
-   *
-   * The condition finding is written BEFORE any item exists, and is required:
-   * "sound" is a positive statement that somebody looked, not a default that
-   * means nobody did. It is the timestamped evidence a damage dispute rests on.
-   */
   async open(operatorId: string, parcelId: string, input: OpenParcelInput) {
     const notes = input.conditionNotes?.trim() ?? '';
     if (!notes) throw AppError.validation('Record what the arrival check found');
@@ -619,9 +489,6 @@ export class ParcelService {
         metadata: { condition: input.condition },
       });
 
-      // A damaged arrival is told to the owner immediately rather than waiting
-      // for the contents to be catalogued: they may want to open a claim with
-      // the seller or the carrier, and both have deadlines.
       if (input.condition !== 'sound') {
         await this.notifyOwner(tx, parcelId, row.ownerId, 'parcel_damaged', {
           parcelCode: row.code,
@@ -634,18 +501,6 @@ export class ParcelService {
     });
   }
 
-  /**
-   * Close the parcel out once its contents are in the vault.
-   *
-   * This is the ONLY point at which the per-package fee is charged, and the
-   * transition guard is what stops it being charged twice: `processed` has no
-   * outgoing edges, so a second call cannot reach this code.
-   *
-   * An opened parcel that produced no items is refused by default. It either
-   * really arrived empty or somebody pressed the button before booking the
-   * contents in, and the second is far more likely. `emptyReason` is the
-   * operator asserting the first, in words, onto the append-only trail.
-   */
   async process(operatorId: string, parcelId: string, emptyReason?: string) {
     const statedEmptyReason = emptyReason?.trim() ?? '';
 
@@ -692,8 +547,6 @@ export class ParcelService {
         toStatus: 'processed',
         actorId: operatorId,
         facilityId: row.facilityId,
-        // The reason a box was closed empty belongs on the trail beside the
-        // charge it justified, not only in whatever the operator remembers.
         notes: contents.length === 0 ? statedEmptyReason : null,
         metadata: { itemCount: contents.length, closedEmpty: contents.length === 0 },
       });
@@ -706,11 +559,6 @@ export class ParcelService {
     });
   }
 
-  /**
-   * Attach an unclaimed parcel to the account it turned out to belong to.
-   *
-   * The holding clock is cleared, because it is no longer unattributable.
-   */
   async claim(operatorId: string, parcelId: string, ownerUsername: string) {
     const username = normalizeUsername(ownerUsername ?? '');
     if (!username) throw AppError.validation('An owner username is required');
@@ -756,7 +604,6 @@ export class ParcelService {
     });
   }
 
-  /** Dispose of a parcel: refused outright, or held past the retention window. */
   async dispose(operatorId: string, parcelId: string, reason: string) {
     const notes = reason?.trim() ?? '';
     if (!notes) throw AppError.validation('Record why this parcel is being disposed of');
@@ -788,17 +635,6 @@ export class ParcelService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     Queues and counts
-     ------------------------------------------------------------------ */
-
-  /**
-   * Everything a warehouse still has to act on, oldest first.
-   *
-   * `itemCount` is the running number of units already booked out of the box,
-   * so an operator can see from the queue how far through an opened parcel they
-   * are.
-   */
   listQueue() {
     const contents = this.db
       .select({ parcelId: item.sourceParcelId, n: sql<number>`count(*)::int`.as('n') })
@@ -834,14 +670,6 @@ export class ParcelService {
       .orderBy(sql`${parcel.receivedAt} asc nulls last`, desc(parcel.createdAt));
   }
 
-  /**
-   * The processing backlog, as a collector sees it.
-   *
-   * Two numbers and one age. The counts say how much work is in front of any
-   * given parcel; the age of the oldest unprocessed arrival is the honest answer
-   * to "how long is this taking at the moment", derived from what is actually on
-   * the bench rather than a promise typed into a page.
-   */
   async workflow() {
     const rows = await this.db
       .select({ status: parcel.status, count: sql<number>`count(*)::int` })
@@ -870,7 +698,6 @@ export class ParcelService {
     };
   }
 
-  /** Unclaimed arrivals past the retention window: the disposal candidates. */
   listRetentionDue(retentionDays: number) {
     return this.db
       .select({
@@ -892,8 +719,6 @@ export class ParcelService {
       .orderBy(sql`${parcel.unclaimedAt} asc`);
   }
 
-  /* ------------------------------------------------------------------ */
-
   private async notifyOwner(
     tx: Database,
     parcelId: string,
@@ -901,8 +726,6 @@ export class ParcelService {
     eventType: string,
     payload: Record<string, unknown>,
   ): Promise<void> {
-    // An unclaimed parcel has nobody to tell. The caller still writes the event
-    // to the trail, but with no recipient no outbox message is emitted.
     if (!ownerId) return;
     await this.outbox.emit(tx, {
       aggregateType: 'parcel',

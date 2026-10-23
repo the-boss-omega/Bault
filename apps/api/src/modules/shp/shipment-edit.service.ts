@@ -6,7 +6,8 @@ import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { OutboxService } from '../not/outbox/outbox.service';
-import { charge } from '../pay/pay.schema';
+import { charge, ledgerRecord } from '../pay/pay.schema';
+import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { shipment } from './shp.schema';
 import { ParcelProfileService } from './parcel-profile.service';
 import { shippingBox } from './boxes';
@@ -20,14 +21,6 @@ import {
   signatureForced,
 } from './shipping-options';
 
-/**
- * Changing a shipment after it has been requested: edit, merge and cancel.
- *
- * Edits and merges are open exactly while the request still reads `requested`,
- * the point before which nobody has walked to a shelf. Once a rate is selected
- * the parcel has been paid for and an operator may be holding it, so changing
- * the contents underneath them would make it a different parcel.
- */
 @Injectable()
 export class ShipmentEditService {
   constructor(
@@ -39,7 +32,6 @@ export class ShipmentEditService {
     private readonly memberships: MembershipService,
   ) {}
 
-  /** Loaded, owned, and still open to change. */
   private async loadEditable(shipmentId: string, actor: ShipmentActor) {
     const s = await this.shipments.loadFor(shipmentId, actor);
     if (s.mergedIntoShipmentId) {
@@ -55,13 +47,6 @@ export class ShipmentEditService {
     return s;
   }
 
-  /**
-   * Change what is in the parcel, and what has been asked for.
-   *
-   * Every field is optional and only what is supplied moves, so a collector
-   * adding one card does not have to re-send the insurance figure and risk
-   * clearing it.
-   */
   async update(
     shipmentId: string,
     actor: ShipmentActor,
@@ -71,8 +56,6 @@ export class ShipmentEditService {
 
     const itemIds = patch.itemIds ?? ((s.itemIds as string[]) ?? []);
     const items = await this.profiles.loadShippableItems(s.userId, itemIds);
-    // Everything except THIS shipment: an item already on it is not a conflict
-    // with itself.
     await this.shipments.assertItemsFree(s.userId, itemIds, s.id);
 
     const insuredValueMinor = patch.insuredValueMinor ?? s.insuredValueMinor;
@@ -91,58 +74,49 @@ export class ShipmentEditService {
     if (problems.length > 0) throw AppError.validation(problems[0]!.message, { problems });
 
     const measurements = this.profiles.measure(items);
-    // Undefined keeps the box; null lets `boxFor` pick one. The contents are
-    // re-checked either way, because adding a sealed box can outgrow the mailer.
     const boxSize = patch.boxSize === undefined ? s.boxSize : patch.boxSize;
     const { box, problems: boxProblems } = this.profiles.boxFor(boxSize, items, measurements);
     if (boxProblems.length > 0) {
       throw AppError.validation(boxProblems[0]!.message, { problems: boxProblems });
     }
-    // Rebuilt rather than patched: the apportionment depends on the whole item
-    // set, so a stale line for a removed card would put value on a card that is
-    // not in the box.
     const customsLines = needsCustoms(s.destinationCountry)
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, patch.perItemCustomsValues)
       : null;
 
-    const [updated] = await this.db
-      .update(shipment)
-      .set({
-        itemIds: items.map((i) => i.id),
-        insuredValueMinor,
-        declaredValueMinor,
-        signatureRequired,
-        addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
-        boxSize: box?.key ?? null,
-        customsLines,
-        rushFlag: patch.rush ?? s.rushFlag,
-        customerNotes:
-          patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
-        recipientName: patch.recipientName?.trim() || s.recipientName,
-        updatedAt: new Date(),
-      })
-      // Still `requested`: an edit checked before a rate was chosen and paid
-      // for must not land after it, or the parcel leaves holding more than was
-      // charged for.
-      .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
+      if (!cur || cur.status !== 'requested' || cur.mergedIntoShipmentId) {
+        throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
+      }
+      await this.profiles.loadShippableItems(s.userId, itemIds, tx as Database);
+      await this.shipments.assertItemsFree(s.userId, itemIds, s.id, tx as Database);
+
+      const [row] = await tx
+        .update(shipment)
+        .set({
+          itemIds: items.map((i) => i.id),
+          insuredValueMinor,
+          declaredValueMinor,
+          signatureRequired,
+          addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
+          boxSize: box?.key ?? null,
+          customsLines,
+          rushFlag: patch.rush ?? s.rushFlag,
+          customerNotes:
+            patch.customerNotes === undefined ? s.customerNotes : patch.customerNotes.trim() || null,
+          recipientName: patch.recipientName?.trim() || s.recipientName,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(shipment.id, shipmentId), eq(shipment.status, 'requested')))
+        .returning();
+      return row;
+    });
     if (!updated) {
       throw new AppError(ErrorCode.CONFLICT, 'This request has moved on and can no longer be changed.', 409);
     }
     return updated;
   }
 
-  /**
-   * Fold one request into another.
-   *
-   * Both must belong to the same collector, both must still be `requested`, and
-   * both must be going to the same place: merging two parcels bound for
-   * different addresses would lose one of them.
-   *
-   * The absorbed request is not deleted. It keeps its code and points at its
-   * new home, because a collector who wrote down SHP-1234 is entitled to find
-   * out what became of it rather than meeting a 404.
-   */
   async merge(targetId: string, sourceId: string, actor: ShipmentActor) {
     if (targetId === sourceId) throw AppError.validation('That is the same request');
     const target = await this.loadEditable(targetId, actor);
@@ -161,14 +135,9 @@ export class ShipmentEditService {
     const items = await this.profiles.loadShippableItems(target.userId, merged);
     const measurements = this.profiles.measure(items);
 
-    // The combined parcel is worth the sum of its parts, and asks for the
-    // stronger of the two protections. Taking the target's figures alone would
-    // quietly downgrade the cover on the cards that came from the source.
     const declaredValueMinor = target.declaredValueMinor + source.declaredValueMinor;
     const insuredValueMinor = Math.min(
       target.insuredValueMinor + source.insuredValueMinor,
-      // Capped rather than refused: a merge that would exceed the ceiling still
-      // makes sense, it simply cannot be insured past it.
       MAX_INSURED_VALUE_MINOR,
     );
     const signatureRequired =
@@ -184,9 +153,6 @@ export class ShipmentEditService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor)
       : null;
 
-    // Two parcels in one box need the bigger of the two boxes. If even that
-    // cannot hold the combined contents, the box is cleared and `boxFor` picks
-    // one that fits when the shipment is rated.
     const volume = (key: string | null) => {
       const d = shippingBox(key)?.dimensionsCm;
       return d ? d.length * d.width * d.height : 0;
@@ -199,8 +165,6 @@ export class ShipmentEditService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
-      // Both still open, re-read under their locks in a fixed order, so neither
-      // was paid for or merged elsewhere since the checks above.
       for (const id of [targetId, sourceId].sort()) {
         const [row] = await tx.select().from(shipment).where(eq(shipment.id, id)).for('update').limit(1);
         if (!row || row.status !== 'requested' || row.mergedIntoShipmentId) {
@@ -239,21 +203,6 @@ export class ShipmentEditService {
     });
   }
 
-  /**
-   * Call it off.
-   *
-   * The restocking fee is charged only when work has actually been done, which
-   * here means a rate was selected and paid for, so the parcel was queued for
-   * picking. A request nobody has touched is free to abandon.
-   *
-   * What was paid for the parcel comes back. A label is bought at dispatch, and
-   * a parcel that can still be cancelled has not been dispatched, so nothing was
-   * spent on it but the picking the fee pays for: the shipping charge is
-   * credited back as a `shipping_refund`, the membership cover it used goes back
-   * to the member's cycle, and the collector is out the restocking fee and
-   * nothing else. A parcel that somehow carries a tracking number is refunded
-   * nothing, because then a label may really have been bought.
-   */
   async cancel(shipmentId: string, actor: ShipmentActor, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Say why');
     const s = await this.shipments.loadFor(shipmentId, actor);
@@ -272,24 +221,16 @@ export class ShipmentEditService {
     const now = new Date();
 
     return this.db.transaction(async (tx) => {
-      // Checked again under the lock, so two Cancel clicks cannot both charge the
-      // restocking fee and a cancel cannot race a dispatch.
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       assertCancellable(cur.status);
-      // Nothing was picked and nothing was paid, so nothing is owed.
       const feeMinor = cur.status === 'rates_selected' ? RESTOCKING_FEE_MINOR : 0;
       const paid = cur.status === 'rates_selected' && !cur.trackingNumber;
 
-      // The shipment, then the wallet, then the member's cycle: the order every
-      // other money path takes them in.
+      if (ShipmentService.isDirect(cur)) await this.releaseDirectParcel(tx as Database, cur, actor.id);
+
       await this.ledger.lockWallet(s.userId, tx as Database);
 
-      /**
-       * What the collector actually paid for this parcel, from the charges
-       * themselves rather than from `cost`, so the refund is exactly what left
-       * the wallet for it: the carrier rate, a white-glove quote, a show fee.
-       */
       let refundedMinor = 0;
       if (paid) {
         const [row] = await tx
@@ -302,7 +243,18 @@ export class ShipmentEditService {
               eq(charge.status, 'settled'),
             ),
           );
-        refundedMinor = Number(row?.total ?? '0');
+        const [back] = await tx
+          .select({ total: sql<string>`coalesce(sum(${ledgerRecord.amount}), 0)::text` })
+          .from(ledgerRecord)
+          .where(
+            and(
+              eq(ledgerRecord.userId, s.userId),
+              eq(ledgerRecord.type, 'shipping_refund'),
+              eq(ledgerRecord.referenceType, 'shipment'),
+              eq(ledgerRecord.referenceId, s.id),
+            ),
+          );
+        refundedMinor = Math.max(0, Number(row?.total ?? '0') - Number(back?.total ?? '0'));
         if (refundedMinor > 0) {
           await this.ledger.record(
             {
@@ -376,6 +328,31 @@ export class ShipmentEditService {
       });
 
       return { status: 'cancelled' as const, restockingFeeMinor: feeMinor, refundedMinor };
+    });
+  }
+
+  private async releaseDirectParcel(tx: Database, s: typeof shipment.$inferSelect, actorId: string) {
+    const [booking] = await tx
+      .select({ parcelId: parcelEvent.parcelId, fromStatus: parcelEvent.fromStatus, toStatus: parcelEvent.toStatus })
+      .from(parcelEvent)
+      .where(and(eq(parcelEvent.eventType, 'direct_shipped'), sql`${parcelEvent.metadata} ->> 'shipmentId' = ${s.id}`))
+      .limit(1);
+    if (!booking) return;
+    const [current] = await tx.select().from(parcel).where(eq(parcel.id, booking.parcelId)).for('update').limit(1);
+    if (!current || current.status !== (booking.toStatus ?? 'processed')) return;
+
+    const restored = (booking.fromStatus ?? 'received') as typeof current.status;
+    const now = new Date();
+    await tx.update(parcel).set({ status: restored, processedAt: null, updatedAt: now }).where(eq(parcel.id, current.id));
+    await tx.insert(parcelEvent).values({
+      parcelId: current.id,
+      eventType: 'direct_cancelled',
+      fromStatus: current.status,
+      toStatus: restored,
+      actorId,
+      facilityId: current.facilityId,
+      notes: `Direct overnight shipment ${s.code ?? s.id} cancelled; the parcel is back at the dock, unopened`,
+      metadata: { shipmentId: s.id, shipmentCode: s.code },
     });
   }
 }

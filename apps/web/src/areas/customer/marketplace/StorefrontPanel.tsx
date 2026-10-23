@@ -4,6 +4,7 @@ import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { itemClassLabel } from '../../../shared/itemClasses';
 import { Amount, Serial } from '../../../shared/ui/Serial';
 import { formatUsd } from '../../../shared/money';
+import { storefrontHref } from '../../../shared/market';
 import { useI18n } from '../../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
 import { Button, EmptyState, Panel, SuccessNote } from '../../../shared/ui/primitives';
@@ -18,25 +19,19 @@ interface StorefrontListing {
   conditionGrade: string | null;
 }
 
-/**
- * A collector's public storefront: everything one seller currently has for sale.
- *
- * The endpoint behind it is `@Public()` on purpose: this is the page a seller
- * shares. Only active listings appear, because a sold or delisted card is not
- * for sale.
- *
- * The seller's own link is shown here, since the point of the feature is having
- * something to send somebody.
- */
 export function StorefrontPanel({
+  seller,
   myUsername,
   onError,
 }: {
+  seller?: string;
   myUsername?: string;
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
-  const [username, setUsername] = useState(myUsername ?? '');
+  const named = seller && isValidUsername(normalizeUsername(seller)) ? normalizeUsername(seller) : undefined;
+  const target = named ?? myUsername;
+  const [username, setUsername] = useState(target ?? '');
   const [viewing, setViewing] = useState<string | null>(null);
   const [listings, setListings] = useState<StorefrontListing[] | null>(null);
 
@@ -59,11 +54,9 @@ export function StorefrontPanel({
     [onError],
   );
 
-  // Land on the reader's own storefront: the first question somebody has about
-  // this page is "what does mine look like".
   useEffect(() => {
-    if (myUsername) void open(myUsername);
-  }, [myUsername, open]);
+    if (target) void open(target);
+  }, [target, open]);
 
   return (
     <>
@@ -85,7 +78,7 @@ export function StorefrontPanel({
 
         {myUsername && (
           <SuccessNote>
-            {t('market.store.yourLink', { link: `#/marketplace/store?seller=${myUsername}` })}
+            {t('market.store.yourLink', { link: storefrontHref(myUsername) })}
           </SuccessNote>
         )}
       </Panel>
@@ -103,10 +96,6 @@ export function StorefrontPanel({
               text={t('market.store.emptyText')}
             />
           ) : (
-            /*
-              A public storefront is the vault's register, read-only: the same
-              columns, components and order (photograph, price, serial, name).
-            */
             <ul className="card-grid card-grid--listings">
               {listings.map((l) => (
                 <li key={l.id} className="card card--listing">

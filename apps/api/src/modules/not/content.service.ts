@@ -6,32 +6,10 @@ import type { Database } from '../../db/client';
 import { consignmentEvent } from '../dis/consignment-event.schema';
 import { facility } from '../inv/facility.schema';
 
-/**
- * The pieces of published content that are DATA rather than prose.
- *
- * Guides and tutorials are WRITING. They live in the SPA next to the FAQ, under
- * the same rule that module already holds itself to: nothing is invented, and an
- * entry is either true of Bault or it is not present. Nothing about them needs a
- * database.
- *
- * These do. The show calendar is real rows: Bault has a table at particular
- * shows on particular dates. Contact details come from CONFIGURATION,
- * because a phone number written into source is a phone number that is wrong in
- * every deployment but one. Where nothing is configured this says so plainly
- * rather than printing a plausible-looking placeholder somebody might dial.
- */
 @Injectable()
 export class ContentService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  /**
-   * The show calendar.
-   *
-   * Every active show, past ones included: a calendar that silently drops
-   * yesterday is a calendar you cannot use to check what you missed. `open`
-   * says whether consignments are still being taken, which is the only thing a
-   * reader actually needs to decide from.
-   */
   async shows() {
     const rows = await this.db
       .select()
@@ -50,33 +28,15 @@ export class ContentService {
       requestDeadline: show.requestDeadline,
       capacity: show.capacity,
       notes: show.notes,
-      /** Still accepting consignments. */
       open: show.requestDeadline.getTime() > now,
-      /** Already happened. */
       past: (show.endsAt ?? show.startsAt).getTime() < now,
     }));
   }
 
-  /**
-   * How to reach a person.
-   *
-   * Every field is optional and every one is read from the environment. A
-   * deployment that has not configured a phone number gets `null` and a page
-   * that says the channel is not published — never a placeholder. The one route
-   * that is ALWAYS available is the helpdesk, because it is built and does not
-   * depend on anybody having filled in a variable.
-   */
   contact() {
     const env = loadEnv();
     const clean = (value: string) => (value.trim() === '' ? null : value.trim());
 
-    /**
-     * Named owners, from `SUPPORT_TEAM` as `Name|Role;Name|Role`.
-     *
-     * The reference publishes who answers, and it is the part that makes a
-     * support page read as a company rather than a form. Parsed leniently: a
-     * malformed entry is dropped rather than breaking the page.
-     */
     const team = (env.SUPPORT_TEAM ?? '')
       .split(';')
       .map((entry: string) => entry.split('|'))
@@ -84,7 +44,6 @@ export class ContentService {
       .map((parts: string[]) => ({ name: parts[0]!.trim(), role: (parts[1] ?? '').trim() || null }));
 
     return {
-      /** Always true: the helpdesk exists regardless of configuration. */
       helpdesk: true,
       email: clean(env.SUPPORT_EMAIL ?? ''),
       phone: clean(env.SUPPORT_PHONE ?? ''),
@@ -93,14 +52,6 @@ export class ContentService {
     };
   }
 
-  /**
-   * The facilities, as published addresses.
-   *
-   * Included here because "where are you, actually" is the other half of the
-   * question a contact page answers, and the rows already exist. The
-   * per-collector `C/O username` line is NOT here — that is
-   * `GET /me/inbound-addresses` and is nobody else's business.
-   */
   async locations() {
     const rows = await this.db
       .select()
@@ -115,7 +66,6 @@ export class ContentService {
       city: f.city,
       region: f.region,
       country: f.country,
-      /** Guidance only — Bault is not the seller and remits nobody's tax. */
       salesTaxBps: f.salesTaxBps,
       forwardingDays: f.forwardingDays,
     }));

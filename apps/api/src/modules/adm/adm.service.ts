@@ -32,12 +32,6 @@ export interface ItemPatch {
   holdFlag?: boolean;
 }
 
-/**
- * Administration. Lets an admin SEE all accounts and all cards and EDIT them.
- * Descriptive item edits are recorded in change history; owner/bin/state/hold
- * changes still write custody events so the chain-of-custody is never broken
- * (Principle III). The admin overrides only the lifecycle transition validation.
- */
 export type DisputeStatus = 'open' | 'investigating' | 'ruled' | 'closed';
 
 @Injectable()
@@ -48,47 +42,26 @@ export class AdmService {
     private readonly ledger: LedgerService,
   ) {}
 
-  /**
-   * The product-facing Users table.
-   *
-   * Integration fixtures, which the e2e suites register against a real
-   * database, are excluded. The match is narrow: ONLY the reserved fixture
-   * domain the test helper mints (`FIXTURE_EMAIL_DOMAIN`, a `.test` TLD
-   * reserved by RFC 2606). A genuine customer at `test.family@…` or
-   * `contest@…` stays visible, as does anything at `bault.dev`.
-   */
   listUsers() {
     return this.db
       .select({
         id: userAccount.id,
         email: userAccount.email,
-        username: userAccount.username, // read-only everywhere
+        username: userAccount.username,
         firstName: userAccount.firstName,
         lastName: userAccount.lastName,
-        // Set by migration 0004 where a legacy display name could not be split
-        // without guessing; admins are the ones who resolve those.
         nameReviewRequired: userAccount.nameReviewRequired,
         role: userAccount.role,
         status: userAccount.status,
         intakeId: userAccount.intakeId,
-        // Whether the account signs in with a second factor; the Users screen
-        // offers the reset only where there is one to reset.
         mfaEnabled: sql<boolean>`exists (select 1 from mfa_factor f where f.user_id = ${userAccount.id}::text and f.enabled_at is not null)`,
+        autoSuspended: sql<boolean>`${userAccount.autoSuspendedAt} is not null`,
       })
       .from(userAccount)
       .where(not(ilike(userAccount.email, `%@${FIXTURE_EMAIL_DOMAIN}`)))
       .orderBy(userAccount.email);
   }
 
-  /**
-   * Edit a user. `actorId` is the administrator doing it.
-   *
-   * An administrator may not suspend, close or demote themselves: every console
-   * route is behind the admin role and the suspension guard, so the change would
-   * lock out the one person able to undo it. Only those two fields are refused
-   * (an administrator may still edit their own name), and the refusal says to
-   * ask another administrator.
-   */
   async updateUser(actorId: string, id: string, patch: UserPatch) {
     if (actorId === id) {
       if (patch.status && patch.status !== 'active') {
@@ -107,13 +80,8 @@ export class AdmService {
     if (patch.role) set.role = patch.role;
     if (patch.status) {
       set.status = patch.status;
-      // Any status a person sets is a person's decision, so the debt sweep's
-      // marker is cleared with it. Otherwise a later sweep could lift a manual
-      // suspension once the balance recovered, taking it for one of its own.
       set.autoSuspendedAt = null;
     }
-    // An admin who writes a name part has just reviewed it, so the migration's
-    // review flag is cleared with it. Nothing else here clears it.
     for (const f of ['firstName', 'lastName'] as const) {
       if (patch[f] === undefined) continue;
       const value = normalizeNamePart(patch[f]);
@@ -123,7 +91,6 @@ export class AdmService {
     }
     if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
 
-    // `username` is deliberately not patchable here either.
     await this.db.update(userAccount).set(set as never).where(eq(userAccount.id, id));
     const [u] = await this.db.select().from(userAccount).where(eq(userAccount.id, id)).limit(1);
     if (!u) throw AppError.notFound('User not found');
@@ -136,6 +103,7 @@ export class AdmService {
       nameReviewRequired: u.nameReviewRequired,
       role: u.role,
       status: u.status,
+      autoSuspended: u.autoSuspendedAt !== null,
       intakeId: u.intakeId,
     };
   }
@@ -167,15 +135,10 @@ export class AdmService {
       const c = cur as Record<string, unknown>;
       const set: Record<string, unknown> = {};
 
-      // The taxonomy is enforced on every write path, this one included. An
-      // admin override exists for lifecycle transitions because a stuck item is
-      // a real operational problem; there is no equivalent argument for putting
-      // an item into a class that does not exist.
       if (patch.typeClass !== undefined && !isKnownItemClass(patch.typeClass)) {
         throw AppError.validation(`Unknown item class "${patch.typeClass}"`);
       }
 
-      // Descriptive fields → direct update + a change-history row per change.
       for (const f of ['typeClass', 'description', 'conditionGrade'] as const) {
         const next = patch[f];
         if (next !== undefined && next !== c[f]) {
@@ -190,17 +153,10 @@ export class AdmService {
         }
       }
 
-      // Owner change → ownership_transfer custody event.
       if (patch.ownerId && patch.ownerId !== cur.ownerId) {
         set.ownerId = patch.ownerId;
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'ownership_transfer', prevOwnerId: cur.ownerId, newOwnerId: patch.ownerId, actorId, reason: 'admin edit' });
 
-        /**
-         * The previous owner's listing goes with the previous owner, so nobody
-         * can buy the card from somebody who no longer owns it. Taken off sale
-         * here, open offers on it closed, and the card put back on the shelf
-         * unless this same edit sets a state of its own.
-         */
         const removed = await tx
           .update(listing)
           .set({ status: 'removed', updatedAt: new Date() })
@@ -212,24 +168,21 @@ export class AdmService {
             .set({ status: 'rejected', updatedAt: new Date() })
             .where(and(inArray(offer.listingId, removed.map((l) => l.id)), eq(offer.status, 'pending')));
         }
-        if (cur.lifecycleState === 'listed' && !patch.lifecycleState) {
+        if ((patch.lifecycleState ?? cur.lifecycleState) === 'listed') {
           patch = { ...patch, lifecycleState: 'stored' };
         }
       }
 
-      // Bin change → relocate custody event.
       if (patch.binId !== undefined && (patch.binId || null) !== cur.binId) {
         set.binId = patch.binId || null;
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'relocate', prevBinId: cur.binId, newBinId: patch.binId || null, actorId, reason: 'admin edit' });
       }
 
-      // Lifecycle change → state_change custody event (admin overrides validation).
       if (patch.lifecycleState && patch.lifecycleState !== cur.lifecycleState) {
         set.lifecycleState = patch.lifecycleState;
         await tx.insert(custodyEvent).values({ itemId: id, eventType: 'state_change', prevState: cur.lifecycleState, newState: patch.lifecycleState, actorId, reason: 'admin edit' });
       }
 
-      // Hold toggle → hold_placed / hold_released.
       if (patch.holdFlag !== undefined && patch.holdFlag !== cur.holdFlag) {
         set.holdFlag = patch.holdFlag;
         await tx.insert(custodyEvent).values({ itemId: id, eventType: patch.holdFlag ? 'hold_placed' : 'hold_released', actorId, reason: 'admin edit' });
@@ -244,15 +197,10 @@ export class AdmService {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Disputes
-  // ---------------------------------------------------------------------------
-
   listDisputes() {
     return this.db.select().from(dispute).orderBy(sql`${dispute.createdAt} desc`);
   }
 
-  /** Recorded transactions a dispute can reference. */
   listTransactions() {
     return this.db
       .select({
@@ -268,7 +216,6 @@ export class AdmService {
   }
 
   async openDispute(adminId: string, input: { transactionId: string; note?: string }) {
-    // A dispute MUST reference an actual recorded transaction.
     const [tx] = await this.db
       .select({ id: transaction.id })
       .from(transaction)
@@ -303,19 +250,6 @@ export class AdmService {
     return row;
   }
 
-  // ---------------------------------------------------------------------------
-  // Storage-fee runs
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Charge the storage fee to every STORED item older than `thresholdDays`.
-   * All charges + ledger debits + the run record commit in ONE transaction, each
-   * charge carrying the pricing-rule snapshot in force now (price freeze).
-   *
-   * Nothing calls this and there is no manual trigger. The daily sweep is the
-   * worker's own SQL job (`apps/worker/src/jobs/storage-fee.ts`), which also
-   * applies included windows and membership cover; this method does not.
-   */
   async runStorageFees(adminId: string, thresholdDays: number) {
     if (!Number.isInteger(thresholdDays) || thresholdDays < 0) {
       throw AppError.validation('thresholdDays must be a non-negative integer');
@@ -392,15 +326,6 @@ export class AdmService {
   listStorageFeeRuns() {
     return this.db.select().from(storageFeeRun).orderBy(sql`${storageFeeRun.runAt} desc`);
   }
-  /**
-   * Who signed in, and who tried to.
-   *
-   * Read from `login_attempt`, the append-only log every exit from
-   * `AuthService.login` writes to.
-   *
-   * The summary is the part an administrator acts on: the `suspicious` rows
-   * name the accounts with a run of failures in the last day.
-   */
   async recentLogins(limit = 200) {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -422,12 +347,6 @@ export class AdmService {
       .orderBy(desc(loginAttempt.occurredAt))
       .limit(Math.min(Math.max(limit, 1), 500));
 
-    /**
-     * What counts as a failure. Not "anything but success": `mfa_challenged`
-     * (the password was right and a code was asked for) precedes every
-     * successful two-step sign-in, so it is not counted. A wrong code
-     * (`mfa_failed`) is a failure.
-     */
     const failed = sql`${loginAttempt.outcome} NOT IN ('success', 'mfa_challenged')`;
 
     const [totals] = await this.db
@@ -439,7 +358,6 @@ export class AdmService {
       .from(loginAttempt)
       .where(gte(loginAttempt.occurredAt, since));
 
-    /** Five failures in a day is past a typo and into a pattern. */
     const suspicious = await this.db
       .select({
         identifier: loginAttempt.identifier,

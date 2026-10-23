@@ -1,18 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, signIn, type Client } from '../integration/helpers/http';
 
-/**
- * One idempotency key, two requests at the same moment.
- *
- * A double-click sends both requests together. A key that is only looked up
- * before the purchase would let both run and charge twice, so the key is
- * claimed by an insert against a unique index at the start of the purchase's
- * own transaction. The second request waits on that claim and then replays what
- * the first one recorded. It never runs.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 type Res = Awaited<ReturnType<Client['post']>>;
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
 const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
@@ -45,13 +33,10 @@ describe('concurrency: one idempotency key', () => {
         ),
       );
 
-      // Exactly one execution: one copy gone, one charge.
       const shelf = (await buyer.get('/marketplace/house/listings')).body as Array<{ id: string; stock: number }>;
       expect(shelf.find((l) => l.id === productId)?.stock ?? 0, `round ${round}`).toBe(2);
       expect(await balanceOf(buyer), `round ${round}`).toBe(before - PRICE);
 
-      // Every request is answered with the one order (a replay), or refused —
-      // never with a second order and never with a 5xx.
       const orders = new Set(results.filter(ok).map((r) => r.body.orderCode as string));
       expect(orders.size, `round ${round}`).toBe(1);
       for (const r of results) expect(r.status === 201 || r.status === 409, `round ${round}: ${r.status}`).toBe(true);

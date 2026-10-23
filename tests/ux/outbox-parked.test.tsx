@@ -2,15 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * Parked outbox messages in the admin console.
- *
- * The dispatcher gives up on a message after five failures and leaves it for a
- * person. These pin what the screen shows, that the requeue button asks for
- * exactly that message, and that the console says how many are waiting before
- * anybody opens the tab.
- */
-
 const post = vi.fn();
 const get = vi.fn();
 
@@ -32,10 +23,6 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   isUnreachable: () => false,
 }));
 
-// The screen is imported where it is used, so a missing module fails only the
-// cases that need it and the console's own case fails on what it asserts.
-// (`@vite-ignore` with the path in a variable: Vite otherwise resolves a dynamic
-// import while transforming the file, which fails the whole file just the same.)
 const sectionPath = '../../apps/web/src/areas/admin/OutboxSection';
 const section = () =>
   import(/* @vite-ignore */ sectionPath) as Promise<typeof import('../../apps/web/src/areas/admin/OutboxSection')>;
@@ -112,7 +99,6 @@ describe('the parked messages', () => {
     const row = (await screen.findByText('item_donated')).closest('tr')!;
     await user.click(within(row as HTMLElement).getByRole('button', { name: /^requeue/i }));
     await waitFor(() => expect(onError).toHaveBeenCalledWith(expect.stringMatching(/already requeued or delivered/i)));
-    // And the list is read again, so it shows what is true now.
     await waitFor(() => expect(screen.queryByText('item_donated')).not.toBeInTheDocument());
   });
 
