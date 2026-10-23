@@ -11,12 +11,6 @@ import { TradeController } from './trade.controller';
 import { HouseStoreController } from './house-store.controller';
 import { HouseStoreService } from './house-store.service';
 
-/**
- * MKT module (marketplace). Injects the global kernels — CST (custody), PRC
- * (pricing), PAY (ledger/wallet + billing port), NOT (outbox), and the shared
- * idempotency/confirmation services — and owns listings, purchase, offers, swaps,
- * and transfers.
- */
 @Module({
   controllers: [MktController, OfferController, TradeController, HouseStoreController],
   providers: [

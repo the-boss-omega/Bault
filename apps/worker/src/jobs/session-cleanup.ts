@@ -1,21 +1,6 @@
 import type { Pool } from 'pg';
 import { log } from '../log';
 
-/**
- * Delete sign-in sessions a month after they stopped working.
- *
- * Nothing removed them. `login_session` grew by a row on every sign-in, forever,
- * each one keeping the hash of a cookie nobody can use any more. A session row
- * is not history — it is not on the append-only list, and the permanent record
- * of who signed in, from where, is `login_attempt`, which this never touches.
- *
- * Thirty days past expiry rather than at expiry, so the account's own "where am
- * I signed in" view and an investigator asking about last week still have the
- * recent sessions to look at.
- *
- * In batches, each claiming its rows with SKIP LOCKED, so a backlog of years is
- * cleared without one long-held lock, and two runs at once delete each row once.
- */
 const RETENTION = '30 days';
 const BATCH = 1_000;
 

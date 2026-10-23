@@ -1,14 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-/**
- * The top-up panel, when the provider cannot take a payment here.
- *
- * Under PayPal the server reports the instant routes unavailable (nothing in
- * Bault creates the PayPal order a capture needs). The panel used to start on
- * `card` regardless and show a Pay button that could only fail with a 500.
- */
-
 const get = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: { get: (...a: unknown[]) => get(...a), post: vi.fn(), patch: vi.fn(), del: vi.fn() },

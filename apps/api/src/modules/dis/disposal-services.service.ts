@@ -10,10 +10,8 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { item, itemChangeHistory } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
 
-/** Fields the operator MUST fill to close a de-slab (Requirement 5.4). */
 export interface DeslabFulfillment {
   itemVerified: boolean;
-  /** What the card looked like once it was out. */
   conditionAfter: string;
   notes: string;
 }
@@ -24,24 +22,8 @@ const DESLAB_REQUIRED: readonly (keyof DeslabFulfillment)[] = [
   'notes',
 ];
 
-/** How many days after intake a cull may still be requested. */
 export const CULL_WINDOW_DAYS = 30;
 
-/**
- * The two services that destroy something on purpose.
- *
- * CRACK A SLAB takes a graded card out of its holder. It is irreversible — the
- * holder is snapped, the grade and certificate no longer describe anything, and
- * no insurance covers the result — so it is two-step confirmed like a donation,
- * and the grade is CLEARED rather than left standing next to a raw card.
- *
- * REMOVE COMMONS is the bulk cull: cards worth less than the storage they will
- * accrue, discarded or given away in one action. It is free, because charging a
- * collector to stop charging them is indefensible, and it is time-limited to the
- * first {@link CULL_WINDOW_DAYS} days after intake — after that the cards have
- * been stored, storage was billed, and "these were never worth keeping" has
- * stopped being true of the arrangement.
- */
 @Injectable()
 export class DisposalServicesService {
   constructor(
@@ -52,9 +34,6 @@ export class DisposalServicesService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /* ---------------- crack a slab ---------------- */
-
-  /** Step 1: check it is even sensible, then issue the confirmation challenge. */
   async requestDeslab(ownerId: string, itemId: string) {
     const [it] = await this.db.select().from(item).where(eq(item.id, itemId)).limit(1);
     if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
@@ -62,37 +41,32 @@ export class DisposalServicesService {
       throw new AppError(ErrorCode.CONFLICT, `Item must be stored (it is ${it.lifecycleState})`, 409);
     }
     if (it.holdFlag) throw new AppError(ErrorCode.ITEM_ON_HOLD, 'Item is on hold', 409);
-    // Cracking something that was never graded is a no-op with a fee attached.
     if (!it.conditionGrade || /^raw$/i.test(it.conditionGrade)) {
       throw AppError.validation('This item has no grade recorded — there is nothing to crack it out of.');
     }
     return this.confirmation.issue(ownerId, 'deslab', { itemId });
   }
 
-  /** Step 2: consume the challenge and raise the (billable) request. */
   async confirmDeslab(ownerId: string, confirmationToken: string) {
     const { itemId } = await this.confirmation.consume<{ itemId: string }>(
       ownerId,
       'deslab',
       confirmationToken,
     );
-    return this.custody.run(async (tx) =>
-      this.requests.create(tx, {
+    return this.custody.run(async (tx) => {
+      const it = await this.custody.lockExpecting(tx, itemId, { ownerId });
+      if (!it.conditionGrade || /^raw$/i.test(it.conditionGrade)) {
+        throw AppError.validation('This item has no grade recorded — there is nothing to crack it out of.');
+      }
+      return this.requests.create(tx, {
         type: 'deslab',
         requesterId: ownerId,
         itemId,
         feeActionType: 'service_fee:deslab',
-      }),
-    );
+      });
+    });
   }
 
-  /**
-   * The operator has cracked it. The grade goes, and the change is recorded.
-   *
-   * Clearing `conditionGrade` matters more than it looks: leaving "PSA 9" on a
-   * card that is now loose in a sleeve would let it be listed, insured or
-   * consigned as a graded card it no longer is.
-   */
   async completeDeslab(operatorId: string, requestId: string, form: DeslabFulfillment) {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
@@ -100,8 +74,7 @@ export class DisposalServicesService {
       if (req.type !== 'deslab') throw AppError.validation('Not a de-slab request');
       if (!req.itemId) throw AppError.validation('Request has no item');
 
-      const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
-      if (!it) throw AppError.notFound('Item not found');
+      const it = await this.custody.lockExpecting(tx, req.itemId, { ownerId: req.requesterId });
 
       await tx
         .update(item)
@@ -122,16 +95,6 @@ export class DisposalServicesService {
     });
   }
 
-  /* ---------------- remove commons ---------------- */
-
-  /**
-   * Step 1 of the bulk cull: validate the whole set, then challenge.
-   *
-   * Everything is checked BEFORE the confirmation is issued, so a collector who
-   * confirms is confirming something that will actually happen — rather than
-   * typing a confirmation and then being told one of the forty cards was on
-   * hold.
-   */
   async requestCull(ownerId: string, itemIds: string[], outcome: 'discard' | 'donate') {
     const ids = [...new Set((itemIds ?? []).filter(Boolean))];
     if (ids.length === 0) throw AppError.validation('Choose at least one item');
@@ -161,13 +124,6 @@ export class DisposalServicesService {
     return this.confirmation.issue(ownerId, 'remove_commons', { itemIds: ids, outcome });
   }
 
-  /**
-   * Step 2: destroy or give away every card in the set, atomically.
-   *
-   * A discard is terminal and the item stays in the record forever, as every
-   * item does. A donation moves ownership to the platform custodian, exactly as
-   * the single-item donation flow does — the difference is only the count.
-   */
   async confirmCull(ownerId: string, confirmationToken: string) {
     const { itemIds, outcome } = await this.confirmation.consume<{
       itemIds: string[];
@@ -175,7 +131,6 @@ export class DisposalServicesService {
     }>(ownerId, 'remove_commons', confirmationToken);
 
     return this.custody.run(async (tx) => {
-      // Free on purpose: charging somebody to stop charging them is indefensible.
       const req = await this.requests.create(tx, {
         type: 'remove_commons',
         requesterId: ownerId,
@@ -186,9 +141,6 @@ export class DisposalServicesService {
 
       const platformId = outcome === 'donate' ? await this.requests.platformAccountId(tx) : null;
 
-      // The checks in step 1 were made when the confirmation was issued. Repeat
-      // them under the locks, all of them before anything changes, so a card
-      // sold or put on hold in between is neither destroyed nor given away.
       await this.custody.lockItems(tx, itemIds);
       for (const itemId of itemIds) await this.custody.lockExpecting(tx, itemId, { ownerId });
 

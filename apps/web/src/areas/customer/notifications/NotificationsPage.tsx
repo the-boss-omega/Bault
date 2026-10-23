@@ -17,20 +17,16 @@ import {
 } from '../../../shared/ui/primitives';
 import { IconBell } from '../../../shared/ui/icons';
 
-/** One switch: an event type on a channel. */
 interface ChannelPreference {
   channel: string;
   enabled: boolean;
-  /** True when this is the default rather than something the user chose. */
   isDefault: boolean;
-  /** Bad news cannot be switched off in the app. */
   mandatory: boolean;
 }
 
 interface PreferenceRow {
   eventType: string;
   category: string;
-  /** The server's own English label, used when this build has no translation. */
   label: string;
   channels: ChannelPreference[];
 }
@@ -41,26 +37,11 @@ interface PreferenceMatrix {
   events: PreferenceRow[];
 }
 
-/**
- * Preferences are written with PUT, which the shared client now supports.
- *
- * This was a hand-rolled `fetch` because `api` had no `put`, and the copy threw
- * a plain `Error` — so these two calls, alone in the app, could not be told
- * apart from a network failure by anything that branches on `ApiError.kind`.
- */
 const putJson = (path: string, body: unknown) => api.put(`/notifications/${path}`, body);
 
 const TABS = ['feed', 'preferences'] as const;
 type NotificationsTab = (typeof TABS)[number];
 
-/**
- * Customer notification feed (NOT). Newest-first list plus per-event-type
- * opt-in/out toggles. Every event type defaults to enabled unless the server
- * returned an explicit `enabled: false` preference.
- *
- * The feed itself is owned by the shell (so the header bell and this page never
- * disagree); opening the page marks everything as seen.
- */
 export function NotificationsPage({
   feed,
   onSeen,
@@ -93,7 +74,6 @@ export function NotificationsPage({
     void loadPrefs();
   }, [loadPrefs]);
 
-  // Landing on the page means the user has looked at the feed.
   useEffect(() => {
     onSeen();
   }, [onSeen]);
@@ -110,7 +90,6 @@ export function NotificationsPage({
     }
   }
 
-  /** "Stop emailing me", in one action rather than twenty-eight. */
   async function toggleChannel(channel: string, enabled: boolean) {
     setSaving(true);
     try {
@@ -179,9 +158,6 @@ export function NotificationsPage({
               <SkeletonTable rows={6} columns={3} />
             ) : (
               <>
-                {/* The one thing somebody arriving here in irritation actually
-                    wants to say. Making them tick twenty-eight boxes to say it
-                    would be a dark pattern. */}
                 <div className="row" style={{ gap: 'var(--sp-2)', marginBlockEnd: 'var(--sp-4)', flexWrap: 'wrap' }}>
                   {prefs.channels.map((channel) => (
                     <span key={channel} className="row" style={{ gap: 'var(--sp-2)' }}>

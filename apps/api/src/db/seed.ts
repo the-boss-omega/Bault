@@ -31,61 +31,14 @@ import { escrowDeal, escrowEvent } from '../modules/esc/escrow.schema';
 import { ID_PREFIX, prefixedId } from '../shared/ids';
 import { makeBinBarcode, makeBinSerial } from '../modules/inv/labels';
 
-/**
- * Seed script — realistic, internally-consistent sample data (dev only).
- *
- * RESET: TRUNCATE clears every table, INCLUDING the append-only history tables,
- * and the background job queue with them. The append-only guards
- * (0001_append_only.sql) block UPDATE/DELETE via per-ROW triggers, which do NOT
- * fire on TRUNCATE — so a full reset is possible here but remains impossible
- * through the running application. This is a deliberate, dev-only escape hatch;
- * never TRUNCATE in production — `refuseInProduction` below enforces that, and
- * `tsconfig.build.json` keeps this file out of the compiled image.
- *
- * The reset is what makes this script the answer to a database full of test
- * residue. The e2e suites drive the real HTTP stack against a real database, so
- * every intake they perform creates a real item, with a real custody trail, in a
- * real collector's vault — 112 of them after one full run — and none of it can
- * be deleted afterwards through any supported path, because an item is never
- * deleted (Principle I) and its trail is append-only. Re-seeding is the only
- * way back to the catalogue, which is why `pnpm test` now ends by running it.
- *
- * The dataset below is consistent by construction: every item has an intake
- * custody event + transfer-ledger row + image + intake charge; ownership changes
- * (sale/donation) carry matching custody events, transaction records and ledger
- * rows; wallet balances are the exact sum of the ledger rows written here.
- *
- * Conventions the seed upholds:
- *  - Every amount is USD in cents (Requirement 7.1) — no shekels/agorot anywhere.
- *  - Owner IDs are OW-, item labels SN-, lots LOT-, bins BIN-, shipments SHP-,
- *    service requests SR-, disputes DSP-, transactions TXN- (Requirement 9).
- *  - Every pricing rule states its description, value, scope and billing trigger
- *    (Requirement 14.1).
- */
-
-/** Narrow a single-row RETURNING result (needed under noUncheckedIndexedAccess). */
 function one<T>(rows: T[]): T {
   const r = rows[0];
   if (!r) throw new Error('insert returned no row');
   return r;
 }
 
-/** The one value that lets this run under NODE_ENV=production. */
 const DESTRUCTIVE_SEED_CONFIRMATION = 'yes-i-am-sure';
 
-/**
- * Refuse to run against production.
- *
- * "Never TRUNCATE in production" above was a comment and nothing else: nothing
- * here read NODE_ENV, the script was compiled into the production image as
- * dist/db/seed.js, and `pnpm test` ran it after every run against whatever
- * database `.env` named. One mistaken command erased the ledger and the custody
- * trail and left two admin accounts with the password printed in this file.
- *
- * A disposable database that happens to run with NODE_ENV=production (a
- * staging rebuild) can still be seeded, by saying so in a way nobody types by
- * accident.
- */
 function refuseInProduction(): void {
   if (process.env.NODE_ENV !== 'production') return;
   if (process.env.ALLOW_DESTRUCTIVE_SEED === DESTRUCTIVE_SEED_CONFIRMATION) return;
@@ -98,32 +51,21 @@ function refuseInProduction(): void {
 }
 
 async function main(): Promise<void> {
-  // Before anything can reach a database: NODE_ENV from the process
-  // environment, which is where a container gets it.
   refuseInProduction();
   let handle: ReturnType<typeof createDb>;
   try {
     handle = createDb();
   } finally {
-    // And again once `loadEnv` has read the repo-root `.env` into the process
-    // environment, so a NODE_ENV=production written only in that file is
-    // caught too. In `finally` because a production `.env` on a development
-    // checkout usually fails validation as well, and the refusal is the thing
-    // worth reporting. The pool connects lazily, so nothing has been sent yet.
     refuseInProduction();
   }
   const { db, pool } = handle;
-  /** The platform's single settlement currency (Requirement 7.1). */
   const CUR = 'USD';
 
-  // Every seeded person has this password.
   const pw = await argon2.hash('11111111');
 
-  // -------------------------------------------------------------------------
-  // 1. RESET — wipe all app data (see header). TRUNCATE bypasses row triggers.
-  // -------------------------------------------------------------------------
   await pool.query(`TRUNCATE TABLE
     user_account, verification_token, login_session, login_attempt,
+    mfa_factor, mfa_recovery_code, mfa_challenge,
     item, bin, item_image, custody_event, item_change_history, bin_transfer, batch,
     listing, "transaction", offer, swap_proposal, house_listing, house_order,
     ledger_record, external_payment, charge, withdrawal,
@@ -132,7 +74,7 @@ async function main(): Promise<void> {
     outbox_message, audit_record, idempotency_key, confirmation_token,
     notification, notification_preference, dispute,
     storage_fee_run, shipping_address,
-    facility, parcel, parcel_event, arrival_disposal,
+    facility, parcel, parcel_event, parcel_photo, arrival_disposal,
     support_ticket, support_message, media_upload,
     consignment_event, grading_submission, shipment_group,
     escrow_deal, escrow_event,
@@ -140,24 +82,6 @@ async function main(): Promise<void> {
     storage_cover, worker_heartbeat
     RESTART IDENTITY`);
 
-  /**
-   * The background job queue is app data too, and the reset was leaving it
-   * behind.
-   *
-   * pg-boss keeps its own schema, so nothing above touches it, and after a test
-   * run it held a hundred and fifty rows of history for work done on rows that
-   * no longer exist. Worse than untidy: the outbox dispatcher's queued jobs
-   * would wake up against a table that had just been truncated underneath them.
-   *
-   * Only the two HISTORY tables are cleared. `queue`, `schedule`, `subscription`
-   * and `version` are pg-boss's own configuration and its schema version —
-   * emptying those would leave the worker unable to start. `job` is partitioned
-   * one table per queue, and TRUNCATE on the parent empties every partition
-   * while keeping the partitions themselves.
-   *
-   * Guarded on the schema existing at all, because a checkout that has never run
-   * the worker has no pgboss schema and a seed must not fail on that.
-   */
   await pool.query(`DO $$
     BEGIN
       IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'pgboss') THEN
@@ -165,27 +89,11 @@ async function main(): Promise<void> {
       END IF;
     END $$;`);
 
-  // -------------------------------------------------------------------------
-  // 2. USERS — delete-all is handled by the TRUNCATE above. Password: 11111111.
-  //    Roles: manager Eldar (admin), garage worker Hermon (warehouse_operator),
-  //    collectors Red & Golden (user), plus the platform custodian (system).
-  //    `username` is set HERE and never again — it is immutable (Requirement 4.1).
-  // -------------------------------------------------------------------------
-  /**
-   * `username` is the customer-facing identifier and is set HERE and never again
-   * — the DB trigger from 0004 rejects any later UPDATE of the column.
-   *
-   * No `intakeId` is minted. The OW- code is retired: new accounts do not get
-   * one, and nothing in the product asks for one. Exactly one seeded account
-   * (`legacy`, below) carries an intake ID, so the pre-printed-label fallback in
-   * `IntakeService.resolveOwner` has something real to exercise.
-   */
   const mkUser = async (
     email: string,
     username: string,
     role: 'user' | 'warehouse_operator' | 'admin',
     firstName: string,
-    /** Null only for a flagged legacy row whose boundary was never resolved. */
     lastName: string | null,
     legacy?: { intakeId?: string; nameReviewRequired?: boolean; legacyDisplayName?: string },
   ) =>
@@ -198,7 +106,6 @@ async function main(): Promise<void> {
           passwordHash: pw,
           status: 'active',
           role,
-          // Two explicit name parts — there is no display-name column to seed.
           firstName,
           lastName,
           intakeId: legacy?.intakeId ?? null,
@@ -212,10 +119,6 @@ async function main(): Promise<void> {
   const hermonAcc = await mkUser('hermon@bault.dev', 'hermon', 'warehouse_operator', 'Hermon', 'Levi');
   const redAcc = await mkUser('red@bault.dev', 'red', 'user', 'Red', 'Ashwood');
   const goldenAcc = await mkUser('golden@bault.dev', 'golden', 'user', 'Golden', 'Marsh');
-  // A pre-identity-pass account, reproduced exactly as migration 0004 would leave
-  // one whose single display name could not be split without guessing: the whole
-  // string became the first name, the original is kept read-only, the row is
-  // flagged for review, and the OW- code it was routed by still works.
   const veteranAcc = await mkUser(
     'veteran@bault.dev',
     'veteran',
@@ -228,9 +131,6 @@ async function main(): Promise<void> {
       legacyDisplayName: 'Ana Maria van der Berg',
     },
   );
-  // Custodian that receives donated/consigned items (keeps single-owner-never-deleted
-  // true once a donation is accepted). It owns nothing in this dataset — the seeded
-  // donation request is still open — but the account must exist for that flow to run.
   const platformAcc = await mkUser('platform@bault.dev', 'platform', 'admin', 'Platform', 'Custodian');
 
   const eldar = eldarAcc.id;
@@ -240,36 +140,14 @@ async function main(): Promise<void> {
   const veteran = veteranAcc.id;
   const platform = platformAcc.id;
 
-  // -------------------------------------------------------------------------
-  // 3. PRICING RULES. Each rule states WHAT it is (description), HOW MUCH
-  //    (value: cents for fixed, basis points for percentage), its SCOPE
-  //    (actionType + itemClass) and WHEN it bills (Requirement 14.1).
-  // -------------------------------------------------------------------------
   const rules = [
     {
       actionType: 'intake',
       model: 'fixed' as const,
-      value: 500, // $5.00
+      value: 500,
       description: 'Intake handling fee per received item',
       billingTrigger: 'per_event' as const,
     },
-    /**
-     * Intake priced PER CLASS, as the reference service prices it.
-     *
-     * Its published fee list charges by what arrived, not a flat rate: $1 for
-     * a single card, $5 for a lot, an oversized card, a box, a comic, $10 for a
-     * large collection, $20 for a sealed case or a helmet. A flat $5 charged a
-     * single card five times what the service Bault is modelled on charges —
-     * and because storage is a percentage of the intake fee, overcharged its
-     * storage by the same factor for as long as it sat on the shelf.
-     *
-     * The catch-all rule above stays: it prices `other` and anything added to
-     * the taxonomy before it has a rule of its own, at the middle of the range
-     * rather than free. A graded slab is priced as a card because the reference
-     * list has no separate line for one; a sealed pack and a small collectible
-     * as its "misc items" line. Those three are mappings by analogy, stated here
-     * so nobody mistakes them for published figures.
-     */
     ...(
       [
         ['trading_card', 100, 'A single card'],
@@ -293,41 +171,24 @@ async function main(): Promise<void> {
       billingTrigger: 'per_event' as const,
     })),
     {
-      /**
-       * A lot is booked as one item, of the class of what is in it — so on the
-       * class rule alone a fifty-card lot would cost what one card does. The
-       * reference list prices a card lot at $5, and so does this.
-       */
       actionType: 'intake_lot',
       model: 'fixed' as const,
-      value: 500, // $5.00
+      value: 500,
       description: 'Intake: a lot, booked as one item',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Storage is an INCLUDED period folded into the intake fee, then periods
-       * priced as a proportion of that same intake fee. `value` is only the
-       * fallback base for an item that has no intake charge to take a percentage
-       * of; the real terms are in `parameters`, which the worker's sweep reads.
-       */
       actionType: 'storage',
       model: 'fixed' as const,
-      value: 100, // $1.00 — fallback base only
+      value: 100,
       description: '180 days included, then 10% of the item intake fee every 90 days',
       billingTrigger: 'daily' as const,
       parameters: { freeDays: 180, periodDays: 90, percentOfIntakeBps: 1_000 },
     },
     {
-      /**
-       * Oversized items get a much shorter included window and pay the whole
-       * intake fee again each period. Deliberately punitive: shelf space is the
-       * scarce resource, and this exists to make "leave it there forever" a
-       * decision rather than a default.
-       */
       actionType: 'storage_oversized',
       model: 'fixed' as const,
-      value: 500, // $5.00 — fallback base only
+      value: 500,
       description: '90 days included, then the full intake fee again every 90 days',
       billingTrigger: 'daily' as const,
       parameters: { freeDays: 90, periodDays: 90, percentOfIntakeBps: 10_000 },
@@ -335,7 +196,7 @@ async function main(): Promise<void> {
     {
       actionType: 'service',
       model: 'fixed' as const,
-      value: 2000, // $20.00
+      value: 2000,
       description: 'Flat fee for a value-added service request',
       billingTrigger: 'per_event' as const,
     },
@@ -349,217 +210,143 @@ async function main(): Promise<void> {
     {
       actionType: 'marketplace_fee',
       model: 'percentage' as const,
-      value: 500, // 5.00%
+      value: 500,
       description: 'Marketplace commission charged to the seller on every sale',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Bault's own cut per consignment channel. The partner's commission is
-       * deducted by the partner before they remit and never touches this ledger,
-       * so these are only ever Bault's share.
-       */
       actionType: 'consignment_fee:card_show',
       model: 'percentage' as const,
-      value: 1000, // 10.00% — Bault sells it at the table itself
+      value: 1000,
       description: 'Bault commission on a card-show consignment sale',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'consignment_fee:auction_house',
       model: 'percentage' as const,
-      value: 100, // 1.00% on top of the auction house's own rate
+      value: 100,
       description: 'Bault commission on an auction-house consignment sale',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'consignment_fee:ebay_partner',
       model: 'percentage' as const,
-      value: 100, // 1.00% on top of the partner seller's own rate
+      value: 100,
       description: 'Bault commission on an eBay partner consignment sale',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Grading is priced per TIER, not per card, because a grader is not
-       * selling a grade — it is selling a turnaround and a declared-value band.
-       * A five-day return on a $5,000 card and a six-week return on a common are
-       * different work and cannot share one fee.
-       *
-       * These sit alongside the flat `service` rule rather than replacing it:
-       * `feeActionType` is TRIED, so a tier added to the catalogue without a
-       * price here falls back to $20 (expensive-by-default) instead of being
-       * silently free.
-       */
       actionType: 'grading_fee:psa_value',
       model: 'fixed' as const,
-      value: 2500, // $25.00
+      value: 2500,
       description: 'PSA Value — up to $499, 45–65 days',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'grading_fee:psa_regular',
       model: 'fixed' as const,
-      value: 7500, // $75.00
+      value: 7500,
       description: 'PSA Regular — up to $1,499, 20–30 days',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'grading_fee:psa_express',
       model: 'fixed' as const,
-      value: 15000, // $150.00
+      value: 15000,
       description: 'PSA Express — up to $4,999, 10–15 days',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'grading_fee:psa_walkthrough',
       model: 'fixed' as const,
-      value: 30000, // $300.00
+      value: 30000,
       description: 'PSA Walkthrough — no ceiling, 5–10 days, needs approval',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'grading_fee:bgs_standard',
       model: 'fixed' as const,
-      value: 6500, // $65.00
+      value: 6500,
       description: 'BGS Standard — up to $1,499, 25–40 days',
       billingTrigger: 'per_event' as const,
     },
     {
-      /** Turning the card under a light on camera — the only way to show gloss. */
       actionType: 'service_fee:video_review',
       model: 'fixed' as const,
-      value: 1000, // $10.00
+      value: 1000,
       description: 'A short video of the card turned under a light',
       billingTrigger: 'per_event' as const,
     },
     {
-      /** A person looking at named areas and writing down what they see. */
       actionType: 'service_fee:condition_inspection',
       model: 'fixed' as const,
-      value: 1500, // $15.00
+      value: 1500,
       description: 'Per-area condition report against a fixed severity scale',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Cheaper than the flat service fee on purpose: cracking a slab is thirty
-       * seconds of work, and pricing it like a photo shoot would only push people
-       * to do it themselves badly after the card was shipped home.
-       */
       actionType: 'service_fee:deslab',
       model: 'fixed' as const,
-      value: 500, // $5.00
+      value: 500,
       description: 'Cracking a graded card out of its holder. Irreversible.',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Rush is BAULT moving the parcel to the front of the packing queue. It
-       * used to be handed to the carrier, which doubled the carrier rate and
-       * shortened the carrier estimate — attributing Bault's own speed to FedEx.
-       */
       actionType: 'shipping_rush',
       model: 'fixed' as const,
-      value: 1000, // $10.00
+      value: 1000,
       description: 'Same-day picking and packing, ahead of the standard queue',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * A tracker in the outgoing parcel. Priced as a rule rather than only in
-       * the add-on catalogue so it can be changed without a deploy (Principle
-       * VI); the catalogue figure is the fallback if the rule is ever removed.
-       */
       actionType: 'shipping_addon:gps_tracker',
       model: 'fixed' as const,
-      value: 3000, // $30.00
+      value: 3000,
       description: 'GPS tracker placed in the parcel; handed over after delivery',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Cashing out. Two bands with a kink at $100: below it a percentage with
-       * a floor, because the provider's own minimum dominates a small payout;
-       * above it a fixed component plus a much smaller percentage, because the
-       * work does not scale with the amount.
-       *
-       * The rule records the LARGE band's percentage; the full schedule lives
-       * in `money-terms.ts`, which is what both the quote and the charge use.
-       */
       actionType: 'cash_out_fee',
       model: 'percentage' as const,
-      value: 100, // 1.00% over $100, plus $5.00 fixed
+      value: 100,
       description: 'Cash-out fee: 6% (min $0.99) under $100, otherwise $5.00 + 1%',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * What the provider charges Bault to handle a disputed card payment,
-       * regardless of who wins it. Charged to the account that received the
-       * money, because that is the only account it could be.
-       */
       actionType: 'chargeback_fee',
       model: 'fixed' as const,
-      value: 2500, // $25.00
+      value: 2500,
       description: 'Handling fee when a card payment into your wallet is reversed',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Escrow. A percentage, because the work scales with what is at stake:
-       * inspecting a $500 card and a $50,000 one are not the same look.
-       */
       actionType: 'escrow_fee',
       model: 'percentage' as const,
-      value: 100, // 1.00%
+      value: 100,
       description: 'Middleman fee on a private deal, 1% of the agreed value',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * White glove. This is the BASE — travel is quoted on top, per journey,
-       * because the cost of getting a person from New Jersey to a hotel in
-       * Boston on a Tuesday is not something a rate table knows.
-       */
       actionType: 'white_glove:domestic',
       model: 'fixed' as const,
-      value: 100000, // $1,000.00
+      value: 100000,
       description: 'Hand delivery within the United States, before travel',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'white_glove:international',
       model: 'fixed' as const,
-      value: 150000, // $1,500.00
+      value: 150000,
       description: 'Hand delivery outside the United States, before travel',
       billingTrigger: 'per_event' as const,
     },
     {
-      /**
-       * Collecting at a show costs a fraction of postage for one reason: the van
-       * was going anyway. A show may override this with its own figure.
-       */
       actionType: 'show_pickup',
       model: 'fixed' as const,
-      value: 1500, // $15.00
+      value: 1500,
       description: 'Collect your cards in person at a show Bault is attending',
       billingTrigger: 'per_event' as const,
     },
-    /**
-     * Membership, derived from the catalogue rather than retyped.
-     *
-     * `mem/tiers.ts` owns what a tier COVERS, because that is a product shape.
-     * The price belongs here, effective-dated like every other, so it can move
-     * without a deploy and the figure a member was charged is frozen onto that
-     * charge. Generating the rows from the catalogue is what stops the two
-     * drifting: a tier added there appears here, priced, or the build fails.
-     *
-     * `parameters` carries the storage allowance because the WORKER needs it and
-     * the worker is a separate process with no access to the API's modules. It
-     * reads the cap out of the rule in SQL, exactly as the storage sweep already
-     * reads `freeDays` and `periodDays` from the storage rule.
-     */
     ...MEMBERSHIP_TIERS.map((t) => ({
       actionType: t.feeActionType,
       model: 'fixed' as const,
@@ -577,14 +364,14 @@ async function main(): Promise<void> {
     {
       actionType: 'parcel_processing',
       model: 'fixed' as const,
-      value: 200, // $2.00
+      value: 200,
       description: 'Per-package fee for receiving, opening and cataloguing a parcel',
       billingTrigger: 'per_event' as const,
     },
     {
       actionType: 'parcel_forwarding',
       model: 'fixed' as const,
-      value: 400, // $4.00
+      value: 400,
       description: 'Second leg, charged only to parcels sent to a forwarding address',
       billingTrigger: 'per_event' as const,
     },
@@ -593,26 +380,6 @@ async function main(): Promise<void> {
     await db.insert(pricingRule).values({ ...r, currency: CUR, updatedBy: eldar });
   }
 
-  // -------------------------------------------------------------------------
-  // 3b. FACILITIES — the addresses collectors ship their purchases to.
-  //
-  //     ⚠ THE STREET ADDRESSES BELOW ARE PLACEHOLDERS. ⚠
-  //     They are what a customer will write on a parcel, so inventing something
-  //     that reads as real would be worse than leaving them obviously unset.
-  //     Replace both with the actual facility addresses before anybody is
-  //     invited to ship anything.
-  //
-  //     New Jersey is the PRIMARY site: goods are stored there. Delaware is a
-  //     FORWARDING site that holds nothing — it exists because Delaware levies
-  //     no sales tax, so a purchase delivered there is not taxed by the
-  //     destination state, at the cost of a second leg to New Jersey.
-  //
-  //     `salesTaxBps` is the DESTINATION state's rate, recorded for guidance
-  //     only. Bault is not the seller and neither collects nor remits anybody's
-  //     sales tax; the figure exists so the app can show a collector what a
-  //     purchase would cost at each address instead of making them work it out.
-  //     NJ is 6.625% (6625 bps) at the time of writing; DE is 0.
-  // -------------------------------------------------------------------------
   const njFacility = one(
     await db
       .insert(facility)
@@ -625,7 +392,7 @@ async function main(): Promise<void> {
         region: 'NJ',
         postalCode: '00000',
         country: 'US',
-        salesTaxBps: 6625,
+        salesTaxBps: 663,
         active: true,
       })
       .returning({ id: facility.id }),
@@ -646,20 +413,6 @@ async function main(): Promise<void> {
     active: true,
   });
 
-  // -------------------------------------------------------------------------
-  // 4. BINS (shelves) — BIN- prefixed SERIALS, minted, never named
-  //    (Requirement 9.3, and 0019_bins_get_a_serial).
-  // -------------------------------------------------------------------------
-  // No capacity: a bin holds what physically goes into it, and the person who
-  // knows whether there is room is the one standing in front of it. Every shelf
-  // names the building it is in, because "stow it wherever there is room" has to
-  // mean "wherever in THIS building" — see 0018_stow_wherever_it_fits.
-  //
-  // Zone O is oversized shelving. Without at least one such bin, the directed
-  // stow has nowhere to send a sealed case or a piece of memorabilia and says so
-  // rather than putting it on a card shelf.
-  // The serial is minted, exactly as the console mints one — the seed does not
-  // get to hand-write `BIN-A-001`, because nothing else can either.
   const mkBin = async (zone: string, oversized = false) => {
     const serialNumber = makeBinSerial();
     return one(
@@ -682,23 +435,19 @@ async function main(): Promise<void> {
   await mkBin('O', true);
   await mkBin('O', true);
 
-  // -------------------------------------------------------------------------
-  // Money constants (USD cents) and small helpers.
-  // -------------------------------------------------------------------------
-  const INTAKE = 500; // $5.00
-  const SERVICE = 2000; // $20.00
-  const SHIP = 3500; // $35.00
-  const MEGA_SALE = 26_000; // $260.00 — M Rayquaza-EX sale price
-  const FEE = 1_300; // 5% of MEGA_SALE
-  const GOLD_STAR_ASK = 320_000; // $3,200.00 — Gold Star asking price
-  const GOLD_STAR_OFFER = 275_000; // $2,750.00 — Golden's standing offer
-  const TOPUP = 500_000; // $5,000.00
-  const WITHDRAW = 100_000; // $1,000.00
+  const INTAKE = 500;
+  const SERVICE = 2000;
+  const SHIP = 3500;
+  const MEGA_SALE = 26_000;
+  const FEE = 1_300;
+  const GOLD_STAR_ASK = 320_000;
+  const GOLD_STAR_OFFER = 275_000;
+  const TOPUP = 500_000;
+  const WITHDRAW = 100_000;
 
   const ledger = (userId: string, type: string, amount: number, direction: 'debit' | 'credit', refType: string, refId: string) =>
     db.insert(ledgerRecord).values({ userId, type: type as never, amount, direction, currency: CUR, referenceType: refType, referenceId: refId });
 
-  /** Insert a settled Charge + its ledger debit (mirrors BillingService). */
   const bill = async (userId: string, actionType: string, amount: number, refItemId: string) => {
     const chargeId = one(
       await db
@@ -756,35 +505,15 @@ async function main(): Promise<void> {
     reason: string;
   }) => db.insert(custodyEvent).values(v);
 
-  /** Dedicated bin/shelf transfer ledger row: source AND destination (Req 10.4). */
   const transfer = (itemId: string, fromBinId: string | null, toBinId: string, actorId: string, reason: string) =>
     db.insert(binTransfer).values({ itemId, fromBinId, toBinId, actorId, reason });
 
   const img = (itemId: string, type: 'intake' | 'professional', version: number, objectKey: string) =>
     db.insert(itemImage).values({ itemId, type, version, objectKey });
 
-  // -------------------------------------------------------------------------
-  // 5. WALLET TOP-UPS (so the collectors have spendable balances).
-  // -------------------------------------------------------------------------
   await topup(red, TOPUP);
   await topup(golden, TOPUP);
 
-  // -------------------------------------------------------------------------
-  // 6. ITEMS + full history for each.
-  // -------------------------------------------------------------------------
-
-  // The vault holds eight of the ten catalogued Rayquaza cards, four owned by Red
-  // and four by Golden. Each `serialNumber` is also the filename of that card's
-  // catalogue photograph under assets/images (SN-DR97-0001.png), so the serial is
-  // the single key joining the database row to the picture on screen.
-  //
-  // GRADES: the research dossiers state their PSA 10 is a *target profile*, not a
-  // certified slab, and carry no certificate number. Inventing one for a real card
-  // would be fabricating an authentication record, so every seeded card is entered
-  // exactly as it is documented — raw and ungraded. The grading workflow is instead
-  // demonstrated by a submission that is still out at PSA (item d).
-
-  // (a) EX Dragon Rayquaza ex — Red, stored, professionally photographed.
   const rayDragon = await mkItem({
     ownerId: red, serialNumber: 'SN-DR97-0001', barcode: 'SN-DR97-0001',
     typeClass: 'trading_card',
@@ -806,8 +535,6 @@ async function main(): Promise<void> {
   });
   await bill(red, 'service', SERVICE, rayDragon);
 
-  // (b) + (g) EX Deoxys ex and Roaring Skies EX arrived together as a BATCH for
-  //     Golden and were split onto separate shelves by Hermon.
   const goldenBatch = one(await db.insert(batch).values({ ownerId: golden, status: 'split' }).returning({ id: batch.id })).id;
 
   const rayDeoxys = await mkItem({
@@ -821,9 +548,6 @@ async function main(): Promise<void> {
   await img(rayDeoxys, 'intake', 1, 'images/sn-dx102-0002-intake.jpg');
   await bill(golden, 'intake', INTAKE, rayDeoxys);
 
-  // (c) Gold Star — the collection's centrepiece. Red has it LISTED, with a
-  //     standing offer from Golden. Relocated once, so the transfer ledger shows
-  //     a real source → destination move.
   const rayGoldStar = await mkItem({
     ownerId: red, serialNumber: 'SN-DX107-0003', barcode: 'SN-DX107-0003',
     typeClass: 'trading_card',
@@ -842,9 +566,6 @@ async function main(): Promise<void> {
   ).id;
   await db.insert(offer).values({ listingId: goldStarListing, buyerId: golden, amount: GOLD_STAR_OFFER, currency: CUR, status: 'pending' });
 
-  // (d) Dragon Frontiers δ — Golden's, currently OUT at PSA. The request is open,
-  //     so it sits in the operator's service queue waiting to be closed with a
-  //     real returned grade; nothing about a grade is asserted here.
   const rayDelta = await mkItem({
     ownerId: golden, serialNumber: 'SN-DF97-0004', barcode: 'SN-DF97-0004',
     typeClass: 'trading_card',
@@ -858,13 +579,10 @@ async function main(): Promise<void> {
   await db.insert(serviceRequest).values({
     code: prefixedId(ID_PREFIX.serviceRequest),
     type: 'third_party_grading', requesterId: golden, itemId: rayDelta, status: 'in_progress',
-    // Target grade only — the certificate number is filled in when the slab returns.
     typeFields: { gradingBody: 'PSA', targetGrade: 'PSA 10', submittedAt: new Date().toISOString() },
   });
   await bill(golden, 'service', SERVICE, rayDelta);
 
-  // (e) Call of Legends Rayquaza — Red, stored, unremarkable on purpose: a plain
-  //     shelved item with nothing pending against it.
   const rayLegends = await mkItem({
     ownerId: red, serialNumber: 'SN-CL10-0005', barcode: 'SN-CL10-0005',
     typeClass: 'trading_card',
@@ -876,8 +594,6 @@ async function main(): Promise<void> {
   await img(rayLegends, 'intake', 1, 'images/sn-cl10-0005-intake.jpg');
   await bill(red, 'intake', INTAKE, rayLegends);
 
-  // (f) Supreme Victors C LV.X — Golden shipped it home (rush). Ownership stays
-  //     with Golden; only custody of the physical card leaves the vault.
   const rayLevelX = await mkItem({
     ownerId: golden, serialNumber: 'SN-SV146-0006', barcode: 'SN-SV146-0006',
     typeClass: 'trading_card',
@@ -895,7 +611,6 @@ async function main(): Promise<void> {
     recipientName: 'Golden Marsh',
     carrier: 'DHL', serviceLevel: 'Express',
     rushFlag: true, cost: SHIP, currency: CUR, status: 'shipped', trackingNumber: 'SBX-SEED-0001', labelObjectKey: 'labels/sn-sv146-0006.pdf',
-    // The carrier's Express quote at dispatch time; the tracking list shows it.
     estimatedDeliveryAt: new Date(Date.now() + 86_400_000),
     packageWeightGrams: 120,
     fulfillmentNotes: 'Single card, top-loader in a team bag, rigid mailer.',
@@ -905,8 +620,6 @@ async function main(): Promise<void> {
   });
   await bill(golden, 'shipping', SHIP, rayLevelX);
 
-  // (g) Roaring Skies Rayquaza-EX — Golden's, second half of the batch above, with
-  //     an OPEN donation request so the DIS donation path has a live example.
   const rayFullArt = await mkItem({
     ownerId: golden, serialNumber: 'SN-ROS104-0007', barcode: 'SN-ROS104-0007',
     typeClass: 'trading_card',
@@ -923,8 +636,6 @@ async function main(): Promise<void> {
     typeFields: { note: 'Donate to the youth league raffle if the platform accepts it.' },
   });
 
-  // (h) M Rayquaza-EX — intaken by Golden, LISTED, then SOLD to Red. This is the
-  //     one full sale record: custody transfer, both ledger legs, fee, and a TXN.
   const rayMega = await mkItem({
     ownerId: red, serialNumber: 'SN-ROS105-0008', barcode: 'SN-ROS105-0008',
     typeClass: 'trading_card',
@@ -954,14 +665,8 @@ async function main(): Promise<void> {
       })
       .returning({ id: transaction.id }),
   ).id;
-  // The condition was corrected on arrival, giving the item a real change history.
   await db.insert(itemChangeHistory).values({ itemId: rayMega, actorId: hermon, field: 'conditionGrade', oldValue: 'Near Mint', newValue: 'Raw' });
 
-  // THE BAULT STORE — the business's own copies, which were never booked in and so
-  // have no serial or barcode until somebody buys one. Each product is a real print
-  // whose catalogue scan is already on disk (`photoRef`), described in exactly the
-  // words the vault uses for another copy of the same card. Raw, because that is
-  // what the scans show. No orders are seeded: buying one is the demo.
   await db.insert(houseListing).values([
     {
       code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
@@ -980,43 +685,16 @@ async function main(): Promise<void> {
     },
   ]);
 
-  // NOT SEEDED, ON PURPOSE — the remaining two cards of the ten are left out of the
-  // database so the warehouse intake flow can be exercised end to end against real
-  // items. Their photographs are already on disk, so booking one in with the serial
-  // below immediately shows the correct picture in the vault:
-  //
-  //   SN-EVS194-0009  2021 Pokémon SWSH Evolving Skies — Rayquaza V (Alternate Full Art)
-  //                   #194/203 · Rare Ultra · art by Ryuta Fuse · swsh7-194
-  //   SN-EVS218-0010  2021 Pokémon SWSH Evolving Skies — Rayquaza VMAX (Alternate Art
-  //                   secret) #218/203 · Rare Rainbow · art by Anesaki Dynamic · swsh7-218
-
-  // -------------------------------------------------------------------------
-  // 7. A pending SWAP PROPOSAL: Red offers the Call of Legends Rayquaza for
-  //    Golden's EX Deoxys Rayquaza ex.
-  // -------------------------------------------------------------------------
   await db.insert(swapProposal).values({
     proposerId: red, responderId: golden, offeredItemIds: [rayLegends], requestedItemIds: [rayDeoxys],
     proposerApproved: true, responderApproved: false, status: 'pending',
   });
 
-  // -------------------------------------------------------------------------
-  // 8. A completed WITHDRAWAL by Golden (money out), from before cash-out became
-  //    a reviewed request. Kept so the historical `withdrawal` reference type in
-  //    the ledger has a real row behind it.
-  // -------------------------------------------------------------------------
   const w = one(
     await db.insert(withdrawal).values({ userId: golden, destinationAccount: '••••1234', amount: WITHDRAW, currency: CUR, status: 'paid', confirmedAt: new Date() }).returning({ id: withdrawal.id }),
   ).id;
   await ledger(golden, 'withdrawal', WITHDRAW, 'debit', 'withdrawal', w);
 
-  // -------------------------------------------------------------------------
-  // 8b. WALLET REQUESTS — one at each interesting point of the lifecycle, so the
-  //     Requests view and the review queue both have real work in them.
-  //
-  //     The COMPLETED one is the only one with a ledger row, and that row is what
-  //     changed the balance — exactly the invariant the workflow exists to hold.
-  //     The open ones have moved no money at all.
-  // -------------------------------------------------------------------------
   const walletEvent = async (
     requestId: string,
     toStatus: string,
@@ -1036,7 +714,6 @@ async function main(): Promise<void> {
     });
   };
 
-  // (a) Red's cash-in, waiting to be picked up by a reviewer.
   const cashInSubmitted = one(
     await db
       .insert(walletRequest)
@@ -1045,7 +722,7 @@ async function main(): Promise<void> {
         userId: red,
         type: 'cash_in',
         status: 'submitted',
-        amount: 25_000, // $250.00
+        amount: 25_000,
         currency: CUR,
         fundingSource: 'bank_transfer',
         reference: 'Wire ref 8842-A',
@@ -1055,7 +732,6 @@ async function main(): Promise<void> {
   ).id;
   await walletEvent(cashInSubmitted, 'submitted', null, red, 'user');
 
-  // (b) Golden's cash-out, approved by the manager and now being paid out.
   const cashOutProcessing = one(
     await db
       .insert(walletRequest)
@@ -1064,7 +740,7 @@ async function main(): Promise<void> {
         userId: golden,
         type: 'cash_out',
         status: 'processing',
-        amount: 12_500, // $125.00
+        amount: 12_500,
         currency: CUR,
         destinationAccount: 'IL62 0108 0000 0009 9999 999',
         beneficiaryName: 'Golden Marsh',
@@ -1078,8 +754,6 @@ async function main(): Promise<void> {
   await walletEvent(cashOutProcessing, 'approved', 'pending_review', eldar, 'admin', 'Beneficiary matches the account holder.');
   await walletEvent(cashOutProcessing, 'processing', 'approved', eldar, 'admin', 'Bank transfer initiated.');
 
-  // (c) A rejected cash-out — the reason is mandatory and is recorded on both the
-  //     request and its event trail.
   const cashOutRejected = one(
     await db
       .insert(walletRequest)
@@ -1088,7 +762,7 @@ async function main(): Promise<void> {
         userId: red,
         type: 'cash_out',
         status: 'rejected',
-        amount: 300_000, // $3,000.00 — more than Red's wallet held
+        amount: 300_000,
         currency: CUR,
         destinationAccount: 'IL62 0108 0000 0001 1111 111',
         beneficiaryName: 'R. Ashwood',
@@ -1108,9 +782,6 @@ async function main(): Promise<void> {
     'Requested amount exceeded the available balance at review time.',
   );
 
-  // (d) A COMPLETED cash-in — and the one ledger row it produced. This pair is
-  //     the whole rule in miniature: the credit exists because, and only because,
-  //     the request reached `completed`.
   const cashInCompleted = one(
     await db
       .insert(walletRequest)
@@ -1150,10 +821,6 @@ async function main(): Promise<void> {
   await walletEvent(cashInCompleted, 'approved', 'submitted', eldar, 'admin');
   await walletEvent(cashInCompleted, 'completed', 'approved', eldar, 'admin', 'Funds cleared.');
 
-  // -------------------------------------------------------------------------
-  // 9. A DISPUTE against the real M Rayquaza-EX sale (Requirement 13.3 — disputes always
-  //    reference an actual recorded transaction, never placeholder data).
-  // -------------------------------------------------------------------------
   await db.insert(dispute).values({
     code: prefixedId(ID_PREFIX.dispute),
     transactionId: saleTxn,
@@ -1163,9 +830,6 @@ async function main(): Promise<void> {
     note: 'Buyer reports the card arrived with a nicked corner not shown in the listing photo.',
   });
 
-  // -------------------------------------------------------------------------
-  // 10. A few AUDIT records + OUTBOX messages (normally interceptor/worker-driven).
-  // -------------------------------------------------------------------------
   const goldStarName = '2005 Pokémon EX Deoxys Rayquaza ★ (Gold Star) #107/107';
   await db.insert(auditRecord).values([
     { actorId: hermon, action: 'POST /api/v1/intake/items', targetEntity: 'item', targetId: rayDragon },
@@ -1182,10 +846,6 @@ async function main(): Promise<void> {
     },
   ]);
 
-  // -------------------------------------------------------------------------
-  // 11. NOTIFICATIONS + preferences and saved ADDRESSES. Every notification
-  //     carries a rendered, human-readable message (Requirement 6.1).
-  // -------------------------------------------------------------------------
   await db.insert(notification).values([
     {
       userId: red,
@@ -1216,25 +876,15 @@ async function main(): Promise<void> {
       },
     },
   ]);
-  // Golden opts OUT of hold_placed notifications (worker skips them on dispatch).
   await db.insert(notificationPreference).values({ userId: golden, eventType: 'hold_placed', enabled: false });
 
   await db.insert(shippingAddress).values([
-    { userId: red, label: 'Home', recipient: 'Red Ashwood', line1: '1200 Market St', city: 'San Francisco', country: 'US', postalCode: '94102', isDefault: true },
-    { userId: golden, label: 'Home', recipient: 'Golden Marsh', line1: '55 Wall St', city: 'New York', country: 'US', postalCode: '10005', isDefault: true },
+    { userId: red, label: 'Home', recipient: 'Red Ashwood', line1: '1200 Market St', city: 'San Francisco', region: 'CA', country: 'US', postalCode: '94102', isDefault: true },
+    { userId: golden, label: 'Home', recipient: 'Golden Marsh', line1: '55 Wall St', city: 'New York', region: 'NY', country: 'US', postalCode: '10005', isDefault: true },
     { userId: veteran, label: 'Home', recipient: 'Ana Maria van der Berg', line1: 'Keizersgracht 12', city: 'Amsterdam', country: 'NL', postalCode: '1015 CS', isDefault: true },
   ]);
 
-  /**
-   * Two shows Bault is taking a table at.
-   *
-   * Real rows rather than decoration: the consignment channel refuses a show
-   * whose deadline has passed or whose capacity is full, the published calendar
-   * reads from here, and show PICKUP is gated on the same deadline because it is
-   * the same van. Dates are relative to the seed run so they never go stale.
-   */
   const days = (n: number) => new Date(Date.now() + n * 86_400_000);
-  /** Same idea at a finer grain, backwards: `minutes(90)` is ninety minutes AGO. */
   const minutes = (n: number) => new Date(Date.now() - n * 60_000);
   await db.insert(consignmentEvent).values([
     {
@@ -1245,7 +895,6 @@ async function main(): Promise<void> {
       endsAt: days(30),
       requestDeadline: days(21),
       capacity: 40,
-      // Bault hands cards back at this one as well as selling at it.
       pickupEnabled: true,
       pickupCapacity: 12,
       pickupFeeMinor: 1500,
@@ -1259,58 +908,12 @@ async function main(): Promise<void> {
       endsAt: days(64),
       requestDeadline: days(56),
       capacity: 25,
-      // Selling only — no room behind the table to hand boxes back.
       pickupEnabled: false,
       notes: 'Consignment only at this one.',
     },
   ]);
 
 
-  // -------------------------------------------------------------------------
-  // 12. THE STATES A SCREEN HAS TO DRAW.
-  //
-  //     Everything above seeds the happy path: items on shelves, a sale that
-  //     completed, money that moved. That is enough to prove the system works
-  //     and not nearly enough to DESIGN it, because the states a product is
-  //     judged on are the ones it was never photographed in — a frozen card, a
-  //     card that has left, a box nobody can attribute, an account locked out of
-  //     everything except the one screen that can unlock it.
-  //
-  //     None of these is decoration. Each is a real row in the real table the
-  //     real screen reads, seeded so those screens can be built against data
-  //     instead of against imagination.
-  // -------------------------------------------------------------------------
-
-  /**
-   * (i) A card Red no longer has.
-   *
-   * The ninth catalogued Rayquaza, booked in and then GIVEN AWAY: donated to the
-   * platform custodian for the youth-league raffle. It exists so the vault's
-   * History scope has something in it for the collector the demo signs in as.
-   *
-   * It is a donation rather than a shipment for a reason worth writing down.
-   * `VaultService.listHistory` finds a departed card two ways — the customer is
-   * the PREVIOUS OWNER of an ownership transfer, or a custody event names them
-   * as `new_owner_id` on a change into a terminal state. Nothing in the
-   * application ever writes the second shape: `CustodyService.changeState` does
-   * not set `new_owner_id`, and no code path writes a `dispatch` event at all.
-   * A card the customer still owns but has shipped home is therefore invisible
-   * in History — including Golden's SN-SV146-0006, seeded long before this pass.
-   *
-   * That is an API bug, and the seed is not the place to hide it. Writing a
-   * `new_owner_id` onto a state change here would make this one row appear while
-   * every row the running product creates stayed missing, which is worse than
-   * the bug. So Red's departure is modelled as the thing that genuinely works,
-   * the bug is reported in docs/design/01-audit.md, and the second branch stays
-   * empty until somebody fixes the query.
-   *
-   * The query is fixed now (audit N2): a terminal state change on a card the
-   * customer owns, made since they acquired it, counts as its departure, so
-   * Golden's SN-SV146-0006 is in her History with nothing written here for it.
-   *
-   * The tenth card (SN-EVS218-0010) is still deliberately unseeded, so the
-   * warehouse intake bench keeps a real, photographed item to book in.
-   */
   const rayAltArt = await mkItem({
     ownerId: platform, serialNumber: 'SN-EVS194-0009', barcode: 'SN-EVS194-0009',
     typeClass: 'trading_card',
@@ -1331,49 +934,23 @@ async function main(): Promise<void> {
   });
   await custody({
     itemId: rayAltArt, eventType: 'ownership_transfer', prevOwnerId: red, newOwnerId: platform,
-    actorId: eldar, reason: 'donation accepted — youth league raffle',
+    actorId: eldar, reason: 'donation',
   });
   await custody({
     itemId: rayAltArt, eventType: 'state_change', prevState: 'stored', newState: 'donated',
     actorId: eldar, reason: 'donated',
   });
 
-  /**
-   * The M Rayquaza is FROZEN.
-   *
-   * Red bought it described as Near Mint; the condition was corrected to Raw on
-   * arrival, and that correction is already in `item_change_history` above. This
-   * is what follows from it: Red disputed the sale, and a disputed card does not
-   * move — it cannot be listed, shipped, swapped or deslabbed while two people
-   * disagree about what it is.
-   *
-   * `hold_flag` and the `hold_placed` custody event are set together on purpose.
-   * The flag is what the vault query filters on; the event is what the register
-   * prints, and it carries the REASON, because a frozen card whose freeze has no
-   * stated cause is indistinguishable from a bug.
-   */
   await db.update(item).set({ holdFlag: true }).where(eq(item.id, rayMega));
   await custody({
     itemId: rayMega, eventType: 'hold_placed', actorId: eldar,
     reason: 'Dispute opened on the sale: sold as Near Mint, received Raw. Held until the dispute closes.',
   });
 
-  /**
-   * (j) A collector locked out of everything except the helpdesk.
-   *
-   * The hardest state in this product to get right, and the only one with no
-   * data at all. Dana owes for storage, the debt sweep suspended the account,
-   * and the API answers 403 to every route except the ticket ones — so the ONE
-   * screen that can get her out of it is the one screen she can reach. Sign in
-   * with dana@bault.dev / 11111111 to see it.
-   */
   const danaAcc = await mkUser('dana@bault.dev', 'dana', 'user', 'Dana', 'Okonkwo');
   const dana = danaAcc.id;
   await db.update(userAccount).set({ status: 'suspended' }).where(eq(userAccount.id, dana));
 
-  // -------------------------------------------------------------------------
-  // 12b. THE HELPDESK — a thread in each state a queue can be in.
-  // -------------------------------------------------------------------------
   const mkTicket = async (v: {
     userId: string;
     category: 'parcel' | 'shipment' | 'item' | 'billing' | 'account' | 'private_sale' | 'other';
@@ -1464,15 +1041,6 @@ async function main(): Promise<void> {
     ],
   });
 
-  // -------------------------------------------------------------------------
-  // 12c. PARCELS — boxes, including the two kinds that are not simple.
-  //
-  //      A receiving bench with nothing on it cannot be designed either. Three
-  //      parcels: one a collector has announced and nobody has seen, one sitting
-  //      unopened on the bench right now, and one that arrived addressed to a
-  //      username that does not exist — somebody's property that Bault is
-  //      holding and may not open.
-  // -------------------------------------------------------------------------
   const mkParcel = async (v: {
     ownerId: string | null;
     addressedTo: string;
@@ -1555,9 +1123,6 @@ async function main(): Promise<void> {
 
   await mkParcel({
     ownerId: null,
-    // The label as it was actually written. It resolves to nobody: there is no
-    // account `r.ashwod`, and guessing that it means `red` is precisely what the
-    // platform must not do with somebody else's unopened property.
     addressedTo: 'r.ashwod',
     status: 'unclaimed',
     carrier: 'UPS',
@@ -1572,15 +1137,6 @@ async function main(): Promise<void> {
     ],
   });
 
-  /**
-   * A prohibited arrival.
-   *
-   * Not an item and never was: a lithium cell cannot be shelved, so recording it
-   * as one would mean booking a thing into a vault it never entered. It gets its
-   * own append-only row saying what turned up, what happened to it and who
-   * decided — because the collector is entitled to know that something addressed
-   * to them arrived and did not survive.
-   */
   await db.insert(arrivalDisposal).values({
     code: prefixedId(ID_PREFIX.disposal),
     ownerId: red,
@@ -1593,13 +1149,6 @@ async function main(): Promise<void> {
     occurredAt: days(-9),
   });
 
-  // -------------------------------------------------------------------------
-  // 12d. CUSTOM REQUESTS — one at each of the three steps.
-  //
-  //      Ask (free) → an operator proposes a price and a scope → the collector
-  //      accepts. All three exist at once so the step register can be drawn with
-  //      the current step actually marked, rather than mocked.
-  // -------------------------------------------------------------------------
   await db.insert(serviceRequest).values([
     {
       code: prefixedId(ID_PREFIX.serviceRequest),
@@ -1646,16 +1195,8 @@ async function main(): Promise<void> {
     },
   ]);
 
-  // -------------------------------------------------------------------------
-  // 12e. ONE ESCROW DEAL, mid-inspection.
-  //
-  //      The inspection gate is the whole product: the card is in Bault's hands,
-  //      the buyer's money has already left their spendable balance, and nobody
-  //      is released until a person has compared the thing to its description.
-  //      Seeded at exactly that moment, so the seal mark has a state to mean.
-  // -------------------------------------------------------------------------
-  const DEAL_VALUE = 145_000; // $1,450.00
-  const DEAL_FEE = 2_500; // the floor: 1% of $1,450 is under the $25 minimum
+  const DEAL_VALUE = 145_000;
+  const DEAL_FEE = 2_500;
   const deal = one(
     await db
       .insert(escrowDeal)

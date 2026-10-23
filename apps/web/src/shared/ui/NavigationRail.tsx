@@ -10,44 +10,10 @@ export interface NavDestination {
   key: string;
   label: string;
   icon: ReactNode;
-  /** Rendered below the divider (notifications, management). */
   secondary?: boolean;
-  /** Optional count badge (unseen notifications). */
   count?: number;
 }
 
-/**
- * The fixed Bault navigation rail.
- *
- * TWO STATES ONLY: collapsed at 76px, and temporarily expanded to 232px while
- * the pointer is over it or keyboard focus is inside it. There is no pin, no
- * lock, and no persisted "stay open" preference — the rail was pinnable and is
- * not any more, and nothing was added in its place.
- *
- *   - choosing a destination collapses the rail immediately, even though the
- *     pointer is still over it and focus is still on the item just activated;
- *   - moving the pointer off the rail collapses it immediately, with no grace
- *     period — the old 220 ms delay is what left it hanging open;
- *   - Tab/Shift-Tab into the rail expands it, so a keyboard user reads the same
- *     labels a pointer user does, and Tabbing on after activating brings them
- *     back.
- *
- * The expanded rail floats OVER the workspace and the shell reserves only the
- * collapsed width permanently (`.workspace { margin-inline-start: var(--rail-w) }`),
- * so expanding and collapsing never shifts the page.
- *
- * The active destination is marked the way every other state in this product is
- * marked: a 2px custody-green rule on the item's leading edge, its icon at full
- * colour and its label at full weight. `aria-current="page"` carries the same
- * fact to assistive technology, and the mark is present in BOTH rail states, so
- * a collapsed rail still says plainly where you are.
- *
- * It used to be a separate element — a translucent bronze plate with a machined
- * gold notch and a turned rivet — absolutely positioned, measured with a
- * `ResizeObserver` on every expand, collapse and window resize, and animated
- * between rows. Five decorative decisions and a layout read per frame to say
- * "you are here", which a border now says with none.
- */
 export function NavigationRail({
   destinations,
   active,
@@ -66,14 +32,11 @@ export function NavigationRail({
   const t = useT();
   const [state, dispatch] = useReducer(navRailReducer, INITIAL_NAV_RAIL_STATE);
 
-  // On mobile the rail is a drawer the shell opens and closes, so hover has no
-  // meaning there and the state machine is bypassed entirely.
   const expanded = mobile ? mobileOpen : isExpanded(state);
 
   const primary = destinations.filter((d) => !d.secondary);
   const secondary = destinations.filter((d) => d.secondary);
 
-  /** One navigation: tell the shell, collapse the rail, close the mobile drawer. */
   function go(key: string) {
     onNavigate(key);
     dispatch({ type: 'navigate' });
@@ -88,9 +51,6 @@ export function NavigationRail({
         aria-label={t('nav.primary')}
         onMouseEnter={mobile ? undefined : () => dispatch({ type: 'pointerEnter' })}
         onMouseLeave={mobile ? undefined : () => dispatch({ type: 'pointerLeave' })}
-        // Real movement is the only pointer signal that reopens a rail closed by
-        // a selection — see `navRailState`. Dispatched only when it would change
-        // something, so an idle sweep of the pointer costs no re-renders.
         onMouseMove={
           mobile || (state.hovering && !state.dismissed)
             ? undefined
@@ -101,9 +61,6 @@ export function NavigationRail({
           mobile
             ? undefined
             : (event) => {
-                // React's onBlur bubbles, so it also fires when focus moves
-                // BETWEEN two rail items. Only a move out of the rail entirely
-                // counts as focus leaving.
                 if (!event.currentTarget.contains(event.relatedTarget as Node)) {
                   dispatch({ type: 'focusLeave' });
                 }
@@ -141,10 +98,6 @@ export function NavigationRail({
   );
 }
 
-/**
- * One block of rail items. No measurement, no observer, no positioned element —
- * the active row marks itself.
- */
 function RailGroup({
   destinations,
   active,

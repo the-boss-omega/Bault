@@ -54,23 +54,12 @@ import {
   type ShippingCover,
 } from '../mem/membership.service';
 
-/** Who is asking. Staff may act on any shipment; a collector only on their own. */
 export type ShipmentActor = Pick<AuthUser, 'id' | 'role'>;
 
-/**
- * What a day of waiting is worth, in minor units, when Bault chooses for you.
- *
- * An explicit number rather than a hidden preference. At $2.50 a day, saving $30
- * is worth about twelve days and saving $2 is worth less than one — which is
- * close to how most people actually feel about a parcel, and is at least
- * arguable in public, which "we picked the cheap one" is not.
- */
 const DAY_OF_WAITING_MINOR = 250;
 
-/** An id that can be compared with a uuid column without the query failing. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Everything a collector can say about a parcel before it is priced. */
 export interface ShipmentOptionsInput {
   rush?: boolean;
   insuredValueMinor?: number;
@@ -80,7 +69,6 @@ export interface ShipmentOptionsInput {
   customerNotes?: string;
   serviceMode?: 'simple' | 'personalised';
   perItemCustomsValues?: Record<string, number>;
-  /** A key from `SHIPPING_BOXES`. Null or absent: priced on weight, the warehouse picks. */
   boxSize?: string | null;
 }
 
@@ -93,46 +81,27 @@ export interface CreateShipmentInput extends ShipmentOptionsInput {
   recipientName?: string;
 }
 
-/** A rate, plus everything needed to decide whether to take it. */
 export interface QuotedRate extends Rate {
   serviceKey: string;
-  /** Empty when the service can carry this parcel. */
   problems: ServiceProblem[];
   eligible: boolean;
   transitDaysMin: number;
   transitDaysMax: number;
   maxInsuredValueMinor: number;
-  /** What Bault adds on top — handling, insurance, add-ons. */
   handlingMinor: number;
   insurancePremiumMinor: number;
   addOnsMinor: number;
-  /**
-   * What the member's tier pays towards this rate, and the parts it pays for.
-   * Null for a non-member. The gross figures above are unchanged by it.
-   */
   membershipCover: AppliedShippingCover | null;
   coveredMinor: number;
-  /** Carrier + everything above, LESS the cover. This is what the wallet is asked for. */
   totalMinor: number;
-  /** True when this is what "choose for me" would take. */
   recommended: boolean;
 }
 
 export interface Quote {
   destination: { country: string; postalCode: string };
   totalWeightGrams: number;
-  /**
-   * The box this was priced in.
-   *
-   * Never null any more when anything fits: an unchosen box is now the one
-   * the warehouse would reach for, so the quote carries real dimensions
-   * rather than pricing on weight alone. Null only when nothing in the
-   * catalogue takes these contents.
-   */
   boxSize: string | null;
-  /** True when Bault picked the box rather than the collector. */
   boxAutoSelected: boolean;
-  /** True when any item's weight came from its class rather than a scale. */
   weightEstimated: boolean;
   itemCount: number;
   insuredValueMinor: number;
@@ -143,27 +112,6 @@ export interface Quote {
   optionProblems: { field: string; message: string }[];
 }
 
-/**
- * Shipment creation, quoting, rating and payment.
- *
- * What changed here is worth stating plainly, because the old version's shape
- * was right and almost everything inside it was synthetic. A rate request
- * hard-coded the destination as country `IL`, postal code `00000`, and assumed
- * 500 g per item — so the two prices that came back were the same two prices for
- * every parcel Bault had ever quoted, whether it held one card or a sealed case,
- * whether it was going to New Jersey or to Japan.
- *
- * Now a quote depends on where the parcel is going, what it weighs, what it is
- * worth and what has been asked for; services that cannot legally carry it say
- * so with the rule they failed; and the price includes the insurance premium and
- * add-ons rather than only the carrier's line.
- *
- * The other change is that a rate can now be selected without being paid for.
- * Previously the charge was unconditional, which quietly drove a wallet negative
- * and blocked every other service the collector had. A shipment that cannot be
- * afforded is now HELD — `awaiting_payment`, for {@link PAYMENT_WINDOW_DAYS} —
- * and its items go back on the shelf if it is never paid.
- */
 @Injectable()
 export class ShipmentService {
   constructor(
@@ -177,12 +125,6 @@ export class ShipmentService {
     private readonly memberships: MembershipService,
   ) {}
 
-  /**
-   * Statuses in which a shipment still has a claim on its items.
-   *
-   * Anything not on this list has either gone (the items left with it) or been
-   * called off (they are free again).
-   */
   static readonly OPEN_STATUSES = [
     'requested',
     'awaiting_payment',
@@ -192,17 +134,6 @@ export class ShipmentService {
     'labeled',
   ] as const;
 
-  /**
-   * Refuse to put an item into two parcels at once.
-   *
-   * Nothing prevented this. `create` checked only that an item was `stored`, and
-   * an item in an open shipment stays `stored` until it is physically dispatched
-   * — so the same card could sit in three open requests, and two of them would
-   * fail at the packing bench with the operator holding one card and two lists.
-   *
-   * It matters more now than it did, because cancelling and merging only mean
-   * something if being IN a shipment means something.
-   */
   async assertItemsFree(userId: string, itemIds: string[], exceptShipmentId?: string, tx?: Database) {
     const open = await (tx ?? this.db)
       .select({ id: shipment.id, code: shipment.code, itemIds: shipment.itemIds })
@@ -227,7 +158,6 @@ export class ShipmentService {
     }
   }
 
-  /** The service catalogue, so the SPA can show limits before anything is chosen. */
   services() {
     return {
       services: CARRIER_SERVICES,
@@ -236,30 +166,10 @@ export class ShipmentService {
       maxInsuredValueMinor: MAX_INSURED_VALUE_MINOR,
       signatureRequiredAboveMinor: SIGNATURE_REQUIRED_ABOVE_MINOR,
       paymentWindowDays: PAYMENT_WINDOW_DAYS,
-      /**
-       * What cancelling costs once a rate has been selected.
-       *
-       * Published so the warning shown BEFORE the cancel button can name the
-       * figure. It said "charges a restocking fee" while the number was a
-       * constant sitting in the server — asking somebody to accept a cost
-       * nobody was willing to state.
-       */
       restockingFeeMinor: RESTOCKING_FEE_MINOR,
     };
   }
 
-  /* ------------------------------------------------------------------
-     Quoting — pricing a parcel that does not exist yet
-     ------------------------------------------------------------------ */
-
-  /**
-   * What would this cost?
-   *
-   * Nothing is created and nothing is charged. This is the endpoint that was
-   * missing: rates used to appear only after a shipment record existed, so
-   * "how much would it be to send these three?" could only be answered by
-   * committing to sending them.
-   */
   async quote(userId: string, input: CreateShipmentInput): Promise<Quote> {
     const items = await this.profiles.loadShippableItems(userId, input.itemIds);
     const { destination } = await this.profiles.resolveDestination(userId, {
@@ -272,8 +182,6 @@ export class ShipmentService {
 
     const insuredValueMinor = Math.max(0, input.insuredValueMinor ?? 0);
     const declaredValueMinor = Math.max(0, input.declaredValueMinor ?? 0);
-    // The signature is forced rather than merely validated, so a quote shows the
-    // real price of the cover the collector asked for.
     const signatureRequired = Boolean(input.signatureRequired) || signatureForced(insuredValueMinor);
     const addOns = input.addOns ?? [];
 
@@ -299,8 +207,6 @@ export class ShipmentService {
       box,
     });
 
-    // The same lines `create` will freeze, so the carrier rates the parcel with
-    // the declaration it will travel under.
     const customsLines = needsCustoms(destination.country)
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
       : null;
@@ -329,14 +235,6 @@ export class ShipmentService {
     };
   }
 
-  /**
-   * Price every service against this parcel, eligible or not.
-   *
-   * Ineligible services are RETURNED rather than filtered away, each carrying
-   * the rule it failed. A collector who wanted the cheap option and cannot have
-   * it is owed the reason — "ePacket insures up to $500.00" is actionable, and
-   * an option that silently vanished is not.
-   */
   private async priceServices(
     profile: ParcelProfile,
     addOnKeys: string[],
@@ -345,31 +243,12 @@ export class ShipmentService {
     customsLines: readonly CustomsLine[] | null = null,
   ): Promise<QuotedRate[]> {
     const { amount: baseHandling } = await this.pricing.price('shipping');
-    /**
-     * Rush is a BAULT charge, not a carrier one.
-     *
-     * It used to be passed to the adapter, which doubled the carrier's base
-     * rate and shortened its estimate — quietly attributing Bault's own picking
-     * speed to the carrier, and telling the collector FedEx would arrive sooner
-     * because Bault packed faster. What rush actually buys is the warehouse
-     * moving a parcel to the front of the queue, so it is priced here and the
-     * carrier's promise is left alone.
-     */
     const rushMinor = rush ? ((await this.pricing.tryPrice('shipping_rush'))?.amount.amount ?? 0) : 0;
     const handling = { amount: baseHandling.amount + rushMinor };
     const premium = insurancePremiumMinor(profile.insuredValueMinor);
     const addOnPrices = await this.priceAddOns(addOnKeys);
     const addOnsMinor = Object.values(addOnPrices).reduce((a, b) => a + b, 0);
 
-    /**
-     * What a member's tier pays, apart from postage (which depends on the rate).
-     *
-     * Insurance is covered up to the tier's cap and no further: a $3,000 parcel
-     * on a $1,000 cap has the premium on $1,000 paid and pays the difference —
-     * "insurance above your tier's cap" is on the published not-covered list.
-     * Rush is covered outright where the tier includes it. A tracker is covered
-     * while the tier has one left this cycle.
-     */
     const rushCovered = cover?.rushIncluded ? rushMinor : 0;
     const insuranceCovered =
       cover && profile.insuredValueMinor > 0 && cover.insuredShipmentsLeft > 0
@@ -384,19 +263,12 @@ export class ShipmentService {
     const origin = await this.originAddress();
     const carrierRates = await this.shipping.getRates({
       destination: profile.destination,
-      // Where the parcel physically leaves from. A real carrier prices on the
-      // origin/destination pair, so quoting without it prices a different
-      // shipment than the one that gets bought.
       origin,
       items: [{ weightGrams: profile.weightGrams }],
-      // The box, when one was chosen. The carrier bills dimensional weight from
-      // these itself, so nothing here scales its price a second time.
       dimensionsCm: profile.dimensionsCm,
       packagingGrams: profile.packagingGrams,
       rush,
       signatureRequired: profile.signatureRequired,
-      // Rated WITH its declaration: the label is bought against this quote, and
-      // a carrier cannot add customs to a shipment after it has been rated.
       customs:
         customsLines && customsLines.length > 0
           ? customsDeclarationFor(customsLines, origin?.name ?? 'Bault')
@@ -405,15 +277,11 @@ export class ShipmentService {
 
     const quoted: QuotedRate[] = [];
     for (const service of CARRIER_SERVICES) {
-      // Matched through the catalogue's explicit provider names, not by
-      // comparing display names with EasyPost's service codes — which matched
-      // nothing, and left a real account with no way to ship. See `rateFor`.
       const rate = rateFor(service, carrierRates);
-      if (!rate) continue; // the adapter does not sell it to this destination
+      if (!rate) continue;
       const problems = checkService(service, profile);
       const carrierCost = service.flatCostMinor !== undefined ? service.flatCostMinor : rate.costMinor;
 
-      // The postage credit meets the carrier's line, and never more than it.
       const postageCovered = cover ? Math.min(cover.postageCreditLeftMinor, carrierCost) : 0;
       const addOnsCoveredMinor = Object.values(addOnsCovered).reduce((a, b) => a + b, 0);
       const coveredMinor = postageCovered + insuranceCovered + rushCovered + addOnsCoveredMinor;
@@ -431,9 +299,6 @@ export class ShipmentService {
 
       quoted.push({
         ...rate,
-        // The catalogue's names, whatever the carrier calls it: these are what
-        // the collector selects by and what the shipment stores, and
-        // `findService` resolves them. The provider's own ids ride along above.
         carrier: service.carrier,
         serviceLevel: service.serviceLevel,
         costMinor: carrierCost,
@@ -459,19 +324,6 @@ export class ShipmentService {
       .sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.totalMinor - b.totalMinor);
   }
 
-  /**
-   * The address parcels ship FROM — the primary storage facility.
-   *
-   * Read from the facility table rather than configured separately, so it is the
-   * same address collectors are told to post to and there is one place to change
-   * it. A forwarding site stores nothing, so it is never the origin of a vault
-   * shipment — the one exception is direct overnight, which never entered the
-   * vault and leaves from the forwarding site it arrived at, named by `code`.
-   *
-   * Left undefined when the facility still carries a placeholder street, which
-   * makes the real adapter refuse with a sentence naming the problem instead of
-   * quoting against a fictional origin.
-   */
   private async originAddress(code?: string) {
     const [site] = await this.db
       .select()
@@ -491,56 +343,26 @@ export class ShipmentService {
     };
   }
 
-  /** Each add-on's price, keyed by its fee action — a tier covers them one by one. */
   private async priceAddOns(keys: string[]): Promise<Record<string, number>> {
     const prices: Record<string, number> = {};
     for (const key of keys) {
       const addOn = shipmentAddOn(key);
       if (!addOn) continue;
-      // The catalogue price is the fallback; a pricing rule wins where one
-      // exists, because Principle VI makes the rules the source of truth.
       const resolved = await this.pricing.tryPrice(addOnFeeAction(key));
       prices[addOnFeeAction(key)] = resolved?.amount.amount ?? addOn.priceMinor;
     }
     return prices;
   }
 
-  /**
-   * "Choose for me."
-   *
-   * ShipMyCards calls this Simple Shipping and it is the mode most people want:
-   * the collector states the outcome — how fast, how covered — and the platform
-   * picks the carrier.
-   *
-   * The rule is neither "cheapest" nor "fastest", because both are wrong on
-   * their own. Cheapest sends a $3,000 card by the slowest boat to save $2;
-   * fastest charges $525 for a parcel that would have arrived comfortably for
-   * $310. So a day of waiting is given an explicit PRICE and the two are added
-   * up — which turns an unstatable preference into an arithmetic one, and makes
-   * the choice explicable to the collector afterwards.
-   */
   private pickBest(rates: QuotedRate[]): QuotedRate | null {
     const eligible = rates.filter((r) => r.eligible);
     if (eligible.length === 0) return null;
-    /**
-     * Postage credit counts as money here, because it is money: a member's
-     * monthly credit spent on this parcel is credit the next one does not have.
-     * Scored on the net total alone, every covered service ties and the fastest
-     * wins — so "choose for me" quietly spent three times the credit it needed.
-     * Adding it back means a member is recommended what anybody would be, and
-     * simply pays less for it.
-     */
     const score = (r: QuotedRate) =>
       r.totalMinor + (r.membershipCover?.postageMinor ?? 0) + r.transitDaysMax * DAY_OF_WAITING_MINOR;
     return eligible.reduce((best, r) => (score(r) < score(best) ? r : best), eligible[0]!);
   }
 
-  /* ------------------------------------------------------------------
-     Creating
-     ------------------------------------------------------------------ */
-
   async create(userId: string, input: CreateShipmentInput) {
-    // A negative balance blocks new shipments (PAY-10).
     await this.wallet.assertNotBlocked(userId);
 
     const items = await this.profiles.loadShippableItems(userId, input.itemIds);
@@ -575,9 +397,6 @@ export class ShipmentService {
       ? this.profiles.buildCustomsLines(measurements, declaredValueMinor, input.perItemCustomsValues)
       : null;
 
-    // The checks above, again, with the items locked: two clicks on Create
-    // used to both pass them and put the same cards on two parcels, each of
-    // which could then be paid for.
     const [created] = await this.db.transaction(async (tx) => {
       await this.profiles.loadShippableItems(userId, input.itemIds, tx);
       await this.assertItemsFree(userId, items.map((i) => i.id), undefined, tx);
@@ -591,7 +410,6 @@ export class ShipmentService {
           recipientName: input.recipientName?.trim() || recipientName,
           destinationCountry: destination.country,
           destinationPostalCode: destination.postalCode,
-          // The street and city a carrier needs, frozen as quoted. See the column.
           destinationDetail: { ...destination, name: input.recipientName?.trim() || destination.name },
           serviceMode: input.serviceMode === 'simple' ? 'simple' : 'personalised',
           rushFlag: input.rush ?? false,
@@ -599,8 +417,6 @@ export class ShipmentService {
           insuredValueMinor,
           signatureRequired,
           addOns: addOns.length > 0 ? addOns.map((key) => ({ key })) : null,
-          // Stored, because picking a service re-rates from the shipment row: a
-          // box that lived only in the quote would be charged as no box at all.
           boxSize: box?.key ?? null,
           customsLines,
           customerNotes: input.customerNotes?.trim() || null,
@@ -612,10 +428,6 @@ export class ShipmentService {
     if (!created) throw AppError.validation('Failed to create shipment');
     return created;
   }
-
-  /* ------------------------------------------------------------------
-     Reading
-     ------------------------------------------------------------------ */
 
   async listFor(actor: ShipmentActor) {
     const staff = actor.role === 'warehouse_operator' || actor.role === 'admin';
@@ -646,12 +458,6 @@ export class ShipmentService {
     );
   }
 
-  /**
-   * The shape the tracking list and the detail drawer both render.
-   *
-   * Kept in one place so a field can never be present in the list and missing
-   * from the drawer.
-   */
   private toTrackingView(
     s: typeof shipment.$inferSelect,
     owner: { username: string | null; accountName: string },
@@ -671,33 +477,17 @@ export class ShipmentService {
       serviceLevel: s.serviceLevel,
       serviceKey: s.serviceKey,
       serviceMode: s.serviceMode,
-      /**
-       * How it ends, and — for a hand delivery — the price somebody worked out.
-       *
-       * The SPA's quotes panel filters on `fulfilmentMethod` and shows
-       * `quoteMinor` with an Accept button, and none of the three was in this
-       * view, so a collector who had been quoted never saw the quote and had no
-       * way to accept it.
-       */
       fulfilmentMethod: s.fulfilmentMethod,
       quoteMinor: s.quoteMinor,
       quoteNotes: s.quoteNotes,
       trackingNumber: s.trackingNumber,
+      labelRefused: ShipmentService.labelRefusal(s),
       estimatedDeliveryAt: s.estimatedDeliveryAt,
       rush: s.rushFlag,
       cost: s.cost,
       currency: s.currency,
       itemIds,
-      /**
-       * What is printed on each item's label.
-       *
-       * The packing bench checked the operator's scans against nothing: it held
-       * only these ids, which appear on no label, and sent them back as "what was
-       * scanned" — so the server's scan check compared the shipment's list with
-       * itself. With the labels here, the bench can match a real scan to a card.
-       */
       items: itemIds.map((id) => labels.get(id) ?? { id, serialNumber: null, barcode: null, description: null }),
-      /** A direct-overnight shipment's contents are a parcel, and this is the one. */
       directParcel: direct ? { code: direct.code, trackingNumber: direct.trackingNumber } : null,
       destinationAddress: s.destinationAddress,
       destinationCountry: s.destinationCountry,
@@ -707,7 +497,6 @@ export class ShipmentService {
       insurancePremiumMinor: s.insurancePremiumMinor,
       signatureRequired: s.signatureRequired,
       addOns: (s.addOns as { key: string }[]) ?? [],
-      // What the parcel goes out in, so whoever packs it uses the box it was priced in.
       boxSize: s.boxSize,
       customerNotes: s.customerNotes,
       groupId: s.groupId,
@@ -728,14 +517,6 @@ export class ShipmentService {
     return s;
   }
 
-  /**
-   * Load a shipment on behalf of a caller.
-   *
-   * A shipment carries the destination address and can be made to charge its
-   * owner's wallet, so it is never addressable by id alone. `notFound` rather
-   * than `forbidden` on a miss — telling a stranger that some other collector's
-   * shipment id exists is itself a leak.
-   */
   async loadFor(shipmentId: string, actor: ShipmentActor) {
     const s = await this.load(shipmentId);
     const staff = actor.role === 'warehouse_operator' || actor.role === 'admin';
@@ -743,7 +524,6 @@ export class ShipmentService {
     return s;
   }
 
-  /** The parcel profile for a shipment that already exists. */
   async profileOf(s: typeof shipment.$inferSelect) {
     const items = await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? []);
     const measurements = this.profiles.measure(items);
@@ -762,26 +542,10 @@ export class ShipmentService {
     };
   }
 
-  /**
-   * What dispatch buys: the rate that was charged, and the parcel it was for.
-   *
-   * Dispatch used to build this itself, and built it wrong in three ways at
-   * once: a hard-coded `US`/`00000` destination, the TOTAL parcel weight
-   * repeated once per item (a 3-item parcel weighing 500 g was declared as
-   * 1.5 kg), and no box. It also passed no rate id, and a real carrier sells a
-   * label only against the rate it quoted — so on EasyPost there was nothing to
-   * buy at all.
-   *
-   * Built from the same `profileOf` that priced the shipment, so the label and
-   * the charge describe the same parcel. The one deliberate difference is the
-   * weight: the operator has just put the parcel on a scale, and a measured
-   * figure beats every estimate this system made before it was packed.
-   */
   async labelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams?: number) {
     const { profile, measurements } = await this.profileOf(s);
     const contentsGrams = measurements.totalWeightGrams;
     const packagingGrams = profile.packagingGrams;
-    // The scale weighs the box too; take the box back out so it is not counted twice.
     const measuredContents =
       measuredWeightGrams && measuredWeightGrams > 0
         ? Math.max(1, measuredWeightGrams - (packagingGrams ?? 0))
@@ -802,7 +566,6 @@ export class ShipmentService {
     return { rate: ShipmentService.chargedRate(s), request };
   }
 
-  /** The rate a shipment was charged for, with the carrier's handles when it has them. */
   private static chargedRate(s: typeof shipment.$inferSelect): Rate {
     return {
       carrier: s.carrier ?? '',
@@ -815,25 +578,15 @@ export class ShipmentService {
     };
   }
 
-  /** A direct-overnight shipment: booked against a parcel, with no items by design. */
   static isDirect(s: Pick<typeof shipment.$inferSelect, 'serviceKey' | 'itemIds'>): boolean {
     return s.serviceKey === DIRECT_OVERNIGHT_KEY && ((s.itemIds as string[]) ?? []).length === 0;
   }
 
-  /**
-   * What a direct-overnight label is bought for: a parcel that never became items.
-   *
-   * There is nothing in the vault to build a profile from — `itemIds` is empty
-   * by design, which is why `labelRequest` cannot serve it. The parcel is the
-   * contents: it leaves from the forwarding site it arrived at, as one envelope
-   * weighing what the scale says.
-   */
   async directLabelRequest(s: typeof shipment.$inferSelect, measuredWeightGrams: number) {
     const request: RateRequest = {
       destination: destinationOf(s),
       origin: await this.originAddress(DIRECT_OVERNIGHT_FACILITY),
       items: [{ weightGrams: Math.max(1, measuredWeightGrams) }],
-      // The scale weighed the envelope with the cards in it.
       packagingGrams: 0,
       rush: s.rushFlag,
       signatureRequired: s.signatureRequired,
@@ -841,13 +594,6 @@ export class ShipmentService {
     return { rate: ShipmentService.chargedRate(s), request };
   }
 
-  /**
-   * The parcel each direct shipment was booked for, by shipment id.
-   *
-   * Read from the parcel's own append-only trail: booking a direct shipment
-   * writes a `direct_shipped` event naming the shipment, and that event is the
-   * link — there is no column to drift from it.
-   */
   async directParcels(shipmentIds: readonly string[], tx?: Database) {
     const out = new Map<string, { id: string; code: string; trackingNumber: string | null; status: string; facilityId: string }>();
     if (shipmentIds.length === 0) return out;
@@ -868,10 +614,6 @@ export class ShipmentService {
     return out;
   }
 
-  /**
-   * What is printed on each item's label, by id — so whoever packs a shipment
-   * can check what they scan against what the shipment holds.
-   */
   private async itemLabels(itemIds: readonly string[]) {
     const ids = [...new Set(itemIds)].filter((id) => UUID.test(id));
     const out = new Map<string, { id: string; serialNumber: string; barcode: string; description: string | null }>();
@@ -884,7 +626,6 @@ export class ShipmentService {
     return out;
   }
 
-  /** Rates for a real shipment, with the same constraint annotations a quote has. */
   async rates(shipmentId: string, actor: ShipmentActor): Promise<QuotedRate[]> {
     const s = await this.loadFor(shipmentId, actor);
     const { profile } = await this.profileOf(s);
@@ -893,14 +634,29 @@ export class ShipmentService {
       profile,
       addOnKeys,
       s.rushFlag,
-      await this.memberships.shippingCover(s.userId),
+      await this.coverFor(s),
       (s.customsLines as CustomsLine[] | null) ?? null,
     );
   }
 
-  /* ------------------------------------------------------------------
-     Choosing a service, and paying for it
-     ------------------------------------------------------------------ */
+  private async coverFor(s: typeof shipment.$inferSelect): Promise<ShippingCover | null> {
+    const cover = await this.memberships.shippingCover(s.userId);
+    const spent = ShipmentService.labelRefusal(s) ? ((s.membershipCover as AppliedShippingCover | null) ?? null) : null;
+    if (!cover || !spent || spent.tier !== cover.tier) return cover;
+    const state = await this.memberships.current(s.userId);
+    if (!spent.spentInPeriodId || spent.spentInPeriodId !== state?.period?.id) return cover;
+    const addOnsLeft = { ...cover.addOnsLeft };
+    for (const action of Object.keys(spent.addOns ?? {})) {
+      const left = addOnsLeft[action];
+      if (left !== undefined && left !== UNLIMITED) addOnsLeft[action] = left + 1;
+    }
+    return {
+      ...cover,
+      insuredShipmentsLeft: cover.insuredShipmentsLeft + (spent.insuredShipment ? 1 : 0),
+      postageCreditLeftMinor: cover.postageCreditLeftMinor + Math.max(0, spent.postageMinor ?? 0),
+      addOnsLeft,
+    };
+  }
 
   async selectRate(shipmentId: string, carrier: string, serviceLevel: string, actor: ShipmentActor) {
     const s = await this.loadFor(shipmentId, actor);
@@ -919,13 +675,6 @@ export class ShipmentService {
     return this.settle(s, rate, service);
   }
 
-  /**
-   * "Choose for me", applied.
-   *
-   * Same settlement path as an explicit choice — the only difference is who
-   * decided, which is recorded on the shipment so a late parcel can be answered
-   * for honestly.
-   */
   async selectRecommended(shipmentId: string, actor: ShipmentActor) {
     ShipmentService.assertRateSelectable(await this.loadFor(shipmentId, actor));
     const quoted = await this.rates(shipmentId, actor);
@@ -941,17 +690,9 @@ export class ShipmentService {
     });
   }
 
-  /**
-   * A rate can be chosen only before anything was charged, and only for a
-   * parcel a carrier is taking.
-   *
-   * `rates_selected` was accepted too, and `settle` charged again without
-   * crediting the first charge: choosing a different service on a paid parcel
-   * paid for it twice. And a hand-delivery or show-pickup request could be
-   * given a carrier rate, which is far cheaper than what was quoted for it.
-   */
   private static assertRateSelectable(s: typeof shipment.$inferSelect) {
-    if (s.status !== 'requested' && s.status !== 'awaiting_payment') {
+    const reRating = s.status === 'rates_selected' && ShipmentService.labelRefusal(s) !== null;
+    if (s.status !== 'requested' && s.status !== 'awaiting_payment' && !reRating) {
       throw new AppError(
         ErrorCode.CONFLICT,
         s.status === 'rates_selected'
@@ -968,16 +709,15 @@ export class ShipmentService {
     }
   }
 
-  /**
-   * Freeze the price and try to pay it.
-   *
-   * If the wallet cannot cover the total the shipment is HELD rather than
-   * charged. That is the change: driving a wallet negative to buy postage
-   * blocked every other service the collector had, on an action they took
-   * deliberately, and left them no way back except funding the wallet anyway.
-   * Now they are told, the parcel waits a week, and the items are released if
-   * nothing happens.
-   */
+  static labelRefusal(s: typeof shipment.$inferSelect): { at: string | null; reason: string | null } | null {
+    if (s.status !== 'rates_selected' || s.trackingNumber || s.fulfilmentMethod !== 'carrier') return null;
+    if (ShipmentService.isDirect(s)) return null;
+    const purchase = (s.fulfillment as { labelPurchase?: { state?: string; startedAt?: string; lastError?: string } } | null)
+      ?.labelPurchase;
+    if (purchase?.state !== 'refused') return null;
+    return { at: purchase.startedAt ?? null, reason: purchase.lastError ?? null };
+  }
+
   private async settle(
     s: typeof shipment.$inferSelect,
     rate: QuotedRate,
@@ -992,10 +732,8 @@ export class ShipmentService {
       carrier: rate.carrier,
       serviceLevel: rate.serviceLevel,
       serviceKey: service.key,
-      // What a real carrier will actually sell at dispatch: THIS rate, by id.
       providerShipmentId: rate.providerShipmentId ?? null,
       providerRateId: rate.providerRateId ?? null,
-      // Stored so a HELD shipment spends the same cover when it is paid later.
       membershipCover: rate.membershipCover,
       cost: rate.totalMinor,
       insurancePremiumMinor: rate.insurancePremiumMinor,
@@ -1004,23 +742,14 @@ export class ShipmentService {
       updatedAt: now,
     };
 
-    /**
-     * One transaction, under the shipment lock and then the wallet lock.
-     *
-     * The balance used to be read before any transaction and the row written by
-     * id alone, so two clicks on a service each found the money, each charged
-     * it, and the worker's expiry sweep could cancel a parcel in the same moment
-     * it was being paid for.
-     */
     return this.db.transaction(async (tx) => {
       const [cur] = await tx.select().from(shipment).where(eq(shipment.id, s.id)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Shipment not found');
       ShipmentService.assertRateSelectable(cur);
+      if (cur.status === 'rates_selected') return this.reRate(tx, cur, rate, common, estimatedDeliveryAt);
 
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < rate.totalMinor) {
-        // A held parcel keeps the deadline it was first given: choosing again
-        // does not buy another week.
         const paymentDueAt = cur.paymentDueAt ?? new Date(now.getTime() + PAYMENT_WINDOW_DAYS * 86_400_000);
         await tx
           .update(shipment)
@@ -1038,8 +767,6 @@ export class ShipmentService {
         };
       }
 
-      // The cover as spent, with the cycle it came out of, so a cancellation
-      // gives it back to the right one.
       const spentCover = rate.membershipCover
         ? await this.memberships.spendShippingCover(tx, s.userId, rate.membershipCover)
         : null;
@@ -1059,16 +786,88 @@ export class ShipmentService {
     });
   }
 
-  /**
-   * One charge for the whole parcel, with every component in the snapshot.
-   *
-   * A single line on the statement, because that is what the collector bought —
-   * but the snapshot carries the carrier's cost, Bault's handling, the insurance
-   * premium and the add-ons separately, so "what am I actually paying for" has
-   * an answer that survives a pricing change (Principle V).
-   */
+  private async reRate(
+    tx: Database,
+    cur: typeof shipment.$inferSelect,
+    rate: QuotedRate,
+    common: Partial<typeof shipment.$inferInsert>,
+    estimatedDeliveryAt: Date,
+  ) {
+    const userId = cur.userId;
+    const currency = cur.currency ?? DEFAULT_CURRENCY;
+    await this.ledger.lockWallet(userId, tx);
+    const refusedCover = (cur.membershipCover as AppliedShippingCover | null) ?? null;
+    if (refusedCover) await this.memberships.returnShippingCover(tx, userId, refusedCover);
+    const spentCover = rate.membershipCover
+      ? await this.memberships.spendShippingCover(tx, userId, rate.membershipCover)
+      : null;
+
+    const paidMinor = cur.cost ?? 0;
+    const differenceMinor = rate.totalMinor - paidMinor;
+    if (differenceMinor > 0) {
+      const balance = await this.ledger.balanceOf(userId, tx);
+      if (balance.amount < differenceMinor) {
+        throw new AppError(
+          ErrorCode.INSUFFICIENT_BALANCE,
+          `That service costs ${formatMinor(differenceMinor)} more than the one already paid for, and the wallet holds ${formatMinor(balance.amount)}. Top up, or choose a cheaper service.`,
+          409,
+          { shortfallMinor: differenceMinor - balance.amount },
+        );
+      }
+      const [c] = await tx
+        .insert(charge)
+        .values({
+          userId,
+          actionType: 'shipping',
+          pricingRuleSnapshot: {
+            rateChangeAfterRefusedLabel: true,
+            previousService: cur.serviceKey,
+            previousTotal: paidMinor,
+            service: rate.serviceKey,
+            newTotal: rate.totalMinor,
+            carrierCost: rate.costMinor,
+            handling: rate.handlingMinor,
+            insurancePremium: rate.insurancePremiumMinor,
+            addOns: rate.addOnsMinor,
+            membershipCover: rate.membershipCover ?? null,
+          },
+          amount: differenceMinor,
+          currency,
+          paymentMeans: 'wallet',
+          status: 'settled',
+          referenceId: cur.id,
+        })
+        .returning({ id: charge.id });
+      if (!c) throw AppError.validation('Failed to charge the difference');
+      await this.ledger.record(
+        { userId, type: 'service_charge', amount: differenceMinor, direction: 'debit', currency, referenceType: 'charge', referenceId: c.id },
+        tx,
+      );
+    } else if (differenceMinor < 0) {
+      await this.ledger.record(
+        { userId, type: 'shipping_refund', amount: -differenceMinor, direction: 'credit', currency, referenceType: 'shipment', referenceId: cur.id },
+        tx,
+      );
+    }
+
+    const [updated] = await tx
+      .update(shipment)
+      .set({ ...common, membershipCover: spentCover, status: 'rates_selected', paymentDueAt: null, fulfillment: null })
+      .where(and(eq(shipment.id, cur.id), eq(shipment.status, 'rates_selected')))
+      .returning({ id: shipment.id });
+    if (!updated) throw new AppError(ErrorCode.CONFLICT, 'This shipment has moved on.', 409);
+    return {
+      status: 'rates_selected' as const,
+      carrier: rate.carrier,
+      serviceLevel: rate.serviceLevel,
+      cost: rate.totalMinor,
+      currency: rate.currency,
+      estimatedDeliveryAt,
+      differenceMinor,
+    };
+  }
+
   private async chargeFor(tx: Database, s: typeof shipment.$inferSelect, rate: QuotedRate) {
-    // A parcel the tier paid for entirely is not a $0.00 line on the statement.
     if (rate.totalMinor <= 0) return;
     const [c] = await tx
       .insert(charge)
@@ -1082,7 +881,6 @@ export class ShipmentService {
           addOns: rate.addOnsMinor,
           service: rate.serviceKey,
           insuredValueMinor: s.insuredValueMinor,
-          // What the member's tier paid, so the charge explains its own total.
           membershipCover: rate.membershipCover ?? null,
         },
         amount: rate.totalMinor,
@@ -1108,19 +906,9 @@ export class ShipmentService {
     );
   }
 
-  /**
-   * Settle a held shipment once the wallet can cover it.
-   *
-   * The price is NOT re-quoted. It was frozen when the service was chosen, and
-   * re-pricing it on payment day would mean a collector who funded their wallet
-   * on Friday paid a different figure from the one they agreed to on Monday
-   * (Principle V).
-   */
   async pay(shipmentId: string, actor: ShipmentActor) {
     await this.loadFor(shipmentId, actor);
 
-    // Everything below under the shipment lock, then the wallet lock — see
-    // `settle`. Two Pay clicks used to charge the parcel twice.
     return this.db.transaction(async (tx) => {
       const [s] = await tx.select().from(shipment).where(eq(shipment.id, shipmentId)).for('update').limit(1);
       if (!s) throw AppError.notFound('Shipment not found');
@@ -1130,9 +918,6 @@ export class ShipmentService {
       if (!s.cost || !s.carrier || !s.serviceLevel) {
         throw AppError.validation('This shipment has no agreed price');
       }
-      // The items were checked when the rate was chosen, up to a week ago.
-      // Whatever has happened to them since, a parcel is not paid for unless
-      // they are still the collector's, on the shelf and not on hold.
       await this.profiles.loadShippableItems(s.userId, (s.itemIds as string[]) ?? [], tx);
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.cost) {
@@ -1145,8 +930,6 @@ export class ShipmentService {
 
       const service = findService(s.carrier, s.serviceLevel);
       const storedCover = (s.membershipCover as AppliedShippingCover | null) ?? null;
-      // The cover the member saw when the rate was chosen, spent now that the
-      // money is. If it has gone meanwhile this refuses instead of charging more.
       const spentCover = storedCover ? await this.memberships.spendShippingCover(tx, s.userId, storedCover) : null;
       await this.chargeFor(tx, s, {
         carrier: s.carrier!,
@@ -1174,48 +957,6 @@ export class ShipmentService {
         .where(eq(shipment.id, s.id));
       return { status: 'rates_selected' as const, paid: s.cost };
     });
-  }
-
-  /**
-   * Release the items of shipments nobody paid for. Called by the worker sweep.
-   *
-   * Returns what it released, so the job can log a real number rather than "ok".
-   */
-  async expireUnpaid(now = new Date()) {
-    const rows = await this.db.select().from(shipment).where(eq(shipment.status, 'awaiting_payment'));
-    const expired: string[] = [];
-
-    for (const s of rows) {
-      if (!s.paymentDueAt || s.paymentDueAt.getTime() > now.getTime()) continue;
-      const cancelled = await this.db.transaction(async (tx) => {
-        // Only if it is STILL unpaid. Unconditionally, a parcel paid for in the
-        // seconds between the read above and this write was cancelled anyway,
-        // with the charge kept and the items released.
-        const [row] = await tx
-          .update(shipment)
-          .set({
-            status: 'cancelled',
-            cancelledAt: now,
-            cancelReason: `Not paid within ${PAYMENT_WINDOW_DAYS} days`,
-            updatedAt: now,
-          })
-          .where(and(eq(shipment.id, s.id), eq(shipment.status, 'awaiting_payment')))
-          .returning({ id: shipment.id });
-        if (!row) return false;
-        await this.outbox.emit(tx, {
-          aggregateType: 'shipment',
-          aggregateId: s.id,
-          eventType: 'shipment_expired',
-          payload: { userId: s.userId, shipmentCode: s.code, itemCount: ((s.itemIds as string[]) ?? []).length },
-        });
-        return true;
-      });
-      if (cancelled) expired.push(s.id);
-    }
-    // Cancelling IS the release. An item in an open shipment never left `stored`
-    // — what it lost was the ability to be put on a second parcel — so moving
-    // the shipment out of the open set is exactly what hands the items back.
-    return { expired: expired.length, shipmentIds: expired };
   }
 
   async track(shipmentId: string, actor: ShipmentActor) {

@@ -1,35 +1,3 @@
-/**
- * External payments against the ledger rows that cite them (N40).
- *
- * The ledger is the only record of what a wallet holds, and `external_payment`
- * is the only record of money that actually moved at a provider. Nothing ever
- * compared the two. A payment marked `succeeded` with no credit behind it is a
- * customer who paid and was never credited; a credit with no settled payment
- * behind it is store credit that was minted from nothing — and either one
- * would have sat there, invisible, until a customer or an auditor found it.
- *
- * What each side must look like when the two agree:
- *
- *   top-up, succeeded   exactly one `credit_topup` credit for the amount paid
- *   top-up, reversed    that credit, plus one `chargeback` debit for the same
- *   top-up, otherwise   no credit and no chargeback (a `pending` one is listed
- *                       separately: its outcome is unknown, and that is what
- *                       somebody has to go and ask the provider about)
- *   payout              the `withdrawal` debit whose completion recorded this
- *                       payout's reference, for the payout plus its fee
- *   withdrawal debit    a payout behind it — money left a wallet, so money
- *                       must have left Bault
- *
- * Pure: the service gathers the facts in SQL and this decides what they mean,
- * so every rule here is testable without a database
- * (`tests3/contract/reconciliation.test.ts`).
- *
- * Cash-ins by bank transfer or PayPal Friends & Family are NOT here. They are
- * credited through reviewed wallet requests, no provider reports them, and the
- * thing to reconcile them against is the bank statement. The report counts
- * them so nobody mistakes their absence for their being checked.
- */
-
 export interface TopupFacts {
   id: string;
   userId: string;
@@ -42,7 +10,6 @@ export interface TopupFacts {
   creditSum: number;
   chargebackCount: number;
   chargebackSum: number;
-  /** Ledger rows citing this payment that are neither of the two above. */
   otherCount: number;
 }
 
@@ -63,10 +30,10 @@ export interface WithdrawalFacts {
   amount: number;
   occurredAt: Date | string;
   walletRequestId: string | null;
-  /** The provider reference the completion recorded, when it recorded one. */
   payoutRef: string | null;
-  /** The fee taken alongside it, which the payout does not carry. */
   feeMinor: number;
+  debitedMinor: number;
+  reversedMinor: number;
 }
 
 export interface OrphanLedgerFacts {
@@ -132,7 +99,6 @@ export function reconcile(input: {
   const pending: Unresolved[] = [];
   let matched = 0;
 
-  /* ---- money in ---- */
   for (const p of input.topups) {
     const found: Mismatch[] = [];
     const flag = (kind: MismatchKind, detail: string, expectedMinor: number | null, recordedMinor: number | null) =>
@@ -210,10 +176,6 @@ export function reconcile(input: {
     });
   }
 
-  /* ---- money out ---- */
-  // A payout is tied to its debit by the reference the completion recorded.
-  // Keyed by user AND reference, so one account's debit can never vouch for
-  // another account's payout.
   const withdrawalByRef = new Map<string, WithdrawalFacts>();
   for (const w of input.withdrawals) {
     if (w.payoutRef) withdrawalByRef.set(`${w.userId}|${w.payoutRef}`, w);
@@ -231,7 +193,7 @@ export function reconcile(input: {
     };
     if (!w) {
       if (p.status === 'failed') {
-        matched += 1; // nothing was paid and nothing was debited
+        matched += 1;
         continue;
       }
       mismatches.push({
@@ -259,15 +221,20 @@ export function reconcile(input: {
         recordedMinor: p.amount,
       });
     }
-    if (p.status === 'failed') {
+    const stillDebited = w.debitedMinor - w.reversedMinor;
+    if ((p.status === 'failed' || p.status === 'reversed') && stillDebited !== 0) {
+      const what = p.status === 'failed' ? 'failed' : 'was taken back after it was paid';
       found.push({
         ...base,
         kind: 'payout_failed_but_debited',
-        detail: 'The provider reports this payout failed, and the wallet was debited anyway.',
+        detail:
+          w.reversedMinor === 0
+            ? `The provider reports this payout ${what}, and the wallet was debited anyway.`
+            : `The provider reports this payout ${what}, and the wallet was credited back a different amount than it was debited.`,
         ledgerId: w.ledgerId,
         walletRequestId: w.walletRequestId,
         expectedMinor: 0,
-        recordedMinor: w.amount,
+        recordedMinor: stillDebited,
       });
     }
     mismatches.push(...found);

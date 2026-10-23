@@ -36,18 +36,6 @@ interface ReadyRequest {
   serialNumber: string | null;
 }
 
-/**
- * The batch that physically goes to the grader.
- *
- * Graders are not a per-card service — cards accumulate and go out together in
- * one insured package. Bault modelled none of that: a grading request was
- * accepted and then, at some later point, completed with a grade, and in between
- * the card stayed `stored` and could be listed, sold or shipped while it was
- * sitting in another company's building.
- *
- * Shipping a submission from here is the moment that closes: every card in the
- * batch moves to `at_grader` in one transaction and stops being sellable.
- */
 export function GradingSubmissions() {
   const t = useT();
   const { locale } = useI18n();
@@ -141,7 +129,7 @@ export function GradingSubmissions() {
                       </span>
                     )}
                   </td>
-                  <td dir="ltr">{s.trackingNumber ?? '—'}</td>
+                  <td>{s.trackingNumber ? <code>{s.trackingNumber}</code> : '—'}</td>
                   <td>
                     {s.status === 'open' && (
                       <Button size="sm" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
@@ -185,14 +173,6 @@ export function GradingSubmissions() {
   );
 }
 
-/**
- * One open batch: what is in it, what could still go into it, and shipping it.
- *
- * `readyFor` only offers requests that are accepted, aimed at THIS grader, not
- * already in a batch, and — where the tier demands it — approved. All four are
- * server-side rules; showing an ineligible card here and failing on the click
- * would just move the refusal later.
- */
 function OpenSubmission({
   submission,
   onChanged,

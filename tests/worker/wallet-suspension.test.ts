@@ -4,13 +4,6 @@ import { sweepWalletSuspensions } from '../../apps/worker/src/jobs/wallet-suspen
 import { SEED, signIn } from '../integration/helpers/http';
 import { createUser, ledger, testPool } from './helpers/db';
 
-/**
- * The debt-suspension sweep, and the marker that tells its suspensions apart
- * from an administrator's (N7).
- *
- * Needs the API: the second suspension below is made the way an administrator
- * makes it, through `PATCH /admin/users/:id`.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();
@@ -49,17 +42,27 @@ describe('wallet suspension sweep', () => {
     await sweepWalletSuspensions(pool);
     expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: true });
 
-    // An administrator reinstates them by hand, and later suspends them by
-    // hand for an unrelated reason.
     expect((await admin.patch(`/admin/users/${debtor}`, { status: 'active' })).status).toBe(200);
     expect((await admin.patch(`/admin/users/${debtor}`, { status: 'suspended' })).status).toBe(200);
     expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: false });
 
-    // The debt clears. The marker from the sweep's own suspension used to
-    // survive the manual changes, so the sweep took this suspension for one of
-    // its own and lifted it.
     await ledger(pool, debtor, 'credit', 5_000);
     await sweepWalletSuspensions(pool);
     expect((await account(pool, debtor)).status).toBe('suspended');
+  });
+
+  it("does not lift a suspension an administrator kept, though the sweep imposed it", async () => {
+    const admin = await signIn(SEED.admin);
+    const debtor = await createUser(pool);
+    await ledger(pool, debtor, 'debit', 5_000, 1);
+    await sweepWalletSuspensions(pool);
+    expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: true });
+
+    expect((await admin.patch(`/admin/users/${debtor}`, { status: 'suspended' })).status).toBe(200);
+    expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: false });
+
+    await ledger(pool, debtor, 'credit', 5_000);
+    await sweepWalletSuspensions(pool);
+    expect(await account(pool, debtor)).toEqual({ status: 'suspended', auto: false });
   });
 });

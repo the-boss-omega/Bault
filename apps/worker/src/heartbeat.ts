@@ -2,22 +2,6 @@ import type { Pool } from 'pg';
 import { log } from './log';
 import { reportJobFailure } from './observability';
 
-/**
- * Run one scheduled job, and leave a record that it ran (step 10).
- *
- * Nothing recorded that the worker was alive. When it stopped — crashed, hung,
- * never deployed — the API kept answering and `/readyz` kept saying the
- * database was up, while notifications, storage billing and interest silently
- * stopped. Every job now goes through here: a success stamps
- * `worker_heartbeat.last_success_at`, which `GET /api/v1/readyz/worker` reads;
- * a failure stamps `last_error` and `last_error_at` WITHOUT touching the last
- * success, is logged at error level, reported, and rethrown so pg-boss retries
- * it exactly as before.
- *
- * Writing the heartbeat is never allowed to fail the job. A job that did its
- * work and then could not say so must not be retried for it — every job is
- * safe to run twice now, but a needless second run is still a second run.
- */
 export async function runScheduledJob(pool: Pool, name: string, run: () => Promise<void>): Promise<void> {
   const started = Date.now();
   try {

@@ -1,14 +1,3 @@
-/**
- * Human-readable notification text (Requirement 6.1).
- *
- * Notifications used to be stored as the raw domain-event payload, which the UI
- * could only render as a tuple of opaque strings. Every event type now maps to a
- * proper sentence built from its payload, written here — at dispatch time — into
- * `content.message` alongside the original fields (which stay available for
- * deep-links). Unknown event types degrade to a readable title-cased sentence
- * rather than a JSON dump.
- */
-
 type Payload = Record<string, unknown>;
 
 function str(payload: Payload, key: string): string | null {
@@ -21,7 +10,6 @@ function num(payload: Payload, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Integer minor units → `$1,234.56`. Every amount on the platform is USD (Req 7.1). */
 function usd(minorUnits: number): string {
   return `$${(minorUnits / 100).toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -29,7 +17,6 @@ function usd(minorUnits: number): string {
   })}`;
 }
 
-/** A short, readable reference for an entity: prefer the human code, else a stub. */
 function ref(payload: Payload, ...keys: string[]): string {
   for (const key of keys) {
     const value = str(payload, key);
@@ -74,6 +61,20 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         ? `Shipment ${shipment} has been dispatched — tracking number ${tracking}.`
         : `Shipment ${shipment} has been dispatched.`;
     }
+    case 'shipment_delivered': {
+      const tracking = str(p, 'trackingNumber');
+      const shipment = ref(p, 'shipmentCode', 'shipmentId');
+      return tracking
+        ? `Shipment ${shipment} was delivered, the carrier reports (tracking number ${tracking}).`
+        : `Shipment ${shipment} was delivered, the carrier reports.`;
+    }
+    case 'shipment_exception': {
+      const tracking = str(p, 'trackingNumber');
+      const shipment = ref(p, 'shipmentCode', 'shipmentId');
+      return tracking
+        ? `The carrier reports a problem with shipment ${shipment} (tracking number ${tracking}): it may be returned, delayed or lost. Contact support if it does not move.`
+        : `The carrier reports a problem with shipment ${shipment}: it may be returned, delayed or lost. Contact support if it does not move.`;
+    }
     case 'hold_placed':
       return `A hold was placed on item ${ref(p, 'barcode', 'itemId')}; it cannot be moved, sold or shipped until the hold is released.`;
     case 'support_ticket_replied':
@@ -94,8 +95,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         : `Parcel ${ref(p, 'parcelCode')} is on its way from ${legs}.`;
     }
     case 'parcel_damaged': {
-      // Said plainly and early: a claim against the seller or the carrier has a
-      // deadline, and the collector cannot start one they were never told about.
       const what =
         str(p, 'condition') === 'contents_damaged'
           ? 'the contents were damaged'
@@ -113,8 +112,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'arrival_not_accepted': {
       const what = str(p, 'itemDescription') ?? 'An item';
       const outcome = str(p, 'outcome');
-      // Named plainly. Somebody's property did not survive contact with the
-      // warehouse, and a euphemism here would leave them waiting for it.
       const fate =
         outcome === 'destroyed'
           ? 'it was disposed of and cannot be returned'
@@ -130,9 +127,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'item_donated':
       return `Item ${ref(p, 'barcode', 'itemId')} was donated and has left your vault.`;
     case 'grading_shipped': {
-      // The sentence has to carry the CONSEQUENCE, not just the fact. A card at
-      // a grader cannot be sold, swapped or shipped, and somebody who lists it
-      // the next morning and finds it refused deserved to be told here.
       const grader = str(p, 'gradingBody') ?? 'the grader';
       const tracking = str(p, 'trackingNumber');
       const tail = tracking ? ` Tracking number ${tracking}.` : '';
@@ -180,9 +174,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
         : 'Your top-up has settled and is available now.';
     }
     case 'payment_reversed': {
-      // Said plainly and early. The first a collector usually hears of a
-      // reversal is a balance that went negative, and a euphemism here leaves
-      // them working out why on their own.
       const amt = num(p, 'amountMinor');
       const fee = num(p, 'feeMinor') ?? 0;
       const tail = fee > 0 ? ` A ${usd(fee)} handling fee was also charged.` : '';
@@ -200,8 +191,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
       return `Both sides have agreed the terms on ${ref(p, 'dealCode')}. The next step is the money being held.`;
     case 'escrow_funded': {
       const amount = num(p, 'amountMinor');
-      // The seller is the one who needs this sentence: it is the moment it
-      // becomes safe to put the card in a box.
       return amount != null
         ? `The full ${usd(amount)} on ${ref(p, 'dealCode')} is now held by Bault. It is safe to send the card.`
         : `The funds on ${ref(p, 'dealCode')} are now held by Bault. It is safe to send the card.`;
@@ -252,7 +241,6 @@ export function notificationMessage(eventType: string, payload: Payload | null):
     case 'transfer_completed':
       return `Your item transfer was completed and ownership has changed.`;
     default: {
-      // Unknown event: still a sentence, never a raw payload dump.
       return `${titleCase(eventType)}.`;
     }
   }

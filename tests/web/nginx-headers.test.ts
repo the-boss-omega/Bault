@@ -2,23 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * The web image's nginx sends its security headers on every response.
- *
- * They were declared once, at the `server` level, and nginx dropped them from
- * every location that set a header of its own: `/assets/`, `/images/` and
- * `= /index.html`, which every SPA route ends in. The HTML document — the one
- * response where a CSP and frame-ancestors matter — went out with neither
- * (E22). Nothing in CI starts nginx, so this reads the configuration instead:
- * every location includes the shared header file, and the file the include
- * names is the one the Dockerfile renders.
- */
-
 const ROOT = join(__dirname, '..', '..');
 const WEB = join(ROOT, 'apps', 'web');
 const read = (...p: string[]) => readFileSync(join(...p), 'utf8');
 
-/** Strip comments, so a commented-out directive never counts. */
 function code(conf: string): string {
   return conf
     .split('\n')
@@ -26,10 +13,6 @@ function code(conf: string): string {
     .join('\n');
 }
 
-/**
- * Each `location … { … }` with its body. `${API_UPSTREAM}` is an envsubst
- * placeholder, not a block, so `${…}` is skipped when counting braces.
- */
 function locations(conf: string): { head: string; body: string }[] {
   const out: { head: string; body: string }[] = [];
   const re = /location\s+[^{]*\{/g;
@@ -64,7 +47,6 @@ describe('web nginx security headers', () => {
     for (const { head, body } of all) {
       expect(body, `${head} drops the server-level headers`).toContain(`include ${include};`);
     }
-    // Outside the locations as well, for anything answered at server level.
     const serverLevel = all.reduce((rest, { body }) => rest.replace(body, ''), conf);
     expect(serverLevel).toContain(`include ${include};`);
   });
@@ -75,7 +57,6 @@ describe('web nginx security headers', () => {
   });
 
   it('renders the included file from the template the Dockerfile installs', () => {
-    // conf.d/bault/x.conf comes from templates/bault/x.conf.template.
     const rendered = include!.replace('/etc/nginx/conf.d/', '/etc/nginx/templates/') + '.template';
     expect(dockerfile).toContain(`nginx-security-headers.conf ${rendered}`);
     expect(dockerfile).toMatch(/nginx-storage-origin\.envsh \/docker-entrypoint\.d\/\S+\.envsh/);
@@ -95,10 +76,8 @@ describe('web nginx security headers', () => {
     const csp = headers.match(/Content-Security-Policy "([^"]+)"/)![1]!;
     const directive = (name: string) => csp.split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `));
     expect(directive('frame-ancestors')).toBe("frame-ancestors 'none'");
-    // Item photographs and videos are presigned bucket URLs: another origin.
     expect(directive('img-src')).toContain('${STORAGE_PUBLIC_ORIGIN}');
     expect(directive('media-src')).toContain('${STORAGE_PUBLIC_ORIGIN}');
-    // HSTS has one source, the TLS edge, and this is not it.
     expect(headers).not.toMatch(/Strict-Transport-Security/i);
     expect(conf).not.toMatch(/Strict-Transport-Security/i);
   });

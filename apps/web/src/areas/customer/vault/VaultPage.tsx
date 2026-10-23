@@ -3,7 +3,17 @@ import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { BarcodeLabel } from '../../../shared/Barcode';
-import { hasMessage, useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
+import { itemClassLabel, itemName } from '../../../shared/itemClasses';
+import {
+  STATE_META,
+  departureLabel,
+  stateLabel,
+  timelineDetail,
+  timelineKindLabel,
+  type Departure,
+  type TimelineEvent,
+} from '../../../shared/itemTimeline';
 import { formatDate, formatUsd } from '../../../shared/money';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -14,10 +24,9 @@ import {
   SkeletonBlock,
   StatusBadge,
   SuccessNote,
-  type StatusTone,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import { Serial } from '../../../shared/ui/Serial';
+import { Code, Serial } from '../../../shared/ui/Serial';
 import {
   IconAlert,
   IconAsk,
@@ -37,16 +46,6 @@ import { InspectionForm } from './InspectionForm';
 import { CustomRequestForm } from './CustomRequestForm';
 import { RemoveCommonsPanel } from './RemoveCommonsPanel';
 
-/**
- * One card's position in the Break-Even Watch, as `GET /vault/break-even`
- * returns it.
- *
- * `estimatedValueMinor` is deliberately nullable and `valueBasis` says where the
- * figure came from, because the service refuses to invent one: it uses the
- * median of real sales of the same class, or the owner's own asking price, or
- * nothing. The UI has to carry that honesty through rather than rendering a bar
- * against a number nobody can source.
- */
 interface BreakEvenRow {
   itemId: string;
   storageSpentMinor: number;
@@ -67,31 +66,20 @@ interface VaultItem {
   conditionGrade: string | null;
   lifecycleState: string;
   barcode: string;
-  /** Where the item physically sits — every live item has a bin (Req 10.3). */
   binBarcode: string | null;
   binZone: string | null;
   holdFlag?: boolean;
   isLot: boolean;
   lotSize: number;
   lotBroken: boolean;
-  /** On the much shorter oversized storage terms — fixed at intake. */
   oversized?: boolean;
-  /** When it arrived. The cull window is measured from this. */
   receivedAt?: string | null;
-  /** Present only on the history scope. */
   historical?: boolean;
   departedAt?: string | null;
-  departureReason?: string | null;
+  departure?: Departure | null;
   stillOwned?: boolean;
 }
 
-/**
- * One stored image or video for the card, with a signed URL.
- *
- * `intake` is what the warehouse shot on arrival; `professional` is what a photo
- * shoot produced; `video` is the card turned under a light. All three are
- * versions of the same thing and live in the same table, newest version last.
- */
 interface ItemMedia {
   id: string;
   type: string;
@@ -99,20 +87,6 @@ interface ItemMedia {
   url: string;
 }
 
-/** One entry of the item's complete history timeline (Requirement 13.2). */
-interface TimelineEvent {
-  at: string;
-  kind: string;
-  summary: string;
-}
-
-/**
- * `GET /vault/items/:id/storage`.
- *
- * Everything about the past is what was actually charged; only `nextChargeAt`
- * and `periodChargeMinor` are forecasts, and both come from the same rule the
- * billing sweep reads.
- */
 interface StorageStatus {
   oversized: boolean;
   freeDays: number;
@@ -132,35 +106,6 @@ interface VaultCounts {
   history: number;
 }
 
-/** Lifecycle state → badge tone + label key. */
-const STATE_META: Record<string, { tone: StatusTone; label: MessageKey }> = {
-  stored: { tone: 'success', label: 'vault.state.stored' },
-  listed: { tone: 'info', label: 'vault.state.listed' },
-  sold: { tone: 'gold', label: 'vault.state.sold' },
-  'on-hold': { tone: 'error', label: 'vault.state.onHold' },
-  received: { tone: 'info', label: 'vault.state.received' },
-  shipped: { tone: 'violet', label: 'vault.state.shipped' },
-  donated: { tone: 'success', label: 'vault.state.donated' },
-  consigned: { tone: 'info', label: 'vault.state.consigned' },
-  /**
-   * Physically at a grader, on the other side of the country. It is its own
-   * state precisely so the card cannot be listed, sold or shipped while it is
-   * gone — which it silently could be before.
-   */
-  at_grader: { tone: 'violet', label: 'vault.state.atGrader' },
-  discarded: { tone: 'neutral', label: 'vault.state.discarded' },
-};
-
-function stateLabel(t: TranslateFn, state: string): string {
-  const meta = STATE_META[state];
-  return meta ? t(meta.label) : state;
-}
-
-/**
- * The three states a card can be in from the collector's point of view. These
- * are the vault's primary controls — switching one refetches that scope and
- * nothing else: the shell, the header and the search text all stay put.
- */
 const SCOPES = ['active', 'hold', 'history'] as const;
 type Scope = (typeof SCOPES)[number];
 
@@ -170,11 +115,6 @@ const SCOPE_ICON: Record<Scope, ReactNode> = {
   history: <IconArchive />,
 };
 
-/* ============================================================
-   Card actions — every one backed by a real endpoint
-   ============================================================ */
-
-/** A service already asked for on this card and not yet finished. */
 interface OpenServiceRequest {
   code: string;
   type: string;
@@ -188,51 +128,19 @@ interface CardAction {
   description: MessageKey;
   icon: ReactNode;
   ok: MessageKey;
-  /** Irreversible actions go through a typed confirmation first. */
   confirm?: boolean;
-  /** What the confirmation says. Required whenever `confirm` is set. */
   confirmTitle?: MessageKey;
   confirmBody?: MessageKey;
-  /** Lifecycle states the action is offered in. */
   states: readonly string[];
-  /** Offered only on a lot that has not already been split. */
   lotOnly?: boolean;
-  /** Offered only on a card that carries a grade. */
   gradedOnly?: boolean;
-  /** Opens a form in the drawer rather than firing the request immediately. */
   form?: FormKind;
-  /**
-   * The `service_request.type` this action creates, so an already-open request
-   * of the same kind can be recognised and the action shown as done rather than
-   * offered a second time.
-   */
   serviceType?: string;
   run: (item: VaultItem) => Promise<unknown>;
 }
 
 type FormKind = 'consignment' | 'grading' | 'inspection' | 'custom';
 
-/**
- * A timeline entry's kind, in words.
- *
- * Falls back to the raw value with its underscores removed, so an event type
- * added on the server before a translation exists still renders as something
- * rather than as a blank badge — the same rule the notification catalogue uses.
- */
-function timelineKindLabel(t: TranslateFn, kind: string): string {
-  const key = `timeline.${kind}` as MessageKey;
-  return hasMessage(key) ? t(key) : kind.replace(/_/g, ' ');
-}
-
-/**
- * Card services moved here from the retired Services section: ordering a service
- * is something you do to a specific card, so it belongs on the card.
- *
- * Every entry maps 1:1 onto an endpoint the API actually exposes. Nothing that
- * the backend cannot do is listed — no "sell now", no "insure", no "request
- * appraisal" — and nothing that only staff may do (hold, release, relocate) is
- * offered to a collector, because those endpoints are role-gated and would fail.
- */
 const CARD_ACTIONS: readonly CardAction[] = [
   {
     key: 'photography',
@@ -245,11 +153,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: (item) => api.post('/services/photography', { itemId: item.id }),
   },
   {
-    /**
-     * Grading is a form now for the same reason consignment became one: a tier
-     * is a declared-value ceiling and a turnaround, and posting `{ itemId }`
-     * could express neither.
-     */
     key: 'grading',
     serviceType: 'third_party_grading',
     label: 'services.grading',
@@ -267,8 +170,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     description: 'services.video.desc',
     icon: <IconServices />,
     ok: 'services.videoRequested',
-    // Also offered while listed: this is exactly the request a buyer's question
-    // provokes, and a listing is when questions arrive.
     states: ['stored', 'listed'],
     run: (item) => api.post('/services/video', { itemId: item.id }),
   },
@@ -284,11 +185,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: async () => undefined,
   },
   {
-    /**
-     * Splitting a lot is not free and is not instant — each card that comes out
-     * is a fresh intake with its own serial, bin and charge — so it is a request
-     * in the operator queue rather than a button that fires.
-     */
     key: 'lot-split',
     serviceType: 'batch_split',
     label: 'services.lotSplit',
@@ -300,11 +196,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: (item) => api.post('/services/lot-split', { itemId: item.id }),
   },
   {
-    /**
-     * Consignment is no longer a one-click action, because it is no longer one
-     * thing: the seller chooses a channel, sets a price, and — for a card show —
-     * picks the show. The drawer opens a form instead of firing a request.
-     */
     key: 'consignment',
     serviceType: 'consignment',
     label: 'services.consignment',
@@ -326,15 +217,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: (item) => api.post('/services/buyout', { itemId: item.id }),
   },
   {
-    /**
-     * The one action that is not a thing Bault sells.
-     *
-     * Nine fixed services and no way to ask for anything else: a collector who
-     * wanted these sleeved before shipping, or the box weighed, had only a
-     * support ticket — a conversation with no price, no operator queue, no
-     * completion and no link to the collectible it is about. Priced by a person
-     * after they read it, which is why it carries no figure here.
-     */
     key: 'custom',
     label: 'custom.action',
     description: 'custom.action.desc',
@@ -345,12 +227,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     run: async () => undefined,
   },
   {
-    /**
-     * Cracking a slab is the one service that destroys the thing it is performed
-     * on: the holder is snapped, and the grade and certificate stop describing
-     * anything. Two-step confirmed, and the grade is cleared afterwards so the
-     * card cannot be listed or insured as graded when it no longer is.
-     */
     key: 'deslab',
     serviceType: 'deslab',
     label: 'services.deslab',
@@ -383,7 +259,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
     confirmBody: 'services.donation.confirmBody',
     states: ['stored'],
     run: async (item) => {
-      // Irreversible, so the API issues a challenge that must be consumed.
       const challenge = await api.post<{ confirmationToken: string }>('/services/donation', {
         itemId: item.id,
       });
@@ -394,14 +269,6 @@ const CARD_ACTIONS: readonly CardAction[] = [
   },
 ];
 
-/**
- * Customer vault — the card-management command centre.
- *
- * One search field and three state controls sit above a grid of cards. Every
- * card opens a drawer carrying its record, its full lifecycle timeline and the
- * actions that are legal for it; historical cards open the same drawer with the
- * actions withheld.
- */
 export function VaultPage() {
   const { t, locale } = useI18n();
   const route = useRoute();
@@ -418,18 +285,8 @@ export function VaultPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [culling, setCulling] = useState(false);
   const [cullWindowDays, setCullWindowDays] = useState<number | null>(null);
-  /**
-   * The Break-Even Watch for the whole vault, in ONE request.
-   *
-   * Not per row: a vault of two hundred cards would otherwise fire two hundred
-   * of these, and the service already computes the comparable medians once for
-   * the whole set. Keyed by item id at render time.
-   */
   const [watch, setWatch] = useState<Map<string, BreakEvenRow>>(() => new Map());
 
-  // Incremental search-as-you-type, scoped to the selected state. Both the list
-  // and the badge counts follow the same query, so a badge never claims cards a
-  // search has filtered away.
   const load = useCallback(async () => {
     const query = new URLSearchParams({ scope });
     if (q) query.set('q', q);
@@ -452,30 +309,22 @@ export function VaultPage() {
     return () => clearTimeout(handle);
   }, [load]);
 
-  // The break-even figures move only when money moves, so they are fetched once
-  // per mount rather than with every keystroke of the search box. A failure is
-  // silent: the watch is an addition to the register, and a vault that cannot
-  // price its cards is still a vault.
   useEffect(() => {
     void (async () => {
       try {
         const summary = await api.get<{ items: BreakEvenRow[] }>('/vault/break-even');
         setWatch(new Map(summary.items.map((row) => [row.itemId, row])));
       } catch {
-        /* no watch this time; the register renders without it */
       }
     })();
   }, []);
 
-  // The cull window is a server rule, so it is asked for rather than assumed —
-  // the panel prints it in its own subtitle and on every blocked card.
   useEffect(() => {
     void (async () => {
       try {
         const { windowDays } = await api.get<{ windowDays: number }>('/services/remove-commons/window');
         setCullWindowDays(windowDays);
       } catch {
-        /* the cull is an extra; the vault works without it */
       }
     })();
   }, []);
@@ -489,11 +338,6 @@ export function VaultPage() {
 
   return (
     <>
-      {/* A filter row, at the start edge. The search field used to be a 720px
-          centred pill, 58px tall, over a list that fits on one screen — the
-          largest and loudest control in the product, searching four holdings.
-          The scope is in the URL and the segmented control shows which of the
-          three views of one collection you are in. */}
       <div className="vault-command">
         <div className="vault-search">
           <IconSearch />
@@ -516,8 +360,6 @@ export function VaultPage() {
                 type="button"
                 className={`state-control${scope === s ? ' is-on' : ''}`}
                 aria-pressed={scope === s}
-                // Both a tooltip and an accessible name: the control is icon-led
-                // and the label can wrap out of sight at narrow widths.
                 title={label}
                 aria-label={
                   count === undefined ? label : t('vault.scopeWithCount', { label, count })
@@ -540,8 +382,6 @@ export function VaultPage() {
 
         <span className="spacer" />
 
-        {/* The count of what is on screen, and the one bulk action that acts on
-            it — beside the control that chose them, not in a band of their own. */}
         {items !== null && (
           <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
         )}
@@ -568,16 +408,6 @@ export function VaultPage() {
         />
       )}
 
-      {/*
-        No section header above the register.
-
-        The page already says "My vault", the scope control already says which of
-        the three views you are in, and a third band repeating "Active / 3 items"
-        between them was one heading too many — it also sat 74px below the filter
-        row and 28px above the register, so it attached itself to the wrong
-        thing. The count moves beside the scope control, where the number belongs;
-        the cull mode moves beside it, where the action belongs.
-      */}
       <Panel flush>
         {scope === 'history' && (
           <p className="hint vault-history-note">{t('vault.history.note')}</p>
@@ -596,14 +426,6 @@ export function VaultPage() {
             title={t(`vault.empty.${scope}` as MessageKey)}
             text={q ? t('vault.empty.searchText') : t(`vault.empty.${scope}Text` as MessageKey)}
             icon={scope === 'history' ? <IconArchive /> : <IconBox />}
-            /*
-              The vault is where a new account lands, and an empty one used to
-              say only "Cards appear here once the warehouse books them in." —
-              a description of something that will never happen unless the
-              reader does something first, with no hint as to what. The whole
-              product begins with sending cards in, and the address to send them
-              to is one section away, so the empty state says so and goes there.
-            */
             action={
               q ? (
                 <Button size="sm" onClick={() => setQ('')}>
@@ -653,20 +475,6 @@ export function VaultPage() {
   );
 }
 
-/**
- * One holding, as a register row.
- *
- * The order is the direction's first rule: PHOTOGRAPH → SERIAL → STATUS, then
- * what the card is, then what it is costing. The whole row is the control —
- * clicking anywhere on it opens the sheet — so it is a real `<button>` stretched
- * over the row and reachable by Tab, rather than a div with a small "view
- * details" affordance in one corner.
- *
- * The title is the CARD, not its class. It used to be `item.typeClass`, so every
- * holding in every vault was called `trading_card` in bold at title size while
- * its actual identity sat underneath in grey, truncated mid-word. The class is a
- * classification and now reads as one.
- */
 function CardTile({
   item,
   watch,
@@ -675,7 +483,6 @@ function CardTile({
   onOpen,
 }: {
   item: VaultItem;
-  /** The card's break-even position, when the watch has one for it. */
   watch?: BreakEvenRow;
   t: TranslateFn;
   locale: string;
@@ -684,7 +491,7 @@ function CardTile({
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
   const frozen = Boolean(item.holdFlag) && !historical;
-  const name = item.description || item.typeClass;
+  const name = itemName(t, item);
 
   return (
     <li
@@ -701,8 +508,6 @@ function CardTile({
         <span className="sr-only">{t('vault.openCard', { name })}</span>
       </button>
 
-      {/* The artwork pipeline is untouched — a departed card reuses exactly the
-          same component and mapping, desaturated by the container's CSS only. */}
       <div className="card-art">
         <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
         {historical && (
@@ -712,9 +517,6 @@ function CardTile({
         )}
       </div>
 
-      {/* IDENTITY. The serial leads — isolated LTR so a Hebrew row cannot
-          reorder it, and selectable, because somebody is going to paste it into
-          an email — with the catalogue name under it. */}
       <div className="card-id">
         <h3 className="card-title">
           <Serial value={item.serialNumber} lead />
@@ -724,7 +526,6 @@ function CardTile({
         </p>
       </div>
 
-      {/* STATE. Its own column, so a reader can run their eye down it. */}
       <div className="card-state">
         {historical ? (
           <StatusBadge tone="neutral">
@@ -739,15 +540,11 @@ function CardTile({
         {item.isLot && !item.lotBroken && (
           <StatusBadge tone="violet">{t('vault.lotOf', { count: item.lotSize })}</StatusBadge>
         )}
-        {/* Oversized items are on a much shorter included period and a far
-            steeper per-period fee, so it is worth seeing without opening the
-            card. */}
         {item.oversized && !historical && (
           <StatusBadge tone="warning">{t('vault.oversized')}</StatusBadge>
         )}
       </div>
 
-      {/* WHERE IT IS — or, for a departed item, where it went. */}
       <div className="card-where">
         {historical ? (
           <>
@@ -756,43 +553,22 @@ function CardTile({
                 {t('vault.historical.on', { date: formatDate(item.departedAt, locale) })}
               </span>
             )}
-            {item.departureReason && (
-              <span className="card-sub ltr-run">{item.departureReason}</span>
-            )}
+            {item.departure && <span className="card-sub">{departureLabel(t, item.departure)}</span>}
           </>
         ) : (
-          /* The bin is mandatory on intake, so it is always shown (Req 10.3). */
-          <span className="code-inline">
-            {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
-          </span>
+          item.binBarcode ? (
+            <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} />
+          ) : (
+            <span>{t('vault.noBin')}</span>
+          )
         )}
       </div>
 
-      {/*
-        WHAT IT IS COSTING, on the row rather than three clicks away.
-
-        The API has computed this all along and nothing has ever shown it: a
-        `GET /vault/break-even` that counts what has actually been billed against
-        each item and compares it to what cards of the same class have really
-        sold for here. Never a forecast, never an invented valuation — where
-        there is no honest value signal the bar is absent and the figure stands
-        alone, which is a true and useful sentence rather than a gap.
-      */}
       {watch && !historical ? <Watch row={watch} t={t} /> : <div className="watch" />}
     </li>
   );
 }
 
-/**
- * The register's column header.
- *
- * The single change that turns a list of rows into a register you can read down.
- * Before this, state, condition and location each began at whatever x the text
- * before them happened to end at, so nothing lined up between one row and the
- * next and the eye had to re-find every field on every line — while a 400px void
- * sat in the middle of every row because all the content was packed into one
- * flexible column.
- */
 function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
   return (
     <li className="register-head" aria-hidden="true">
@@ -805,13 +581,6 @@ function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
   );
 }
 
-/**
- * Break-Even Watch, one row of it.
- *
- * A proportion, not a score: how much of what a card is worth has already been
- * eaten by what it costs to keep. It goes AMBER at two thirds — before it says
- * anything — because a watch that only warns once the number is bad is a report.
- */
 function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
   const value = row.estimatedValueMinor;
   const known = value !== null && value > 0;
@@ -855,14 +624,6 @@ function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
   );
 }
 
-/**
- * The card's actual photographs, and its video if one was shot.
- *
- * Newest version first, because the reason somebody ordered a photo shoot is
- * that they wanted the new pictures rather than the arrival snapshot. Video is
- * rendered as video rather than being linked out to — the whole point of it is
- * watching the light move across the surface, which a download does not do.
- */
 function ItemMediaGallery({
   media,
   title,
@@ -873,16 +634,6 @@ function ItemMediaGallery({
   t: TranslateFn;
 }) {
   const ordered = [...media].sort((a, b) => b.version - a.version);
-  /**
-   * Which of these the browser could not fetch.
-   *
-   * Item media are presigned object-storage URLs, and in this environment they
-   * answer 403 — the signature parameters are absent from the URL (reported in
-   * docs/design/01-audit.md; the fix is in the storage adapter, not here). An
-   * <img> that fails renders its alt text sprawled across a grey box, which for
-   * a catalogue description is six lines of it. A photograph that did not load
-   * should say that it did not load.
-   */
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
 
   return (
@@ -921,19 +672,6 @@ function ItemMediaGallery({
   );
 }
 
-/**
- * What storage costs for this card.
- *
- * Storage is included for a period folded into the intake fee, and after that
- * costs a proportion of that same fee per period — so the answer to "what am I
- * paying to keep this here" is different for a $1 common and a sealed case, and
- * a collector should be able to see which.
- *
- * The wording distinguishes the two states plainly. While the included period is
- * running it says so and names the date it ends; once it has, it names what has
- * already been charged and when the next period falls. Nothing here is a
- * forecast except the next date and the per-period amount.
- */
 function StoragePanel({
   storage,
   locale,
@@ -1001,7 +739,7 @@ function StoragePanel({
             {storage.nextChargeAt && (
               <div className="detail-row">
                 <dt className="detail-label">{t('vault.storage.next')}</dt>
-                <dd className="detail-value" dir="ltr">
+                <dd className="detail-value">
                   {formatDate(storage.nextChargeAt, locale)}
                   <span className="detail-value-sub">
                     {t('vault.storage.nextAmount', {
@@ -1018,11 +756,6 @@ function StoragePanel({
   );
 }
 
-/**
- * Everything that ever happened to one card (Requirement 13.2): intake, bin
- * transfers, corrections, offers, sales, shipments and disputes, newest first —
- * alongside the card's own record and the actions it can still take.
- */
 function ItemDrawer({
   item,
   locale,
@@ -1060,16 +793,6 @@ function ItemDrawer({
     })();
   }, [item.id]);
 
-  /**
-   * The card's real media, which nothing has ever shown.
-   *
-   * `GET /vault/items/:id` has returned signed URLs for every stored image since
-   * intake was built, and the drawer rendered the deterministic placeholder
-   * artwork instead — so a collector who PAID for a photo shoot got the same
-   * generated tile they had before. Allowed to fail quietly for the same reason
-   * storage is: it is context, and a card whose photographs would not load
-   * should still open.
-   */
   useEffect(() => {
     setMedia(null);
     void (async () => {
@@ -1086,8 +809,6 @@ function ItemDrawer({
     })();
   }, [item.id]);
 
-  // Storage is loaded separately and allowed to fail quietly: it is context, and
-  // a card whose storage figures could not be fetched should still open.
   useEffect(() => {
     setStorage(null);
     if (historical) return;
@@ -1095,22 +816,16 @@ function ItemDrawer({
       try {
         setStorage(await api.get<StorageStatus>(`/vault/items/${item.id}/storage`));
       } catch {
-        /* leave the section out rather than showing an error over a detail */
       }
     })();
   }, [item.id, historical]);
 
-  // A historical card is a record, not an instrument: no action is offered on
-  // it at all. A held card is frozen, and releasing a hold is a warehouse
-  // operation, so a collector gets no actions there either.
   const graded = Boolean(item.conditionGrade && !/^raw$/i.test(item.conditionGrade));
   const actions = historical || item.holdFlag
     ? []
     : CARD_ACTIONS.filter(
         (a) =>
           a.states.includes(item.lifecycleState) &&
-          // Offering "split this lot" on a single card, or "crack the slab" on a
-          // raw one, would be offering a request the API refuses.
           (!a.lotOnly || (item.isLot && !item.lotBroken)) &&
           (!a.gradedOnly || graded),
       );
@@ -1130,30 +845,13 @@ function ItemDrawer({
     }
   }
 
-  const name = item.description || item.typeClass;
+  const name = itemName(t, item);
   const frozen = Boolean(item.holdFlag) && !historical;
-  /**
-   * The reason the card is frozen, taken from the custody log rather than
-   * invented here. `hold_placed` carries it, and it is the whole difference
-   * between a frozen card and a broken one.
-   */
-  const holdReason = frozen
-    ? ((events ?? [])
-        .find((e) => e.kind === 'hold_placed')
-        ?.summary // The API prefixes the operator's reason with the event's own
-        // name — "hold placed — Dispute opened on the sale: …". The sentence
-        // above already says the item is frozen, so the prefix is the same fact
-        // twice and the reader has to read past it to reach the reason.
-        .replace(/^\s*hold placed\s*[—–-]\s*/i, '') ?? null)
-    : null;
 
   return (
     <>
       <DetailDrawer
         title={name}
-        /* The identity, in the direction's order: SERIAL, then status. The
-           title used to be the whole four-line catalogue string with
-           `trading_card` under it, which is a description reading as a name. */
         lead={
           <span className="identity">
             <Serial value={item.serialNumber} lead className="identity-serial" />
@@ -1181,11 +879,6 @@ function ItemDrawer({
           </Button>
         }
       >
-        {/*
-          The photography stage. The one local dark moment in a light product,
-          and the first thing in the sheet: a collector cannot hold this object,
-          so the least the screen can do is light it like one.
-        */}
         <div className={historical ? 'stage stage--departed' : 'stage'}>
           <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
         </div>
@@ -1196,14 +889,7 @@ function ItemDrawer({
               <p className="frozen-reason">
                 <IconClock />
                 <span>
-                  {holdReason ? (
-                    <>
-                      {t('vault.frozen.reason', { reason: '' })}{' '}
-                      <span className="ltr-run">{holdReason}</span>{' '}
-                    </>
-                  ) : (
-                    <>{t('vault.frozen.reason', { reason: '' })} </>
-                  )}
+                  {t('vault.frozen.reason', { reason: '' })}{' '}
                   {t('vault.frozen.actionsNote')}
                 </span>
               </p>
@@ -1219,7 +905,7 @@ function ItemDrawer({
         <dl className="detail-list">
           <div className="detail-row">
             <dt className="detail-label">{t('vault.class')}</dt>
-            <dd className="detail-value">{item.typeClass}</dd>
+            <dd className="detail-value">{itemClassLabel(t, item.typeClass)}</dd>
           </div>
           <div className="detail-row">
             <dt className="detail-label">{t('vault.item.condition')}</dt>
@@ -1231,23 +917,23 @@ function ItemDrawer({
               {item.departedAt && (
                 <div className="detail-row">
                   <dt className="detail-label">{t('vault.historical.dateLabel')}</dt>
-                  <dd className="detail-value" dir="ltr">
+                  <dd className="detail-value">
                     {formatDate(item.departedAt, locale)}
                   </dd>
                 </div>
               )}
-              {item.departureReason && (
+              {item.departure && (
                 <div className="detail-row">
                   <dt className="detail-label">{t('vault.historical.reasonLabel')}</dt>
-                  <dd className="detail-value">{item.departureReason}</dd>
+                  <dd className="detail-value">{departureLabel(t, item.departure)}</dd>
                 </div>
               )}
             </>
           ) : (
             <div className="detail-row">
               <dt className="detail-label">{t('vault.item.bin')}</dt>
-              <dd className="detail-value" dir="ltr">
-                {item.binBarcode ? `${item.binBarcode} · ${item.binZone ?? ''}`.trim() : t('vault.noBin')}
+              <dd className="detail-value">
+                {item.binBarcode ? <Code value={`${item.binBarcode} · ${item.binZone ?? ''}`.trim()} /> : t('vault.noBin')}
               </dd>
             </div>
           )}
@@ -1277,12 +963,6 @@ function ItemDrawer({
                   : undefined;
                 return (
                   <li key={action.key}>
-                    {/*
-                      Every one of these buttons used to be `gold`. Nine primary
-                      actions in one list is the same as none: the eye has
-                      nothing to land on, and "donate this card forever" carried
-                      the identical weight as "take a photo of it".
-                    */}
                     <Button
                       size="sm"
                       variant={action.confirm ? 'danger' : 'secondary'}
@@ -1299,9 +979,6 @@ function ItemDrawer({
                     >
                       <span className="action-line">
                         <span>{t(action.label)}</span>
-                        {/* The charge lands the moment this is pressed, so it is
-                            stated on the control rather than in a price list in
-                            another section of the app. */}
                         {price && !pending && (
                           <span className="action-price" dir="ltr">
                             {price}
@@ -1378,23 +1055,11 @@ function ItemDrawer({
           />
         )}
 
-            {/* The barcode is an operational control on a collector's screen, so
-                it goes last in its column rather than sitting mid-sheet above
-                the record. */}
             <div className="stack-top-lg">
               <BarcodeLabel value={item.barcode} caption={name} />
             </div>
           </div>
 
-          {/*
-            The custody register, on the end side.
-
-            It is append-only and it looks it: a continuous rule, a date column,
-            an entry beside it, and nothing that suggests any of it can be
-            changed. This is the most trust-critical thing Bault renders — it is
-            the answer to "prove you have had this the whole time" — so it sits
-            beside the card's details rather than three screens below them.
-          */}
           <div className="sheet-col sheet-col--register">
             <h3 className="drawer-heading">{t('vault.historyTitle')}</h3>
 
@@ -1404,28 +1069,18 @@ function ItemDrawer({
               <EmptyState title={t('vault.historyEmpty')} />
             ) : (
               <ul className="timeline">
-                {events.map((event, index) => (
-                  <li key={`${event.at}-${index}`}>
-                    <span className="hint date">{formatDate(event.at, locale)}</span>
-                    <div>
-                      {/*
-                        The kind was rendered as `event.kind.replace(/_/g, ' ')` —
-                        the database enum with its underscores taken out. A vault's
-                        chain of custody is the most trust-critical thing it shows,
-                        and it read "ownership transfer" / "state change" in English
-                        to a Hebrew reader, in the machine's vocabulary to everyone.
-                      */}
-                      <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
-                      {/*
-                        The summary comes back from the API in English whatever
-                        the reader's locale — an operator's own words on a custody
-                        event. Isolated, so a Hebrew page lays it out as the Latin
-                        run it is instead of reordering it.
-                      */}
-                      <p className="register-entry ltr-run">{event.summary}</p>
-                    </div>
-                  </li>
-                ))}
+                {events.map((event, index) => {
+                  const detail = timelineDetail(t, event);
+                  return (
+                    <li key={`${event.at}-${index}`}>
+                      <span className="hint date">{formatDate(event.at, locale)}</span>
+                      <div>
+                        <span className="register-kind">{timelineKindLabel(t, event.kind)}</span>
+                        {detail && <p className="register-entry">{detail}</p>}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -1439,11 +1094,9 @@ function ItemDrawer({
             <>
               <p>
                 {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                  item: `${item.typeClass} — ${item.description}`,
+                  item: `\u2068${itemName(t, item)}\u2069`,
                 })}
               </p>
-              {/* Donating a card charges $20, and the dialog asking somebody to
-                  do something irreversible said nothing about money at all. */}
               {(() => {
                 const fee = priceLabel(prices.get(SERVICE_FEE_ACTION[confirming.key] ?? ''));
                 return fee ? <p className="hint">{t('services.confirmFee', { amount: fee })}</p> : null;

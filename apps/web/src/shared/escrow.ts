@@ -1,16 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
 import type { StatusTone } from './ui/primitives';
 
-/**
- * The SPA's vocabulary for escrow and for fulfilment that is a person.
- *
- * Shapes mirrored by value from `apps/api/src/modules/esc/` and
- * `apps/api/src/modules/shp/fulfilment.ts`, because the SPA cannot import from
- * the API tree. The figures are fetched (`GET /escrow/terms`,
- * `GET /shipping/white-glove/terms`) rather than duplicated — only the labels
- * live here, because a label has to be translatable and a server string is not.
- */
-
 export interface EscrowDeal {
   id: string;
   code: string;
@@ -30,7 +20,6 @@ export interface EscrowDeal {
   fundingReference: string | null;
   itemId: string | null;
   inspectedAt: string | null;
-  /** `'yes'` or `'no'` — the question both parties are paying to have answered. */
   inspectionMatches: string | null;
   inspectionNotes: string | null;
   buyerReleasedAt: string | null;
@@ -52,13 +41,6 @@ export interface EscrowEvent {
   occurredAt: string;
 }
 
-/**
- * Status → tone.
- *
- * `inspecting` and `awaiting_release` are warnings rather than info on purpose:
- * both mean somebody is waiting on somebody, and a deal that sits in either for
- * a week is a deal that has gone quiet.
- */
 export const ESCROW_TONE: Record<string, StatusTone> = {
   proposed: 'neutral',
   agreed: 'info',
@@ -86,12 +68,6 @@ export function escrowStatusLabel(t: TranslateFn, status: string): string {
   return key ? t(key) : status;
 }
 
-/**
- * The step a deal is waiting on, phrased as what happens NEXT.
- *
- * A status tells you where a deal is; this tells you whose move it is, which is
- * the only thing either party actually wants to know from a list.
- */
 export function nextStep(t: TranslateFn, deal: EscrowDeal, viewerIsBuyer: boolean): string {
   switch (deal.status) {
     case 'proposed':
@@ -110,10 +86,6 @@ export function nextStep(t: TranslateFn, deal: EscrowDeal, viewerIsBuyer: boolea
       return '';
   }
 }
-
-/* ============================================================
-   Fulfilment methods
-   ============================================================ */
 
 export const FULFILMENT_METHODS = ['carrier', 'hand_delivery', 'show_pickup'] as const;
 export type FulfilmentMethod = (typeof FULFILMENT_METHODS)[number];
@@ -140,7 +112,6 @@ export interface PickupShow {
   feeMinor: number;
   capacity: number;
   booked: number;
-  /** Null means uncapped. */
   remaining: number | null;
   open: boolean;
   notes: string | null;

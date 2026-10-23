@@ -8,35 +8,10 @@ import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
 import { listing, offer, swapProposal } from './mkt.schema';
 
-/**
- * The READ side of the marketplace — the half that was missing.
- *
- * Every write here already existed and was correct: `ListingService` can reprice
- * and remove, `OfferService` can accept, reject and counter, `TradeService` runs
- * a dual-approval swap. None of it was reachable, because there was no query
- * that answered the questions a seller actually has:
- *
- *   - which listings are mine?
- *   - has anybody offered on them?
- *   - what have I offered on, and did they reply?
- *   - is anybody proposing a trade with me?
- *   - who is this person I want to trade with?
- *
- * A seller was notified "you received an offer of $X" and had nowhere to go.
- * These queries are the somewhere.
- */
 @Injectable()
 export class MarketReadService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  /**
-   * Resolve a username to the id the swap and transfer endpoints need.
-   *
-   * Deliberately narrow: it answers with an id and a display name and nothing
-   * else. A lookup that returned a profile would be a directory anybody could
-   * scrape; this returns exactly what is needed to address a trade to somebody
-   * whose username you already know.
-   */
   async counterparty(rawUsername: string, callerId: string) {
     const username = normalizeUsername(rawUsername ?? '');
     if (!username) throw AppError.validation('A username is required');
@@ -53,27 +28,10 @@ export class MarketReadService {
       .limit(1);
     if (!row) throw AppError.notFound(`No collector with username ${username}`);
     if (row.id === callerId) throw AppError.validation('That is your own account');
-    // A suspended or closed account cannot complete a trade, so offering it as a
-    // counterparty would only produce a proposal that can never execute.
     if (row.status !== 'active') throw AppError.validation('That collector cannot trade right now');
     return { id: row.id, username: row.username, firstName: row.firstName, lastName: row.lastName };
   }
 
-  /**
-   * Look up one of another collector's items by SERIAL NUMBER, for a swap.
-   *
-   * A swap has to name what comes back, and the proposer cannot browse somebody
-   * else's vault — publishing every collector's holdings to anybody who asks is
-   * not a trade-off worth making for this. So the exchange works the way it does
-   * between collectors anyway: you already know which card you want, and you
-   * quote its serial.
-   *
-   * Requiring the serial is therefore the privacy control, not an inconvenience.
-   * The answer is deliberately thin — the item's identity and nothing about its
-   * value, cost or history — and it is refused unless the item is genuinely
-   * swappable, so a proposal cannot be built against something that would be
-   * rejected at execution.
-   */
   async tradableItem(rawUsername: string, rawSerial: string, callerId: string) {
     const owner = await this.counterparty(rawUsername, callerId);
     const serial = (rawSerial ?? '').trim();
@@ -93,9 +51,6 @@ export class MarketReadService {
       .where(and(eq(item.ownerId, owner.id), eq(item.serialNumber, serial)))
       .limit(1);
 
-    // Same answer whether the serial does not exist or belongs to somebody else:
-    // a lookup that distinguished the two would confirm what a given collector
-    // owns, one guess at a time.
     if (!row) throw AppError.notFound(`${owner.username} has no item with serial ${serial}`);
     if (row.lifecycleState !== 'stored' || row.holdFlag) {
       throw AppError.validation(`That item is not available to trade right now`);
@@ -111,12 +66,6 @@ export class MarketReadService {
     };
   }
 
-  /**
-   * A seller's own listings, with the count of offers still awaiting them.
-   *
-   * `removed` listings are included: a seller who delisted something should be
-   * able to see that they did, rather than watching it vanish.
-   */
   async myListings(sellerId: string) {
     const rows = await this.db
       .select({
@@ -138,7 +87,6 @@ export class MarketReadService {
 
     if (rows.length === 0) return [];
 
-    // One grouped query rather than one per listing.
     const counts = await this.db
       .select({ listingId: offer.listingId, count: sql<number>`count(*)::int` })
       .from(offer)
@@ -157,20 +105,6 @@ export class MarketReadService {
     return rows.map((r) => ({ ...r, pendingOffers: byListing.get(r.id) ?? 0 }));
   }
 
-  /**
-   * Every offer that concerns the caller, on both sides of the table.
-   *
-   * `direction` says which side of the LISTING they are on. `yourTurn` says
-   * whether the ball is in their court, and those are not the same question —
-   * which is the mistake the offers panel made.
-   *
-   * The panel keyed its actions off `direction` alone: a buyer was always shown
-   * "awaiting seller" and given no controls, so a buyer who had been sent a
-   * counter-offer could not accept it, counter it, or even withdraw. A
-   * negotiation could be started but never finished from the side that was being
-   * negotiated with. Whose move it is depends on who proposed the price on the
-   * table, so that is what is computed and sent.
-   */
   async myOffers(userId: string) {
     const rows = await this.db
       .select({
@@ -204,25 +138,12 @@ export class MarketReadService {
       return {
         ...r,
         direction: side === 'seller' ? ('incoming' as const) : ('outgoing' as const),
-        /** The caller's own side, so the UI never re-derives it from ids. */
         side,
-        /**
-         * True when the price on the table was named by the OTHER party, which
-         * is exactly when accept / counter / reject are available. False means
-         * the caller is waiting — and their one action is to withdraw.
-         */
         yourTurn: r.proposedBy !== side,
       };
     });
   }
 
-  /**
-   * Swap proposals and gift transfers involving the caller, on either side.
-   *
-   * A gift is the degenerate swap with an empty requested set, and it is
-   * labelled as one here rather than left for the UI to work out from an empty
-   * array — the two read completely differently to a recipient.
-   */
   async mySwaps(userId: string) {
     const rows = await this.db
       .select()
@@ -242,7 +163,6 @@ export class MarketReadService {
         : [];
     const byId = new Map(people.map((p) => [p.id, p.username]));
 
-    // Every item named by any proposal, resolved once.
     const itemIds = [
       ...new Set(
         rows.flatMap((r) => [
@@ -283,20 +203,11 @@ export class MarketReadService {
         proposerApproved: r.proposerApproved,
         responderApproved: r.responderApproved,
         createdAt: r.createdAt,
-        /** Whether the caller still has to do something for this to execute. */
         awaitingMe: r.status === 'pending' && incoming && !r.responderApproved,
       };
     });
   }
 
-  /**
-   * A public storefront: one collector's active listings.
-   *
-   * Public on purpose — it is the shareable page a seller points people at, and
-   * a storefront nobody can open without an account is not a storefront. Only
-   * ACTIVE listings appear: a sold or delisted card is not on sale, and showing
-   * it would advertise something that cannot be bought.
-   */
   async storefront(rawUsername: string) {
     const username = normalizeUsername(rawUsername ?? '');
     if (!username) throw AppError.validation('A username is required');

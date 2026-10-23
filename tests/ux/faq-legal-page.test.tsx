@@ -1,15 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
-/**
- * FAQ & Legal as a reader meets it (E20, E21).
- *
- * The content suites check the text; this checks what reaches the screen: the
- * FAQ is Bault's and says so, every draft document shows its banner and its
- * version above the first line, and the figures the documents point at are
- * actually displayed from the API rather than promised.
- */
-
 const get = vi.fn();
 
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -21,9 +12,10 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 
 const { FaqLegalPage } = await import('../../apps/web/src/areas/customer/help/FaqLegalPage');
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
+const { TERMS_VERSION } = await import('../../apps/web/src/areas/customer/help/legalContent');
 
 const TERMS = {
-  termsVersion: '2026-10-draft-1',
+  termsVersion: TERMS_VERSION,
   debt: { graceDays: 14, interestBpsPerDay: 5, suspendBelowMinor: -2000 },
   cashOut: { bandMinor: 10_000, smallBps: 600, smallMinimumMinor: 99, largeFixedMinor: 500, largeBps: 100 },
   chargebackFeeMinor: 2_500,
@@ -56,7 +48,6 @@ beforeEach(() => {
   try {
     localStorage.setItem('bault.locale', 'en');
   } catch {
-    /* jsdom always has it */
   }
 });
 
@@ -73,8 +64,8 @@ describe('FAQ & Legal', () => {
     const panel = (await screen.findByRole('heading', { name: 'Terms of Service', level: 2 })).closest('section')!;
     const banner = within(panel).getByRole('note');
     expect(banner).toHaveTextContent('DRAFT — must be reviewed by a lawyer before launch');
-    expect(banner).toHaveTextContent('2026-10-draft-1');
-    expect(within(panel).getByText(/Version 2026-10-draft-1/)).toBeInTheDocument();
+    expect(banner).toHaveTextContent(TERMS_VERSION);
+    expect(within(panel).getByText(new RegExp(`Version ${TERMS_VERSION}`))).toBeInTheDocument();
   });
 
   it('shows the figures the documents point at, from the API', async () => {

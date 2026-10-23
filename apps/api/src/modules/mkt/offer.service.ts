@@ -11,26 +11,8 @@ import { PurchaseService } from './purchase.service';
 import { item } from '../cst/cst.schema';
 import { listing, offer } from './mkt.schema';
 
-/** Which side of the table an actor is on for a given listing. */
 type Side = 'buyer' | 'seller';
 
-/**
- * Offers & negotiation (T084, Principle VIII).
- *
- * A buyer offers on someone else's active listing. Either side may then counter,
- * reject or accept — subject to the one rule that makes a negotiation a
- * negotiation:
- *
- *   THE PARTY WHO PROPOSED A PRICE MAY NOT ALSO ACCEPT IT.
- *
- * That rule replaced "only the seller may accept", which was right for the
- * opening offer and wrong for every counter. It failed in both directions at
- * once: a buyer could not accept the counter they had been sent (so a
- * negotiation could never conclude), while the seller could accept their own
- * counter and have it execute — money taken from the buyer's wallet at a price
- * the buyer had never agreed to. Being on the selling side of a listing is not
- * what entitles you to agree to a price; not having named it is.
- */
 @Injectable()
 export class OfferService {
   constructor(
@@ -47,13 +29,6 @@ export class OfferService {
       throw new AppError(ErrorCode.SELF_DEALING_FORBIDDEN, 'You cannot offer on your own listing', 403);
     }
 
-    /**
-     * Offering MORE than the seller is asking is a typo, not a strategy.
-     *
-     * The listing has a price and a Buy button that honours it, so an offer
-     * above it can only cost the offerer money for nothing. One probe put
-     * $9,999 on a $75 card and it was accepted without comment.
-     */
     if (amount > l.askingPrice) {
       throw AppError.validation(
         `The asking price is ${formatMinor(l.askingPrice)}. You can buy it now for that — an offer above it would only cost you more.`,
@@ -64,14 +39,14 @@ export class OfferService {
     await this.assertNoOpenOffer(buyerId, listingId);
 
     return this.db.transaction(async (tx) => {
+      const [still] = await tx.select({ status: listing.status }).from(listing).where(eq(listing.id, listingId)).for('share').limit(1);
+      if (still?.status !== 'active') throw new AppError(ErrorCode.CONFLICT, 'Listing not active', 409);
       const [created] = await tx
         .insert(offer)
         .values({ listingId, buyerId, amount, currency: l.currency, status: 'pending', proposedBy: 'buyer' })
         .returning();
       if (!created) throw AppError.validation('Failed to create offer');
 
-      // The seller is notified of every offer (Requirement 6.2). The item's label
-      // travels with the event so the notification reads as a real sentence (6.1).
       const [listed] = await tx
         .select({ barcode: item.barcode, description: item.description })
         .from(item)
@@ -94,14 +69,6 @@ export class OfferService {
     });
   }
 
-  /**
-   * Load an offer with its listing, asserting the actor is a participant, and
-   * report WHICH participant they are.
-   *
-   * Participation decides who may look at an offer and who may end it. It does
-   * NOT decide who may agree to one — see `assertNotProposer`. Conflating the
-   * two is what let a buyer accept their own offer.
-   */
   private async loadParticipating(actorId: string, offerId: string) {
     const [o] = await this.db.select().from(offer).where(eq(offer.id, offerId)).limit(1);
     if (!o) throw AppError.notFound('Offer not found');
@@ -113,13 +80,6 @@ export class OfferService {
     return { o, l, side };
   }
 
-  /**
-   * Why this offer can no longer be responded to, in terms of what happened.
-   *
-   * "Offer is not pending" is a status field read aloud. A countered offer in
-   * particular is the common case and the confusing one: the negotiation did not
-   * end, it moved to a new price, and the reader needs to be pointed at it.
-   */
   private static notPending(status: string): string {
     if (status === 'countered') return 'That offer was answered with a counter-offer — respond to the counter instead.';
     if (status === 'accepted') return 'That offer has already been accepted.';
@@ -127,14 +87,6 @@ export class OfferService {
     return 'That offer is no longer open.';
   }
 
-  /**
-   * The party who named a price may not be the party who agrees to it.
-   *
-   * Both directions matter. Without the first half a buyer accepts their own
-   * offer and takes the card at their own price; without the second a seller
-   * accepts their own counter and charges the buyer a price they never agreed
-   * to. Both were reachable, and both moved a real card in a probe.
-   */
   private static assertNotProposer(side: Side, proposedBy: Side, amount: number): void {
     if (side !== proposedBy) return;
     throw AppError.forbidden(
@@ -144,7 +96,6 @@ export class OfferService {
     );
   }
 
-  /** One open offer per buyer per listing, and the refusal names the one that is open. */
   private async assertNoOpenOffer(buyerId: string, listingId: string): Promise<void> {
     const [open] = await this.db
       .select({ amount: offer.amount })
@@ -160,15 +111,6 @@ export class OfferService {
     }
   }
 
-  /**
-   * An offer is a commitment to pay, so it is checked against the wallet when it
-   * is made — not only when it is accepted.
-   *
-   * Checking only at accept put the failure on the wrong person: the SELLER
-   * pressed Accept and was told "Insufficient wallet balance", an error about
-   * somebody else's money phrased as if it were theirs. `context` keeps the
-   * two readings apart for the two people who can trigger it.
-   */
   private async assertCanCover(buyerId: string, amount: number, context: 'offer' | 'accept'): Promise<void> {
     const balance = await this.ledger.balanceOf(buyerId);
     if (balance.amount >= amount) return;
@@ -185,23 +127,7 @@ export class OfferService {
     const { o, l, side } = await this.loadParticipating(actorId, offerId);
     OfferService.assertNotProposer(side, o.proposedBy, o.amount);
 
-    /**
-     * Purchase FIRST, then record the acceptance.
-     *
-     * The order used to be the other way round, and the status write was outside
-     * any transaction the purchase took part in — so a buyer who could not cover
-     * their own offer left it marked `accepted` with no sale behind it: the card
-     * never moved, the listing stayed live, and neither party could act on the
-     * offer again because it was no longer pending. A dead record that looked
-     * like a completed deal.
-     *
-     * Failing before the status write leaves the offer exactly as it was, which
-     * is the truth: nothing was agreed.
-     */
     await this.assertCanCover(o.buyerId, o.amount, 'accept');
-    // The acceptance is written inside the sale's transaction, and only if the
-    // offer is still pending: a withdrawal or counter that landed in between
-    // stops the sale instead of being overwritten by it.
     const result = await this.purchase.purchase(o.buyerId, o.listingId, idempotencyKey, o.amount, async (tx) => {
       const [accepted] = await tx
         .update(offer)
@@ -220,19 +146,8 @@ export class OfferService {
     };
   }
 
-  /**
-   * Ending the negotiation, from either side.
-   *
-   * Both may do this, and deliberately so — a seller declining and a buyer
-   * withdrawing are the same state change, and refusing a buyer the ability to
-   * take their own offer off the table would leave money committed against an
-   * offer they no longer want honoured. The RESULT says which happened, so the
-   * notification and the history can word it correctly.
-   */
   async reject(actorId: string, offerId: string) {
     const { side } = await this.loadParticipating(actorId, offerId);
-    // Only while pending: unconditionally, a withdrawal racing an acceptance
-    // relabelled a completed sale as rejected.
     const [rejected] = await this.db
       .update(offer)
       .set({ status: 'rejected', updatedAt: new Date() })
@@ -242,14 +157,6 @@ export class OfferService {
     return { status: 'rejected', by: side };
   }
 
-  /**
-   * Answer a price with a different one — from EITHER side.
-   *
-   * Countering used to be the seller's privilege alone, which made the feature
-   * a one-way street: a buyer who was countered could only accept or walk. A
-   * counter from the buyer is just their next offer, so it is priced and funded
-   * by the same rules as their first one.
-   */
   async counter(actorId: string, offerId: string, amount: number) {
     const { o, l, side } = await this.loadParticipating(actorId, offerId);
     if (side === 'buyer') {
@@ -291,14 +198,6 @@ export class OfferService {
           sellerId: l.sellerId,
           amount,
           counteredBy: side,
-          /**
-           * Who to tell: a counter is addressed to the OTHER side.
-           *
-           * Said explicitly, because the payload names both parties and the
-           * worker, given no `recipientIds`, takes the first single-recipient
-           * key it finds — `sellerId`. A seller's counter was announced to the
-           * seller, in the app and by email, and the buyer never heard of it.
-           */
           recipientIds: [side === 'seller' ? o.buyerId : l.sellerId],
         },
       });

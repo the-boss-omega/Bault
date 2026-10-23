@@ -27,16 +27,6 @@ interface HousePurchase {
   replayed?: boolean;
 }
 
-/**
- * The Bault store: cards the business sells itself.
- *
- * It is a tab of its own rather than rows mixed into Browse, because what is
- * being bought is different in a way the buyer should know before paying. A
- * Browse listing is one particular card already on a shelf; a store product is
- * a print with copies, and the copy a buyer gets is labelled and shelved after
- * they pay for it — so the confirmation says so, and the receipt names the serial
- * the new card was given.
- */
 export function HouseStorePanel({
   onBought,
   onError,
@@ -66,9 +56,6 @@ export function HouseStorePanel({
     if (!buying) return;
     setBusy(true);
     try {
-      // One key per confirmation, not per product: a store product has copies, so
-      // buying a second one is a second purchase, while a double-click on the
-      // same confirmation is not.
       const result = await api.post<HousePurchase>(
         `/marketplace/house/listings/${buying.product.id}/purchase`,
         undefined,

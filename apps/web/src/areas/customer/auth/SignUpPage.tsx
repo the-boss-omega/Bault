@@ -13,33 +13,6 @@ import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primi
 import { TERMS_VERSION } from '../help/legalContent';
 import { TermsReader } from '../help/LegalDocumentView';
 
-/**
- * Sign-up page — its own page, separate from sign-in.
- *
- * Registration does NOT yield a session: the account is created `pending` and the
- * API emails a verification link, so the page ends on a "check your mail" panel
- * with a way back to sign-in rather than entering the app.
- *
- * Five things, and every one of them is required by the API:
- *
- *   - email;
- *   - USERNAME, captured here and nowhere else. It is permanent — there is no
- *     path anywhere in the app to change it, and the database rejects the write
- *     even if one were added (Requirement 4.1);
- *   - FIRST NAME and LAST NAME, two explicit fields. There is no display name to
- *     type: the full name is derived from these two wherever it is shown, so
- *     there is no second copy that can drift;
- *   - CONSENT to the Terms of Service, Privacy Policy and Cookie notice (E21).
- *     An account used to be created without anybody agreeing to the fees, the
- *     interest on a negative balance or the suspension rule. The box sends the
- *     version it showed, the API refuses any other, and records which version
- *     was accepted and when. The documents can be read right here, because a
- *     signed-out visitor cannot open FAQ & Legal.
- *
- * The rules applied to the inputs are the same values the API enforces (see
- * `shared/names.ts`), so the button disables for exactly the input the server
- * would reject.
- */
 export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -52,9 +25,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Sign-in has had this since it was written; sign-up did not, so the one form
-  // in the product that creates an account was also the one that could be
-  // submitted twice by pressing the button twice.
   const [busy, setBusy] = useState(false);
   const t = useT();
 
@@ -62,24 +32,8 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const usernameOk = isValidUsername(normalizedUsername);
   const firstOk = isValidNamePart(normalizeNamePart(firstName));
   const lastOk = isValidNamePart(normalizeNamePart(lastName));
-  /**
-   * Email and password are checked here for the same reason the other three
-   * are: they gate the button.
-   *
-   * They were the two that did not. The button disabled on `!email.trim()` and
-   * `password.length < 8`, so somebody who typed `nope` into the address field,
-   * or a six-character password, saw a dead button and no statement of what was
-   * wrong with it — while the field directly above explained itself. A disabled
-   * control that will not say why is worse than an enabled one that fails, and
-   * every other field on this form already did better.
-   *
-   * The address test is the shape the API's `@IsEmail` accepts, kept loose on
-   * purpose: this is here to catch a typo, not to adjudicate RFC 5322.
-   */
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordOk = password.length >= PASSWORD_MIN;
-  // Only complain once something has been typed — an empty field a user has not
-  // reached yet is not an error, it is a field they have not reached yet.
   const usernameError = username.length > 0 && !usernameOk;
   const firstNameError = firstName.length > 0 && !firstOk;
   const lastNameError = lastName.length > 0 && !lastOk;
@@ -91,8 +45,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      // The response names the new account by its USERNAME. No intake ID is
-      // issued any more, and nothing asks the user to keep one.
       const created = await api.post<{ username: string; firstName: string; lastName: string }>(
         '/auth/register',
         {
@@ -101,7 +53,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
           firstName: normalizeNamePart(firstName),
           lastName: normalizeNamePart(lastName),
           password,
-          // The version the box was ticked for — never "whatever is current".
           acceptedTermsVersion: TERMS_VERSION,
         },
       );
@@ -113,14 +64,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     }
   }
 
-  /**
-   * Ask for the verification mail again.
-   *
-   * The address is the one just typed, so nothing is re-entered. The endpoint
-   * answers identically for a pending account and an unknown address, so the
-   * confirmation says a link is on its way rather than asserting anything about
-   * whether the account exists.
-   */
   async function resendVerification() {
     setResending(true);
     setError(null);
@@ -162,15 +105,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     <form className="auth-card" onSubmit={register}>
       <h2>{t('auth.signUpTitle')}</h2>
 
-      {/*
-        `Field` throughout rather than a wrapping <label>.
-        A <label> that encloses BOTH the caption and the hint takes all of that
-        text as the control's accessible name, so this form announced its address
-        field as "EmailWe send a confirmation link here" — and the four fields
-        that carried hints or errors each did the same. `Field` points the label
-        at the control by id and attaches the hint with `aria-describedby`, which
-        is where a description belongs.
-      */}
       <Field
         label={t('auth.email')}
         htmlFor="signup-email"

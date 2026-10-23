@@ -3,12 +3,6 @@ import type { Pool } from 'pg';
 import { accrueInterest } from '../../apps/worker/src/jobs/interest-accrual';
 import { count, createUser, ledger, testPool } from './helpers/db';
 
-/**
- * Daily interest on a debt past its grace period (F051, N9).
- *
- * `.env` sets a 14-day grace and 5 bps a day, so a $100 debt that is twenty days
- * old accrues one interest row a day. One — not one per run.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();
@@ -28,8 +22,6 @@ describe('interest accrual run more than once in a day', () => {
     await accrueInterest(pool);
     expect(await interestRows(pool, debtor)).toBe(1);
 
-    // pg-boss retries a failed job immediately, and every INSERT before the
-    // failure had already committed — so a retry charged everybody again.
     await accrueInterest(pool);
     expect(await interestRows(pool, debtor)).toBe(1);
   });

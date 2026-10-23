@@ -7,35 +7,23 @@ import { fullName, isValidNamePart, normalizeNamePart } from '../../shared/names
 import { userAccount } from './acc.schema';
 import { shippingAddress } from './address.schema';
 import { toCountryCode } from '../shp/countries';
+import { normalizeRegion } from '../shp/regions';
+import { MfaService } from './mfa/mfa.service';
 
-/**
- * What a user sees about themselves.
- *
- * `intakeId` is deliberately ABSENT. The OW- code is retired from every
- * user-facing workflow: nothing asks a customer to quote one, so returning it
- * here would only invite its reuse. It still exists on the row, and admins can
- * still read it through `GET /admin/users` for troubleshooting a pre-printed
- * label — that is the one surface it survives on.
- */
 export interface ProfileView {
   id: string;
-  email: string; // a user always sees their OWN email (PII rule guards OTHER users' data)
-  username: string; // immutable, read-only (Requirement 4.1)
+  email: string;
+  username: string;
   role: string;
   status: string;
   firstName: string | null;
   lastName: string | null;
-  /** Derived from the two parts above with `fullName()` — never stored. */
   fullName: string;
-  /** True while the legacy-name migration's split is still unconfirmed. */
   nameReviewRequired: boolean;
-  /**
-   * The terms this person accepted at registration, and when. Both NULL for an
-   * account created before there was anything to accept — said plainly rather
-   * than back-filled with a consent nobody gave (migration 0033).
-   */
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
+  mfaEnabled: boolean;
+  mfaRequired: boolean;
 }
 
 export interface AddressInput {
@@ -43,23 +31,20 @@ export interface AddressInput {
   recipient: string;
   line1: string;
   city: string;
+  region?: string | null;
   country: string;
   postalCode: string;
   isDefault?: boolean;
 }
 
-/** Every address field is individually editable (Requirement 4.2). */
 export type AddressPatch = Partial<AddressInput>;
 
-/**
- * Own-profile read/update (T033) + saved shipping addresses (ACC-07). Returns the
- * caller's own record — including their own PII, which is legitimate. Cross-user
- * PII exposure is what the PII interceptor guards for non-admins (Principle IX).
- * Address access is strictly own-only: every query filters by the caller's id.
- */
 @Injectable()
 export class ProfileService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly mfa: MfaService,
+  ) {}
 
   async get(userId: string): Promise<ProfileView> {
     const [u] = await this.db
@@ -80,18 +65,11 @@ export class ProfileService {
       nameReviewRequired: u.nameReviewRequired,
       termsVersion: u.termsVersion,
       termsAcceptedAt: u.termsAcceptedAt,
+      mfaEnabled: await this.mfa.isEnabled(u.id),
+      mfaRequired: this.mfa.requiredFor(u.role),
     };
   }
 
-  /**
-   * Only the two name parts are writable. `username` is never in the SET clause —
-   * there is no code path anywhere that updates it after registration (Req 4.1) —
-   * and there is no separate display name that could drift out of step with these.
-   *
-   * A name the owner has just confirmed clears `nameReviewRequired`, which is the
-   * only way the flag set by the legacy-name migration (0004) is ever cleared by
-   * the person it describes.
-   */
   async update(userId: string, patch: { firstName: string; lastName: string }): Promise<ProfileView> {
     const first = normalizeNamePart(patch.firstName);
     const last = normalizeNamePart(patch.lastName);
@@ -105,10 +83,6 @@ export class ProfileService {
     return this.get(userId);
   }
 
-  // ---------------------------------------------------------------------------
-  // Shipping addresses (ACC-07) — own-only.
-  // ---------------------------------------------------------------------------
-
   listAddresses(userId: string) {
     return this.db
       .select()
@@ -118,8 +92,9 @@ export class ProfileService {
   }
 
   async addAddress(userId: string, dto: AddressInput) {
+    const country = toCountryCode(dto.country) ?? dto.country;
+    const region = regionFor(country, dto.region);
     return this.db.transaction(async (tx) => {
-      // A new default demotes any existing default (single default per user).
       if (dto.isDefault) {
         await tx.update(shippingAddress).set({ isDefault: false }).where(eq(shippingAddress.userId, userId));
       }
@@ -131,9 +106,8 @@ export class ProfileService {
           recipient: dto.recipient,
           line1: dto.line1,
           city: dto.city,
-          // Stored as the code the carrier rules read, whatever shape it arrived
-          // in — the validator has already established it resolves to one.
-          country: toCountryCode(dto.country) ?? dto.country,
+          region,
+          country,
           postalCode: dto.postalCode,
           isDefault: dto.isDefault ?? false,
         })
@@ -143,10 +117,6 @@ export class ProfileService {
     });
   }
 
-  /**
-   * Edit a saved address (Requirement 4.2). Own-only; promoting an address to the
-   * default demotes the previous one so exactly one default survives.
-   */
   async updateAddress(userId: string, id: string, patch: AddressPatch) {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
@@ -161,6 +131,10 @@ export class ProfileService {
         if (patch[f] === undefined) continue;
         set[f] = f === 'country' ? (toCountryCode(patch[f]!) ?? patch[f]) : patch[f];
       }
+      if (patch.country !== undefined || patch.region !== undefined) {
+        const country = (set.country as string | undefined) ?? existing.country;
+        set.region = regionFor(country, patch.region !== undefined ? patch.region : existing.region);
+      }
       if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
       if (Object.keys(set).length === 0) throw AppError.validation('Nothing to update');
 
@@ -174,7 +148,6 @@ export class ProfileService {
     });
   }
 
-  /** Delete an address; only the owner may delete it. */
   async deleteAddress(userId: string, id: string) {
     const [row] = await this.db
       .select()
@@ -185,4 +158,10 @@ export class ProfileService {
     await this.db.delete(shippingAddress).where(eq(shippingAddress.id, id));
     return { deleted: true };
   }
+}
+
+function regionFor(country: string, value: string | null | undefined): string | null {
+  const result = normalizeRegion(country, value);
+  if ('problem' in result) throw AppError.validation(result.problem);
+  return result.region;
 }

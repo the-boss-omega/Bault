@@ -1,15 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
-/**
- * The administrator's sign-in log.
- *
- * Before `login_attempt` a failed sign-in left no trace anywhere, so the
- * question this screen answers — is somebody guessing passwords? — could not be
- * asked. These pin that failures are shown, that a stranger's guess at an
- * address with no account is shown as what was typed, and that the pattern is
- * pulled out above the table rather than left for somebody to spot.
- */
 const get = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: { get: (...a: unknown[]) => get(...a), post: vi.fn(), patch: vi.fn(), del: vi.fn() },
@@ -39,7 +30,6 @@ describe('the sign-in log', () => {
 
     expect(await screen.findAllByText('Wrong details')).toHaveLength(2);
     expect(screen.getByText('Signed in')).toBeInTheDocument();
-    // Address shown without the IPv6-mapping prefix, device in words.
     expect(screen.getByText('203.0.113.7')).toBeInTheDocument();
     expect(screen.getByText('Chrome · Windows')).toBeInTheDocument();
     expect(screen.getByText('curl/8.10.1')).toBeInTheDocument();

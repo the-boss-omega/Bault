@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, binIds, signIn, usernameOf } from './helpers/http';
 
-/**
- * US2 — batch split produces one tracked item + custody event per item (T038).
- */
 describe('INV batch split', () => {
   it('opens a batch and splits it into individually tracked items', async () => {
     const operator = await signIn(SEED.operator);
@@ -24,7 +21,6 @@ describe('INV batch split', () => {
     expect(split.status).toBe(201);
     expect(split.body).toHaveLength(3);
 
-    // Each produced item has a batch_split custody event, a bin, and links to the batch.
     for (const item of split.body) {
       expect(item.sourceBatchId).toBe(batchId);
       expect(item.binId).toBeTruthy();

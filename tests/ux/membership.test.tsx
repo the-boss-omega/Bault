@@ -2,16 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The membership screen, driven as somebody deciding whether to subscribe.
- *
- * The cases that matter are about CONSENT, because a subscription is the most
- * consequential control in the product: it is the only one that charges again
- * next month without being pressed again. So the price has to be on the button,
- * the button has to confirm, and the screen has to say what happens when an
- * allowance runs out — which is the question the whole scheme lives or dies on.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -62,15 +52,12 @@ describe('the membership screen', () => {
     renderPage();
 
     const table = await screen.findByRole('table');
-    // A column per tier, and the price in the heading rather than three
-    // separate cards with one of them scaled up.
     expect(within(table).getByText('Folio')).toBeInTheDocument();
     expect(within(table).getByText('Registry')).toBeInTheDocument();
     expect(within(table).getByText('Trust')).toBeInTheDocument();
     expect(within(table).getAllByText('$39.00 a month').length).toBeGreaterThan(0);
     expect(within(table).getAllByText('$699.00 a month').length).toBeGreaterThan(0);
 
-    // And the rows are the benefits, compared across the columns.
     expect(within(table).getByText('Items in storage')).toBeInTheDocument();
     expect(within(table).getByText('Items booked in (a month)')).toBeInTheDocument();
   });
@@ -79,8 +66,6 @@ describe('the membership screen', () => {
     answer();
     renderPage();
 
-    // `.offer` is the component that makes this structural: the price and the
-    // control are one node. Every join control has to sit inside one.
     const joins = await screen.findAllByRole('button', { name: /^join$/i });
     expect(joins).toHaveLength(3);
     for (const button of joins) {
@@ -98,11 +83,8 @@ describe('the membership screen', () => {
     const joins = await screen.findAllByRole('button', { name: /^join$/i });
     await user.click(joins[0]!);
 
-    // Nothing has been charged yet.
     expect(post).not.toHaveBeenCalled();
 
-    // The sentence names the amount, the cycle, AND what happens at the limit —
-    // that it goes back to the ordinary price and only after approval.
     const confirmText = await screen.findByText(/every 30 days until you cancel/i);
     expect(confirmText.textContent).toMatch(/\$39\.00/);
     expect(confirmText.textContent).toMatch(/only after you approve it/i);
@@ -114,7 +96,6 @@ describe('the membership screen', () => {
   });
 
   it('states that running out never charges automatically', async () => {
-    // The promise the whole scheme rests on, on the screen rather than in terms.
     answer({
       tier: 'folio',
       status: 'active',
@@ -133,7 +114,6 @@ describe('the membership screen', () => {
 
     expect(await screen.findByText(/never triggers an automatic charge/i)).toBeInTheDocument();
     expect(screen.getByText(/do not roll over/i)).toBeInTheDocument();
-    // A spent allowance reads as 0 left of 4 — not as an error, just a fact.
     expect(screen.getByText('0 left of 4')).toBeInTheDocument();
   });
 
@@ -141,8 +121,6 @@ describe('the membership screen', () => {
     answer();
     renderPage();
 
-    // The pass-throughs and the penalties, named. A membership page that only
-    // lists inclusions is the half of the page people complain about later.
     expect(await screen.findByText(/carrier postage beyond the monthly credit/i)).toBeInTheDocument();
     expect(screen.getByText(/the graders’ own fees/i)).toBeInTheDocument();
     expect(screen.getByText(/hand delivery/i)).toBeInTheDocument();
@@ -166,7 +144,6 @@ describe('the membership screen', () => {
     renderPage();
 
     expect(await screen.findByText('Your tier')).toBeInTheDocument();
-    // The other two are switchable; the current one is not offered again.
     expect(screen.getAllByRole('button', { name: /switch to this/i })).toHaveLength(2);
   });
 });

@@ -23,23 +23,6 @@ import {
 import { IconBox, IconInbox, IconShipping } from '../../shared/ui/icons';
 import { PhotoInput, photoKeys, type PhotoRef } from '../../shared/ui/PhotoInput';
 
-/**
- * The warehouse's inbound bench.
- *
- * A parcel moves left to right: received → opened → its contents booked in →
- * processed, with two side exits (unclaimed, disposed) and one detour
- * (forwarded, when it landed at a site that stores nothing). Every control here
- * is one of those moves, and the row only ever offers the moves that are legal
- * for its current status — the API enforces the same table, so a button that
- * would 409 is never drawn.
- *
- * An opened parcel now offers Book contents rather than Process. That is the
- * step that was missing from the bench: the work of unpacking a box happens on
- * the intake form, and an operator who reached this row was told, in a hint,
- * to go and find it. Pressing it opens the intake form already pointed at this
- * box, and the box is closed out from there — at the end of the work, next to
- * the count of what came out of it.
- */
 export function ParcelQueue({
   onChanged,
   onBookContents,
@@ -111,16 +94,6 @@ export function ParcelQueue({
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  /*
-                    An UNCLAIMED parcel is somebody's unopened property that
-                    nobody can attribute, held rather than opened. It is the one
-                    row on this bench that needs a person, and it used to be an
-                    ordinary row distinguished by a small red dot in a pill.
-
-                    It takes the register's state rail — the same 3px leading
-                    rule a frozen item takes in the vault — so a bench with one
-                    of these on it says so from across the room.
-                  */
                   <tr key={row.id} className={row.status === 'unclaimed' ? 'is-alert' : undefined}>
                     <td>
                       <Code value={row.code} />
@@ -134,11 +107,6 @@ export function ParcelQueue({
                       {row.ownerUsername ? (
                         <Code value={`@${row.ownerUsername}`} />
                       ) : (
-                        /* The label as written, even — especially — when it
-                           resolves to nothing. It is the only clue to whose
-                           property this is, so it is quoted rather than
-                           corrected, and marked as unresolved rather than muted
-                           into looking like an empty cell. */
                         <span className="unresolved">
                           <Code value={row.addressedTo || t('parcelQueue.noLabel')} />
                           <span className="dt-sub">{t('parcelQueue.noAccount')}</span>
@@ -156,8 +124,6 @@ export function ParcelQueue({
                         {row.receivedAt ? formatDate(row.receivedAt, locale) : '—'}
                       </span>
                     </td>
-                    {/* What has actually come out of the box so far. Before this
-                        the only way to find out was to leave the page. */}
                     <td className="td-end num">{row.itemCount.toLocaleString()}</td>
                     <td>
                       <StatusBadge tone={PARCEL_TONE[row.status] ?? 'neutral'}>
@@ -180,10 +146,6 @@ export function ParcelQueue({
   );
 }
 
-/* ============================================================
-   Per-row actions
-   ============================================================ */
-
 function ParcelActions({
   row,
   onAct,
@@ -199,18 +161,9 @@ function ParcelActions({
   const [claiming, setClaiming] = useState(false);
   const [condition, setCondition] = useState(PARCEL_CONDITIONS[0]?.key ?? 'sound');
   const [conditionNotes, setConditionNotes] = useState('');
-  /**
-   * What the arrival check actually saw.
-   *
-   * A box recorded as `contents_damaged` used to be a sentence with nothing
-   * attached — the operator's word against the customer's, weeks later. The
-   * pictures go on the parcel, and its owner can see them.
-   */
   const [conditionPhotos, setConditionPhotos] = useState<PhotoRef[]>([]);
   const [claimUsername, setClaimUsername] = useState('');
 
-  // A forwarding site holds nothing, so anything sitting there needs the second
-  // leg before it can be opened at all.
   const needsForwarding = row.facilityRole === 'forwarding' && !row.forwardedAt;
 
   if (row.status === 'unclaimed') {
@@ -348,15 +301,6 @@ function ParcelActions({
     );
   }
 
-  /**
-   * status === 'opened' — the box is on the bench with its lid off.
-   *
-   * The only move offered is the next piece of physical work: take the contents
-   * out and book them in. Closing the box out lives at the end of that, on the
-   * intake bench, where the operator can see how many units came out of it —
-   * and the API refuses to close one that produced nothing unless somebody
-   * states, in writing, that it really arrived empty.
-   */
   return (
     <div className="actions">
       <Button size="sm" variant="gold" icon={<IconBox />} onClick={() => onBookContents?.(row.id)}>

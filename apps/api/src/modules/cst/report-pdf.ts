@@ -1,11 +1,3 @@
-/**
- * Minimal, dependency-free PDF writer for the inventory report (Requirement 11.2).
- *
- * The platform ships no PDF library, so this builds a valid multi-page PDF by hand:
- * a Helvetica-typeset title, generation timestamp, a two-column table (label, count)
- * and a total. Kept deliberately small — enough for a clean, professional report.
- */
-
 interface ReportRow {
   label: string;
   count: number;
@@ -20,8 +12,6 @@ interface ReportDoc {
 }
 
 function escapeText(s: string): string {
-  // PDF strings escape backslash and parentheses; strip non-Latin1 to stay in
-  // the base WinAnsi Helvetica encoding (labels are barcodes/emails/classes).
   return s
     .replace(/[\\()]/g, (c) => `\\${c}`)
     .replace(/[^\x20-\x7e]/g, '?');
@@ -47,7 +37,6 @@ function buildPageContent(doc: ReportDoc, pageRows: ReportRow[], pageIndex: numb
     text(left, y, 10, 'F1', doc.subtitle);
     y -= LINE * 1.6;
   }
-  // Column header
   text(left, y, 11, 'F2', doc.columns[0]);
   text(rightCol, y, 11, 'F2', doc.columns[1]);
   y -= LINE;
@@ -77,11 +66,10 @@ export function renderReportPdf(doc: ReportDoc): Buffer {
   const pageCount = chunks.length;
 
   const objects: string[] = [];
-  // 1 Catalog, 2 Pages, 3 F1, 4 F2, then per-page [content, page]
   const kidIds: number[] = [];
   const contentAndPageStart = 5;
   for (let p = 0; p < pageCount; p += 1) {
-    kidIds.push(contentAndPageStart + p * 2 + 1); // page object id
+    kidIds.push(contentAndPageStart + p * 2 + 1);
   }
 
   objects[1] = `<< /Type /Catalog /Pages 2 0 R >>`;
@@ -99,7 +87,6 @@ export function renderReportPdf(doc: ReportDoc): Buffer {
       `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
   }
 
-  // Serialize with an xref table.
   let pdf = '%PDF-1.4\n';
   const offsets: number[] = [];
   for (let i = 1; i < objects.length; i += 1) {
@@ -108,7 +95,7 @@ export function renderReportPdf(doc: ReportDoc): Buffer {
     pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
   }
   const xrefStart = Buffer.byteLength(pdf, 'latin1');
-  const count = objects.length; // includes index 0
+  const count = objects.length;
   pdf += `xref\n0 ${count}\n`;
   pdf += `0000000000 65535 f \n`;
   for (let i = 1; i < count; i += 1) {

@@ -17,20 +17,11 @@ import {
   IconUser,
 } from './icons';
 
-/* ============================================================
-   Page header
-   ============================================================ */
-
 export interface Crumb {
   label: string;
   onClick?: () => void;
 }
 
-/**
- * Compact in-content header: page title + breadcrumb on the leading side,
- * account state on the trailing side. There is no second navy bar — the rail is
- * the only chrome above this.
- */
 export function PageHeader({
   title,
   crumbs,
@@ -69,42 +60,11 @@ export function PageHeader({
   );
 }
 
-/** "Signed in as Manager" — quiet, informational, never a button. */
-/**
- * Who you are signed in as, and whether the account is in good standing.
- *
- * This replaced a pill that read "Signed in as Collector" beside a green dot,
- * and each of those three things was wrong in its own way.
- *
- * THE DOT WAS DECORATION. It was hard-coded to the success colour and never
- * changed, on any account, in any state — so it looked like a status indicator
- * while indicating nothing. The platform has a real status to show there: an
- * account can be `suspended`, which Part 13's debt policy applies automatically
- * once a negative balance passes its threshold, and which locks the app down to
- * the helpdesk. That is precisely the fact a person needs on screen at all
- * times, and it was the one thing the pill did not say.
- *
- * THE ROLE WAS ALREADY THERE. The account menu two controls to the right shows
- * the name and the role together. Spending the header's most prominent
- * horizontal space restating the role in a sentence is chrome, not information.
- *
- * THE IDENTIFIER WAS MISSING. `@username` is the operational identity in this
- * product — it is the `C/O` line a seller must write on a parcel, the string an
- * operator types to route an arrival, and the one identifier a collector is ever
- * asked to quote. It is permanent and unique (Requirement 4.1). Having it
- * permanently on screen is worth more than a sentence about a role.
- */
 export function AccountPill({
   username,
   roleLabel,
   suspended,
 }: {
-  /**
-   * Absent only in the moment between a successful sign-in and the profile
-   * request that fills the session in — the login response does not carry it.
-   * The pill falls back to the role for that frame rather than rendering a bare
-   * `@`, which would flash a broken identifier on every sign-in.
-   */
   username?: string;
   roleLabel: string;
   suspended: boolean;
@@ -125,8 +85,6 @@ export function AccountPill({
       <span className="status-dot" aria-hidden="true" />
       {username ? (
         <>
-          {/* The username is the identifier; the role is context for it, so it
-              is set quieter rather than given equal weight. */}
           <span className="status-pill-main" dir="ltr">
             @{username}
           </span>
@@ -139,11 +97,6 @@ export function AccountPill({
   );
 }
 
-/* ============================================================
-   Popover plumbing
-   ============================================================ */
-
-/** Closes a popover on outside click or Escape, and restores focus. */
 function usePopover(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -169,15 +122,6 @@ function usePopover(open: boolean, close: () => void) {
   return ref;
 }
 
-/* ============================================================
-   Notifications
-   ============================================================ */
-
-/**
- * Header bell. Opens a compact dropdown of the most recent notifications; the
- * full page is only reached through "View all notifications", so inspecting one
- * item never costs a full navigation.
- */
 export function NotificationBell({
   items,
   unseen,
@@ -264,39 +208,6 @@ export function NotificationBell({
   );
 }
 
-/* ============================================================
-   Language switcher
-   ============================================================ */
-
-/**
- * The application's ONE language control.
- *
- * It lives in the shell header, which is mounted once and rendered above every
- * section — Vault, Wallet, Marketplace, Shipping & Services, Warehouse,
- * Notifications, FAQ & Legal, Management, Profile — and above every error and
- * empty state those sections render, because they render INSIDE the shell. No
- * page owns a language control of its own; the only other one in the product is
- * on the sign-in screen, which is deliberately outside the shell (a user must be
- * able to change language before they can sign in).
- *
- * It is an explicit chooser rather than a toggle: a toggle labelled with the
- * other language ("English") forces the reader to work out whether the label
- * names the current state or the action. Here each locale is a menu item and the
- * current one is marked with `aria-checked`.
- *
- * Switching writes the preference to localStorage (see `I18nProvider`), sets
- * `<html lang>` and `<html dir>`, and re-renders through context. Nothing
- * reloads, nothing remounts, and the route is untouched — so the section, tab
- * and any open drawer survive the change.
- */
-/**
- * Light / dark / system, in one control.
- *
- * A single button that cycles rather than a three-way menu: the whole state
- * space is three, the current one is visible in the icon, and a menu for three
- * options is a menu for the sake of having one. The title says which state is
- * next so the cycle is discoverable rather than guessed at.
- */
 export function ThemeToggle() {
   const t = useT();
   const { choice, resolved, cycle } = useTheme();
@@ -366,8 +277,6 @@ export function LanguageSwitcher() {
               role="menuitemradio"
               aria-checked={option.value === locale}
               className={`menu-item${option.value === locale ? ' is-on' : ''}`}
-              // `dir` is pinned per option so each language's own name renders
-              // correctly whichever direction the document is currently in.
               dir={option.value === 'he' ? 'rtl' : 'ltr'}
               onClick={() => {
                 setLocale(option.value);
@@ -387,19 +296,6 @@ export function LanguageSwitcher() {
   );
 }
 
-/* ============================================================
-   User menu
-   ============================================================ */
-
-/**
- * Account menu. Profile, settings and sign-out live here rather than as
- * top-level destinations, keeping the rail purely operational.
- *
- * Language is NOT here any more: it moved out to `LanguageSwitcher`, its own
- * control in the header. Two controls for one setting is one too many, and a
- * language chooser buried behind an avatar is not "immediately discoverable" for
- * the reader who most needs it — the one who cannot read the menu it is hidden in.
- */
 export function UserMenu({
   initials,
   name,

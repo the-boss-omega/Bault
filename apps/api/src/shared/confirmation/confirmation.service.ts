@@ -7,14 +7,6 @@ import { ErrorCode } from '../errors/error-codes';
 import { generateToken, hashToken } from '../tokens';
 import { confirmationToken } from './confirmation.schema';
 
-/**
- * Two-step confirmation primitive (T017, Principle VII).
- *
- * `issue` records a pending irreversible action and returns a short-lived raw
- * token (returned to the client as the confirmation challenge). `consume`
- * validates the token, marks it used (single-use), and returns the stored
- * payload so the caller can now execute the action.
- */
 @Injectable()
 export class ConfirmationService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
@@ -61,11 +53,6 @@ export class ConfirmationService {
       throw AppError.tokenExpired('Confirmation token expired or already used');
     }
 
-    // Single-use: append-only tables use compensating rows, but confirmation tokens
-    // are transient operational state (not history), so a guarded UPDATE is correct here.
-    // Guarded for real: the update claims the token only if it is still unused
-    // and unexpired. It used to update by id alone, so two submissions of one
-    // token both passed the check above and both carried out the action.
     const [claimed] = await this.db
       .update(confirmationToken)
       .set({ consumedAt: new Date() })

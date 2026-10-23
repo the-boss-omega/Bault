@@ -8,11 +8,9 @@ import type { AuthUser } from '../sec/auth-context';
 import { ListingService } from './listing.service';
 import { BrowseService, type BrowseSort } from './browse.service';
 
-/** A page of the public shelf: what is shown by default, and the most ever returned. */
 const BROWSE_DEFAULT = 50;
 const BROWSE_MAX = 200;
 
-/** The orders the shelf can be shown in. Anything else falls back to the first. */
 const BROWSE_SORTS: readonly string[] = ['newest', 'price_asc', 'price_desc'];
 import { PurchaseService } from './purchase.service';
 import { MarketReadService } from './market-read.service';
@@ -28,7 +26,6 @@ class ConfirmTokenDto {
   @IsString() confirmationToken!: string;
 }
 
-/** MKT listings + purchase (T080). */
 @ApiTags('MKT')
 @Controller('marketplace')
 export class MktController {
@@ -39,11 +36,6 @@ export class MktController {
     private readonly read: MarketReadService,
   ) {}
 
-  /**
-   * An unrecognised `sort` falls back to `newest` rather than erroring: a stale
-   * bookmark should still show the shelf, which is the same rule the vault's
-   * `scope` follows.
-   */
   @Public()
   @Get('listings')
   list(
@@ -59,8 +51,6 @@ export class MktController {
       const n = Number(raw);
       return raw !== undefined && raw !== '' && Number.isFinite(n) && n >= 0 ? n : undefined;
     };
-    // Validated here, not coerced: `Number('abc')` reached the query as NaN and
-    // the LIMIT disappeared with it. See `pageLimit`.
     return this.browse.list(pageLimit(limit, { max: BROWSE_MAX, fallback: BROWSE_DEFAULT }), {
       q,
       type,
@@ -71,41 +61,21 @@ export class MktController {
     });
   }
 
-  /**
-   * The caller's OWN listings, with the count of offers still awaiting them.
-   *
-   * Declared before `listings/:id` so "mine" is never captured as an id — the
-   * route table is ordered, and a literal segment that sits after a parameter
-   * is unreachable.
-   */
   @Get('listings/mine')
   mine(@CurrentUser() user: AuthUser) {
     return this.read.myListings(user.id);
   }
 
-  /** Every offer the caller is party to, on either side of the table. */
   @Get('offers/mine')
   myOffers(@CurrentUser() user: AuthUser) {
     return this.read.myOffers(user.id);
   }
 
-  /**
-   * Resolve a username to the id the swap and transfer endpoints take.
-   * Answers with an id and a name only — never a profile.
-   */
   @Get('collectors/:username')
   collector(@CurrentUser() user: AuthUser, @Param('username') username: string) {
     return this.read.counterparty(username, user.id);
   }
 
-  /**
-   * A collector's public storefront. Public on purpose: it is the page a seller
-   * shares, and one that needs an account to open is not a storefront.
-   */
-  /**
-   * One of another collector's items, by serial — the only way to name what a
-   * swap asks for. Requiring the serial IS the privacy control.
-   */
   @Get('collectors/:username/items/:serial')
   tradable(
     @CurrentUser() user: AuthUser,

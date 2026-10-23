@@ -10,14 +10,6 @@ export interface DomainEvent {
   payload: Record<string, unknown>;
 }
 
-/**
- * Transactional outbox writer (T018, Principle XI).
- *
- * `emit` MUST be called with the SAME transaction handle (`tx`) as the state
- * change, so the event and the change commit together — atomically. The worker
- * dispatches unsent rows later (T128). Never call this outside a transaction that
- * also performs the state change.
- */
 @Injectable()
 export class OutboxService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}

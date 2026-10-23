@@ -1,35 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
 
-/**
- * Double-spend and double-charge races (P0 money findings).
- *
- * Every case here is a step that used to decide on a read made OUTSIDE the
- * transaction that moved the money: a balance checked before the debit, a status
- * checked before the write, a quote read before the charge. Two clicks (or two
- * parties) arriving together both passed the check and both moved the money.
- *
- * Each test fires the competing requests with Promise.all and then asserts on
- * the money itself — the balance delta read before and after — not only on the
- * HTTP statuses, because the bug is the money, not the status code.
- *
- * Requires a running API + a freshly seeded DB (`pnpm --filter @bault/api db:seed`).
- */
-
 type Res = Awaited<ReturnType<Client['post']>>;
 
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
 const wins = (rs: Res[]) => rs.filter(ok).length;
-/** Every loser is refused as a client error — never a 5xx, never a second success. */
 const losersAre4xx = (rs: Res[]) => rs.filter((r) => !ok(r)).every((r) => r.status >= 400 && r.status < 500);
 
 const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
 
-/**
- * Fund `email` until its balance is at least `min`. A cash-in request is bounded
- * to $10 … $20,000, so a top-up is never smaller than 1,000 minor units and a
- * large one goes in several requests.
- */
 async function ensureBalance(email: string, min: number): Promise<number> {
   const c = await signIn(email);
   let cur = await balanceOf(c);
@@ -40,10 +19,6 @@ async function ensureBalance(email: string, min: number): Promise<number> {
   return cur;
 }
 
-/**
- * Bring `email`'s balance to exactly `target`: fund it up if it is short, then
- * spend any excess by buying a fresh card another collector lists at that price.
- */
 async function setBalance(email: string, target: number): Promise<void> {
   const cur = await ensureBalance(email, target);
   if (cur > target) {
@@ -59,7 +34,6 @@ async function setBalance(email: string, target: number): Promise<void> {
   expect(await balanceOf(await signIn(email))).toBe(target);
 }
 
-/** A carrier shipment request for one fresh card, by inline destination. */
 async function carrierShipment(ownerEmail: string, description: string) {
   const operator = await signIn(SEED.operator);
   const card = await intakeFor(operator, ownerEmail, { typeClass: 'trading_card', description });
@@ -82,11 +56,8 @@ async function carrierShipment(ownerEmail: string, description: string) {
   return { owner, card, shipmentId: created.body.id as string, eligible };
 }
 
-/* ---------------- escrow setup ---------------- */
+const ESC_VALUE = 100_000;
 
-const ESC_VALUE = 100_000; // $1,000 — above the $500 floor
-
-/** Red (seller) raises a deal with Golden (buyer); both sides agree. Status `agreed`. */
 async function agreedDeal(description: string) {
   const seller = await signIn(SEED.collector);
   const buyer = await signIn(SEED.collector2);
@@ -102,7 +73,6 @@ async function agreedDeal(description: string) {
   return { seller, buyer, deal: raised.body as { id: string; feeMinor: number } };
 }
 
-/** The esc test's flow up to `awaiting_release`: raise, agree, fund, receive-item, inspect. */
 async function dealAwaitingRelease(description: string) {
   const { seller, buyer, deal } = await agreedDeal(description);
   await ensureBalance(SEED.collector2, ESC_VALUE);
@@ -125,8 +95,6 @@ const dealStatus = async (c: Client, dealId: string) =>
 
 describe('concurrency: money races', () => {
   it('a balance that covers one listing buys exactly one of eight', async () => {
-    // E1: parallel purchases each priced at the whole balance all passed an
-    // unlocked balance check and drove the wallet negative.
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);
     const buyer = await signIn(SEED.collector3);
@@ -151,8 +119,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('funding an escrow deal twice holds the money once', async () => {
-    // E18, escrow fund double: the balance check ran outside the transaction and the
-    // status was written by id alone, so each funding click debited the hold.
     const { buyer, deal } = await agreedDeal('Escrow double fund');
     await ensureBalance(SEED.collector2, ESC_VALUE);
     const before = await balanceOf(buyer);
@@ -166,8 +132,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('both sides releasing at once pays the seller exactly once', async () => {
-    // Step 4a, escrow release race: release and settlement were two transactions, each
-    // deciding on a read made outside it, so racing releases each settled.
     const { seller, buyer, deal } = await dealAwaitingRelease('Escrow release race');
     const sellerBefore = await balanceOf(seller);
     const buyerBefore = await balanceOf(buyer);
@@ -179,7 +143,6 @@ describe('concurrency: money races', () => {
     }
     const res = await Promise.all(calls);
 
-    // Seller raised it, so the fee falls on them: value minus fee, once.
     expect({
       sellerCredited: (await balanceOf(seller)) - sellerBefore,
       buyerMoved: (await balanceOf(buyer)) - buyerBefore,
@@ -190,8 +153,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('the second side releasing twice pays the seller once', async () => {
-    // Step 4a, escrow release race (double click): with the seller already released, every
-    // buyer release read that and settled, crediting the seller once per click.
     const { seller, buyer, deal } = await dealAwaitingRelease('Escrow double release');
     const first = await seller.post(`/escrow/${deal.id}/release`, {});
     expect(first.status).toBe(201);
@@ -209,8 +170,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('a release and a return racing move the money one way only', async () => {
-    // Step 4a, escrow release vs return: both saw `awaiting_release`; the seller was
-    // paid and the buyer refunded for one deposit.
     const { seller, buyer, deal } = await dealAwaitingRelease('Escrow release vs return');
     const sellerReleased = await seller.post(`/escrow/${deal.id}/release`, {});
     expect(sellerReleased.status).toBe(201);
@@ -230,7 +189,6 @@ describe('concurrency: money races', () => {
     const buyerDelta = (await balanceOf(buyer)) - buyerBefore;
     const status = await dealStatus(seller, deal.id);
 
-    // Exactly one winner, and the money moved the way that winner says.
     const settled = { wins: 1, sellerDelta: ESC_VALUE - deal.feeMinor, buyerDelta: 0, status: 'settled' };
     const returned = { wins: 1, sellerDelta: 0, buyerDelta: ESC_VALUE, status: 'returned' };
     expect([settled, returned]).toContainEqual({ wins: wins(res), sellerDelta, buyerDelta, status });
@@ -238,8 +196,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('choosing a rate again on a paid shipment is refused and charges nothing', async () => {
-    // Shipment re-rate after payment: `rates_selected` was accepted and settle charged again
-    // without crediting the first charge.
     await ensureBalance(SEED.collector, 100_000);
     const { owner, shipmentId, eligible } = await carrierShipment(SEED.collector, 'Paid shipment re-rate');
     const first = eligible[0]!;
@@ -266,8 +222,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('two clicks on a rate charge the shipment once', async () => {
-    // E18, shipment select-rate double: the balance was read before any transaction and
-    // the row written by id alone, so each click found the money and charged it.
     await ensureBalance(SEED.collector, 100_000);
     const { owner, shipmentId, eligible } = await carrierShipment(SEED.collector, 'Select-rate double click');
     const pick = eligible[0]!;
@@ -288,10 +242,7 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('paying a held shipment twice charges it once', async () => {
-    // E18, shipment pay double: status and balance were checked before the transaction,
-    // so two Pay clicks both charged the parcel.
     const operator = await signIn(SEED.operator);
-    // Intake first: it bills the owner, and the wallet must be empty AFTER it.
     const card = await intakeFor(operator, SEED.collector3, { typeClass: 'trading_card', description: 'Pay race' });
     await setBalance(SEED.collector3, 0);
     const owner = await signIn(SEED.collector3);
@@ -336,8 +287,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('accepting a hand-delivery quote twice charges it once', async () => {
-    // F124, hand-delivery acceptQuote double: status and balance were read before the transaction,
-    // so two clicks on Accept both saw `requested` and the quote was charged twice.
     const QUOTE = 50_000;
     const operator = await signIn(SEED.operator);
     const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab', description: 'Hand delivery race' });
@@ -375,8 +324,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('booking the same cards for a show pickup twice books and charges once', async () => {
-    // Show pickup double booking: the items were checked free outside the transaction,
-    // so two clicks on Book made two bookings and paid the show fee twice.
     const operator = await signIn(SEED.operator);
     const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab', description: 'Pickup race' });
     const collector = await signIn(SEED.collector);
@@ -391,8 +338,6 @@ describe('concurrency: money races', () => {
     }>;
     const show = shows.find((s) => s.open);
     expect(show).toBeTruthy();
-    // Capacity is checked outside the transaction, so a race needs room for at
-    // least two; up to five copies, never more than the show has left.
     const copies = Math.min(5, show!.remaining ?? 5);
     expect(copies).toBeGreaterThanOrEqual(2);
 
@@ -416,8 +361,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('accepting a custom-request quote twice charges it once', async () => {
-    // Custom request acceptQuote double: the request was read unlocked, so two clicks on
-    // Accept both saw `quoted` and the price was debited twice.
     const PRICE = 2_500;
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
@@ -450,13 +393,10 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('accepting a buyout offer twice credits the owner once', async () => {
-    // Buyout accept double: the request was read unlocked, so two clicks on Accept both
-    // saw `quoted` and the collector was credited twice for one card.
     const OFFER = 30_000;
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const card = await intakeFor(operator, SEED.collector, { description: 'Buyout race' });
-    // Asking for a buyout is billed at the service rate, and needs a wallet in credit.
     await ensureBalance(SEED.collector, 10_000);
 
     const requested = await owner.post('/services/buyout', { itemId: card.id });
@@ -480,8 +420,6 @@ describe('concurrency: money races', () => {
   }, 60_000);
 
   it('sending one parcel direct overnight twice charges it once', async () => {
-    // F123: eligibility and balance were checked before the transaction and the
-    // parcel written by id alone, so two clicks on Send each paid the $100 flat.
     const collector = await signIn(SEED.collector);
     const operator = await signIn(SEED.operator);
     const address = await collector.post('/me/addresses', {
@@ -489,6 +427,7 @@ describe('concurrency: money races', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });

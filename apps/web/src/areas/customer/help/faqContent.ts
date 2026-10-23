@@ -1,36 +1,3 @@
-/**
- * Bault's FAQ, written from what the product does.
- *
- * This file used to be another company's FAQ, copied verbatim — their
- * addresses, their phone number, the account they take payments into, their
- * prices — with a note from Bault above each answer saying what was different.
- * A customer opening Help read thirty answers in somebody else's voice about
- * somebody else's service. It was replaced, not edited (E20 / F058).
- *
- * THE RULE FOR EVERY ANSWER: each sentence states something the code does, and
- * names where to see it. Where a figure is CONFIGURATION — a pricing rule, an
- * environment variable, a facility row — the answer says where the app shows it
- * and does not print a number, because a number copied into prose goes stale
- * the day somebody changes the configuration and nobody updates the FAQ. The
- * only figures written out are constants in the code that charges them, and
- * `tests/web/faq-legal.test.ts` checks every dollar amount and percentage here
- * against those constants.
- *
- * The data shape is the one `FaqLegalPage.tsx` renders, kept on purpose:
- *
- *   `baultNote`     the short answer, shown first.
- *   `blocks`        the full answer.
- *   `availability`  `adapted`  — Bault does this;
- *                   `partial`  — Bault does this, with a limit the answer names;
- *                   `unavailable` — Bault does not offer it (none today).
- *   `sourceIndex`   the entry's position, 0-based. The name is historical.
- *
- * Inline markers inside `text`: `**bold**` and `[[label|url]]`. A url is either
- * an in-app route (`#/section/tab`) or https; `renderInline` refuses anything
- * else. Written in English and not yet translated: the page renders it with
- * `lang="en"` so a Hebrew screen reader does not read it in a Hebrew voice.
- */
-
 export type FaqAvailability = 'adapted' | 'partial' | 'unavailable';
 
 export interface FaqInlineListItem {
@@ -44,21 +11,16 @@ export type FaqBlock =
   | { kind: 'ul'; items: FaqInlineListItem[] };
 
 export interface FaqEntry {
-  /** Stable slug used by deep links (`#/faq/faq?q=<id>`). */
   id: string;
-  /** 0-based position in the catalogue. */
   sourceIndex: number;
   question: string;
   category: string;
   availability: FaqAvailability;
-  /** The short answer, shown first. */
   baultNote: string;
-  /** The full answer. */
   blocks: FaqBlock[];
 }
 
 export interface FaqDocument {
-  /** When every answer was last checked against the code, and how many there are. */
   reviewed: { date: string; entryCount: number };
   categoryOrder: string[];
   entries: FaqEntry[];
@@ -70,9 +32,6 @@ const p = (text: string): FaqBlock => ({ kind: 'p', text });
 const ul = (...items: string[]): FaqBlock => ({ kind: 'ul', items: items.map((text) => ({ text })) });
 
 const ENTRIES: Draft[] = [
-  /* ============================================================
-     Getting started
-     ============================================================ */
   {
     id: 'what-is-bault',
     question: 'What is Bault?',
@@ -132,9 +91,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Sending items in
-     ============================================================ */
   {
     id: 'where-do-i-send-my-items',
     question: 'Where do I send my items?',
@@ -213,9 +169,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Storage
-     ============================================================ */
   {
     id: 'what-does-storage-cost',
     question: 'What does storage cost?',
@@ -253,9 +206,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Fees & balance
-     ============================================================ */
   {
     id: 'how-does-the-wallet-work',
     question: 'How does my Bault wallet work?',
@@ -325,9 +275,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Shipping
-     ============================================================ */
   {
     id: 'how-do-i-ship-items-home',
     question: 'How do I ship items to myself?',
@@ -404,9 +351,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Services
-     ============================================================ */
   {
     id: 'what-services-are-there',
     question: 'What can Bault do with an item in my vault?',
@@ -445,9 +389,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Marketplace
-     ============================================================ */
   {
     id: 'how-does-selling-work',
     question: 'How does selling on the marketplace work?',
@@ -496,9 +437,6 @@ const ENTRIES: Draft[] = [
     ],
   },
 
-  /* ============================================================
-     Account
-     ============================================================ */
   {
     id: 'memberships',
     question: 'What does a membership include?',

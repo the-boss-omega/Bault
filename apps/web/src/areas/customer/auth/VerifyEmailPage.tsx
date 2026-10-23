@@ -1,43 +1,56 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../../shared/api';
-import { useT } from '../../../shared/i18n';
+import { ApiError, api, apiErrorKey } from '../../../shared/api';
+import { useT, type TranslateFn } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 
-/**
- * The page the verification link opens (`#/verify-email?token=…`).
- *
- * Verification runs on mount rather than behind a button: the reader already
- * expressed intent by clicking the link in their mail, and asking them to
- * confirm a second time is a step that carries no information.
- *
- * Three outcomes, each stated plainly. On failure the token is spent, expired
- * or wrong — an expired link is the common case and the only one with a way
- * forward, so a resend form is offered rather than a dead end. The resend
- * endpoint answers identically for a known and an unknown address, so this
- * page confirms the request without claiming a mail was sent.
- */
 type State =
   | { status: 'working' }
   | { status: 'verified' }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; error: unknown };
+
+const verifying = new Map<string, Promise<unknown>>();
+
+function failure(t: TranslateFn, e: unknown): string {
+  if (e instanceof ApiError && e.status === 410) return t('auth.verifyLinkInvalid');
+  const key = apiErrorKey(e);
+  return key ? t(key) : (e as Error).message;
+}
+
+function verifyOnce(token: string): Promise<unknown> {
+  const existing = verifying.get(token);
+  if (existing) return existing;
+  const request = api.post('/auth/verify-email', { token });
+  verifying.set(token, request);
+  request.catch(() => {
+    if (verifying.get(token) === request) verifying.delete(token);
+  });
+  return request;
+}
 
 export function VerifyEmailPage({ token }: { token: string | null }) {
   const t = useT();
-  const [state, setState] = useState<State>(
-    token ? { status: 'working' } : { status: 'failed', message: '' },
-  );
+  const [outcome, setOutcome] = useState<(State & { token: string }) | null>(null);
+  const state: State = !token
+    ? { status: 'failed', error: null }
+    : outcome?.token === token
+      ? outcome
+      : { status: 'working' };
 
   useEffect(() => {
     if (!token) return;
-    void (async () => {
-      try {
-        await api.post('/auth/verify-email', { token });
-        setState({ status: 'verified' });
-      } catch (e) {
-        setState({ status: 'failed', message: (e as Error).message });
-      }
-    })();
+    let live = true;
+    verifyOnce(token).then(
+      () => {
+        if (live) setOutcome({ token, status: 'verified' });
+      },
+      (e: unknown) => {
+        if (live) setOutcome({ token, status: 'failed', error: e });
+      },
+    );
+    return () => {
+      live = false;
+    };
   }, [token]);
 
   function goToSignIn() {
@@ -68,7 +81,7 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
   return (
     <section className="auth-card">
       <h2>{t('auth.verifyTitle')}</h2>
-      <ErrorState message={token ? state.message : t('auth.verifyNoToken')} />
+      <ErrorState message={token ? failure(t, state.error) : t('auth.verifyNoToken')} />
       <p className="field-hint">{t('auth.verifyFailedHint')}</p>
       <ResendForm />
       <p className="auth-switch">
@@ -80,11 +93,6 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
   );
 }
 
-/**
- * Ask for a fresh verification link. Shared shape with the sign-up page's own
- * resend control, but this one collects the address because the reader arrived
- * from a link rather than from having just typed it.
- */
 function ResendForm() {
   const t = useT();
   const [email, setEmail] = useState('');

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../../../shared/api';
+import { api, ApiError } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
+import { ItemPick } from '../../../shared/ui/Serial';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import {
   boxLabel,
@@ -12,10 +14,10 @@ import {
   type QuotedRate,
   type ServiceCatalogue,
 } from '../../../shared/carriers';
-import { Button, EmptyState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { IconAlert, IconBox, IconLocation, IconShipping } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
-import { countryName, useShippingCountries } from '../../../shared/countries';
+import { countryName, lacksRegion, useShippingCountries } from '../../../shared/countries';
 
 interface Address {
   id: string;
@@ -23,6 +25,7 @@ interface Address {
   recipient: string;
   line1: string;
   city: string;
+  region: string | null;
   country: string;
   postalCode: string;
   isDefault: boolean;
@@ -30,26 +33,11 @@ interface Address {
 
 interface VaultItem {
   id: string;
+  serialNumber?: string;
   typeClass: string;
   description: string;
 }
 
-/**
- * Building a parcel, and pricing it before committing to it.
- *
- * The old composer was four controls: tick some items, choose a saved address,
- * tick Rush, press a button — which created a shipment record and only THEN
- * showed two prices. There was no way to ask "what would this cost" without
- * committing, and the two prices were the same two prices for every parcel,
- * because nothing about the destination or the weight reached the rate request.
- *
- * The order of operations here is the substance of the change. Everything on the
- * left is a question about the parcel; the panel on the right re-quotes as those
- * answers change; and the shipment is only created once somebody has seen what
- * it costs. A service that cannot legally carry the parcel is still SHOWN, with
- * the rule it failed — an option that silently vanished would leave a collector
- * hunting for the cheap one they saw a moment ago.
- */
 export function ShipmentComposer({
   items,
   onError,
@@ -78,6 +66,7 @@ export function ShipmentComposer({
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [refusedAddressId, setRefusedAddressId] = useState<string | null>(null);
 
   const selectedIds = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).map(([id]) => id),
@@ -85,13 +74,13 @@ export function ShipmentComposer({
   );
 
   const address = addresses.find((a) => a.id === addressId);
+  const regionMissing = Boolean(
+    address && (lacksRegion(address, countries) || refusedAddressId === address.id),
+  );
   const international = Boolean(address && address.country.toUpperCase() !== 'US');
   const insuredMinor = dollarsToCents(insured) ?? 0;
   const declaredMinor = dollarsToCents(declared) ?? 0;
 
-  // The signature is not merely validated — it is FORCED, because the cover
-  // would not pay on a parcel left at a door. Showing it ticked and locked is
-  // more honest than refusing the combination at submit time.
   const signatureForced =
     catalogue !== null && insuredMinor > catalogue.signatureRequiredAboveMinor;
   const effectiveSignature = signature || signatureForced;
@@ -128,14 +117,8 @@ export function ShipmentComposer({
     [selectedIds, addressId, rush, insuredMinor, declaredMinor, effectiveSignature, addOns, notes, boxSize],
   );
 
-  /**
-   * Re-quote as the answers change, debounced.
-   *
-   * Quoting is free and creates nothing, so there is no reason to make somebody
-   * press a button to find out that adding insurance changed the price.
-   */
   useEffect(() => {
-    if (selectedIds.length === 0 || !addressId) {
+    if (selectedIds.length === 0 || !addressId || regionMissing) {
       setQuote(null);
       return;
     }
@@ -147,14 +130,19 @@ export function ShipmentComposer({
           onError(null);
         } catch (e) {
           setQuote(null);
-          onError((e as Error).message);
+          if (refusedForRegion(e)) {
+            setRefusedAddressId(addressId);
+            onError(null);
+          } else {
+            onError((e as Error).message);
+          }
         } finally {
           setQuoting(false);
         }
       })();
     }, 350);
     return () => clearTimeout(handle);
-  }, [selectedIds.length, addressId, body, onError]);
+  }, [selectedIds.length, addressId, regionMissing, body, onError]);
 
   function toggleItem(id: string) {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -164,7 +152,6 @@ export function ShipmentComposer({
     setAddOns((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
-  /** Create the request, then take the chosen service in the same gesture. */
   async function commit(rate: QuotedRate | 'recommended') {
     setBusy(true);
     try {
@@ -193,7 +180,13 @@ export function ShipmentComposer({
       setSelected({});
       setQuote(null);
     } catch (e) {
-      onError((e as Error).message);
+      if (refusedForRegion(e)) {
+        setRefusedAddressId(addressId);
+        setQuote(null);
+        onError(null);
+      } else {
+        onError((e as Error).message);
+      }
     } finally {
       setBusy(false);
     }
@@ -222,9 +215,7 @@ export function ShipmentComposer({
               <li key={item.id}>
                 <label className="check">
                   <input type="checkbox" checked={!!selected[item.id]} onChange={() => toggleItem(item.id)} />
-                  <span>
-                    {item.typeClass} — {item.description}
-                  </span>
+                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                 </label>
               </li>
             ))}
@@ -234,12 +225,6 @@ export function ShipmentComposer({
 
       <Panel title={t('shipping.destination')} subtitle={t('shipping.destinationSubtitle')}>
         {addresses.length === 0 ? (
-          /*
-            This told somebody to go and manage their addresses and gave them no
-            way to do it — the form lives on another section entirely, and
-            nothing on screen said which. A shipment cannot be composed at all
-            from here without one, so this is the only thing to do next.
-          */
           <EmptyState
             title={t('shipping.noAddresses')}
             text={t('shipping.manageAddressesHint')}
@@ -271,9 +256,17 @@ export function ShipmentComposer({
               </select>
             </Field>
 
-            {/* The box changes the price — a carrier bills on size as well as
-                weight — so it is asked here, before the quote, not at the packing
-                bench after the price was already given. */}
+            {regionMissing && address && (
+              <ErrorState
+                message={t('shipping.regionMissing', {
+                  label: address.label,
+                  country: countryName(address.country, countries),
+                })}
+                onRetry={() => navigate({ section: 'profile', tab: 'addresses' })}
+                retryLabel={t('shipping.editAddress')}
+              />
+            )}
+
             <Field label={t('ship.boxSize')} hint={t('ship.boxSizeHint')}>
               <select value={boxSize} onChange={(e) => setBoxSize(e.target.value)}>
                 <option value="">{t('ship.box.none')}</option>
@@ -337,9 +330,9 @@ export function ShipmentComposer({
                 <input type="checkbox" checked={addOns.includes(a.key)} onChange={() => toggleAddOn(a.key)} />
                 {t('ship.addon.gps_tracker')} — {formatUsd(a.priceMinor)}
               </label>
-              <span className="field-hint">
+              <div className="field-hint">
                 {t('ship.addonNeedsInsurance', { amount: formatUsd(a.requiresInsuranceMinor) })}
-              </span>
+              </div>
             </div>
           ))}
 
@@ -406,9 +399,6 @@ export function ShipmentComposer({
                         insurance: formatUsd(r.insurancePremiumMinor),
                       })}
                     </p>
-                    {/* The tier's part, named. A total that is lower than the
-                        breakdown above it, with nothing to say why, reads as a
-                        mistake — so the membership says what it paid. */}
                     {r.membershipCover && (r.coveredMinor ?? 0) > 0 && (
                       <p className="hint mem-covered">
                         {t('ship.coveredBy', {
@@ -448,8 +438,6 @@ export function ShipmentComposer({
               </div>
             )}
 
-            {/* Refused services stay on screen with their reason. A collector who
-                wanted the cheap one is owed the rule, not a gap where it was. */}
             {refused.length > 0 && (
               <>
                 <h3 className="drawer-heading">{t('ship.unavailable')}</h3>
@@ -474,4 +462,8 @@ export function ShipmentComposer({
       </Panel>
     </>
   );
+}
+
+function refusedForRegion(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'address_region_required';
 }

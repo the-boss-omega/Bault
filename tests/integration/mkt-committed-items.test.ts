@@ -1,20 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn } from './helpers/http';
 
-/**
- * A card that is already promised somewhere cannot also be put up for sale.
- *
- * Listing checked that the card was the seller's, on the shelf and not on hold,
- * and nothing else — but a card in an open escrow deal, in a parcel being
- * prepared, or in a buyout or consignment is all three of those. It could be
- * listed and bought, and the deal, the parcel or the buyout found out only at
- * settlement or at the packing bench, with a stranger's money already taken.
- *
- * Refused at the listing now, with a 409 that says what the card is committed
- * to.
- *
- * Requires a running API + a seeded DB.
- */
 describe('MKT a committed card cannot be listed', () => {
   const list = async (itemId: string) => {
     const seller = await signIn(SEED.collector);

@@ -19,19 +19,6 @@ import {
 } from '../shp/shipping-options';
 import { CULL_WINDOW_DAYS } from '../dis/disposal-services.service';
 
-/**
- * The figures the legal documents and the FAQ refer to, read from where the
- * charging code reads them.
- *
- * The balance policy used to print "14 days", "0.05% a day" and "-$20.00" as
- * prose. Those three are environment variables (`WALLET_DEBT_*`), read by the
- * daily sweeps — so changing one in production would have made a document
- * about charging people interest quietly false. The terms now say the current
- * figures are shown in the app, and this is what the app shows: the debt
- * policy from the same configuration the sweeps load, and every fixed fee from
- * the same constant the charge uses. Prices that are pricing rules are on the
- * price list (`GET /pricing/list`) and are deliberately not repeated here.
- */
 export function accountTerms() {
   const env = loadEnv();
   return {

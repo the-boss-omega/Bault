@@ -3,19 +3,6 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { Button, ErrorState, Field } from '../../../shared/ui/primitives';
 
-/**
- * "Can you also…" — asking for something the service list has no button for.
- *
- * The nine services in the drawer are fixed things Bault decided to sell. A
- * collector who wanted anything else — sleeve these before you ship them, weigh
- * this box, check the seal is intact — had one route: a support ticket, which is
- * a conversation with no price, no queue, no completion and no link to the
- * collectible it is about.
- *
- * The form says plainly that ASKING IS FREE and that nothing is charged until
- * they see a price and agree to it, because the reasonable fear about a box
- * marked "custom" is exactly that it will cost something unknown.
- */
 export function CustomRequestForm({
   itemId,
   onCancel,
@@ -33,8 +20,6 @@ export function CustomRequestForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mirrors the API's own minimums, so the button disables for exactly the input
-  // the server would refuse.
   const summaryOk = summary.trim().length >= 3;
   const detailOk = detail.trim().length >= 10;
 
@@ -83,9 +68,6 @@ export function CustomRequestForm({
         />
       </Field>
 
-      {/* The reasonable fear about a box marked "custom" is that it will cost
-          something unknown. Answering it here is cheaper than answering it in
-          support afterwards. */}
       <p className="hint">{t('custom.freeNote')}</p>
 
       {error && <ErrorState message={error} />}

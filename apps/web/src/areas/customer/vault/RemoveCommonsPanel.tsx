@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
 import { formatDate } from '../../../shared/money';
 import { Button, EmptyState, Panel, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
@@ -16,20 +17,6 @@ interface CullItem {
   receivedAt?: string | null;
 }
 
-/**
- * The bulk cull — cards worth less than the storage they are about to accrue.
- *
- * A collector who sends in a shoebox gets back a vault containing forty commons
- * they never wanted individually catalogued, and every one of them starts
- * costing storage the day the included period ends. Culling them one at a time
- * through the donation flow is forty confirmations.
- *
- * Two things about this are deliberate. It is FREE, because charging somebody to
- * stop charging them is indefensible. And it is limited to a window after
- * arrival, which is why the ineligible cards are still LISTED here, greyed, with
- * the reason on them — a card that quietly vanished from this list would read as
- * a bug, where "the window closed for this one" reads as the rule it is.
- */
 export function RemoveCommonsPanel({
   items,
   windowDays,
@@ -49,7 +36,6 @@ export function RemoveCommonsPanel({
 
   const cutoff = Date.now() - windowDays * 86_400_000;
 
-  /** Eligibility mirrors the server's checks so the reason is visible up front. */
   const rows = useMemo(
     () =>
       items.map((it) => {
@@ -68,17 +54,6 @@ export function RemoveCommonsPanel({
 
   const eligible = rows.filter((r) => !r.reason);
 
-  /**
-   * What will actually be removed: the ticked cards that are on screen AND
-   * still eligible.
-   *
-   * `chosen` outlives the list. The vault reloads `items` on every keystroke of
-   * its search, so a collector could tick five cards, type a search that hid
-   * three, confirm — and all five went to `remove-commons/confirm`, three of
-   * them donated or destroyed without being on screen when the button was
-   * pressed. Everything below — the count on the button, the confirmation and
-   * the request — reads this list, never `chosen`.
-   */
   const selected = useMemo(() => {
     const visible = new Map(eligible.map((r) => [r.it.id, r.it]));
     return chosen.flatMap((id) => {
@@ -128,7 +103,7 @@ export function RemoveCommonsPanel({
                     onChange={() => toggle(it.id)}
                   />
                   <span>
-                    {it.description || it.typeClass}
+                    {itemName(t, it)}
                     <span className="hint" dir="ltr">
                       {' '}
                       {it.serialNumber}
@@ -193,13 +168,11 @@ export function RemoveCommonsPanel({
                   ? t('cull.confirmDiscard', { count: selected.length })
                   : t('cull.confirmDonate', { count: selected.length })}
               </p>
-              {/* Every card by name. This cannot be undone, so the collector
-                  confirms a list they can read, not a number. */}
               <ul className="check-list list-unbounded">
                 {selected.map((it) => (
                   <li key={it.id}>
                     <span>
-                      {it.description || it.typeClass}
+                      {itemName(t, it)}
                       <span className="hint" dir="ltr">
                         {' '}
                         {it.serialNumber}

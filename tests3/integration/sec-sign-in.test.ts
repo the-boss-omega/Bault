@@ -4,26 +4,10 @@ import { Client, SEED, SEED_PASSWORD, fixtureEmail, signIn } from '../../tests/i
 import { closeDb, sql } from '../../tests/integration/helpers/db';
 import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
-/**
- * Signing in, from the side of somebody guessing (E13, N5, N10).
- *
- * An identifier that matched no account skipped `argon2.verify` and was refused
- * in a few milliseconds, against a couple of hundred for a real one — so the
- * time it took to say "invalid credentials" said which accounts exist. And a
- * single account could be guessed at for as long as the per-IP rate limit
- * allowed, by anyone with more than one address.
- *
- * Every account these tests guess against is a fixture registered here, or an
- * identifier nobody owns. The lockout is real and is not switched off for
- * tests: a suite that pointed ten wrong passwords at a seeded account would
- * lock it for every suite after it.
- */
-
 afterAll(closeDb);
 
 const PASSWORD = 'correct horse battery';
 
-/** A fresh account. Pending — the password is checked before the status is. */
 async function register(label: string): Promise<{ email: string; username: string }> {
   const email = fixtureEmail(label);
   const username = `${label.slice(0, 6)}${randomBytes(5).toString('hex')}`;
@@ -33,7 +17,6 @@ async function register(label: string): Promise<{ email: string; username: strin
     firstName: 'Sign',
     lastName: 'In',
     password: PASSWORD,
-    // Sign-up requires accepting the terms in force (E21).
     acceptedTermsVersion: CURRENT_TERMS_VERSION,
   });
   expect(res.status).toBe(201);
@@ -50,20 +33,11 @@ async function attempt(identifier: string, password: string) {
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-/* ============================================================
-   E13 — the time a refusal takes says nothing
-   ============================================================ */
-
 describe('how long a wrong sign-in takes', () => {
   it('is the same whether or not the identifier belongs to anybody', async () => {
-    // Twenty attempts each side, spread over four identifiers per side so none
-    // of them gets near the lockout, interleaved so a slow moment on the
-    // machine lands on both sides, and with the order of each pair alternating
-    // so whichever side goes second does not always get the warmer machine.
     const known = await Promise.all([1, 2, 3, 4].map((i) => register(`time${i}`)));
     const unknown = [1, 2, 3, 4].map((i) => nobody(`time${i}`));
 
-    // One of each first, so neither side pays for a cold path alone.
     await attempt(known[0]!.username, 'wrong-password');
     await attempt(unknown[0]!, 'wrong-password');
 
@@ -87,18 +61,12 @@ describe('how long a wrong sign-in takes', () => {
   }, 120_000);
 });
 
-/* ============================================================
-   Per-identifier lockout
-   ============================================================ */
-
 describe('guessing at one identifier', () => {
   it('is refused for fifteen minutes after ten failures — even with the right password', async () => {
     const { username } = await register('lock');
     for (let i = 0; i < 10; i += 1) {
       expect((await attempt(username, `guess-${i}`)).status).toBe(401);
     }
-    // The right password, now. Letting it through would make the lockout a
-    // signal ("the one that worked") rather than a stop.
     const eleventh = await attempt(username, PASSWORD);
     expect(eleventh.status).toBe(429);
     expect(eleventh.body.error.code).toBe('rate_limited');
@@ -119,8 +87,6 @@ describe('guessing at one identifier', () => {
   }, 60_000);
 
   it('counts guesses sent all at once: twenty in parallel still get ten tries', async () => {
-    // Read-the-count-then-verify, unserialised, lets every request in a burst
-    // read "fewer than ten" before any of them has written its failure.
     const target = nobody('burst');
     const results = await Promise.all(Array.from({ length: 20 }, (_, i) => attempt(target, `burst-${i}`)));
     const statuses = results.map((r) => r.status).sort();
@@ -132,17 +98,11 @@ describe('guessing at one identifier', () => {
     const target = nobody('other');
     for (let i = 0; i < 10; i += 1) await attempt(target, `guess-${i}`);
     expect((await attempt(target, 'x')).status).toBe(429);
-    // A seeded account somebody else is guessing at nothing to do with.
     await signIn(SEED.collector2, SEED_PASSWORD);
   }, 60_000);
 });
 
-/* ============================================================
-   N10 — a confirmation link confirms, and does nothing else
-   ============================================================ */
-
 describe('an unused confirmation link', () => {
-  /** A link for this account, as the email would have carried it. */
   async function linkFor(email: string): Promise<{ userId: string; token: string }> {
     const [row] = await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [email]);
     const token = randomBytes(32).toString('hex');
@@ -166,8 +126,6 @@ describe('an unused confirmation link', () => {
   });
 
   it('does not bring a suspended account back', async () => {
-    // A link is valid for a day. An account suspended inside that day was
-    // reinstated by whoever still held the mail.
     const { email } = await register('verifys');
     const { userId, token } = await linkFor(email);
     const admin = await signIn(SEED.admin);
@@ -189,10 +147,6 @@ describe('an unused confirmation link', () => {
   });
 });
 
-/* ============================================================
-   N5 — staff powers need an active account
-   ============================================================ */
-
 describe('a suspended member of staff', () => {
   it('can no longer read or answer a customer’s ticket', async () => {
     const customer = await signIn(SEED.collector);
@@ -203,7 +157,6 @@ describe('a suspended member of staff', () => {
     });
     expect(ticket.status).toBe(201);
 
-    // A staff account of its own, so suspending it touches no seeded login.
     const { email } = await register('staff');
     await sql(`UPDATE user_account SET status = 'active', role = 'warehouse_operator' WHERE email = $1`, [email]);
     const staff = await signIn(email, PASSWORD);
@@ -213,8 +166,6 @@ describe('a suspended member of staff', () => {
     const admin = await signIn(SEED.admin);
     expect((await admin.patch(`/admin/users/${me.id}`, { status: 'suspended' })).status).toBe(200);
 
-    // `@AllowSuspended` keeps these two routes open so a suspended CUSTOMER can
-    // ask for help. It was letting a suspended operator keep working the queue.
     expect((await staff.get(`/support/tickets/${ticket.body.id}`)).status).toBe(403);
     const reply = await staff.post(`/support/tickets/${ticket.body.id}/messages`, { body: 'Answering anyway.' });
     expect(reply.status).toBe(403);
@@ -224,7 +175,6 @@ describe('a suspended member of staff', () => {
     };
     expect(thread.messages.some((m) => m.authorRole === 'staff')).toBe(false);
 
-    // Their own tickets are still theirs to read: suspended staff are customers too.
     const own = await staff.post('/support/tickets', { category: 'account', subject: 'Why?', body: 'Suspended.' });
     expect(own.status).toBe(201);
     expect((await staff.get(`/support/tickets/${own.body.id}`)).status).toBe(200);
