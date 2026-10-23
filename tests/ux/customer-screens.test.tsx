@@ -2,16 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The screens a collector actually looks at.
- *
- * Three things are worth asserting about a page that reads from an API, and none
- * of them are visible to a type checker: that it shows something sensible while
- * loading, that it shows the REASON when the call fails rather than an empty
- * frame, and that an empty result reads as "nothing here yet" rather than as a
- * broken page.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -37,6 +27,8 @@ const { VaultPage } = await import('../../apps/web/src/areas/customer/vault/Vaul
 const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
 const { WalletPage } = await import('../../apps/web/src/areas/customer/finance/WalletPage');
 const { WhiteGloveQuotes } = await import('../../apps/web/src/areas/customer/shipping/HumanFulfilmentPanels');
+const { RechooseService } = await import('../../apps/web/src/areas/customer/shipping/ShippingServicesPage');
+const { useI18n } = await import('../../apps/web/src/shared/i18n');
 
 function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
@@ -62,9 +54,6 @@ describe('the account pill in the header', () => {
   });
 
   it('falls back to the role for the one frame after sign-in where the username is not loaded yet', () => {
-    // The login response does not carry a username; it arrives with the profile
-    // request. Rendering a bare "@" for that frame would flash a broken
-    // identifier on every single sign-in.
     renderIn(<AccountPill roleLabel="Collector" suspended={false} />);
     expect(screen.getByText('Collector')).toBeInTheDocument();
     expect(screen.queryByText('@')).not.toBeInTheDocument();
@@ -100,8 +89,6 @@ describe('the published intake policy', () => {
     renderIn(<IntakePolicyPanel />);
     await screen.findByText('Trading card');
 
-    // Telling somebody their box of commons was "prohibited" would be a false
-    // statement about their property, made by the platform that destroyed it.
     const refused = screen.getByRole('heading', { name: /will not go into a vault/i }).closest('section')!;
     expect(within(refused).getByText('GPS tracker')).toBeInTheDocument();
     expect(within(refused).queryByText('No processing value')).not.toBeInTheDocument();
@@ -160,8 +147,6 @@ describe('the vault', () => {
       Promise.resolve(path.startsWith('/vault/items') ? [ITEM] : { stored: 1 }),
     );
     renderIn(<VaultPage />);
-    // The description appears in the card and again in its detail affordance;
-    // what matters is that the catalogue line reached the screen at all.
     await waitFor(() => expect(screen.getAllByText(/Rayquaza ex/).length).toBeGreaterThan(0));
   });
 
@@ -170,15 +155,6 @@ describe('the vault', () => {
       Promise.resolve(path.startsWith('/vault/items') ? [] : {}),
     );
     renderIn(<VaultPage />);
-    /**
-     * An empty state is a sentence, not the absence of one — the difference
-     * between "nothing in your vault yet" and a page that looks broken.
-     *
-     * The wording moved twice: away from "No active cards", because a vault
-     * holds comics and sealed boxes too, and towards something that says what to
-     * do about it. The matcher is deliberately loose about the exact phrasing
-     * and strict about there being one.
-     */
     await waitFor(() => {
       const empty = screen.queryByText(/nothing (in your vault|to show)|no (active )?(cards|items)/i);
       expect(empty, 'the vault renders no empty state at all').toBeTruthy();
@@ -231,7 +207,7 @@ describe('the vault has a place for every state (F057)', () => {
                 lifecycleState: 'discarded',
                 historical: true,
                 departedAt: '2026-10-01T10:00:00.000Z',
-                departureReason: 'remove commons — discarded',
+                departure: { kind: 'discarded', code: null },
               },
             ]
           : { active: 0, hold: 0, history: 1 },
@@ -240,8 +216,9 @@ describe('the vault has a place for every state (F057)', () => {
     renderIn(<VaultPage />);
     await waitFor(() => expect(screen.getAllByText(/Bulk common, culled/).length).toBeGreaterThan(0));
     expect(get).toHaveBeenCalledWith(expect.stringMatching(/^\/vault\/items\?scope=history/));
-    // The history tile reads "Historical — Discarded".
     expect(screen.getAllByText(/Discarded/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Discarded at your request').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/remove commons/)).toBeNull();
   });
 });
 
@@ -271,15 +248,12 @@ describe('removing commons acts only on what is on screen (F056)', () => {
     await user.click(screen.getByRole('checkbox', { name: /Common Alpha/ }));
     await user.click(screen.getByRole('checkbox', { name: /Common Beta/ }));
 
-    // The vault's search narrows the list the panel is given. Beta is ticked
-    // and no longer on screen.
     rerender(
       <I18nProvider>
         <RemoveCommonsPanel items={[ALL[0]!]} windowDays={30} onDone={onDone} onError={() => {}} />
       </I18nProvider>,
     );
 
-    // The count on the button is the count that will be removed.
     await user.click(screen.getByRole('button', { name: /Remove 1 items/ }));
     await user.click(screen.getByRole('button', { name: /Remove them/ }));
 
@@ -299,11 +273,6 @@ describe('removing commons acts only on what is on screen (F056)', () => {
 });
 
 describe('the wallet running balance (F055)', () => {
-  /**
-   * Ten movements, newest first, as `GET /finance/ledger` returns them: five
-   * $20 cash-ins and five $5 service charges, alternating. The wallet stands
-   * at $75.00.
-   */
   const LEDGER = Array.from({ length: 10 }, (_, i) => {
     const credit = i % 2 === 1;
     return {
@@ -325,7 +294,6 @@ describe('the wallet running balance (F055)', () => {
     return Promise.resolve([]);
   }
 
-  /** The Balance cell of each body row, top to bottom. */
   function balances(): string[] {
     const table = screen.getByRole('table');
     return within(table)
@@ -342,8 +310,6 @@ describe('the wallet running balance (F055)', () => {
     renderIn(<WalletPage />);
     await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').length).toBe(7));
     expect(balances()[0]).toContain('$75.00');
-    // …and every row below it is the wallet's position after that movement:
-    // $75 − (−$5) − $20 + $5 − $20 + $5 for the sixth row down.
     expect(balances()).toEqual(['$75.00', '$80.00', '$60.00', '$65.00', '$45.00', '$50.00']);
   });
 
@@ -358,8 +324,6 @@ describe('the wallet running balance (F055)', () => {
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filters' }), 'service_charge');
     await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row').length).toBe(6));
-    // The newest movement is a service charge: after it the wallet held $75.00,
-    // whatever else is hidden. Recomputed over the filtered rows it read -$25.00.
     expect(balances()[0]).toBe(before);
   });
 });
@@ -385,5 +349,53 @@ describe('a hand-delivery quote reaches the collector (F060)', () => {
     expect(screen.queryByText('SHP-CARRIER1')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Accept' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/shipping/white-glove/hd1/accept'));
+  });
+});
+
+describe('a label the carrier refused can be re-chosen (fix 4)', () => {
+  const RATE = (serviceKey: string, carrier: string, serviceLevel: string, totalMinor: number) => ({
+    serviceKey,
+    carrier,
+    serviceLevel,
+    totalMinor,
+    eligible: true,
+    costMinor: totalMinor,
+    handlingMinor: 0,
+    insurancePremiumMinor: 0,
+    addOnsMinor: 0,
+    problems: [],
+  });
+
+  it('shows what each service does to what was paid, and chooses one', async () => {
+    get.mockResolvedValue([
+      RATE('usps_ground', 'USPS', 'Ground Advantage', 645),
+      RATE('usps_priority', 'USPS', 'Priority Mail', 1_293),
+      RATE('fedex_2day', 'FedEx', '2Day', 2_254),
+    ]);
+    const onChosen = vi.fn(async (fn: () => Promise<unknown>) => {
+      await fn();
+    });
+    const user = userEvent.setup();
+    function Rechoose() {
+      const { t } = useI18n();
+      return (
+        <RechooseService
+          shipment={{ id: 's1', cost: 1_293, labelRefused: { at: null, reason: 'EasyPost 422: rate expired' } } as never}
+          t={t}
+          busy={false}
+          onChosen={onChosen}
+        />
+      );
+    }
+    renderIn(<Rechoose />);
+
+    expect(await screen.findByText('$6.48 back')).toBeInTheDocument();
+    expect(screen.getByText('No change in price')).toBeInTheDocument();
+    expect(screen.getByText('$9.61 more')).toBeInTheDocument();
+    expect(screen.getByText(/rate expired/)).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button')[0]!);
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/shipping/shipments/s1/select-rate', { carrier: 'USPS', serviceLevel: 'Ground Advantage' }),
+    );
   });
 });

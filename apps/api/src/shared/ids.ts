@@ -1,19 +1,5 @@
 import { randomInt } from 'node:crypto';
 
-/**
- * Human-recognizable, prefixed entity IDs (Requirement 9).
- *
- * Every entity type gets a scannable, glanceable code with its own prefix so a
- * warehouse operator or admin can tell what an ID refers to at a glance:
- *   OW-  owner (intake)      SN-  item serial       BIN- storage bin
- *   SHP- shipment            SR-  service request   DSP- dispute
- *   LOT- lot / batch         TXN- marketplace transaction
- *   DSL- arrival disposal (something that arrived and was not accepted)
- *   PKG- inbound parcel        TKT- support ticket   GSB- grading submission
- *
- * Ambiguous characters (0/O, 1/I) are excluded for readability. Uniqueness is
- * ultimately enforced by DB unique indexes; callers retry on the rare collision.
- */
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function prefixedId(prefix: string, length = 8): string {
@@ -35,13 +21,9 @@ export const ID_PREFIX = {
   parcel: 'PKG',
   ticket: 'TKT',
   gradingSubmission: 'GSB',
-  /** A shared parcel several collectors ship in together. */
   shipmentGroup: 'GRP',
-  /** A private deal with Bault standing in the middle. */
   escrow: 'ESC',
-  /** A product the Bault store sells. */
   houseListing: 'HSE',
-  /** One copy of it, sold. */
   houseOrder: 'ORD',
 } as const;
 

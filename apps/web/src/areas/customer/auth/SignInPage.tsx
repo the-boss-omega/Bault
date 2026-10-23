@@ -6,7 +6,6 @@ import type { SessionUser } from './AuthPage';
 import { DEMO_USERS } from './demoUsers';
 import { SecondFactorForm } from './SecondFactorForm';
 
-/** What a right password returns for an account with two-factor sign-in, instead of a session. */
 interface MfaChallenge {
   status: 'mfa_required';
   challengeToken: string;
@@ -17,13 +16,6 @@ function isChallenge(body: SessionUser | MfaChallenge): body is MfaChallenge {
   return (body as MfaChallenge).status === 'mfa_required';
 }
 
-/**
- * Sign-in page — credentials only. Registration lives on its own page
- * (`SignUpPage`); the two never share a form.
- *
- * On success the API sets an httpOnly session cookie and returns the user's id +
- * role, which the app shell uses to decide which destinations to show.
- */
 export function SignInPage({
   onSignedIn,
   onGoToSignUp,
@@ -33,38 +25,12 @@ export function SignInPage({
   onGoToSignUp: () => void;
   onGoToForgotPassword: () => void;
 }) {
-  // ONE identifier field: the email or the username, either on its own.
-  //
-  // EMPTY in any build that is not a local dev server. These two fields shipped
-  // pre-filled with `red@bault.dev` / `11111111` — a real seeded account and its
-  // real password, typed into the login screen of every build including a
-  // production one. Convenient locally and indefensible in a deployment: it
-  // publishes a working credential to anybody who loads the page.
-  //
-  // `import.meta.env.DEV` is false in every `vite build` output, so the
-  // convenience survives exactly where it belongs and nowhere else.
   const [identifier, setIdentifier] = useState(import.meta.env.DEV ? 'red@bault.dev' : '');
   const [password, setPassword] = useState(import.meta.env.DEV ? '11111111' : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /**
-   * The sign-in refusal that has a remedy, held apart from the rest.
-   *
-   * Somebody who signed up and never clicked the link was told their address is
-   * unconfirmed and then left on a page offering "Forgot password" — which does
-   * not help — and "Sign up", which answers that the address is already
-   * registered. `POST /auth/verify-email/resend` existed the whole time, and the
-   * only page in the signed-out app that could reach it was the one you arrive
-   * at by following the very link they no longer have. A closed loop, so the way
-   * out is offered here, where the door was shut.
-   */
   const [unverified, setUnverified] = useState(false);
   const [resent, setResent] = useState(false);
-  /**
-   * The challenge a right password earned, for an account with two-factor
-   * sign-in. While it is set the page IS the second step; the password is
-   * cleared, because it has done its job and is not sent again.
-   */
   const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
   const t = useT();
 
@@ -90,12 +56,6 @@ export function SignInPage({
     }
   }
 
-  /**
-   * The address is whatever was typed into the identifier field. When that was a
-   * username rather than an email the endpoint answers exactly as it answers an
-   * unknown address — a confirmation that a link is on its way, asserting
-   * nothing about whether an account exists — so nothing here has to guess.
-   */
   async function resendVerification() {
     setBusy(true);
     try {
@@ -125,10 +85,6 @@ export function SignInPage({
     <form className="auth-card" onSubmit={login}>
       <h2>{t('auth.signInTitle')}</h2>
 
-      {/* `Field` rather than a wrapping <label>: the caption is a real
-          <label for>, so clicking it focuses the input and a screen reader
-          announces the caption alone as the field's name instead of the caption
-          and its hint run together. */}
       <Field label={t('auth.identifier')} hint={t('auth.identifierHint')} htmlFor="signin-identifier">
         <input
           id="signin-identifier"
@@ -153,7 +109,6 @@ export function SignInPage({
 
       {error && <ErrorState message={error} />}
 
-      {/* The remedy, directly under the refusal that needs it. */}
       {unverified &&
         (resent ? (
           <SuccessNote>{t('auth.verifyResent')}</SuccessNote>
@@ -163,14 +118,10 @@ export function SignInPage({
           </Button>
         ))}
 
-      {/* Busy rather than merely disabled: a form whose only feedback is that
-          nothing happens gets pressed twice. */}
       <Button variant="gold" type="submit" block loading={busy}>
         {t('auth.signIn')}
       </Button>
 
-      {/* Recovery sits directly under the button that just failed, which is
-          where someone looks after a rejected password — not in a footer. */}
       <p className="auth-switch">
         <button className="btn--link" type="button" onClick={onGoToForgotPassword}>
           {t('auth.forgotLink')}
@@ -184,9 +135,6 @@ export function SignInPage({
         </button>
       </p>
 
-      {/* The same rule, for the same reason, and this one is worse: it printed
-          every seeded account AND the shared password on screen for anyone who
-          opened the page. */}
       {import.meta.env.DEV && <p className="auth-demo">{DEMO_USERS}</p>}
     </form>
   );

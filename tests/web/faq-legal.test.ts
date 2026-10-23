@@ -17,14 +17,6 @@ import { PASSWORD_MIN } from '../../apps/web/src/shared/names';
 
 const ROOT = join(__dirname, '..', '..');
 
-/**
- * FAQ & Legal content and the Ask placeholder.
- *
- * The Ask contract is the strict one: the assistant is not connected, and until
- * it is, every query must come back as exactly `#1DDD` — not "starts with", not
- * "contains", and never with an explanation appended that a reader could mistake
- * for a real answer.
- */
 describe('Ask placeholder', () => {
   const queries = [
     'What are the storage fees?',
@@ -56,7 +48,6 @@ describe('Ask placeholder', () => {
   });
 });
 
-/** Every piece of text an entry renders, flattened. */
 function textOf(entry: (typeof FAQ.entries)[number]): string {
   const parts = [entry.question, entry.baultNote];
   for (const block of entry.blocks) {
@@ -67,17 +58,6 @@ function textOf(entry: (typeof FAQ.entries)[number]): string {
 }
 const ALL_FAQ_TEXT = FAQ.entries.map(textOf).join('\n');
 
-/**
- * Bault's own FAQ (E20 / F058).
- *
- * This suite used to assert the OPPOSITE: that the FAQ was a verbatim copy of
- * another company's, down to its source URL, its first question, its curly
- * apostrophes and the exact count of 48 bullet lists. Those expectations encoded
- * the finding — another company's addresses, phone number, payment account and
- * prices shown to Bault's customers — so they were replaced, not kept. What is
- * pinned now is that the answers are Bault's, and that the figures in them are
- * the ones the code charges.
- */
 describe('FAQ: Bault’s own answers', () => {
   it('records when it was last checked against the code', () => {
     expect(FAQ.reviewed.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -113,8 +93,6 @@ describe('FAQ: Bault’s own answers', () => {
 
   it('names no other company and links to no other company', () => {
     expect(ALL_FAQ_TEXT).not.toMatch(/ship\s*my\s*cards/i);
-    // The only links are in-app routes and https; no referral links, no
-    // somebody-else's support pages.
     const links = [...ALL_FAQ_TEXT.matchAll(/\[\[[^|\]]*\|([^\]]*)\]\]/g)].map((m) => m[1]!);
     expect(links.length).toBeGreaterThan(0);
     for (const href of links) expect(href, href).toMatch(/^#\/[a-z-]+(\/[a-z-]+)?$/);
@@ -124,16 +102,6 @@ describe('FAQ: Bault’s own answers', () => {
     expect(ALL_FAQ_TEXT).not.toMatch(/<\/?(script|div|span|p|ul|li|a|strong)\b/i);
   });
 
-  /**
-   * The drift guard.
-   *
-   * The copied FAQ quoted another company's prices, and the policy below it
-   * quoted Bault's configuration as prose — both went wrong the same way: a
-   * number written down once, in a place nothing checks. So: a dollar figure or
-   * a percentage may appear in an answer only if it is a constant in the code
-   * that charges it. Anything that is configuration — a pricing rule, an
-   * environment variable — has to be described as shown in the app instead.
-   */
   it('quotes no dollar amount or percentage the code does not charge', () => {
     const m = moneyTerms;
     const e = escrowTerms;
@@ -188,8 +156,6 @@ describe('FAQ: Bault’s own answers', () => {
   });
 
   it('sends a reader to the app for every figure that is configuration', () => {
-    // The debt policy is environment configuration: the answer must point at
-    // where the current figures are shown rather than print them.
     const debt = textOf(FAQ.entries.find((e) => e.id === 'negative-balance')!);
     expect(debt).toMatch(/current figures/i);
     expect(debt).not.toMatch(/\d+ days|\d+(\.\d+)?%|\$\d/);
@@ -214,12 +180,6 @@ describe('Legal documents', () => {
     }
   });
 
-  /**
-   * E21 / F059. There were no terms at all — the pending list named three
-   * documents and gave none of them a body — while the product charged fees,
-   * accrued interest and suspended accounts. They exist now, as drafts, and a
-   * draft must never be mistaken for a reviewed agreement.
-   */
   it('has a Terms of Service, a Privacy Policy and a Cookie notice, each a visibly marked draft', () => {
     expect(DRAFT_NOTICE).toBe('DRAFT — must be reviewed by a lawyer before launch');
     for (const id of CONSENT_DOCUMENT_IDS) {
@@ -243,7 +203,6 @@ describe('Legal documents', () => {
     for (const fact of [/interest/i, /negative/i, /suspend/i, /fee/i, /grace period/i, /chargeback|reverse/i]) {
       expect(tos).toMatch(fact);
     }
-    // ...without printing configuration as prose.
     expect(tos).toMatch(/current figures/i);
     expect(tos).not.toMatch(/\d+ days|\d+(\.\d+)?%|\$\d/);
   });
@@ -251,7 +210,6 @@ describe('Legal documents', () => {
   it('names every processor the code sends personal data to', () => {
     const privacy = docText('privacy-policy');
     for (const processor of [/PayPal/, /EasyPost/, /email provider/i, /S3/]) expect(privacy).toMatch(processor);
-    // And the data the sign-in log really keeps.
     expect(privacy).toMatch(/IP address/);
     expect(privacy).toMatch(/user-agent/i);
   });
@@ -261,8 +219,6 @@ describe('Legal documents', () => {
     expect(notice).toMatch(/exactly one cookie/i);
     expect(notice).toMatch(/httpOnly/);
 
-    // Every key the app writes to localStorage, found in the source rather
-    // than listed here, so a new one fails this until the notice names it.
     const keys = new Set<string>();
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir)) {
@@ -292,7 +248,6 @@ describe('Legal documents', () => {
     expect(text).toContain('SIL OPEN FONT LICENSE Version 1.1');
     expect(text).toContain('THE FONT SOFTWARE IS PROVIDED "AS IS"');
 
-    // Named from what is in assets/fonts, not from what somebody remembers.
     const shipped = readdirSync(join(ROOT, 'assets', 'fonts')).filter((f) => f.endsWith('.woff2'));
     expect(shipped.length).toBeGreaterThan(0);
     const families: Record<string, string> = {
@@ -306,7 +261,6 @@ describe('Legal documents', () => {
       expect(prefix, `${file} is a font nobody licensed`).toBeDefined();
       expect(text).toContain(families[prefix!]!);
     }
-    // The font it used to name is not bundled at all.
     expect(text).not.toMatch(/Libertinus/);
 
     expect(ofl.downloadPath).toBe('/fonts/OFL.txt');

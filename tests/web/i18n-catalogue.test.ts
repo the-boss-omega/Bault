@@ -1,22 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_LOCALE, LOCALES, MESSAGE_KEYS, hasMessage, t } from '../../apps/web/src/shared/i18n';
 
-/**
- * The message catalogues.
- *
- * Two things are checked here that nothing else can catch:
- *
- *  1. TRANSLATION COVERAGE. `MessageKey` is derived from the Hebrew catalogue and
- *     the English one is typed as a total map over it, so a MISSING English key
- *     fails the build. What the type system cannot see is a key that exists but
- *     was left as the Hebrew string, or an English string that silently dropped a
- *     `{placeholder}` the caller passes.
- *
- *  2. BRAND. No user-facing string may say "ShipMyCards" — with no exceptions
- *     now that the FAQ is Bault's own (E20); `no-third-party-brand.test.ts`
- *     extends the same rule to every file under `apps/web/src`.
- */
-
 describe('message catalogues', () => {
   it('exposes exactly the two supported locales, Hebrew first', () => {
     expect([...LOCALES]).toEqual(['he', 'en']);
@@ -72,8 +56,6 @@ describe('retired keys are really gone', () => {
   it('has no intake-ID strings in the customer-facing surface', () => {
     expect(hasMessage('profile.details.intakeId')).toBe(false);
     expect(hasMessage('warehouse.intake.ownerIntakeId')).toBe(false);
-    // The one surviving mention is the admin troubleshooting tooltip, which is
-    // deliberate and explicitly labelled as historical.
     expect(hasMessage('admin.users.legacyIntakeIdTitle')).toBe(true);
   });
 
@@ -86,15 +68,8 @@ describe('retired keys are really gone', () => {
 });
 
 describe('brand', () => {
-  /**
-   * There used to be an allowance here: three FAQ strings that attributed the
-   * FAQ to the company it had been copied from, and a test requiring them to
-   * KEEP naming it. That allowance was the finding (E20) wearing a test — the
-   * FAQ was another company's text — and it went with the copied FAQ. Every
-   * catalogued string now says Bault or nothing.
-   */
   it('says Bault, never ShipMyCards, in every catalogued string', () => {
-    expect(MESSAGE_KEYS.length).toBeGreaterThan(100); // the whole catalogue, not a sample
+    expect(MESSAGE_KEYS.length).toBeGreaterThan(100);
 
     const offenders: string[] = [];
     for (const key of MESSAGE_KEYS) {
@@ -107,9 +82,6 @@ describe('brand', () => {
   });
 
   it('has no untranslated English string left as its Hebrew original', () => {
-    // A key whose two locales are byte-identical is usually fine (a brand name,
-    // a currency code, "PayPal"), but a LONG identical string is almost always a
-    // translation that was never done.
     const suspicious = MESSAGE_KEYS.filter((key) => {
       const he = t(key, 'he');
       const en = t(key, 'en');

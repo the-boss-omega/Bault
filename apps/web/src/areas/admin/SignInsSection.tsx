@@ -30,30 +30,8 @@ const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
   mfa_failed: 'admin.signIns.outcome.mfa_failed',
 };
 
-/**
- * Rows worth a second look. A right password waiting for its code is the
- * first half of every two-step sign-in, so it is not highlighted; the wrong
- * code that might follow it is.
- */
 const ROUTINE: ReadonlySet<SignInOutcome> = new Set(['success', 'mfa_challenged']);
 
-/**
- * Who signed in, and who tried to.
- *
- * Until `login_attempt` existed this screen could not have been built: a failed
- * sign-in was not recorded anywhere, and a successful one was an audit row with
- * the user left empty. The question an administrator most needs answered —
- * *is somebody guessing passwords?* — had the answer "we would never know".
- *
- * The figures come first because they are what decides whether to read the
- * table at all. The `suspicious` list is the pattern pulled out of the rows —
- * five or more failures against one identifier in a day — so it is not left to
- * somebody scanning two hundred lines for a repeat.
- *
- * The identifier is what was TYPED, so a burst against an address that has no
- * account shows up as clearly as one against an address that does. The password
- * is not in this log, in any form.
- */
 export function SignInsSection({ onError }: { onError: (m: string) => void }) {
   const { t, locale } = useI18n();
   const [log, setLog] = useState<SignInLog | null>(null);
@@ -163,9 +141,6 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                       <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>
                     </td>
                     <td data-label={t('admin.signIns.col.account')}>
-                      {/* The account it resolved to — or, when it resolved to
-                          nothing, exactly what was typed, so a stranger's guess
-                          is as visible as a member's typo. */}
                       <span className="ltr-run">{a.username ? `@${a.username}` : a.identifier}</span>
                       {!a.userId && <span className="hint"> · {t('admin.signIns.noAccount')}</span>}
                     </td>

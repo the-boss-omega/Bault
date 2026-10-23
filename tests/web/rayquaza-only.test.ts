@@ -2,31 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-/**
- * The catalogue is Rayquaza, and nothing else.
- *
- * This has now been cleared out twice. The seeded catalogue was replaced with ten
- * real Rayquaza cards — each with its real set, collector number, rarity,
- * illustrator, TCG id and its own photograph on disk — and both times, other
- * collectibles crept back in through the side door: a Base Set Charizard and a
- * 1986 Fleer Jordan in escrow fixtures, an Amazing Fantasy #15 in an intake test,
- * a Charizard in four doc comments, and a whole page of DIVE1 still describing a
- * nine-item mixed catalogue that had been deleted long before.
- *
- * None of that was reachable by a test, because every one of them was either a
- * fixture description or a sentence in a comment. So the check is textual, and it
- * runs over the repository rather than over the running product.
- *
- * WHAT IS DELIBERATELY EXEMPT:
- *
- *   - `.claude/`, `node_modules`, build output and the scratchpad are not the
- *     product.
- *
- * `faqContent.ts` used to be exempt, because it reproduced another company's
- * FAQ verbatim and a quotation cannot be edited to suit us. It is Bault's own
- * text now (E20), so it is held to the same rule as everything else.
- */
-
 const FORBIDDEN = [
   'charizard',
   'pikachu',
@@ -47,9 +22,7 @@ const FORBIDDEN = [
   'amazing fantasy',
 ];
 
-/** Files that legitimately contain a forbidden word, and why. */
 const EXEMPT = [
-  // This file names them in order to ban them.
   join('tests', 'web', 'rayquaza-only.test.ts'),
 ];
 
@@ -85,12 +58,6 @@ describe('the catalogue is Rayquaza only', () => {
   });
 
   it('seeds only Rayquaza, each with a photograph keyed by its serial', () => {
-    /**
-     * The standing rule: every seeded item is a genuine collectible, described
-     * exactly as its slab reads, with a real photograph and catalogue information
-     * matching it. The serial IS the filename — the coupling is by convention
-     * with nothing to enforce it, so this is what enforces it.
-     */
     const seed = readFileSync(join(root, 'apps', 'api', 'src', 'db', 'seed.ts'), 'utf8');
     const items = [...seed.matchAll(/serialNumber: '(SN-[^']+)'/g)].map((m) => m[1]!);
     expect(items.length).toBeGreaterThan(0);
@@ -101,7 +68,6 @@ describe('the catalogue is Rayquaza only', () => {
       expect(found, `${serial} has no photograph in assets/images`).toBe(true);
     }
 
-    // And every description names the card the photograph is of.
     const descriptions = [...seed.matchAll(/serialNumber: '(SN-[^']+)',[\s\S]{0,400}?description: '([^']+)'/g)];
     expect(descriptions.length).toBe(items.length);
     for (const [, serial, description] of descriptions) {
@@ -110,13 +76,6 @@ describe('the catalogue is Rayquaza only', () => {
   });
 
   it('creates only Rayquaza in the test fixtures that name a card at all', () => {
-    /**
-     * Fixture descriptions are mostly labels — "Band 1: self-accept", "Atomicity"
-     * — which name no collectible and are left alone. What is checked is that
-     * none of them names a DIFFERENT one, which the forbidden-word sweep above
-     * already covers; this pins the positive case for the fixtures that do quote
-     * a real card, so they stay quoting real ones.
-     */
     const fixtures = files.filter((f) => f.startsWith('tests') && (f.endsWith('.ts') || f.endsWith('.tsx')));
     const named = fixtures.flatMap((f) =>
       [...readFileSync(join(root, f), 'utf8').matchAll(/description: '(\d{4} [^']+)'/g)].map((m) => m[1]!),

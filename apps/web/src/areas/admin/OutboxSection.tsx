@@ -5,7 +5,6 @@ import { useI18n } from '../../shared/i18n';
 import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { IconInbox } from '../../shared/ui/icons';
 
-/** `GET /admin/outbox/parked`. Field NAMES only — the API never sends what a message carries. */
 export interface ParkedMessage {
   id: string;
   eventType: string;
@@ -17,19 +16,6 @@ export interface ParkedMessage {
   payloadKeys: string[];
 }
 
-/**
- * Outbox messages the dispatcher gave up on, and the button that hands one back.
- *
- * After five failed attempts a message is parked — left undispatched with its
- * error — and until this screen existed the only way to retry one was an
- * UPDATE typed into the production database. What is shown is what decides
- * whether to retry: which event, how often it failed, the last error and when.
- * What it carries is not shown, because the API does not send it.
- *
- * A requeue is answered by reading the list again rather than by editing it
- * locally, so a message somebody else requeued a moment earlier disappears with
- * an explanation instead of failing silently.
- */
 export function OutboxSection({
   onMsg,
   onError,
@@ -37,7 +23,6 @@ export function OutboxSection({
 }: {
   onMsg: (m: string) => void;
   onError: (m: string) => void;
-  /** How many are parked, for the console's tab label. */
   onCount?: (n: number) => void;
 }) {
   const { t, locale } = useI18n();

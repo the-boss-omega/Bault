@@ -3,20 +3,6 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nes
 import type { Request } from 'express';
 import { map, type Observable } from 'rxjs';
 
-/**
- * Field-level PII protection (T014, Principle IX).
- *
- * Two pieces:
- *   1. `@Pii()` marks a DTO property as personal data (email, address, ...).
- *   2. `PiiInterceptor` strips those fields from responses UNLESS the caller is an
- *      admin. Apply it to cross-user endpoints (e.g. the admin support view / any
- *      listing that includes other users' data).
- *
- * NOTE: a user always sees their OWN profile in full — that endpoint returns the
- * user's own record and simply does not apply this interceptor. The interceptor
- * guards OTHER users' PII from non-admins. Responses must be class instances for
- * the field registry lookup to match (see profile.dto / support DTOs).
- */
 const PII_FIELDS = new Map<object, Set<string>>();
 
 export function Pii(): PropertyDecorator {

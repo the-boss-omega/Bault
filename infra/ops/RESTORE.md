@@ -167,10 +167,14 @@ database and never over the live one.
    untouched until the incident is closed: it is the evidence. If PITR is
    unavailable, restore the last nightly dump (Drill 2) or the pre-migration
    dump `deploy.sh` took, and accept the larger window.
-4. **Point the release at it:** update the URLs in `/etc/bault/production.env`
-   and `/etc/bault/migrate.env`, re-run `roles.sql` without passwords (it only
-   re-asserts grants), then `docker compose up -d api` and `readyz`. Start the
-   worker last, once the API is ready.
+4. **Point the release at it:** update the URLs in `/etc/bault/api.env`,
+   `/etc/bault/worker.env` and `/etc/bault/migrate.env`, which is where they
+   live (each service's own role, so change the host and keep the user), and in
+   `/etc/bault/backup.env`, or the next nightly dump is of the damaged cluster.
+   If `api.env` names a pooler, point the pooler at the new cluster instead.
+   Re-run `roles.sql` without passwords (it only re-asserts grants), then
+   `docker compose up -d api` and `readyz`. Start the worker last, once the API
+   is ready.
 5. **Reconcile what happened outside the database after T.** PayPal captures and
    payouts, and EasyPost labels bought, are real and are not in the restored
    ledger. List them from each provider's dashboard for the window between T

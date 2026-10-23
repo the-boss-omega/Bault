@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { eq, inArray } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -16,30 +16,20 @@ import {
   needsCustoms,
 } from './shipping-options';
 import type { Destination, ParcelProfile } from './carriers';
+import { regionRequired } from './regions';
 import { checkBox, chooseBox, shippingBox, type BoxProblem, type ShippingBox } from './boxes';
 
-/** One line of the commercial invoice — per item, because customs is per item. */
 export interface CustomsLine {
   itemId: string;
   serialNumber: string;
   description: string;
-  /** What the COLLECTOR says it is worth. Never derived, never adjusted. */
   valueMinor: number;
   hsCode: string;
   countryOfOrigin: string;
   weightGrams: number;
-  /** True when the weight is the class's typical figure, not a measured one. */
   weightEstimated: boolean;
 }
 
-/**
- * The frozen customs lines as the declaration a carrier is sent.
- *
- * One line per item, quantity one, at the value the collector declared — the
- * same lines the commercial invoice prints, so the paper in the pouch and the
- * data the carrier holds cannot disagree. `signer` is who certifies it: the
- * shipper of record, Bault's facility, acting for the collector.
- */
 export function customsDeclarationFor(lines: readonly CustomsLine[], signer: string, currency = 'USD'): CustomsDeclaration {
   return {
     contentsType: CUSTOMS_CONTENTS_TYPE,
@@ -57,36 +47,16 @@ export function customsDeclarationFor(lines: readonly CustomsLine[], signer: str
   };
 }
 
-/** What a set of items adds up to, physically. */
 export interface ItemMeasurements {
   totalWeightGrams: number;
-  /** True when ANY item's weight was estimated from its class. */
   anyEstimated: boolean;
   perItem: { itemId: string; serialNumber: string; description: string; weightGrams: number; estimated: boolean }[];
 }
 
-/**
- * Turning a set of item ids into a parcel.
- *
- * Every path that prices a shipment — quoting a hypothetical one, rating a real
- * one, re-rating one after its contents were edited — needs the same three
- * answers: what does this weigh, where is it going, and is it legal to send.
- * Having one place that computes them is what stops a quote and the subsequent
- * charge disagreeing about the same parcel.
- */
 @Injectable()
 export class ParcelProfileService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  /**
-   * Load items and check they may be shipped by this owner.
-   *
-   * The checks are the same ones shipment creation always ran; they live here
-   * now so the edit and merge paths cannot forget one.
-   *
-   * With `tx` the rows are locked, in id order, until the transaction ends, so
-   * the caller can check nothing else has claimed them and then claim them.
-   */
   async loadShippableItems(userId: string, itemIds: string[], tx?: Database) {
     const ids = [...new Set(itemIds.filter(Boolean))];
     if (ids.length === 0) throw AppError.validation('Choose at least one item');
@@ -106,7 +76,6 @@ export class ParcelProfileService {
     return rows;
   }
 
-  /** What the parcel weighs, and how much of that figure anybody actually measured. */
   measure(items: (typeof item.$inferSelect)[]): ItemMeasurements {
     const perItem = items.map((it) => ({
       itemId: it.id,
@@ -122,12 +91,6 @@ export class ParcelProfileService {
     };
   }
 
-  /**
-   * The box that was chosen, and whether these contents fit in it.
-   *
-   * Every path that stores or prices a box asks the same question, so it is
-   * answered once.
-   */
   boxFor(
     boxSize: string | null | undefined,
     items: (typeof item.$inferSelect)[],
@@ -141,32 +104,9 @@ export class ParcelProfileService {
     const chosen = shippingBox(boxSize);
     if (chosen) return { box: chosen, problems: checkBox(chosen, contents), boxAutoSelected: false };
 
-    /**
-     * Nobody picked one, so pick the one the warehouse would.
-     *
-     * This used to answer `undefined`, which meant no dimensions reached the
-     * carrier, which meant the parcel was billed on weight alone plus a flat
-     * 120 g — and a light-but-bulky parcel was under-quoted by whatever its
-     * volume was worth. The quote was then the charge, so Bault absorbed the
-     * difference on every unboxed shipment.
-     *
-     * The fix is not to make the collector choose. Most people have no idea what
-     * a dimensional divisor is and should not have to: the warehouse was always
-     * going to pick a box, and `chooseBox` picks the same one it would — the
-     * smallest that fits. An explicit choice still wins, because a collector who
-     * wants their card in a bigger box for their own reasons may have one.
-     */
     return { box: chooseBox(contents), problems: [], boxAutoSelected: true };
   }
 
-  /**
-   * Resolve where the parcel is going.
-   *
-   * A saved address is preferred over free text because it carries a real
-   * country and postal code, which is what a rate depends on. The formatted
-   * single line is still stored for humans — it is simply no longer the only
-   * thing stored.
-   */
   async resolveDestination(
     userId: string,
     input: { addressId?: string; destinationAddress?: string; country?: string; postalCode?: string },
@@ -178,24 +118,27 @@ export class ParcelProfileService {
         .where(eq(shippingAddress.id, input.addressId))
         .limit(1);
       if (!a || a.userId !== userId) throw AppError.notFound('Address not found');
+      if (!a.region && regionRequired(a.country)) {
+        throw new AppError(
+          ErrorCode.ADDRESS_REGION_REQUIRED,
+          `Add the state or province to the address "${a.label}": carriers will not ship to ${a.country.toUpperCase()} without it.`,
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          { addressId: a.id },
+        );
+      }
       return {
-        // The whole address, not two fields of it. A saved address already has
-        // the street and city a carrier needs; throwing them away here is what
-        // made a real rate impossible to ask for.
         destination: {
           country: a.country.toUpperCase(),
           postalCode: a.postalCode,
           name: a.recipient,
           street1: a.line1,
           city: a.city,
+          ...(a.region ? { region: a.region } : {}),
         },
-        formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${a.postalCode}, ${a.country}`,
+        formatted: `${a.recipient}, ${a.line1}, ${a.city}, ${[a.region, a.postalCode].filter(Boolean).join(' ')}, ${a.country}`,
         recipientName: a.recipient,
       };
     }
-    // Free text is still accepted, but it has to carry the two fields a carrier
-    // needs. Guessing a country from a formatted string is how you end up
-    // quoting a domestic rate for a parcel to Japan.
     if (!input.destinationAddress?.trim()) throw AppError.validation('A destination is required');
     if (!input.country?.trim() || !input.postalCode?.trim()) {
       throw AppError.validation('A destination country and postal code are required to quote a rate');
@@ -207,15 +150,6 @@ export class ParcelProfileService {
     };
   }
 
-  /**
-   * The customs declaration, one line per item.
-   *
-   * The total the collector declared is APPORTIONED across the items by weight
-   * when they have not given per-item figures, which is the honest thing to do:
-   * a single lump sum on a five-item parcel is not a declaration a broker can
-   * use, and inventing per-item values out of nothing would be worse. Where the
-   * collector does give per-item values, those are used verbatim.
-   */
   buildCustomsLines(
     measurements: ItemMeasurements,
     declaredValueMinor: number,
@@ -230,8 +164,6 @@ export class ParcelProfileService {
       if (typeof explicit === 'number' && explicit >= 0) {
         valueMinor = explicit;
       } else if (index === measurements.perItem.length - 1) {
-        // The last line absorbs the rounding, so the invoice total always equals
-        // the figure the collector declared rather than being a cent or two short.
         valueMinor = Math.max(0, declaredValueMinor - apportioned);
       } else {
         valueMinor = Math.round((declaredValueMinor * m.weightGrams) / total);
@@ -250,7 +182,6 @@ export class ParcelProfileService {
     });
   }
 
-  /** Assemble the profile the carrier catalogue reasons about. */
   toProfile(args: {
     destination: Destination;
     measurements: ItemMeasurements;
@@ -259,7 +190,6 @@ export class ParcelProfileService {
     insuredValueMinor: number;
     signatureRequired: boolean;
     originFacilityCode?: string | null;
-    /** The box the collector chose, if they chose one. */
     box?: ShippingBox;
   }): ParcelProfile {
     return {
@@ -268,7 +198,6 @@ export class ParcelProfileService {
       dimensionsCm: args.box?.dimensionsCm,
       packagingGrams: args.box?.tareGrams,
       itemCount: args.itemCount,
-      // A domestic parcel has no customs value at all, whatever was typed.
       customsValueMinor: needsCustoms(args.destination.country) ? args.declaredValueMinor : 0,
       insuredValueMinor: args.insuredValueMinor,
       signatureRequired: args.signatureRequired,

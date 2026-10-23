@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IsIn, IsInt, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
 import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
@@ -17,13 +17,12 @@ class CreateRuleDto {
   @IsOptional() @IsString() itemClass?: string;
   @IsString() description!: string;
   @IsIn(['fixed', 'percentage']) model!: 'fixed' | 'percentage';
-  @IsInt() value!: number;
+  @IsInt() @Min(0) value!: number;
   @IsIn(['per_event', 'daily', 'weekly', 'monthly'])
   billingTrigger!: 'per_event' | 'daily' | 'weekly' | 'monthly';
   @IsOptional() @IsObject() parameters?: Record<string, unknown>;
 }
 
-/** PRC endpoints: read rules + admin CRUD (PRC-02 / ADM-02). */
 @ApiTags('PRC')
 @Controller('pricing')
 export class PrcController {
@@ -33,13 +32,6 @@ export class PrcController {
     private readonly priceList: PriceListService,
   ) {}
 
-  /**
-   * The price list, for a collector.
-   *
-   * Public: somebody deciding whether to use Bault has to be able to read what
-   * it costs before they have an account, and putting the prices behind a
-   * session makes them unreadable to exactly the person deciding.
-   */
   @Public()
   @Get('list')
   publicList() {

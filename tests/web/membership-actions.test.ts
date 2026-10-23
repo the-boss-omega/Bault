@@ -1,14 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { tierAction, type MembershipTier, type MyMembership } from '../../apps/web/src/shared/membership';
 
-/**
- * What a tier's button does, and what it costs today.
- *
- * One button, four meanings — and two of them used to be priced wrong by the
- * API: re-joining your own tier during a cancellation charged a whole new cycle,
- * and an upgrade charged the new tier in full with nothing back for the old one.
- * The confirm sentence is built from this, so it has to say what the server does.
- */
 const ORDER = ['folio', 'registry', 'trust'];
 const tier = (key: string, priceMinor: number) => ({ key, priceMinor }) as MembershipTier;
 
@@ -32,7 +24,6 @@ describe('tier actions', () => {
   });
 
   it('an upgrade credits the unused part of the cycle already paid for', () => {
-    // Ten days into thirty: two thirds of $199.00 comes back.
     const a = tierAction(mine(), tier('trust', 69_900), ORDER, START + 10 * DAY);
     expect(a.kind).toBe('upgrade');
     if (a.kind !== 'upgrade') return;

@@ -2,16 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The design system itself.
- *
- * These assert the behaviours the system PROMISES, as opposed to how it looks —
- * a screenshot test would pin the appearance and miss all of this. What a design
- * system is actually for is that a control behaves the same way everywhere: a
- * busy button cannot be pressed twice, a label focuses its field, a theme choice
- * survives a reload, and a failure says what went wrong.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -58,8 +48,6 @@ describe('a field and its label', () => {
       </Field>,
     );
 
-    // The whole point of a real <label for>: the caption is a hit target for
-    // the control, which a wrapping <label> around a <span> never provided.
     await user.click(screen.getByText('Owner username'));
     expect(document.activeElement).toBe(screen.getByRole('textbox'));
   });
@@ -71,8 +59,6 @@ describe('a field and its label', () => {
       </Field>,
     );
 
-    // Previously the accessible name was the caption and the hint run together,
-    // so a screen reader announced the help text as part of the field's name.
     expect(screen.getByLabelText('Owner username')).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveAccessibleDescription('As shown on the parcel.');
   });
@@ -86,8 +72,6 @@ describe('a field and its label', () => {
 
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('That is below the minimum.');
-    // The hint is gone rather than stacked under the error — two messages about
-    // one field, one of them now wrong, is worse than one.
     expect(screen.queryByText('Minimum $10.')).not.toBeInTheDocument();
   });
 });
@@ -103,8 +87,6 @@ describe('a button that is working', () => {
     );
 
     const button = screen.getByRole('button', { name: /pay now/i });
-    // A form whose only feedback is that nothing happens gets pressed again,
-    // and on a money-moving action that is a real problem.
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
     await user.click(button);
@@ -115,8 +97,6 @@ describe('a button that is working', () => {
     renderIn(<Button disabled>Pay now</Button>);
     const button = screen.getByRole('button', { name: /pay now/i });
     expect(button).toBeDisabled();
-    // "You cannot do this yet" and "I am doing this" are different states and
-    // must not announce identically.
     expect(button).not.toHaveAttribute('aria-busy');
   });
 });
@@ -124,8 +104,6 @@ describe('a button that is working', () => {
 describe('the theme', () => {
   it('follows the system by default, stamping nothing', () => {
     renderIn(<ThemeToggle />);
-    // `system` is a real preference, not an absence of one — and it works by
-    // leaving the media query to decide, which means no attribute at all.
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
   });
 
@@ -202,13 +180,9 @@ describe('shelf yield', () => {
     mockYield();
     renderIn(<ShelfYieldPanel />);
 
-    // Three tables render — shelves, zones, customers. The first is the one
-    // this assertion is about.
     await screen.findByText('BIN-AAAA1111');
     const table = screen.getAllByRole('table')[0]!;
-    const rows = within(table).getAllByRole('row').slice(1); // drop the header
-    // The job this screen exists for is "find the shelf to reclaim", so the
-    // answer has to be the first row, not somewhere in the middle.
+    const rows = within(table).getAllByRole('row').slice(1);
     expect(within(rows[0]!).getByText('BIN-AAAA1111')).toBeInTheDocument();
   });
 
@@ -217,7 +191,6 @@ describe('shelf yield', () => {
     renderIn(<ShelfYieldPanel />);
     await screen.findByText('BIN-AAAA1111');
     expect(screen.queryByText('BIN-CCCC3333')).not.toBeInTheDocument();
-    // It is still counted, in the metric where it means something good.
     expect(screen.getByText(/1 empty and available/i)).toBeInTheDocument();
   });
 
@@ -233,12 +206,7 @@ describe('shelf yield', () => {
     mockYield();
     renderIn(<ShelfYieldPanel />);
     await screen.findByText('BIN-AAAA1111');
-    // Rent, labour and insurance are not in this database, so a margin figure
-    // would be a confident number about something nobody measured.
-    // The caveat is stated where the money is, not buried in a footnote.
     expect(screen.getByText(/revenue, not profit/i)).toBeInTheDocument();
-    // …and "profit" appears ONLY inside that disclaimer — never as a column
-    // header or a metric label, which would be the claim it disclaims.
     const profitMentions = screen
       .queryAllByText(/profit/i)
       .filter((el) => !/revenue, not profit/i.test(el.textContent ?? ''));

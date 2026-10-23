@@ -1,15 +1,5 @@
 import { formatUsd } from './money';
 
-/**
- * The membership catalogue and one member's state, as the SPA reads them.
- *
- * Shapes only — `GET /membership/tiers` is the source of truth for what a tier
- * covers, so the SPA never holds a second copy of an allowance. The one thing
- * defined here is the ORDER benefits are listed in, which is presentation and
- * belongs on this side.
- */
-
-/** An allowance with no ceiling, as the API encodes it. */
 export const UNLIMITED = -1;
 
 export interface TierAllowanceCounts {
@@ -56,12 +46,6 @@ export interface MyMembership {
   perks: string[];
 }
 
-/**
- * The rows of the comparison table, in the order somebody meets them.
- *
- * Storage first because it is the reason most people join — it is the charge
- * that arrives without being asked for. Then the things you do on purpose.
- */
 export const COMPARISON_ROWS = [
   'storedItems',
   'intake',
@@ -82,12 +66,6 @@ export const COMPARISON_ROWS = [
 
 export type ComparisonRow = (typeof COMPARISON_ROWS)[number];
 
-/**
- * An allowance as a cell.
- *
- * `null` means "not in this tier", which the table renders as an em dash rather
- * than a zero: zero reads as "included, none left", and the two are different.
- */
 export function allowanceCell(tier: MembershipTier, row: ComparisonRow): string | null {
   switch (row) {
     case 'storedItems':
@@ -99,7 +77,6 @@ export function allowanceCell(tier: MembershipTier, row: ComparisonRow): string 
     case 'commission':
       return tier.commissionWaivedOnMinor > 0 ? formatUsd(tier.commissionWaivedOnMinor) : null;
     case 'escrow_fee': {
-      // A count AND a ceiling: "1 · $5,000.00" — one deal, up to that value.
       const n = tier.perCycle.escrow_fee;
       if (n === undefined) return null;
       return tier.escrowValueCapMinor > 0 ? `${n} · ${formatUsd(tier.escrowValueCapMinor)}` : String(n);
@@ -112,29 +89,11 @@ export function allowanceCell(tier: MembershipTier, row: ComparisonRow): string 
   }
 }
 
-/** How much of an allowance is gone, 0–1, for the proportion bar. */
 export function usedFraction(counts: TierAllowanceCounts): number {
   if (counts.allowed === UNLIMITED || counts.allowed <= 0) return 0;
   return Math.min(1, counts.used / counts.allowed);
 }
 
-/**
- * What pressing a tier's button would do, and what it would cost today.
- *
- * Four different requests share one button, and they are not priced alike:
- *
- *   join       not a member: the full fee now.
- *   upgrade    a dearer tier: the full fee LESS the unused part of the current
- *              cycle, which is what the API charges (`MembershipService.subscribe`).
- *   downgrade  a cheaper tier: nothing today; it takes effect at renewal.
- *   keep       the current tier, with a cancellation or downgrade pending:
- *              nothing at all — the pending change is simply dropped.
- *
- * The confirmation sentence is built from this, so the figure on the button is
- * the figure the wallet sees. The credit is computed the same way the server
- * computes it; the few seconds between reading and clicking move it by less than
- * a cent a minute, and the success notice reports the exact amount charged.
- */
 export type TierAction =
   | { kind: 'join'; chargeMinor: number }
   | { kind: 'upgrade'; chargeMinor: number; creditMinor: number }

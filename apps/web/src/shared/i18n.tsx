@@ -1,16 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-/**
- * Hebrew/English i18n for the SPA.
- *
- * Hebrew remains the default locale. The Hebrew catalogue is the source of truth:
- * `MessageKey` is derived from it, so the English catalogue is a total map over the
- * same keys and TypeScript fails the build if a translation is missing.
- *
- * Switching locale also flips the document direction — the stylesheet uses CSS
- * logical properties throughout, so LTR falls out of the `dir` attribute with no
- * per-rule overrides.
- */
 export type Locale = 'he' | 'en';
 
 export const DEFAULT_LOCALE: Locale = 'he';
@@ -18,19 +7,15 @@ export const LOCALES: readonly Locale[] = ['he', 'en'] as const;
 
 const STORAGE_KEY = 'bault.locale';
 
-/** Values may contain {placeholders}, substituted from the vars argument. */
 export type MessageVars = Record<string, string | number>;
 
 const he = {
-  // ---- App shell ----
   'app.title': 'Bault — כספת ושוק לפריטי אספנות',
   'auth.landing.headline': 'מישהו מחזיק את זה עכשיו. אתם רואים בדיוק מה, איפה, ומה זה עולה.',
   'auth.landing.lede': 'Bault שומרת פריטי אספנות ומנהלת את הרישום היחיד של הבעלות עליהם. כל פריט נושא מספר סידורי, כל תזוזה נרשמת ואי אפשר למחוק אותה, וכל חיוב מציג את הכלל שלפיו חושב.',
   'auth.landing.state': 'בכספת',
   'auth.landing.whereLabel': 'איפה',
   'auth.landing.where': 'Bault New Jersey · אזור B',
-  // ---- The landing page (marketing/LandingPage.tsx) ----
-  // ---- Membership (customer/membership/MembershipPage.tsx) ----
   'tab.membership': 'מנוי',
   'membership.title': 'מנוי',
   'membership.tier.folio': 'פוליו',
@@ -134,6 +119,7 @@ const he = {
   'landing.price.shipping': 'דמי טיפול על חבילה יוצאת',
   'landing.price.marketplace': 'מכירה כאן',
   'landing.price.cashOut': 'משיכת כסף',
+  'landing.price.unavailable': 'לא זמין כרגע',
   'landing.journey.title': 'איך פריט זז',
   'landing.journey.subtitle': 'לפי הסדר שבו העבודה באמת מתבצעת.',
   'landing.journey.arrive.name': 'הוא מגיע',
@@ -214,6 +200,10 @@ const he = {
   'role.user': 'אספן',
   'role.warehouse_operator': 'עובד מחסן',
   'role.admin': 'מנהל',
+  'account.status.pending': 'ממתין לאימות',
+  'account.status.active': 'פעיל',
+  'account.status.suspended': 'מושעה',
+  'account.status.closed': 'סגור',
 
   'tab.vault': 'הכספת',
   'tab.inbound': 'נכנס',
@@ -351,6 +341,7 @@ const he = {
   'market.store.subtitle': 'כל מה שאספן מציע כרגע למכירה. הדף פתוח לכולם.',
   'market.store.view': 'הצג',
   'market.store.of': 'החנות של {username}',
+  'market.listing.soldBy': 'נמכר על ידי',
   'market.store.empty': 'אין פריטים למכירה',
   'market.store.emptyText': 'לאספן הזה אין כרגע מודעות פעילות.',
   'market.store.yourLink': 'הקישור לחנות שלכם: {link}',
@@ -397,6 +388,8 @@ const he = {
   'notifications.event.swap_completed': 'ההחלפה הושלמה',
   'notifications.event.transfer_completed': 'המתנה הועברה',
   'notifications.event.shipment_cancelled': 'המשלוח בוטל',
+  'notifications.event.shipment_delivered': 'המשלוח נמסר',
+  'notifications.event.shipment_exception': 'בעיה במשלוח',
   'notifications.event.shipment_expired': 'תוקף המשלוח פג',
   'notifications.event.custom_request_raised': 'בקשה מותאמת התקבלה',
   'notifications.event.custom_request_quoted': 'התקבל מחיר לבקשה',
@@ -641,7 +634,6 @@ const he = {
   'tab.warehouse': 'קונסולת מחסן',
   'tab.admin': 'ניהול',
 
-  // ---- Card photo lightbox ----
   'photo.show': 'הצג תמונה',
   'photo.showOf': 'הצג תמונה של {title}',
   'photo.close': 'סגור',
@@ -649,7 +641,6 @@ const he = {
   'photo.none': 'אין תמונה',
   'vault.media.unavailable': 'התמונה לא נטענה. הקובץ קיים, אך אין כרגע גישה אליו מהדפדפן.',
 
-  // ---- Service requests (shared: customer + operator) ----
   'service.type.professional_photography': 'צילום מקצועי',
   'service.type.third_party_grading': 'דירוג',
   'service.type.consignment': 'קונסיגנציה',
@@ -667,7 +658,6 @@ const he = {
   'service.status.completed': 'הושלם',
   'service.status.cancelled': 'נדחה',
 
-  // ---- Auth ----
   'auth.signInTitle': 'כניסה',
   'auth.signUpTitle': 'הרשמה',
   'auth.identifier': 'אימייל או שם משתמש',
@@ -692,7 +682,6 @@ const he = {
   'auth.username': 'שם משתמש',
   'auth.usernameHint': 'שם המשתמש נקבע פעם אחת בהרשמה ולא ניתן לשינוי.',
 
-  // ---- Account recovery: forgot password, reset, email verification ----
   'auth.forgotLink': 'שכחת את הסיסמה?',
   'auth.backToSignIn': 'חזרה לכניסה',
   'auth.newPassword': 'סיסמה חדשה',
@@ -716,6 +705,8 @@ const he = {
   'auth.verifyDone': 'הכתובת אומתה והחשבון פעיל. אפשר להתחבר.',
   'auth.verifyNoToken': 'הקישור חסר את אסימון האימות.',
   'auth.verifyFailedHint': 'קישור אימות תקף ל־24 שעות ולשימוש אחד. אם פג — בקש קישור חדש כאן.',
+  'auth.verifyLinkInvalid': 'הקישור הזה כבר לא תקף: פג תוקפו או שכבר השתמשו בו.',
+  'auth.resetLinkInvalid': 'קישור האיפוס הזה כבר לא תקף: פג תוקפו או שכבר השתמשו בו. בקש קישור חדש.',
   'auth.verifyResend': 'שלח קישור אימות חדש',
   'auth.verifyResent': 'אם קיים חשבון ממתין לאימות בכתובת הזו, קישור חדש בדרך אליו.',
   'auth.verifySentHint': 'שלחנו קישור אימות. הוא תקף ל־24 שעות; בדוק גם בתיקיית הספאם.',
@@ -724,13 +715,11 @@ const he = {
   'auth.consentRead': 'קריאת המסמכים',
   'auth.consentHide': 'הסתרת המסמכים',
 
-  // ---- Vault ----
   'vault.title': 'הכספת שלי',
   'vault.searchPlaceholder': 'חיפוש חופשי',
   'vault.search': 'חפש',
   'vault.condition': 'מצב: {grade}',
 
-  // ---- Wallet ----
   'wallet.title': 'הארנק שלי',
   'wallet.currentBalance': 'יתרה נוכחית',
   'wallet.topup': 'הפקדה',
@@ -740,7 +729,6 @@ const he = {
   'wallet.col.amount': 'סכום',
   'wallet.col.balance': 'יתרה',
 
-  // ---- Marketplace ----
   'market.title': 'שוק',
   'market.searchPlaceholder': 'חיפוש בשוק',
   'market.filters': 'סינון מודעות',
@@ -767,7 +755,6 @@ const he = {
   'market.status.selectItem': 'בחר פריט למכירה',
   'market.status.listed': 'הפריט הוצע למכירה',
 
-  // ---- Services (customer) ----
   'services.title': 'שירותים',
   'services.pickItem': 'בחר פריט מהכספת שלך:',
   'services.pickItemOption': '— בחר פריט —',
@@ -795,7 +782,6 @@ const he = {
   'services.colStatus': 'סטטוס',
   'services.colDate': 'תאריך',
 
-  // ---- Shipping ----
   'shipping.title': 'משלוח',
   'shipping.selectItemFirst': 'בחר פריט',
   'shipping.created': 'נוצר משלוח — בחר תעריף',
@@ -806,7 +792,6 @@ const he = {
   'shipping.createAndGetRates': 'צור משלוח וקבל תעריפים',
   'shipping.selectRate': 'בחר',
 
-  // ---- Notifications ----
   'notifications.title': 'התראות',
   'notifications.preferences.title': 'העדפות התראות',
   'notifications.preferences.hint': 'בחר על אילו אירועים תרצה לקבל התראות.',
@@ -822,7 +807,6 @@ const he = {
   'notifications.event.hold_placed': 'הוטלה החזקה',
   'notifications.event.arrival_not_accepted': 'משלוח לא נקלט',
 
-  // ---- Profile ----
   'profile.title': 'פרופיל',
   'profile.details.heading': 'הפרטים שלי',
   'profile.details.email': 'אימייל:',
@@ -839,6 +823,7 @@ const he = {
   'profile.addresses.heading': 'כתובות למשלוח',
   'profile.addresses.empty': 'לא נשמרו כתובות עדיין.',
   'profile.addresses.default': 'ברירת מחדל',
+  'profile.addresses.regionMissing': 'חסר מחוז או מדינה',
   'profile.addresses.delete': 'מחק',
   'profile.addressForm.legend': 'הוספת כתובת',
   'profile.addressForm.label': 'תווית (למשל: בית)',
@@ -850,10 +835,13 @@ const he = {
   'profile.addressForm.countryPlaceholder': 'בחרו מדינה…',
   'profile.addressForm.countryHint': 'רק יעדים שאליהם Bault שולחת בפועל.',
   'profile.addressForm.postalCode': 'מיקוד',
+  'profile.addressForm.region': 'מחוז או מדינה בארה״ב',
+  'profile.addressForm.regionPlaceholder': 'בחרו…',
+  'profile.addressForm.regionRequiredHint': 'חובה עבור {country}: חברות השילוח לא מדפיסות תווית בלעדיו.',
+  'profile.addressForm.regionOptionalHint': 'אם יש לכתובת כזה.',
   'profile.addressForm.isDefault': 'ברירת מחדל',
   'profile.addressForm.submit': 'הוסף כתובת',
 
-  // ---- Warehouse console ----
   'warehouse.title': 'קונסולת מחסן',
   'warehouse.intake.legend': 'עמדת קליטה',
   'warehouse.intake.ownerUsername': 'שם המשתמש של הבעלים',
@@ -908,7 +896,6 @@ const he = {
   'warehouse.log.binCreated': 'נוצר מדף {serial} באזור {zone}',
   'warehouse.log.binCreateError': 'שגיאת יצירת תא: {message}',
 
-  // ---- Service queue (operator) ----
   'queue.title': 'בקשות שירות',
   'queue.empty': 'אין בקשות ממתינות.',
   'queue.col.service': 'שירות',
@@ -937,7 +924,6 @@ const he = {
   'queue.fulfill.noAreas': 'הבקשה לא כוללת אזורים לבדיקה',
   'queue.msg.saleDone': 'המכירה הושלמה',
 
-  // ---- Admin console ----
   'admin.title': 'ניהול',
   'admin.section.users': 'משתמשים',
   'admin.section.signins': 'כניסות',
@@ -967,7 +953,6 @@ const he = {
   'admin.signIns.outcome.refused': 'החשבון סגור',
   'admin.signIns.outcome.mfa_challenged': 'סיסמה נכונה — נדרש קוד',
   'admin.signIns.outcome.mfa_failed': 'קוד שגוי',
-  // ---- Two-factor sign-in (auth/SecondFactorForm, profile/TwoFactorPanel, auth/ForcedEnrollmentPage) ----
   'mfa.title': 'אימות דו־שלבי',
   'mfa.challenge.intro': 'הזינו את הקוד בן שש הספרות מאפליקציית האימות.',
   'mfa.code': 'קוד מאפליקציית האימות',
@@ -982,7 +967,7 @@ const he = {
   'mfa.status.on': 'פעיל',
   'mfa.status.off': 'כבוי',
   'mfa.setup': 'הגדרת אימות דו־שלבי',
-  'mfa.setup.scan': 'סרקו את קוד ה‑QR באפליקציית אימות (Google Authenticator,‏ 1Password,‏ Authy…), או הקלידו את המפתח שמתחתיו.',
+  'mfa.setup.scan': 'סרקו את קוד ה‑QR באפליקציית אימות (⁨Google Authenticator, 1Password, Authy…⁩), או הקלידו את המפתח שמתחתיו.',
   'mfa.setup.qrAlt': 'קוד QR לאפליקציית האימות',
   'mfa.setup.key': 'מפתח להקלדה ידנית',
   'mfa.setup.confirmHint': 'הזינו את הסיסמה ואת הקוד שהאפליקציה מציגה עכשיו, כדי לוודא שהיא קיבלה את המפתח. שאר החיבורים לחשבון ינותקו.',
@@ -1012,7 +997,6 @@ const he = {
   'admin.users.mfaResetBody': '{email} ינותק מכל המכשירים ויוכל להיכנס עם הסיסמה בלבד עד שיגדיר אפליקציית אימות חדשה. הפעולה נרשמת ביומן הביקורת.',
   'admin.users.mfaResetConfirm': 'איפוס',
   'admin.users.mfaResetDone': 'האימות הדו־שלבי של {email} אופס. חיבורים שנותקו: {count}.',
-  // ---- Parked outbox messages (admin/OutboxSection) ----
   'admin.section.outbox': 'הודעות תקועות',
   'admin.section.outboxCount': 'הודעות תקועות ({count})',
   'admin.outbox.title': 'הודעות שהשליחה ויתרה עליהן ({count})',
@@ -1044,6 +1028,9 @@ const he = {
   'admin.users.legacyIntakeIdTitle': 'מזהה קליטה היסטורי — לפתרון תקלות בלבד. אינו בשימוש בתהליכים חדשים.',
   'admin.users.col.role': 'תפקיד',
   'admin.users.saved': 'נשמר: {email}',
+  'admin.users.autoSuspended': 'הושעה בסריקת החובות, שמסירה את ההשעיה כשהיתרה משולמת.',
+  'admin.users.keepSuspended': 'השארה בהשעיה',
+  'admin.users.keepSuspendedLabel': 'השארת {email} בהשעיה',
   'admin.items.heading': 'פריטים ({count})',
   'admin.items.col.barcode': 'ברקוד',
   'admin.items.col.description': 'תיאור',
@@ -1059,6 +1046,10 @@ const he = {
   'admin.pricing.action.service': 'שירות',
   'admin.pricing.action.shipping': 'משלוח',
   'admin.pricing.action.marketplaceFee': 'עמלת שוק',
+  'admin.pricing.group.charged': 'נגבה לפי הכלל',
+  'admin.pricing.group.published': 'לפרסום בלבד, הסכום שנגבה קבוע בקוד',
+  'admin.pricing.tierHint': 'הכלל נושא את מכסות המסלול מקטלוג המנויים (אחסון ל-{count} פריטים). סריקת האחסון הלילית קוראת אותן ממנו.',
+  'admin.pricing.publishedHint': 'הסכום שנגבה על פעולה זו קבוע בקוד. כלל משנה את מה שמוצג במחירון, לא את מה שנגבה.',
   'admin.pricing.model.fixed': 'סכום קבוע',
   'admin.pricing.model.percentage': 'אחוז',
   'admin.pricing.heading': 'כללי תמחור ({count})',
@@ -1097,7 +1088,6 @@ const he = {
   'admin.storage.col.thresholdDays': 'סף ימים',
   'admin.storage.col.chargedItems': 'פריטים שחויבו',
   'admin.storage.col.total': 'סה״כ',
-  // ---- Requirements: shipping, pricing, disputes, storage, intake, history, notifications ----
   'admin.storage.autoNotice': 'החיוב אוטומטי לחלוטין: משימה יומית מחייבת כל חשבון עם פריטים המאוחסנים יותר מיום אחד. אין הפעלה ידנית.',
   'admin.pricing.descriptionPlaceholder': 'תיאור הכלל',
   'admin.pricing.col.description': 'תיאור',
@@ -1115,6 +1105,8 @@ const he = {
   'shipping.selectAddressFirst': 'בחר כתובת יעד',
   'shipping.createdTracked': 'נוצר משלוח {id}. הוא כבר מופיע בלשונית מעקב המשלוחים. בחר תעריף כדי להמשיך.',
   'shipping.manageAddressesHint': 'הוסף כתובות משלוח בעמוד הפרופיל.',
+  'shipping.regionMissing': 'לכתובת "{label}" חסר מחוז או מדינה, וחברות השילוח לא שולחות אל {country} בלעדיו. הוסיפו אותו ואז חזרו לכאן.',
+  'shipping.editAddress': 'עריכת הכתובת',
   'shipping.shipmentIdLabel': 'מזהה משלוח: {id}',
   'profile.address.edit': 'ערוך',
   'profile.address.save': 'שמור כתובת',
@@ -1127,7 +1119,6 @@ const he = {
   'intake.lotTooSmall':
     'לוט של {count} פריטים לא ייקלט כלוט — עד {min} פריטים נקלטים תמיד בנפרד, כל אחד עם ברקוד וחיוב קליטה משלו.',
 
-  // ---- Item taxonomy ----
   'itemClass.trading_card': 'כרטיס אספנות',
   'itemClass.graded_slab': 'כרטיס מדורג (סלאב)',
   'itemClass.oversized_card': 'כרטיס גדול מהרגיל',
@@ -1141,7 +1132,6 @@ const he = {
   'itemClass.small_collectible': 'פריט אספנות קטן',
   'itemClass.other': 'אחר',
 
-  // ---- Arrivals that were not accepted ----
   'disposal.category.gps_tracker': 'איתוראן / מכשיר מעקב',
   'disposal.category.lithium_battery': 'סוללת ליתיום',
   'disposal.category.liquid_or_glass': 'נוזל או זכוכית',
@@ -1176,6 +1166,14 @@ const he = {
   'timeline.swap': 'החלפה',
   'timeline.transfer': 'העברה',
   'timeline.consignment': 'קונסיגנציה',
+  'timeline.detail.change': '{from} ← {to}',
+  'timeline.detail.shelvedIn': 'אוחסן ב־{bin}',
+  'timeline.detail.intake': 'קליטה',
+  'timeline.detail.field': '{field}: {change}',
+  'timeline.field.description': 'תיאור',
+  'timeline.field.conditionGrade': 'מצב',
+  'timeline.field.typeClass': 'סוג פריט',
+  'timeline.field.other': 'פרט',
   'vault.bin': 'תא: {bin}',
   'vault.isLot': 'לוט',
   'warehouse.fulfill': 'מילוי הזמנה',
@@ -1195,14 +1193,12 @@ const he = {
     'השאר ריק כדי שהמערכת תנפיק מספר. מלא רק לפריט בודד שכבר יש לו תצלום קטלוגי בשם הזה.',
   'warehouse.report.exportPdf': 'ייצוא PDF',
 
-  // ---- Profile: immutable username + address editing ----
   'profile.details.username': 'שם משתמש:',
   'profile.details.usernameImmutable': 'קבוע — לא ניתן לשינוי',
   'profile.nameLabel': 'השם שלך',
   'profile.namePreview': 'יוצג כ: {name}',
   'profile.nameReviewRequired': 'השם שלך הועבר ממערכת קודמת ולא ניתן היה לפצל אותו בוודאות לשם פרטי ומשפחה. בדוק אותו ושמור כדי לאשר.',
 
-  // ---- Vault: bin, lot and item history ----
   'vault.noBin': 'ללא תא',
   'vault.lotOf': 'לוט של {count}',
   'vault.historyEmpty': 'אין עדיין אירועים לפריט זה.',
@@ -1211,7 +1207,6 @@ const he = {
   'vault.historyCol.event': 'אירוע',
   'vault.historyCol.details': 'פרטים',
 
-  // ---- Warehouse: break lot ----
   'warehouse.lots.legend': 'לוטים פתוחים',
   'warehouse.lots.empty': 'אין לוטים שלמים לפירוק.',
   'warehouse.lots.colLot': 'לוט',
@@ -1219,7 +1214,6 @@ const he = {
   'warehouse.lots.broken': 'הלוט {lot} פורק ל־{count} פריטים עצמאיים',
   'warehouse.lots.breakError': 'שגיאת פירוק לוט: {message}',
 
-  // ---- Warehouse: structured service fulfillment (Requirement 5.4) ----
   'queue.col.request': 'מספר בקשה',
   'queue.fulfill.legend': 'טופס מילוי בקשה',
   'queue.fulfill.objectKey': 'מפתח קובץ התמונות',
@@ -1237,7 +1231,6 @@ const he = {
   'queue.fulfill.required': 'יש למלא את כל השדות ולאמת את הפריט.',
   'queue.fulfill.noForm': 'סוג בקשה זה נסגר אוטומטית.',
 
-  // ---- Barcodes ----
   'barcode.print': 'הדפס ברקוד',
   'barcode.printOf': 'הדפס את הברקוד {value}',
   'barcode.printAll': 'הדפסת כל {count} התוויות',
@@ -1245,23 +1238,15 @@ const he = {
   'warehouse.intake.lastLabels': 'תוויות לפריטים שנקלטו',
   'warehouse.intake.labelsHint': 'הדפיסו והדביקו תווית על כל פריט לפני שהוא עולה למדף.',
 
-  // ==========================================================
-  // Redesign: application shell, navigation rail and shared UI
-  // ==========================================================
   'nav.primary': 'ניווט ראשי',
   'nav.breadcrumb': 'נתיב ניווט',
   'nav.home': 'בית',
   'nav.workspace': 'סביבת עבודה',
   'nav.warehouse': 'מחסן',
   'nav.management': 'ניהול',
-  // No 'nav.pin' / 'nav.unpin': the rail is no longer pinnable and nothing
-  // replaced the control, so the strings that named it are gone too.
   'nav.skipToContent': 'דלג לתוכן',
   'nav.openMenu': 'פתח תפריט ניווט',
 
-  // ---- API failure states ----
-  // Each maps to one ApiError kind, so "the server is down" never looks like
-  // "you are signed out" (see shared/api.ts).
   'error.title': 'משהו השתבש',
   'error.unreachable': 'ה‑API של Bault אינו זמין. הפעל את שרת הפיתוח (pnpm dev) ונסה שוב.',
   'error.unauthenticated': 'נדרשת התחברות מחדש.',
@@ -1283,7 +1268,6 @@ const he = {
   'menu.languageCurrent': 'נבחרה',
   'menu.role': 'תפקיד',
 
-  // ---- Notifications ----
   'notifications.newCount': '{n} התראות חדשות',
   'notifications.recent': 'אחרונות',
   'notifications.viewAll': 'הצג את כל ההתראות',
@@ -1291,7 +1275,6 @@ const he = {
   'notifications.tab.feed': 'התראות',
   'notifications.tab.preferences': 'העדפות',
 
-  // ---- Wallet ----
   'wallet.tab.overview': 'סקירה',
   'wallet.tab.transactions': 'תנועות',
   'wallet.tab.topup': 'טעינה',
@@ -1332,11 +1315,19 @@ const he = {
   'wallet.type.shipping_refund': 'החזר משלוח',
   'wallet.type.service_refund': 'החזר שירות',
   'wallet.type.payout_reversal': 'החזר משיכה שלא שולמה',
+  'wallet.type.escrow_hold': 'הוקפא לעסקה מוגנת',
+  'wallet.type.escrow_release': 'שוחרר מעסקה מוגנת',
+  'wallet.type.escrow_refund': 'הוחזר מעסקה מוגנת',
+  'wallet.type.chargeback': 'הכחשת עסקה',
   'wallet.ref.charge': 'חיוב פלטפורמה',
   'wallet.ref.transaction': 'עסקת שוק',
   'wallet.ref.withdrawal': 'בקשת משיכה',
   'wallet.ref.external_payment': 'תשלום חיצוני',
   'wallet.ref.listing': 'הצעה בשוק',
+  'wallet.ref.escrow_deal': 'עסקה מוגנת',
+  'wallet.ref.service_request': 'בקשת שירות',
+  'wallet.ref.shipment': 'משלוח',
+  'wallet.ref.wallet_request': 'בקשת ארנק',
   'wallet.rowLabel': '{type} · {amount} · {date}',
   'wallet.tx.title': 'פרטי תנועה',
   'wallet.tx.recordId': 'מזהה רשומה',
@@ -1378,7 +1369,6 @@ const he = {
   'wallet.withdraw.history': 'משיכות קודמות',
   'wallet.withdraw.empty': 'עדיין לא בוצעו משיכות.',
 
-  // ---- Vault ----
   'vault.metric.stored': 'פריטים באחסון',
   'vault.metric.storedNote': 'נמצאים כעת בכספת',
   'vault.metric.listed': 'מוצעים למכירה',
@@ -1407,7 +1397,6 @@ const he = {
   'vault.state.donated': 'נתרם',
   'vault.state.consigned': 'בקונסיגנציה',
 
-  // ---- Marketplace ----
   'market.tab.browse': 'עיון',
   'market.tab.sell': 'מכירה',
   'market.listings': 'פריטים בשוק',
@@ -1430,7 +1419,6 @@ const he = {
   'market.offer.submit': 'שלח הצעה',
   'market.offer.askingPrice': 'מחיר מבוקש',
 
-  // ---- Services ----
   'services.tab.order': 'הזמנת שירות',
   'services.tab.requests': 'הבקשות שלי',
   'services.orderAction': 'הזמן שירות',
@@ -1481,7 +1469,6 @@ const he = {
   'services.deslab.confirmTitle': 'אישור פתיחת מארז',
   'services.deslab.confirmBody': 'לפתוח את המארז של {item}? המארז יישבר, הדירוג יימחק, ולא ניתן לבטל את הפעולה.',
 
-  // ---- Services on a stored card: grading tiers, submissions, inspection, cull ----
   'vault.state.atGrader': 'אצל גוף הדירוג',
   'vault.state.discarded': 'סולק',
   'vault.media.title': 'תמונות וסרטונים',
@@ -1572,7 +1559,6 @@ const he = {
   'cull.confirmAction': 'סילוק',
   'cull.done': '{count} פריטים סולקו',
 
-  // ---- Shipping ----
   'shipping.selectItemsSubtitle': 'כל הפריטים שייבחרו ישלחו יחד תחת מזהה משלוח אחד.',
   'shipping.selectedCount': 'נבחרו {count}',
   'shipping.noItemsText': 'רק פריטים במצב "באחסון" ניתנים לשילוח.',
@@ -1584,7 +1570,6 @@ const he = {
   'shipping.rateChosen': 'נבחר תעריף',
   'shipping.rateChosenText': 'המשלוח ממתין לשילוח מהמחסן.',
 
-  // ---- Profile ----
   'profile.tab.details': 'פרטים',
   'profile.tab.addresses': 'כתובות',
   'profile.tab.security': 'אבטחה',
@@ -1600,7 +1585,6 @@ const he = {
   'profile.address.deleteTitle': 'מחיקת כתובת',
   'profile.address.deleteBody': 'למחוק את הכתובת "{label}"?',
 
-  // ---- Warehouse console ----
   'warehouse.tab.overview': 'סקירה',
   'warehouse.tab.intake': 'קליטה',
   'warehouse.tab.receiving': 'קליטה ופתיחה',
@@ -1631,7 +1615,6 @@ const he = {
   'warehouse.status.empty': 'ריק',
   'warehouse.status.unshelved': 'ללא תא',
 
-  // ---- Inbound bench: directed stow, scanning, closing a box out ----
   'parcelQueue.col.units': 'יחידות',
   'parcelQueue.action.bookContents': 'קלוט תוכן',
   'parcelQueue.bookedSoFar': 'נקלטו {count} יחידות מהחבילה עד כה.',
@@ -1685,11 +1668,9 @@ const he = {
   'warehouse.log.binRetired': 'מדף {serial} הוצא משימוש',
   'warehouse.log.binReturned': 'מדף {serial} הוחזר לשימוש',
 
-  // ---- Service queue ----
   'queue.subtitle': 'אשר או דחה בקשות, וסגור בקשות מאושרות בטופס המילוי.',
   'queue.emptyText': 'בקשות חדשות מלקוחות יופיעו כאן.',
 
-  // ---- Management console ----
   'admin.users.subtitle': 'עריכת שם, תפקיד וסטטוס לכל חשבון.',
   'admin.users.empty': 'אין חשבונות להצגה.',
   'admin.items.subtitle': 'עריכת פרטי פריט, בעלות, מצב חיים והקפאה.',
@@ -1700,7 +1681,6 @@ const he = {
   'admin.pricing.empty': 'לא הוגדרו כללי תמחור.',
   'admin.disputes.subtitle': 'מחלוקת חייבת להתייחס לעסקה מתועדת.',
 
-  // ---- Shipping & Services (merged section) ----
   'shippingServices.title': 'משלוחים ושירותים',
   'ss.tab.overview': 'סקירה',
   'ss.tab.shipping': 'משלוח',
@@ -1778,7 +1758,6 @@ const he = {
   'ss.shipmentStatus.exception': 'תקלה',
   'ss.shipmentStatus.cancelled': 'בוטל',
 
-  // ---- Outbound shipping: carriers, cover, customs, shared parcels ----
   'ss.tab.shared': 'חבילה משותפת',
 
   'ship.svc.usps_ground': 'USPS Ground Advantage',
@@ -1863,6 +1842,12 @@ const he = {
 
   'ship.payNow': 'תשלום',
   'ship.paid': 'המשלוח שולם',
+  'ship.labelRefused': 'חברת השילוח סירבה להנפיק תווית למשלוח הזה, ולכן לא נקנה דבר. בחרו שירות מחדש: על שירות זול יותר יוחזר ההפרש, ועל שירות יקר יותר יחויב ההפרש.',
+  'ship.labelRefusedReason': 'תשובת חברת השילוח: {reason}',
+  'ship.rechoose.refund': 'יוחזרו {amount}',
+  'ship.rechoose.extra': 'תוספת של {amount}',
+  'ship.rechoose.same': 'ללא שינוי במחיר',
+  'ship.rechosen': 'השירות הוחלף',
   'ship.paymentDue': 'לתשלום עד',
   'ship.cancel': 'ביטול המשלוח',
   'ship.cancelled': 'המשלוח בוטל',
@@ -1910,10 +1895,8 @@ const he = {
   'grp.status.dispatched': 'נשלחה',
   'grp.status.cancelled': 'בוטלה',
 
-  // ---- FAQ & Legal ----
   'faqLegal.title': 'שאלות נפוצות ותנאים',
   'faq.tab.ask': 'שאלה',
-  // ---- Money: paying in, cashing out, and the price list ----
   'faq.tab.prices': 'מחירון',
 
   'money.topUp': 'הפקדה',
@@ -1936,6 +1919,7 @@ const he = {
   'money.instantHint': 'התשלום נסגר מול הספק, ולכן לא ממתין לאישור של אף אחד.',
   'money.paid': '{amount} נוספו ליתרה.',
   'money.pending': 'התשלום על {amount} התקבל וממתין לאישור הספק.',
+  'money.notTaken': 'התשלום לא עבר ודבר לא נוסף ליתרה. אם מופיע עליו חיוב בדף החשבון, פנו לתמיכה.',
   'money.sendTo': 'לאן לשלוח',
   'money.paypalHandle': 'כתובת PayPal',
   'money.bank.accountName': 'שם החשבון',
@@ -1960,6 +1944,7 @@ const he = {
   'prices.col.price': 'מחיר',
   'prices.col.when': 'מתי נגבה',
   'prices.forClass': 'לסוג {itemClass}',
+  'prices.note': 'הכלל שבתוקף ברגע החיוב נשמר יחד עם החיוב, כך ששינוי מחיר מאוחר יותר לא משנה סכום שכבר נגבה.',
   'prices.group.intake': 'קליטה',
   'prices.group.storage': 'אחסון',
   'prices.group.services': 'שירותים',
@@ -1972,7 +1957,6 @@ const he = {
   'prices.trigger.weekly': 'שבועי',
   'prices.trigger.monthly': 'חודשי',
 
-  // ---- Escrow, and fulfilment that is a person ----
   'market.tab.escrow': 'עסקה מוגנת',
   'ss.tab.in-person': 'מסירה אישית',
 
@@ -2094,7 +2078,6 @@ const he = {
   'ff.wg.accept': 'אישור',
   'ff.wg.accepted': 'אושר, {amount} נגבו.',
 
-  // ---- Help: guides, shows, contact. Notification channels. ----
   'faq.tab.guides': 'מדריכים',
   'faq.tab.shows': 'לוח תערוכות',
   'faq.tab.contact': 'יצירת קשר',
@@ -2262,7 +2245,6 @@ const he = {
   'legal.download': 'הורדה',
   'legal.noMatches': 'אין התאמות בטקסט',
 
-  // ---- Vault: states, history and card actions ----
   'vault.scope.active': 'פעילים',
   'vault.scope.hold': 'מוקפאים',
   'vault.scope.history': 'היסטוריה',
@@ -2283,6 +2265,16 @@ const he = {
   'vault.historical.dateLabel': 'תאריך יציאה',
   'vault.historical.reasonLabel': 'סיבת יציאה',
   'vault.historical.drawerNote': 'כרטיס היסטורי — לצפייה בלבד. פעולות אינן זמינות.',
+  'vault.departure.shipped': 'נשלח מהכספת',
+  'vault.departure.donated': 'נתרם',
+  'vault.departure.discarded': 'סולק לבקשתך',
+  'vault.departure.consigned': 'נמכר בקונסיגנציה',
+  'vault.departure.buyout': 'נקנה על ידי Bault',
+  'vault.departure.sold': 'נמכר בשוק',
+  'vault.departure.gift': 'הועבר במתנה',
+  'vault.departure.swap': 'הוחלף',
+  'vault.departure.escrow': 'נמכר בעסקה מוגנת {code}',
+  'vault.departure.left': 'יצא מהכספת',
   'vault.class': 'סיווג',
   'vault.serial': 'מספר סידורי',
   'vault.col.item': 'פריט',
@@ -2310,9 +2302,6 @@ const he = {
   'vault.actions.heldNote': 'הכרטיס מוקפא. שחרור הקפאה מתבצע על ידי המחסן.',
 
 
-  // ==========================================================
-  // Wallet requests (cash in / cash out) - Requirements 7 & 8
-  // ==========================================================
   'wallet.tab.cash-in': 'הפקדה',
   'wallet.tab.cash-out': 'משיכה',
   'wallet.tab.requests': 'בקשות',
@@ -2397,7 +2386,6 @@ const he = {
   'wallet.requests.rejectionReason': 'סיבת הדחייה',
   'wallet.requests.reviewedBy': 'נבדקה על ידי',
 
-  // ---- Management: wallet request review queue ----
   'admin.section.requests': 'בקשות ארנק',
   'admin.section.accounting': 'הנהלת חשבונות',
   'admin.accounting.intro': 'הדוחות שרואה החשבון צריך, מתוך הספר כפי שהוא. לא חושב או הופרד מס בשום מקום כאן; אילו שורות חייבות במס היא החלטה של רואה החשבון.',
@@ -2493,22 +2481,18 @@ const he = {
   'admin.requests.reconcile': 'בדוק משיכות תלויות',
   'admin.requests.reconciled': 'נבדקו {checked} משיכות: {succeeded} שולמו, {failed} נכשלו והוחזרו, {pending} עדיין ממתינות.',
 
-  // ---- FAQ & Legal breadcrumb helpers ----
   'nav.faqLegal': 'שאלות ותנאים',
 } as const;
 
 export type MessageKey = keyof typeof he;
 
 const en: Record<MessageKey, string> = {
-  // ---- App shell ----
   'app.title': 'Bault — Collectibles Vault & Marketplace',
   'auth.landing.headline': 'Somebody is holding this right now. You can see exactly what, where, and what it costs.',
   'auth.landing.lede': 'Bault holds collectibles and keeps the only record of who owns them. Every item carries a serial, every movement is written down and cannot be erased, and every charge shows the rule that priced it.',
   'auth.landing.state': 'In the vault',
   'auth.landing.whereLabel': 'Where',
   'auth.landing.where': 'Bault New Jersey · Zone B',
-  // ---- The landing page (marketing/LandingPage.tsx) ----
-  // ---- Membership (customer/membership/MembershipPage.tsx) ----
   'tab.membership': 'Membership',
   'membership.title': 'Membership',
   'membership.tier.folio': 'Folio',
@@ -2613,6 +2597,7 @@ const en: Record<MessageKey, string> = {
   'landing.price.shipping': 'Handling on an outbound parcel',
   'landing.price.marketplace': 'Selling it here',
   'landing.price.cashOut': 'Taking money out',
+  'landing.price.unavailable': 'Not available just now',
   'landing.journey.title': 'How an item moves',
   'landing.journey.subtitle': 'In the order the work actually happens.',
   'landing.journey.arrive.name': 'It arrives',
@@ -2694,6 +2679,10 @@ const en: Record<MessageKey, string> = {
   'role.user': 'Collector',
   'role.warehouse_operator': 'Warehouse operator',
   'role.admin': 'Manager',
+  'account.status.pending': 'Waiting to verify',
+  'account.status.active': 'Active',
+  'account.status.suspended': 'Suspended',
+  'account.status.closed': 'Closed',
 
   'tab.vault': 'Vault',
   'tab.inbound': 'Inbound',
@@ -2831,6 +2820,7 @@ const en: Record<MessageKey, string> = {
   'market.store.subtitle': 'Everything one collector currently has for sale. The page is public.',
   'market.store.view': 'View',
   'market.store.of': "{username}'s storefront",
+  'market.listing.soldBy': 'Sold by',
   'market.store.empty': 'Nothing for sale',
   'market.store.emptyText': 'This collector has no active listings right now.',
   'market.store.yourLink': 'Your storefront link: {link}',
@@ -2877,6 +2867,8 @@ const en: Record<MessageKey, string> = {
   'notifications.event.swap_completed': 'Swap completed',
   'notifications.event.transfer_completed': 'Gift delivered',
   'notifications.event.shipment_cancelled': 'Shipment cancelled',
+  'notifications.event.shipment_delivered': 'Shipment delivered',
+  'notifications.event.shipment_exception': 'Problem with a shipment',
   'notifications.event.shipment_expired': 'Shipment expired',
   'notifications.event.custom_request_raised': 'Custom request received',
   'notifications.event.custom_request_quoted': 'Custom request priced',
@@ -3121,7 +3113,6 @@ const en: Record<MessageKey, string> = {
   'tab.warehouse': 'Warehouse console',
   'tab.admin': 'Management',
 
-  // ---- Card photo lightbox ----
   'photo.show': 'Show photo',
   'photo.showOf': 'Show photo of {title}',
   'photo.close': 'Close',
@@ -3129,7 +3120,6 @@ const en: Record<MessageKey, string> = {
   'photo.none': 'No photograph',
   'vault.media.unavailable': 'This photograph did not load. The file exists; the browser cannot reach it right now.',
 
-  // ---- Service requests (shared: customer + operator) ----
   'service.type.professional_photography': 'Professional photography',
   'service.type.third_party_grading': 'Grading',
   'service.type.consignment': 'Consignment',
@@ -3147,7 +3137,6 @@ const en: Record<MessageKey, string> = {
   'service.status.completed': 'Completed',
   'service.status.cancelled': 'Declined',
 
-  // ---- Auth ----
   'auth.signInTitle': 'Sign in',
   'auth.signUpTitle': 'Create an account',
   'auth.identifier': 'Email or username',
@@ -3195,6 +3184,8 @@ const en: Record<MessageKey, string> = {
   'auth.verifyDone': 'Your address is confirmed and the account is active. You can sign in.',
   'auth.verifyNoToken': 'This link is missing its confirmation token.',
   'auth.verifyFailedHint': 'A confirmation link is valid for 24 hours and can be used once. If yours expired, ask for a new one here.',
+  'auth.verifyLinkInvalid': 'This link no longer works: it has expired or has already been used.',
+  'auth.resetLinkInvalid': 'This reset link no longer works: it has expired or has already been used. Ask for a new one.',
   'auth.verifyResend': 'Send a new confirmation link',
   'auth.verifyResent': 'If an unconfirmed account exists at that address, a new link is on its way to it.',
   'auth.verifySentHint': "We've sent a confirmation link. It is valid for 24 hours — check your spam folder too.",
@@ -3203,13 +3194,11 @@ const en: Record<MessageKey, string> = {
   'auth.consentRead': 'Read them',
   'auth.consentHide': 'Hide them',
 
-  // ---- Vault ----
   'vault.title': 'My vault',
   'vault.searchPlaceholder': 'Search',
   'vault.search': 'Search',
   'vault.condition': 'Condition: {grade}',
 
-  // ---- Wallet ----
   'wallet.title': 'My wallet',
   'wallet.currentBalance': 'Current balance',
   'wallet.topup': 'Cash in',
@@ -3219,7 +3208,6 @@ const en: Record<MessageKey, string> = {
   'wallet.col.amount': 'Amount',
   'wallet.col.balance': 'Balance',
 
-  // ---- Marketplace ----
   'market.title': 'Marketplace',
   'market.searchPlaceholder': 'Search the marketplace',
   'market.filters': 'Narrow the listings',
@@ -3246,7 +3234,6 @@ const en: Record<MessageKey, string> = {
   'market.status.selectItem': 'Select an item to sell',
   'market.status.listed': 'Item listed for sale',
 
-  // ---- Services (customer) ----
   'services.title': 'Services',
   'services.pickItem': 'Pick an item from your vault:',
   'services.pickItemOption': '— Select an item —',
@@ -3274,7 +3261,6 @@ const en: Record<MessageKey, string> = {
   'services.colStatus': 'Status',
   'services.colDate': 'Date',
 
-  // ---- Shipping ----
   'shipping.title': 'Shipping',
   'shipping.selectItemFirst': 'Select an item',
   'shipping.created': 'Shipment created — select a rate',
@@ -3286,7 +3272,6 @@ const en: Record<MessageKey, string> = {
   'shipping.createAndGetRates': 'Create shipment and get rates',
   'shipping.selectRate': 'Select',
 
-  // ---- Notifications ----
   'notifications.title': 'Notifications',
   'notifications.preferences.title': 'Notification preferences',
   'notifications.preferences.hint': 'Choose which events you want to be notified about.',
@@ -3302,7 +3287,6 @@ const en: Record<MessageKey, string> = {
   'notifications.event.hold_placed': 'Hold placed',
   'notifications.event.arrival_not_accepted': 'Arrival not accepted',
 
-  // ---- Profile ----
   'profile.title': 'Profile',
   'profile.details.heading': 'My details',
   'profile.details.email': 'Email:',
@@ -3319,6 +3303,7 @@ const en: Record<MessageKey, string> = {
   'profile.addresses.heading': 'Shipping addresses',
   'profile.addresses.empty': 'No saved addresses yet.',
   'profile.addresses.default': 'Default',
+  'profile.addresses.regionMissing': 'State or province missing',
   'profile.addresses.delete': 'Delete',
   'profile.addressForm.legend': 'Add address',
   'profile.addressForm.label': 'Label (e.g. Home)',
@@ -3330,10 +3315,13 @@ const en: Record<MessageKey, string> = {
   'profile.addressForm.countryPlaceholder': 'Choose a country…',
   'profile.addressForm.countryHint': 'Only destinations Bault actually ships to.',
   'profile.addressForm.postalCode': 'Postal code',
+  'profile.addressForm.region': 'State / province',
+  'profile.addressForm.regionPlaceholder': 'Choose…',
+  'profile.addressForm.regionRequiredHint': 'Required for {country}: carriers will not print a label without it.',
+  'profile.addressForm.regionOptionalHint': 'If the address has one.',
   'profile.addressForm.isDefault': 'Default',
   'profile.addressForm.submit': 'Add address',
 
-  // ---- Warehouse console ----
   'warehouse.title': 'Warehouse console',
   'warehouse.intake.legend': 'Receive bench',
   'warehouse.intake.ownerUsername': 'Owner username',
@@ -3388,7 +3376,6 @@ const en: Record<MessageKey, string> = {
   'warehouse.log.binCreated': 'Created shelf {serial} in zone {zone}',
   'warehouse.log.binCreateError': 'Could not create the shelf: {message}',
 
-  // ---- Service queue (operator) ----
   'queue.title': 'Service requests',
   'queue.empty': 'No pending requests.',
   'queue.col.service': 'Service',
@@ -3417,7 +3404,6 @@ const en: Record<MessageKey, string> = {
   'queue.fulfill.noAreas': 'This request names no areas',
   'queue.msg.saleDone': 'Sale completed',
 
-  // ---- Admin console ----
   'admin.title': 'Management',
   'admin.section.users': 'Users',
   'admin.section.signins': 'Sign-ins',
@@ -3447,7 +3433,6 @@ const en: Record<MessageKey, string> = {
   'admin.signIns.outcome.refused': 'Account closed',
   'admin.signIns.outcome.mfa_challenged': 'Password right — code asked for',
   'admin.signIns.outcome.mfa_failed': 'Wrong code',
-  // ---- Two-factor sign-in ----
   'mfa.title': 'Two-factor sign-in',
   'mfa.challenge.intro': 'Enter the six-digit code from your authenticator app.',
   'mfa.code': 'Code from your authenticator app',
@@ -3492,7 +3477,6 @@ const en: Record<MessageKey, string> = {
   'admin.users.mfaResetBody': '{email} will be signed out everywhere and will sign in with their password alone until they set up a new authenticator. This is recorded in the audit log.',
   'admin.users.mfaResetConfirm': 'Reset',
   'admin.users.mfaResetDone': 'Two-factor sign-in reset for {email}. Sessions ended: {count}.',
-  // ---- Parked outbox messages ----
   'admin.section.outbox': 'Parked messages',
   'admin.section.outboxCount': 'Parked messages ({count})',
   'admin.outbox.title': 'Messages the dispatcher gave up on ({count})',
@@ -3524,6 +3508,9 @@ const en: Record<MessageKey, string> = {
   'admin.users.legacyIntakeIdTitle': 'Historical intake ID — troubleshooting only. Not used by any current workflow.',
   'admin.users.col.role': 'Role',
   'admin.users.saved': 'Saved: {email}',
+  'admin.users.autoSuspended': 'Suspended by the debt sweep, which lifts it when the balance is paid.',
+  'admin.users.keepSuspended': 'Keep suspended',
+  'admin.users.keepSuspendedLabel': 'Keep {email} suspended',
   'admin.items.heading': 'Items ({count})',
   'admin.items.col.barcode': 'Barcode',
   'admin.items.col.description': 'Description',
@@ -3539,6 +3526,10 @@ const en: Record<MessageKey, string> = {
   'admin.pricing.action.service': 'Service',
   'admin.pricing.action.shipping': 'Shipping',
   'admin.pricing.action.marketplaceFee': 'Marketplace fee',
+  'admin.pricing.group.charged': 'Charged from the rule',
+  'admin.pricing.group.published': 'Published only, charged from the code',
+  'admin.pricing.tierHint': "The rule carries the tier's allowances from the membership catalogue (storage for {count} items). The nightly storage sweep reads them from it.",
+  'admin.pricing.publishedHint': 'What this action charges is a constant in the code. A rule changes what the price list shows, not what is charged.',
   'admin.pricing.model.fixed': 'Flat amount',
   'admin.pricing.model.percentage': 'Percentage',
   'admin.pricing.heading': 'Pricing rules ({count})',
@@ -3578,7 +3569,6 @@ const en: Record<MessageKey, string> = {
   'admin.storage.col.thresholdDays': 'Day threshold',
   'admin.storage.col.chargedItems': 'Items charged',
   'admin.storage.col.total': 'Total',
-  // ---- Requirements: shipping, pricing, disputes, storage, intake, history, notifications ----
   'admin.storage.autoNotice':
     'Billing is fully automatic: a daily job charges every account with items stored for more than one day. There is no manual trigger.',
   'admin.pricing.descriptionPlaceholder': 'Rule description',
@@ -3597,6 +3587,8 @@ const en: Record<MessageKey, string> = {
   'shipping.selectAddressFirst': 'Select a destination address',
   'shipping.createdTracked': 'Shipment {id} created. It is already in Shipment Tracking. Select a rate to continue.',
   'shipping.manageAddressesHint': 'Add shipping addresses on the Profile page.',
+  'shipping.regionMissing': 'The address "{label}" has no state or province, and carriers will not ship to {country} without it. Add it, then come back.',
+  'shipping.editAddress': 'Edit the address',
   'shipping.shipmentIdLabel': 'Shipment ID: {id}',
   'profile.address.edit': 'Edit',
   'profile.address.save': 'Save address',
@@ -3656,6 +3648,14 @@ const en: Record<MessageKey, string> = {
   'timeline.swap': 'Swapped',
   'timeline.transfer': 'Transferred',
   'timeline.consignment': 'Consignment',
+  'timeline.detail.change': '{from} → {to}',
+  'timeline.detail.shelvedIn': 'Shelved in {bin}',
+  'timeline.detail.intake': 'Intake',
+  'timeline.detail.field': '{field}: {change}',
+  'timeline.field.description': 'Description',
+  'timeline.field.conditionGrade': 'Condition',
+  'timeline.field.typeClass': 'Item class',
+  'timeline.field.other': 'Detail',
   'vault.bin': 'Shelf {bin}',
   'vault.isLot': 'Lot',
   'warehouse.fulfill': 'Fulfill',
@@ -3675,14 +3675,12 @@ const en: Record<MessageKey, string> = {
     'Leave blank to have one minted. Fill it in only for a single item that already has a catalogue photo filed under that serial.',
   'warehouse.report.exportPdf': 'Export PDF',
 
-  // ---- Profile: immutable username + address editing ----
   'profile.details.username': 'Username:',
   'profile.details.usernameImmutable': 'permanent — cannot be changed',
   'profile.nameLabel': 'Your name',
   'profile.namePreview': 'Shown as: {name}',
   'profile.nameReviewRequired': 'Your name was migrated from an earlier system and could not be split into first and last with certainty. Review it and save to confirm.',
 
-  // ---- Vault: bin, lot and item history ----
   'vault.noBin': 'Not on a shelf',
   'vault.lotOf': 'Lot of {count}',
   'vault.historyEmpty': 'Nothing has happened to this item yet.',
@@ -3691,7 +3689,6 @@ const en: Record<MessageKey, string> = {
   'vault.historyCol.event': 'Event',
   'vault.historyCol.details': 'Details',
 
-  // ---- Warehouse: break lot ----
   'warehouse.lots.legend': 'Open lots',
   'warehouse.lots.empty': 'No whole lots to break.',
   'warehouse.lots.colLot': 'Lot',
@@ -3699,7 +3696,6 @@ const en: Record<MessageKey, string> = {
   'warehouse.lots.broken': 'Lot {lot} broken into {count} standalone items',
   'warehouse.lots.breakError': 'Break lot failed: {message}',
 
-  // ---- Warehouse: structured service fulfillment (Requirement 5.4) ----
   'queue.col.request': 'Request ID',
   'queue.fulfill.legend': 'Fulfillment form',
   'queue.fulfill.objectKey': 'Photo object key',
@@ -3717,7 +3713,6 @@ const en: Record<MessageKey, string> = {
   'queue.fulfill.required': 'Fill every field and confirm the item was verified.',
   'queue.fulfill.noForm': 'This request type closes automatically.',
 
-  // ---- Barcodes ----
   'barcode.print': 'Print barcode',
   'barcode.printOf': 'Print the barcode {value}',
   'barcode.printAll': 'Print all {count} labels',
@@ -3725,9 +3720,6 @@ const en: Record<MessageKey, string> = {
   'warehouse.intake.lastLabels': 'Labels for what you just booked in',
   'warehouse.intake.labelsHint': 'Print these and stick one on each item before it goes to its shelf.',
 
-  // ==========================================================
-  // Redesign: application shell, navigation rail and shared UI
-  // ==========================================================
   'nav.primary': 'Primary navigation',
   'nav.breadcrumb': 'Breadcrumb',
   'nav.home': 'Home',
@@ -3737,7 +3729,6 @@ const en: Record<MessageKey, string> = {
   'nav.skipToContent': 'Skip to content',
   'nav.openMenu': 'Open navigation menu',
 
-  // ---- API failure states ----
   'error.title': 'Something went wrong',
   'error.unreachable': 'The Bault API is unavailable. Start the local backend (pnpm dev) and try again.',
   'error.unauthenticated': 'Please sign in again.',
@@ -3759,7 +3750,6 @@ const en: Record<MessageKey, string> = {
   'menu.languageCurrent': 'Selected',
   'menu.role': 'Role',
 
-  // ---- Notifications ----
   'notifications.newCount': '{n} new notifications',
   'notifications.recent': 'Latest',
   'notifications.viewAll': 'View all notifications',
@@ -3767,7 +3757,6 @@ const en: Record<MessageKey, string> = {
   'notifications.tab.feed': 'Notifications',
   'notifications.tab.preferences': 'Preferences',
 
-  // ---- Wallet ----
   'wallet.tab.overview': 'Overview',
   'wallet.tab.transactions': 'Transactions',
   'wallet.tab.topup': 'Cash in',
@@ -3808,11 +3797,19 @@ const en: Record<MessageKey, string> = {
   'wallet.type.shipping_refund': 'Shipping refund',
   'wallet.type.service_refund': 'Service refund',
   'wallet.type.payout_reversal': 'Payout returned',
+  'wallet.type.escrow_hold': 'Held for escrow',
+  'wallet.type.escrow_release': 'Released from escrow',
+  'wallet.type.escrow_refund': 'Refunded from escrow',
+  'wallet.type.chargeback': 'Chargeback',
   'wallet.ref.charge': 'Platform charge',
   'wallet.ref.transaction': 'Marketplace transaction',
   'wallet.ref.withdrawal': 'Withdrawal request',
   'wallet.ref.external_payment': 'External payment',
   'wallet.ref.listing': 'Marketplace listing',
+  'wallet.ref.escrow_deal': 'Escrow deal',
+  'wallet.ref.service_request': 'Service request',
+  'wallet.ref.shipment': 'Shipment',
+  'wallet.ref.wallet_request': 'Wallet request',
   'wallet.rowLabel': '{type} · {amount} · {date}',
   'wallet.tx.title': 'Transaction details',
   'wallet.tx.recordId': 'Record ID',
@@ -3854,7 +3851,6 @@ const en: Record<MessageKey, string> = {
   'wallet.withdraw.history': 'Previous withdrawals',
   'wallet.withdraw.empty': 'No withdrawals yet.',
 
-  // ---- Vault ----
   'vault.metric.stored': 'Items in storage',
   'vault.metric.storedNote': 'Currently held in the vault',
   'vault.metric.listed': 'Listed for sale',
@@ -3883,7 +3879,6 @@ const en: Record<MessageKey, string> = {
   'vault.state.donated': 'Donated',
   'vault.state.consigned': 'Consigned',
 
-  // ---- Marketplace ----
   'market.tab.browse': 'Browse',
   'market.tab.sell': 'Sell',
   'market.listings': 'Active listings',
@@ -3906,7 +3901,6 @@ const en: Record<MessageKey, string> = {
   'market.offer.submit': 'Send offer',
   'market.offer.askingPrice': 'Asking price',
 
-  // ---- Services ----
   'services.tab.order': 'Order a service',
   'services.tab.requests': 'My requests',
   'services.orderAction': 'Order service',
@@ -3957,7 +3951,6 @@ const en: Record<MessageKey, string> = {
   'services.deslab.confirmTitle': 'Confirm cracking the slab',
   'services.deslab.confirmBody': 'Crack {item} out of its holder? The holder is destroyed, the grade is cleared, and this cannot be undone.',
 
-  // ---- Services on a stored card: grading tiers, submissions, inspection, cull ----
   'vault.state.atGrader': 'At the grader',
   'vault.state.discarded': 'Discarded',
   'vault.media.title': 'Photographs and video',
@@ -4048,7 +4041,6 @@ const en: Record<MessageKey, string> = {
   'cull.confirmAction': 'Remove them',
   'cull.done': '{count} items removed',
 
-  // ---- Shipping ----
   'shipping.selectItemsSubtitle': 'Everything selected ships together under one shipment ID.',
   'shipping.selectedCount': '{count} selected',
   'shipping.noItemsText': 'Only items in the "stored" state can be shipped.',
@@ -4060,7 +4052,6 @@ const en: Record<MessageKey, string> = {
   'shipping.rateChosen': 'Rate selected',
   'shipping.rateChosenText': 'The shipment is awaiting dispatch from the warehouse.',
 
-  // ---- Profile ----
   'profile.tab.details': 'Details',
   'profile.tab.addresses': 'Addresses',
   'profile.tab.security': 'Security',
@@ -4076,7 +4067,6 @@ const en: Record<MessageKey, string> = {
   'profile.address.deleteTitle': 'Delete address',
   'profile.address.deleteBody': 'Delete the address "{label}"?',
 
-  // ---- Warehouse console ----
   'warehouse.tab.overview': 'Overview',
   'warehouse.tab.intake': 'Intake',
   'warehouse.tab.receiving': 'Receiving',
@@ -4107,7 +4097,6 @@ const en: Record<MessageKey, string> = {
   'warehouse.status.empty': 'Empty',
   'warehouse.status.unshelved': 'Unshelved',
 
-  // ---- Inbound bench: directed stow, scanning, closing a box out ----
   'parcelQueue.col.units': 'Units',
   'parcelQueue.action.bookContents': 'Book contents',
   'parcelQueue.bookedSoFar': '{count} booked from this parcel so far.',
@@ -4161,11 +4150,9 @@ const en: Record<MessageKey, string> = {
   'warehouse.log.binRetired': 'Shelf {serial} taken out of service',
   'warehouse.log.binReturned': 'Shelf {serial} returned to service',
 
-  // ---- Service queue ----
   'queue.subtitle': 'Approve or decline requests, then close approved ones with the fulfillment form.',
   'queue.emptyText': 'New customer requests land here.',
 
-  // ---- Management console ----
   'admin.users.subtitle': 'Edit the name, role and status of any account.',
   'admin.users.empty': 'No accounts to show.',
   'admin.items.subtitle': 'Edit item details, ownership, lifecycle state and holds.',
@@ -4176,7 +4163,6 @@ const en: Record<MessageKey, string> = {
   'admin.pricing.empty': 'No pricing rules defined.',
   'admin.disputes.subtitle': 'A dispute must reference a recorded transaction.',
 
-  // ---- Shipping & Services (merged section) ----
   'shippingServices.title': 'Shipping & Services',
   'ss.tab.overview': 'Overview',
   'ss.tab.shipping': 'Shipping',
@@ -4254,7 +4240,6 @@ const en: Record<MessageKey, string> = {
   'ss.shipmentStatus.exception': 'Exception',
   'ss.shipmentStatus.cancelled': 'Cancelled',
 
-  // ---- Outbound shipping: carriers, cover, customs, shared parcels ----
   'ss.tab.shared': 'Shared parcels',
 
   'ship.svc.usps_ground': 'USPS Ground Advantage',
@@ -4339,6 +4324,12 @@ const en: Record<MessageKey, string> = {
 
   'ship.payNow': 'Pay now',
   'ship.paid': 'Shipment paid',
+  'ship.labelRefused': 'The carrier refused the label for this shipment, so nothing was bought. Choose a service again: a cheaper one refunds the difference, a dearer one charges it.',
+  'ship.labelRefusedReason': 'The carrier said: {reason}',
+  'ship.rechoose.refund': '{amount} back',
+  'ship.rechoose.extra': '{amount} more',
+  'ship.rechoose.same': 'No change in price',
+  'ship.rechosen': 'Service changed',
   'ship.paymentDue': 'Pay by',
   'ship.cancel': 'Cancel shipment',
   'ship.cancelled': 'Shipment cancelled',
@@ -4386,10 +4377,8 @@ const en: Record<MessageKey, string> = {
   'grp.status.dispatched': 'Dispatched',
   'grp.status.cancelled': 'Cancelled',
 
-  // ---- FAQ & Legal ----
   'faqLegal.title': 'FAQ & Legal',
   'faq.tab.ask': 'Ask',
-  // ---- Money: paying in, cashing out, and the price list ----
   'faq.tab.prices': 'Prices',
 
   'money.topUp': 'Cash in',
@@ -4412,6 +4401,7 @@ const en: Record<MessageKey, string> = {
   'money.instantHint': 'Settled by the provider, so it does not wait on anybody here.',
   'money.paid': '{amount} added to your balance.',
   'money.pending': 'Your {amount} payment is with the provider and will land when it clears.',
+  'money.notTaken': 'This payment did not go through, and nothing has been credited. If a charge for it shows on your statement, contact support.',
   'money.sendTo': 'Where to send it',
   'money.paypalHandle': 'PayPal address',
   'money.bank.accountName': 'Account name',
@@ -4436,6 +4426,7 @@ const en: Record<MessageKey, string> = {
   'prices.col.price': 'Price',
   'prices.col.when': 'Charged',
   'prices.forClass': 'for {itemClass}',
+  'prices.note': 'The rule in force at the moment of a charge is recorded with that charge, so a later price change never alters what you were already billed.',
   'prices.group.intake': 'Taking things in',
   'prices.group.storage': 'Storage',
   'prices.group.services': 'Services',
@@ -4448,7 +4439,6 @@ const en: Record<MessageKey, string> = {
   'prices.trigger.weekly': 'weekly',
   'prices.trigger.monthly': 'monthly',
 
-  // ---- Escrow, and fulfilment that is a person ----
   'market.tab.escrow': 'Escrow',
   'ss.tab.in-person': 'In person',
 
@@ -4570,7 +4560,6 @@ const en: Record<MessageKey, string> = {
   'ff.wg.accept': 'Accept',
   'ff.wg.accepted': 'Accepted, {amount} charged.',
 
-  // ---- Help: guides, shows, contact. Notification channels. ----
   'faq.tab.guides': 'Guides',
   'faq.tab.shows': 'Show calendar',
   'faq.tab.contact': 'Contact',
@@ -4738,7 +4727,6 @@ const en: Record<MessageKey, string> = {
   'legal.download': 'Download',
   'legal.noMatches': 'No matches in this document',
 
-  // ---- Vault: states, history and card actions ----
   'vault.scope.active': 'Active',
   'vault.scope.hold': 'On hold',
   'vault.scope.history': 'History',
@@ -4759,6 +4747,16 @@ const en: Record<MessageKey, string> = {
   'vault.historical.dateLabel': 'Date left',
   'vault.historical.reasonLabel': 'Reason',
   'vault.historical.drawerNote': 'Historical record — read only. No actions are available.',
+  'vault.departure.shipped': 'Shipped out of the vault',
+  'vault.departure.donated': 'Donated',
+  'vault.departure.discarded': 'Discarded at your request',
+  'vault.departure.consigned': 'Sold on consignment',
+  'vault.departure.buyout': 'Bought by Bault',
+  'vault.departure.sold': 'Sold on the marketplace',
+  'vault.departure.gift': 'Given as a gift',
+  'vault.departure.swap': 'Swapped',
+  'vault.departure.escrow': 'Sold through escrow {code}',
+  'vault.departure.left': 'Left the vault',
   'vault.class': 'Class',
   'vault.serial': 'Serial',
   'vault.col.item': 'Item',
@@ -4786,9 +4784,6 @@ const en: Record<MessageKey, string> = {
   'vault.actions.heldNote': 'This is on hold. Releasing a hold is a warehouse operation.',
 
 
-  // ==========================================================
-  // Wallet requests (cash in / cash out) - Requirements 7 & 8
-  // ==========================================================
   'wallet.tab.cash-in': 'Cash in',
   'wallet.tab.cash-out': 'Cash out',
   'wallet.tab.requests': 'Requests',
@@ -4873,7 +4868,6 @@ const en: Record<MessageKey, string> = {
   'wallet.requests.rejectionReason': 'Reason for rejection',
   'wallet.requests.reviewedBy': 'Reviewed by',
 
-  // ---- Management: wallet request review queue ----
   'admin.section.requests': 'Wallet requests',
   'admin.section.accounting': 'Accounting',
   'admin.accounting.intro': 'The reports an accountant needs, read straight from the ledger. No tax is applied or separated anywhere here; which lines are taxable is the accountant’s decision.',
@@ -4969,20 +4963,13 @@ const en: Record<MessageKey, string> = {
   'admin.requests.reconcile': 'Check pending payouts',
   'admin.requests.reconciled': 'Checked {checked} payouts: {succeeded} paid, {failed} failed and returned, {pending} still pending.',
 
-  // ---- FAQ & Legal breadcrumb helpers ----
   'nav.faqLegal': 'FAQ & Legal',
 };
 
 const messages: Record<Locale, Record<MessageKey, string>> = { he, en };
 
-/**
- * The catalogues themselves, for tests that assert about the WORDS rather than
- * about a rendered screen — that the product does not call twelve kinds of
- * collectible "a card", or use three names for putting money in.
- */
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = messages;
 
-/** Substitute {placeholders}; an unmatched placeholder is left verbatim. */
 function format(template: string, vars?: MessageVars): string {
   if (!vars) return template;
   return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
@@ -4990,30 +4977,12 @@ function format(template: string, vars?: MessageVars): string {
   );
 }
 
-/**
- * Whether a key exists in the catalogue.
- *
- * `t` falls back to echoing the key, which is a useful last resort but would put
- * a raw string like `ss.tab.overview` in front of a user. Callers that build a
- * key from runtime parts (the breadcrumb composes `<section>.<tab>`) check here
- * first and omit the element rather than render the key.
- */
 export function hasMessage(key: string): key is MessageKey {
   return Object.prototype.hasOwnProperty.call(he, key);
 }
 
-/**
- * Every message key in the catalogue.
- *
- * The catalogues themselves stay module-private — nothing outside should index
- * them directly — but the key SET is worth exposing: it is what lets a test walk
- * every user-facing string in both locales at once, which is how the brand and
- * placeholder checks in `tests/web/i18n-catalogue.test.ts` are able to be
- * exhaustive rather than a spot check.
- */
 export const MESSAGE_KEYS: readonly MessageKey[] = Object.keys(he) as MessageKey[];
 
-/** Translate a key for the given locale, falling back to the key itself. */
 export function t(key: MessageKey, locale: Locale = DEFAULT_LOCALE, vars?: MessageVars): string {
   const template = messages[locale][key] ?? messages[DEFAULT_LOCALE][key] ?? key;
   return format(template, vars);
@@ -5038,8 +5007,6 @@ function initialLocale(): Locale {
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
 
-  // Persist the choice and keep <html lang/dir> in step, so the whole document
-  // (including native form controls and scrollbars) flips direction with it.
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, locale);
     document.documentElement.lang = locale;
@@ -5063,7 +5030,6 @@ export function useI18n(): I18nValue {
   return ctx;
 }
 
-/** Convenience hook for components that only need to translate. */
 export function useT(): TranslateFn {
   return useI18n().t;
 }

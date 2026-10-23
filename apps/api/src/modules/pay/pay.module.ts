@@ -11,11 +11,6 @@ import { ChargebackService } from './chargeback.service';
 import { PayController } from './pay.controller';
 import { WalletRequestController } from './wallet-request.controller';
 
-/**
- * PAY module (finance). Global because the ledger/wallet/billing primitives are
- * used by MKT, SHP, DIS. Crucially it provides BILLING_PORT via the REAL
- * BillingService — replacing the Phase-4 no-op adapter without touching callers.
- */
 @Global()
 @Module({
   controllers: [PayController, WalletRequestController],

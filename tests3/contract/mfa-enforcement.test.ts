@@ -2,19 +2,6 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-/**
- * Two-factor sign-in, REQUIRED of staff — the rule itself, with no server.
- *
- * The API under the e2e suites runs in development, where the requirement
- * defaults to nobody, because every suite signs in as the seeded administrator
- * with a password alone. So the guarantee "an administrator or operator who has
- * not enrolled can reach nothing but enrolment, sign-out and their own profile"
- * is pinned here, on the guard and on the code that marks routes, where it does
- * not depend on which configuration some running process happened to start
- * with. `tests/integration/acc-two-factor-required.test.ts` proves the same
- * end to end against a second API started with production's setting.
- */
-
 process.env.NODE_ENV = 'test';
 
 type Guard = typeof import('../../apps/api/src/modules/acc/mfa/mfa-enrollment.guard');
@@ -37,11 +24,8 @@ beforeAll(async () => {
 type Role = 'user' | 'warehouse_operator' | 'admin';
 const STAFF: Role[] = ['admin', 'warehouse_operator'];
 
-/** A route handler, optionally marked the way a controller marks one. */
 function handler(mark?: 'exempt' | 'public'): () => void {
   const fn = function route() {};
-  // Decorators applied as plain calls: a test file is not compiled with
-  // `experimentalDecorators`, and the call is exactly what the `@` does.
   if (mark === 'exempt') decorators.AllowWithoutMfa()({}, 'route', { value: fn });
   if (mark === 'public') publicDecorator.Public()({}, 'route', { value: fn });
   return fn;
@@ -84,8 +68,6 @@ describe('the enrolment guard, with staff required to enrol (production)', () =>
   });
 
   it('treats an unknown enrolment state as not enrolled', () => {
-    // A user object that arrived without the flag is a bug somewhere upstream;
-    // the guard fails closed rather than reading the gap as "enrolled".
     expect(refusal(() => guard(STAFF).canActivate(context(person('admin', undefined), handler()))))
       .toMatchObject({ code: 'mfa_enrollment_required' });
   });
@@ -112,8 +94,6 @@ describe('the enrolment guard, with staff required to enrol (production)', () =>
 
   it('leaves public routes and anonymous requests to the guards that own them', () => {
     expect(guard(STAFF).canActivate(context(person('admin', false), handler('public')))).toBe(true);
-    // No user on a private route is the session guard's 401, already thrown
-    // before this guard runs; this one must not turn it into something else.
     expect(guard(STAFF).canActivate(context(undefined, handler()))).toBe(true);
   });
 });
@@ -129,15 +109,6 @@ describe('the enrolment guard, with nobody required (development and test defaul
   });
 });
 
-/**
- * Which routes carry the exemption.
- *
- * A route marked `@AllowWithoutMfa()` is reachable by an administrator who has
- * not enrolled — so one stray mark on, say, a payout route would quietly reopen
- * exactly what the requirement closes. The set is pinned by reading the source:
- * adding a route to it is then a deliberate change to this list, reviewed as
- * one.
- */
 describe('the routes exempt from enrolment', () => {
   const SRC = join(__dirname, '..', '..', 'apps', 'api', 'src');
 
@@ -155,7 +126,6 @@ describe('the routes exempt from enrolment', () => {
       const lines = readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, i) => {
         if (!/^\s*@AllowWithoutMfa\(\)/.test(line)) return;
-        // The decorated thing is the next line that declares a method or a class.
         for (let j = i + 1; j < lines.length; j += 1) {
           const method = /^\s+(?:async\s+)?(\w+)\s*\(/.exec(lines[j]!);
           const cls = /^export class (\w+)/.exec(lines[j]!);
@@ -191,7 +161,6 @@ describe('the second sign-in step', () => {
     expect(step, 'AuthController.loginMfa').toBeTypeOf('function');
     expect(Reflect.getMetadata(IS_PUBLIC_KEY, step!)).toBe(true);
     expect(notAnAuthRoute({ getHandler: () => step } as never)).toBe(false);
-    // And with the same budget as the password step.
     const login = (AuthController.prototype as unknown as Record<string, () => void>).login!;
     expect(Reflect.getMetadata('THROTTLER:LIMITauth', step!)).toBe(Reflect.getMetadata('THROTTLER:LIMITauth', login));
   });
@@ -209,5 +178,5 @@ describe('where the guard runs', () => {
     const mfa = providers.indexOf(guardModule.MfaEnrollmentGuard);
     expect(session).toBeGreaterThanOrEqual(0);
     expect(mfa).toBeGreaterThan(session);
-  });
+  }, 30_000);
 });

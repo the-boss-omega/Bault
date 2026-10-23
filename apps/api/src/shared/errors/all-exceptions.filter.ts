@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { EasyPostError, PaymentProviderError } from '@bault/adapters';
 import { pgErrorCode } from './pg-error';
 import { ErrorCode } from './error-codes';
 import {
@@ -16,24 +17,10 @@ import {
 } from '../observability/error-reporting';
 import { currentRequestId } from '../observability/logger';
 
-/**
- * Global exception filter (T013). Renders EVERY error into the single problem
- * shape documented in contracts/README.md:
- *   { "error": { "code", "message", "details" } }
- *
- * - AppError / HttpException carrying our `{code,message,details}` payload pass through.
- * - Any other thrown error becomes a safe 500 `internal` (no stack leaked to clients).
- */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Exceptions');
 
-  /**
-   * Where a server-side failure is reported (step 15). It used to go to stdout
-   * and nowhere else, and nobody is paged by stdout. The reporter is a no-op
-   * unless `SENTRY_DSN` is set; it is a parameter so the filter can be tested
-   * without one.
-   */
   constructor(private readonly report: ExceptionReporter = reportException) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
@@ -41,9 +28,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      // A 5xx raised on purpose is still the server failing — except from the
-      // readiness probes, whose 503 is the answer they exist to give and which
-      // the uptime monitor alerts on by itself.
       if (status >= 500) {
         const req = requestOf(host);
         if (!READINESS_PROBE.test(pathOf(req))) this.report(exception, describeRequest(req));
@@ -54,10 +38,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? body
           : {
               code: this.mapStatus(status),
-              // A throttled caller was being handed the raw
-              // `ThrottlerException: Too Many Requests` under an `internal`
-              // code, which reads as a server fault and tells a client nothing
-              // about what to do. Say what happened and what to do about it.
               message:
                 status === HttpStatus.TOO_MANY_REQUESTS
                   ? 'Too many requests. Wait a moment and try again.'
@@ -68,28 +48,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    // A malformed identifier is the caller's mistake, not ours.
-    //
-    // Every primary key here is a `uuid` column, and Postgres does not merely
-    // fail to match a non-UUID against one — it aborts the statement with
-    // `22P02 invalid_text_representation`. That error reached this filter as an
-    // unknown exception, so `GET /vault/items/not-a-uuid` answered 500. Every
-    // route taking an id from the URL had the same hole: a typo, a stale
-    // bookmark or a crawler produced an unhandled server error and an alert.
-    //
-    // It is caught HERE rather than by putting a `ParseUUIDPipe` on each route,
-    // and that is deliberate. Several of these ids are legitimately not UUIDs —
-    // `/custody/items/:itemId/relocate` takes the barcode printed on the item,
-    // and the bin routes take a shelf serial — so a blanket UUID pipe would
-    // break scanning, which is the one thing the warehouse console is driven by.
-    //
-    // The trade-off is worth stating: this also converts a 22P02 caused by OUR
-    // OWN code passing a bad value into a 400, where it would previously have
-    // been a loud 500. The log line below still records every one of them, so
-    // the evidence survives; what changes is that a caller's typo stops paging
-    // anybody.
     if (isInvalidTextRepresentation(exception)) {
-      this.logger.warn(`Malformed identifier rejected: ${describe(exception)}`);
+      this.logger.warn(`Malformed identifier rejected: ${describe(withoutQueryValues(exception))}`);
       res.status(HttpStatus.BAD_REQUEST).json({
         error: {
           code: ErrorCode.VALIDATION_FAILED,
@@ -100,10 +60,31 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    // Body-parser and other connect-style middleware throw plain errors carrying
-    // their own HTTP status rather than a Nest HttpException. The one that
-    // actually fires is `PayloadTooLargeError` — a 200 KB request body answered
-    // 500 instead of 413, which tells a client nothing about what to do next.
+    const provider = providerFailure(exception);
+    if (provider) {
+      if (provider.rejectedInput) {
+        this.logger.warn(`Provider rejected the request (${provider.kind}): ${describe(exception)}`);
+        res.status(HttpStatus.BAD_REQUEST).json({
+          error: {
+            code: ErrorCode.PROVIDER_REJECTED,
+            message: `The carrier could not accept this shipment as entered: ${provider.reason}. Check the address and the parcel details, then try again.`,
+            details: { provider: provider.kind },
+          },
+        });
+        return;
+      }
+      this.logger.error(`Provider failure (${provider.kind}): ${exception instanceof Error ? exception.stack : describe(exception)}`);
+      this.report(exception, describeRequest(requestOf(host)));
+      res.status(HttpStatus.BAD_GATEWAY).json({
+        error: {
+          code: ErrorCode.PROVIDER_UNAVAILABLE,
+          message: `The ${provider.kind === 'shipping' ? 'shipping' : 'payment'} provider could not handle this just now. Try again shortly.`,
+          details: { provider: provider.kind },
+        },
+      });
+      return;
+    }
+
     const middlewareStatus = statusOf(exception);
     if (middlewareStatus && middlewareStatus >= 400 && middlewareStatus < 500) {
       this.logger.warn(`Request rejected by middleware (${middlewareStatus}): ${describe(exception)}`);
@@ -120,9 +101,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    // Unknown/unexpected error: log server-side, report it, return an opaque 500.
-    this.logger.error(exception instanceof Error ? exception.stack : String(exception));
-    this.report(exception, describeRequest(requestOf(host)));
+    const safe = withoutQueryValues(exception);
+    this.logger.error(safe instanceof Error ? safe.stack : String(safe));
+    this.report(safe, describeRequest(requestOf(host)));
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: { code: ErrorCode.INTERNAL, message: 'Internal server error', details: {} },
     });
@@ -140,18 +121,65 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 }
 
-/**
- * Postgres `22P02 invalid_text_representation` — the class of error raised when
- * a value cannot be parsed as the column's type. For this schema that is almost
- * always a non-UUID compared against a uuid primary key.
- */
 const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 function isInvalidTextRepresentation(exception: unknown): boolean {
   return pgErrorCode(exception) === PG_INVALID_TEXT_REPRESENTATION;
 }
 
-/** The HTTP status a connect-style middleware error carries, if it carries one. */
+function providerFailure(
+  exception: unknown,
+): { kind: 'shipping' | 'payment'; rejectedInput: boolean; reason: string } | null {
+  if (!(exception instanceof Error)) return null;
+  if (exception instanceof EasyPostError || exception.name === 'EasyPostError') {
+    const e = exception as EasyPostError;
+    const reason = (e.detail ?? e.message).replace(/[.\s]+$/, '').slice(0, 300);
+    return { kind: 'shipping', rejectedInput: e.status === 400 || e.status === 422, reason };
+  }
+  if (exception instanceof PaymentProviderError || exception.name === 'PaymentProviderError') {
+    return { kind: 'payment', rejectedInput: false, reason: exception.message };
+  }
+  return null;
+}
+
+function withoutQueryValues(exception: unknown): unknown {
+  const query = queryErrorOf(exception);
+  if (!query) return exception;
+  const db = databaseErrorOf(exception);
+  const named = [
+    db?.constraint ? `constraint ${db.constraint}` : null,
+    db?.table ? `table ${db.table}` : null,
+    db?.column ? `column ${db.column}` : null,
+  ].filter(Boolean);
+  const sqlText = query.query.replace(/'(?:[^']|'')*'/g, "'…'").slice(0, 500);
+  const safe = new Error(
+    `Query failed, SQLSTATE ${pgErrorCode(exception) ?? 'unknown'}${named.length > 0 ? ` (${named.join(', ')})` : ''}: ${sqlText}`,
+  );
+  safe.name = 'DatabaseQueryError';
+  const frames = (query.stack ?? '').split('\n').filter((line) => /^\s+at /.test(line));
+  safe.stack = [`${safe.name}: ${safe.message}`, ...frames].join('\n');
+  return safe;
+}
+
+function queryErrorOf(exception: unknown): { query: string; stack?: string } | null {
+  if (!(exception instanceof Error)) return null;
+  const e = exception as Error & { query?: unknown; params?: unknown };
+  return typeof e.query === 'string' && Array.isArray(e.params) ? { query: e.query, stack: e.stack } : null;
+}
+
+function databaseErrorOf(exception: unknown): { constraint?: string; table?: string; column?: string } | null {
+  let current = (exception as { cause?: unknown })?.cause;
+  for (let depth = 0; depth < 5 && typeof current === 'object' && current !== null; depth += 1) {
+    const e = current as { code?: unknown; constraint?: unknown; table?: unknown; column?: unknown; cause?: unknown };
+    if (typeof e.code === 'string') {
+      const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+      return { constraint: text(e.constraint), table: text(e.table), column: text(e.column) };
+    }
+    current = e.cause;
+  }
+  return null;
+}
+
 function statusOf(exception: unknown): number | null {
   if (typeof exception !== 'object' || exception === null) return null;
   const e = exception as { status?: unknown; statusCode?: unknown };
@@ -159,7 +187,6 @@ function statusOf(exception: unknown): number | null {
   return typeof raw === 'number' ? raw : null;
 }
 
-/** A one-line description for the log — never sent to the client. */
 function describe(exception: unknown): string {
   if (exception instanceof Error) return `${exception.name}: ${exception.message}`;
   return String(exception);
@@ -179,12 +206,6 @@ function pathOf(req: Request | undefined): string {
   return (req?.originalUrl || req?.url || '').split('?')[0] ?? '';
 }
 
-/**
- * What a report says about the request. Everything is passed — headers and body
- * included, because a body is often the whole explanation — and the error
- * reporter's scrubber removes cookies, credential headers and the bodies of the
- * credential routes before anything leaves the process.
- */
 function describeRequest(req: Request | undefined): ReportedRequest | undefined {
   if (!req) return undefined;
   const headers: Record<string, string> = {};

@@ -5,7 +5,6 @@ import { useI18n, type MessageKey } from '../../shared/i18n';
 import { Button, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
 import { IconRefresh } from '../../shared/ui/icons';
 
-/** `GET /admin/pricing/coverage` — see `apps/api/src/modules/prc/billable-actions.ts`. */
 export interface PricingCoverage {
   ready: boolean;
   summary: {
@@ -28,7 +27,7 @@ export interface PricingCoverage {
   unknownRules: { id: string; actionType: string }[];
 }
 
-type CoverageStatus = 'priced' | 'missing' | 'falls_back' | 'code_default' | 'free' | 'code_constant';
+export type CoverageStatus = 'priced' | 'missing' | 'falls_back' | 'code_default' | 'free' | 'code_constant';
 
 const STATUS_TONE: Record<CoverageStatus, StatusTone> = {
   priced: 'success',
@@ -48,21 +47,19 @@ const STATUS_LABEL: Record<CoverageStatus, MessageKey> = {
   code_constant: 'admin.coverage.status.code_constant',
 };
 
-/** A rule's value as a person reads it: cents for a fixed rule, basis points for a percentage. */
 function ruleValue(rule: { model: string; value: number }): string {
   return rule.model === 'percentage' ? `${Number((rule.value / 100).toFixed(2))}%` : formatUsd(rule.value);
 }
 
-/**
- * Is every price loaded? (E6)
- *
- * No migration inserts a pricing rule, so a database built for production
- * from migrations alone cannot price an intake, and several actions fall back
- * quietly — to another rule, to a figure in the code, or to nothing. This is
- * the launch check: every action the code charges for, what it costs right
- * now, and what happens to the ones that have no rule. Problems sort first.
- */
-export function PricingCoveragePanel({ refreshKey, onError }: { refreshKey: number; onError: (m: string) => void }) {
+export function PricingCoveragePanel({
+  refreshKey,
+  onError,
+  onLoaded,
+}: {
+  refreshKey: number;
+  onError: (m: string) => void;
+  onLoaded?: (coverage: PricingCoverage) => void;
+}) {
   const { t } = useI18n();
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,13 +67,15 @@ export function PricingCoveragePanel({ refreshKey, onError }: { refreshKey: numb
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setCoverage(await api.get<PricingCoverage>('/admin/pricing/coverage'));
+      const next = await api.get<PricingCoverage>('/admin/pricing/coverage');
+      setCoverage(next);
+      onLoaded?.(next);
     } catch (e) {
       onError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [onError]);
+  }, [onError, onLoaded]);
 
   useEffect(() => {
     void load();

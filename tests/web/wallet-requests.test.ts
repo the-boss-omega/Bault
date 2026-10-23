@@ -14,16 +14,6 @@ import {
 } from '../../apps/web/src/shared/walletRequests';
 import { reviewerActions } from '../../apps/web/src/areas/admin/WalletRequestsSection';
 
-/**
- * Wallet cash-in / cash-out request rules, as the SPA applies them.
- *
- * The API enforces every one of these again — nothing here is a security
- * boundary. What these tests protect is that the form tells the user the SAME
- * rule the server will apply, so a submission is never refused for a reason the
- * interface had already accepted.
- */
-
-/** A minimal request row, overridable per case. */
 function request(overrides: Partial<WalletRequest> = {}): WalletRequest {
   return {
     id: 'r1',
@@ -70,7 +60,6 @@ describe('wallet request lifecycle', () => {
   it('lets the requester cancel only before a decision is made', () => {
     expect(canCancel('submitted')).toBe(true);
     expect(canCancel('pending_review')).toBe(true);
-    // Once approved, the request is the reviewer's to finish or reject.
     expect(canCancel('approved')).toBe(false);
     expect(canCancel('processing')).toBe(false);
     expect(canCancel('completed')).toBe(false);
@@ -132,7 +121,6 @@ describe('wallet request validation', () => {
     expect(validateDraft({ ...cashIn, amountMinor: maxMinor + 1 })[0]?.messageKey).toBe(
       'wallet.request.error.amountAboveMax',
     );
-    // The bounds themselves are inclusive.
     expect(validateDraft({ ...cashIn, amountMinor: minMinor })).toHaveLength(0);
     expect(validateDraft({ ...cashIn, amountMinor: maxMinor })).toHaveLength(0);
   });
@@ -140,7 +128,6 @@ describe('wallet request validation', () => {
   it('refuses a cash-out larger than the available balance', () => {
     const problems = validateDraft({ ...cashOut, amountMinor: 30_000, availableMinor: 25_000 });
     expect(problems[0]?.messageKey).toBe('wallet.request.error.overBalance');
-    // Equal to the balance is fine — a user may cash out everything.
     expect(validateDraft({ ...cashOut, amountMinor: 25_000, availableMinor: 25_000 })).toHaveLength(0);
   });
 
@@ -193,12 +180,9 @@ describe('duplicate submission prevention', () => {
   });
 
   it('treats a different reference as a different transfer', () => {
-    // Two $250 pay-ins against two different wires are two real requests.
     const open = [request({ reference: 'wire-8842-A' })];
     expect(findOpenDuplicate(open, { ...draft, reference: 'wire-8843-B' })).toBeNull();
-    // The same reference twice is the double-click this guard exists for.
     expect(findOpenDuplicate(open, { ...draft, reference: 'wire-8842-A' })?.code).toBe('WR-ABCD1234');
-    // Whitespace-only is no reference at all, and matches the no-reference row.
     expect(findOpenDuplicate([request()], { ...draft, reference: '   ' })?.code).toBe('WR-ABCD1234');
   });
 

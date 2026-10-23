@@ -6,17 +6,6 @@ import {
   type WithdrawalFacts,
 } from '../../apps/api/src/modules/adm/reconciliation';
 
-/**
- * The reconciliation rules, one fact pattern at a time (N40).
- *
- * The integration suite proves the report against a live database, but the
- * live API cannot be made to produce most of the faults it exists to find —
- * a payment the provider took with no credit behind it, a credit minted for a
- * payment that failed — because the code paths that would produce them are
- * the ones the P0 fixes closed. So the rules are pinned here, on the pure
- * function the service feeds, where every pattern can be written down.
- */
-
 const AT = '2026-10-15T12:00:00.000Z';
 
 function topup(over: Partial<TopupFacts> = {}): TopupFacts {
@@ -60,6 +49,8 @@ function withdrawal(over: Partial<WithdrawalFacts> = {}): WithdrawalFacts {
     walletRequestId: 'wr-1',
     payoutRef: 'sbx_payout_wallet_request:wr-1',
     feeMinor: 700,
+    debitedMinor: 20_000,
+    reversedMinor: 0,
     ...over,
   };
 }
@@ -169,6 +160,38 @@ describe('money out', () => {
     expect(kinds(run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal()] }))).toEqual([
       'payout_failed_but_debited',
     ]);
+  });
+
+  it('matches a refused payout whose debit was credited back in full', () => {
+    const r = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal({ reversedMinor: 20_000 })] });
+    expect(r.mismatches).toEqual([]);
+    expect(r.matched).toBe(1);
+
+    const net = withdrawal({ amount: 19_300, feeMinor: 0, debitedMinor: 20_000, reversedMinor: 20_000 });
+    const flow = run({ payouts: [payout({ status: 'failed' })], withdrawals: [net] });
+    expect(flow.mismatches).toEqual([]);
+    expect(flow.matched).toBe(1);
+  });
+
+  it('treats a payout taken back after it was paid like a refusal', () => {
+    const net = withdrawal({ amount: 19_300, feeMinor: 0, debitedMinor: 20_000 });
+    const back = run({ payouts: [payout({ status: 'reversed' })], withdrawals: [{ ...net, reversedMinor: 20_000 }] });
+    expect(back.mismatches).toEqual([]);
+    expect(back.matched).toBe(1);
+
+    const kept = run({ payouts: [payout({ status: 'reversed' })], withdrawals: [net] });
+    expect(kinds(kept)).toEqual(['payout_failed_but_debited']);
+    expect(kept.mismatches[0]).toMatchObject({ recordedMinor: 20_000 });
+  });
+
+  it('still reports a refused payout whose debit was not credited back, or only in part', () => {
+    const none = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal()] });
+    expect(kinds(none)).toEqual(['payout_failed_but_debited']);
+    expect(none.mismatches[0]).toMatchObject({ expectedMinor: 0, recordedMinor: 20_000 });
+
+    const part = run({ payouts: [payout({ status: 'failed' })], withdrawals: [withdrawal({ reversedMinor: 19_300 })] });
+    expect(kinds(part)).toEqual(['payout_failed_but_debited']);
+    expect(part.mismatches[0]).toMatchObject({ expectedMinor: 0, recordedMinor: 700 });
   });
 
   it('lists a debited payout the provider has not confirmed as unresolved', () => {

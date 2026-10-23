@@ -1,19 +1,14 @@
-/**
- * Job name constants (T019). Centralizes pg-boss queue names so producers (the
- * API, via pg-boss) and consumers (worker jobs added in later phases) agree on
- * one string. Each name maps to a scheduled/queued job registered in index.ts.
- */
 export const JobName = {
-  OUTBOX_DISPATCH: 'outbox.dispatch', // T128
-  STORAGE_FEE_RUN: 'storage-fee.run', // T120
-  INTEREST_ACCRUAL: 'interest.accrual', // T069
-  WALLET_SUSPENSION: 'wallet.suspension-sweep', // debt threshold → suspend / reinstate
-  TRACKING_REFRESH: 'shipment.tracking-refresh', // T107
-  LEDGER_INVARIANT_CHECK: 'ledger.invariant-check', // T070
-  IMAGE_SYNC: 'image.sync', // T133
-  SHIPMENT_EXPIRY: 'shipment.expiry-sweep', // unpaid shipments release their items
-  MEMBERSHIP_RENEWAL: 'membership.renewal', // a cycle ends: renew and charge, or end it
-  SESSION_CLEANUP: 'session.cleanup', // sign-in sessions a month past their expiry are deleted
+  OUTBOX_DISPATCH: 'outbox.dispatch',
+  STORAGE_FEE_RUN: 'storage-fee.run',
+  INTEREST_ACCRUAL: 'interest.accrual',
+  WALLET_SUSPENSION: 'wallet.suspension-sweep',
+  TRACKING_REFRESH: 'shipment.tracking-refresh',
+  LEDGER_INVARIANT_CHECK: 'ledger.invariant-check',
+  IMAGE_SYNC: 'image.sync',
+  SHIPMENT_EXPIRY: 'shipment.expiry-sweep',
+  MEMBERSHIP_RENEWAL: 'membership.renewal',
+  SESSION_CLEANUP: 'session.cleanup',
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];

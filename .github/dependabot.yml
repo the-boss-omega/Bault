@@ -1,13 +1,5 @@
-# Dependency updates, weekly, as pull requests that go through CI like any other.
-#
-# Every workflow action is pinned to a commit SHA and every image to a tag, which
-# is what makes them safe and also what freezes them: nothing moves unless
-# somebody moves it. This is the somebody. Minor and patch updates are grouped
-# so a week's worth arrives as one PR per ecosystem; a major version is its own
-# PR, because that is the one that can change behaviour.
 version: 2
 updates:
-  # The pnpm workspace: one lockfile at the root covers every package.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -18,12 +10,12 @@ updates:
       npm-minor-and-patch:
         update-types: [minor, patch]
 
-  # FROM lines in the three images.
   - package-ecosystem: docker
     directories:
       - /apps/api
       - /apps/worker
       - /apps/web
+      - /infra/minio
     schedule:
       interval: weekly
       day: monday
@@ -31,13 +23,18 @@ updates:
       docker-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Node's major version follows `engines` in package.json, which is a
-      # decision, not an update.
       - dependency-name: node
         update-types: [version-update:semver-major]
 
-  # The actions in .github/workflows. Dependabot rewrites the SHA and the
-  # version comment together.
+  - package-ecosystem: docker-compose
+    directory: /infra/production
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      compose-minor-and-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

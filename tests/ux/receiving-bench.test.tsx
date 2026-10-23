@@ -2,19 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The receiving bench as an operator works it.
- *
- * Three defects, all the same shape — the product described the work instead of
- * fitting it:
- *
- *   1. Parcels and intake were TWO TABS for one piece of work. "Book contents"
- *      switched tabs, and the box was closed out on the far side.
- *   2. Arrivals were booked in ONE AT A TIME, so the facility and carrier were
- *      re-entered for every box a courier dropped.
- *   3. NOTHING could be photographed — no route in the API accepted image bytes.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 
@@ -99,11 +86,6 @@ beforeEach(() => {
 
 describe('one bench, not two tabs', () => {
   it('shows receiving, the queue and the intake bench on the same screen', async () => {
-    /**
-     * The split cut one piece of work in half. An operator emptying a box moved
-     * between two tabs to do it, and the count of what had come out was visible
-     * on one of them at a time.
-     */
     renderConsole();
 
     await waitFor(() => expect(panel(/receive an arrival/i)).toBeInTheDocument());
@@ -119,7 +101,6 @@ describe('one bench, not two tabs', () => {
     const row = queueRow.closest('tr')!;
     await user.click(within(row).getByRole('button', { name: /book contents/i }));
 
-    // Still on the receiving tab, with the bench now naming that parcel.
     expect(window.location.hash).toContain('receiving');
     const bench = panel(/receive bench/i);
     await waitFor(() =>
@@ -128,9 +109,6 @@ describe('one bench, not two tabs', () => {
   });
 
   it('keeps shelf work off the receiving bench', async () => {
-    // Relocate, hold, break-lot and disposal act on cards ALREADY on a shelf.
-    // They were on the intake tab only because that is where the scan fields
-    // happened to live, which made the bench a page of five unrelated forms.
     renderConsole();
     await waitFor(() => expect(panel(/receive bench/i)).toBeInTheDocument());
     expect(screen.queryByText(/move something that is already/i)).toBeNull();
@@ -141,17 +119,6 @@ describe('one bench, not two tabs', () => {
 });
 
 describe('booking in a box of different units', () => {
-  /**
-   * The rows are on the intake bench, not the parcel form, and the reason is
-   * what each piece of work actually is. Receiving a parcel is a scan and a
-   * label — one field's worth per box. A BOX holds a Rayquaza ex, a sealed pack
-   * and a graded Gold Star, each needing its own class, condition, serial and
-   * photographs.
-   *
-   * `quantity` used to stand in for this and could not: it books N copies of ONE
-   * description, which is right for a run of identical commons and wrong for
-   * everything else.
-   */
   it('has no quantity stepper', async () => {
     renderConsole();
     const bench = await waitFor(() => panel(/receive bench/i));
@@ -166,7 +133,6 @@ describe('booking in a box of different units', () => {
     const bench = await waitFor(() => panel(/receive bench/i));
     await user.click(within(bench).getByRole('button', { name: /another unit/i }));
 
-    // Two units, one owner and one stow control.
     expect(within(bench).getAllByLabelText(/description/i)).toHaveLength(2);
     expect(within(bench).getAllByLabelText(/owner username/i)).toHaveLength(1);
     expect(within(bench).getAllByLabelText(/where it goes|stow/i).length).toBeGreaterThan(0);
@@ -184,7 +150,6 @@ describe('booking in a box of different units', () => {
     await user.type(descriptions[0]!, 'Rayquaza ex 97/97');
     await user.type(descriptions[1]!, 'Rayquaza Gold Star 107/107');
 
-    // Each row carries its own class.
     const classes = within(bench).getAllByLabelText(/type \/ class/i);
     await user.selectOptions(classes[1]!, 'graded_slab');
 
@@ -197,9 +162,7 @@ describe('booking in a box of different units', () => {
     expect(sent).toHaveLength(2);
     expect(sent.map((u) => u.description)).toEqual(['Rayquaza ex 97/97', 'Rayquaza Gold Star 107/107']);
     expect(sent.map((u) => u.typeClass)).toEqual(['trading_card', 'graded_slab']);
-    // The shared answers are copied onto every unit rather than asked twice.
     expect(sent.every((u) => u.ownerUsername === 'red' && u.autoStow === true)).toBe(true);
-    // And nothing sends a quantity any more.
     expect(sent.every((u) => u.quantity === undefined)).toBe(true);
   });
 
@@ -228,8 +191,6 @@ describe('booking in a box of different units', () => {
   });
 
   it('offers the lot box only while there is one unit', async () => {
-    // A lot is ONE record standing for many things, so it cannot describe a
-    // submission of several — hidden rather than offered and then ignored.
     const user = userEvent.setup();
     renderConsole();
 
@@ -254,7 +215,6 @@ describe('booking in one parcel', () => {
     await user.type(within(receiving).getByLabelText(/username on the parcel/i), 'red');
     await user.click(within(receiving).getByRole('button', { name: /^receive parcel$/i }));
 
-    // Still the batch route, with one entry — that is what makes it atomic.
     const [, body] = post.mock.calls.find(([p]) => p === '/parcels/receive/batch')!;
     expect((body as { parcels: unknown[] }).parcels).toHaveLength(1);
   });
@@ -267,11 +227,9 @@ describe('booking in one parcel', () => {
 });
 
 describe('photographs', () => {
-  /** jsdom has no camera; a File is what the picker would hand over. */
   const file = () => new File([new Uint8Array([1, 2, 3])], 'box.png', { type: 'image/png' });
 
   beforeEach(() => {
-    // jsdom implements neither, and both are used to preview a chosen file.
     if (!URL.createObjectURL) {
       Object.defineProperty(URL, 'createObjectURL', { value: () => 'blob:preview', writable: true });
       Object.defineProperty(URL, 'revokeObjectURL', { value: () => {}, writable: true });
@@ -279,12 +237,6 @@ describe('photographs', () => {
   });
 
   it('uploads on selection and holds the key, never the bytes', async () => {
-    /**
-     * Two steps, matching the API: bytes go to `/media/uploads` and the form
-     * sends the KEY with whatever it is creating. Uploading immediately is what
-     * lets an operator photograph a box while they are still typing its tracking
-     * number.
-     */
     const user = userEvent.setup();
     post.mockResolvedValue({ objectKey: 'parcels/2026/09/abc.png' });
     const onChange = vi.fn();
@@ -315,8 +267,6 @@ describe('photographs', () => {
       </I18nProvider>,
     );
     const input = document.querySelector('input[type="file"]')!;
-    // The whole point at a receiving bench: the alternative is a picker pointed
-    // at a photo somebody has to take in another app first.
     expect(input).toHaveAttribute('capture', 'environment');
     expect(input).toHaveAttribute('accept', expect.stringContaining('image/'));
   });
@@ -359,7 +309,6 @@ describe('photographs', () => {
     renderConsole();
 
     const bench = await waitFor(() => panel(/receive bench/i));
-    // The bench offers the control at all — it did not exist.
     expect(within(bench).getAllByText(/item photos/i).length).toBeGreaterThan(0);
 
     post.mockResolvedValue({ objectKey: 'intake/2026/09/xyz.png' });
@@ -380,12 +329,6 @@ describe('photographs', () => {
 });
 
 describe('the labels an intake produces', () => {
-  /**
-   * Every unit needs a label stuck on it before it goes to its shelf, and the
-   * barcode is what every later scan reads — the shelf scan, the pick, the
-   * dispatch. So the print control is the last thing on the bench rather than
-   * something to go and find afterwards.
-   */
   it('shows a label per unit, with one control that prints the whole run', async () => {
     const user = userEvent.setup();
     renderConsole();
@@ -403,12 +346,9 @@ describe('the labels an intake produces', () => {
     ]);
     await user.click(within(bench).getByRole('button', { name: /book in 2 units/i }));
 
-    // One label each…
     await waitFor(() => expect(screen.getByText(/labels for what you just booked in/i)).toBeInTheDocument());
     expect(within(bench).getAllByRole('button', { name: /print the barcode/i })).toHaveLength(2);
 
-    // …and one control for the run, which is what stops twelve units meaning
-    // twelve trips to the print dialog.
     expect(within(bench).getByRole('button', { name: /print all 2 labels/i })).toBeInTheDocument();
   });
 
@@ -421,13 +361,6 @@ describe('the labels an intake produces', () => {
 });
 
 describe('when there is nowhere to put it', () => {
-  /**
-   * The directed stow refuses for exactly two reasons — no shelving of the kind
-   * this run needs, or none in this building — and both of them used to end the
-   * run. The operator stood at an open box reading "create one before stowing
-   * this", with the form that does it on another tab: leave the bench, lose the
-   * units already typed into it, come back and start the box again.
-   */
   it('offers the shelf form at the refusal, and asks again once one exists', async () => {
     const user = userEvent.setup();
     let shelfExists = false;
@@ -452,12 +385,9 @@ describe('when there is nowhere to put it', () => {
     await user.type(within(bench).getByLabelText(/zone for the new shelf/i), 'C-2');
     await user.click(within(bench).getByRole('button', { name: /create a shelf here/i }));
 
-    // The kind and the building are taken from the run, not asked for again:
-    // they are the two facts that just failed to match.
     const [, body] = post.mock.calls.find(([p]) => p === '/custody/bins')!;
     expect(body).toMatchObject({ zone: 'C-2', oversized: false });
 
-    // And the answer comes back from where it always does, not from the create.
     await waitFor(() => expect(within(bench).getByText('BIN-NEWSHELF')).toBeInTheDocument());
     expect(within(bench).queryByLabelText(/zone for the new shelf/i)).toBeNull();
   });

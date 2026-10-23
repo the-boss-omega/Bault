@@ -14,15 +14,6 @@ import {
   createStorageAdapter,
 } from '@bault/adapters';
 
-/**
- * Which adapter a process gets for a configuration (E17, F039).
- *
- * The API chose its adapters from config in `adapters.module.ts`; the worker
- * did not choose at all — its tracking job built `new SandboxShippingAdapter()`
- * itself. The choice now lives in one place both processes call, so "what does
- * SHIPPING_PROVIDER=easypost give me" has one answer, and the production
- * refusals stand in front of the worker as well as the API.
- */
 const base = {
   NODE_ENV: 'development' as const,
   SHIPPING_PROVIDER: 'sandbox' as const,

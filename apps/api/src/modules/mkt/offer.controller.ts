@@ -14,7 +14,6 @@ class RespondDto {
   @IsOptional() @IsInt() @IsPositive() amount?: number;
 }
 
-/** MKT offers (T085). */
 @ApiTags('MKT')
 @Controller('marketplace')
 export class OfferController {

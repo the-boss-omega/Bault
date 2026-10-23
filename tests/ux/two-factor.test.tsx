@@ -2,15 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * Two-factor sign-in, as a person meets it: the second step at sign-in, the
- * account-security screen that enrols, the screen a member of staff is held on
- * until they have, and the administrator's reset.
- *
- * `api` is mocked at the module boundary, as in `auth.test.tsx`: the contract
- * pinned is "call the API this way, render what comes back".
- */
-
 const post = vi.fn();
 const get = vi.fn();
 const patch = vi.fn();
@@ -40,10 +31,6 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 }));
 
 const { SignInPage } = await import('../../apps/web/src/areas/customer/auth/SignInPage');
-// New screens, imported where they are used so the cases about the screens that
-// already existed fail on what they assert, not on a missing module.
-// (`@vite-ignore` with the path in a variable: Vite otherwise resolves a dynamic
-// import while transforming the file, which fails the whole file just the same.)
 const lazy = <T,>(path: string) => import(/* @vite-ignore */ path) as Promise<T>;
 const panel = () =>
   lazy<typeof import('../../apps/web/src/areas/customer/profile/TwoFactorPanel')>(
@@ -78,15 +65,10 @@ async function reachSecondStep(user: ReturnType<typeof userEvent.setup>, onSigne
   return onSignedIn;
 }
 
-/* ============================================================
-   The second step
-   ============================================================ */
-
 describe('signing in with a second factor', () => {
   it('asks for the code after a right password, and signs in with the challenge and the code', async () => {
     const user = userEvent.setup();
     const onSignedIn = await reachSecondStep(user);
-    // The password step did not sign anybody in.
     expect(onSignedIn).not.toHaveBeenCalled();
     expect(document.querySelector('input[type="password"]')).toBeNull();
 
@@ -124,7 +106,6 @@ describe('signing in with a second factor', () => {
     await user.type(code, '000000');
     await user.click(screen.getByRole('button', { name: /^verify$/i }));
     expect(await screen.findByText(/that code is not right/i)).toBeInTheDocument();
-    // Still on the second step: a mistyped code is not a reason to retype the password.
     expect(screen.getByRole('heading', { name: /two-factor sign-in/i })).toBeInTheDocument();
 
     post.mockRejectedValueOnce(new MockApiError('unauthenticated', 401, 'expired', 'mfa_challenge_expired'));
@@ -135,10 +116,6 @@ describe('signing in with a second factor', () => {
     expect(document.querySelector('input[type="password"]')).not.toBeNull();
   });
 });
-
-/* ============================================================
-   Account security
-   ============================================================ */
 
 const OFF = { enabled: false, pending: false, required: false, recoveryCodesRemaining: 0 };
 const CODES = Array.from({ length: 10 }, (_, i) => `aaaa-bbbb-${String(i).padStart(4, '0')}`);
@@ -163,7 +140,6 @@ describe('the account-security screen', () => {
     expect(screen.getByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/code from your authenticator app/i), '654321');
-    // The password too: a session alone must not be enough to enrol a phone.
     const turnOn = screen.getByRole('button', { name: /^turn on$/i });
     expect(turnOn).toBeDisabled();
     await user.type(screen.getByLabelText(/^password$/i), 'hunter22');
@@ -172,7 +148,6 @@ describe('the account-security screen', () => {
     await user.click(turnOn);
     expect(post).toHaveBeenLastCalledWith('/auth/mfa/confirm', { code: '654321', password: 'hunter22' });
 
-    // Every code, and a step that cannot be skipped by accident.
     expect(await screen.findByRole('heading', { name: /save your recovery codes/i })).toBeInTheDocument();
     for (const c of CODES) expect(screen.getByText(c)).toBeInTheDocument();
     const done = screen.getByRole('button', { name: /^done$/i });
@@ -181,7 +156,6 @@ describe('the account-security screen', () => {
     expect(done).toBeEnabled();
     await user.click(done);
 
-    // Gone from the screen, and not coming back.
     await waitFor(() => expect(screen.queryByText(CODES[0]!)).not.toBeInTheDocument());
     expect(await screen.findByText(/recovery codes left: 10/i)).toBeInTheDocument();
   });
@@ -224,10 +198,6 @@ describe('the account-security screen', () => {
   });
 });
 
-/* ============================================================
-   Staff who must enrol
-   ============================================================ */
-
 describe('a member of staff who has not enrolled', () => {
   it('is told why, can enrol from there, and can always sign out', async () => {
     const user = userEvent.setup();
@@ -262,15 +232,10 @@ describe('the app shell', () => {
 
     expect(await screen.findByRole('heading', { name: /set up two-factor sign-in to continue/i })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /set up two-factor sign-in/i })).toBeInTheDocument();
-    // Every one of these would have been refused with `mfa_enrollment_required`.
     const asked = get.mock.calls.map((c) => c[0]);
     expect(asked.filter((p) => p !== '/me/profile' && p !== '/auth/mfa')).toEqual([]);
   });
 });
-
-/* ============================================================
-   The administrator's reset
-   ============================================================ */
 
 const USERS = [
   { id: 'me', email: 'eldar@bault.dev', username: 'eldar', firstName: 'Eldar', lastName: 'A', nameReviewRequired: false, role: 'admin', status: 'active', intakeId: null, mfaEnabled: true },
@@ -295,7 +260,6 @@ describe("resetting somebody else's second factor", () => {
     renderIn(<AdminConsole currentUserId="me" />);
 
     const buttons = await screen.findAllByRole('button', { name: /reset two-factor/i });
-    // Hermon only: not the administrator's own row, not an account without it.
     expect(buttons).toHaveLength(1);
     expect(buttons[0]!.closest('tr')).toHaveTextContent('hermon@bault.dev');
 
@@ -309,10 +273,6 @@ describe("resetting somebody else's second factor", () => {
     expect(await screen.findByText(/sessions ended: 2/i)).toBeInTheDocument();
   });
 });
-
-/* ============================================================
-   The sign-in log
-   ============================================================ */
 
 describe('the sign-in log', () => {
   it('names the two-step outcomes', async () => {

@@ -1,21 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Client, SEED, SEED_USERNAME, fixtureEmail, signIn, usernameOf } from './helpers/http';
+import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
-/**
- * User identity after the identity pass (Requirements 3 & 4).
- *
- * Three properties, each enforced at more than one layer, each checked here at
- * the layer a user actually meets — the HTTP API:
- *
- *   - a USERNAME is unique, permanent, and cannot be reassigned;
- *   - a person's name is FIRST + LAST, validated, with no display name anywhere;
- *   - the INTAKE ID is gone from every customer-facing response, while remaining
- *     visible to an administrator and still usable for a pre-printed label.
- *
- * Requires a running API + seeded DB.
- */
-
-/** Register a fresh, valid account and return the response. */
 async function register(client: Client, overrides: Record<string, unknown> = {}) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   return client.post('/auth/register', {
@@ -24,8 +10,7 @@ async function register(client: Client, overrides: Record<string, unknown> = {})
     firstName: 'Ada',
     lastName: 'Lovelace',
     password: 'password123',
-    // A valid registration accepts the terms in force (E21, acc-consent.test.ts).
-    acceptedTermsVersion: '2026-10-draft-1',
+    acceptedTermsVersion: CURRENT_TERMS_VERSION,
     ...overrides,
   });
 }
@@ -35,7 +20,6 @@ describe('ACC username: unique, permanent, protected', () => {
     const res = await register(new Client());
     expect(res.status).toBe(201);
     expect(res.body.username).toBeTruthy();
-    // No intake ID is issued any more.
     expect(res.body.intakeId).toBeUndefined();
   });
 
@@ -46,8 +30,6 @@ describe('ACC username: unique, permanent, protected', () => {
   });
 
   it('rejects a duplicate regardless of the case typed', async () => {
-    // Normalization is what makes the unique index an index over what people
-    // can type: "RED" and "red" are the same account, not two.
     const res = await register(new Client(), { username: SEED_USERNAME.collector.toUpperCase() });
     expect(res.status).toBe(400);
   });
@@ -69,8 +51,6 @@ describe('ACC username: unique, permanent, protected', () => {
   it('offers no way to change a username, on any surface', async () => {
     const collector = await signIn(SEED.collector);
 
-    // The profile patch whitelists the name parts only, and the global
-    // ValidationPipe runs with forbidNonWhitelisted.
     const own = await collector.patch('/me/profile', {
       firstName: 'Red',
       lastName: 'Ashwood',
@@ -78,14 +58,12 @@ describe('ACC username: unique, permanent, protected', () => {
     });
     expect(own.status).toBe(400);
 
-    // Nor can an administrator reassign one.
     const admin = await signIn(SEED.admin);
     const users = (await admin.get('/admin/users')).body as { id: string; username: string }[];
     const target = users.find((u) => u.username === SEED_USERNAME.collector)!;
     const patched = await admin.patch(`/admin/users/${target.id}`, { username: 'reassigned' });
     expect(patched.status).toBe(400);
 
-    // And the username is unchanged after both attempts.
     expect(await usernameOf(SEED.collector)).toBe(SEED_USERNAME.collector);
   });
 });
@@ -118,7 +96,6 @@ describe('ACC name: first and last, never a display name', () => {
     expect(updated.status).toBe(200);
     expect(updated.body.fullName).toBe('Golden Marsh');
 
-    // Normalized on the way in: extra whitespace does not survive.
     const messy = await collector.patch('/me/profile', { firstName: '  Golden  ', lastName: ' Marsh ' });
     expect(messy.body.firstName).toBe('Golden');
     expect(messy.body.lastName).toBe('Marsh');
@@ -141,9 +118,6 @@ describe('ACC name: first and last, never a display name', () => {
 
 describe('ACC migrated accounts', () => {
   it('keeps a flagged legacy account signed in and usable', async () => {
-    // The seeded `veteran` reproduces what migration 0004 leaves behind when a
-    // single display name cannot be split without guessing: the whole string is
-    // the first name, there is no last name, and the row is flagged.
     const client = await signIn(SEED.collector3);
     const me = (await client.get('/me/profile')).body as Record<string, unknown>;
 
@@ -151,7 +125,6 @@ describe('ACC migrated accounts', () => {
     expect(me.firstName).toBe('Ana Maria van der Berg');
     expect(me.lastName).toBeNull();
     expect(me.nameReviewRequired).toBe(true);
-    // Nothing was invented: the full name is the first name, not a guess.
     expect(me.fullName).toBe('Ana Maria van der Berg');
   });
 
@@ -163,12 +136,6 @@ describe('ACC migrated accounts', () => {
     expect(Object.keys(veteran)).toContain('nameReviewRequired');
   });
 
-  /**
-   * CONSUMES the flagged fixture: confirming the name is what clears the flag,
-   * and there is no endpoint that sets it again (only the migration does). It is
-   * ordered last in this block for that reason, and the suite is documented as
-   * running against a freshly seeded database — see `helpers/http.ts`.
-   */
   it('clears the review flag when the owner confirms a real split', async () => {
     const client = await signIn(SEED.collector3);
     const before = (await client.get('/me/profile')).body as { nameReviewRequired: boolean };
@@ -177,7 +144,6 @@ describe('ACC migrated accounts', () => {
     const updated = await client.patch('/me/profile', { firstName: 'Ana Maria', lastName: 'van der Berg' });
     expect(updated.status).toBe(200);
     expect(updated.body.nameReviewRequired).toBe(false);
-    // The split the OWNER supplied, not one the system guessed.
     expect(updated.body.firstName).toBe('Ana Maria');
     expect(updated.body.lastName).toBe('van der Berg');
     expect(updated.body.fullName).toBe('Ana Maria van der Berg');
@@ -200,8 +166,6 @@ describe('ACC intake ID is retired from user-facing workflows', () => {
   it('remains visible to an administrator for troubleshooting', async () => {
     const admin = await signIn(SEED.admin);
     const users = (await admin.get('/admin/users')).body as Record<string, unknown>[];
-    // The key exists on the admin surface; most accounts now have null there,
-    // and the seeded legacy account still carries its historical OW- code.
     expect(Object.keys(users[0]!)).toContain('intakeId');
     const veteran = users.find((u) => u.username === SEED_USERNAME.collector3)!;
     expect(String(veteran.intakeId)).toMatch(/^OW-/);

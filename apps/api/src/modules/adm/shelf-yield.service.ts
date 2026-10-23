@@ -8,28 +8,6 @@ import { listing } from '../mkt/mkt.schema';
 import { userAccount } from '../acc/acc.schema';
 import { facility } from '../inv/facility.schema';
 
-/**
- * Shelf Yield — what a shelf earns, and what it is being used for instead.
- *
- * The other half of the engine behind Break-Even Watch. That one is pointed at
- * the collector and answers "is this card worth keeping"; this one is pointed at
- * the operator and answers "is this SHELF worth what it holds". Same charges,
- * same custody trail, different unit and different audience.
- *
- * Nobody in this industry measures it, and the reason is structural: the metric
- * only becomes actionable if you are willing to tell a customer to take a card
- * away, and a vault whose whole business model is storage will never do that. It
- * is exactly because Bault's exits are billable — sale, cull, ship-home — that
- * an empty shelf is worth more to it than a full unprofitable one.
- *
- * WHAT THIS IS NOT. It is REVENUE per shelf-month, never margin. Bault's costs —
- * rent, labour, insurance — are not in this database, and a "profit per shelf"
- * figure computed without them would be a confident number about something
- * nobody measured. The operator knows their own cost per slot; this supplies the
- * half they cannot compute, and stops there.
- */
-
-/** One shelf, what sits on it, and what it has earned. */
 export interface ShelfYieldRow {
   binId: string;
   serialNumber: string;
@@ -38,18 +16,13 @@ export interface ShelfYieldRow {
   oversized: boolean;
   active: boolean;
   itemCount: number;
-  /** Occupancy: items × days held, the denominator of the yield. */
   slotDays: number;
   revenueMinor: number;
-  /** Revenue per item-month of occupancy. Null when nothing has sat here yet. */
   revenuePerSlotMonthMinor: number | null;
-  /** Items that have earned nothing at all since they were shelved. */
   deadItemCount: number;
-  /** The longest an item has sat on this shelf, in days. */
   oldestItemDays: number | null;
 }
 
-/** One account, and whether the shelving it occupies pays for itself. */
 export interface CustomerYieldRow {
   userId: string;
   username: string;
@@ -60,6 +33,8 @@ export interface CustomerYieldRow {
   deadItemCount: number;
 }
 
+const SHELVED: Array<'stored' | 'listed' | 'on-hold'> = ['stored', 'listed', 'on-hold'];
+
 const MS_PER_DAY = 86_400_000;
 const DAYS_PER_MONTH = 30;
 
@@ -67,21 +42,6 @@ const DAYS_PER_MONTH = 30;
 export class ShelfYieldService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  /**
-   * Every penny an item has earned, from BOTH places revenue is recorded.
-   *
-   * This is the part that had to be built before any yield number could be
-   * trusted, and it is not a detail. The `charge` table holds intake, storage,
-   * services and shipping, each keyed to the item. It does NOT hold the
-   * marketplace commission: a sale writes no charge row at all, only a
-   * `ledger_record` of type `fee` pointing at the LISTING. A yield computed from
-   * charges alone would therefore report zero revenue for every card that
-   * actually sold — scoring the most profitable shelves in the building as the
-   * deadest.
-   *
-   * So commission is joined back through `listing.item_id`, and the two sources
-   * are summed per item.
-   */
   private async revenueByItem(itemIds: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     if (itemIds.length === 0) return out;
@@ -95,7 +55,6 @@ export class ShelfYieldService {
       out.set(row.referenceId, (out.get(row.referenceId) ?? 0) + (row.amount ?? 0));
     }
 
-    // The commission, recovered through the listing it was charged against.
     const fees = await this.db
       .select({ itemId: listing.itemId, amount: ledgerRecord.amount })
       .from(ledgerRecord)
@@ -114,18 +73,6 @@ export class ShelfYieldService {
     return out;
   }
 
-  /**
-   * How long each item has been sitting where it is now.
-   *
-   * From the transfer ledger, not from `receivedAt`: a card that arrived a year
-   * ago and moved shelf last week has occupied THIS shelf for a week, and
-   * charging the year to it would make every recently-reorganised zone look
-   * catastrophic. The first shelving is itself a transfer row, so an item that
-   * has never moved is covered by the same query.
-   *
-   * `receivedAt` is the fallback for anything booked in before the transfer
-   * ledger existed.
-   */
   private async slotDaysByItem(itemIds: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     if (itemIds.length === 0) return out;
@@ -140,8 +87,6 @@ export class ShelfYieldService {
       .where(inArray(binTransfer.itemId, itemIds))
       .groupBy(binTransfer.itemId, binTransfer.toBinId);
 
-    // An item may appear once per bin it has ever been on; the one that counts
-    // is its arrival on the bin it is on NOW, so keep the latest.
     const latest = new Map<string, Date>();
     for (const row of arrivals) {
       const at = new Date(row.arrivedAt);
@@ -161,10 +106,6 @@ export class ShelfYieldService {
     return Math.round((revenueMinor * DAYS_PER_MONTH) / slotDays);
   }
 
-  /**
-   * The shelves, worst yield last — the list an operator reads top-down to
-   * decide what to reclaim.
-   */
   async byShelf(): Promise<{ shelves: ShelfYieldRow[]; totals: Record<string, number> }> {
     const shelved = await this.db
       .select({
@@ -174,7 +115,7 @@ export class ShelfYieldService {
         receivedAt: item.receivedAt,
       })
       .from(item)
-      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, ['stored', 'listed', 'on-hold'])));
+      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, SHELVED), eq(item.lotBroken, false)));
 
     const ids = shelved.map((s) => s.itemId);
     const [revenue, slotDays, bins] = await Promise.all([
@@ -228,8 +169,6 @@ export class ShelfYieldService {
       };
     });
 
-    // Occupied shelves first, worst-earning at the top — an empty shelf is not a
-    // problem, it is capacity.
     shelves.sort((x, y) => {
       if (x.itemCount === 0 && y.itemCount === 0) return x.serialNumber.localeCompare(y.serialNumber);
       if (x.itemCount === 0) return 1;
@@ -252,7 +191,6 @@ export class ShelfYieldService {
     };
   }
 
-  /** The same numbers rolled up per zone — where to put the next rack. */
   async byZone() {
     const { shelves } = await this.byShelf();
     const acc = new Map<string, ShelfYieldRow[]>();
@@ -278,17 +216,6 @@ export class ShelfYieldService {
       .sort((a, b) => (a.revenuePerSlotMonthMinor ?? 0) - (b.revenuePerSlotMonthMinor ?? 0));
   }
 
-  /**
-   * Which accounts pay for the shelving they occupy, and which are carried.
-   *
-   * The uncomfortable number, and the one worth having: a collector with four
-   * hundred commons across four shelves earning $12 a year is subsidised by the
-   * one with six slabs earning $400. Neither is visible from a revenue total.
-   *
-   * Fixture accounts are excluded for the same reason the admin user list
-   * excludes them — they are machinery, and a yield table that ranks the test
-   * suite among its customers is unreadable.
-   */
   async byCustomer(): Promise<CustomerYieldRow[]> {
     const shelved = await this.db
       .select({
@@ -300,7 +227,7 @@ export class ShelfYieldService {
       })
       .from(item)
       .innerJoin(userAccount, eq(userAccount.id, item.ownerId))
-      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, ['stored', 'listed', 'on-hold'])));
+      .where(and(isNotNull(item.binId), inArray(item.lifecycleState, SHELVED), eq(item.lotBroken, false)));
 
     const real = shelved.filter((s) => !s.email.toLowerCase().endsWith('@fixture.bault.test'));
     const ids = real.map((s) => s.itemId);

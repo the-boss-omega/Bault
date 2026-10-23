@@ -4,27 +4,6 @@ import { ShipmentService, type QuotedRate } from '../../apps/api/src/modules/shp
 import { CARRIER_SERVICES, findService, type ParcelProfile } from '../../apps/api/src/modules/shp/carriers';
 import type { CustomsLine } from '../../apps/api/src/modules/shp/parcel-profile.service';
 
-/**
- * EasyPost's rates, through the catalogue, through `ShipmentService`.
- *
- * F062 / F068. The catalogue names services for people — "Ground Advantage",
- * "Priority Mail", "2Day" — and EasyPost names them for carriers:
- * `GroundAdvantage`, `Priority`, `FEDEX_2_DAY`. Rates were paired with the
- * catalogue by comparing the two strings exactly, so with
- * `SHIPPING_PROVIDER=easypost` every rate was dropped and a collector had no way
- * to ship anything. The adapter's own contract test could not see it, because
- * the adapter was right: the pairing happens in `shipment.service.ts`, so that
- * is what this drives.
- *
- * F069. The customs lines frozen on a shipment were never sent, so an
- * international label was bought with no customs information at all.
- *
- * The fetch stub answers with EasyPost's own response shape — rate objects as
- * the API returns them, with the services a test-mode account with USPS, FedEx
- * and UPS connected actually quotes. Whether a live EZTK account returns
- * exactly these codes is what the live check is for; see the report.
- */
-
 const NJ = {
   name: 'Bault New Jersey',
   line1: '12 Ferry Street',
@@ -56,7 +35,6 @@ function rate(id: string, carrier: string, service: string, amount: string, days
   };
 }
 
-/** A domestic shipment as `POST /v2/shipments` returns it. */
 const DOMESTIC = {
   id: 'shp_dom123',
   object: 'Shipment',
@@ -76,7 +54,6 @@ const DOMESTIC = {
   ],
 };
 
-/** An international one, to Japan. */
 const TO_JAPAN = {
   id: 'shp_jp456',
   object: 'Shipment',
@@ -99,11 +76,6 @@ function stubEasyPost(response: unknown) {
   });
 }
 
-/**
- * The real `ShipmentService`, with the real EasyPost adapter, and stand-ins for
- * the two things pricing reads from the database: the facility it ships from
- * and the handling fee.
- */
 function service(adapter: ShippingAdapter): ShipmentService {
   const db = { select: () => ({ from: () => ({ where: () => ({ limit: async () => [NJ] }) }) }) };
   const pricing = {
@@ -160,26 +132,20 @@ describe('EasyPost rates reach the collector (F062, F068)', () => {
     const byKey = new Map(quoted.map((q) => [q.serviceKey, q]));
     expect([...byKey.keys()].sort()).toEqual(['direct_overnight', 'fedex_2day', 'usps_ground', 'usps_priority']);
 
-    // Priced at EasyPost's figure, carrying EasyPost's handles for the purchase…
     expect(byKey.get('usps_ground')).toMatchObject({ costMinor: 607, providerShipmentId: 'shp_dom123', providerRateId: 'rate_usps_ga' });
     expect(byKey.get('usps_priority')).toMatchObject({ costMinor: 985, providerRateId: 'rate_usps_pri' });
     expect(byKey.get('fedex_2day')).toMatchObject({ costMinor: 2461, providerRateId: 'rate_fx_2day' });
-    // …and the overnight envelope buys next-morning when the account sells it.
     expect(byKey.get('direct_overnight')?.providerRateId).toBe('rate_fx_pri_on');
 
-    // Named the catalogue's way, because that is what a collector selects by and
-    // what the shipment stores; `findService` has to resolve every one of them.
     for (const q of quoted) {
       expect(findService(q.carrier, q.serviceLevel)?.key).toBe(q.serviceKey);
     }
 
-    // Something is offered, and "choose for me" has something to choose.
     expect(quoted.filter((q) => q.eligible).length).toBeGreaterThan(0);
     expect(quoted.some((q) => q.recommended)).toBe(true);
   });
 
   it('never pairs a service by resemblance', async () => {
-    // USPS Express is not Priority Mail, and FedEx Ground is not 2Day.
     stubEasyPost({
       ...DOMESTIC,
       rates: DOMESTIC.rates.filter((r) => ['Express', 'FEDEX_GROUND', 'Ground'].includes(r.service)),
@@ -214,8 +180,6 @@ describe('EasyPost rates reach the collector (F062, F068)', () => {
     );
     expect(quoted.map((q) => q.serviceKey)).toEqual(['fedex_intl_priority']);
     expect(quoted[0]).toMatchObject({ carrier: 'FedEx', serviceLevel: 'International Priority', providerRateId: 'rate_fx_ip' });
-    // ePacket and ePost have no confirmed EasyPost equivalent, so a USPS
-    // international rate is NOT passed off as either of them.
     expect(CARRIER_SERVICES.find((s) => s.key === 'epacket')?.easypost).toBeUndefined();
   });
 });

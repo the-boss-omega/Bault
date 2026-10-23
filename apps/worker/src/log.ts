@@ -1,22 +1,5 @@
 import { loadEnv } from '@bault/config';
 
-/**
- * The worker's log, in the API's format (step 15).
- *
- * The worker wrote bare `console.log` strings — `[job:storage-fee] billed 3
- * period(s)…` — with no level, no timestamp and nothing an aggregator could
- * filter on, so the one process that moves money unattended was the one whose
- * output could not be searched or alerted on. It now writes exactly the line the
- * API's `StructuredLogger` writes: `level`, `time`, `message`, `context`, then
- * the fields, as one JSON object per line — and, like the API, a single human
- * line in development, because a developer reading a terminal is a different
- * reader from a log pipeline.
- *
- * Mirrored BY VALUE from `apps/api/src/shared/observability/logger.ts`. The
- * worker is deliberately independent of the Nest container (it cannot import
- * the API), the same arrangement `notification-events.ts` has with the API's
- * event catalogue. Change the shape in both places or in neither.
- */
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 } as const;
 export type LogLevel = keyof typeof LEVELS;
 
@@ -35,11 +18,6 @@ export interface Logger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-/**
- * Read lazily, on the first line written, so the configuration is whatever the
- * process has by the time it actually logs — not whatever it had when this
- * module happened to be imported.
- */
 let settings: { threshold: number; json: boolean } | undefined;
 function resolved(): { threshold: number; json: boolean } {
   if (settings) return settings;
@@ -48,7 +26,6 @@ function resolved(): { threshold: number; json: boolean } {
   return settings;
 }
 
-/** An Error becomes its name, message and stack; JSON.stringify would make it `{}`. */
 function plain(value: unknown): unknown {
   if (value instanceof Error) {
     return { name: value.name, message: value.message, ...(value.stack ? { stack: value.stack } : {}) };

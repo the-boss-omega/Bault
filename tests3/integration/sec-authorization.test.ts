@@ -4,35 +4,7 @@ import { closeDb, sql } from '../../tests/integration/helpers/db';
 
 afterAll(closeDb);
 
-/**
- * The authorization matrix.
- *
- * Every other suite in this tree drives a flow from the side that is allowed to
- * drive it. This one does the opposite, because that is where the damage is: a
- * missing guard on a warehouse route is a customer relocating somebody else's
- * card, and a missing ownership check on a read route is one collector reading
- * another's vault.
- *
- * Three probes, applied systematically:
- *
- *   1. ANONYMOUS — no session at all. Everything that is not explicitly
- *      `@Public()` must refuse, and must refuse with 401 rather than 404 or 500.
- *   2. WRONG ROLE — a signed-in customer against staff-only routes, and a
- *      warehouse operator against admin-only routes. Must be 403.
- *   3. WRONG TENANT — a signed-in customer against another customer's own
- *      records. Must not return the record.
- *
- * The routes are listed literally rather than derived, so adding an endpoint
- * without adding it here is a visible omission rather than silent coverage.
- */
-
-/** Staff-only routes, by the method that reaches them. */
 const STAFF_ONLY: readonly [string, string][] = [
-  // NOTE: `/intake/vocabulary` is deliberately NOT here. It serves the item
-  // taxonomy to any signed-in caller, because a collector reading their own
-  // disposal list needs the same labels the operator picked from. Documented as
-  // such on DisposalController.
-
   ['GET', '/custody/bins'],
   ['GET', '/custody/bins/suggest'],
   ['GET', '/custody/bins/stowable'],
@@ -55,7 +27,6 @@ const STAFF_ONLY: readonly [string, string][] = [
   ['GET', '/marketplace/house/orders/queue'],
 ];
 
-/** Admin-only routes — a warehouse operator must not reach these either. */
 const ADMIN_ONLY: readonly [string, string][] = [
   ['GET', '/admin/users'],
   ['GET', '/admin/items'],
@@ -69,7 +40,6 @@ const ADMIN_ONLY: readonly [string, string][] = [
   ['POST', '/marketplace/house/listings'],
 ];
 
-/** Routes that must answer with no session at all. */
 const PUBLIC_ROUTES: readonly string[] = [
   '/content/shows',
   '/content/contact',
@@ -81,7 +51,6 @@ const PUBLIC_ROUTES: readonly string[] = [
   '/shipping/destinations/AU',
 ];
 
-/** Signed-in routes that belong to the caller and nobody else. */
 const OWNER_SCOPED: readonly string[] = [
   '/me/profile',
   '/me/addresses',
@@ -143,25 +112,10 @@ describe('anonymous access', () => {
     const unknown = await anon.post('/auth/password/reset-request', {
       email: 'definitely-not-here@fixture.bault.test',
     });
-    // Same status either way, or the endpoint is an account-existence oracle.
     expect(unknown.status).toBe(known.status);
   });
 
   it('hands the reset mail to the outbox and answers every address the same way (N11)', async () => {
-    /**
-     * The reset mail used to be sent INSIDE the request, and only for an address
-     * that had an account: a failing mail server answered 500 for registered
-     * addresses and 202 for everybody else, and the time the request took — a
-     * token row and a mail delivery, or neither — told the same story. Both are
-     * account-existence oracles.
-     *
-     * Now the request does the same thing for any address: it records that a
-     * reset was asked for, and the worker resolves the address and mails it
-     * later. So the evidence is in the outbox, for both addresses.
-     *
-     * Kept next to the test above and before the flood test at the end of this
-     * file: the reset route's budget is five a minute per address.
-     */
     const anon = new Client();
     const unknownEmail = `reset-n11-${Date.now()}@fixture.bault.test`;
     const known = await anon.post('/auth/password/reset-request', { email: SEED.collector });
@@ -179,8 +133,6 @@ describe('anonymous access', () => {
     expect(addresses.has(SEED.collector)).toBe(true);
     expect(addresses.has(unknownEmail)).toBe(true);
 
-    // Nothing in the outbox is a usable link: a reset token exists in clear only
-    // in the mail the worker sends, never in a row somebody could read.
     const payloads = await sql<{ payload: string }>(
       `SELECT payload::text AS payload FROM outbox_message WHERE event_type = 'password_reset_requested'`,
     );
@@ -273,7 +225,6 @@ describe('one customer against another customer', () => {
     const res = await other.get(`/parcels/${registered.body.id}`);
     expect([403, 404]).toContain(res.status);
 
-    // …but the operator, who has to handle it physically, can.
     const staff = await operator.get(`/parcels/${registered.body.id}`);
     expect(staff.status).toBe(200);
   });
@@ -288,9 +239,6 @@ describe('one customer against another customer', () => {
     const res = await other.post(`/me/parcels/${registered.body.id}/cancel`, {});
     expect(res.status).toBeGreaterThanOrEqual(400);
 
-    // And it is genuinely still there afterwards.
-    // `GET /parcels/:id` returns { parcel, events, items } — the record, its
-    // trail and what came out of it.
     const still = await collector.get(`/parcels/${registered.body.id}`);
     expect(still.status).toBe(200);
     expect(still.body.parcel.status).toBe('expected');
@@ -334,6 +282,7 @@ describe('one customer against another customer', () => {
       recipient: 'Somebody Else',
       line1: '1 Nowhere',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -362,6 +311,7 @@ describe('one customer against another customer', () => {
       recipient: 'Red Ashwood',
       line1: '12 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -374,8 +324,6 @@ describe('one customer against another customer', () => {
       itemIds: [theirItem.id],
       addressId: mine.body.id,
     });
-    // Golden owns the item but not the address; sending their own card to a
-    // stranger's saved address must not be expressible.
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 
@@ -386,6 +334,7 @@ describe('one customer against another customer', () => {
       recipient: 'Red Ashwood',
       line1: '9 Vine St',
       city: 'Trenton',
+      region: 'NJ',
       country: 'US',
       postalCode: '08608',
     });
@@ -409,13 +358,6 @@ describe('session handling', () => {
   });
 
   it('refuses the very cookie it issued, once that session has signed out (N12)', async () => {
-    /**
-     * The test above cannot tell a revoked session from a forgotten one: the
-     * logout response clears the cookie, the client stores the empty value, and
-     * the next request goes out with no token at all — so it would still pass if
-     * logout revoked nothing server-side. A stolen cookie is a copy the thief
-     * kept; this replays exactly that copy.
-     */
     const collector = await signIn(SEED.collector);
     const stolen = (collector as unknown as { cookie: string }).cookie;
     expect(stolen).toMatch(/=.+/);
@@ -430,8 +372,6 @@ describe('session handling', () => {
 
   it('refuses a forged session cookie', async () => {
     const forged = new Client();
-    // Reach into the client the way an attacker reaches into a browser: set a
-    // plausible-looking session value and see whether the API believes it.
     (forged as unknown as { cookie: string }).cookie = 'bault_session=00000000-0000-0000-0000-000000000000';
     const res = await forged.get('/me/profile');
     expect(res.status).toBe(401);
@@ -439,16 +379,6 @@ describe('session handling', () => {
 });
 
 describe('rate limiting', () => {
-  /**
-   * The mail cannon, closed.
-   *
-   * `POST /auth/password/reset-request` lets an unauthenticated stranger make
-   * Bault send email to any address they name, and it was completely unmetered.
-   * Its bucket is deliberately hard-coded rather than configurable — there is no
-   * deployment where a higher number is the right answer — so this test does not
-   * depend on the local `.env`, which raises the sign-in budget so the suite can
-   * run at all.
-   */
   it('stops an unauthenticated caller from using password reset as a mail cannon', async () => {
     const anon = new Client();
     const statuses: number[] = [];
@@ -461,9 +391,6 @@ describe('rate limiting', () => {
 
     expect(statuses, `no request was throttled: ${statuses.join(',')}`).toContain(429);
 
-    // …and a throttled caller is told what happened, in the documented error
-    // shape. It used to come back as an opaque `internal`, which reads as a
-    // server fault and tells a client nothing about backing off.
     const throttled = await anon.post('/auth/password/reset-request', {
       email: 'flood-last@fixture.bault.test',
     });

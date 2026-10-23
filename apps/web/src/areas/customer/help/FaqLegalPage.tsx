@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -19,16 +19,8 @@ import { DraftBanner } from './LegalDocumentView';
 import { ContactPanel, GuidesPanel, ShowsPanel } from './HelpPanels';
 import { PriceListPanel } from './PriceListPanel';
 
-/** Whether any catalogued entry is outright unavailable — see the filter. */
 const HAS_UNAVAILABLE = FAQ.entries.some((e) => e.availability === 'unavailable');
 
-/**
- * How each availability value is presented.
- *
- * `partial` is warned rather than greyed out: it is a thing Bault does, with a
- * limit the answer names, so hiding it behind the "not offered" filter would
- * bury a capability people have.
- */
 const AVAILABILITY_TONE: Record<FaqAvailability, 'info' | 'warning' | 'neutral'> = {
   adapted: 'info',
   partial: 'warning',
@@ -50,19 +42,6 @@ const AVAILABILITY_NOTE: Record<FaqAvailability, MessageKey> = {
 const TABS = ['ask', 'guides', 'faq', 'policy', 'prices', 'shows', 'contact', 'legal'] as const;
 type HelpTab = (typeof TABS)[number];
 
-/**
- * FAQ & Legal.
- *
- * Six contextual tabs on the shared shell: Ask (the placeholder assistant),
- * Guides (Bault's own workflow walkthroughs), FAQ (Bault's answers, written
- * from what the product does), Shows (the card-show calendar, from real rows),
- * Contact (how to reach a person) and Legal Terms (the terms, drafts marked as
- * drafts, and the figures they refer to).
- *
- * The tab lives in the route, so a link can open any of them; the FAQ's `q`
- * param deep-links a single answer open and the Guides' `g` param a single
- * guide.
- */
 export function FaqLegalPage() {
   const { t } = useI18n();
   const route = useRoute();
@@ -93,9 +72,6 @@ export function FaqLegalPage() {
           <FaqPanel />
         </TabPanel>
       )}
-      {/* Sits after the FAQ because it is the answer the FAQ keeps pointing at:
-          what may be sent at all. Before the prices, because whether Bault will
-          take the thing comes before what keeping it costs. */}
       {tab === 'policy' && <IntakePolicyPanel />}
 
       {tab === 'prices' && (
@@ -122,22 +98,6 @@ export function FaqLegalPage() {
   );
 }
 
-/* ============================================================
-   Ask
-   ============================================================ */
-
-/**
- * The single seam a real assistant will be wired into.
- *
- * Every query resolves to exactly `#1DDD` and nothing else — no answer text, no
- * heuristics, no lookup against the FAQ. It is deliberately `async` and
- * deliberately ignores its argument so that swapping the body for a real call is
- * the only change needed at the integration point; every caller already awaits
- * it and already handles a pending state.
- *
- * It performs NO network request. That is a requirement of this placeholder, not
- * an implementation detail: nothing typed into Ask leaves the browser.
- */
 export async function answerQuestion(_query: string): Promise<string> {
   return '#1DDD';
 }
@@ -148,11 +108,6 @@ interface Turn {
   answer: string | null;
 }
 
-/**
- * A conversation surface that is real UI on a placeholder brain: the transcript,
- * the pending state, the keyboard handling and the live region are all what the
- * connected version will use. Only `answerQuestion` changes.
- */
 function AskPanel() {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
@@ -161,7 +116,6 @@ function AskPanel() {
   const nextId = useRef(1);
   const logRef = useRef<HTMLDivElement>(null);
 
-  // Keep the newest turn in view without stealing focus from the input.
   useEffect(() => {
     const log = logRef.current;
     if (log) log.scrollTop = log.scrollHeight;
@@ -185,8 +139,6 @@ function AskPanel() {
 
   return (
     <Panel title={t('faq.ask.title')} subtitle={t('faq.ask.subtitle')}>
-      {/* Unobtrusive, but never hidden: the assistant is not connected, and a
-          user should know that before they read its reply as an answer. */}
       <p className="ask-notice" role="note">
         <IconAsk />
         <span>{t('faq.ask.notConnected')}</span>
@@ -236,11 +188,6 @@ function AskPanel() {
   );
 }
 
-/* ============================================================
-   FAQ
-   ============================================================ */
-
-/** Flatten an entry to the plain text the search matches against. */
 function searchableText(entry: FaqEntry): string {
   const parts: string[] = [entry.question, entry.category];
   for (const block of entry.blocks) {
@@ -255,7 +202,6 @@ function searchableText(entry: FaqEntry): string {
   return parts.join(' \n ').toLowerCase();
 }
 
-// Built once: the catalogue is static, so re-deriving it per keystroke is waste.
 const SEARCH_INDEX = new Map(FAQ.entries.map((e) => [e.id, searchableText(e)]));
 
 function FaqPanel() {
@@ -265,8 +211,6 @@ function FaqPanel() {
 
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string>('all');
-  // An entry marked `unavailable` answers "does Bault do X?" with no. Those are
-  // hidden until asked for, so the list leads with what Bault does.
   const [showAll, setShowAll] = useState(false);
 
   const openId = route.params.q ?? null;
@@ -281,8 +225,6 @@ function FaqPanel() {
     });
   }, [q, category, showAll]);
 
-  // A deep link may point at an entry the current filters hide. Reveal it rather
-  // than opening nothing — the link is the stronger signal of intent.
   useEffect(() => {
     if (!openId) return;
     const entry = FAQ.entries.find((e) => e.id === openId);
@@ -322,11 +264,6 @@ function FaqPanel() {
             ))}
           </div>
 
-          {/* Offered only when there is something to reveal. Every entry in the
-              catalogue currently describes something Bault does, in whole or in
-              part, so a permanent "also show what does not apply" control would
-              be a toggle that changes nothing — and would imply a set of
-              excluded answers that does not exist. */}
           {HAS_UNAVAILABLE && (
             <label className="check">
               <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
@@ -335,12 +272,6 @@ function FaqPanel() {
           )}
         </div>
 
-        {/*
-          When the answers were last checked against the product, and where the
-          numbers live. The answers point at the price list and at the current
-          figures instead of repeating configured amounts, and this says so up
-          front so a reader does not go looking for a price in the prose.
-        */}
         <p className="infobox faq-source">
           {t('faq.reviewedNote', { count: FAQ.reviewed.entryCount, date: formatDate(FAQ.reviewed.date, locale) })}
         </p>
@@ -377,11 +308,6 @@ function FaqPanel() {
   );
 }
 
-/**
- * One question. A real `<button>` drives the disclosure, so Enter/Space work and
- * screen readers get `aria-expanded` and `aria-controls` for free; the answer
- * region is labelled by its own trigger.
- */
 function FaqItem({
   entry,
   open,
@@ -395,7 +321,6 @@ function FaqItem({
 }) {
   const ref = useRef<HTMLLIElement>(null);
 
-  // A deep-linked answer scrolls itself into view once, on open.
   useEffect(() => {
     if (open) ref.current?.scrollIntoView({ block: 'nearest' });
   }, [open]);
@@ -430,7 +355,6 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        {/* The short answer first, then the full one. */}
         <p className={`faq-note faq-note--${entry.availability}`} lang="en" dir="ltr">
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
@@ -438,9 +362,6 @@ function FaqItem({
           {entry.baultNote}
         </p>
 
-        {/* The full answer. Written in English and not yet translated, so it
-            is marked as English and LTR whatever the app locale — a Hebrew
-            screen reader would otherwise read it in a Hebrew voice. */}
         <div className="faq-source-answer" lang="en" dir="ltr">
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
@@ -454,8 +375,6 @@ function FaqItem({
 function FaqBlockView({ block }: { block: FaqBlock }) {
   if (block.kind === 'p') return <p>{renderInline(block.text)}</p>;
   if (block.kind === 'h') {
-    // Answers sit inside an accordion whose question is an h3; clamp so the
-    // page's own heading order is not broken by the content.
     const Tag = (block.level >= 5 ? 'h5' : 'h4') as 'h4' | 'h5';
     return <Tag>{renderInline(block.text)}</Tag>;
   }
@@ -477,16 +396,6 @@ function FaqBlockView({ block }: { block: FaqBlock }) {
   );
 }
 
-/**
- * Render the two inline markers the content carries: `**bold**` and
- * `[[label|url]]`. Deliberately not a Markdown parser and deliberately not
- * `dangerouslySetInnerHTML` — the text is rendered as React nodes and can never
- * inject markup.
- *
- * The href is the one value that reaches the DOM as an active attribute, so its
- * scheme is checked: an in-app route (`#/...`) opens in place, https opens in a
- * new tab, and anything else is rendered as plain text rather than as a link.
- */
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /\[\[([^|\]]*)\|([^\]]*)\]\]|\*\*([^*]+)\*\*/g;
@@ -521,10 +430,6 @@ function renderInline(text: string): ReactNode[] {
   if (last < text.length) nodes.push(text.slice(last));
   return nodes;
 }
-
-/* ============================================================
-   Legal
-   ============================================================ */
 
 function LegalPanel() {
   const { t, locale } = useI18n();
@@ -634,7 +539,6 @@ function LegalPanel() {
   );
 }
 
-/** `GET /content/account-terms` — see `apps/api/src/modules/not/account-terms.ts`. */
 export interface AccountTerms {
   termsVersion: string;
   debt: { graceDays: number; interestBpsPerDay: number; suspendBelowMinor: number };
@@ -652,19 +556,6 @@ export interface AccountTerms {
   removeCommonsWindowDays: number;
 }
 
-/** Basis points as a percentage, without trailing zeros: 5 → "0.05", 150 → "1.5". */
-function bpsToPercent(bps: number): string {
-  return String(Number((bps / 100).toFixed(4)));
-}
-
-/**
- * The figures the terms and the FAQ point at.
- *
- * The documents deliberately do not print configuration — the debt policy is
- * environment configuration, and a number copied into prose goes stale the day
- * somebody changes it. This panel is where "shown in the app" is true: it reads
- * the same settings and constants the charging code uses.
- */
 function CurrentFiguresPanel() {
   const { t } = useI18n();
   const [terms, setTerms] = useState<AccountTerms | null>(null);

@@ -4,7 +4,6 @@ import { useI18n } from '../../../shared/i18n';
 import { Button, ErrorState, Field, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { typedCode as digits } from '../../../shared/twoFactor';
 
-/** `GET /auth/mfa`. Never a secret and never a recovery code. */
 interface MfaStatus {
   enabled: boolean;
   pending: boolean;
@@ -12,7 +11,6 @@ interface MfaStatus {
   recoveryCodesRemaining: number;
 }
 
-/** `POST /auth/mfa/setup`. */
 interface MfaSetup {
   otpauthUri: string;
   secret: string;
@@ -26,34 +24,21 @@ type Mode =
   | { kind: 'regenerate' }
   | { kind: 'disable' };
 
-/**
- * Two-factor sign-in on the account-security screen: enrol, see how many
- * recovery codes are left, replace them, turn it off.
- *
- * Enrolment is three steps and none is skipped. The secret is shown two ways —
- * a QR code to scan and the key to type — then a code from the app proves it
- * arrived, and only then is it on. The recovery codes come back with that
- * confirmation and are shown ONCE: the API keeps no copy it can read, so this
- * screen makes saving them a step of its own, with "Done" held until the person
- * says they have. Leaving the screen any other way loses them, which is why the
- * acknowledgement is not optional.
- *
- * Turning it off is not offered to a role that requires it — the API would
- * refuse it, and a button that always fails is worse than an explanation.
- */
 export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
   const { t } = useI18n();
   const [status, setStatus] = useState<MfaStatus | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setStatus(await api.get<MfaStatus>('/auth/mfa'));
+      setLoadError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setLoadError((e as Error).message);
     }
   }, []);
 
@@ -61,7 +46,6 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
     void load();
   }, [load]);
 
-  /** Run one request with the busy flag and the error line handled the same way every time. */
   async function run(work: () => Promise<void>) {
     setBusy(true);
     setError(null);
@@ -115,6 +99,7 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
     <Panel title={t('mfa.title')} subtitle={t('mfa.panel.subtitle')}>
       <div className="stack stack--tight" style={{ maxWidth: 560 }}>
         {note && <SuccessNote>{note}</SuccessNote>}
+        {loadError && <ErrorState message={loadError} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
         {error && <ErrorState message={error} />}
 
         {mode.kind === 'codes' ? (
@@ -151,8 +136,6 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
         ) : mode.kind === 'setup' ? (
           <>
             <p>{t('mfa.setup.scan')}</p>
-            {/* A data URL made by the API, shown as an image: no server markup
-                is ever put into the page as HTML. */}
             <img src={mode.setup.qrCode} alt={t('mfa.setup.qrAlt')} width={200} height={200} />
             <div>
               <span className="field-label">{t('mfa.setup.key')}</span>{' '}
@@ -186,10 +169,6 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
   );
 }
 
-/**
- * A code from the app, and one action. `withPassword` asks for the password as
- * well — turning it on does, so a session on its own cannot enrol a phone.
- */
 function CodeForm({
   hint,
   submitLabel,
@@ -254,7 +233,6 @@ function CodeForm({
   );
 }
 
-/** The password and a current code: what turning the second factor off costs. */
 function DisableForm({
   busy,
   onSubmit,
@@ -305,10 +283,6 @@ function DisableForm({
   );
 }
 
-/**
- * The recovery codes, the one time they exist outside the person's own copy.
- * "Done" waits for the box to be ticked: closing this is losing them.
- */
 function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   const { t } = useI18n();
   const [saved, setSaved] = useState(false);

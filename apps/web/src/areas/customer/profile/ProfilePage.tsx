@@ -9,7 +9,7 @@ import {
   normalizeNamePart,
 } from '../../../shared/names';
 import { useNavigation, useRoute } from '../../../shared/routing';
-import { countryName, useShippingCountries } from '../../../shared/countries';
+import { countryName, lacksRegion, regionRequired, useShippingCountries } from '../../../shared/countries';
 import {
   Button,
   ContextTabs,
@@ -25,24 +25,15 @@ import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { TwoFactorPanel } from './TwoFactorPanel';
 import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
 
-/**
- * `GET /me/profile`.
- *
- * No `intakeId`: the OW- code is retired from every user-facing workflow and the
- * API no longer returns it here. No `displayName` either — a person's name is
- * the two explicit fields, and the full name is derived at render time.
- */
 interface Profile {
   id: string;
   email: string;
-  /** Immutable: chosen at registration, never editable (Requirement 4.1). */
   username: string;
   role: string;
   status: string;
   firstName: string | null;
   lastName: string | null;
   fullName: string;
-  /** Set when a migrated legacy name has not yet been confirmed by anyone. */
   nameReviewRequired: boolean;
 }
 
@@ -52,6 +43,7 @@ interface Address {
   recipient: string;
   line1: string;
   city: string;
+  region: string | null;
   country: string;
   postalCode: string;
   isDefault: boolean;
@@ -66,19 +58,6 @@ const ROLE_LABEL: Record<string, MessageKey> = {
 const TABS = ['details', 'addresses', 'security'] as const;
 type ProfileTab = (typeof TABS)[number];
 
-/**
- * Own profile (ACC): view email / username / role, edit the two name fields, and
- * manage saved shipping addresses (add / edit / delete, with a default marker).
- * Reached from the account menu — it is deliberately not a rail destination.
- *
- * Identity on this page, after the identity pass:
- *   - the USERNAME is shown as text, never an input. It is permanent;
- *   - the intake ID is gone. Nothing asks a customer for one any more, so
- *     displaying it would only invite it back into use;
- *   - FIRST and LAST NAME are the editable identity fields. There is no display
- *     name to edit, and the full name shown beside them is derived from these
- *     two rather than stored.
- */
 export function ProfilePage() {
   const { t } = useI18n();
   const route = useRoute();
@@ -96,8 +75,6 @@ export function ProfilePage() {
     ? (route.tab as ProfileTab)
     : 'details';
 
-  // A failed load names the actual failure — backend down, session expired,
-  // permission denied — instead of dropping a raw transport message on screen.
   const describe = useCallback(
     (e: unknown) => {
       const key = apiErrorKey(e);
@@ -159,8 +136,6 @@ export function ProfilePage() {
   const roleKey = profile ? ROLE_LABEL[profile.role] : undefined;
   const tabs = TABS.map((key) => ({ key, label: t(`profile.tab.${key}` as MessageKey) }));
 
-  // Both parts are required, and Save stays disabled unless something changed —
-  // so confirming a flagged legacy name is a deliberate act, not an accident.
   const firstOk = isValidNamePart(normalizeNamePart(firstName));
   const lastOk = isValidNamePart(normalizeNamePart(lastName));
   const nameDirty =
@@ -185,8 +160,6 @@ export function ProfilePage() {
                     {profile.email}
                   </dd>
                 </div>
-                {/* Rendered as static text on purpose — a username can never be
-                    edited (Requirement 4.1), so there is deliberately no input. */}
                 <div className="detail-row">
                   <dt className="detail-label">{t('profile.details.username')}</dt>
                   <dd className="detail-value">
@@ -197,8 +170,6 @@ export function ProfilePage() {
                 <div className="detail-row">
                   <dt className="detail-label">{t('profile.details.fullName')}</dt>
                   <dd className="detail-value">
-                    {/* Derived, never stored — so it cannot disagree with the
-                        two fields it comes from. */}
                     {fullName(profile.firstName, profile.lastName) || (
                       <span className="muted">{t('profile.details.noName')}</span>
                     )}
@@ -216,9 +187,6 @@ export function ProfilePage() {
 
           <Panel title={t('profile.nameLabel')} subtitle={t('profile.nameSubtitle')}>
             <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-              {/* Shown only for an account migration 0004 could not split
-                  without guessing. It states plainly what happened and what to
-                  do, instead of silently presenting a wrong split as fact. */}
               {profile?.nameReviewRequired && (
                 <SuccessNote tone="warning">{t('profile.nameReviewRequired')}</SuccessNote>
               )}
@@ -269,8 +237,6 @@ export function ProfilePage() {
 
       {tab === 'addresses' && (
         <TabPanel tab="addresses">
-          {/* Saved shipping addresses are managed HERE and only here — the
-              shipping page just picks one from this list (Req 4.2 / 5.1). */}
           <Panel
             title={t('profile.addresses.heading')}
             subtitle={t('profile.addresses.subtitle')}
@@ -339,19 +305,6 @@ export function ProfilePage() {
   );
 }
 
-/**
- * Change the account password (ACC).
- *
- * The current password is required by the API and asked for here for the reason
- * it exists: an unattended signed-in browser should not be enough to lock the
- * real owner out of their own account. `POST /auth/password/change` verifies it
- * with argon2 before writing anything.
- *
- * Sessions are deliberately NOT revoked on success. `SessionService` resolves a
- * session against its own row, not against the password hash, so existing
- * sessions survive — including this one, which is why the page stays usable
- * afterwards instead of bouncing the user to sign-in.
- */
 function PasswordPanel({
   onStatus,
   onError,
@@ -367,8 +320,6 @@ function PasswordPanel({
 
   const tooShort = next.length > 0 && next.length < PASSWORD_MIN;
   const mismatch = confirm.length > 0 && confirm !== next;
-  // Refusing a no-op change here rather than letting the server accept it: it
-  // reports success while nothing happened, which reads as a bug.
   const unchanged = next.length > 0 && next === current;
   const ready = current.length > 0 && next.length >= PASSWORD_MIN && confirm === next && !unchanged;
 
@@ -400,10 +351,6 @@ function PasswordPanel({
           />
         </Field>
 
-        {/* Two different problems, told apart. The field previously rendered the
-            length HINT in error colour when the password was too short and the
-            "same as your current one" text when it was unchanged — so the two
-            failures shared one line and only one of them ever named itself. */}
         <Field
           label={t('auth.newPassword')}
           hint={t('auth.passwordHint')}
@@ -449,10 +396,6 @@ function PasswordPanel({
   );
 }
 
-/**
- * One saved address: read-only card that flips into an inline edit form
- * (Requirement 4.2 — addresses are added, edited and removed from this page).
- */
 function AddressCard({
   address,
   onDelete,
@@ -470,7 +413,13 @@ function AddressCard({
   const [draft, setDraft] = useState(address);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.region || !regionRequired(draft.country, countries));
 
   async function save() {
     try {
@@ -479,6 +428,7 @@ function AddressCard({
         recipient: draft.recipient,
         line1: draft.line1,
         city: draft.city,
+        region: draft.region?.trim() || null,
         country: draft.country,
         postalCode: draft.postalCode,
         isDefault: draft.isDefault,
@@ -498,12 +448,14 @@ function AddressCard({
             {address.label}
           </h3>
           {address.isDefault && <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>}
+          {lacksRegion(address, countries) && (
+            <StatusBadge tone="warning">{t('profile.addresses.regionMissing')}</StatusBadge>
+          )}
         </div>
         <p className="card-desc">{address.recipient}</p>
-        {/* The country is stored as a code; a card reading "San Francisco, US"
-            has swapped one unreadable value for another. */}
         <p className="card-desc">
-          {address.line1}, {address.city}, {countryName(address.country, countries)}{' '}
+          {address.line1}, {address.city}
+          {address.region ? `, ${address.region}` : ''}, {countryName(address.country, countries)}{' '}
           {address.postalCode}
         </p>
         <div className="actions">
@@ -542,7 +494,6 @@ function AddressCard({
 
 type AddressDraft = Omit<Address, 'id'>;
 
-/** The address field set, shared by the edit card and the add form. */
 function AddressFields({
   draft,
   onChange,
@@ -554,14 +505,10 @@ function AddressFields({
   const countries = useShippingCountries();
   const set = (patch: Partial<AddressDraft>) => onChange({ ...draft, ...patch });
   const id = useId();
+  const country = countries.find((c) => c.code === draft.country);
 
   return (
     <div className="form-grid">
-      {/*
-        `Field` throughout. These were wrapping <label>s, which is the pattern
-        that makes a hint part of the control's accessible name — and the country
-        field below now has a hint worth reading.
-      */}
       <Field label={t('profile.addressForm.label')} htmlFor={`${id}-label`}>
         <input id={`${id}-label`} value={draft.label} onChange={(e) => set({ label: e.target.value })} />
       </Field>
@@ -589,15 +536,6 @@ function AddressFields({
           autoComplete="address-level2"
         />
       </Field>
-      {/*
-        A SELECT, not a text box.
-        This was free text pre-filled with the word "Israel", and every carrier
-        rule reads this field as an ISO code — so the default value made each new
-        address international-and-uncontracted, and the collector was told
-        "ePacket International is not contracted to ISRAEL" for an address that
-        should have qualified. The list comes from the carrier table itself, so
-        nothing here can offer a destination that cannot be reached.
-      */}
       <Field
         label={t('profile.addressForm.country')}
         htmlFor={`${id}-country`}
@@ -606,7 +544,7 @@ function AddressFields({
         <select
           id={`${id}-country`}
           value={draft.country}
-          onChange={(e) => set({ country: e.target.value })}
+          onChange={(e) => set({ country: e.target.value, region: '' })}
           autoComplete="country"
         >
           <option value="">{t('profile.addressForm.countryPlaceholder')}</option>
@@ -616,6 +554,39 @@ function AddressFields({
             </option>
           ))}
         </select>
+      </Field>
+      <Field
+        label={t('profile.addressForm.region')}
+        htmlFor={`${id}-region`}
+        hint={
+          country?.regionRequired
+            ? t('profile.addressForm.regionRequiredHint', { country: country.name })
+            : t('profile.addressForm.regionOptionalHint')
+        }
+      >
+        {country?.regions ? (
+          <select
+            id={`${id}-region`}
+            value={draft.region ?? ''}
+            onChange={(e) => set({ region: e.target.value })}
+            autoComplete="address-level1"
+          >
+            <option value="">{t('profile.addressForm.regionPlaceholder')}</option>
+            {country.regions.map((r) => (
+              <option key={r.code} value={r.code}>
+                {r.code} — {r.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id={`${id}-region`}
+            value={draft.region ?? ''}
+            maxLength={60}
+            onChange={(e) => set({ region: e.target.value })}
+            autoComplete="address-level1"
+          />
+        )}
       </Field>
       <Field label={t('profile.addressForm.postalCode')} htmlFor={`${id}-postal`}>
         <input
@@ -646,13 +617,13 @@ function AddressForm({
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
+  const countries = useShippingCountries();
   const empty: AddressDraft = {
     label: '',
     recipient: '',
     line1: '',
     city: '',
-    // No default. A pre-filled country is a country nobody checked, and the one
-    // that used to be here was a display name that no carrier rule recognised.
+    region: '',
     country: '',
     postalCode: '',
     isDefault: false,
@@ -660,11 +631,17 @@ function AddressForm({
   const [draft, setDraft] = useState<AddressDraft>(empty);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.region || !regionRequired(draft.country, countries));
 
   async function add() {
     try {
-      await api.post('/me/addresses', draft);
+      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null });
       setDraft(empty);
       await onAdded();
     } catch (e) {

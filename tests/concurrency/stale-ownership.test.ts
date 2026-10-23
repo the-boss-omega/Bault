@@ -1,23 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from '../integration/helpers/http';
 
-/**
- * Ownership moved on a stale check (P0 ownership findings).
- *
- * Every path that hands a card to somebody decided it could on a read made
- * EARLIER — when a transfer was confirmed, when a listing was created, when a
- * pickup was booked, when a split was asked for, when a card was booked into an
- * escrow deal — and then moved the card from whoever owned it NOW. A card sold in
- * between went to the wrong person, and the person who no longer owned it was
- * paid or handed it.
- *
- * The fixed behaviour re-checks the owner (and state, and hold) under the row
- * lock at the moment of the move, and refuses with 409 when it no longer holds.
- * The tests assert on who owns the card and who was paid, not only the status.
- *
- * Requires a running API + a freshly seeded DB (`pnpm --filter @bault/api db:seed`).
- */
-
 type Res = Awaited<ReturnType<Client['post']>>;
 
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
@@ -26,7 +9,6 @@ const losersAre4xx = (rs: Res[]) => rs.filter((r) => !ok(r)).every((r) => r.stat
 
 const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
 
-/** Fund `email` until its balance is at least `min` (cash-ins are $10 … $20,000 each). */
 async function ensureBalance(email: string, min: number): Promise<number> {
   const c = await signIn(email);
   let cur = await balanceOf(c);
@@ -37,10 +19,8 @@ async function ensureBalance(email: string, min: number): Promise<number> {
   return cur;
 }
 
-/** Whether `c` owns the card: the owner-scoped vault drawer answers 404 to anybody else. */
 const owns = async (c: Client, itemId: string) => (await c.get(`/vault/items/${itemId}`)).status === 200;
 
-/** List `itemId` as `seller` and have `buyerEmail` buy it. */
 async function listAndSell(seller: Client, itemId: string, buyerEmail: string, price = 5_000) {
   const listing = await seller.post('/marketplace/listings', { itemId, askingPrice: price });
   expect(listing.status).toBe(201);
@@ -50,14 +30,6 @@ async function listAndSell(seller: Client, itemId: string, buyerEmail: string, p
   return buyer;
 }
 
-/**
- * Move `itemId` to `toEmail` behind the seller's back, the way that is still
- * possible for a card already promised elsewhere: an administrator reassigning
- * it. The two cases below used to list and sell the card instead; a card in an
- * open pickup or escrow deal can no longer be listed at all (item_committed),
- * so that route is asserted closed and the card changes hands this way to test
- * the re-check that settlement and hand-over still make.
- */
 async function reassignBehindTheirBack(seller: Client, itemId: string, toEmail: string) {
   const refused = await seller.post('/marketplace/listings', { itemId, askingPrice: 5_000 });
   expect(refused.status).toBe(409);
@@ -71,7 +43,6 @@ async function reassignBehindTheirBack(seller: Client, itemId: string, toEmail: 
   return to;
 }
 
-/** Book a show pickup of one fresh card for Red, paid on the spot. */
 async function bookedPickup(description: string) {
   const operator = await signIn(SEED.operator);
   const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab', description });
@@ -86,19 +57,16 @@ async function bookedPickup(description: string) {
   return { operator, owner, card, shipmentId: booked.body.id as string };
 }
 
-/** A lot of eight cards for Red, tagged so its children can be found by search. */
 async function lotWithAcceptedSplit(tag: string) {
   const operator = await signIn(SEED.operator);
   const lot = await intakeFor(operator, SEED.collector, {
     typeClass: 'trading_card',
     isLot: true,
-    // Above the trading-card threshold, so it is received as a lot.
     lotSize: 8,
     description: tag,
   });
   expect(lot.isLot).toBe(true);
   const owner = await signIn(SEED.collector);
-  // A split request is billed and needs a wallet in credit.
   await ensureBalance(SEED.collector, 50_000);
   const req = await owner.post('/services/lot-split', { itemId: lot.id });
   expect(req.status).toBe(201);
@@ -106,7 +74,6 @@ async function lotWithAcceptedSplit(tag: string) {
   return { operator, owner, lot, requestId: req.body.id as string };
 }
 
-/** Children of a tagged lot: every non-lot item in the owner's vault carrying the tag. */
 async function childrenOf(owner: Client, tag: string) {
   const res = await owner.get(`/vault/items?q=${encodeURIComponent(tag)}`);
   expect(res.status).toBe(200);
@@ -122,8 +89,6 @@ const HAND_OVER = (itemId: string) => ({
 
 describe('concurrency: stale ownership', () => {
   it('a gift transfer approved after the card was sold is refused', async () => {
-    // E4: the transfer moved the card from its CURRENT owner — the buyer — to the
-    // gift's recipient, because ownership was checked only when it was proposed.
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const item = await intakeFor(operator, SEED.collector, { description: 'E4' });
@@ -144,8 +109,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('a listing left behind by an admin reassignment cannot be bought', async () => {
-    // F177: the old owner's listing stayed live; a buyer bought the NEW owner's
-    // card and the OLD owner was paid for it.
     const operator = await signIn(SEED.operator);
     const admin = await signIn(SEED.admin);
     const oldOwner = await signIn(SEED.collector);
@@ -174,8 +137,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('a pickup is not handed over after the card was sold to somebody else', async () => {
-    // N4: hand-over checked nothing about the card; one sold on the market after
-    // the pickup was booked was handed at the show to the person who sold it.
     const { operator, owner, card, shipmentId } = await bookedPickup('N4 sold');
     const buyer = await reassignBehindTheirBack(owner, card.id, SEED.collector2);
 
@@ -189,7 +150,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('a pickup is not handed over while the card is on hold', async () => {
-    // N4 (hold variant): a card frozen by an operator after the pickup was booked went out anyway.
     const { operator, owner, card, shipmentId } = await bookedPickup('N4 hold');
     const hold = await operator.post(`/custody/items/${card.id}/hold`);
     expect(hold.status).toBe(201);
@@ -207,8 +167,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('a lot listed for sale after its split was accepted is not split', async () => {
-    // F117: the split ran on a lot its owner had put on sale, so the lot and its
-    // cards could both be sold.
     const tag = `F117-${Date.now().toString(36)}`;
     const { operator, owner, lot, requestId } = await lotWithAcceptedSplit(tag);
     const listing = await owner.post('/marketplace/listings', { itemId: lot.id, askingPrice: 10_000 });
@@ -224,8 +182,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('completing one lot split twice produces its cards once', async () => {
-    // F007, lot split double complete: the lot was read unlocked and each child intaken
-    // in its own transaction, so a second Complete split the lot again.
     const tag = `SPLITx2-${Date.now().toString(36)}`;
     const { operator, owner, requestId } = await lotWithAcceptedSplit(tag);
 
@@ -238,8 +194,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('one confirmation token creates one transfer proposal', async () => {
-    // Confirmation token reuse: the token was checked, then marked used by id
-    // alone, so parallel submissions of one token each created a proposal.
     const operator = await signIn(SEED.operator);
     const owner = await signIn(SEED.collector);
     const item = await intakeFor(operator, SEED.collector, { description: 'Token reuse' });
@@ -258,14 +212,10 @@ describe('concurrency: stale ownership', () => {
     const proposals = swaps.filter((s) => s.status === 'pending' && s.offeredItems.some((i) => i.id === item.id));
 
     expect({ wins: wins(res), proposals: proposals.length }).toEqual({ wins: 1, proposals: 1 });
-    // A reused token is gone (410) or unknown (400), never a second success.
     expect(res.filter((r) => !ok(r)).every((r) => r.status === 410 || r.status === 400)).toBe(true);
   }, 60_000);
 
   it('an offer accepted while it is being withdrawn ends one way only', async () => {
-    // Offer accept vs reject: the reject wrote unconditionally, and the accept
-    // wrote its status after the sale, so both answered 2xx and a completed sale
-    // could carry the label of a withdrawn offer.
     const ROUNDS = 4;
     const PRICE = 10_000;
     const OFFER = 8_000;
@@ -311,8 +261,6 @@ describe('concurrency: stale ownership', () => {
   }, 60_000);
 
   it('an escrow deal does not settle after the seller sold the card elsewhere', async () => {
-    // Escrow settle after the card changed hands: settlement moved the card from
-    // its CURRENT owner — a third person who had bought it — and paid the seller.
     const VALUE = 100_000;
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);
@@ -336,8 +284,6 @@ describe('concurrency: stale ownership', () => {
       (await operator.post(`/escrow/${dealId}/inspect`, { matches: true, notes: 'Slab intact, cert matches.' })).status,
     ).toBe(201);
 
-    // The card is still on the seller's shelf. It can no longer be listed while
-    // the deal is open, but it can still change hands another way.
     const third = await reassignBehindTheirBack(seller, card.id, SEED.collector3);
 
     const sellerBefore = await balanceOf(seller);
