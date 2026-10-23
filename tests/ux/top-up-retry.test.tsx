@@ -2,17 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * Pressing Pay again after a top-up did not answer.
- *
- * The server dedupes a top-up on the idempotency key the panel sends, and that
- * only protects the collector if a retry of the SAME intended top-up carries the
- * SAME key. A network error says nothing about whether the card was charged,
- * so the second press must be answered with the first one's outcome, not
- * charge again. A different amount, a different route, or a top-up after one
- * that went through is a new top-up, with a new key.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 

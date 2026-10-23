@@ -2,28 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The landing page, driven as a first-time visitor drives it.
- *
- * Every case here pins a decision that could be undone by accident, and the two
- * that matter most are about the same thing: WHAT THIS PAGE IS ALLOWED TO SAY
- * ABOUT MONEY.
- *
- * A marketing page is the one surface in a product where a price is normally
- * typed in by hand — a designer writes "from $5" into a hero and it is nobody's
- * job to keep it true. Bault's whole economics are per-item pricing rules, and
- * Principle VI makes those rules the source of truth, so the figure on the front
- * page is fetched from `GET /pricing/list` (which is `@Public()` for exactly
- * this reason) and is NEVER written into the component. The first test proves
- * the figure comes from the response; the second proves that when the response
- * does not arrive, the page shows no figure at all rather than a stale or
- * invented one.
- *
- * `api` is mocked at the module boundary rather than `fetch` being stubbed: the
- * component's contract is "ask for the price list and render what came back",
- * and that is the seam worth pinning.
- */
-
 const get = vi.fn();
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: {
@@ -38,7 +16,6 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 const { LandingPage } = await import('../../apps/web/src/areas/customer/marketing/LandingPage');
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 
-/** The shape `GET /pricing/list` answers with, trimmed to what this page reads. */
 const PRICE_LIST = {
   groups: [
     {
@@ -68,15 +45,10 @@ const PRICE_LIST = {
   ],
 };
 
-/**
- * `GET /content/account-terms`, trimmed to what this page reads: the cash-out
- * schedule, which is a constant in the charging code rather than a rule.
- */
 const TERMS = {
   cashOut: { bandMinor: 10_000, smallBps: 600, smallMinimumMinor: 99, largeFixedMinor: 500, largeBps: 100 },
 };
 
-/** Each endpoint answers with its own body; `terms` may answer with a pending or failing promise. */
 function answer({ terms = (): Promise<unknown> => Promise.resolve(TERMS) } = {}) {
   get.mockImplementation((path: string) => {
     if (path === '/pricing/list') return Promise.resolve(PRICE_LIST);
@@ -103,19 +75,12 @@ describe('the landing page', () => {
     answer();
     renderPage();
 
-    // The identity, in the component that states it everywhere else in the
-    // product. A landing page that promises a different product than the one
-    // behind it is a lie told twice.
     expect(screen.getByText('SN-DX107-0003')).toBeInTheDocument();
 
-    // And the photograph of that exact serial — the filename IS the serial, so
-    // this cannot drift into being a picture of nothing.
     const photo = document.querySelector('img');
     expect(photo).toBeTruthy();
     expect(photo!.getAttribute('src')).toContain('SN-DX107-0003');
 
-    // Let the price fetch settle before the case ends, so its state update
-    // happens inside the test rather than after it (React's act warning).
     await screen.findByText('$5.00');
   });
 
@@ -125,15 +90,9 @@ describe('the landing page', () => {
 
     await waitFor(() => expect(get).toHaveBeenCalledWith('/pricing/list'));
 
-    // Cents for a fixed rule, basis points for a percentage one — rendering both
-    // through the money formatter would turn 5% into "$5.00", which is the exact
-    // error a price label exists to prevent.
     expect(await screen.findByText('$5.00')).toBeInTheDocument();
     expect(screen.getByText('5%')).toBeInTheDocument();
 
-    // $0.00 is PRINTED, not suppressed. Bault adds no handling markup on an
-    // outbound parcel, and that is a fact worth stating rather than an absence
-    // to hide behind an empty cell.
     expect(screen.getByText('$0.00')).toBeInTheDocument();
   });
 
@@ -141,10 +100,6 @@ describe('the landing page', () => {
     answer();
     renderPage();
 
-    // `value` on the storage rule is $1.00 — a fallback base for an item with no
-    // intake charge to take a proportion of, and a figure nobody is ever
-    // charged. The real terms are in `parameters`, and those are what a reader
-    // is shown.
     expect(
       await screen.findByText('180 days included, then 10% of the intake fee every 90 days'),
     ).toBeInTheDocument();
@@ -155,10 +110,6 @@ describe('the landing page', () => {
     answer();
     renderPage();
 
-    // The cash-out fee is charged from the schedule in `money-terms.ts`, which
-    // `GET /content/account-terms` reports. Its pricing rule only publishes a
-    // figure, and here it says 1.50%: a front page that printed it would quote
-    // a fee nobody is charged.
     await waitFor(() => expect(get).toHaveBeenCalledWith('/content/account-terms'));
     const row = (await screen.findByText('Taking money out')).closest('tr')!;
     await waitFor(() =>
@@ -191,8 +142,6 @@ describe('the landing page', () => {
     get.mockRejectedValue(new Error('unreachable'));
     renderPage();
 
-    // Not a placeholder, not a cached number, not "from $5" — a sentence saying
-    // the list could not be loaded. A placeholder here could be read as "free".
     expect(await screen.findByText(/price list could not be loaded/i)).toBeInTheDocument();
     expect(screen.queryByText('$5.00')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
@@ -203,9 +152,6 @@ describe('the landing page', () => {
     answer();
     renderPage();
 
-    // Two calls to action that mean different things. Landing "Open an account"
-    // on the sign-in form with a link underneath asks somebody to make the same
-    // choice twice.
     const bar = document.querySelector('.landing-bar') as HTMLElement;
     await user.click(within(bar).getByRole('button', { name: /open an account/i }));
     expect(window.location.hash).toBe('#/signup');
@@ -219,8 +165,6 @@ describe('the landing page', () => {
     renderPage();
 
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    // Every section below the stage is labelled by its own heading, which is
-    // what `aria-labelledby` on each <section> buys.
     expect(screen.getAllByRole('region').length).toBeGreaterThanOrEqual(5);
 
     await screen.findByText('$5.00');

@@ -10,19 +10,6 @@ import { LedgerService, DEFAULT_CURRENCY } from './ledger.service';
 import { charge, externalPayment } from './pay.schema';
 import { CHARGEBACK_FEE_MINOR } from './money-terms';
 
-/**
- * A payment the cardholder took back. Recording one writes two rows:
- *
- *  - the reversal itself, a DEBIT of exactly what was credited, so the derived
- *    balance stops claiming money the platform no longer has;
- *  - the provider's dispute fee, as an ordinary fee charge.
- *
- * Both land on the account that received the money, and the collector sees
- * both on their statement.
- *
- * Operator-only and manual: a provider tells Bault about a chargeback out of
- * band, so there is no message for an automatic path to act on.
- */
 @Injectable()
 export class ChargebackService {
   constructor(
@@ -32,18 +19,10 @@ export class ChargebackService {
     private readonly outbox: OutboxService,
   ) {}
 
-  /** The published fee, so the policy page and the operator form agree. */
   terms() {
     return { feeMinor: CHARGEBACK_FEE_MINOR };
   }
 
-  /**
-   * Record that a top-up was reversed.
-   *
-   * Keyed on the external payment rather than on an amount: a chargeback
-   * reverses a specific payment, so the amount is that payment's and an
-   * operator cannot type the wrong figure.
-   */
   async record(
     operatorId: string,
     paymentId: string,
@@ -75,8 +54,6 @@ export class ChargebackService {
 
       const now = new Date();
 
-      // The reversal. Exactly what was credited, so the derived balance stops
-      // claiming money the platform no longer holds.
       await this.ledger.record(
         {
           userId: payment.userId,
@@ -90,8 +67,6 @@ export class ChargebackService {
         tx,
       );
 
-      // The provider's dispute fee. Optional, because a chargeback Bault WINS
-      // sometimes carries no fee.
       const feeMinor = input.chargeFee === false ? 0 : CHARGEBACK_FEE_MINOR;
       if (feeMinor > 0) {
         const [c] = await tx
@@ -165,7 +140,6 @@ export class ChargebackService {
     });
   }
 
-  /** Settled top-ups an operator could reverse, newest first. */
   reversible() {
     return this.db
       .select()

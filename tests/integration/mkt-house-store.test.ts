@@ -1,17 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, signIn } from './helpers/http';
 
-/**
- * The Bault store — the business selling its own cards.
- *
- * What makes this different from every other sale is that the card has no record
- * until it is bought: no serial, no barcode, no owner. So the tests that matter
- * are the ones about that record coming into existence — at the moment of payment,
- * owned by the buyer, on the record but not yet on a shelf — and about the
- * warehouse finishing the physical half.
- *
- * Requires a running API + a seeded DB.
- */
 describe('MKT the Bault store', () => {
   const PRINT =
     '2011 Pokémon Call of Legends — Rayquaza #SL10/95 · Rare Holo (Shiny Legendary subset) · art by Noriko Hotta · col1-SL10';
@@ -43,18 +32,15 @@ describe('MKT the Bault store', () => {
     expect(bought.body.barcode).toBe(bought.body.serialNumber);
     expect(bought.body.orderCode).toMatch(/^ORD-/);
 
-    // Paid for exactly the asking price — no intake fee on a card that was Bault's.
     const after = (await collector.get('/finance/wallet')).body.amount as number;
     expect(before - after).toBe(3_500);
 
-    // On the record and in the vault at once, but not on a shelf yet.
     const vault = (await collector.get('/vault/items')).body as Array<Record<string, unknown>>;
     const mine = vault.find((i) => i.id === bought.body.itemId);
     expect(mine).toBeDefined();
     expect(mine!.lifecycleState).toBe('received');
     expect(mine!.description).toBe(PRINT);
 
-    // One copy fewer on the shelf.
     const shelf = (await collector.get('/marketplace/house/listings')).body as Array<{ id: string; stock: number }>;
     expect(shelf.find((l) => l.id === p.id)?.stock).toBe(1);
   });
@@ -104,7 +90,6 @@ describe('MKT the Bault store', () => {
     const vault = (await collector.get('/vault/items')).body as Array<Record<string, unknown>>;
     expect(vault.find((i) => i.id === bought.itemId)!.lifecycleState).toBe('stored');
 
-    // Gone from the queue, and cannot be shelved twice.
     const again = (await operator.get('/marketplace/house/orders/queue')).body as Array<{ id: string }>;
     expect(again.some((o) => o.id === row!.id)).toBe(false);
     expect((await operator.post(`/marketplace/house/orders/${row!.id}/stow`, { autoStow: true })).status).toBe(409);

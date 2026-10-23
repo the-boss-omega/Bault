@@ -2,26 +2,16 @@ import { cloneElement, isValidElement, useId } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
-/* ============================================================
-   Buttons
-   ============================================================ */
-
 type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: 'md' | 'sm';
   block?: boolean;
-  /** Shows a spinner, disables the control and announces `aria-busy`. */
   loading?: boolean;
   icon?: ReactNode;
 }
 
-/**
- * The one button in the product. `gold` is the single primary action per view;
- * everything else is `secondary` or `ghost` so common and rare actions never
- * carry the same visual weight.
- */
 export function Button({
   variant = 'secondary',
   size = 'md',
@@ -45,11 +35,6 @@ export function Button({
     .filter(Boolean)
     .join(' ');
   return (
-    /**
-     * A busy button is disabled and says so: `aria-busy` announces it,
-     * `disabled` prevents a second press on a money-moving form, and the spinner
-     * replaces the icon so the control does not change width mid-action.
-     */
     <button
       type={type}
       className={classes}
@@ -63,14 +48,6 @@ export function Button({
   );
 }
 
-/**
- * A labelled form control.
- *
- * The label points at the control by id, so the field's accessible name is the
- * caption alone. The hint is attached with `aria-describedby`, and an error
- * replaces the hint as a `role="alert"` message so the failure is announced,
- * not only coloured.
- */
 export function Field({
   label,
   hint,
@@ -82,15 +59,6 @@ export function Field({
   label: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
-  /**
-   * The id of the control this labels. Usually omitted: the field then mints one
-   * with `useId` and attaches it to its child, which stays unique when the field
-   * renders inside a list.
-   *
-   * Pass it only when something outside needs to point at the control (a `ref`,
-   * a test, an `aria-controls` elsewhere on the page). The child is then left
-   * as it is.
-   */
   htmlFor?: string;
   children: ReactNode;
   className?: string;
@@ -99,13 +67,6 @@ export function Field({
   const id = htmlFor ?? generated;
   const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
 
-  /**
-   * When the id is ours, put it on the control, with `describedBy`, so the hint
-   * is announced as a description instead of becoming part of the field's name.
-   *
-   * Only a single element child can be given an id; anything else (a fragment, a
-   * group of radios) is left alone and should pass `htmlFor` itself.
-   */
   const control =
     htmlFor === undefined && isValidElement(children)
       ? cloneElement(children as ReactElement<Record<string, unknown>>, {
@@ -134,14 +95,6 @@ export function Field({
   );
 }
 
-/**
- * An amount somebody types, with its currency mark.
- *
- * The component owns both the label and the input, so their association cannot
- * be forgotten. `dir="ltr"` because an amount is a Latin run whatever the page
- * direction, `inputMode="decimal"` for the numeric keypad, and `spellCheck` off
- * because a red squiggle under a number is noise.
- */
 export function MoneyField({
   label,
   hint,
@@ -155,7 +108,6 @@ export function MoneyField({
   label: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
-  /** `$` for money, `%` for a rate. Decorative; the label says which. */
   mark?: string;
   value: string;
   onChange: (value: string) => void;
@@ -197,7 +149,6 @@ export function MoneyField({
   );
 }
 
-/** Icon-only control. `label` is required: it becomes the accessible name. */
 export function IconButton({
   label,
   children,
@@ -218,11 +169,6 @@ export function IconButton({
   );
 }
 
-/* ============================================================
-   Surfaces
-   ============================================================ */
-
-/** Card surface with an optional titled header and tool slot. */
 export function Panel({
   title,
   subtitle,
@@ -259,16 +205,8 @@ export function Panel({
   );
 }
 
-/* ============================================================
-   Status
-   ============================================================ */
-
 export type StatusTone = 'success' | 'warning' | 'error' | 'info' | 'gold' | 'violet' | 'neutral';
 
-/**
- * Status badge. Colour is never the only signal: the label always states the
- * status in words, so the pill is readable without colour perception.
- */
 export function StatusBadge({
   tone = 'neutral',
   children,
@@ -284,10 +222,6 @@ export function StatusBadge({
     </span>
   );
 }
-
-/* ============================================================
-   States: empty / error / loading
-   ============================================================ */
 
 export function EmptyState({
   title,
@@ -310,10 +244,6 @@ export function EmptyState({
   );
 }
 
-/**
- * Inline error, shown where the failure happened rather than as a page takeover,
- * so the shell and the rest of the data stay usable.
- */
 export function ErrorState({
   title,
   message,
@@ -341,15 +271,6 @@ export function ErrorState({
   );
 }
 
-/**
- * A short confirmation banner.
- *
- * `tone="warning"` is the same shape in amber with the alert glyph, for a
- * message that is informational rather than celebratory, such as a flagged
- * legacy name awaiting confirmation. It stays `role="status"` (polite) in both
- * tones: neither case is an error, and neither should interrupt a screen reader
- * mid-sentence.
- */
 export function SuccessNote({
   children,
   tone = 'success',
@@ -365,7 +286,6 @@ export function SuccessNote({
   );
 }
 
-/** Layout-preserving table skeleton: same row height, same column count. */
 export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="dt-wrap" aria-hidden="true">
@@ -393,10 +313,6 @@ export function SkeletonBlock({ className = '' }: { className?: string }) {
   return <div className={`skel ${className}`} aria-hidden="true" />;
 }
 
-/* ============================================================
-   Metric card
-   ============================================================ */
-
 export function MetricCard({
   label,
   value,
@@ -422,20 +338,11 @@ export function MetricCard({
   );
 }
 
-/* ============================================================
-   Contextual tabs
-   ============================================================ */
-
 export interface ContextTab {
   key: string;
   label: string;
 }
 
-/**
- * Local tab strip. These only switch content inside the current section; the
- * rail, header and shell stay mounted. Implemented as a real ARIA tab list so
- * arrow keys move between tabs.
- */
 export function ContextTabs({
   tabs,
   active,
@@ -452,7 +359,6 @@ export function ContextTabs({
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);
     if (index < 0) return;
-    // In RTL the visual arrow direction is mirrored, matching the tab order.
     const rtl = document.documentElement.dir === 'rtl';
     const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
     const back = rtl ? 'ArrowRight' : 'ArrowLeft';
@@ -494,7 +400,6 @@ export function ContextTabs({
   );
 }
 
-/** The content region a `ContextTabs` strip controls. */
 export function TabPanel({ tab, children }: { tab: string; children: ReactNode }) {
   return (
     <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={-1} className="stack">
@@ -503,11 +408,6 @@ export function TabPanel({ tab, children }: { tab: string; children: ReactNode }
   );
 }
 
-/* ============================================================
-   Small compositions
-   ============================================================ */
-
-/** Centred "view all …" action at the foot of a preview table. */
 export function ViewAllLink({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
     <button type="button" className="link-more" onClick={onClick}>
@@ -517,7 +417,6 @@ export function ViewAllLink({ children, onClick }: { children: ReactNode; onClic
   );
 }
 
-/** One label/value line inside a detail drawer. */
 export function DetailRow({
   label,
   children,

@@ -1,12 +1,4 @@
 {
-  // What `nest build` compiles, and so what ships in the image.
-  //
-  // The seed is left out. It TRUNCATEs every table, the append-only history
-  // included (row triggers do not fire on TRUNCATE), and creates two admin
-  // accounts whose password is in the source. Compiled, it sat in the production
-  // image as dist/db/seed.js, next to argon2, one `docker exec … node
-  // dist/db/seed.js` away from erasing the ledger. Development runs it from
-  // source with tsx (`pnpm db:seed`), and `tsconfig.json` still type-checks it.
   "extends": "./tsconfig.json",
   "exclude": ["src/db/seed.ts"]
 }

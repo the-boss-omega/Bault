@@ -4,22 +4,8 @@ import { useI18n } from '../i18n';
 import { Button, IconButton } from './primitives';
 import { IconAlert, IconClose, IconPlus } from './icons';
 
-/**
- * Take or attach photographs, and hand back the keys.
- *
- * Two steps, matching the API. Each file is uploaded to `/media/uploads` on
- * selection and the component holds the returned keys; the form it sits in
- * sends those keys with whatever it is creating. Uploading on selection lets an
- * operator photograph a box while still typing its tracking number, and keeps a
- * slow upload from sitting between them and the submit button.
- *
- * `capture="environment"` asks a phone for the rear camera directly, which is
- * what a receiving bench needs.
- */
-
 export interface PhotoRef {
   objectKey: string;
-  /** Local preview: a blob URL. The stored object is never fetched back. */
   previewUrl: string;
   name: string;
 }
@@ -59,8 +45,6 @@ export function PhotoInput({
   const add = useCallback(
     async (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      // Files over the cap are dropped here instead of being uploaded and then
-      // refused by the server.
       const room = Math.max(0, max - value.length);
       const chosen = Array.from(files).slice(0, room);
       if (chosen.length < files.length) setError(t('photos.tooMany', { max }));
@@ -93,8 +77,6 @@ export function PhotoInput({
 
   function remove(objectKey: string) {
     const gone = value.find((p) => p.objectKey === objectKey);
-    // The blob is ours; releasing it is not optional on a bench that photographs
-    // fifty boxes without reloading the page.
     if (gone) URL.revokeObjectURL(gone.previewUrl);
     onChange(value.filter((p) => p.objectKey !== objectKey));
   }
@@ -128,11 +110,6 @@ export function PhotoInput({
 
         {!full && (
           <li>
-            {/*
-              The control is a Button rather than a styled <label>, so it is
-              reachable by keyboard and announces as a button; the file input
-              itself stays out of the tab order behind it.
-            */}
             <Button
               variant="secondary"
               size="sm"
@@ -147,10 +124,6 @@ export function PhotoInput({
         )}
       </ul>
 
-      {/*
-        The real file input, driven by the visible button above. It is off the
-        tab order but is still a form control, so it carries its own label.
-      */}
       <input
         ref={inputRef}
         type="file"
@@ -162,7 +135,6 @@ export function PhotoInput({
         className="visually-hidden"
         onChange={(e) => {
           void add(e.target.files);
-          // Reset, or picking the same file twice in a row does nothing.
           e.target.value = '';
         }}
       />
@@ -180,5 +152,4 @@ export function PhotoInput({
   );
 }
 
-/** The keys a form sends, from what the control is holding. */
 export const photoKeys = (photos: readonly PhotoRef[]): string[] => photos.map((p) => p.objectKey);

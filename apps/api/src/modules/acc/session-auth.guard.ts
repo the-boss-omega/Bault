@@ -9,24 +9,6 @@ import { ALLOW_SUSPENDED_KEY } from './allow-suspended.decorator';
 import { ALLOW_ANY_STATUS_KEY } from './allow-any-status.decorator';
 import { SessionService } from './session.service';
 
-/**
- * Global authentication + account-status guard.
- *
- * Steps for every request:
- *   1. Read the session cookie; if present, resolve it to an AuthUser.
- *   2. If the account is not `active`, BLOCK it, even on public routes: a
- *      suspended or closed account is barred from every action.
- *   3. Attach the user to the request.
- *   4. Public routes (@Public) pass regardless; all others require a user (401).
- *
- * ONE EXCEPTION, at step 2. A route marked `@AllowSuspended()` (the helpdesk and
- * the profile probe) is reachable by a SUSPENDED account, so a holder suspended
- * automatically for debt can still ask for help. `closed` is never let through
- * there: that state is terminal. Signing out (`@AllowAnyStatus()`) is reachable
- * by every status, because it only ends the session it is given.
- *
- * Runs before MfaEnrollmentGuard and RolesGuard.
- */
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
   private readonly cookieName = loadEnv().SESSION_COOKIE_NAME;
@@ -57,8 +39,6 @@ export class SessionAuthGuard implements CanActivate {
     if (raw) {
       const user = await this.sessions.resolve(raw);
       if (user) {
-        // `suspended` may pass on an explicitly-marked route; `closed` only to
-        // sign out.
         const permitted =
           user.status === 'active' ||
           allowAnyStatus === true ||

@@ -7,10 +7,6 @@ import { TradeService } from './trade.service';
 import { MarketReadService } from './market-read.service';
 
 class ProposeSwapDto {
-  /**
-   * The counterparty's USERNAME, not their internal id. Usernames are the only
-   * customer-facing identifier, so the id is resolved here.
-   */
   @IsString() responderUsername!: string;
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) offeredItemIds!: string[];
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) requestedItemIds!: string[];
@@ -23,7 +19,6 @@ class ConfirmTokenDto {
   @IsString() confirmationToken!: string;
 }
 
-/** MKT swaps + gift transfers (T091). Recipient approval reuses /swaps/:id/approve. */
 @ApiTags('MKT')
 @Controller('marketplace')
 export class TradeController {
@@ -32,7 +27,6 @@ export class TradeController {
     private readonly read: MarketReadService,
   ) {}
 
-  /** Every proposal the caller is party to, incoming and outgoing. */
   @Get('swaps')
   mine(@CurrentUser() user: AuthUser) {
     return this.read.mySwaps(user.id);

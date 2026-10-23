@@ -2,31 +2,16 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { SEED, SEED_USERNAME, fundWallet, signIn } from '../../tests/integration/helpers/http';
 import { closeDb, sql } from '../../tests/integration/helpers/db';
 
-/**
- * Uploads, from the wrong side.
- *
- * `POST /media/uploads` is for staff, and judges the content by its bytes, not
- * by the `contentType` string the client chose to send. A failure in the store
- * says so instead of answering the same opaque 500 as a bug. The routes that
- * attach a key accept only one this API minted for that purpose: never
- * somebody else's, and never one with a `..` segment that a URL parser would
- * resolve into another bucket before a link to it is signed.
- */
-
 type Client = Awaited<ReturnType<typeof signIn>>;
 
 afterAll(closeDb);
 
 const b64 = (bytes: Buffer) => bytes.toString('base64');
 
-/** A 1×1 PNG — the smallest thing that is genuinely an image. */
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-/** The first bytes of a JFIF file; a signature is all the check reads. */
 const JPEG = b64(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01]));
 const WEBP = b64(Buffer.concat([Buffer.from('RIFF'), Buffer.from([0x24, 0, 0, 0]), Buffer.from('WEBPVP8 '), Buffer.alloc(8)]));
-/** An ISO-BMFF `ftyp` box whose major brand is `heic`, as an iPhone writes it. */
 const HEIC = b64(Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypheic'), Buffer.from([0, 0, 0, 0]), Buffer.from('mif1heic')]));
-/** The same box shape with an AVIF brand: an image, but not one of the four. */
 const AVIF = b64(Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypavif'), Buffer.from([0, 0, 0, 0]), Buffer.from('mif1miaf')]));
 const TEXT = b64(Buffer.from('This is a shopping list, not a photograph of a card.'));
 
@@ -40,7 +25,6 @@ async function uploadedKey(client: Client, purpose: 'parcel' | 'item_intake'): P
   return res.body.objectKey as string;
 }
 
-/** Move an upload's timestamp back, which is the only way to make one old. */
 async function age(objectKey: string, minutes: number): Promise<void> {
   await sql(`UPDATE media_upload SET created_at = now() - make_interval(mins => $2) WHERE object_key = $1`, [
     objectKey,
@@ -60,10 +44,6 @@ const intakeWith = (operator: Client, photoKeys: string[]) =>
 const facilityCode = async (client: Client) =>
   ((await client.get('/me/inbound-addresses')).body as { code: string }[])[0]!.code;
 
-/* ============================================================
-   Who may upload
-   ============================================================ */
-
 describe('who may put bytes in the bucket', () => {
   it('refuses a customer: no screen a customer sees uploads anything', async () => {
     const collector = await signIn(SEED.collector);
@@ -78,10 +58,6 @@ describe('who may put bytes in the bucket', () => {
     }
   });
 });
-
-/* ============================================================
-   What counts as an image
-   ============================================================ */
 
 describe('an upload is judged by its bytes, not by its label', () => {
   it('refuses text that calls itself a PNG', async () => {
@@ -99,8 +75,6 @@ describe('an upload is judged by its bytes, not by its label', () => {
   });
 
   it('stores the type the bytes are, whatever the label said', async () => {
-    // A `.png` that is really a JPEG is common — a browser names the type from
-    // the extension. The stored type is the one an image viewer will need.
     const operator = await signIn(SEED.operator);
     const res = await upload(operator, 'item_intake', JPEG, 'image/png');
     expect(res.status).toBe(201);
@@ -120,14 +94,8 @@ describe('an upload is judged by its bytes, not by its label', () => {
   });
 });
 
-/* ============================================================
-   The size limit, in words a person reads
-   ============================================================ */
-
 describe('an oversized photograph', () => {
   it('is refused with the limit in megabytes, not a count of characters', async () => {
-    // 11 MB of bytes is ~14.7 million base64 characters: under the 16 MB body
-    // cap, so the refusal has to come from the media rules rather than Express.
     const operator = await signIn(SEED.operator);
     const big = Buffer.alloc(11 * 1024 * 1024, 0);
     big.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -139,26 +107,14 @@ describe('an oversized photograph', () => {
   });
 });
 
-/* ============================================================
-   A store that is down says so
-   ============================================================ */
-
 describe('when the store cannot be reached', () => {
   it('answers with storage_unavailable, never a bare 500', async () => {
-    // Against the sandbox store this stores and answers 201. Against an S3
-    // endpoint nobody is listening on — the way `receiving-bench.test.ts` fails
-    // with no bucket — it has to be a 503 that names the cause, because a 500
-    // tells the operator "bug" and tells them nothing about trying again.
     const operator = await signIn(SEED.operator);
     const res = await upload(operator, 'parcel');
     expect([201, 503]).toContain(res.status);
     if (res.status === 503) expect(res.body.error.code).toBe('storage_unavailable');
   });
 });
-
-/* ============================================================
-   A key is a name, never a path
-   ============================================================ */
 
 describe('a key with a dot segment', () => {
   const TRAVERSAL = ['intake/../other-bucket/secret.png', './intake/x.png', 'intake/2026/../../x.png', '..'];
@@ -203,7 +159,6 @@ describe('a key with a dot segment', () => {
   });
 
   it('still accepts an ordinary file name with dots in it', async () => {
-    // Only a WHOLE segment of `.` or `..` moves a path. `receipt.v2.pdf` is a name.
     const collector = await signIn(SEED.collector);
     const res = await collector.post('/finance/wallet-requests', {
       type: 'cash_in',
@@ -216,10 +171,6 @@ describe('a key with a dot segment', () => {
     expect(res.status).toBe(201);
   });
 });
-
-/* ============================================================
-   An attached key has to be one this API minted, for this
-   ============================================================ */
 
 describe('attaching a photograph', () => {
   it('refuses a key this API never minted', async () => {
@@ -255,7 +206,6 @@ describe('attaching a photograph', () => {
   });
 
   it('accepts a colleague’s photograph taken moments ago', async () => {
-    // Two people at one bench: one photographs, the other books the card in.
     const admin = await signIn(SEED.admin);
     const operator = await signIn(SEED.operator);
     const key = await uploadedKey(admin, 'item_intake');
@@ -263,8 +213,6 @@ describe('attaching a photograph', () => {
   });
 
   it('refuses somebody else’s photograph from hours ago', async () => {
-    // The key of a card photographed this morning, lifted from a vault response
-    // or a log, and attached to a different card this afternoon.
     const admin = await signIn(SEED.admin);
     const operator = await signIn(SEED.operator);
     const key = await uploadedKey(admin, 'item_intake');
@@ -306,7 +254,6 @@ describe('attaching a photograph', () => {
     });
     expect(refused.status).toBe(400);
 
-    // Still waiting for a shelf, and shelving it properly still works.
     const ok = await operator.post(`/marketplace/house/orders/${order.id}/stow`, {
       autoStow: true,
       photoKeys: [await uploadedKey(operator, 'item_intake')],

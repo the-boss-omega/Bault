@@ -4,15 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { createUser, testPool } from './helpers/db';
 
-/**
- * Tracking refresh with the carrier the deployment is configured for.
- *
- * The sandbox answers `in_transit` for every parcel forever, so a job that used
- * it whatever `SHIPPING_PROVIDER` said would never move a shipment to
- * `delivered`. EasyPost is stood up locally (`EASYPOST_BASE_URL` exists for
- * exactly this) and answers per tracking code, so the suite can see which
- * adapter the job really asked.
- */
 const calls: { code: string; auth: string | undefined }[] = [];
 const answers: Record<string, { status: number; body: unknown }> = {};
 let server: Server;
@@ -34,8 +25,6 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
 
-  // Set BEFORE the config is first read in this file: `loadEnv` caches, and
-  // dotenv never overrides a variable that is already set.
   process.env.SHIPPING_PROVIDER = 'easypost';
   process.env.EASYPOST_API_KEY = 'EZTK_worker_suite_not_a_real_key';
   process.env.EASYPOST_BASE_URL = `http://127.0.0.1:${port}/v2`;
@@ -70,13 +59,11 @@ describe('tracking refresh', () => {
     await refreshTracking(pool);
 
     expect(calls.some((c) => c.code === code)).toBe(true);
-    // EasyPost's own scheme: the key as the Basic username, no password.
     expect(calls.find((c) => c.code === code)!.auth).toBe(
       `Basic ${Buffer.from('EZTK_worker_suite_not_a_real_key:').toString('base64')}`,
     );
     expect(await statusOf(pool, id)).toBe('delivered');
 
-    // Twice is the same as once: a delivered parcel is no longer polled.
     const before = calls.length;
     await refreshTracking(pool);
     expect(calls.filter((c) => c.code === code).length).toBe(1);
@@ -93,12 +80,55 @@ describe('tracking refresh', () => {
     const brokenId = await shipment(pool, broken);
     const fineId = await shipment(pool, fine);
 
-    // One carrier error must not escape the loop, or every parcel after it goes
-    // unrefreshed, every half hour, for as long as that one keeps failing.
     await refreshTracking(pool);
 
     expect(await statusOf(pool, fineId)).toBe('delivered');
     expect(await statusOf(pool, brokenId)).toBe('shipped');
+  });
+
+  const eventsFor = async (id: string) =>
+    (
+      await pool.query<{ event_type: string; user_id: string | null }>(
+        `SELECT event_type, payload ->> 'userId' AS user_id FROM outbox_message WHERE aggregate_id = $1 ORDER BY created_at`,
+        [id],
+      )
+    ).rows;
+  const ownerOf = async (id: string) =>
+    (await pool.query<{ user_id: string }>(`SELECT user_id FROM shipment WHERE id = $1`, [id])).rows[0]!.user_id;
+
+  it('tells the collector once when the carrier says the parcel was delivered', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}TOLDDELIVERED`;
+    answers[code] = { status: 200, body: { status: 'delivered' } };
+    const id = await shipment(pool, code);
+
+    await refreshTracking(pool);
+    await refreshTracking(pool);
+
+    expect(await statusOf(pool, id)).toBe('delivered');
+    expect(await eventsFor(id)).toEqual([{ event_type: 'shipment_delivered', user_id: await ownerOf(id) }]);
+  });
+
+  it('tells the collector once when the carrier reports a problem', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}TOLDFAILURE`;
+    answers[code] = { status: 200, body: { status: 'return_to_sender' } };
+    const id = await shipment(pool, code, 'in_transit');
+
+    await refreshTracking(pool);
+    await refreshTracking(pool);
+
+    expect(await statusOf(pool, id)).toBe('exception');
+    expect(await eventsFor(id)).toEqual([{ event_type: 'shipment_exception', user_id: await ownerOf(id) }]);
+  });
+
+  it('writes no event for a parcel that is merely still on its way', async () => {
+    const { refreshTracking } = await import('../../apps/worker/src/jobs/tracking-refresh');
+    const code = `EZ${Date.now()}STILLMOVING`;
+    answers[code] = { status: 200, body: { status: 'in_transit' } };
+    const id = await shipment(pool, code, 'in_transit');
+    await refreshTracking(pool);
+    expect(await eventsFor(id)).toEqual([]);
   });
 
   it('does not touch a parcel whose status the carrier does not recognise', async () => {

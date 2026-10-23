@@ -5,18 +5,6 @@ import { Client, signIn } from './helpers/http';
 import { closeDb } from './helpers/db';
 import { MFA_PASSWORD, activeAccount, enrol, passwordOnly } from './helpers/mfa';
 
-/**
- * The HTTP helpers every suite here leans on.
- *
- * A helper that talks to the wrong server, or reports a sign-in that did not
- * happen, makes every test built on it prove less than it says: a suite against
- * a second API would read the first one's answers, and a test "signed in" as an
- * account with two-factor sign-in would be making anonymous requests.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
-/** A server that records the path of every request it is sent. */
 let server: Server;
 let seen: string[] = [];
 let base = '';
@@ -51,8 +39,6 @@ describe('signIn', () => {
     const account = await activeAccount('helper');
     await enrol(await passwordOnly(account));
 
-    // The password was right, the API answered 200 with a challenge, and no
-    // session cookie was set: whoever uses this client is anonymous.
     await expect(signIn(account.username, MFA_PASSWORD)).rejects.toThrow(/second factor/i);
   });
 });

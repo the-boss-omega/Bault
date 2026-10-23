@@ -1,51 +1,5 @@
 name: Deploy (optional)
 
-# Deploys a release that release.yml has already published. Manual only: a
-# deployment is a decision somebody makes and puts their name to, never a side
-# effect of a push. Rollback is the same run with the previous tag.
-#
-# OPTIONAL. The supported way to deploy is deploy.sh run by hand on the host,
-# over SSH from ADMIN_IP (infra/production/README.md, section 5). The host's
-# firewall admits SSH from ADMIN_IP only (bootstrap.sh), and a GitHub-hosted
-# runner connects from addresses that change, so from `ubuntu-latest` this
-# job cannot reach the host. It checks that first and stops with the reason.
-# Opening SSH to GitHub's address ranges is not the fix: that is most of the
-# internet's cloud. The job works unchanged on a self-hosted runner on a
-# machine the firewall admits: set `runs-on` to that runner's label.
-#
-# APPROVAL lives in the repository settings, not in this file: Settings >
-# Environments > `staging` / `production` > Required reviewers (and, for
-# production, "Deployment branches and tags: selected tags `v*`"). The job
-# below names the environment, so it waits for that approval before it can read
-# the environment's secrets, which are what reach the server.
-#
-# Per environment (Settings > Environments > <name>):
-#   secret   DEPLOY_SSH_KEY      private key for the host's `deploy` user, used
-#                                for nothing else
-#   secret   DEPLOY_KNOWN_HOSTS  the host's line(s) for ~/.ssh/known_hosts
-#                                (`ssh-keyscan -t ed25519 <host>`, checked by hand
-#                                against the host's own fingerprint)
-#   variable DEPLOY_HOST         host name or address
-# No other secret is used, and none is passed to the server: the server reads
-# its own from /etc/bault.
-#
-# WHAT THIS RELIES ON in infra/production/deploy.sh (the contract):
-#   - run on the host as `deploy`, from /opt/bault, with exactly one argument,
-#     the release tag (`v1.2.3` or `v1.2.3-rc1`), which is also the image tag:
-#     ghcr.io/<owner>/bault-{api,worker,web}:<tag>
-#   - non-interactive (no TTY, no prompt) and `set -euo pipefail`: it exits
-#     non-zero on any failure and exits 0 only once the new release answers
-#     /api/v1/readyz and /api/v1/readyz/worker
-#   - it does everything on the host: pulls the three images (with the host's
-#     own docker login, a read-only token, if the packages are private), takes
-#     the pre-migration backup, migrates as bault_owner, re-runs
-#     infra/production/roles.sql, swaps the containers, waits for both probes
-#     and records the tag in /opt/bault/CURRENT_TAG
-#   - /opt/bault (compose.yml, Caddyfile, backup.sh, roles.sql) must be at the
-#     same tag as the images. deploy.sh does not check it out; it warns when
-#     the checkout is at another tag
-#   - re-running it with the same tag is safe, and running it with the previous
-#     tag is the rollback
 on:
   workflow_dispatch:
     inputs:
@@ -64,22 +18,18 @@ permissions:
   contents: read
   packages: read
 
-# Never two deployments to one environment at once, and never cancel one
-# halfway: a migration interrupted by a newer run is worse than either.
 concurrency:
   group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment:
       name: ${{ inputs.environment }}
 
     steps:
-      # The tag ends up in a command line on the server, so it is checked
-      # against the release pattern before it goes anywhere.
       - name: Check the tag
         env:
           TAG: ${{ inputs.tag }}
@@ -87,9 +37,6 @@ jobs:
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] \
             || { echo "::error::'$TAG' is not a release tag (v1.2.3 or v1.2.3-rc1)"; exit 1; }
 
-      # Before anything else touches the host: can this runner reach its SSH
-      # port at all? A firewall that drops the connection would otherwise
-      # leave ssh waiting two minutes for an opaque "Connection timed out".
       - name: Check the host is reachable from this runner
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
@@ -101,8 +48,6 @@ jobs:
           fi
           echo "reached ${DEPLOY_HOST}:22"
 
-      # Fail here, with a clear message, rather than on the server halfway
-      # through: all three images of the release must exist.
       - name: Check the release images exist
         env:
           TAG: ${{ inputs.tag }}
@@ -131,8 +76,6 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-      # StrictHostKeyChecking=yes against the pinned known_hosts: a host that
-      # does not prove it is ours never receives the command.
       - name: Run the deployment on the host
         env:
           TAG: ${{ inputs.tag }}

@@ -1,13 +1,5 @@
-# Dependency updates, weekly, as pull requests that go through CI like any other.
-#
-# Every workflow action is pinned to a commit SHA and every image to a digest, which
-# is what makes them safe and also what freezes them: nothing moves unless
-# somebody moves it. This is the somebody. Minor and patch updates are grouped
-# so a week's worth arrives as one PR per ecosystem; a major version is its own
-# PR, because that is the one that can change behaviour.
 version: 2
 updates:
-  # The pnpm workspace: one lockfile at the root covers every package.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -18,7 +10,6 @@ updates:
       npm-minor-and-patch:
         update-types: [minor, patch]
 
-  # FROM lines in the three images, and in the local MinIO build.
   - package-ecosystem: docker
     directories:
       - /apps/api
@@ -32,14 +23,9 @@ updates:
       docker-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Node's major version follows `engines` in package.json, which is a
-      # decision, not an update.
       - dependency-name: node
         update-types: [version-update:semver-major]
 
-  # `image:` lines in the production compose file: Caddy's tag and digest. Our
-  # own three images are named by ${BAULT_TAG}, which a deployment chooses;
-  # Dependabot skips a reference it cannot resolve.
   - package-ecosystem: docker-compose
     directory: /infra/production
     schedule:
@@ -49,12 +35,6 @@ updates:
       compose-minor-and-patch:
         update-types: [minor, patch]
 
-  # Not here, because Dependabot cannot see them: the MinIO version and the
-  # gitleaks version and checksum in ci.yml, and the MinIO and mc versions in
-  # infra/minio/Dockerfile. They are updated by hand; each says so.
-
-  # The actions in .github/workflows. Dependabot rewrites the SHA and the
-  # version comment together.
   - package-ecosystem: github-actions
     directory: /
     schedule:

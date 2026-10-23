@@ -1,20 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn, fundWallet, intakeFor, type Client } from '../../tests/integration/helpers/http';
 
-/**
- * The money invariants, checked against the API rather than the database.
- *
- * `tests/property/wallet-ledger.test.ts` proves the derivation is correct in the
- * small. This proves it survives the product: after a real sequence of intakes,
- * charges, a sale, a withdrawal and a shipment, does the balance the customer is
- * shown still equal the sum of the rows they can see?
- *
- * The reason to check it here and not only in a property test is that every one
- * of those operations is a different service writing a different row inside a
- * different transaction. The invariant only means something end to end.
- */
-
-/** The balance, and the ledger it must be derived from, as a customer sees them. */
 async function walletAndLedger(client: Client) {
   const [wallet, ledger] = await Promise.all([
     client.get('/finance/wallet'),
@@ -42,13 +28,11 @@ describe('the balance is always the sum of the ledger', () => {
     const start = await walletAndLedger(collector);
     expect(start.balance).toBe(start.derived);
 
-    // 1. Money in, through the only path that exists.
     await fundWallet(SEED.collector, 250_00);
     const funded = await walletAndLedger(collector);
     expect(funded.balance).toBe(funded.derived);
     expect(funded.balance).toBe(start.balance + 250_00);
 
-    // 2. Charges out — three intakes, each of which bills the owner.
     for (let i = 0; i < 3; i += 1) {
       await intakeFor(operator, SEED.collector, { description: `Invariant item ${i}` });
     }
@@ -56,8 +40,6 @@ describe('the balance is always the sum of the ledger', () => {
     expect(charged.balance).toBe(charged.derived);
     expect(charged.balance).toBeLessThan(funded.balance);
 
-    // 3. A sale — money moving between two accounts at once is where a
-    //    single-sided write would show up.
     const item = await intakeFor(operator, SEED.collector, { description: 'Invariant sale' });
     const listing = await collector.post('/marketplace/listings', {
       itemId: item.id,
@@ -77,15 +59,10 @@ describe('the balance is always the sum of the ledger', () => {
     expect(sellerAfter.balance).toBe(sellerAfter.derived);
     expect(buyerAfter.balance).toBe(buyerAfter.derived);
 
-    // The buyer paid exactly the asking price.
     expect(buyerAfter.balance).toBe(buyerBefore.balance - 40_00);
-    // The seller received it less a fee — never more than it, never nothing.
     expect(sellerAfter.balance).toBeGreaterThan(charged.balance);
     expect(sellerAfter.balance - charged.balance).toBeLessThanOrEqual(40_00);
 
-    // 4. Money out.
-    // $20 is the published cash-out minimum; below it the request is refused
-    // with a named violation rather than silently clamped.
     const tooSmall = await collector.post('/finance/withdrawals', {
       amountMinor: 19_99,
       destinationAccount: 'IL62 0108 0000 0009 9999 999',
@@ -98,7 +75,6 @@ describe('the balance is always the sum of the ledger', () => {
     });
     expect([200, 201]).toContain(withdrawal.status);
 
-    // A cash-out is a REQUEST: raising it must not move the balance either.
     const requested = await walletAndLedger(collector);
     expect(requested.balance).toBe(requested.derived);
 
@@ -120,8 +96,6 @@ describe('the balance is always the sum of the ledger', () => {
     const bought = await buyer.post(`/marketplace/listings/${listing.body.id}/purchase`, {});
     expect(bought.status).toBe(201);
 
-    // The item is now the buyer's, in the buyer's vault, and gone from the
-    // seller's — the money and the ownership are one transaction or neither.
     const buyerVault = await buyer.get('/vault/items');
     expect((buyerVault.body as { id: string }[]).some((i) => i.id === item.id)).toBe(true);
 
@@ -150,7 +124,6 @@ describe('the balance is always the sum of the ledger', () => {
     expect(after.balance).toBe(before.balance);
     expect(after.rowCount).toBe(before.rowCount);
 
-    // And the item is still the seller's.
     const sellerVault = await seller.get('/vault/items');
     expect((sellerVault.body as { id: string }[]).some((i) => i.id === item.id)).toBe(true);
   });
@@ -175,11 +148,9 @@ describe('the ledger is append-only in practice, not just in policy', () => {
     const collector = await signIn(SEED.collector);
     const before = await walletAndLedger(collector);
 
-    // $10 is the cash-in minimum; fund above it.
     await fundWallet(SEED.collector, 25_00);
     const after = await walletAndLedger(collector);
 
-    // Rows only ever accumulate. A correction is a new row, never an edit.
     expect(after.rowCount).toBeGreaterThan(before.rowCount);
     expect(after.balance).toBe(after.derived);
   });
@@ -231,14 +202,12 @@ describe('separation of duties on wallet requests', () => {
     });
     expect(created.status).toBe(201);
 
-    // Raised: nothing has moved.
     const raised = await walletAndLedger(collector);
     expect(raised.balance).toBe(before.balance);
 
     const admin = await signIn(SEED.admin);
     await admin.post(`/admin/wallet-requests/${created.body.id}/approve`, {});
 
-    // Approved: STILL nothing has moved. Approval is a decision, not a payment.
     const approved = await walletAndLedger(collector);
     expect(approved.balance).toBe(before.balance);
 
@@ -286,7 +255,6 @@ describe('pricing is snapshotted, not looked up later', () => {
     const firstCharge = before.balance - afterFirst.balance;
     expect(firstCharge).toBeGreaterThan(0);
 
-    // Change the intake price, then confirm the EARLIER charge did not move.
     const raised = await admin.post('/pricing/rules', {
       actionType: 'intake',
       description: 'Doubled for the snapshot test',

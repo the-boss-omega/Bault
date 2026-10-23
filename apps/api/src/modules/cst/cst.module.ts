@@ -5,17 +5,10 @@ import { InventoryService } from './inventory.service';
 import { StowService } from './stow.service';
 import { CstController } from './cst.controller';
 
-/**
- * CST module (custody). Global because CustodyService is the shared kernel used
- * by INV, MKT, SHP, DIS and ESC to mutate items while guaranteeing custody events.
- */
 @Global()
 @Module({
   controllers: [CstController],
   providers: [CustodyService, RelocateService, InventoryService, StowService],
-  // InventoryService is exported so VLT can serve the owner-scoped item history
-  // timeline (Requirement 13.2) without duplicating the merge logic; StowService
-  // so intake (INV, and the house store) can be directed to a bin.
   exports: [CustodyService, InventoryService, StowService],
 })
 export class CstModule {}

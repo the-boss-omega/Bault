@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
+import { itemName } from '../../../shared/itemClasses';
+import { ItemPick } from '../../../shared/ui/Serial';
 import { useVaultItems } from '../../../shared/useVaultItems';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
 import { Button, EmptyState, Field, Panel, StatusBadge } from '../../../shared/ui/primitives';
@@ -13,7 +15,6 @@ interface Collector {
   lastName: string | null;
 }
 
-/** One of the counterparty's items, resolved from a serial number. */
 interface TradableItem {
   id: string;
   serialNumber: string;
@@ -22,16 +23,6 @@ interface TradableItem {
   ownerUsername: string;
 }
 
-/**
- * Propose a swap, or give a card away.
- *
- * The other collector is named by username, the only customer-facing identifier
- * Bault has; the endpoints take it in place of an internal user id.
- *
- * A gift is the same thing with nothing asked in return, and it is presented as
- * one control, because the difference between "swap" and "give away" is whether
- * you tick a box.
- */
 export function ProposeTradePanel({
   onProposed,
   onError,
@@ -57,8 +48,6 @@ export function ProposeTradePanel({
     .filter(([, v]) => v)
     .map(([id]) => id);
 
-  // A change of username invalidates a previously-resolved collector, so the
-  // form can never submit against somebody the reader is no longer looking at.
   useEffect(() => {
     setCounterparty(null);
     setWanted([]);
@@ -76,12 +65,6 @@ export function ProposeTradePanel({
     }
   }
 
-  /**
-   * Add one of their cards to the ask, by serial.
-   *
-   * You cannot browse another collector's vault, so a swap names what it wants
-   * the way collectors do it anyway: by quoting the serial you already know.
-   */
   async function addWanted() {
     if (!counterparty) return;
     try {
@@ -100,8 +83,6 @@ export function ProposeTradePanel({
     setBusy(true);
     try {
       if (gift) {
-        // A gift is two-step confirmed on the sender's side, then still needs the
-        // recipient to accept: nobody receives property without agreeing to.
         const challenge = await api.post<{ confirmationToken: string }>('/marketplace/transfers', {
           itemId: offeredIds[0],
           toUsername: counterparty.username,
@@ -111,11 +92,6 @@ export function ProposeTradePanel({
         });
         await onProposed(t('market.propose.giftSent', { username: counterparty.username }));
       } else {
-        /**
-         * A swap must name what comes back. The engine reads an empty requested
-         * set as a gift and hands the card over on approval, which would give
-         * away a card the proposer thought they were negotiating over.
-         */
         await api.post('/marketplace/swaps', {
           responderUsername: counterparty.username,
           offeredItemIds: offeredIds,
@@ -183,15 +159,11 @@ export function ProposeTradePanel({
                     checked={!!offered[item.id]}
                     onChange={() =>
                       setOffered((prev) =>
-                        // A gift moves exactly one card, so ticking a second
-                        // replaces the first instead of sending both.
                         gift ? { [item.id]: !prev[item.id] } : { ...prev, [item.id]: !prev[item.id] },
                       )
                     }
                   />
-                  <span>
-                    {item.typeClass} — {item.description}
-                  </span>
+                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
                 </label>
               </li>
             ))}
@@ -216,10 +188,7 @@ export function ProposeTradePanel({
               <ul className="check-list list-unbounded">
                 {wanted.map((w) => (
                   <li key={w.id}>
-                    <span>
-                      {w.typeClass} — {w.description}{' '}
-                      <code dir="ltr">{w.serialNumber}</code>
-                    </span>
+                    <ItemPick serial={w.serialNumber} name={itemName(t, w)} />
                     <Button
                       size="sm"
                       variant="ghost"

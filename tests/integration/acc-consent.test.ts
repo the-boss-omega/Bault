@@ -2,19 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { Client, SEED, fixtureEmail, signIn } from './helpers/http';
 import { CURRENT_TERMS_VERSION } from '../../apps/api/src/modules/acc/terms';
 
-/**
- * Registration records that the person agreed to the terms.
- *
- * Bault charges fees, accrues interest on a negative balance and suspends
- * accounts, so nobody gets an account without agreeing to that. The API
- * refuses a registration that did not accept, refuses one that accepted some
- * OTHER version than the one in force, and writes down which version and when.
- *
- * The version is the API's own constant, so a new version of the terms needs no
- * edit here. `tests/web/faq-legal.test.ts` checks that the SPA and the API name
- * the same one.
- */
-
 function registration(overrides: Record<string, unknown> = {}) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   return {
@@ -41,9 +28,6 @@ describe('ACC registration consent', () => {
   });
 
   it('refuses an acceptance of terms that are not the ones in force', async () => {
-    // A page loaded before the terms changed sends the version it showed. That
-    // is not consent to the current text, so it is refused with a reason the
-    // page can act on rather than recorded as if it were.
     const res = await new Client().post(
       '/auth/register',
       registration({ acceptedTermsVersion: '2020-01-draft-1' }),
@@ -61,7 +45,6 @@ describe('ACC registration consent', () => {
     );
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending_verification');
-    // Read back from the row as INSERTed (RETURNING), not echoed from the request.
     expect(res.body.termsVersion).toBe(CURRENT_TERMS_VERSION);
     const acceptedAt = Date.parse(res.body.termsAcceptedAt);
     expect(Number.isFinite(acceptedAt)).toBe(true);
@@ -70,8 +53,6 @@ describe('ACC registration consent', () => {
   });
 
   it('shows an account that predates the consent step as never having accepted', async () => {
-    // The seeded personas were created before there was anything to accept.
-    // Their profile says so plainly instead of inventing an acceptance.
     const collector = await signIn(SEED.collector);
     const me = await collector.get('/me/profile');
     expect(me.status).toBe(200);

@@ -1,0 +1,11 @@
+-- 0037 — An address names its state or province.
+--
+-- A saved address had a street, a city, a postal code and a country, and no
+-- state. The EasyPost adapter already sends `region` as the carrier's `state`,
+-- and the facility origin carries one, but a customer's destination arrived
+-- without it, and carriers will not print a US or Canadian label without the
+-- state or province. Nullable, because addresses saved before this have none:
+-- the API refuses to quote or ship to one of those in a country that needs it,
+-- with an error that names the address, until the customer adds it. Nothing
+-- here guesses a state from a postal code.
+ALTER TABLE "shipping_address" ADD COLUMN IF NOT EXISTS "region" text;

@@ -20,34 +20,15 @@ export interface CreateRuleInput {
 
 export interface PriceResult {
   amount: Money;
-  /** The exact rule applied — snapshotted onto charges/transactions (price freeze). */
   snapshot: Record<string, unknown>;
 }
 
-/**
- * Pricing resolution (T064, Principles VI & V).
- *
- * `resolve` finds the rule IN FORCE right now for an action (+ optional item class),
- * preferring a class-specific rule over the catch-all, newest effective_from first.
- * `price` computes the amount: fixed → the value; percentage → basis points of a
- * base amount (e.g. the marketplace fee on a sale price). The returned snapshot is
- * stored with the charge/transaction so future rule changes never alter it.
- */
 @Injectable()
 export class PricingService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  /**
-   * Admin creates a new effective-dated rule (PRC-02/ADM-02). Inserts a fresh row
-   * effective NOW; `resolve` always picks the newest in-force rule, so the new row
-   * supersedes older ones without editing them (price freeze preserved, PRC-04).
-   */
   async createRule(adminId: string, input: CreateRuleInput) {
-    // A rule must explicitly define what it is (description), how much (value),
-    // its scope (actionType + itemClass), and how/when it is billed (Req 14.1).
     if (!input.description?.trim()) throw AppError.validation('A rule description is required');
-    // A percentage is basis points of a base amount (a sale price, a
-    // shipment's value); over 10,000 it would take more than the whole base.
     if (input.model === 'percentage' && input.value > 10_000) {
       throw AppError.validation('A percentage rule is at most 10000 basis points (100%)', { field: 'value' });
     }
@@ -70,15 +51,6 @@ export class PricingService {
     return row;
   }
 
-  /**
-   * `price`, but answers `null` instead of throwing when no rule is in force.
-   *
-   * For callers that have a legitimate fallback — a consignment channel with no
-   * channel-specific rule falls back to the flat marketplace fee — where a
-   * missing rule is a configuration choice rather than a fault. Everything else
-   * should keep using `price`, so an unpriced action fails loudly instead of
-   * quietly costing nothing.
-   */
   async tryPrice(
     actionType: string,
     opts: { itemClass?: string; base?: Money } = {},
@@ -108,7 +80,6 @@ export class PricingService {
           or(isNull(pricingRule.effectiveTo), sql`${pricingRule.effectiveTo} > now()`),
         ),
       )
-      // class-specific rule (itemClass not null) wins over the catch-all; then newest.
       .orderBy(sql`${pricingRule.itemClass} nulls last`, sql`${pricingRule.effectiveFrom} desc`)
       .limit(1);
 

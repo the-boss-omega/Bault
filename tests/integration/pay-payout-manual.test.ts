@@ -4,21 +4,6 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { SEED, fundWallet, signIn, type Client } from './helpers/http';
 
-/**
- * `PAYOUT_MODE=manual` — paying a cash-out by hand.
- *
- * Bault can launch before PayPal approves it for Payouts. Until then an
- * administrator sends the money themselves — a PayPal transfer, a bank wire —
- * and completing the request records that, with the reference they used. The
- * provider is never called, and a completion without a reference is refused,
- * because a debit with nothing to say where the money went is exactly the
- * record a reconciliation cannot use.
- *
- * The mode is read once at boot, so this suite starts a second API, from the
- * same build and against the same database, with `PAYOUT_MODE=manual`. The
- * default mode is covered by `pay-payouts.test.ts` against the API under test.
- */
-
 let child: ChildProcess | null = null;
 let base = '';
 let output = '';
@@ -53,7 +38,6 @@ beforeAll(async () => {
       const res = await fetch(`${base}/readyz`);
       if (res.ok) return;
     } catch {
-      // not listening yet
     }
     if (child.exitCode !== null) break;
     await new Promise((r) => setTimeout(r, 250));
@@ -93,14 +77,11 @@ describe('PAY manual payout mode', () => {
     expect(bare.status).toBe(400);
     expect(String(bare.body.error.message)).toMatch(/reference/i);
 
-    // Nothing moved.
     expect(await balanceOf(collector)).toBe(before);
     expect((await admin.get(`/admin/wallet-requests/${id}`)).body.status).toBe('approved');
   }, 30_000);
 
   it('records the reference, debits the quote, and never asks the provider', async () => {
-    // A destination the sandbox provider would refuse: in manual mode it is
-    // never asked, so it cannot refuse.
     const AMOUNT = 30_000;
     const { collector, admin, id } = await approvedCashOut(AMOUNT, 'red+payout-refused@example.test');
     const quote = (await collector.get(`/finance/cash-out-quote?amountMinor=${AMOUNT}`)).body as {

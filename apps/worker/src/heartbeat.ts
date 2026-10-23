@@ -2,17 +2,6 @@ import type { Pool } from 'pg';
 import { log } from './log';
 import { reportJobFailure } from './observability';
 
-/**
- * Run one scheduled job and leave a record that it ran.
- *
- * A success stamps `worker_heartbeat.last_success_at`, which
- * `GET /api/v1/readyz/worker` reads. A failure stamps `last_error` and
- * `last_error_at` WITHOUT touching the last success, is logged, reported, and
- * rethrown so pg-boss retries it.
- *
- * Writing the heartbeat never fails the job: a job that did its work and then
- * could not say so must not be retried for it.
- */
 export async function runScheduledJob(pool: Pool, name: string, run: () => Promise<void>): Promise<void> {
   const started = Date.now();
   try {

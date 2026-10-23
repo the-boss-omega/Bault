@@ -9,7 +9,7 @@ import {
   normalizeNamePart,
 } from '../../../shared/names';
 import { useNavigation, useRoute } from '../../../shared/routing';
-import { countryName, useShippingCountries } from '../../../shared/countries';
+import { countryName, lacksRegion, regionRequired, useShippingCountries } from '../../../shared/countries';
 import {
   Button,
   ContextTabs,
@@ -25,21 +25,15 @@ import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { TwoFactorPanel } from './TwoFactorPanel';
 import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
 
-/**
- * `GET /me/profile`. A person's name is the two explicit fields; the full name
- * is derived at render time.
- */
 interface Profile {
   id: string;
   email: string;
-  /** Immutable: chosen at registration, never editable (Requirement 4.1). */
   username: string;
   role: string;
   status: string;
   firstName: string | null;
   lastName: string | null;
   fullName: string;
-  /** Set when a migrated legacy name has not yet been confirmed by anyone. */
   nameReviewRequired: boolean;
 }
 
@@ -49,6 +43,7 @@ interface Address {
   recipient: string;
   line1: string;
   city: string;
+  region: string | null;
   country: string;
   postalCode: string;
   isDefault: boolean;
@@ -63,15 +58,6 @@ const ROLE_LABEL: Record<string, MessageKey> = {
 const TABS = ['details', 'addresses', 'security'] as const;
 type ProfileTab = (typeof TABS)[number];
 
-/**
- * Own profile: view email, username and role, edit the two name fields, and
- * manage saved shipping addresses (add, edit, delete, with a default marker).
- * Reached from the account menu; it is deliberately not a rail destination.
- *
- * The username is shown as text, never an input: it is permanent. First and
- * last name are the editable identity fields, and the full name shown beside
- * them is derived from these two instead of stored.
- */
 export function ProfilePage() {
   const { t } = useI18n();
   const route = useRoute();
@@ -89,8 +75,6 @@ export function ProfilePage() {
     ? (route.tab as ProfileTab)
     : 'details';
 
-  // A failed load names the actual failure (backend down, session expired,
-  // permission denied) instead of a raw transport message.
   const describe = useCallback(
     (e: unknown) => {
       const key = apiErrorKey(e);
@@ -152,8 +136,6 @@ export function ProfilePage() {
   const roleKey = profile ? ROLE_LABEL[profile.role] : undefined;
   const tabs = TABS.map((key) => ({ key, label: t(`profile.tab.${key}` as MessageKey) }));
 
-  // Both parts are required, and Save stays disabled unless something changed,
-  // so confirming a flagged legacy name is a deliberate act.
   const firstOk = isValidNamePart(normalizeNamePart(firstName));
   const lastOk = isValidNamePart(normalizeNamePart(lastName));
   const nameDirty =
@@ -178,8 +160,6 @@ export function ProfilePage() {
                     {profile.email}
                   </dd>
                 </div>
-                {/* Static text on purpose: a username can never be edited
-                    (Requirement 4.1), so there is deliberately no input. */}
                 <div className="detail-row">
                   <dt className="detail-label">{t('profile.details.username')}</dt>
                   <dd className="detail-value">
@@ -190,8 +170,6 @@ export function ProfilePage() {
                 <div className="detail-row">
                   <dt className="detail-label">{t('profile.details.fullName')}</dt>
                   <dd className="detail-value">
-                    {/* Derived, never stored, so it cannot disagree with the
-                        two fields it comes from. */}
                     {fullName(profile.firstName, profile.lastName) || (
                       <span className="muted">{t('profile.details.noName')}</span>
                     )}
@@ -209,9 +187,6 @@ export function ProfilePage() {
 
           <Panel title={t('profile.nameLabel')} subtitle={t('profile.nameSubtitle')}>
             <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-              {/* Shown only for an account migration 0004 could not split
-                  without guessing. It states what happened and what to do,
-                  instead of presenting a guessed split as fact. */}
               {profile?.nameReviewRequired && (
                 <SuccessNote tone="warning">{t('profile.nameReviewRequired')}</SuccessNote>
               )}
@@ -262,8 +237,6 @@ export function ProfilePage() {
 
       {tab === 'addresses' && (
         <TabPanel tab="addresses">
-          {/* Saved shipping addresses are managed here and only here; the
-              shipping page picks one from this list (Req 4.2 / 5.1). */}
           <Panel
             title={t('profile.addresses.heading')}
             subtitle={t('profile.addresses.subtitle')}
@@ -332,16 +305,6 @@ export function ProfilePage() {
   );
 }
 
-/**
- * Change the account password.
- *
- * The current password is required by the API, so an unattended signed-in
- * browser is not enough to lock the real owner out of their own account.
- * `POST /auth/password/change` verifies it with argon2 before writing anything.
- *
- * On success the API ends every other session the account has open and keeps
- * this one, so the page stays usable afterwards.
- */
 function PasswordPanel({
   onStatus,
   onError,
@@ -357,8 +320,6 @@ function PasswordPanel({
 
   const tooShort = next.length > 0 && next.length < PASSWORD_MIN;
   const mismatch = confirm.length > 0 && confirm !== next;
-  // Refuse a no-op change here: the server would report success while nothing
-  // happened.
   const unchanged = next.length > 0 && next === current;
   const ready = current.length > 0 && next.length >= PASSWORD_MIN && confirm === next && !unchanged;
 
@@ -390,7 +351,6 @@ function PasswordPanel({
           />
         </Field>
 
-        {/* Two different problems, told apart: too short, and unchanged. */}
         <Field
           label={t('auth.newPassword')}
           hint={t('auth.passwordHint')}
@@ -436,10 +396,6 @@ function PasswordPanel({
   );
 }
 
-/**
- * One saved address: read-only card that flips into an inline edit form
- * (Requirement 4.2: addresses are added, edited and removed from this page).
- */
 function AddressCard({
   address,
   onDelete,
@@ -457,7 +413,13 @@ function AddressCard({
   const [draft, setDraft] = useState(address);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.region || !regionRequired(draft.country, countries));
 
   async function save() {
     try {
@@ -466,6 +428,7 @@ function AddressCard({
         recipient: draft.recipient,
         line1: draft.line1,
         city: draft.city,
+        region: draft.region?.trim() || null,
         country: draft.country,
         postalCode: draft.postalCode,
         isDefault: draft.isDefault,
@@ -485,11 +448,14 @@ function AddressCard({
             {address.label}
           </h3>
           {address.isDefault && <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>}
+          {lacksRegion(address, countries) && (
+            <StatusBadge tone="warning">{t('profile.addresses.regionMissing')}</StatusBadge>
+          )}
         </div>
         <p className="card-desc">{address.recipient}</p>
-        {/* The country is stored as a code, so its name is looked up for display. */}
         <p className="card-desc">
-          {address.line1}, {address.city}, {countryName(address.country, countries)}{' '}
+          {address.line1}, {address.city}
+          {address.region ? `, ${address.region}` : ''}, {countryName(address.country, countries)}{' '}
           {address.postalCode}
         </p>
         <div className="actions">
@@ -528,7 +494,6 @@ function AddressCard({
 
 type AddressDraft = Omit<Address, 'id'>;
 
-/** The address field set, shared by the edit card and the add form. */
 function AddressFields({
   draft,
   onChange,
@@ -540,10 +505,10 @@ function AddressFields({
   const countries = useShippingCountries();
   const set = (patch: Partial<AddressDraft>) => onChange({ ...draft, ...patch });
   const id = useId();
+  const country = countries.find((c) => c.code === draft.country);
 
   return (
     <div className="form-grid">
-      {/* `Field` throughout, so each control's accessible name is its caption alone. */}
       <Field label={t('profile.addressForm.label')} htmlFor={`${id}-label`}>
         <input id={`${id}-label`} value={draft.label} onChange={(e) => set({ label: e.target.value })} />
       </Field>
@@ -571,11 +536,6 @@ function AddressFields({
           autoComplete="address-level2"
         />
       </Field>
-      {/*
-        A select, because every carrier rule reads this field as an ISO code.
-        The list comes from the carrier table itself, so nothing here can offer
-        a destination that cannot be reached.
-      */}
       <Field
         label={t('profile.addressForm.country')}
         htmlFor={`${id}-country`}
@@ -584,7 +544,7 @@ function AddressFields({
         <select
           id={`${id}-country`}
           value={draft.country}
-          onChange={(e) => set({ country: e.target.value })}
+          onChange={(e) => set({ country: e.target.value, region: '' })}
           autoComplete="country"
         >
           <option value="">{t('profile.addressForm.countryPlaceholder')}</option>
@@ -594,6 +554,39 @@ function AddressFields({
             </option>
           ))}
         </select>
+      </Field>
+      <Field
+        label={t('profile.addressForm.region')}
+        htmlFor={`${id}-region`}
+        hint={
+          country?.regionRequired
+            ? t('profile.addressForm.regionRequiredHint', { country: country.name })
+            : t('profile.addressForm.regionOptionalHint')
+        }
+      >
+        {country?.regions ? (
+          <select
+            id={`${id}-region`}
+            value={draft.region ?? ''}
+            onChange={(e) => set({ region: e.target.value })}
+            autoComplete="address-level1"
+          >
+            <option value="">{t('profile.addressForm.regionPlaceholder')}</option>
+            {country.regions.map((r) => (
+              <option key={r.code} value={r.code}>
+                {r.code} — {r.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id={`${id}-region`}
+            value={draft.region ?? ''}
+            maxLength={60}
+            onChange={(e) => set({ region: e.target.value })}
+            autoComplete="address-level1"
+          />
+        )}
       </Field>
       <Field label={t('profile.addressForm.postalCode')} htmlFor={`${id}-postal`}>
         <input
@@ -624,12 +617,13 @@ function AddressForm({
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
+  const countries = useShippingCountries();
   const empty: AddressDraft = {
     label: '',
     recipient: '',
     line1: '',
     city: '',
-    // No default: a pre-filled country is a country nobody checked.
+    region: '',
     country: '',
     postalCode: '',
     isDefault: false,
@@ -637,11 +631,17 @@ function AddressForm({
   const [draft, setDraft] = useState<AddressDraft>(empty);
 
   const valid =
-    draft.label && draft.recipient && draft.line1 && draft.city && draft.country && draft.postalCode;
+    draft.label &&
+    draft.recipient &&
+    draft.line1 &&
+    draft.city &&
+    draft.country &&
+    draft.postalCode &&
+    (draft.region || !regionRequired(draft.country, countries));
 
   async function add() {
     try {
-      await api.post('/me/addresses', draft);
+      await api.post('/me/addresses', { ...draft, region: draft.region?.trim() || null });
       setDraft(empty);
       await onAdded();
     } catch (e) {

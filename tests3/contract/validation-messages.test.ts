@@ -1,14 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-/**
- * What a client is told about an unknown field and a malformed id
- * (apps/api/src/shared/errors/validation-error.ts).
- *
- * Driven through Nest's ValidationPipe with the options main.ts uses, so the
- * constraint names are the ones class-validator really produces: an unknown
- * field is `whitelistValidation` and `@IsUUID()` is `isUuid`, not `isUUID`.
- * Unit-level, no server.
- */
 type Violation = { field: string; code: string; message: string };
 type Problem = { code: string; message: string; details: { violations: Violation[] } };
 
@@ -23,7 +14,6 @@ beforeAll(async () => {
   class Body {
     itemId?: string;
   }
-  // `@IsUUID()`, applied without decorator syntax.
   IsUUID()(Body.prototype, 'itemId');
 
   const pipe = new ValidationPipe({

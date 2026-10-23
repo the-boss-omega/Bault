@@ -3,18 +3,6 @@ import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
 
-/**
- * Step one of password recovery: ask for the reset link.
- *
- * The API answers identically whether or not the address belongs to an account
- * (`PasswordService.requestReset` only records the request; the worker drops an
- * unknown address), so this page does the same. It shows one confirmation for
- * every submission and never says "no such account", because a form that
- * distinguishes the two is an account-enumeration oracle.
- *
- * That is also why the confirmation is worded as what will happen if the
- * address is registered, instead of asserting that a mail was sent.
- */
 export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const t = useT();
   const [email, setEmail] = useState('');
@@ -30,8 +18,6 @@ export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void 
       await api.post('/auth/password/reset-request', { email: email.trim() });
       setSent(true);
     } catch (err) {
-      // Only a transport or validation failure reaches here; an unknown address
-      // is a success as far as this endpoint is concerned.
       setError((err as Error).message);
     } finally {
       setBusy(false);

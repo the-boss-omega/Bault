@@ -21,25 +21,10 @@ class ReplyDto {
   @IsString() @MinLength(1) @MaxLength(5000) body!: string;
 }
 
-/**
- * SUP endpoints: the helpdesk.
- *
- * Every collector-facing route carries `@AllowSuspended()`. That is the entire
- * point of the module: an account suspended for debt can reach no other part
- * of the platform (beyond the profile probe the shell needs), cannot cash in,
- * and therefore cannot clear the debt that suspended it. Without a channel to
- * ask for help the lock has no key on the inside. These routes are the key.
- *
- * Roles are per method rather than on the class, because the queue and the
- * resolve/assign actions are staff work while the rest is ordinary account
- * functionality.
- */
 @ApiTags('SUP')
 @Controller('support')
 export class SupController {
   constructor(private readonly support: SupportService) {}
-
-  /* ---------------- collector ---------------- */
 
   @AllowSuspended()
   @Get('tickets')
@@ -53,31 +38,23 @@ export class SupController {
     return this.support.open(user.id, dto);
   }
 
-  /** Tickets currently waiting on this collector — the rail badge. */
   @AllowSuspended()
   @Get('awaiting')
   awaiting(@CurrentUser() user: AuthUser) {
     return this.support.awaitingMe(user.id);
   }
 
-  /**
-   * One ticket and its whole thread. Staff may open any; a collector only their
-   * own, and a miss answers `notFound` rather than `forbidden`.
-   */
   @AllowSuspended()
   @Get('tickets/:id')
   thread(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.support.thread(id, { id: user.id, role: user.role, status: user.status });
   }
 
-  /** Reply. The status flips automatically depending on who spoke. */
   @AllowSuspended()
   @Post('tickets/:id/messages')
   reply(@Param('id') id: string, @Body() dto: ReplyDto, @CurrentUser() user: AuthUser) {
     return this.support.reply(id, { id: user.id, role: user.role, status: user.status }, dto.body);
   }
-
-  /* ---------------- staff ---------------- */
 
   @Roles('warehouse_operator', 'admin')
   @Get('queue')
