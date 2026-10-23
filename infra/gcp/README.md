@@ -171,28 +171,44 @@ The same commands, with `--url https://<domain>`.
 
 ## Before you have a domain
 
-Run in the production README's local rehearsal mode, on the server's own IP.
+Use a free `sslip.io` name. sslip.io answers any name of the form
+`<ip-with-dashes>.sslip.io` with that IP, so a server at `34.1.2.3` is
+`34-1-2-3.sslip.io`, with nothing to buy or register. Caddy then gets a real
+Let's Encrypt certificate for it, and browsers show a normal secure site.
 
 **In `production.env`:**
-- `BAULT_DOMAIN=<STATIC_IP>`
-- `APP_BASE_URL=https://<STATIC_IP>`
-- `CADDY_LOCAL_CERTS=local_certs`
+- `BAULT_DOMAIN=<ip-with-dashes>.sslip.io`, built from `<STATIC_IP>`;
+- `APP_BASE_URL=https://<ip-with-dashes>.sslip.io`;
+- `CADDY_LOCAL_CERTS` empty.
 
-Caddy then issues a certificate from its own CA. Browsers warn about it once,
-and `deploy.sh` needs that CA, as the rehearsal section shows:
+Deploy as usual. The first request after the start takes a few seconds while
+Caddy fetches the certificate. Check it from your own machine:
+
+```sh
+curl -sI https://<ip-with-dashes>.sslip.io | head -1   # HTTP/2 200, with no certificate error
+```
+
+Every command in sections 7 to 9 then takes `--url https://<ip-with-dashes>.sslip.io`.
+Email links point at that name too. It's fine for a demo and for staging, but
+it's not a name to give customers: it changes whenever the IP changes, and you
+don't own it.
+
+If Let's Encrypt refuses the name (its rate limit is shared by everyone using
+sslip.io, and Caddy's log shows `rateLimited`), fall back to rehearsal mode on
+the bare IP for that day:
+- `BAULT_DOMAIN=<STATIC_IP>`, `APP_BASE_URL=https://<STATIC_IP>`, and
+  `CADDY_LOCAL_CERTS=local_certs`;
+- Caddy issues a certificate from its own CA, which browsers warn about once;
+- `deploy.sh` needs that CA:
 
 ```sh
 bault cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt   # after a first start
 CURL_CA_BUNDLE=$PWD/caddy-root.crt ./infra/production/deploy.sh <tag>
 ```
 
-Email links then point at the IP. For a real certificate before you own a
-domain, use `<ip-with-dashes>.sslip.io` (for example
-`34-1-2-3.sslip.io`) as `BAULT_DOMAIN`, without `CADDY_LOCAL_CERTS`.
-
 **When the domain arrives:**
 1. Point its A record at `<STATIC_IP>`.
-2. Set `BAULT_DOMAIN` and `APP_BASE_URL`, and empty `CADDY_LOCAL_CERTS`.
+2. Set `BAULT_DOMAIN` and `APP_BASE_URL` to the domain (and empty `CADDY_LOCAL_CERTS` if you used rehearsal mode).
 3. Deploy again.
 
 ## What it costs
