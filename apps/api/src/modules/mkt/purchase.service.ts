@@ -21,34 +21,9 @@ export interface PurchaseResult {
   itemId: string;
   price: number;
   fee: number;
-  /**
-   * True when this call returned an earlier purchase rather than making one.
-   *
-   * Absent on a first purchase, so a client can branch on it. Matches the flag
-   * `POST /finance/checkout` returns, so "you have already done this" has one
-   * convention.
-   */
   replayed?: boolean;
 }
 
-/**
- * Atomic direct purchase (T079, Principles V & VIII).
- *
- * Everything below happens in ONE database transaction with row-level locks, so
- * it is all-or-nothing and immune to double-sale:
- *   1. lock the listing FOR UPDATE (a second concurrent buyer blocks, then sees
- *      it is no longer active → 409),
- *   2. lock the item FOR UPDATE,
- *   3. reject self-purchase and on-hold items,
- *   4. resolve the marketplace fee from PRC and SNAPSHOT it (price freeze),
- *   5. lock both wallets in id order and require the buyer to have the funds,
- *      then spend the seller's commission waiver,
- *   6. move money on the ledger: buyer −price; seller +price then −fee (net),
- *   7. transfer ownership (custody event) and return the item to the vault,
- *   8. mark the listing sold and write the irreversible Transaction,
- *   9. emit an `item_sold` outbox event.
- * A client `Idempotency-Key` makes retries safe — a replay returns the first result.
- */
 @Injectable()
 export class PurchaseService {
   constructor(
@@ -61,12 +36,6 @@ export class PurchaseService {
     private readonly memberships: MembershipService,
   ) {}
 
-  /**
-   * @param priceOverride set by an accepted offer (buy at the offer amount).
-   * @param inSale work that must commit or fail with the sale itself — an
-   *   accepted offer marks itself accepted here, so a sale never happens for an
-   *   offer that was withdrawn in the same moment, and vice versa.
-   */
   async purchase(
     buyerId: string,
     listingId: string,
@@ -77,15 +46,8 @@ export class PurchaseService {
     const endpoint = `purchase:${listingId}`;
 
     return this.db.transaction(async (tx): Promise<PurchaseResult> => {
-      // The key first, so a second request carrying it waits here for this one
-      // and then replays it rather than buying again.
       const { replay } = await this.idempotency.claim(tx as Database, idempotencyKey, endpoint, buyerId);
       if (replay) {
-        /**
-         * A repeat of a purchase that already happened, marked as such so a
-         * double-clicked Buy does not read as two purchases. Nothing is charged
-         * twice.
-         */
         return { ...(replay.body as PurchaseResult), replayed: true };
       }
 
@@ -105,41 +67,22 @@ export class PurchaseService {
       const price = priceOverride ?? l.askingPrice;
       const currency = l.currency;
 
-      // Fee = percentage of price, resolved from the pricing table and snapshotted.
       const { amount: fee, snapshot } = await this.pricing.price(
         'marketplace_fee',
         { base: money(price, currency) },
         tx,
       );
 
-      /**
-       * Both wallets, in one order, before the seller's membership period: the
-       * rows, then the wallets, then the periods, the order every money path
-       * takes them in (`LedgerService.lockWallet`). The waiver used to write
-       * the seller's period before the buyer's wallet was taken, which closed a
-       * cycle with the members' own payments (wallet, then period) when two
-       * collectors bought from each other, and Postgres aborted one sale.
-       * Sorted by id, two sales between the same pair queue rather than cross.
-       */
       for (const userId of [buyerId, l.sellerId].sort()) await this.ledger.lockWallet(userId, tx as Database);
 
-      // Buyer must have the funds (a sale is not a "defined service" that can go negative).
       const buyerBalance = await this.ledger.balanceOf(buyerId, tx);
       if (buyerBalance.amount < price) {
         throw new AppError(ErrorCode.INSUFFICIENT_BALANCE, 'Insufficient wallet balance', 409);
       }
 
-      /**
-       * The seller's membership may waive the commission on this sale, in part
-       * or whole. Spent here, inside the sale's own transaction, so the waiver
-       * and the sale commit or fail together. It can only lower the fee the
-       * price list states — see `MembershipService.waive`.
-       */
       const waiver = await this.memberships.waive(tx as Database, l.sellerId, 'marketplace_fee', fee.amount, price);
       const feeMinor = fee.amount - waiver.waivedMinor;
 
-      // Money moves on the immutable ledger. Seller is credited gross then debited
-      // the fee, so the ledger transparently shows gross + fee = net.
       await this.ledger.record(
         { userId: buyerId, type: 'purchase', amount: price, direction: 'debit', currency, referenceType: 'listing', referenceId: listingId },
         tx,
@@ -155,11 +98,6 @@ export class PurchaseService {
         );
       }
 
-      // Ownership moves; the item stays on its shelf (no physical movement) and
-      // returns to `stored` under the new owner.
-      // The seller named on the listing must still own the card, and it must
-      // still be the listed card: an admin reassignment or any other transfer
-      // since the listing was made means this sale would pay the wrong person.
       await this.custody.transferOwnership(tx, l.itemId, buyerId, buyerId, `sale of listing ${listingId}`, {
         ownerId: l.sellerId,
         fromStates: ['listed'],
@@ -168,20 +106,18 @@ export class PurchaseService {
 
       await tx.update(listing).set({ status: 'sold', updatedAt: new Date() }).where(eq(listing.id, listingId));
       if (inSale) await inSale(tx as Database);
-      // Every other offer on it lapses with the sale (an accepted one was marked above).
       await closeOpenOffers(tx as Database, listingId);
 
       const [txn] = await tx
         .insert(transaction)
         .values({
-          code: prefixedId(ID_PREFIX.transaction), // TXN-XXXXXXXX (Requirement 9.4)
+          code: prefixedId(ID_PREFIX.transaction),
           type: 'sale',
           itemIds: [l.itemId],
           buyerId,
           sellerId: l.sellerId,
           price,
           fee: feeMinor,
-          // The waiver rides with the frozen price, so the sale explains its own fee.
           frozenPricing:
             waiver.waivedMinor > 0
               ? { ...snapshot, grossFeeMinor: fee.amount, membershipWaiver: waiver }

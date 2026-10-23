@@ -3,20 +3,11 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { BASE, SEED, signIn, type Client } from '../integration/helpers/http';
 import { closeDb, sql } from '../integration/helpers/db';
 
-/**
- * A password-reset link is single use. Sent twice at once (a double click, or
- * the link opened on two devices), it must change the password once and
- * refuse the other, as the email-verification link already does.
- *
- * Requires a running API + a seeded DB.
- */
-
 afterAll(closeDb);
 
 type Res = Awaited<ReturnType<Client['post']>>;
 const ok = (r: Res) => r.status >= 200 && r.status < 300;
 
-/** A fixture account that can sign in: the seeded password and terms. */
 async function fixtureAccount(): Promise<string> {
   const tag = randomBytes(5).toString('hex');
   const email = `reset-${tag}@fixture.bault.test`;
@@ -55,7 +46,6 @@ describe('one reset link used twice at once', () => {
     for (const r of results.filter((x) => !ok(x))) expect(r.status).toBeGreaterThanOrEqual(400);
     for (const r of results.filter((x) => !ok(x))) expect(r.status).toBeLessThan(500);
 
-    // The password that took is the winner's, and no other one works.
     const winner = (winners[0] as Res & { i: number }).i;
     await expect(signIn(email, `correct horse battery ${winner}`)).resolves.toBeDefined();
     for (const r of results) {

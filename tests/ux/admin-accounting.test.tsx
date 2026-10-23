@@ -2,12 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * The accountant's buttons and the pricing-coverage check, in the admin console.
- * The figures are the API's; what is checked here is that each
- * button asks for the right report and that what comes back is shown.
- */
-
 const get = vi.fn();
 
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -30,7 +24,6 @@ beforeEach(() => {
   try {
     localStorage.setItem('bault.locale', 'en');
   } catch {
-    /* jsdom always has it */
   }
 });
 

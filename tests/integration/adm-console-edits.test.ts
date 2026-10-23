@@ -3,15 +3,6 @@ import { SEED, intakeFor, signIn } from './helpers/http';
 import { activeAccount } from './helpers/mfa';
 import { closeDb, sql } from './helpers/db';
 
-/**
- * What the admin console's Save buttons may and may not change on the server.
- *
- * These pin the server side of a save: what a field that is sent does, and what
- * a field that is left out leaves alone.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 afterAll(async () => {
   await closeDb();
 });
@@ -25,7 +16,6 @@ const marker = async (id: string) =>
   )[0]!;
 
 describe('saving a user the debt sweep suspended', () => {
-  /** An account in the state the sweep leaves it: suspended, with its marker. */
   async function autoSuspended(label: string) {
     const account = await activeAccount(label);
     await sql(`UPDATE user_account SET status = 'suspended', auto_suspended_at = now() WHERE id = $1`, [account.id]);
@@ -37,23 +27,13 @@ describe('saving a user the debt sweep suspended', () => {
     const admin = await signIn(SEED.admin);
     const account = await autoSuspended('autosus');
 
-    // A name correction: what the console sends for one.
     const res = await admin.patch(`/admin/users/${account.id}`, { firstName: 'Renamed' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ firstName: 'Renamed', status: 'suspended', autoSuspended: true });
-    // Still the sweep's own suspension, so the sweep lifts it once the debt clears.
     expect(await marker(account.id)).toEqual({ status: 'suspended', auto: true });
   });
 
   it("makes it an administrator's suspension when the status is sent, even unchanged", async () => {
-    /**
-     * Support finds fraud on an account the sweep suspended for debt. The row
-     * already says `suspended`, and "Keep suspended" sends exactly that. It has
-     * to take the suspension over, or the debtor tops up, the sweep lifts it,
-     * and the account is active again. The same request is what lands when an
-     * administrator suspends an account the sweep suspended a moment earlier.
-     * tests/worker/wallet-suspension.test.ts runs the sweep over the result.
-     */
     const admin = await signIn(SEED.admin);
     const account = await autoSuspended('autosu3');
 
@@ -72,8 +52,6 @@ describe('saving a user the debt sweep suspended', () => {
   });
 
   it("says in the users list which suspensions are the sweep's", async () => {
-    // The list leaves fixture accounts out, so this borrows a seeded one and
-    // puts it back exactly as it was.
     const admin = await signIn(SEED.admin);
     const [before] = await sql<{ id: string; status: string; auto_suspended_at: Date | null }>(
       `SELECT id, status, auto_suspended_at FROM user_account WHERE email = $1`,
@@ -125,7 +103,6 @@ describe("changing the owner of a listed card", () => {
     const res = await admin.patch(`/admin/items/${itemId}`, { ownerId: to, lifecycleState: 'listed' });
     expect(res.status).toBe(200);
     expect(await listingStatus(listingId)).toBe('removed');
-    // The listing went with the previous owner, so the card is not `listed`.
     expect(await ownerAndState(itemId)).toEqual({ owner_id: to, lifecycle_state: 'stored' });
   });
 

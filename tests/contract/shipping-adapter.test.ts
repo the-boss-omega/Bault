@@ -1,17 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SandboxShippingAdapter } from '@bault/adapters';
 
-/**
- * Shipping adapter contract (Principle XIII). Asserts the adapter honors its
- * interface for rates, labels, and tracking, so a real carrier's adapter can be
- * swapped in behind the same interface.
- *
- * Rush is a Bault handling charge, so the adapter leaves the carrier's price and
- * promise alone; that rush costs more is asserted on the shipment quote
- * (`tests/integration/shp-outbound.test.ts`). What an adapter owes is below: a
- * price that moves with the weight and the destination, and a signature
- * surcharge where the service offers one.
- */
 describe('contract: ShippingAdapter', () => {
   const adapter = new SandboxShippingAdapter();
   const domestic = {
@@ -45,7 +34,6 @@ describe('contract: ShippingAdapter', () => {
     });
     expect(home.length).toBeGreaterThan(0);
     expect(away.length).toBeGreaterThan(0);
-    // No service quotes on both sides — the two sets are disjoint.
     const key = (r: { carrier: string; serviceLevel: string }) => `${r.carrier}/${r.serviceLevel}`;
     const homeKeys = new Set(home.map(key));
     expect(away.every((r) => !homeKeys.has(key(r)))).toBe(true);
@@ -58,8 +46,6 @@ describe('contract: ShippingAdapter', () => {
   });
 
   it('charges more for a bigger box of the same weight', async () => {
-    // A carrier sells space as well as lift: a shoebox of sleeved commons bills
-    // on its volume, not on the few hundred grams it weighs.
     const mailer = await adapter.getRates({
       ...domestic,
       dimensionsCm: { length: 25, width: 18, height: 3 },
@@ -74,19 +60,13 @@ describe('contract: ShippingAdapter', () => {
   });
 
   it('bills in whole units, because carriers do not sell fractions', async () => {
-    // The reference service publishes the unit per service: "Postage amount is
-    // charged per pound" for ePost, per ounce for ePacket. Two parcels inside
-    // the same pound are the same parcel to a per-pound service, and quoting on
-    // the continuous weight under-quotes almost every one of them.
     const lighter = await adapter.getRates({ ...international, items: [{ weightGrams: 900 }], packagingGrams: 60 });
     const heavier = await adapter.getRates({ ...international, items: [{ weightGrams: 910 }], packagingGrams: 60 });
     const ePost = (rates: Awaited<ReturnType<typeof adapter.getRates>>) =>
       rates.find((r) => r.carrier === 'ePost')!.costMinor;
 
-    // 960 g and 970 g both land inside the same pound band.
     expect(ePost(lighter)).toBe(ePost(heavier));
 
-    // And crossing the boundary costs a whole band more, not a few cents.
     const overBoundary = await adapter.getRates({
       ...international,
       items: [{ weightGrams: 1_400 }],

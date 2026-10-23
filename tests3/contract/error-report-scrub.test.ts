@@ -1,18 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { scrubErrorEvent } from '@bault/adapters';
 
-/**
- * What an error report is allowed to carry off the platform.
- *
- * An exception report goes to a third party — Sentry — and is kept there, read
- * by whoever has access to the project, long after the request is forgotten. A
- * crash in the middle of `POST /auth/login` must not hand that third party the
- * password that was being checked, and no report at all may carry a session
- * cookie, which IS the account for as long as it is valid.
- *
- * Every case here is driven through the scrubber directly, the way the SDK's
- * `beforeSend` hook calls it, with the events shaped the way the SDK shapes them.
- */
 type Event = Parameters<typeof scrubErrorEvent>[0] & { message?: string; extra?: unknown };
 
 const crashDuring = (method: string, url: string, data?: unknown): Event => ({
@@ -58,7 +46,6 @@ describe('every report', () => {
 });
 
 describe('a failed query', () => {
-  // drizzle-orm's query error: the SQL, then the values it was run with.
   const failed = 'Failed query: select * from user_account where email = $1 and last_name = $2\nparams: ann@example.test,Ashwood';
 
   it('loses the values from the exception, the message and a logged stack, and keeps the SQL', () => {

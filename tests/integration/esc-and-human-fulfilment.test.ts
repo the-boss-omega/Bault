@@ -1,24 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, fundWallet, intakeFor, signIn, type Client } from './helpers/http';
 
-/**
- * Section 7 — the places where Bault puts a person between two parties.
- *
- * Escrow is the substantial one, and the tests worth having are about the two
- * GATES rather than the plumbing. Funding is what makes it safe for a seller to
- * post a card to a stranger; inspection is what makes it safe for a buyer to pay
- * one. Everything else is bookkeeping around those two facts.
- *
- * The money assertions matter most. A "held" flag on a row would be a claim the
- * wallet immediately contradicts, so a hold is a real ledger debit and these
- * tests check the balance actually moves — before, during and after.
- *
- * Requires a running API + a freshly seeded DB.
- */
 describe('ESC escrow and human fulfilment', () => {
   const balanceOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
-
-  /* ---------------- terms ---------------- */
 
   it('publishes what escrow costs and the floor under a deal', async () => {
     const collector = await signIn(SEED.collector);
@@ -57,7 +41,6 @@ describe('ESC escrow and human fulfilment', () => {
       counterpartyEmail: 'stranger@example.test',
       description: '2003 EX Dragon Rayquaza ex #97/97, PSA 9',
       valueMinor: 900_000,
-      // The buyer is external — there is nowhere to put it.
       settlement: 'buyer_vault',
     });
     expect(res.status).toBe(400);
@@ -75,17 +58,14 @@ describe('ESC escrow and human fulfilment', () => {
     expect(res.status).toBe(400);
   });
 
-  /* ---------------- the whole happy path, with the money watched ---------------- */
-
   it('holds the buyer money, inspects the card, and settles both sides at once', async () => {
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);
     const buyer = await signIn(SEED.collector2);
 
-    const VALUE = 400_000; // $4,000
+    const VALUE = 400_000;
     await fundWallet(SEED.collector2, VALUE + 10_000);
 
-    // The seller raises it, so the fee falls on them.
     const deal = (
       await seller.post('/escrow', {
         raiserRole: 'seller',
@@ -99,31 +79,24 @@ describe('ESC escrow and human fulfilment', () => {
     expect(deal.status).toBe('proposed');
     expect(deal.feeMinor).toBeGreaterThan(0);
 
-    // Nothing can be funded before both sides agree the terms.
     const early = await buyer.post(`/escrow/${deal.id}/fund`, {});
     expect(early.status).toBe(409);
 
     expect((await buyer.post(`/escrow/${deal.id}/agree`, {})).status).toBe(201);
 
     const buyerBefore = await balanceOf(buyer);
-    // Other files may leave deals of golden's funded, so the held total is
-    // measured from here.
     const heldBefore = (await buyer.get('/escrow/held')).body.heldMinor as number;
     const funded = await buyer.post(`/escrow/${deal.id}/fund`, {});
     expect(funded.status).toBe(201);
     expect(funded.body.source).toBe('wallet');
 
-    // THE point: the money has genuinely left the spendable balance. A flag on a
-    // row would be a claim the wallet contradicts.
     expect(await balanceOf(buyer)).toBe(buyerBefore - VALUE);
     const held = (await buyer.get('/escrow/held')).body;
     expect(held.heldMinor).toBe(heldBefore + VALUE);
 
-    // The card arrives and is booked in against the deal.
     const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
     expect((await operator.post(`/escrow/${deal.id}/receive-item`, { itemId: card.id })).status).toBe(201);
 
-    // Nobody can release before the inspection has been recorded.
     const tooSoon = await buyer.post(`/escrow/${deal.id}/release`, {});
     expect(tooSoon.status).toBe(409);
 
@@ -134,7 +107,6 @@ describe('ESC escrow and human fulfilment', () => {
     expect(inspected.status).toBe(201);
     expect(inspected.body.matches).toBe(true);
 
-    // One side alone does not settle it.
     const oneSide = await buyer.post(`/escrow/${deal.id}/release`, {});
     expect(oneSide.body.status).toBe('awaiting_release');
     expect(oneSide.body.buyerReleased).toBe(true);
@@ -145,17 +117,13 @@ describe('ESC escrow and human fulfilment', () => {
     expect(settled.status).toBe(201);
     expect(settled.body.status).toBe('settled');
 
-    // Seller paid the full value, minus the fee they owed for raising it.
     expect(await balanceOf(seller)).toBe(sellerBefore + VALUE - deal.feeMinor);
-    // Buyer's balance does not move again — it moved when it was held.
     expect(await balanceOf(buyer)).toBe(buyerBefore - VALUE);
     expect((await buyer.get('/escrow/held')).body.heldMinor).toBe(heldBefore);
 
-    // The card is the buyer's now.
     const detail = (await buyer.get(`/escrow/${deal.id}`)).body;
     expect(detail.deal.status).toBe('settled');
     expect(detail.deal.itemId).toBe(card.id);
-    // And the trail records every step.
     const kinds = (detail.events as Array<{ eventType: string }>).map((e) => e.eventType);
     for (const step of ['raised', 'agreed', 'funded', 'item_received', 'inspected', 'settled']) {
       expect(kinds).toContain(step);
@@ -188,8 +156,6 @@ describe('ESC escrow and human fulfilment', () => {
     const card = await intakeFor(operator, SEED.collector, { typeClass: 'graded_slab' });
     await operator.post(`/escrow/${deal.id}/receive-item`, { itemId: card.id });
 
-    // The finding is recorded and does NOT itself return the deal — it gives
-    // the buyer a reason to refuse, and they take it.
     const inspected = await operator.post(`/escrow/${deal.id}/inspect`, {
       matches: false,
       notes: 'Slab is a PSA 8, not a PSA 10. Cert number does not match the listing.',
@@ -202,10 +168,8 @@ describe('ESC escrow and human fulfilment', () => {
     expect(returned.status).toBe(201);
     expect(returned.body.refundedMinor).toBe(VALUE);
 
-    // Whole. No fee is charged for finding out you were being misled.
     expect(await balanceOf(buyer)).toBe(before);
 
-    // The card never changed hands.
     const detail = (await seller.get(`/escrow/${deal.id}`)).body;
     expect(detail.deal.status).toBe('returned');
     const stillMine = (await seller.get(`/vault/items/${card.id}`)).body;
@@ -221,7 +185,7 @@ describe('ESC escrow and human fulfilment', () => {
         raiserRole: 'seller',
         counterpartyUsername: 'veteran',
         description: 'A slab well beyond an empty wallet',
-        valueMinor: 5_000_000, // $50,000
+        valueMinor: 5_000_000,
         settlement: 'ship_to_buyer',
       })
     ).body;
@@ -246,14 +210,10 @@ describe('ESC escrow and human fulfilment', () => {
       })
     ).body;
 
-    // The external side cannot click anything, so a collector cannot agree for
-    // them — only an operator can record that they did.
     const wrongHand = await seller.post(`/escrow/${deal.id}/agree`, {});
     expect(wrongHand.status).toBe(403);
     expect((await operator.post(`/escrow/${deal.id}/agree`, { notes: 'Confirmed by phone.' })).status).toBe(201);
 
-    // The money never touches a Bault account, so no ledger row is written for
-    // it — an operator attests to having received it, with a reference.
     const noRef = await operator.post(`/escrow/${deal.id}/fund`, {});
     expect(noRef.status).toBe(400);
 
@@ -268,12 +228,6 @@ describe('ESC escrow and human fulfilment', () => {
   });
 
   it('does not pay the seller of an outside buyer until the card is on its way to them', async () => {
-    /**
-     * An outside buyer has no vault, so settling moves no ownership. Paying the
-     * seller then would leave the card on the seller's shelf, free to be
-     * withdrawn, and the buyer would never receive anything. The deal will not
-     * settle until the card has been dispatched to them.
-     */
     const operator = await signIn(SEED.operator);
     const seller = await signIn(SEED.collector);
     const VALUE = 150_000;
@@ -302,7 +256,6 @@ describe('ESC escrow and human fulfilment', () => {
     expect(await balanceOf(seller)).toBe(sellerBefore);
     expect((await seller.get(`/escrow/${deal.id}`)).body.deal.status).toBe('awaiting_release');
 
-    // The seller sends it to the buyer, and the warehouse dispatches it.
     await fundWallet(SEED.collector, 20_000);
     const parcel = (
       await seller.post('/shipping/shipments', {
@@ -325,8 +278,6 @@ describe('ESC escrow and human fulfilment', () => {
       })).body.status,
     ).toBe('rates_selected');
 
-    // Paid for but not yet gone: the seller could still call it back, so this
-    // is not yet enough to release the money.
     expect((await operator.post(`/escrow/${deal.id}/release`, { side: 'buyer' })).status).toBe(409);
 
     const dispatched = await operator.post(`/shipping/shipments/${parcel.id}/dispatch`, {
@@ -358,12 +309,9 @@ describe('ESC escrow and human fulfilment', () => {
       })
     ).body;
 
-    // notFound rather than forbidden: confirming the id exists is itself a leak.
     const res = await stranger.get(`/escrow/${deal.id}`);
     expect(res.status).toBe(404);
   });
-
-  /* ---------------- white glove ---------------- */
 
   it('quotes a hand delivery instead of pricing it from a rate card', async () => {
     const operator = await signIn(SEED.operator);
@@ -373,7 +321,6 @@ describe('ESC escrow and human fulfilment', () => {
 
     const soon = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
-    // Too soon: somebody has to plan a journey and quote it first.
     const rushed = await collector.post('/shipping/white-glove', {
       itemIds: [card.id],
       pickupAddress: 'Bault NJ vault',
@@ -399,12 +346,10 @@ describe('ESC escrow and human fulfilment', () => {
     });
     expect(requested.status).toBe(201);
     const shipmentId = requested.body.id as string;
-    // No carrier, no price. The request is a question.
     expect(requested.body.fulfilmentMethod).toBe('hand_delivery');
     expect(requested.body.quoteMinor).toBeNull();
     expect(requested.body.cost).toBeNull();
 
-    // A collector cannot accept a quote that does not exist yet.
     const premature = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);
     expect(premature.status).toBe(409);
 
@@ -414,8 +359,6 @@ describe('ESC escrow and human fulfilment', () => {
     });
     expect(quoted.status).toBe(201);
 
-    // The collector finds the quote in their shipments list: the panel that
-    // offers "Accept" reads exactly these three fields from it.
     const listed = ((await collector.get('/shipping/shipments')).body as Record<string, unknown>[]).find(
       (s) => s.id === shipmentId,
     );
@@ -428,12 +371,9 @@ describe('ESC escrow and human fulfilment', () => {
     const before = await balanceOf(collector);
     const accepted = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);
     expect(accepted.status).toBe(201);
-    // Charged at the quoted figure and nothing else. A quote that moved between
-    // being given and being accepted would not be a quote.
     expect(accepted.body.cost).toBe(118_000);
     expect(await balanceOf(collector)).toBe(before - 118_000);
 
-    // Closed by a person putting a name to it, not by a carrier scan.
     const handed = await operator.post(`/shipping/shipments/${shipmentId}/hand-over`, {
       scannedItemIds: [card.id],
       handedToName: 'Red Ashwood',
@@ -446,8 +386,6 @@ describe('ESC escrow and human fulfilment', () => {
     expect(after.status).toBe('delivered');
     expect(after.trackingNumber).toBeNull();
   });
-
-  /* ---------------- show pickup ---------------- */
 
   it('lists only the shows that actually take pickups', async () => {
     const collector = await signIn(SEED.collector);
@@ -484,10 +422,8 @@ describe('ESC escrow and human fulfilment', () => {
     });
     expect(booked.status).toBe(201);
     expect(booked.body.fulfilmentMethod).toBe('show_pickup');
-    // Charged on the spot: there is nothing to quote and nothing to select.
     expect(await balanceOf(collector)).toBe(before - show.feeMinor);
 
-    // The remaining capacity is computed, so it moves.
     const after = (await collector.get('/shipping/pickup/shows')).body as Array<{ id: string; booked: number }>;
     expect(after.find((s) => s.id === show.id)!.booked).toBe(show.booked + 1);
 
@@ -530,6 +466,7 @@ describe('ESC escrow and human fulfilment', () => {
         recipient: 'Red Ashwood',
         line1: '12 Vine St',
         city: 'Trenton',
+        region: 'NJ',
         country: 'US',
         postalCode: '08608',
       })

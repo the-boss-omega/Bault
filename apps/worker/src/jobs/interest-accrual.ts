@@ -3,29 +3,6 @@ import { loadEnv } from '@bault/config';
 import { log } from '../log';
 import { negativeAccounts } from './debt';
 
-/**
- * Interest accrual.
- *
- * For every account whose derived balance has been negative for at least
- * `WALLET_DEBT_GRACE_DAYS`, append an `interest` DEBIT of
- * `WALLET_DEBT_INTEREST_BPS` basis points of the debt, as a new append-only
- * ledger row. Both are commercial policy, so they are configuration (see
- * `packages/config/src/env.ts`).
- *
- * ONE DAY OF INTEREST PER DAY, HOWEVER OFTEN THIS RUNS. pg-boss retries a failed
- * job, and a lease can expire or a second replica can run it. Each row carries
- * the UTC day it is for in `reference_id`, and a unique index on (account, day)
- * for interest rows makes a repeat insert a no-op.
- *
- * Each account is charged in its own transaction, holding the same wallet lock
- * the API takes before it reads a balance and moves money, and the debt is read
- * again under that lock, so a debt settled since the scan accrues nothing. One
- * account that fails is logged and skipped rather than stopping the rest.
- *
- * Not on a CLOSED account: a debt it was closed with is a matter for a person.
- * Nor on a `pending` one, which cannot have spent anything. A SUSPENDED account
- * keeps accruing, so suspension is not a way to stop the interest.
- */
 export async function accrueInterest(pool: Pool): Promise<void> {
   const env = loadEnv();
   const graceDays = env.WALLET_DEBT_GRACE_DAYS;
@@ -36,8 +13,6 @@ export async function accrueInterest(pool: Pool): Promise<void> {
     return;
   }
 
-  // The day this run accrues for, fixed once and taken from the database clock,
-  // so a run that straddles midnight is still one day's accrual.
   const { rows: today } = await pool.query<{ day: string }>(
     `SELECT to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day`,
   );
@@ -70,8 +45,6 @@ export async function accrueInterest(pool: Pool): Promise<void> {
         continue;
       }
 
-      // At least one cent, so a debt too small to round to a charge still costs
-      // something rather than sitting free forever.
       const amount = Math.max(1, Math.floor((-balance * bps) / 10_000));
       const inserted = await client.query(
         `INSERT INTO ledger_record (user_id, type, amount, direction, currency, reference_type, reference_id)
@@ -105,7 +78,5 @@ export async function accrueInterest(pool: Pool): Promise<void> {
     skipped,
     errored,
   });
-  // A run where some accounts could not be charged is a failed run, so the
-  // heartbeat records it and pg-boss retries, safely because of the key.
   if (errored > 0) throw new Error(`interest accrual failed for ${errored} account(s)`);
 }

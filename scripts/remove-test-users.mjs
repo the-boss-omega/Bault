@@ -1,38 +1,4 @@
 #!/usr/bin/env node
-/**
- * Remove the leftover integration-test accounts from the Users table.
- *
- * WHY THIS EXISTS
- * ---------------
- * The e2e suites register real accounts in a reserved fixture domain (see
- * `apps/api/src/shared/fixtures.ts`), which `AdmService.listUsers` filters out.
- * Older databases still hold accounts an earlier test helper made at
- * `bault.dev`, the seeded personas' domain, as `t<epoch-ms>@bault.dev`. They
- * look exactly like customers in Management > Users; this script clears them.
- *
- * SAFETY
- * ------
- * This deletes accounts, so it is built to refuse anything it is not certain
- * about:
- *
- *   - Dry run by default. It prints what it would delete and exits. Deleting
- *     requires an explicit `--apply`.
- *   - It matches ONE exact pattern: a local part of `t` followed by 10-19
- *     digits and nothing else, at `bault.dev`. It does not match on the
- *     substring "test", so a real customer at `test.family@…` is untouched.
- *   - The five seeded personas (eldar, hermon, red, golden, platform) are named
- *     in an explicit keep-list and can never be selected, whatever they match.
- *   - An account is skipped if it has items, ledger records, charges,
- *     shipments, service requests or shipping addresses. A test registration
- *     owns nothing; anything that does is not one, whatever its address looks like.
- *   - It refuses NODE_ENV=production, from the environment or `.env`, before it
- *     connects, as the seed and `pnpm test` do. A disposable database run with
- *     NODE_ENV=production is let through by ALLOW_DESTRUCTIVE_SEED=yes-i-am-sure.
- *
- * USAGE
- *   node scripts/remove-test-users.mjs            # dry run, prints candidates
- *   node scripts/remove-test-users.mjs --apply    # actually delete
- */
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -42,14 +8,10 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..');
 
-// `pg` from the API package, as tests/integration/helpers/db.ts does: the root
-// manifest has no database driver, so a bare `import 'pg'` does not resolve.
 const pg = createRequire(resolve(repoRoot, 'apps/api/package.json'))('pg');
 
-/** The exact shape the old test helper produced, anchored at both ends. */
 const LEGACY_FIXTURE = /^t\d{10,19}@bault\.dev$/i;
 
-/** Seeded personas. Never candidates, regardless of anything else. */
 const PROTECTED = new Set([
   'eldar@bault.dev',
   'hermon@bault.dev',
@@ -58,7 +20,6 @@ const PROTECTED = new Set([
   'platform@bault.dev',
 ]);
 
-/** Tables that prove an account is in real use. */
 const ACTIVITY = [
   ['item', 'owner_id'],
   ['ledger_record', 'user_id'],
@@ -68,7 +29,6 @@ const ACTIVITY = [
   ['shipping_address', 'user_id'],
 ];
 
-/** The process environment first, then the repo `.env`; the last assignment there wins. */
 function envValue(key) {
   if (process.env[key] !== undefined) return process.env[key];
   let value;
@@ -78,7 +38,6 @@ function envValue(key) {
       if (m) value = m[1].trim().replace(/^["']|["']$/g, '');
     }
   } catch {
-    /* no .env */
   }
   return value;
 }
@@ -110,7 +69,6 @@ async function main() {
       if (PROTECTED.has(row.email.toLowerCase())) continue;
       if (!LEGACY_FIXTURE.test(row.email)) continue;
 
-      // Prove it owns nothing before proposing to delete it.
       const activity = [];
       for (const [table, column] of ACTIVITY) {
         try {
@@ -120,8 +78,6 @@ async function main() {
           );
           if (hit.length > 0) activity.push(table);
         } catch (e) {
-          // A table or column that does not exist in this schema version is not
-          // evidence of safety: refuse the row rather than assume.
           activity.push(`${table}(unverifiable: ${e.message})`);
         }
       }
@@ -152,9 +108,6 @@ async function main() {
 
     await client.query('BEGIN');
     const ids = removable.map((c) => c.id);
-    // Verification tokens and login sessions are the only rows a bare
-    // registration can have produced; clear them first so the delete cannot
-    // trip a foreign key.
     await client.query('DELETE FROM verification_token WHERE user_id = ANY($1::uuid[])', [ids]);
     await client.query('DELETE FROM login_session WHERE user_id = ANY($1::uuid[])', [ids]);
     const del = await client.query('DELETE FROM user_account WHERE id = ANY($1::uuid[])', [ids]);

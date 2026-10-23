@@ -24,13 +24,6 @@ import {
 import { ConfirmationModal, DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { IconReceipt } from '../../shared/ui/icons';
 
-/**
- * Which reviewer actions the request's current status permits.
- *
- * The same adjacency the API enforces in `wallet-request.rules.ts`, so a button
- * never offers a transition the server would refuse. `cancelled` belongs to the
- * requester, not to a reviewer, and is deliberately absent.
- */
 export function reviewerActions(status: string): readonly string[] {
   switch (status) {
     case 'submitted':
@@ -46,23 +39,6 @@ export function reviewerActions(status: string): readonly string[] {
   }
 }
 
-/**
- * Where authorized administrators process cash-in and cash-out requests
- * (Requirement 8).
- *
- * Everything a reviewer needs is on one screen: the filtered queue, the full
- * detail of the selected request, its immutable audit history, and only the
- * actions its current status allows.
- *
- * Two rules are made visible here, as well as enforced by the API:
- *
- *   - Separation of duties. A request the signed-in admin raised themselves
- *     offers no actions at all, and says why. The API refuses those calls too;
- *     this is the explanation, not the enforcement.
- *   - Completion is the money. "Complete" is the only action that changes a
- *     balance. It is one of two behind a confirmation dialog, and that dialog
- *     names the amount, the customer, and the fact that it cannot be undone.
- */
 export function WalletRequestsSection({
   currentUserId,
   onMsg,
@@ -85,8 +61,6 @@ export function WalletRequestsSection({
   const [payoutReference, setPayoutReference] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Filtering is server-side, so a reviewer works a real slice of the queue
-  // rather than one page of it narrowed down in the browser.
   const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (typeFilter !== 'all') params.set('type', typeFilter);
@@ -117,7 +91,6 @@ export function WalletRequestsSection({
     [onError],
   );
 
-  /** One reviewer action; refreshes the queue and the open drawer together. */
   async function act(request: WalletRequest, action: string, body?: Record<string, unknown>) {
     setBusy(true);
     try {
@@ -141,10 +114,6 @@ export function WalletRequestsSection({
     }
   }
 
-  /**
-   * Ask the payout provider again about cash-outs still paying out: the ones
-   * whose confirmation never arrived.
-   */
   async function reconcile() {
     setBusy(true);
     try {
@@ -306,8 +275,6 @@ export function WalletRequestsSection({
           confirmLabel={t('admin.requests.reject')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
-          // A rejection without a reason is not a decision anyone can audit, so
-          // Confirm stays unavailable until one is typed.
           busy={busy || rejectReason.trim().length === 0}
           onConfirm={() => void act(rejecting, 'reject', { reason: rejectReason.trim() })}
           onCancel={() => {
@@ -329,9 +296,6 @@ export function WalletRequestsSection({
                   customer: completing.customerName || completing.username || completing.email || '—',
                 })}
               </p>
-              {/* Required by the API when cash-outs are paid by hand, refused when
-                  the provider pays: a reference here on the provider rail would
-                  mean somebody believes they already paid it. */}
               {completing.type === 'cash_out' && (
                 <Field label={t('admin.requests.payoutReferenceLabel')} hint={t('admin.requests.payoutReferenceHint')}>
                   <input
@@ -397,8 +361,6 @@ function WalletRequestDrawer({
               variant={action === 'complete' ? 'gold' : action === 'reject' ? 'danger' : 'secondary'}
               disabled={busy}
               onClick={() => {
-                // The two consequential ones go through a dialog; the rest are
-                // ordinary queue movements and take effect immediately.
                 if (action === 'reject') onRequestReject();
                 else if (action === 'complete') onRequestComplete();
                 else onAct(action);
@@ -453,7 +415,6 @@ function WalletRequestDrawer({
         {request.rejectionReason && (
           <DetailRow label={t('wallet.requests.rejectionReason')}>{request.rejectionReason}</DetailRow>
         )}
-        {/* The proof that completion, and only completion, moved money. */}
         {request.settledLedgerId && (
           <DetailRow label={t('wallet.requests.settledLedger')}>
             <code dir="ltr">{request.settledLedgerId}</code>

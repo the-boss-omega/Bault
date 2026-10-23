@@ -3,17 +3,6 @@ import type { Pool } from 'pg';
 import { BASE } from '../integration/helpers/http';
 import { testPool } from './helpers/db';
 
-/**
- * The worker's heartbeat, and the probe that reads it.
- *
- * A stopped worker is invisible from outside: the API keeps answering and
- * `/readyz` keeps saying the database is up, while outbox messages, storage
- * billing and interest silently stop. Every job stamps `worker_heartbeat` when
- * it succeeds, and `/readyz/worker` answers 503 once outbox dispatch (the job
- * that runs every minute) has not succeeded for five minutes.
- *
- * Needs the API running.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();
@@ -70,7 +59,6 @@ describe('GET /readyz/worker', () => {
     expect(rows[0]!.fresh).toBe(true);
     expect(rows[0]!.last_error).toContain('ECONNREFUSED');
 
-    // Public route: a time per job, nothing an error message might carry.
     const res = await probe();
     expect(res.status).toBe(200);
     expect(res.text).not.toContain('ECONNREFUSED');

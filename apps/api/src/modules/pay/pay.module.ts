@@ -11,10 +11,6 @@ import { ChargebackService } from './chargeback.service';
 import { PayController } from './pay.controller';
 import { WalletRequestController } from './wallet-request.controller';
 
-/**
- * PAY module (finance). Global because the ledger/wallet/billing primitives are
- * used across modules. It provides BILLING_PORT via BillingService.
- */
 @Global()
 @Module({
   controllers: [PayController, WalletRequestController],

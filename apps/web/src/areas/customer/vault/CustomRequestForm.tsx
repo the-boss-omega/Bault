@@ -3,14 +3,6 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { Button, ErrorState, Field } from '../../../shared/ui/primitives';
 
-/**
- * "Can you also…": asking for something the service list has no button for
- * (sleeve these before you ship them, weigh this box, check the seal is intact),
- * as a request with a price, a queue and a link to the item.
- *
- * The form says plainly that asking is free and that nothing is charged until
- * the collector sees a price and agrees to it.
- */
 export function CustomRequestForm({
   itemId,
   onCancel,
@@ -28,8 +20,6 @@ export function CustomRequestForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mirrors the API's own minimums, so the button disables for exactly the input
-  // the server would refuse.
   const summaryOk = summary.trim().length >= 3;
   const detailOk = detail.trim().length >= 10;
 
@@ -78,8 +68,6 @@ export function CustomRequestForm({
         />
       </Field>
 
-      {/* The reasonable fear about a box marked "custom" is that it will cost
-          something unknown, so the form answers it here. */}
       <p className="hint">{t('custom.freeNote')}</p>
 
       {error && <ErrorState message={error} />}

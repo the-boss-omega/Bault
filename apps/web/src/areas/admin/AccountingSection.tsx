@@ -5,7 +5,6 @@ import { useI18n, type MessageKey } from '../../shared/i18n';
 import { Button, EmptyState, MetricCard, Panel, StatusBadge } from '../../shared/ui/primitives';
 import { IconAlert, IconCheckCircle, IconChart, IconDownload, IconReceipt, IconWallet } from '../../shared/ui/icons';
 
-/** `GET /admin/accounting/summary`; see `apps/api/src/modules/adm/accounting.service.ts`. */
 export interface AccountingSummary {
   month: string;
   currency: string;
@@ -27,7 +26,6 @@ export interface AccountingSummary {
   note: string;
 }
 
-/** `GET /admin/accounting/reconciliation`; see `reconciliation.ts`. */
 export interface Reconciliation {
   checked: { topups: number; payouts: number; withdrawals: number };
   matched: number;
@@ -60,15 +58,6 @@ const REVENUE_LABEL: Record<string, MessageKey> = {
 const pad = (n: number) => String(n).padStart(2, '0');
 const isoDay = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 
-/**
- * The accountant's exports, where an administrator's money screens are.
- *
- * Three buttons, one per report, each reading an admin-only endpoint. Nothing
- * here computes a figure: the summary and the reconciliation are the API's, and
- * the ledger export is a plain download of `ledger.csv` (a link, not a fetch),
- * so a year of rows streams straight to disk instead of through this tab's
- * memory. No tax is applied or separated anywhere; that is for the accountant.
- */
 export function AccountingSection({ onError }: { onError: (m: string) => void }) {
   const { t, locale } = useI18n();
   const today = new Date();

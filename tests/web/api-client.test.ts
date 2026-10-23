@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api, apiErrorKey, isUnreachable } from '../../apps/web/src/shared/api';
 
-/**
- * The SPA must be able to tell "the backend is not there" apart from "the
- * backend says you are not signed in". Collapsing the two turns a dead API into
- * a sign-in screen: a silent, misleading sign-out.
- */
 const realFetch = globalThis.fetch;
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -55,7 +50,6 @@ describe('api client — request shape', () => {
 
 describe('api client — failure classification', () => {
   it('reports a refused connection as unreachable, not as a server error', async () => {
-    // fetch rejects (never resolves with a status) when no socket can be opened.
     stubFetch(() => {
       throw new TypeError('Failed to fetch');
     });
@@ -68,7 +62,6 @@ describe('api client — failure classification', () => {
   });
 
   it('treats the dev proxy 503 envelope as unreachable too', async () => {
-    // What apps/web/vite.config.ts answers when it cannot reach the API.
     stubFetch(() =>
       jsonResponse(503, {
         error: { code: 'api_unreachable', message: 'The Bault API is unavailable at http://127.0.0.1:3000.' },

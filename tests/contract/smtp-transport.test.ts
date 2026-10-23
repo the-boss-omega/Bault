@@ -3,21 +3,8 @@ import { createServer, type Server } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { SmtpEmailAdapter, createEmailAdapter } from '@bault/adapters';
 
-/**
- * SMTP must not fall back to plaintext.
- *
- * On 587 the connection starts in clear and upgrades with STARTTLS only if the
- * server offers it. Without `requireTLS`, a server that does not offer it, or
- * somebody on the path who strips the offer, gets the SMTP password and every
- * verification and reset link in clear. TLS is required everywhere except in
- * development, which may turn it off for a local mail catcher.
- *
- * A stand-in server that never offers STARTTLS records what it is sent.
- */
-
 type Options = { secure?: boolean; requireTLS?: boolean; tls?: { rejectUnauthorized?: boolean } };
 
-/** What the adapter handed to nodemailer. */
 function transportOptions(adapter: unknown): Options {
   expect(adapter).toBeInstanceOf(SmtpEmailAdapter);
   return (adapter as { transport: { options: Options } }).transport.options;
@@ -53,7 +40,6 @@ beforeAll(async () => {
           socket.write('354 go ahead\r\n');
         } else if (verb === 'QUIT') socket.end('221 bye\r\n');
         else if (verb === 'MAIL' || verb === 'RCPT') socket.write('250 ok\r\n');
-        // STARTTLS included: this server, like one whose offer was stripped, has none.
         else socket.write('502 command not implemented\r\n');
       }
     });
@@ -72,7 +58,6 @@ const smtp = (overrides: Record<string, unknown> = {}) =>
     NODE_ENV: 'production',
     EMAIL_PROVIDER: 'smtp',
     SMTP_HOST: '127.0.0.1',
-    // The stand-in, in place of 587: the same plaintext start and upgrade.
     SMTP_PORT: port,
     SMTP_SECURE: false,
     SMTP_REQUIRE_TLS: true,
@@ -123,7 +108,6 @@ describe('a server that does not offer STARTTLS', () => {
   it('gets neither the credentials nor the message outside development', async () => {
     lines.length = 0;
     await expect(smtp().send(message)).rejects.toThrow();
-    // It was reached: the refusal is about TLS, not a connection that failed.
     expect(lines.some((l) => /^EHLO/i.test(l))).toBe(true);
     expect(lines.some((l) => /^AUTH/i.test(l))).toBe(false);
     expect(lines.some((l) => /^(MAIL|DATA)/i.test(l))).toBe(false);

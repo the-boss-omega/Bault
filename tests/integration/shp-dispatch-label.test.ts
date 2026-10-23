@@ -11,41 +11,15 @@ import { ParcelProfileService } from '../../apps/api/src/modules/shp/parcel-prof
 import { ShipmentService } from '../../apps/api/src/modules/shp/shipment.service';
 import { DispatchService } from '../../apps/api/src/modules/shp/dispatch.service';
 
-/**
- * Buying a label is a call to somebody else's computer, and it costs money that
- * cannot be rolled back.
- *
- * So dispatch buys the label OUTSIDE the transaction that holds the shipment and
- * every card in it `FOR UPDATE`, with a timeout. Both reasons are driven here:
- *
- *   - rows locked across the purchase would stay locked for as long as the
- *     carrier took to answer, so other work on those cards would queue behind a
- *     network call;
- *   - anything that fails AFTER the purchase (a card that changed state, a
- *     failed commit) must not roll back the tracking number while the label
- *     stays bought, or a retry would buy a second one.
- *
- * The carrier here is a fake, because the only way to make a purchase succeed
- * and then fail what follows is to control the carrier. Everything else is the
- * real thing: the real `DispatchService` and custody kernel in this process,
- * against the same database the running API uses, with the shipment set up
- * through the API exactly as a collector and an operator would.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 const apiRequire = createRequire(new URL('../../apps/api/package.json', import.meta.url));
-// Resolved from the API's own dependencies, the same copy its services use.
 const { sql } = apiRequire('drizzle-orm') as typeof import('drizzle-orm');
 
-/** What the fake carrier is told to do when asked for a label. */
 type Behaviour = 'sell' | 'refuse' | 'lose-the-answer';
 
 class FakeCarrier implements ShippingAdapter {
   purchases = 0;
   keys: (string | undefined)[] = [];
   signals: (AbortSignal | undefined)[] = [];
-  /** Run during the purchase, while dispatch is waiting on the carrier. */
   duringPurchase: () => Promise<void> = async () => {};
 
   constructor(public behaviour: Behaviour = 'sell') {}
@@ -90,7 +64,6 @@ afterAll(async () => {
   await closeDb();
 });
 
-/** The services dispatch uses, built the way Nest builds them, with this carrier. */
 function dispatchWith(carrier: ShippingAdapter) {
   const outbox = new OutboxService(db);
   const custody = new CustodyService(db, outbox);
@@ -108,7 +81,6 @@ function dispatchWith(carrier: ShippingAdapter) {
   return { dispatch: new DispatchService(db, carrier, custody, outbox, shipments), custody };
 }
 
-/** A paid, ready-to-dispatch shipment of one fresh card. */
 async function readyShipment(label: string) {
   const card = await intakeFor(operator, SEED.collector, { description: `F049: ${label}` });
   const collector = await signIn(SEED.collector);
@@ -148,9 +120,6 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
     const carrier = new FakeCarrier('sell');
     const { dispatch, custody } = dispatchWith(carrier);
 
-    // While the carrier is selling the label, somebody puts a hold on the card.
-    // With the rows locked across the purchase this waits for the dispatch and
-    // gives up; without the lock it simply happens.
     let heldDuringPurchase = false;
     carrier.duringPurchase = async () => {
       try {
@@ -167,14 +136,11 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
     const first = await dispatch.dispatch(operatorId, shipmentId, FORM(itemId)).catch((e: unknown) => e);
     expect(heldDuringPurchase, 'the card was locked for as long as the carrier took').toBe(true);
 
-    // The card is on hold now, so it must not leave — but the label was paid
-    // for, and its tracking number is on the shipment rather than lost.
     expect((first as { getStatus?: () => number }).getStatus?.()).toBe(409);
     const kept = (await collector.get(`/shipping/shipments/${shipmentId}`)).body;
     expect(kept.status).toBe('labeled');
     expect(kept.trackingNumber).toBe(`FAKE-${shipmentId.slice(0, 8)}`);
 
-    // Hold lifted, dispatch again: it completes with the label already bought.
     carrier.duringPurchase = async () => {};
     expect((await operator.del(`/custody/items/${itemId}/hold`)).status).toBe(200);
     const second = await dispatch.dispatch(operatorId, shipmentId, FORM(itemId));
@@ -192,15 +158,12 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
 
     const lost = await dispatch.dispatch(operatorId, shipmentId, FORM(itemId)).catch((e: unknown) => e);
     expect((lost as { getStatus?: () => number }).getStatus?.()).toBe(502);
-    // Nobody knows whether the carrier sold it, so the shipment is not handed
-    // back as if nothing happened: it stays claimed, and cannot be cancelled.
     expect((await collector.get(`/shipping/shipments/${shipmentId}`)).body.status).toBe('labeled');
     expect((await collector.post(`/shipping/shipments/${shipmentId}/cancel`, { reason: 'changed my mind' })).status).toBe(409);
 
     carrier.behaviour = 'sell';
     const done = await dispatch.dispatch(operatorId, shipmentId, FORM(itemId));
     expect(done.status).toBe('shipped');
-    // Both attempts asked for the same purchase, each with a deadline.
     expect(carrier.keys).toEqual([shipmentId, shipmentId]);
     expect(carrier.signals.every((s) => s instanceof AbortSignal)).toBe(true);
   });
@@ -233,8 +196,6 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
 
     const first = dispatch.dispatch(operatorId, shipmentId, FORM(itemId));
     await inside;
-    // Answered at once — not left queueing behind the first operator's lock
-    // until the carrier replies.
     const attempt = dispatch.dispatch(operatorId, shipmentId, FORM(itemId)).catch((e: unknown) => e);
     const second = await Promise.race([
       attempt,
@@ -248,20 +209,9 @@ describe('dispatch buys the label outside the transaction (F049)', () => {
   });
 });
 
-/**
- * A label the carrier refuses at dispatch.
- *
- * Nothing was bought, so the shipment goes back to `rates_selected`, paid for.
- * The rate it holds is the one the carrier just turned down, so dispatching it
- * again buys nothing either. The way forward is a fresh rate, chosen by the
- * collector or by an operator, with the difference settled against what was
- * already paid: a cheaper rate's difference comes back, a dearer one's is
- * charged, and neither leaves the cancellation (and its fee) as the only exit.
- */
 describe('a label refused at dispatch', () => {
   const walletOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
 
-  /** A paid shipment whose label the carrier has just refused. */
   async function refusedShipment(label: string, pick: 'cheapest' | 'dearest', ownerEmail: string = SEED.collector) {
     const card = await intakeFor(operator, ownerEmail, { description: `Refused label: ${label}` });
     const owner = await signIn(ownerEmail);
@@ -313,7 +263,6 @@ describe('a label refused at dispatch', () => {
       serviceLevel: cheaper.serviceLevel,
     });
     expect(again.status).toBe(201);
-    // The collector was shown why: the refusal is on the shipment until a new rate replaces it.
     expect(refusedView.labelRefused).toMatchObject({ reason: expect.stringContaining('rate expired') });
     expect(again.body).toMatchObject({ status: 'rates_selected', cost: cheaper.totalMinor });
     expect((await walletOf(owner)) - before).toBe(chosen.totalMinor - cheaper.totalMinor);
@@ -322,15 +271,12 @@ describe('a label refused at dispatch', () => {
     expect(after).toMatchObject({ status: 'rates_selected', cost: cheaper.totalMinor, carrier: cheaper.carrier });
     expect(after.labelRefused).toBeNull();
 
-    // Paid for again, so a further change is refused as on any paid shipment.
     const third = await owner.post(`/shipping/shipments/${shipmentId}/select-rate`, {
       carrier: chosen.carrier,
       serviceLevel: chosen.serviceLevel,
     });
     expect(third.status).toBe(409);
 
-    // A cancellation now refunds what is actually paid, not the first charge:
-    // the collector ends up out the restocking fee and nothing else.
     const cancelled = await owner.post(`/shipping/shipments/${shipmentId}/cancel`, { reason: 'Changed my mind.' });
     expect(cancelled.status).toBe(201);
     expect(cancelled.body.refundedMinor).toBe(cheaper.totalMinor);
@@ -373,7 +319,6 @@ describe('a label refused at dispatch', () => {
     const { shipmentId, owner, chosen, eligible } = await refusedShipment('dearer, short', 'cheapest', SEED.collector3);
     const dearer = eligible[eligible.length - 1]!;
 
-    // Spend whatever is left, so the difference cannot be covered.
     const left = await walletOf(owner);
     if (left > 0) {
       const seller = await signIn(SEED.collector);
@@ -395,7 +340,6 @@ describe('a label refused at dispatch', () => {
   });
 
   it('prices a member the same after a refusal, and spends the allowance once', async () => {
-    // A fresh account, so becoming a member changes nobody else's prices.
     const account = await activeAccount('relabel');
     const member = await passwordOnly(account);
     const admin = await signIn(SEED.admin);
@@ -443,7 +387,6 @@ describe('a label refused at dispatch', () => {
     const { dispatch } = dispatchWith(new FakeCarrier('refuse'));
     await dispatch.dispatch(operatorId, s.id, FORM(card.body.id)).catch(() => undefined);
 
-    // Quoted as if this parcel had never spent the allowance.
     const again = await quoted();
     expect(again.map((r) => [r.serviceKey, r.totalMinor])).toEqual(fresh.map((r) => [r.serviceKey, r.totalMinor]));
 
@@ -454,7 +397,6 @@ describe('a label refused at dispatch', () => {
     });
     expect(reselected.status).toBe(201);
     expect((await walletOf(member)) - before).toBe(first.totalMinor - second.totalMinor);
-    // The refused rate's cover went back; only the new rate's is spent.
     expect(await usedOf()).toBe(usedBefore + second.membershipCover!.postageMinor);
   });
 });

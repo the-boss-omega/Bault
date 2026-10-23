@@ -4,16 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
 import { MEMBERSHIP_TIERS } from '../../apps/api/src/modules/mem/tiers';
 
-/**
- * The admin console's editing screens: the pricing form, and the user and item
- * rows.
- *
- * `api` is mocked at the module boundary: what is pinned is which request each
- * button sends. The pricing catalogue is the API's own (`billable-actions.ts`),
- * read through the coverage check exactly as the endpoint builds it, so an
- * action added to the code shows up here without anybody editing this file.
- */
-
 const get = vi.fn();
 const post = vi.fn();
 const patch = vi.fn();
@@ -38,10 +28,8 @@ function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
 }
 
-/** The coverage check on a database built by migration alone: not one rule. */
 const UNPRICED = JSON.parse(JSON.stringify(coverage(billableActions(), []))) as ReturnType<typeof coverage>;
 
-/** `GET /membership/tiers`, as `MembershipService.catalogue` builds it. */
 const TIERS = {
   tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
   uncovered: [],
@@ -65,11 +53,6 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
-/* ============================================================
-   Pricing: every price the coverage check asks for can be loaded
-   ============================================================ */
-
-/** The new-rule form's action picker, once the catalogue is in it. */
 async function actionPicker() {
   const select = (await screen.findByRole('combobox', { name: /^action/i })) as HTMLSelectElement;
   await waitFor(() => expect(select.querySelector('option[value="parcel_forwarding"]')).not.toBeNull());
@@ -91,8 +74,6 @@ describe('the pricing form', () => {
     renderIn(<AdminConsole currentUserId="me" />);
 
     const missing = UNPRICED.actions.filter((a) => a.status === 'missing').map((a) => a.actionType);
-    // The ones the launch plan stalls on, by name, so a catalogue that stopped
-    // reporting them could not make this pass by having nothing to check.
     expect(missing).toEqual(
       expect.arrayContaining(['parcel_processing', 'parcel_forwarding', 'membership:folio', 'membership:trust']),
     );
@@ -103,7 +84,6 @@ describe('the pricing form', () => {
       offered = [...select.options].map((o) => o.value);
       expect(offered).toEqual(expect.arrayContaining(missing));
     });
-    // And everything else the API bills, so no rule has to be loaded by hand.
     expect(new Set(offered)).toEqual(new Set(UNPRICED.actions.map((a) => a.actionType)));
   });
 
@@ -135,8 +115,6 @@ describe('the pricing form', () => {
     await waitFor(() => expect(post).toHaveBeenCalled());
     const [path, body] = post.mock.calls[0]!;
     expect(path).toBe('/pricing/rules');
-    // The shape the seed writes. Without `storedItems` the nightly sweep covers
-    // none of a member's items and bills storage on every one of them.
     expect(body).toMatchObject({
       actionType: 'membership:folio',
       value: 3900,
@@ -163,10 +141,6 @@ describe('the pricing form', () => {
   });
 });
 
-/* ============================================================
-   Users: a save sends what the administrator changed, nothing else
-   ============================================================ */
-
 const DEBTOR = {
   id: 'u1',
   email: 'debtor@bault.dev',
@@ -175,8 +149,6 @@ const DEBTOR = {
   lastName: 'Btor',
   nameReviewRequired: false,
   role: 'user',
-  // Suspended by the debt sweep: the sweep lifts it once the balance recovers,
-  // unless an administrator sets a status.
   status: 'suspended',
   autoSuspended: true,
   intakeId: null,
@@ -225,7 +197,6 @@ describe('saving a user row', () => {
     await user.click(screen.getByRole('button', { name: /keep debtor@bault\.dev suspended/i }));
 
     await waitFor(() => expect(patch).toHaveBeenCalled());
-    // Exactly the status, which the server reads as an administrator's decision.
     expect(patch).toHaveBeenCalledWith('/admin/users/u1', { status: 'suspended' });
     await waitFor(() => expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
@@ -233,8 +204,6 @@ describe('saving a user row', () => {
 
   it('confirms a name flagged for review that is already right, by sending the name and nothing else', async () => {
     const user = userEvent.setup();
-    // A migrated account whose split name is correct as it stands: confirming
-    // it is the whole edit, so there is nothing to change before saving.
     const flagged = {
       ...DEBTOR,
       id: 'u5',
@@ -286,10 +255,6 @@ describe('saving a user row', () => {
   });
 });
 
-/* ============================================================
-   Items: a save sends what the administrator changed, nothing else
-   ============================================================ */
-
 const LISTED_CARD = {
   id: 'i1',
   serialNumber: 'SN-1',
@@ -317,8 +282,6 @@ describe('saving an item row', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(patch).toHaveBeenCalled());
-    // The server takes the card off sale and back to `stored`; a `listed` sent
-    // alongside would keep it listed with no listing.
     expect(patch).toHaveBeenCalledWith('/admin/items/i1', { ownerId: 'u2' });
   });
 

@@ -29,11 +29,6 @@ import {
   type WalletRequestType,
 } from './wallet-request.rules';
 
-/**
- * Cash-in and cash-out share one submission shape. Which fields are REQUIRED
- * depends on the type, and that rule lives in `validateWalletRequestDraft` rather
- * than in decorators, so the API and the SPA enforce exactly the same thing.
- */
 class SubmitWalletRequestDto {
   @IsIn(['cash_in', 'cash_out']) type!: WalletRequestType;
   @IsInt() @IsPositive() amountMinor!: number;
@@ -42,7 +37,6 @@ class SubmitWalletRequestDto {
   @IsOptional() @IsString() @MaxLength(140) destinationAccount?: string;
   @IsOptional() @IsString() @MaxLength(140) beneficiaryName?: string;
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) reference?: string;
-  /** Object key of an already-uploaded document, never the document itself. */
   @IsOptional() @IsString() @MaxLength(400) @IsObjectKey() documentKey?: string;
   @IsOptional() @IsString() @MaxLength(MAX_NOTE_LENGTH) notes?: string;
 }
@@ -60,28 +54,12 @@ class RejectDto {
 }
 
 class CompleteDto extends ReviewNoteDto {
-  /**
-   * With `PAYOUT_MODE=manual`, the reference of the payment the administrator
-   * made by hand (a PayPal transaction id, a bank transfer reference). Required
-   * for a cash-out in that mode, refused in the provider mode.
-   */
   @IsOptional() @IsString() @MaxLength(MAX_REFERENCE_LENGTH) payoutReference?: string;
 }
 
-/**
- * A date the review queue can filter on: a day (`2026-10-15`, as the date
- * inputs send it) or a moment (`2026-10-15T09:30:00Z`). The pattern keeps out
- * the ISO forms `new Date()` cannot read (week and ordinal dates); strict
- * ISO 8601 keeps out days that do not exist (`2026-02-30`).
- */
 const QUEUE_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 const queueDate = (field: string) => ({ message: `${field} has to be a date, written YYYY-MM-DD or as an ISO 8601 time.` });
 
-/**
- * The review queue's filters, checked here so a bad one is a 400 that names
- * it. An unreadable date used to reach `new Date()` and fail inside the query
- * as a 500.
- */
 class ReviewQueueQuery {
   @IsOptional() @IsIn(['cash_in', 'cash_out']) type?: WalletRequestType;
   @IsOptional() @IsIn(Object.keys(WALLET_REQUEST_TRANSITIONS)) status?: WalletRequestStatus;
@@ -91,25 +69,14 @@ class ReviewQueueQuery {
 }
 
 class ReconcileDto {
-  /** Only payouts pending at least this long are asked about. */
   @IsOptional() @IsInt() @Min(0) @Max(10_080) olderThanMinutes?: number;
   @IsOptional() @IsInt() @Min(1) @Max(200) limit?: number;
 }
 
-/**
- * Wallet request endpoints.
- *
- * `/finance/wallet-requests*` is the customer surface: submit, list your own,
- * open one, cancel your own. `/admin/wallet-requests*` is the review surface and
- * carries `@Roles('admin')`; the service re-checks separation of duties so an
- * admin still cannot decide their own.
- */
 @ApiTags('PAY')
 @Controller()
 export class WalletRequestController {
   constructor(private readonly requests: WalletRequestService) {}
-
-  /* ---- Customer ---- */
 
   @Post('finance/wallet-requests')
   submit(@CurrentUser() user: AuthUser, @Body() dto: SubmitWalletRequestDto) {
@@ -140,8 +107,6 @@ export class WalletRequestController {
   cancel(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CancelDto) {
     return this.requests.cancel(id, user, dto.reason);
   }
-
-  /* ---- Review (admin only) ---- */
 
   @Roles('admin')
   @Get('admin/wallet-requests')
@@ -179,22 +144,12 @@ export class WalletRequestController {
     return this.requests.markProcessing(id, user, dto.note);
   }
 
-  /**
-   * Completes an approved request and moves its money. A provider payout then
-   * settles by webhook or by `admin/payouts/reconcile`.
-   */
   @Roles('admin')
   @Post('admin/wallet-requests/:id/complete')
   complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CompleteDto) {
     return this.requests.complete(id, user, { note: dto.note, payoutReference: dto.payoutReference });
   }
 
-  /**
-   * Ask the payout provider again about cash-outs still `paying`.
-   *
-   * For a payout whose webhook never came, or whose answer was lost. Safe to run
-   * any number of times: a payout settles once.
-   */
   @Roles('admin')
   @Post('admin/payouts/reconcile')
   reconcile(@CurrentUser() user: AuthUser, @Body() dto: ReconcileDto) {

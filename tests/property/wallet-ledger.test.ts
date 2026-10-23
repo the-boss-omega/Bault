@@ -1,16 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from '../integration/helpers/http';
 
-/**
- * Principle IV: after ANY sequence of money operations, the wallet balance
- * equals the sum of that user's ledger records.
- *
- * The sequence is driven through the cash-in/cash-out REQUEST workflow, because
- * that is the only way money moves. So it also asserts that requests which were
- * never completed contribute NOTHING to either.
- *
- * Requires a running API + seeded DB.
- */
 describe('property: wallet balance == Σ ledger', () => {
   it('balance equals Σ ledger after a mixed sequence of completed and undecided requests', async () => {
     const customer = await signIn(SEED.collector);
@@ -19,7 +9,6 @@ describe('property: wallet balance == Σ ledger', () => {
     const start = (await customer.get('/finance/wallet')).body as { amount: number };
     let expected = start.amount;
 
-    /** Raise a cash-in request. Distinct references keep them distinct requests. */
     async function submit(amountMinor: number, tag: string): Promise<string> {
       const res = await customer.post('/finance/wallet-requests', {
         type: 'cash_in',
@@ -32,10 +21,6 @@ describe('property: wallet balance == Σ ledger', () => {
       return res.body.id as string;
     }
 
-    // A deterministic, awkward set of amounts — nothing round, so an off-by-one
-    // in the ledger arithmetic cannot hide behind a tidy total. Every one clears
-    // the $10 cash-in minimum, or the request would be refused before it could
-    // contribute anything to the sum.
     const completedAmounts = [1_234, 5_000, 7_771, 9_042, 100_000];
     for (const [index, amount] of completedAmounts.entries()) {
       const id = await submit(amount, `complete-${index}`);
@@ -45,8 +30,6 @@ describe('property: wallet balance == Σ ledger', () => {
       expected += amount;
     }
 
-    // Requests that are approved but NOT completed, rejected, and cancelled.
-    // None of these may touch the balance, and the totals below prove it.
     const approvedOnly = await submit(50_000, 'approved-only');
     await admin.post(`/admin/wallet-requests/${approvedOnly}/approve`, {});
 
@@ -56,7 +39,6 @@ describe('property: wallet balance == Σ ledger', () => {
     const cancelled = await submit(70_000, 'cancelled');
     await customer.post(`/finance/wallet-requests/${cancelled}/cancel`, {});
 
-    // A cash-out, completed, to exercise the debit direction too.
     const out = await customer.post('/finance/wallet-requests', {
       type: 'cash_out',
       amountMinor: 3_456,
@@ -68,14 +50,6 @@ describe('property: wallet balance == Σ ledger', () => {
     expect(out.status).toBe(201);
     await admin.post(`/admin/wallet-requests/${out.body.id}/approve`, {});
     await admin.post(`/admin/wallet-requests/${out.body.id}/complete`, {});
-    /**
-     * A cash-out costs exactly the amount asked for: the fee comes out of it, as
-     * its own row, and the rest is the withdrawal.
-     *
-     * Taken from the quote endpoint rather than recomputed here, so this model
-     * cannot drift from the schedule the platform actually charges — which is
-     * the same reason the quote and the charge share one function on the server.
-     */
     const outQuote = (await customer.get('/finance/cash-out-quote?amountMinor=3456')).body as {
       amountMinor: number;
       feeMinor: number;
@@ -88,8 +62,8 @@ describe('property: wallet balance == Σ ledger', () => {
     const ledger = (await customer.get('/finance/ledger')).body as { amount: number; direction: string }[];
     const summed = ledger.reduce((acc, r) => acc + (r.direction === 'credit' ? r.amount : -r.amount), 0);
 
-    expect(balance.amount).toBe(summed); // the balance IS Σ ledger, always
-    expect(balance.amount).toBe(expected); // and only completed requests moved it
+    expect(balance.amount).toBe(summed);
+    expect(balance.amount).toBe(expected);
   });
 
   it('writes exactly one ledger row per completed request, and none for the rest', async () => {
@@ -123,7 +97,6 @@ describe('property: wallet balance == Σ ledger', () => {
       referenceId: string | null;
     }[];
 
-    // Three requests raised, one completed: exactly one new ledger row.
     expect(after.length - before.length).toBe(1);
     expect(after.filter((r) => r.referenceId === completed)).toHaveLength(1);
     expect(after.some((r) => r.referenceId === openOne)).toBe(false);

@@ -1,15 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-/**
- * Which browser origins may write (apps/api/src/shared/csrf/cross-site.ts).
- *
- * `vite preview` on 4173 and the `pnpm tunnel` link are the app, served from an
- * origin that is neither `APP_BASE_URL` nor in `CORS_ORIGINS`, so every POST
- * from them, sign-in included, was refused with 403. Production keeps its
- * explicit list: nothing is added there, or under `test`.
- *
- * Unit-level, no server.
- */
 let csrf: typeof import('../../apps/api/src/shared/csrf/cross-site');
 
 beforeAll(async () => {
@@ -19,7 +9,6 @@ beforeAll(async () => {
 
 const PREVIEW = ['http://localhost:4173', 'http://127.0.0.1:4173'];
 
-/** Run the middleware once and say whether it let the request through. */
 function passes(allowed: ReadonlySet<string>, origin: string): boolean {
   let error: unknown;
   const middleware = csrf.sameOriginWrites(allowed, []);

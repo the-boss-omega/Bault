@@ -1,14 +1,3 @@
-/**
- * Which events go out by email, and what their subject line says.
- *
- * Mirrored BY VALUE from `apps/api/src/modules/not/event-types.ts`, because the
- * worker is independent of the Nest container and cannot import the API's
- * catalogue. Only the email default and the subject are needed here; category,
- * label and in-app settings are the API's business.
- *
- * Email is on by default only for money, custody of somebody's property
- * changing hands, and anything with a deadline attached.
- */
 const EMAIL_BY_DEFAULT = new Set([
   'item_received',
   'parcel_received',
@@ -49,18 +38,10 @@ const EMAIL_BY_DEFAULT = new Set([
   'payment_reversed',
 ]);
 
-/**
- * An event not in the list defaults to email OFF, so a new emitter still
- * reaches the collector in-app and cannot start sending mail without an entry here.
- */
 export function defaultEmailEnabled(eventType: string): boolean {
   return EMAIL_BY_DEFAULT.has(eventType);
 }
 
-/**
- * The subject line, written to be readable in a notification bar with the rest
- * cut off: the subject of the sentence comes first and there are no pleasantries.
- */
 const SUBJECTS: Record<string, string> = {
   item_received: 'An item has been received into your vault',
   parcel_received: 'Your parcel has arrived',

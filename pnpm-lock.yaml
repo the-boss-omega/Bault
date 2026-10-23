@@ -43,6 +43,9 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
       prettier:
         specifier: ^3.4.2
         version: 3.9.5

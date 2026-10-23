@@ -7,16 +7,6 @@ import {
   type RuleInForce,
 } from '../../apps/api/src/modules/prc/billable-actions';
 
-/**
- * The pricing-coverage catalogue, without a database.
- *
- * Two things are pinned here. What each kind of missing rule is REPORTED as —
- * the integration suite only ever sees the seeded database, where nothing is
- * missing. And that the catalogue is complete: a service that starts pricing a
- * new action type by string literal, without the catalogue knowing, is the
- * exact way an unpriced action reaches production unseen.
- */
-
 const rule = (actionType: string, over: Partial<RuleInForce> = {}): RuleInForce => ({
   id: `rule-${actionType}`,
   actionType,
@@ -48,9 +38,7 @@ describe('coverage of the rules in force', () => {
     for (const t of ['intake', 'service', 'storage', 'shipping', 'marketplace_fee', 'parcel_processing']) {
       expect(missing).toContain(t);
     }
-    // With its parent gone too, a fallback has nothing to fall back to.
     expect(missing).toContain('grading_fee:psa_value');
-    // A free-if-unpriced action is free, and says so rather than "missing".
     expect(report.actions.find((a) => a.actionType === 'shipping_rush')!.status).toBe('free');
     expect(report.actions.find((a) => a.actionType === 'shipping_addon:gps_tracker')!.status).toBe('code_default');
     expect(report.actions.find((a) => a.actionType === 'cash_out_fee')!.status).toBe('code_constant');
@@ -109,13 +97,9 @@ describe('the catalogue is complete', () => {
       ...sources(join(root, 'apps', 'worker', 'src')),
     ];
     const patterns = [
-      // pricing.price('x') / tryPrice('x')
       /\b(?:price|tryPrice)\(\s*'([a-z_:]+)'/g,
-      // BillingService.charge(tx, { ..., actionType: 'x' }) and feeActionType: 'x'
       /\b(?:feeActionType|actionType):\s*'([a-z_:]+)'/g,
-      // FOO_ACTION = 'x'
       /_ACTION\s*=\s*'([a-z_:]+)'/g,
-      // the worker's SQL: action_type IN ('a', 'b') / action_type = 'x'
       /action_type\s*(?:IN\s*\(([^)]*)\)|=\s*'([a-z_:]+)')/g,
     ];
     const found = new Set<string>();
@@ -129,11 +113,9 @@ describe('the catalogue is complete', () => {
         }
       }
     }
-    expect(found.size).toBeGreaterThan(10); // the scan found the real call sites
+    expect(found.size).toBeGreaterThan(10);
 
     const known = billableActions().map((a) => a.actionType);
-    // A literal ending in ':' is a family prefix built up in SQL
-    // ('membership:' || tier); it is covered when the family has members.
     const unknown = [...found].filter((t) =>
       t.endsWith(':') ? !known.some((k) => k.startsWith(t)) : !known.includes(t),
     );

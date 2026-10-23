@@ -3,12 +3,6 @@ import type { Pool } from 'pg';
 import { expireUnpaidShipments } from '../../apps/worker/src/jobs/shipment-expiry';
 import { count, createUser, testPool } from './helpers/db';
 
-/**
- * Releasing shipments nobody paid for, run more than once.
- *
- * One cancelled shipment and one `shipment_expired` message per shipment, no
- * matter how many runs saw it.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();

@@ -1,15 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
-/**
- * FAQ & Legal as a reader meets it.
- *
- * The content suites check the text; this checks what reaches the screen: the
- * FAQ is Bault's and says so, every draft document shows its banner and its
- * version above the first line, and the figures the documents point at are
- * actually displayed from the API rather than promised.
- */
-
 const get = vi.fn();
 
 vi.mock('../../apps/web/src/shared/api', () => ({
@@ -57,7 +48,6 @@ beforeEach(() => {
   try {
     localStorage.setItem('bault.locale', 'en');
   } catch {
-    /* jsdom always has it */
   }
 });
 

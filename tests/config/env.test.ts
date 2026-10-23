@@ -1,18 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 
-/**
- * The environment schema (packages/config/src/env.ts).
- *
- * Imported by path: the repository root does not depend on `@bault/config`.
- * `loadEnv` caches its first result, so every case loads a fresh module.
- */
 async function load(source: Record<string, string | undefined>) {
   vi.resetModules();
   const { loadEnv } = await import('../../packages/config/src/env');
   return loadEnv(source as NodeJS.ProcessEnv);
 }
 
-/** Enough to boot in development. */
 const DEV = {
   NODE_ENV: 'development',
   DATABASE_URL: 'postgres://bault:bault@localhost:6432/bault',
@@ -25,13 +18,8 @@ const DEV = {
   STORAGE_SECRET_KEY: 's',
 };
 
-/**
- * A real-looking two-factor key: 32 bytes, base64. Not the development key —
- * production refuses that one by value.
- */
 const MFA_KEY = Buffer.alloc(32, 7).toString('base64');
 
-/** A configuration production accepts. */
 const PROD = {
   ...DEV,
   MFA_ENCRYPTION_KEY: MFA_KEY,
@@ -65,7 +53,6 @@ describe('environment schema', () => {
   });
 
   it('still parses an env file that sets the retired statement timeout', async () => {
-    // The timeout is a database role setting now (apps/api/src/db/client.ts).
     const env = await load({ ...PROD, DATABASE_STATEMENT_TIMEOUT_MS: '30000' });
     expect(env).not.toHaveProperty('DATABASE_STATEMENT_TIMEOUT_MS');
   });
@@ -118,8 +105,6 @@ describe('environment schema', () => {
   });
 
   it('pays cash-outs through the provider unless told to record manual payouts', async () => {
-    // Manual mode is how Bault launches before PayPal approves it for Payouts:
-    // an administrator pays by hand and records the reference.
     expect((await load(DEV)).PAYOUT_MODE).toBe('provider');
     expect((await load({ ...DEV, PAYOUT_MODE: 'manual' })).PAYOUT_MODE).toBe('manual');
     expect((await load({ ...PROD, PAYOUT_MODE: 'manual' })).PAYOUT_MODE).toBe('manual');
@@ -135,16 +120,6 @@ describe('environment schema', () => {
   });
 });
 
-/**
- * Two-factor sign-in.
- *
- * The TOTP secrets are encrypted at rest under MFA_ENCRYPTION_KEY, and staff
- * accounts must use a second factor in production. Both are configuration, so
- * both are refused at boot when they are wrong — a missing key would otherwise
- * surface as the first enrolment failing, and a production deployment that
- * quietly stopped requiring two-factor sign-in for administrators would surface
- * as nothing at all.
- */
 describe('two-factor configuration', () => {
   it('requires MFA_ENCRYPTION_KEY in production', async () => {
     await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: undefined })).rejects.toThrow(
@@ -168,8 +143,6 @@ describe('two-factor configuration', () => {
     const dev = await load(DEV);
     expect(Buffer.from(dev.MFA_ENCRYPTION_KEY, 'base64')).toHaveLength(32);
     expect((await load({ ...DEV, MFA_ENCRYPTION_KEY: MFA_KEY })).MFA_ENCRYPTION_KEY).toBe(MFA_KEY);
-    // The development key is in the source, so a production that used it
-    // would be encrypting every secret under a published key.
     await expect(load({ ...PROD, MFA_ENCRYPTION_KEY: dev.MFA_ENCRYPTION_KEY })).rejects.toThrow(
       /MFA_ENCRYPTION_KEY/,
     );
@@ -194,14 +167,11 @@ describe('two-factor configuration', () => {
     await expect(load({ ...PROD, MFA_REQUIRED_ROLES: 'warehouse_operator' })).rejects.toThrow(
       /MFA_REQUIRED_ROLES/,
     );
-    // Stricter is allowed: collectors too.
     const all = await load({ ...PROD, MFA_REQUIRED_ROLES: 'admin,warehouse_operator,user' });
     expect([...all.MFA_REQUIRED_ROLES].sort()).toEqual(['admin', 'user', 'warehouse_operator']);
   });
 
   it('refuses a role name it does not know, rather than enforcing nothing for it', async () => {
-    // `operator` is not a role. Accepting it would leave every real operator
-    // without the requirement while the configuration said otherwise.
     await expect(load({ ...DEV, MFA_REQUIRED_ROLES: 'admin,operator' })).rejects.toThrow(
       /MFA_REQUIRED_ROLES/,
     );

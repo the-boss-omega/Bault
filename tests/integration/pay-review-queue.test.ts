@@ -1,14 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 
-/**
- * The wallet-request review queue's filters (`GET /admin/wallet-requests`).
- *
- * Every filter arrives as a query string a person typed or a form built, so a
- * bad one is answered as a validation error that names it, never as a server
- * error. Requires a running API + seeded DB.
- */
-
 interface Violation {
   field: string;
 }
@@ -64,7 +56,6 @@ describe('PAY review queue filters', () => {
     expect(await ids(`from=${before}&to=${after}&type=cash_in&status=submitted`)).toContain(created.body.id);
     expect(await ids(`from=${after}`)).not.toContain(created.body.id);
     expect(await ids(`to=${before}`)).not.toContain(created.body.id);
-    // A whole day, as the date inputs on the review screen send it.
     expect(await ids(`from=${before.slice(0, 10)}`)).toContain(created.body.id);
 
     await collector.post(`/finance/wallet-requests/${created.body.id}/cancel`, {});

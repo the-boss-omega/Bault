@@ -21,7 +21,6 @@ import {
 } from './grading-tiers';
 import { PricingService } from '../prc/pricing.service';
 
-/** Fields the operator MUST fill to close a grading request (Requirement 5.4). */
 export interface GradingFulfillment {
   grade: string;
   gradingBody: string;
@@ -38,17 +37,6 @@ const REQUIRED: readonly (keyof GradingFulfillment)[] = [
   'notes',
 ];
 
-/**
- * Third-party grading — a pipeline, not a single action.
- *
- * A card goes: requested → accepted by an operator → (approved, if the declared
- * value demands it) → added to a submission → the submission ships and the card
- * becomes `at_grader` → a grade comes back and the card returns to the shelf.
- *
- * Every request carries a TIER, because a grader prices on declared value and
- * turnaround. A card away at a grader is `at_grader`, so it cannot be listed,
- * sold, swapped or shipped while it is gone.
- */
 @Injectable()
 export class GradingService {
   constructor(
@@ -59,16 +47,6 @@ export class GradingService {
     private readonly pricing: PricingService,
   ) {}
 
-  /**
-   * The tier catalogue, each tier carrying its CURRENT price.
-   *
-   * The price is resolved here rather than hard-coded beside the tier, because
-   * the pricing rules are the single source of truth for what anything costs
-   * (Principle VI) and a fee printed in a form that disagrees with the fee that
-   * is charged is worse than no fee at all. A tier whose rule has not been
-   * created yet reports `null` and the form says so, rather than quoting the
-   * flat service fee it would silently fall back to.
-   */
   async tiers() {
     const priced = await Promise.all(
       GRADING_TIERS.map(async (tier) => {
@@ -79,13 +57,6 @@ export class GradingService {
     return { tiers: priced, walkthroughThresholdMinor: WALKTHROUGH_THRESHOLD_MINOR };
   }
 
-  /**
-   * Raise a grading request at a chosen tier and declared value.
-   *
-   * Everything refusable is refused before the billable request exists: an
-   * unknown tier, a declared value outside the tier's ceiling, or a card that is
-   * not on the shelf.
-   */
   async request(ownerId: string, itemId: string, tierKey: string, declaredMinor: number) {
     const tier = gradingTier(tierKey);
     if (!tier) throw AppError.validation(`Unknown grading tier "${tierKey}"`);
@@ -105,22 +76,13 @@ export class GradingService {
         type: 'third_party_grading',
         requesterId: ownerId,
         itemId,
-        // The tier's own fee action, so the charge reflects the service level
-        // rather than the flat "a service happened" rate.
         feeActionType: tierFeeAction(tier.key),
         typeFields: {
           tier: tier.key,
           gradingBody: tier.gradingBody,
           declaredMinor,
-          // Snapshotted, so the expectation the owner was given survives a later
-          // edit to the tier catalogue.
           turnaroundDaysMin: tier.turnaroundDaysMin,
           turnaroundDaysMax: tier.turnaroundDaysMax,
-          /**
-           * A high-value card needs a person to agree before it leaves. The
-           * request is created either way — refusing to record it would lose the
-           * owner's intent — but it cannot join a submission until approved.
-           */
           approvalRequired: tier.requiresApproval,
           approvalState: tier.requiresApproval ? 'pending' : 'not_required',
         },
@@ -128,7 +90,6 @@ export class GradingService {
     });
   }
 
-  /** An admin agrees that a high-value card may be sent. */
   async approve(adminId: string, requestId: string, approve: boolean, reason: string) {
     if (!reason?.trim()) throw AppError.validation('Record why');
     return this.db.transaction(async (tx) => {
@@ -150,11 +111,6 @@ export class GradingService {
     });
   }
 
-  /* ------------------------------------------------------------------
-     Submissions — the weekly batch
-     ------------------------------------------------------------------ */
-
-  /** Open a new batch for one grader. */
   async openSubmission(gradingBody: string) {
     const body = gradingBody?.trim();
     if (!body) throw AppError.validation('Name the grader');
@@ -170,7 +126,6 @@ export class GradingService {
     return this.db.select().from(gradingSubmission).orderBy(desc(gradingSubmission.createdAt));
   }
 
-  /** Accepted requests that are eligible to join a batch for this grader. */
   readyFor(gradingBody: string) {
     return this.db
       .select({
@@ -191,14 +146,12 @@ export class GradingService {
           eq(serviceRequest.status, 'in_progress'),
           sql`${serviceRequest.typeFields} ->> 'gradingBody' = ${gradingBody}`,
           sql`${serviceRequest.typeFields} ->> 'submissionId' is null`,
-          // A card needing sign-off is only offered once it has it.
           sql`coalesce(${serviceRequest.typeFields} ->> 'approvalState', 'not_required') in ('not_required', 'approved')`,
         ),
       )
       .orderBy(asc(serviceRequest.createdAt));
   }
 
-  /** Put an accepted request into an open batch. */
   async addToSubmission(requestId: string, submissionId: string) {
     return this.db.transaction(async (tx) => {
       const [sub] = await tx
@@ -232,12 +185,6 @@ export class GradingService {
     });
   }
 
-  /**
-   * Ship the batch. This is the moment every card in it leaves the building.
-   *
-   * Each item moves to `at_grader` with a custody event, which is what stops it
-   * being listed, sold, swapped or shipped while it is away.
-   */
   async shipSubmission(
     operatorId: string,
     submissionId: string,
@@ -258,12 +205,6 @@ export class GradingService {
         throw new AppError(ErrorCode.CONFLICT, 'This submission has already shipped', 409);
       }
 
-      /**
-       * Only the requests still waiting for a grade travel. `complete` may
-       * record a grade before the batch leaves, and that card must not move to
-       * `at_grader`: the only way back to the shelf is completing its request,
-       * which is already complete.
-       */
       const members = await tx
         .select()
         .from(serviceRequest)
@@ -310,19 +251,10 @@ export class GradingService {
     });
   }
 
-  /**
-   * A grade comes back. The card returns to the shelf and the request closes.
-   *
-   * The state change back to `stored` is what makes the card sellable again, and
-   * it happens in the same transaction as the grade being written — so there is
-   * no window in which a graded card is neither away nor available.
-   */
   async complete(operatorId: string, requestId: string, form: GradingFulfillment) {
     return this.custody.run(async (tx) => {
       const req = await this.requests.get(requestId, tx);
       this.requests.assertAccepted(req);
-      // Only a grading request: through this route any other kind would have a
-      // grade written onto a card nobody sent to a grader.
       if (req.type !== 'third_party_grading') throw AppError.validation('Not a grading request');
       if (!req.itemId) throw AppError.validation('Request has no item');
       const [it] = await tx.select().from(item).where(eq(item.id, req.itemId)).for('update').limit(1);
@@ -340,9 +272,6 @@ export class GradingService {
         newValue: form.grade,
       });
 
-      // Only a card that actually went away needs bringing back. A request
-      // completed without ever shipping (an operator recording a grade for a
-      // card that never left) is still legal and simply has nothing to undo.
       if (it.lifecycleState === 'at_grader') {
         await this.custody.changeState(tx, req.itemId, 'stored', operatorId, 'returned from grading');
       }
@@ -355,7 +284,6 @@ export class GradingService {
     });
   }
 
-  /** Close a submission once every card in it has come back. */
   async closeSubmission(submissionId: string) {
     return this.db.transaction(async (tx) => {
       const [sub] = await tx

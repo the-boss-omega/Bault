@@ -4,13 +4,6 @@ import { runStorageFees } from '../../apps/worker/src/jobs/storage-fee';
 import { SEED, SEED_PASSWORD, signIn, type Client } from '../integration/helpers/http';
 import { count, createItem, createMembership, createUser, storageCharges, testPool, warm } from './helpers/db';
 
-/**
- * The nightly storage sweep.
- *
- * The seeded rule is the standard one: 180 days included, then one period every
- * 90 days. An item received 400 days ago is therefore three periods in —
- * day 180, day 270 and day 360 have all started.
- */
 let pool: Pool;
 beforeAll(() => {
   pool = testPool();
@@ -25,28 +18,20 @@ describe('a membership that stops covering an item', () => {
     await createMembership(pool, member, { endsInMinutes: 60 * 24 * 10 });
     const card = await createItem(pool, member, 400);
 
-    // While the cycle is live the card is inside the allowance and costs nothing.
     await runStorageFees(pool);
     expect(await storageCharges(pool, card)).toBe(0);
 
-    // The member cancels and the cycle ends.
     await pool.query(`UPDATE membership SET status = 'ended', ended_at = now() WHERE user_id = $1`, [member]);
 
-    // Counting periods from `received_at` would find three started and none
-    // billed, and charge all three the night cover ended: rent for the months
-    // the subscription had promised were free.
     await runStorageFees(pool);
     expect(await storageCharges(pool, card)).toBe(1);
 
-    // And a second run the same night changes nothing.
     await runStorageFees(pool);
     expect(await storageCharges(pool, card)).toBe(1);
   });
 
   it('does not bill a member whose cycle ran out minutes before the sweep and is about to renew (F021)', async () => {
     const member = await createUser(pool);
-    // Active and auto-renewing, but the cycle closed at 01:55 and the hourly
-    // renewal last ran at 01:40.
     await createMembership(pool, member, { endsInMinutes: -5 });
     const card = await createItem(pool, member, 400);
 
@@ -70,11 +55,6 @@ describe('running the sweep more than once', () => {
     await runStorageFees(pool);
     expect(await storageCharges(pool, once)).toBe(3);
 
-    // Two sweeps overlapping: a retry after the job's lease expired while the
-    // first was still running, or a second worker replica. Neither may bill a
-    // period because it counted the charges before the other had committed.
-    // Enough items that each sweep's inserts take a while, so the two really
-    // do overlap.
     const items: string[] = [];
     for (let i = 0; i < 20; i += 1) items.push(await createItem(pool, owner, 400));
     await warm(pool);
@@ -89,11 +69,6 @@ describe('running the sweep more than once', () => {
   });
 });
 
-/**
- * A lot, once split, is the record of where its cards came from. `breakLot`
- * leaves it `stored` on its shelf with `lot_broken` set, and every card in it is
- * a stored item of its own from then on.
- */
 async function splitLot(
   pool: Pool,
   ownerId: string,
@@ -125,9 +100,6 @@ async function splitLot(
 describe('a lot that has been split into its cards (F006)', () => {
   it('bills the cards, and never the lot they came out of', async () => {
     const owner = await createUser(pool);
-    // In for 400 days, split at day 150 while still inside its included window,
-    // so nothing was ever owed on the lot itself. The cards were booked in at the
-    // split, 250 days ago: each has one period running.
     const { lot, cards } = await splitLot(pool, owner, { lotReceivedDaysAgo: 400, splitDaysAgo: 250, cards: 3 });
 
     await runStorageFees(pool);
@@ -148,9 +120,6 @@ describe('a lot that has been split into its cards (F006)', () => {
         ORDER BY effective_from DESC LIMIT 1`,
     );
     const slots = rows[0]!.slots;
-    // Exactly as many cards as the allowance covers, all past their included
-    // window, and the split lot older than any of them: oldest-first, it would
-    // take the first slot and push the newest card out of cover.
     const { lot, cards } = await splitLot(pool, member, { lotReceivedDaysAgo: 400, splitDaysAgo: 250, cards: slots });
 
     await runStorageFees(pool);
@@ -167,17 +136,9 @@ describe('a lot that has been split into its cards (F006)', () => {
   });
 });
 
-/**
- * What the vault tells a collector about the next storage charge.
- *
- * The sweep is the authority; the vault only forecasts. These run the sweep
- * and then ask the vault, so the forecast is checked against what was billed.
- * Needs the API.
- */
 describe('the next storage charge the vault names', () => {
   const DAY_MS = 86_400_000;
 
-  /** A fixture collector who can sign in: the seeded password and terms. */
   async function collectorWithLogin(): Promise<{ id: string; client: Client }> {
     const id = await createUser(pool);
     const { rows } = await pool.query<{ email: string }>(
@@ -194,19 +155,15 @@ describe('the next storage charge the vault names', () => {
   it('dates it from the end of membership cover, and prices it as the sweep does (never under a cent)', async () => {
     const { id: owner, client } = await collectorWithLogin();
     const card = await createItem(pool, owner, 400);
-    // A 4-cent intake fee: 10% of it rounds to nothing, and the sweep bills a
-    // cent rather than nothing.
     await pool.query(
       `INSERT INTO charge (user_id, action_type, pricing_rule_snapshot, amount, currency, payment_means, status, reference_id)
        VALUES ($1, 'intake', '{}'::jsonb, 4, 'USD', 'wallet', 'settled', $2)`,
       [owner, card],
     );
-    // A membership covered it until ten days ago.
     await pool.query(`INSERT INTO storage_cover (item_id, covered_until) VALUES ($1, now() - interval '10 days')`, [
       card,
     ]);
 
-    // The sweep bills the one period that started when cover ended.
     await runStorageFees(pool);
     const billed = await pool.query<{ amount: number }>(
       `SELECT amount::int AS amount FROM charge WHERE action_type = 'storage' AND reference_id = $1`,
@@ -220,8 +177,6 @@ describe('the next storage charge the vault names', () => {
 
     const res = await client.get(`/vault/items/${card}/storage`);
     expect(res.status).toBe(200);
-    // The next period starts one period after the one just billed, counted
-    // from the end of cover, not from the day the card arrived.
     expect(new Date(res.body.nextChargeAt).getTime()).toBe(
       rows[0]!.covered_until.getTime() + res.body.periodDays * DAY_MS,
     );

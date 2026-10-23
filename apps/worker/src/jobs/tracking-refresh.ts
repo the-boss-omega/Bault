@@ -3,32 +3,6 @@ import { loadEnv } from '@bault/config';
 import { createShippingAdapter, type ShippingAdapter, type TrackingStatus } from '@bault/adapters';
 import { log } from '../log';
 
-/**
- * Shipment tracking refresh. Polls the carrier through the shipping adapter for
- * every shipment that is out and updates its status, so the customer's tracking
- * view stays current without a synchronous request.
- *
- * The adapter is chosen by the same factory the API uses, from the same config,
- * with the same refusal of the sandbox in production. The sandbox answers
- * `in_transit` for every parcel forever.
- *
- * ONE PARCEL AT A TIME. A carrier error on one tracking number is logged and the
- * loop moves on. The carrier is asked OUTSIDE any transaction, so no row lock is
- * held across a network call, and the answer is then written under
- * `FOR UPDATE SKIP LOCKED`, only if the shipment is still in a status this job
- * may move. A parcel an operator has just marked delivered by hand is not
- * dragged back to `in_transit` by an answer already on its way.
- *
- * A carrier status that maps to nothing (`unknown`) changes nothing.
- *
- * Reaching `delivered` or `exception` writes the event that tells the
- * collector (`shipment_delivered`, `shipment_exception`) in the same
- * transaction as the status, so the two cannot disagree. Neither status is
- * polled again, so a parcel is announced once.
- *
- * Bounded per run, least recently refreshed first, so a backlog is worked
- * through over successive runs instead of one unbounded burst of carrier calls.
- */
 const PER_RUN = 200;
 const MOVABLE = ['shipped', 'in_transit'];
 
@@ -37,7 +11,6 @@ function carrier(): ShippingAdapter {
   return (configured ??= createShippingAdapter(loadEnv()));
 }
 
-/** The event each status this job can reach tells the collector, if any. */
 const ANNOUNCED: Record<string, string> = {
   delivered: 'shipment_delivered',
   exception: 'shipment_exception',
@@ -90,8 +63,6 @@ export async function refreshTracking(pool: Pool, shipping: ShippingAdapter = ca
       );
       const current = locked.rows[0];
       if (current) {
-        // `updated_at` moves either way, so the next run starts with the
-        // parcels that have waited longest.
         await client.query(
           `UPDATE shipment SET status = COALESCE($1::shipment_status, status), updated_at = now() WHERE id = $2`,
           [next, row.id],

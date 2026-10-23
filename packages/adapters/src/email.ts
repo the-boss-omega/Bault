@@ -1,8 +1,5 @@
 import { createTransport, type Transporter } from 'nodemailer';
 
-/**
- * Transactional email adapter: verification and reset links, and event notifications.
- */
 export interface EmailMessage {
   to: string;
   subject: string;
@@ -14,23 +11,11 @@ export interface EmailAdapter {
   send(message: EmailMessage): Promise<{ providerRef: string }>;
 }
 
-/* ============================================================
-   Templates
-   ============================================================ */
-
-/**
- * The rendered body of one message, in both parts a mail client may read.
- *
- * Both are always produced. A text-only client, and every spam filter, reads
- * `text`, where a link inside an anchor tag is invisible, so the URL is written
- * out in full in the plain part too.
- */
 export interface RenderedEmail {
   text: string;
   html: string;
 }
 
-/** Escape the four characters that would otherwise break out of HTML text. */
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -39,71 +24,106 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * A message body built around a single call to action: a sentence of context,
- * one link, and a line saying what happens if it is ignored. One function, so a
- * new template cannot arrive without a plain-text part or with an unescaped URL.
- */
-function actionEmail(input: {
+interface ActionCopy {
   heading: string;
   body: string;
   action: string;
-  link: string;
   footer: string;
-}): RenderedEmail {
-  const text = [input.heading, '', input.body, '', input.link, '', input.footer].join('\n');
-  const href = escapeHtml(input.link);
-  const html = [
-    '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.6;color:#17202c">',
-    `  <h1 style="font-size:20px;margin:0 0 16px">${escapeHtml(input.heading)}</h1>`,
-    `  <p style="margin:0 0 20px">${escapeHtml(input.body)}</p>`,
-    `  <p style="margin:0 0 20px"><a href="${href}" style="background:#17202c;color:#fff;padding:10px 18px;border-radius:3px;text-decoration:none;display:inline-block">${escapeHtml(input.action)}</a></p>`,
-    `  <p style="margin:0 0 20px;font-size:13px;color:#6e7887">${escapeHtml(input.link)}</p>`,
-    `  <p style="margin:0;font-size:13px;color:#6e7887">${escapeHtml(input.footer)}</p>`,
-    '</div>',
-  ].join('\n');
-  return { text, html };
 }
 
-/**
- * Render a message body from its template name and variables.
- *
- * An unknown template does NOT throw, because a mail that fails to render would
- * abort whatever triggered it. It degrades to the variables it was given.
- */
+const INK = '#111318';
+const BODY = '#2a2d33';
+const MUTED = '#676c74';
+const CUSTODY = '#0f5b4a';
+const LINE = '#dcded9';
+const FONT = "'IBM Plex Sans','IBM Plex Sans Hebrew',-apple-system,'Segoe UI',Arial,sans-serif";
+
+function actionText(copy: ActionCopy, link: string): string {
+  return [copy.heading, '', copy.body, '', link, '', copy.footer].join('\n');
+}
+
+function actionSection(copy: ActionCopy, link: string, lang: 'he' | 'en'): string {
+  const dir = lang === 'he' ? 'rtl' : 'ltr';
+  const align = lang === 'he' ? 'right' : 'left';
+  const href = escapeHtml(link);
+  return [
+    `  <div lang="${lang}" dir="${dir}" style="text-align:${align}">`,
+    `    <h1 style="font-size:20px;line-height:1.35;font-weight:600;margin:0 0 16px;color:${INK}">${escapeHtml(copy.heading)}</h1>`,
+    `    <p style="margin:0 0 20px;color:${BODY}">${escapeHtml(copy.body)}</p>`,
+    `    <p style="margin:0 0 20px"><a href="${href}" style="background:${CUSTODY};color:#ffffff;padding:10px 18px;border-radius:3px;text-decoration:none;display:inline-block;font-weight:600">${escapeHtml(copy.action)}</a></p>`,
+    `    <p dir="ltr" style="margin:0 0 20px;font-size:13px;color:${MUTED};text-align:${align};word-break:break-all">${href}</p>`,
+    `    <p style="margin:0;font-size:13px;color:${MUTED}">${escapeHtml(copy.footer)}</p>`,
+    '  </div>',
+  ].join('\n');
+}
+
+function frame(sections: string[]): string {
+  return [
+    `<div style="font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY};max-width:560px;margin:0 auto;padding:24px 16px">`,
+    `  <p style="font-family:'Frank Ruhl Libre',Georgia,serif;font-size:20px;font-weight:600;margin:0 0 24px;color:${INK}">Bault</p>`,
+    sections.join(`\n  <hr style="border:0;border-top:1px solid ${LINE};margin:32px 0">\n`),
+    '</div>',
+  ].join('\n');
+}
+
+function actionEmail(copy: ActionCopy, link: string): RenderedEmail {
+  return { text: actionText(copy, link), html: frame([actionSection(copy, link, 'en')]) };
+}
+
+function bilingualEmail(he: ActionCopy, en: ActionCopy, link: string): RenderedEmail {
+  return {
+    text: [actionText(he, link), '', '—', '', actionText(en, link)].join('\n'),
+    html: frame([actionSection(he, link, 'he'), actionSection(en, link, 'en')]),
+  };
+}
+
 export function renderEmail(template: string, variables: Record<string, string>): RenderedEmail {
   const link = variables.link ?? '';
   switch (template) {
     case 'email_verification':
-      return actionEmail({
-        heading: 'Confirm your email address',
-        body: 'Your Bault account has been created and is waiting on one thing: confirming this address. Follow the link below to activate it and sign in.',
-        action: 'Confirm email address',
+      return bilingualEmail(
+        {
+          heading: 'אימות כתובת האימייל',
+          body: 'החשבון שלך ב־Bault נפתח, ונשאר רק לאמת את הכתובת הזו. לחץ על הקישור כדי להפעיל את החשבון ולהתחבר.',
+          action: 'אימות הכתובת',
+          footer: 'הקישור תקף ל־24 שעות ולשימוש אחד. אם לא פתחת חשבון ב־Bault, התעלם מההודעה ולא יקרה דבר.',
+        },
+        {
+          heading: 'Confirm your email address',
+          body: 'Your Bault account has been created and is waiting on one thing: confirming this address. Follow the link below to activate it and sign in.',
+          action: 'Confirm email address',
+          footer: 'The link is valid for 24 hours and can be used once. If you did not create a Bault account, ignore this message and nothing will happen.',
+        },
         link,
-        footer: 'The link is valid for 24 hours and can be used once. If you did not create a Bault account, ignore this message and nothing will happen.',
-      });
+      );
     case 'password_reset':
-      return actionEmail({
-        heading: 'Reset your password',
-        body: 'Somebody asked to reset the password on this Bault account. Follow the link below to choose a new one.',
-        action: 'Choose a new password',
+      return bilingualEmail(
+        {
+          heading: 'איפוס הסיסמה',
+          body: 'מישהו ביקש לאפס את הסיסמה של חשבון Bault הזה. לחץ על הקישור כדי לבחור סיסמה חדשה.',
+          action: 'בחירת סיסמה חדשה',
+          footer: 'הקישור תקף לשעה אחת ולשימוש אחד. אם לא ביקשת זאת, התעלם מההודעה — הסיסמה הנוכחית נשארת בתוקף.',
+        },
+        {
+          heading: 'Reset your password',
+          body: 'Somebody asked to reset the password on this Bault account. Follow the link below to choose a new one.',
+          action: 'Choose a new password',
+          footer: 'The link is valid for 1 hour and can be used once. If you did not ask for this, ignore this message — your current password stays in force.',
+        },
         link,
-        footer: 'The link is valid for 1 hour and can be used once. If you did not ask for this, ignore this message — your current password stays in force.',
-      });
+      );
     case 'notification_event':
-      /**
-       * One domain event, as a mail. The body is the SAME sentence the in-app
-       * feed shows, composed once by the worker and passed through here.
-       */
-      return actionEmail({
-        heading: variables.heading ?? 'An update on your vault',
-        body: variables.message ?? '',
-        action: 'Open Bault',
+      return actionEmail(
+        {
+          heading: variables.heading ?? 'An update on your vault',
+          body: variables.message ?? '',
+          action: 'Open Bault',
+          footer:
+            variables.footer ??
+            'You are receiving this because email is switched on for this kind of update. You can turn it off, per event or all at once, in Notifications → Preferences.',
+        },
         link,
-        footer:
-          variables.footer ??
-          'You are receiving this because email is switched on for this kind of update. You can turn it off, per event or all at once, in Notifications → Preferences.',
-      });
+      );
     default: {
       const lines = Object.entries(variables).map(([k, v]) => `${k}: ${v}`);
       const text = lines.join('\n');
@@ -113,11 +133,6 @@ export function renderEmail(template: string, variables: Record<string, string>)
   }
 }
 
-/* ============================================================
-   Adapters
-   ============================================================ */
-
-/** Dev sink: logs the email (including the link) to the console instead of sending. */
 export class ConsoleEmailAdapter implements EmailAdapter {
   async send(message: EmailMessage): Promise<{ providerRef: string }> {
     // eslint-disable-next-line no-console
@@ -129,44 +144,17 @@ export class ConsoleEmailAdapter implements EmailAdapter {
 export interface SmtpConfig {
   host: string;
   port: number;
-  /** true = implicit TLS (465); false = STARTTLS upgrade (587). */
   secure: boolean;
-  /**
-   * Refuse to continue in clear when the server offers no STARTTLS. False only
-   * for a local mail catcher in development (`createEmailAdapter` decides).
-   */
   requireTls: boolean;
   user: string;
   password: string;
-  /** Envelope sender, e.g. `Bault <noreply@example.com>`. */
   from: string;
 }
 
-/**
- * Real SMTP delivery.
- *
- * Works with any SMTP server; the configuration documented in `.env.example` is
- * Gmail with an app password, for genuine delivery in development.
- *
- * The credentials arrive through the constructor rather than from `process.env`,
- * so this package stays free of the config schema and the adapter is testable
- * with a fake transport.
- *
- * `verify()` is deliberately NOT called at construction: the API must boot
- * whether or not the mail server is reachable, and a failure surfaces on the
- * first send with the provider's own error.
- */
 export class SmtpEmailAdapter implements EmailAdapter {
   private readonly transport: Transporter;
 
   constructor(private readonly config: SmtpConfig) {
-    /**
-     * `requireTLS`: on 587 the session starts in clear, and nodemailer upgrades
-     * only if the server offers STARTTLS. Without it, a server that does not
-     * offer it, or anybody on the path who strips the offer, receives the
-     * password and every reset link in clear. With it, nodemailer stops before
-     * AUTH. On 465 (`secure`) TLS starts with the first byte.
-     */
     this.transport = createTransport({
       host: config.host,
       port: config.port,
@@ -185,8 +173,6 @@ export class SmtpEmailAdapter implements EmailAdapter {
       text,
       html,
     });
-    // The provider's own message id, so a delivery can be traced back from the
-    // mail server's logs. Falls back to a local stamp if the server omits it.
     return { providerRef: info.messageId ?? `smtp_${Date.now()}` };
   }
 }

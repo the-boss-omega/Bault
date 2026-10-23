@@ -2,24 +2,6 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import { EasyPostShippingAdapter, PaymentProviderError } from '@bault/adapters';
 
-/**
- * What a customer is told when a provider fails underneath their request.
- *
- * The EasyPost adapter throws an `EasyPostError` carrying EASYPOST's HTTP
- * status. That status describes the conversation between Bault and EasyPost,
- * not between the customer and Bault: a 401 there means Bault's API key was
- * refused, and answered as a 401 here it tells the SPA the customer's session
- * is gone. So a provider error is answered in Bault's own terms: 502
- * `provider_unavailable` when the provider failed or refused Bault's
- * credentials, 400 `provider_rejected` with the provider's reason when it
- * refused what the customer entered (an address), never 401 or 403. The
- * original goes to the log.
- *
- * The errors are real ones: the adapter is driven against a stubbed `fetch`
- * that answers the way EasyPost does, and what it throws is handed to the
- * exception filter.
- */
-
 process.env.NODE_ENV = 'test';
 
 let filters: typeof import('../../apps/api/src/shared/errors/all-exceptions.filter');
@@ -36,7 +18,6 @@ afterEach(() => {
 const ADDRESS = { name: 'Red Ashwood', street1: '1140 W Addison St', city: 'Chicago', region: 'IL', postalCode: '60613', country: 'US' };
 const ORIGIN = { name: 'Bault', street1: '12 Ferry Street', city: 'Newark', region: 'NJ', postalCode: '07105', country: 'US' };
 
-/** What the adapter throws when EasyPost answers `status` with `message`. */
 async function easyPostFailure(status: number, message: string): Promise<unknown> {
   vi.stubGlobal('fetch', async () => ({
     ok: false,
@@ -53,7 +34,6 @@ async function easyPostFailure(status: number, message: string): Promise<unknown
   );
 }
 
-/** The filter's answer to `exception`, what it logged, and what it reported. */
 async function answer(exception: unknown) {
   const reported: unknown[] = [];
   const filter = new filters.AllExceptionsFilter((error) => reported.push(error));
@@ -95,7 +75,6 @@ describe('a shipping provider error, as the customer sees it', () => {
     const failure = await easyPostFailure(401, 'The API key provided is invalid.');
     const out = await answer(failure);
     expect({ status: out.status, code: out.code }).toEqual({ status: 502, code: 'provider_unavailable' });
-    // Nothing about Bault's credentials reaches the customer; all of it reaches the log.
     expect(out.message).not.toMatch(/api key/i);
     expect(out.log).toContain('EasyPost 401');
     expect(out.reported).toEqual([failure]);
@@ -111,7 +90,6 @@ describe('a shipping provider error, as the customer sees it', () => {
     expect({ status: out.status, code: out.code }).toEqual({ status: 400, code: 'provider_rejected' });
     expect(out.message).toContain('Unable to verify address.');
     expect(out.message).not.toBe('Bad request.');
-    // The customer's mistake is not a server failure.
     expect(out.reported).toHaveLength(0);
     expect(out.log).toContain('EasyPost 422');
   });

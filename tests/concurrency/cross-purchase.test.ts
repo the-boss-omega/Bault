@@ -3,32 +3,10 @@ import { SEED, signIn, type Client } from '../integration/helpers/http';
 import { activeAccount, passwordOnly, type Account } from '../integration/helpers/mfa';
 import { closeDb, openTransaction, sql, waitForLockWaiters } from '../integration/helpers/db';
 
-/**
- * Two collectors buying from each other at the same moment, while each of
- * them is also paying for something of their own.
- *
- * A sale touches four locks besides the listing and the card: the buyer's
- * wallet, which the balance check takes; the seller's wallet, which is
- * credited; and the seller's membership period, which a commission waiver
- * writes. Every other money path takes a user's wallet and then that user's
- * period (`LedgerService.lockWallet`). A sale that wrote the seller's period
- * before taking the buyer's wallet closed a cycle with them: A's sale to B
- * holding B's period and waiting for A's wallet, a payment of A's holding A's
- * wallet and waiting for A's period, which B's sale to A held while it waited
- * for B's wallet, held by a payment of B's waiting for B's period. Postgres
- * breaks the cycle by aborting one of them, and a customer is answered 500.
- *
- * The two payments are this test's own transactions: each takes its user's
- * wallet lock exactly as `lockWallet` does, then writes that user's period.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 afterAll(closeDb);
 
 type Res = Awaited<ReturnType<Client['post']>>;
 
-/** A fresh member on the tier that waives commission, with a card listed. */
 async function memberWithListing(label: string, admin: Client, operator: Client) {
   const account = await activeAccount(label);
   const c = await passwordOnly(account);
@@ -63,7 +41,6 @@ async function memberWithListing(label: string, admin: Client, operator: Client)
   return { account, client: c, listingId: listing.body.id as string, periodId: period!.id };
 }
 
-/** Another session paying for something: the wallet, then the period, as `lockWallet` orders them. */
 async function payment(member: Account) {
   const t = await openTransaction();
   await t.query(`select pg_advisory_xact_lock(hashtextextended($1, 0))`, [`wallet:${member.id}`]);
@@ -87,7 +64,6 @@ describe('concurrency: two collectors buying from each other', () => {
         b.client.post(`/marketplace/listings/${a.listingId}/purchase`),
       ];
       await waitForLockWaiters(2);
-      // Each payment now reaches its own period, as spending cover would.
       for (const [t, periodId] of [
         [payA, a.periodId],
         [payB, b.periodId],
@@ -96,11 +72,8 @@ describe('concurrency: two collectors buying from each other', () => {
           t.query('update membership_period set updated_at = now() where id = $1', [periodId]).catch((e: Error) => e),
         );
       }
-      // Longer than Postgres's deadlock_timeout, so a cycle is found if there is one.
       await new Promise((r) => setTimeout(r, 1_800));
     } finally {
-      // Together: a payment still waiting on a sale cannot end until the other
-      // payment lets that sale through.
       await Promise.all([payA.rollback(), payB.rollback()]);
     }
     await Promise.all(periodWrites);

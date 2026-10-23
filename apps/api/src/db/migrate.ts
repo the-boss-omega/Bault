@@ -5,21 +5,9 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { loadEnv } from '@bault/config';
 
-/**
- * Migration runner (T009 + T011).
- *
- * Order matters:
- *   1. Apply drizzle-kit generated schema migrations (tables, enums, indexes).
- *   2. Apply the append-only guards SQL AFTER the tables exist, so the triggers
- *      and role grants attach to the freshly-created history tables.
- *
- * Runs over the DIRECT connection (5432, not PgBouncer) — DDL needs a real session.
- */
 async function main(): Promise<void> {
   const env = loadEnv();
   const pool = new Pool({ connectionString: env.DIRECT_DATABASE_URL });
-  // Same as the API's pool: an idle connection dropped by the server is
-  // reported, not an uncaught exception. A query that fails still fails the run.
   pool.on('error', (err) => {
     console.error('migration: idle database connection lost', err.message);
   });
@@ -27,12 +15,6 @@ async function main(): Promise<void> {
 
   await migrate(db, { migrationsFolder: './src/db/migrations' });
 
-  /**
-   * Read next to this file, which is `dist/db/sql` once compiled. `nest build`
-   * copies nothing but compiled TypeScript on its own, so `nest-cli.json` lists
-   * `db/sql/*.sql` as a build asset; the compiled runner and
-   * `tsx src/db/migrate.ts` read the same file.
-   */
   const appendOnlySql = readFileSync(join(__dirname, 'sql', '0001_append_only.sql'), 'utf8');
   await pool.query(appendOnlySql);
 

@@ -1,11 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ErrorCode } from './error-codes';
 
-/**
- * Domain error (T013). Carries a stable machine `code` plus HTTP status and
- * optional details. Thrown by services; rendered into the uniform problem body
- * by AllExceptionsFilter. Factory helpers keep call sites terse and consistent.
- */
 export class AppError extends HttpException {
   constructor(
     public readonly code: ErrorCode,
@@ -25,12 +20,6 @@ export class AppError extends HttpException {
   static forbidden(message = 'Not permitted'): AppError {
     return new AppError(ErrorCode.FORBIDDEN, message, HttpStatus.FORBIDDEN);
   }
-  /**
-   * Right password, unconfirmed address.
-   *
-   * Its own code because it is the only sign-in failure the person can fix from
-   * the sign-in page, and the page can only offer that if it can recognise it.
-   */
   static emailUnverified(message: string): AppError {
     return new AppError(ErrorCode.EMAIL_UNVERIFIED, message, HttpStatus.FORBIDDEN);
   }

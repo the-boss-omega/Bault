@@ -1,15 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn, intakeFor, fundWallet } from '../../tests/integration/helpers/http';
 
-/**
- * Break-Even Watch.
- *
- * The feature is a custodian telling a collector to stop paying it, so the thing
- * that has to be true above all others is that it never invents the number it
- * uses to give that advice. Bault has no price feed. Most of this file is about
- * what it does when it cannot price something.
- */
-
 interface Row {
   itemId: string;
   serialNumber: string;
@@ -42,11 +33,8 @@ describe('what it will and will not claim to know', () => {
     const body = res.body as Summary;
     for (const row of body.items) {
       if (row.valueBasis === 'unknown') {
-        // The honest case. An unpriceable card reports its cost and nothing
-        // else — never a guess dressed as an estimate.
         expect(row.estimatedValueMinor).toBeNull();
         expect(row.comparableCount).toBe(0);
-        // And it can never be "past break-even": there is no line to be past.
         expect(row.pastBreakEven).toBe(false);
         expect(row.monthsToBreakEven).toBeNull();
       } else {
@@ -61,7 +49,6 @@ describe('what it will and will not claim to know', () => {
     const body = (await collector.get('/vault/break-even')).body as Summary;
 
     for (const row of body.items.filter((r) => r.valueBasis === 'sold_comparable')) {
-      // A comparable that is not drawn from a transaction is an opinion.
       expect(row.comparableCount).toBeGreaterThan(0);
     }
   });
@@ -70,8 +57,6 @@ describe('what it will and will not claim to know', () => {
     const collector = await signIn(SEED.collector);
     const body = (await collector.get('/vault/break-even')).body as Summary;
 
-    // That figure is the honest limit on everything else on the page, so it is
-    // reported rather than hidden.
     const unknown = body.items.filter((r) => r.valueBasis === 'unknown').length;
     expect(body.unknownValueCount).toBe(unknown);
   });
@@ -80,7 +65,6 @@ describe('what it will and will not claim to know', () => {
     const operator = await signIn(SEED.operator);
     const collector = await signIn(SEED.collector);
 
-    // A class with no sales at all, listed by its owner at a wild number.
     const item = await intakeFor(operator, SEED.collector, {
       typeClass: 'memorabilia',
       description: 'Break-even: asking price only',
@@ -93,8 +77,6 @@ describe('what it will and will not claim to know', () => {
 
     const body = (await collector.get('/vault/break-even')).body as Summary;
     const row = body.items.find((r) => r.itemId === item.id)!;
-    // No comparable exists for this class, so the owner's hope is the only
-    // signal — and it is labelled as exactly that.
     expect(row.valueBasis).toBe('own_asking_price');
     expect(row.estimatedValueMinor).toBe(999_00);
     expect(row.comparableCount).toBe(0);
@@ -113,9 +95,6 @@ describe('what it counts', () => {
     const after = (await collector.get('/vault/break-even')).body as Summary;
 
     const row = after.items.find((r) => r.itemId === item.id)!;
-    // A card booked in seconds ago has been charged its intake fee and no
-    // storage — a figure derived from elapsed time would already show storage
-    // nobody had billed.
     expect(row.totalSpentMinor).toBeGreaterThan(0);
     expect(row.storageSpentMinor).toBe(0);
     expect(row.projectedYearMinor).toBe(0);
@@ -133,7 +112,6 @@ describe('what it counts', () => {
     const watched = new Set((watch.body as Summary).items.map((r) => r.itemId));
     const held = (vault.body as { id: string }[]).map((i) => i.id);
 
-    // Advice about a card that has already been shipped or sold is noise.
     for (const id of held) expect(watched.has(id), `${id} missing from the watch`).toBe(true);
   });
 
@@ -141,8 +119,6 @@ describe('what it counts', () => {
     const collector = await signIn(SEED.collector);
     const body = (await collector.get('/vault/break-even')).body as Summary;
 
-    // Past break-even, then closest to it, then the unpriceable — because the
-    // page exists to be acted on from the top.
     const rank = (r: Row) =>
       r.pastBreakEven ? 0 : r.monthsToBreakEven === null ? 2 : 1;
     const ranks = body.items.map(rank);

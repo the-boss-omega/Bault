@@ -2,22 +2,6 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
-/**
- * A direct line to the test database, for the few facts HTTP cannot show.
- *
- * Every suite here drives the API over HTTP and that stays the rule. But some
- * security properties are, by design, invisible from outside: a verification
- * token exists in clear only inside the email that carried it, a password-reset
- * mail leaves through the outbox rather than inside the request, and an
- * upload's age is a timestamp nobody can wind back over HTTP.
- * A test that cannot reach those has to either skip the property or trust it.
- *
- * Kept deliberately small: open a pool, run a query, close it. `pg` is resolved
- * from the API package, the same way `vitest.workspace.ts` reaches the adapters
- * and React — the root manifest stays free of a database driver it does not
- * otherwise need.
- */
-
 interface QueryResult<R> {
   rows: R[];
   rowCount: number | null;
@@ -35,11 +19,6 @@ interface PgPool {
 const requireFromApi = createRequire(new URL('../../../apps/api/package.json', import.meta.url));
 const { Pool } = requireFromApi('pg') as { Pool: new (config: { connectionString: string; max?: number }) => PgPool };
 
-/**
- * The same database the API under test is using: the direct URL when the
- * environment names one (CI), otherwise the worktree's `.env`, which is where
- * `pnpm --filter @bault/api db:seed` read it from too.
- */
 function databaseUrl(): string {
   const fromEnv = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
   if (fromEnv) return fromEnv;
@@ -57,22 +36,12 @@ function databaseUrl(): string {
 
 let pool: PgPool | undefined;
 
-/** Run one statement against the test database. */
 export async function sql<R = Record<string, unknown>>(text: string, values: unknown[] = []): Promise<R[]> {
   pool ??= new Pool({ connectionString: databaseUrl(), max: 4 });
   const res = await pool.query<R>(text, values);
   return res.rows;
 }
 
-/**
- * Hold one row `FOR UPDATE` in a transaction of its own until `release`.
- *
- * For the races whose losing order is too narrow to hit by firing requests
- * together: hold the row, send the competing requests, wait until they are all
- * queued behind the lock (`waitForLockWaiters`), then let go, and they meet the
- * row in the order they queued. `table` is a fixed name from the test, never
- * input.
- */
 export async function holdRowLock(table: string, id: string): Promise<{ release: () => Promise<void> }> {
   pool ??= new Pool({ connectionString: databaseUrl(), max: 4 });
   const client = await pool.connect();
@@ -92,10 +61,6 @@ export async function holdRowLock(table: string, id: string): Promise<{ release:
   };
 }
 
-/**
- * A transaction of the test's own, standing in for another session that holds
- * locks while the API works: `query` runs inside it, `rollback` ends it.
- */
 export async function openTransaction(): Promise<{
   query: <R = Record<string, unknown>>(text: string, values?: unknown[]) => Promise<R[]>;
   rollback: () => Promise<void>;
@@ -119,10 +84,6 @@ export async function openTransaction(): Promise<{
   };
 }
 
-/**
- * Wait until at least `count` other sessions on this database are waiting for a
- * lock: the requests a test sent are then queued, in the order they arrived.
- */
 export async function waitForLockWaiters(count: number, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -136,7 +97,6 @@ export async function waitForLockWaiters(count: number, timeoutMs = 10_000): Pro
   }
 }
 
-/** Close the pool, so the test file can exit. Call from `afterAll`. */
 export async function closeDb(): Promise<void> {
   const p = pool;
   pool = undefined;

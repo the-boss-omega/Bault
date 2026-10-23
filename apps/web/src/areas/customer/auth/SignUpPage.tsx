@@ -13,29 +13,6 @@ import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primi
 import { TERMS_VERSION } from '../help/legalContent';
 import { TermsReader } from '../help/LegalDocumentView';
 
-/**
- * Sign-up page: its own page, separate from sign-in.
- *
- * Registration does not yield a session: the account is created `pending` and
- * the API emails a verification link, so the page ends on a "check your mail"
- * panel with a way back to sign-in.
- *
- * Every field is required by the API:
- *
- *   - email and password;
- *   - username, captured here and nowhere else. It is permanent: no path in the
- *     app changes it, and a database trigger rejects the write (Requirement 4.1);
- *   - first name and last name, two explicit fields. The full name is derived
- *     from these wherever it is shown, so there is no second copy to drift;
- *   - consent to the Terms of Service, Privacy Policy and Cookie notice. The box
- *     sends the version it showed, and the API refuses any other and records
- *     which version was accepted and when. The documents can be read right here,
- *     because a signed-out visitor cannot open FAQ & Legal.
- *
- * The rules applied to the inputs are the same values the API enforces (see
- * `shared/names.ts`), so the button disables for exactly the input the server
- * would reject.
- */
 export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -55,17 +32,8 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const usernameOk = isValidUsername(normalizedUsername);
   const firstOk = isValidNamePart(normalizeNamePart(firstName));
   const lastOk = isValidNamePart(normalizeNamePart(lastName));
-  /**
-   * Email and password are checked here like the other fields, so a field that
-   * gates the button also says what is wrong with it.
-   *
-   * The address test is the shape the API's `@IsEmail` accepts, kept loose on
-   * purpose: it is here to catch a typo.
-   */
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordOk = password.length >= PASSWORD_MIN;
-  // Only complain once something has been typed: an empty field the user has
-  // not reached yet is not an error.
   const usernameError = username.length > 0 && !usernameOk;
   const firstNameError = firstName.length > 0 && !firstOk;
   const lastNameError = lastName.length > 0 && !lastOk;
@@ -77,7 +45,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      // The response names the new account by its username.
       const created = await api.post<{ username: string; firstName: string; lastName: string }>(
         '/auth/register',
         {
@@ -86,7 +53,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
           firstName: normalizeNamePart(firstName),
           lastName: normalizeNamePart(lastName),
           password,
-          // The version the box was ticked for, never "whatever is current".
           acceptedTermsVersion: TERMS_VERSION,
         },
       );
@@ -98,14 +64,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     }
   }
 
-  /**
-   * Ask for the verification mail again.
-   *
-   * The address is the one just typed, so nothing is re-entered. The endpoint
-   * answers identically for a pending account and an unknown address, so the
-   * confirmation says a link is on its way rather than asserting anything about
-   * whether the account exists.
-   */
   async function resendVerification() {
     setResending(true);
     setError(null);
@@ -147,10 +105,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     <form className="auth-card" onSubmit={register}>
       <h2>{t('auth.signUpTitle')}</h2>
 
-      {/*
-        `Field` throughout: its label points at the control by id, so each
-        field's accessible name is the caption alone.
-      */}
       <Field
         label={t('auth.email')}
         htmlFor="signup-email"

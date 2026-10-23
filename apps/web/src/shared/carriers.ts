@@ -1,15 +1,5 @@
 import type { MessageKey, TranslateFn } from './i18n';
 
-/**
- * The SPA's vocabulary for outbound shipping.
- *
- * The shapes mirror `apps/api/src/modules/shp/carriers.ts` and
- * `shipping-options.ts` by value, because the SPA cannot import from the API
- * tree. The catalogue itself is fetched from `GET /shipping/services`, so a
- * changed carrier limit needs no client deploy; only the translatable labels
- * live here.
- */
-
 export interface CarrierServiceInfo {
   key: string;
   carrier: string;
@@ -34,7 +24,6 @@ export interface AddOnInfo {
   description: string;
 }
 
-/** A box a parcel can go out in. Mirrors `SHIPPING_BOXES` in shp/boxes.ts. */
 export interface BoxInfo {
   key: string;
   label: string;
@@ -52,11 +41,9 @@ export interface ServiceCatalogue {
   paymentWindowDays: number;
 }
 
-/** Why a service cannot carry this parcel. */
 export interface RateProblem {
   rule: string;
   message: string;
-  /** The limit that was exceeded, already formatted by the server. */
   limit?: string;
 }
 
@@ -75,10 +62,6 @@ export interface QuotedRate {
   handlingMinor: number;
   insurancePremiumMinor: number;
   addOnsMinor: number;
-  /**
-   * What the member's tier paid towards this rate. `totalMinor` is already net
-   * of it; this lets the card explain the smaller number.
-   */
   membershipCover?: {
     tier: string;
     insuranceMinor: number;
@@ -115,11 +98,6 @@ const SERVICE_KEY: Record<string, MessageKey> = {
   direct_overnight: 'ship.svc.direct_overnight',
 };
 
-/**
- * A service's name. Falls back to the carrier and service level the server
- * sent, so a service added on the server reads correctly before it is
- * translated.
- */
 export function serviceLabel(
   t: TranslateFn,
   service: { key?: string; serviceKey?: string; carrier: string; serviceLevel: string },
@@ -136,25 +114,16 @@ const BOX_KEY: Record<string, MessageKey> = {
   extra_large: 'ship.box.extra_large',
 };
 
-/** A box's name, falling back to the server's English label for one this build does not know. */
 export function boxLabel(t: TranslateFn, box: { key: string; label?: string }): string {
   const key = BOX_KEY[box.key];
   return key ? t(key) : (box.label ?? box.key);
 }
 
-/** "33 × 25 × 15 cm". */
 export function formatBoxDimensions(box: BoxInfo): string {
   const { length, width, height } = box.dimensionsCm;
   return `${length} × ${width} × ${height} cm`;
 }
 
-/**
- * Why a service was refused, phrased locally.
- *
- * The server sends both a machine-readable `rule` and an English message. The
- * rule is preferred so the reason is translated; the message stands in for a
- * rule this build does not know about.
- */
 const RULE_KEY: Record<string, MessageKey> = {
   scope: 'ship.rule.scope',
   country: 'ship.rule.country',
@@ -171,7 +140,6 @@ export function ruleLabel(t: TranslateFn, problem: RateProblem): string {
   return key ? t(key, { limit: problem.limit ?? '' }) : problem.message;
 }
 
-/** Grams → a readable weight. Kept here so the list and the drawer agree. */
 export function formatWeight(grams: number): string {
   if (grams < 1000) return `${grams} g`;
   return `${(grams / 1000).toFixed(grams < 10_000 ? 2 : 1)} kg`;

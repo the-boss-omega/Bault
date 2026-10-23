@@ -5,16 +5,6 @@ import { CURRENT_TERMS_VERSION } from '../../../apps/api/src/modules/acc/terms';
 import { BASE, Client, fixtureEmail } from './http';
 import { sql } from './db';
 
-/**
- * Accounts and codes for the two-factor suites.
- *
- * Every account these suites enrol is a fresh fixture: enrolling a seeded
- * account would make every later suite that signs in as it meet a second step
- * it does not expect. The codes are computed with the API's own TOTP, which
- * `tests3/contract/mfa-crypto.test.ts` pins to the RFC 6238 vectors — so a code
- * here is the code an authenticator app would show.
- */
-
 export const MFA_PASSWORD = 'correct horse battery';
 
 export interface Account {
@@ -23,7 +13,6 @@ export interface Account {
   id: string;
 }
 
-/** A registered, confirmed, active account with a password and nothing else. */
 export async function activeAccount(label: string, base = BASE): Promise<Account> {
   const email = fixtureEmail(label);
   const username = `${label.slice(0, 6)}${randomBytes(5).toString('hex')}`;
@@ -37,7 +26,6 @@ export async function activeAccount(label: string, base = BASE): Promise<Account
   });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
   const [row] = await sql<{ id: string }>(`SELECT id FROM user_account WHERE email = $1`, [email]);
-  // The confirmation link, as the email would have carried it.
   const token = randomBytes(32).toString('hex');
   await sql(
     `INSERT INTO verification_token (user_id, type, token_hash, expires_at)
@@ -48,7 +36,6 @@ export async function activeAccount(label: string, base = BASE): Promise<Account
   return { email, username, id: row!.id };
 }
 
-/** A signed-in client for an account without two-factor sign-in. */
 export async function passwordOnly(account: Account, base = BASE): Promise<Client> {
   const c = new Client(base);
   const res = await c.post('/auth/login', { identifier: account.username, password: MFA_PASSWORD });
@@ -57,18 +44,10 @@ export async function passwordOnly(account: Account, base = BASE): Promise<Clien
   return c;
 }
 
-/**
- * The code an authenticator shows `offset` steps from now.
- *
- * Enrolment confirms with the CURRENT step and the server then refuses that
- * step again, so the first sign-in after it uses `+1` — still inside the
- * one-step window either side of the server's clock.
- */
 export function codeAt(secret: Buffer, offset = 0): string {
   return totp(secret, Date.now() + offset * 30_000);
 }
 
-/** Six digits that are not the code for any step the server would accept now or a moment from now. */
 export function wrongCode(secret: Buffer): string {
   const near = new Set([-2, -1, 0, 1, 2].map((o) => codeAt(secret, o)));
   for (let n = 0; ; n += 1) {
@@ -77,7 +56,6 @@ export function wrongCode(secret: Buffer): string {
   }
 }
 
-/** Start and confirm enrolment for a signed-in client. */
 export async function enrol(c: Client): Promise<{ secret: Buffer; recoveryCodes: string[] }> {
   const setup = await c.post('/auth/mfa/setup');
   expect(setup.status, JSON.stringify(setup.body)).toBe(200);
@@ -87,7 +65,6 @@ export async function enrol(c: Client): Promise<{ secret: Buffer; recoveryCodes:
   return { secret, recoveryCodes: confirmed.body.recoveryCodes as string[] };
 }
 
-/** The first step: the password. Returns the challenge token the second step needs. */
 export async function challenge(account: Account, base = BASE): Promise<string> {
   const res = await new Client(base).post('/auth/login', { identifier: account.username, password: MFA_PASSWORD });
   expect(res.status, JSON.stringify(res.body)).toBe(200);
@@ -95,5 +72,4 @@ export async function challenge(account: Account, base = BASE): Promise<string> 
   return res.body.challengeToken as string;
 }
 
-/** The current TOTP step, for tests that reason about which step a code belongs to. */
 export const nowStep = () => timeStep(Date.now());

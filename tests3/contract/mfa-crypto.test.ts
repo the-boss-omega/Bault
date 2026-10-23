@@ -18,19 +18,6 @@ import {
   normalizeRecoveryCode,
 } from '../../apps/api/src/modules/acc/mfa/recovery-codes';
 
-/**
- * The cryptography under two-factor sign-in, written here rather than taken
- * from a library.
- *
- * TOTP is small enough to implement with `node:crypto` and dangerous enough to
- * get subtly wrong — an off-by-one in the dynamic truncation, a counter written
- * little-endian — in ways that still produce six digits and still "work" with
- * the implementation's own codes, while matching no authenticator app on
- * earth. The published test vectors are the only honest check: RFC 4226's for
- * HOTP, RFC 6238's for the time-based layer on top of it.
- */
-
-/** RFC 6238 Appendix B and RFC 4226 Appendix D both use this ASCII secret for SHA-1. */
 const RFC_SECRET = Buffer.from('12345678901234567890', 'ascii');
 
 describe('HOTP (RFC 4226, Appendix D)', () => {
@@ -41,7 +28,6 @@ describe('HOTP (RFC 4226, Appendix D)', () => {
 });
 
 describe('TOTP (RFC 6238, Appendix B, SHA-1)', () => {
-  // [unix seconds, 8-digit TOTP] — the SHA-1 rows of the table.
   const vectors: [number, string][] = [
     [59, '94287082'],
     [1111111109, '07081804'],
@@ -56,8 +42,6 @@ describe('TOTP (RFC 6238, Appendix B, SHA-1)', () => {
   });
 
   it.each(vectors)('at T=%i the 6-digit code is the last six digits', (seconds, code) => {
-    // Six digits is the same truncated value modulo 10^6, which is what every
-    // authenticator app shows.
     expect(totp(RFC_SECRET, seconds * 1000)).toBe(code.slice(-6));
   });
 
@@ -86,8 +70,6 @@ describe('accepting a code', () => {
   });
 
   it('refuses a code two steps away', () => {
-    // Unless it happens to collide with one in the window — one in a million
-    // per neighbour, so check that first rather than flake.
     const window = [at(step - 1), at(step), at(step + 1)];
     for (const far of [at(step - 2), at(step + 2)]) {
       if (!window.includes(far)) expect(matchTotp(secret, far, now)).toBeNull();
@@ -173,8 +155,6 @@ describe('the secret at rest (AES-256-GCM)', () => {
   });
 
   it("refuses another account's ciphertext copied onto this one", () => {
-    // The account id is authenticated data: a row's secret moved to another
-    // row by somebody with write access to the table does not decrypt there.
     const sealed = sealSecret(key, secret, 'user-1');
     expect(() => openSecret(key, sealed, 'user-2')).toThrow();
   });
@@ -185,8 +165,6 @@ describe('the secret at rest (AES-256-GCM)', () => {
   });
 
   it('refuses every unreadable value with the one error the service maps to a clear answer', () => {
-    // A changed MFA_ENCRYPTION_KEY, a copied row and a damaged one all reach
-    // the person as `mfa_factor_unreadable`, never as a 500.
     const sealed = sealSecret(key, secret, 'user-1');
     expect(() => openSecret(randomBytes(32), sealed, 'user-1')).toThrow(UnreadableSecretError);
     expect(() => openSecret(key, sealed, 'user-2')).toThrow(UnreadableSecretError);
@@ -219,7 +197,6 @@ describe('recovery codes', () => {
     expect(normalizeRecoveryCode(code!.toUpperCase())).toBe(normal);
     expect(normalizeRecoveryCode(` ${code!.replace(/-/g, ' ')} `)).toBe(normal);
     expect(normalizeRecoveryCode(code!.replace(/-/g, ''))).toBe(normal);
-    // The letters people confuse with digits read as the digits.
     expect(normalizeRecoveryCode('oiL0-1111-2222')).toBe(normalizeRecoveryCode('0110-1111-2222'));
   });
 

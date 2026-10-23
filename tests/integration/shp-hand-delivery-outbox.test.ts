@@ -9,21 +9,6 @@ import { ParcelProfileService } from '../../apps/api/src/modules/shp/parcel-prof
 import { ShipmentService } from '../../apps/api/src/modules/shp/shipment.service';
 import { HumanFulfilmentService } from '../../apps/api/src/modules/shp/human-fulfilment.service';
 
-/**
- * A hand-delivery request and the event that tells the collector it arrived.
- *
- * The event is written to the outbox, and the worker turns it into the
- * notification. Written in a transaction of its own after the shipment, a
- * failure there left a request nobody was told about: the shipment committed,
- * the event never did. Written in the same transaction, the two exist
- * together or not at all.
- *
- * The failure is forced with the real service in this process and an outbox
- * that refuses to write, against the database the running API uses.
- *
- * Requires a running API + a freshly seeded DB.
- */
-
 let db: Database;
 let close: () => Promise<void>;
 let operator: Client;
@@ -56,7 +41,6 @@ const request = (itemId: string) => ({
   destinationCountry: 'US',
 });
 
-/** The hand-delivery shipments carrying the item, each with its `white_glove_requested` count. */
 const requestsFor = (itemId: string) =>
   sql<{ id: string; events: number }>(
     `select s.id,
@@ -106,7 +90,6 @@ describe('a hand-delivery request is recorded with its event', () => {
     );
 
     await expect(service.requestHandDelivery(collectorId, request(card.id))).rejects.toThrow('outbox unavailable');
-    // No request without its event: the shipment went with the event that failed.
     expect(await requestsFor(card.id)).toEqual([]);
   });
 });

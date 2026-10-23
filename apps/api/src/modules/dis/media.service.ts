@@ -9,7 +9,6 @@ import { item, itemImage } from '../cst/cst.schema';
 import { ServiceRequestService } from './service.service';
 import { INSPECTION_AREAS, isKnownArea, type InspectionArea } from './grading-tiers';
 
-/** Fields the operator MUST fill to close a video review (Requirement 5.4). */
 export interface VideoFulfillment {
   objectKey: string;
   durationSeconds: number;
@@ -24,10 +23,8 @@ const VIDEO_REQUIRED: readonly (keyof VideoFulfillment)[] = [
   'notes',
 ];
 
-/** One area, and what looking at it found. */
 export interface AreaFinding {
   area: string;
-  /** `clean` | `minor` | `notable` — three grades, deliberately coarse. */
   severity: string;
   note: string;
 }
@@ -40,22 +37,6 @@ export interface InspectionFulfillment {
 
 const SEVERITIES = ['clean', 'minor', 'notable'] as const;
 
-/**
- * The two services that answer "what does this card actually look like".
- *
- * A collector buying sight-unseen has one question: is it as described. A
- * still photograph does not show gloss, and a photograph of the front says
- * nothing about a soft corner.
- *
- *  - VIDEO REVIEW turns the card under a light on camera, which is the only way
- *    to see surface and gloss.
- *  - CONDITION INSPECTION is a person looking at named areas and writing down
- *    what they see, per area, against a fixed scale.
- *
- * The inspection's areas and severities are CLOSED lists on purpose. The value
- * of a report is that two of them are comparable; free text would produce
- * findings nobody could line up against each other.
- */
 @Injectable()
 export class MediaService {
   constructor(
@@ -67,15 +48,11 @@ export class MediaService {
   private async assertOwnedAndPresent(tx: Database, ownerId: string, itemId: string) {
     const [it] = await tx.select().from(item).where(eq(item.id, itemId)).limit(1);
     if (!it || it.ownerId !== ownerId) throw AppError.forbidden('Not your item');
-    // Both services need somebody to physically hold the card, so a card away at
-    // a grader cannot be photographed or inspected.
     if (it.lifecycleState !== 'stored' && it.lifecycleState !== 'listed') {
       throw new AppError(ErrorCode.CONFLICT, `Item must be on the shelf (it is ${it.lifecycleState})`, 409);
     }
     return it;
   }
-
-  /* ---------------- video review ---------------- */
 
   async requestVideo(ownerId: string, itemId: string) {
     return this.custody.run(async (tx) => {
@@ -89,10 +66,6 @@ export class MediaService {
     });
   }
 
-  /**
-   * Attach the video. It becomes a new media version on the item, exactly as a
-   * professional photograph does; the only difference is the `type`.
-   */
   async completeVideo(operatorId: string, requestId: string, form: VideoFulfillment) {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
@@ -123,15 +96,6 @@ export class MediaService {
     });
   }
 
-  /* ---------------- condition inspection ---------------- */
-
-  /**
-   * Ask somebody to look at named areas.
-   *
-   * The requester chooses which areas they care about; asking for all five when
-   * you are only worried about the corners wastes an operator's time and the
-   * collector's money.
-   */
   async requestInspection(ownerId: string, itemId: string, areas: string[]) {
     const wanted = (areas ?? []).filter((a): a is InspectionArea => isKnownArea(a));
     if (wanted.length === 0) {
@@ -149,13 +113,6 @@ export class MediaService {
     });
   }
 
-  /**
-   * Record what was found, one line per area that was asked about.
-   *
-   * Every requested area must be answered. A report that silently omits the
-   * corners is worse than no report: the collector reads the absence as "nothing
-   * wrong" when it actually means "nobody looked".
-   */
   async completeInspection(operatorId: string, requestId: string, form: InspectionFulfillment) {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);

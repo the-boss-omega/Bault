@@ -1,20 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SEED, signIn } from './helpers/http';
 
-/**
- * Is every price loaded?
- *
- * No migration inserts a single `pricing_rule`. The seed does, so every
- * development database is priced — and a production database built by
- * migration alone is not: `PricingService.price` throws "No pricing rule for
- * action" on the first intake, and the actions that only TRY a rule quietly
- * fall back to another price, to a figure in the code, or to nothing at all.
- * The launch procedure needs one place that says, action by action, which of
- * those it is.
- *
- * Requires a running API + a freshly seeded DB (which prices everything).
- */
-
 type Coverage = {
   ready: boolean;
   summary: { total: number; priced: number; missing: number };
@@ -43,7 +29,6 @@ describe('E6 pricing coverage', () => {
     const body = res.body as Coverage;
     const types = body.actions.map((a) => a.actionType);
 
-    // The ones whose absence stops the action outright...
     for (const t of [
       'intake',
       'parcel_processing',
@@ -56,7 +41,6 @@ describe('E6 pricing coverage', () => {
       expect(types, `${t} is not listed`).toContain(t);
       expect(body.actions.find((a) => a.actionType === t)!.resolution).toBe('required');
     }
-    // ...and the families that fall back to something else when unpriced.
     for (const t of [
       'intake_lot',
       'storage_oversized',
@@ -78,8 +62,6 @@ describe('E6 pricing coverage', () => {
     }
     expect(new Set(types).size).toBe(types.length);
 
-    // A fallback names what it falls back to, so "unpriced" can be read as
-    // "charged the flat service fee" rather than as "free".
     expect(body.actions.find((a) => a.actionType === 'grading_fee:psa_value')!.fallsBackTo).toBe('service');
     expect(body.actions.find((a) => a.actionType === 'intake_lot')!.fallsBackTo).toBe('intake');
     expect(body.actions.find((a) => a.actionType === 'shipping_rush')!.resolution).toBe('free_if_unpriced');
