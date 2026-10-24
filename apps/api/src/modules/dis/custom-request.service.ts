@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -9,7 +9,6 @@ import { OutboxService } from '../not/outbox/outbox.service';
 import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
 import { WalletService } from '../pay/wallet.service';
 import { item } from '../cst/cst.schema';
-import { ledgerRecord } from '../pay/pay.schema';
 import { ServiceRequestService } from './service.service';
 
 export interface CustomRequestInput {
@@ -127,7 +126,7 @@ export class CustomRequestService {
       }
 
       await this.ledger.lockWallet(req.requesterId, tx as Database);
-      const refundedMinor = await this.refundable(tx as Database, req.requesterId, req.id);
+      const refundedMinor = await this.requests.paidDirectly(tx as Database, req.requesterId, req.id);
       if (refundedMinor > 0) {
         await this.ledger.record(
           {
@@ -159,30 +158,12 @@ export class CustomRequestService {
     });
   }
 
-  private async refundable(tx: Database, userId: string, requestId: string): Promise<number> {
-    const [row] = await tx
-      .select({
-        net: sql<string>`coalesce(sum(case
-          when ${ledgerRecord.type} = 'fee' and ${ledgerRecord.direction} = 'debit' then ${ledgerRecord.amount}
-          when ${ledgerRecord.type} = 'service_refund' and ${ledgerRecord.direction} = 'credit' then -${ledgerRecord.amount}
-          else 0 end), 0)::text`,
-      })
-      .from(ledgerRecord)
-      .where(
-        and(
-          eq(ledgerRecord.userId, userId),
-          eq(ledgerRecord.referenceType, 'service_request'),
-          eq(ledgerRecord.referenceId, requestId),
-        ),
-      );
-    return Math.max(0, Number(row?.net ?? '0'));
-  }
-
   async acceptQuote(requesterId: string, requestId: string) {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== requesterId) throw AppError.notFound('Request not found');
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
+      this.requests.assertAccepted(req);
 
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.stage !== 'quoted') {
@@ -228,6 +209,7 @@ export class CustomRequestService {
       const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== requesterId) throw AppError.notFound('Request not found');
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
+      this.requests.assertAccepted(req);
 
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.stage !== 'quoted') {
@@ -244,6 +226,7 @@ export class CustomRequestService {
     return this.db.transaction(async (tx) => {
       const req = await this.requests.get(requestId, tx);
       if (req.type !== 'custom') throw AppError.validation('Not a custom request');
+      this.requests.assertAccepted(req);
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.stage !== 'accepted') {
         throw new AppError(

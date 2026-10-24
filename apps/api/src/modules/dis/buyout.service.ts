@@ -80,6 +80,7 @@ export class BuyoutService {
       const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== ownerId) throw AppError.notFound('Request not found');
       if (req.type !== 'buyout') throw AppError.validation('Not a buyout request');
+      this.requests.assertAccepted(req);
       if (!req.itemId) throw AppError.validation('Request has no item');
 
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
@@ -140,6 +141,7 @@ export class BuyoutService {
       const req = await this.requests.get(requestId, tx);
       if (req.requesterId !== ownerId) throw AppError.notFound('Request not found');
       if (req.type !== 'buyout') throw AppError.validation('Not a buyout request');
+      this.requests.assertAccepted(req);
       const fields = (req.typeFields as Record<string, unknown>) ?? {};
       if (fields.stage !== 'quoted') {
         throw new AppError(ErrorCode.CONFLICT, 'There is no quote to decline', 409);
