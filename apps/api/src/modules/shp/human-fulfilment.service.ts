@@ -24,7 +24,19 @@ import {
   whiteGloveFeeAction,
 } from './fulfilment';
 import { formatMinor } from '../../shared/money';
-import { MembershipService } from '../mem/membership.service';
+import { MembershipService, type AppliedShippingCover } from '../mem/membership.service';
+
+function pickupCover(tier: string | null, periodId: string): AppliedShippingCover {
+  return {
+    tier: tier ?? '',
+    insuredShipment: false,
+    insuranceMinor: 0,
+    postageMinor: 0,
+    rushMinor: 0,
+    addOns: { show_pickup: 1 },
+    spentInPeriodId: periodId,
+  };
+}
 
 @Injectable()
 export class HumanFulfilmentService {
@@ -161,7 +173,7 @@ export class HumanFulfilmentService {
     });
   }
 
-  async acceptQuote(shipmentId: string, actor: ShipmentActor) {
+  async acceptQuote(shipmentId: string, actor: ShipmentActor, seenMinor: number) {
     await this.shipments.loadFor(shipmentId, actor);
 
     return this.db.transaction(async (tx) => {
@@ -170,7 +182,16 @@ export class HumanFulfilmentService {
       if (s.fulfilmentMethod !== 'hand_delivery') throw AppError.validation('That is not a hand-delivery request');
       if (s.quoteMinor === null) throw new AppError(ErrorCode.CONFLICT, 'No quote yet', 409);
       if (s.status !== 'requested') throw new AppError(ErrorCode.CONFLICT, 'Already accepted', 409);
+      if (s.quoteMinor !== seenMinor) {
+        throw new AppError(
+          ErrorCode.QUOTE_CHANGED,
+          `The quote changed to ${formatMinor(s.quoteMinor)}. Check it and accept again.`,
+          409,
+          { quoteMinor: s.quoteMinor },
+        );
+      }
 
+      await this.ledger.lockWallet(s.userId, tx as Database);
       const balance = await this.ledger.balanceOf(s.userId, tx);
       if (balance.amount < s.quoteMinor) {
         throw new AppError(
@@ -333,6 +354,7 @@ export class HumanFulfilmentService {
           currency: DEFAULT_CURRENCY,
           status: 'rates_selected',
           estimatedDeliveryAt: show.startsAt,
+          membershipCover: waiver.periodId ? pickupCover(waiver.tier, waiver.periodId) : null,
         })
         .returning();
       if (!created) throw AppError.validation('Failed to book the pickup');

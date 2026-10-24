@@ -172,13 +172,13 @@ About 1.5 minutes. It builds on T11 and T15.3.
 
 About 2 minutes. It builds on T13, T10.5 and T10.6.
 
-The tabs are `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `history` and `not-accepted`. `TrackingTab` lists `GET /shipping/shipments`. `ShipmentDrawer` pays, cancels with a reason, and shows `CustomsReadiness` outside the US. `RechooseService` appears after a carrier refuses a label. It loads the shipment's rates and posts `select-rate`, and the server settles the difference. `RequestTable` lists `GET /services/mine` and accepts or declines buyout and custom-request quotes. `NotAcceptedTable` lists `GET /me/disposals`, the arrivals Bault refused.
+The tabs are `overview`, `shipping`, `in-person`, `tracking`, `shared`, `requests`, `history` and `not-accepted`. `TrackingTab` lists `GET /shipping/shipments`. `ShipmentDrawer` pays, and it cancels with a reason after it shows the fee from `cancel-fee`. It shows `CustomsReadiness` outside the US. `RechooseService` appears after a carrier refuses a label. It loads the shipment's rates and posts `select-rate`, and the server settles the difference. `RequestTable` lists `GET /services/mine` and accepts or declines buyout and custom-request quotes. `NotAcceptedTable` lists `GET /me/disposals`, the arrivals Bault refused.
 
 #### `apps/web/src/areas/customer/shipping/ShipmentComposer.tsx`, `apps/web/src/areas/customer/shipping/HumanFulfilmentPanels.tsx`, `apps/web/src/areas/customer/shipping/SharedParcelsTab.tsx`
 
 About 1 minute. It builds on T13.1, T13.6 and T13.7.
 
-`ShipmentComposer` quotes again as answers change, with `POST /shipping/quote`, which creates nothing. Refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`. If the second call fails, the shipment already exists and only the error shows. An address that `lacksRegion`, or that the server refuses with `address_region_required`, stops the quote and shows a link to edit it. `HumanFulfilmentPanels.tsx` handles show pickup and hand delivery. Its `WhiteGloveQuotes` accepts with no amount, so the server charges whatever quote is current. `SharedParcelsTab` runs group shipments.
+`ShipmentComposer` quotes again as answers change, with `POST /shipping/quote`, which creates nothing. Refused rates stay visible with their rule. `commit` posts `/shipping/shipments`, then `choose-for-me` or `select-rate`. If the second call fails, the shipment already exists and only the error shows. An address that `lacksRegion`, or that the server refuses with `address_region_required`, stops the quote and shows a link to edit it. `HumanFulfilmentPanels.tsx` handles show pickup and hand delivery. Its `WhiteGloveQuotes` accepts by naming the figure it shows. A `quote_changed` answer says so and reloads the list with the new figure. `SharedParcelsTab` runs group shipments.
 
 #### `apps/web/src/areas/customer/profile/ProfilePage.tsx`, `apps/web/src/areas/customer/profile/TwoFactorPanel.tsx`, `apps/web/src/areas/customer/support/SupportPage.tsx`, `apps/web/src/areas/customer/notifications/NotificationsPage.tsx`
 

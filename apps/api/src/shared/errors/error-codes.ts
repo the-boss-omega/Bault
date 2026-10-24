@@ -30,6 +30,7 @@ export const ErrorCode = {
   WEBHOOK_UNVERIFIED: 'webhook_unverified',
   OUTBOX_NOT_PARKED: 'outbox_not_parked',
   ADDRESS_REGION_REQUIRED: 'address_region_required',
+  QUOTE_CHANGED: 'quote_changed',
   INTERNAL: 'internal',
 } as const;
 

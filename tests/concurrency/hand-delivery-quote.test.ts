@@ -44,7 +44,7 @@ describe('concurrency: hand-delivery quotes', () => {
     const lock = await holdRowLock('shipment', shipmentId);
     let accepts: Promise<Res>[] = [];
     try {
-      accepts = [0, 1, 2].map(() => collector.post(`/shipping/white-glove/${shipmentId}/accept`));
+      accepts = [0, 1, 2].map(() => collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: QUOTE }));
       await waitForLockWaiters(3);
     } finally {
       await lock.release();
@@ -68,7 +68,7 @@ describe('concurrency: hand-delivery quotes', () => {
     let accept: Promise<Res> | undefined;
     let revise: Promise<Res> | undefined;
     try {
-      accept = collector.post(`/shipping/white-glove/${shipmentId}/accept`);
+      accept = collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: FIRST });
       await waitForLockWaiters(1);
       revise = operator.post(`/shipping/white-glove/${shipmentId}/quote`, {
         quoteMinor: REVISED,
@@ -89,5 +89,31 @@ describe('concurrency: hand-delivery quotes', () => {
     );
     expect(row).toEqual({ quote_minor: FIRST, cost: FIRST, status: 'rates_selected' });
     expect(revised.status).toBe(409);
+  });
+
+  it('charges only the figure the collector saw, and names the new one when the quote changed', async () => {
+    const { operator, collector, shipmentId } = await quotedHandDelivery('Quote changed under the reader', 12_000);
+    const requoted = await operator.post(`/shipping/white-glove/${shipmentId}/quote`, {
+      quoteMinor: 15_000,
+      notes: 'Revised: the show moved to a farther hall.',
+    });
+    expect(requoted.status).toBe(201);
+    const before = await balanceOf(collector);
+
+    const stale = await collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: 12_000 });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('quote_changed');
+    expect(stale.body.error.details.quoteMinor).toBe(15_000);
+    expect(await balanceOf(collector)).toBe(before);
+
+    const fresh = await collector.post(`/shipping/white-glove/${shipmentId}/accept`, { quoteMinor: 15_000 });
+    expect(fresh.status).toBe(201);
+    expect(before - (await balanceOf(collector))).toBe(15_000);
+  });
+
+  it('refuses an accept that names no figure', async () => {
+    const { collector, shipmentId } = await quotedHandDelivery('Accept without a figure', 9_000);
+    const res = await collector.post(`/shipping/white-glove/${shipmentId}/accept`);
+    expect(res.status).toBe(400);
   });
 });

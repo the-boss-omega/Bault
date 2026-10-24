@@ -283,6 +283,14 @@ describe('a label refused at dispatch', () => {
     expect(await walletOf(owner)).toBe(beforePaying - (cancelled.body.restockingFeeMinor as number));
   });
 
+  it('charges no restocking fee to cancel a shipment whose label the carrier refused', async () => {
+    const { shipmentId, owner, beforePaying } = await refusedShipment('cancel', 'cheapest');
+    const cancelled = await owner.post(`/shipping/shipments/${shipmentId}/cancel`, { reason: 'The carrier refused it.' });
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.restockingFeeMinor).toBe(0);
+    expect(await walletOf(owner)).toBe(beforePaying);
+  });
+
   it('takes the same rate again for nothing, chosen by an operator, and then dispatches', async () => {
     const { shipmentId, itemId, owner, chosen } = await refusedShipment('same', 'cheapest');
     const before = await walletOf(owner);

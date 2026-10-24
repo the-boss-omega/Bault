@@ -110,6 +110,10 @@ class QuoteDto {
   @IsString() @MaxLength(1000) notes!: string;
 }
 
+class AcceptQuoteDto {
+  @IsInt() @Min(1) quoteMinor!: number;
+}
+
 class PickupDto {
   @IsArray() @ArrayNotEmpty() @IsString({ each: true }) itemIds!: string[];
   @IsString() eventId!: string;
@@ -221,8 +225,8 @@ export class ShpController {
   }
 
   @Post('white-glove/:id/accept')
-  acceptQuote(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.human.acceptQuote(id, user);
+  acceptQuote(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AcceptQuoteDto) {
+    return this.human.acceptQuote(id, user, dto.quoteMinor);
   }
 
   @Get('pickup/shows')
@@ -282,6 +286,11 @@ export class ShpController {
   @Post('shipments/:id/merge')
   merge(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: MergeDto) {
     return this.edits.merge(id, dto.sourceShipmentId, user);
+  }
+
+  @Get('shipments/:id/cancel-fee')
+  cancelFee(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.edits.cancelFee(id, user);
   }
 
   @Post('shipments/:id/cancel')

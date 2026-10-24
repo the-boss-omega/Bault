@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../../shared/api';
+import { ApiError, api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { itemName } from '../../../shared/itemClasses';
 import { ItemPick } from '../../../shared/ui/Serial';
@@ -353,13 +353,20 @@ export function WhiteGloveQuotes({
                     onClick={() => {
                       setBusy(true);
                       void api
-                        .post(`/shipping/white-glove/${r.id}/accept`)
+                        .post(`/shipping/white-glove/${r.id}/accept`, { quoteMinor: r.quoteMinor })
                         .then(() => {
                           onStatus(t('ff.wg.accepted', { amount: formatUsd(r.quoteMinor!) }));
                           onError(null);
                           onChanged();
                         })
-                        .catch((e: Error) => onError(e.message))
+                        .catch((e: Error) => {
+                          if (e instanceof ApiError && e.code === 'quote_changed') {
+                            onError(t('ff.wg.quoteChanged'));
+                            onChanged();
+                          } else {
+                            onError(e.message);
+                          }
+                        })
                         .finally(() => setBusy(false));
                     }}
                   >
