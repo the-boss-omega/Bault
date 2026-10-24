@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
-    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/schematics": "^12.0.10",
     "@types/express": "^5.0.0",
     "@types/pg": "^8.11.10",
     "@types/qrcode": "^1.5.6",
