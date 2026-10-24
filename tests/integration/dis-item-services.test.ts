@@ -84,6 +84,34 @@ describe('DIS services on a stored item', () => {
     expect(after.some((r) => r.id === req.id)).toBe(true);
   });
 
+  it('refunds and closes a walkthrough request an admin refuses', async () => {
+    const { item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    await fundWallet(SEED.collector, 100_000);
+    const before = await walletOf(collector);
+    const req = (
+      await collector.post('/services/grading', {
+        itemId: item.id,
+        tier: 'psa_walkthrough',
+        declaredMinor: 800_000,
+      })
+    ).body;
+    expect(await walletOf(collector)).toBeLessThan(before);
+
+    const admin = await signIn(SEED.admin);
+    const refused = await admin.post(`/services/grading/${req.id}/approval`, {
+      approve: false,
+      reason: 'Declared value is not supported by comps.',
+    });
+    expect(refused.status).toBe(201);
+    expect(refused.body.status).toBe('cancelled');
+    expect(await walletOf(collector)).toBe(before);
+
+    const again = await admin.post(`/services/grading/${req.id}/approval`, { approve: false, reason: 'Twice.' });
+    expect(again.status).toBe(409);
+    expect(await walletOf(collector)).toBe(before);
+  });
+
   it('takes the card out of circulation while it is at the grader, and brings it back', async () => {
     const { operator, item } = await freshItem();
     const collector = await signIn(SEED.collector);
@@ -327,6 +355,13 @@ describe('DIS services on a stored item', () => {
     expect(done.body.error.code).toBe('item_no_longer_available');
     const card = (await (await signIn(SEED.collector2)).get(`/vault/items/${item.id}`)).body;
     expect(card.item.conditionGrade).toBe('CGC 9');
+
+    const before = await walletOf(collector);
+    const closed = await operator.post(`/services/requests/${req.id}/deny`);
+    expect(closed.status).toBe(201);
+    expect(closed.body.status).toBe('cancelled');
+    expect(await walletOf(collector)).toBeGreaterThan(before);
+    expect((await operator.post(`/services/requests/${req.id}/deny`)).status).toBe(409);
   });
 
   it('lets the owner ask for a lot to be split, and produces one item per card', async () => {

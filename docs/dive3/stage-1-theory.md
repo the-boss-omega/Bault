@@ -760,7 +760,7 @@ The ledger is single-entry. A fee debits a customer and credits nobody; a sale d
 | `escrow_refund` | credit | the buyer repaid when a deal is returned |
 | `chargeback` | debit | a top-up the cardholder took back |
 | `shipping_refund` | credit | a cancelled shipment, or a cheaper rate after a refused label |
-| `service_refund` | credit | a custom request declined after it was paid |
+| `service_refund` | credit | a custom request declined after it was paid; a service request denied, refused or cancelled before the work was done |
 | `payout_reversal` | credit | a cash-out the provider refused or took back |
 
 Every row names what it refers to with `reference_type` and `reference_id`: a `charge`, `wallet_request`, `listing`, `escrow_deal`, `shipment`, `service_request`, `external_payment` or `transaction`, or for interest the day. The amount is always positive and the direction carries the sign (T5.5). A mistake is undone by a compensating row, never by an edit.
@@ -788,6 +788,8 @@ A module that charges a fixed price for an action calls the billing port inside 
 3. records nothing for a zero price;
 4. inserts a `charge`, status `settled`, with the rule's snapshot;
 5. writes the debit: `service_charge`, or `fee` for `marketplace_fee`.
+
+It answers what it did: the charge it wrote and its amount, the period whose allowance covered the action, or nothing at all. A caller that may have to give the money back keeps that answer.
 
 The port never checks the balance, so it can take a wallet negative (T8.9). Its callers: intake (`intake`, or `intake_lot` for a lot), parcel processing and forwarding, every service request at creation, and swaps and gifts (`service` for each side of a swap, the sender of a gift).
 
@@ -997,7 +999,8 @@ Services are most of what a collector does with a stored card, and each one is b
 Every service is a `service_request` of one type: `batch_split`, `professional_photography`, `third_party_grading`, `donation`, `consignment`, `warehouse_transfer`, `buyout`, `video_review`, `condition_inspection`, `deslab`, `remove_commons` or `custom`. Its status runs `requested` (waiting for the warehouse), `in_progress` (an operator accepted it), `completed`, or `cancelled` (denied or declined). The rules every type follows:
 - Creation is refused on a negative balance, and billed in the same transaction through the billing port: the flat `service` rule, or the type's own fee action falling back to `service`. Only removing commons and custom requests are created free.
 - One open request of a type per item, since a second would be a second charge for one job. Custom requests are the exception.
-- An operator accepts or denies a pending request; only an accepted one can be completed.
+- An operator accepts a pending request; only an accepted one can be completed.
+- A service Bault does not do costs nothing. Creating a request keeps what the billing port answered in its type fields (`billed`). Denying an open request, an administrator refusing a grading approval, and an operator cancelling one already under way all close it `cancelled` and give that back once: the charge as a `service_refund`, or the membership allowance it used.
 - Completion needs the operator's fulfilment form with every required field filled and "item verified" ticked; a closed request cannot be completed again.
 
 #### T10.2 Grading
@@ -1021,7 +1024,7 @@ Grading is a pipeline. A request names a tier and a declared value within its ce
 #### T10.4 Cracking a slab and removing commons
 
 These two destroy something on purpose.
-- **Cracking a slab** is irreversible, so it takes a confirmation token (T6.6). Confirming locks the item, checks the owner and that it has a grade, and creates the request (`service_fee:deslab`). Completion re-checks both under the lock and clears the grade with a change-history row, so a raw card cannot be listed, insured or consigned as graded. If the card was sold after the request was accepted, completion is refused and the old owner's fee stays charged; refunding it is an open decision.
+- **Cracking a slab** is irreversible, so it takes a confirmation token (T6.6). Confirming locks the item, checks the owner and that it has a grade, and creates the request (`service_fee:deslab`). Completion re-checks both under the lock and clears the grade with a change-history row, so a raw card cannot be listed, insured or consigned as graded. If the card was sold after the request was accepted, completion is refused, and the operator cancels the request, which refunds the old owner.
 - **Removing commons** is the bulk cull of cards worth less than the storage they will cost. It is free, confirmed with a token, and allowed within 30 days of intake. Each card is discarded, or donated to the platform custodian.
 
 #### T10.5 Consignment and buyout

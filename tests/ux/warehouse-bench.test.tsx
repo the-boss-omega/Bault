@@ -316,3 +316,34 @@ describe('packing a shipment', () => {
     expect(body).not.toHaveProperty('scannedItemIds');
   });
 });
+
+describe('the service queue', () => {
+  beforeEach(() => {
+    get.mockReset();
+    post.mockReset();
+    post.mockResolvedValue({});
+  });
+
+  it('lets the operator cancel and refund a request that is already under way', async () => {
+    const DESLAB = {
+      id: 'sr-1',
+      code: 'SR-DESLAB1',
+      type: 'deslab',
+      status: 'in_progress',
+      itemId: 'it-1',
+      requesterEmail: 'red@bault.dev',
+      itemDescription: 'Sold before the bench',
+      typeFields: {},
+    };
+    get.mockImplementation(apiFor({ '/services/queue': [DESLAB] }));
+    window.location.hash = '#/warehouse/services';
+    render(
+      <I18nProvider>
+        <WarehouseConsole />
+      </I18nProvider>,
+    );
+    const button = await screen.findByRole('button', { name: /cancel and refund/i });
+    await userEvent.click(button);
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/services/requests/sr-1/deny'));
+  });
+});

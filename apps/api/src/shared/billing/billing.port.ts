@@ -17,16 +17,22 @@ export interface BillableAction {
   metadata?: Record<string, unknown>;
 }
 
+export type ChargeOutcome =
+  | { kind: 'charged'; chargeId: string; amountMinor: number; currency: string }
+  | { kind: 'covered'; periodId: string; allowance: string }
+  | { kind: 'free' };
+
 export interface BillingPort {
-  charge(tx: Database, action: BillableAction): Promise<void>;
+  charge(tx: Database, action: BillableAction): Promise<ChargeOutcome>;
 }
 
 export const BILLING_PORT = Symbol('BILLING_PORT');
 
 class NoopBillingAdapter implements BillingPort {
-  async charge(_tx: Database, action: BillableAction): Promise<void> {
+  async charge(_tx: Database, action: BillableAction): Promise<ChargeOutcome> {
     // eslint-disable-next-line no-console
     console.log(`[billing:noop] would charge ${action.actionType} for user ${action.userId}`);
+    return { kind: 'free' };
   }
 }
 

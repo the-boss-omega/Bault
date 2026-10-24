@@ -64,7 +64,7 @@ About 1.5 minutes. It builds on T4.4, T8.4 and T6.1.
 
 These are two injection seams. `AdaptersModule` is global and provides `PAYMENT_ADAPTER`, `SHIPPING_ADAPTER`, `EMAIL_ADAPTER` and `STORAGE_ADAPTER`. It builds them with the factories in `packages/adapters/src/select.ts`, so the worker chooses the same way. A sandbox payment, shipping or storage adapter fails the boot in production.
 
-`BILLING_PORT`, `BillingPort` and `BillableAction` let a module charge a fee without importing PAY. `PayModule` binds the port to `BillingService`. `charge` runs in the caller's `tx`, so the fee commits or rolls back with the work. `itemClass` and `feeActionType` select a narrower pricing rule. `BillingModule` and `NoopBillingAdapter`, in the same file, are imported by nothing.
+`BILLING_PORT`, `BillingPort` and `BillableAction` let a module charge a fee without importing PAY. `PayModule` binds the port to `BillingService`. `charge` runs in the caller's `tx`, so the fee commits or rolls back with the work. `itemClass` and `feeActionType` select a narrower pricing rule. `charge` returns a `ChargeOutcome`. It is `charged` with the charge's id and amount, `covered` with the period and the allowance spent, or `free`. `BillingModule` and `NoopBillingAdapter`, in the same file, are imported by nothing.
 
 #### `apps/api/src/shared/idempotency/idempotency.service.ts`, `apps/api/src/shared/idempotency/idempotency.schema.ts`
 

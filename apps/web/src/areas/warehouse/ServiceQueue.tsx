@@ -151,9 +151,25 @@ function QueueActions({
     );
   }
 
-  if (q.type === 'condition_inspection') return <InspectionFulfillment q={q} onAct={onAct} t={t} />;
-
-  return <FulfillmentForm q={q} onAct={onAct} t={t} />;
+  return (
+    <>
+      {q.type === 'condition_inspection' ? (
+        <InspectionFulfillment q={q} onAct={onAct} t={t} />
+      ) : (
+        <FulfillmentForm q={q} onAct={onAct} t={t} />
+      )}
+      <div className="actions">
+        <Button
+          size="sm"
+          variant="danger"
+          icon={<IconClose />}
+          onClick={() => onAct(() => api.post(`/services/requests/${q.id}/deny`), t('queue.msg.cancelled'))}
+        >
+          {t('queue.action.cancelRefund')}
+        </Button>
+      </div>
+    </>
+  );
 }
 
 function InspectionFulfillment({

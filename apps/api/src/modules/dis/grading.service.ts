@@ -102,12 +102,14 @@ export class GradingService {
       if (fields.approvalState !== 'pending') {
         throw new AppError(ErrorCode.CONFLICT, 'This request has already been decided', 409);
       }
-      return this.requests.setStatus(tx, requestId, approve ? req.status as 'in_progress' : 'cancelled', {
+      const decision = {
         approvalState: approve ? 'approved' : 'refused',
         approvalBy: adminId,
         approvalReason: reason.trim(),
         approvalAt: new Date().toISOString(),
-      });
+      };
+      if (!approve) return this.requests.refundAndCancel(tx, req, decision);
+      return this.requests.setStatus(tx, requestId, req.status as 'in_progress', decision);
     });
   }
 

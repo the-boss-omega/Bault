@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { SEED, intakeFor, signIn } from './helpers/http';
+import { SEED, intakeFor, signIn, type Client } from './helpers/http';
+import { activeAccount, passwordOnly } from './helpers/mfa';
+import { sql } from './helpers/db';
 
 describe('DIS value-added services', () => {
   async function freshItem() {
@@ -104,6 +106,79 @@ describe('DIS value-added services', () => {
     const denied = await operator.post(`/services/requests/${req.id}/deny`);
     expect(denied.status).toBe(201);
     expect(denied.body.status).toBe('cancelled');
+  });
+
+  const walletOf = async (c: Client) => ((await c.get('/finance/wallet')).body as { amount: number }).amount;
+  const refundsFor = (requestId: string) =>
+    sql<{ amount: string }>(
+      `SELECT amount FROM ledger_record WHERE type = 'service_refund' AND reference_type = 'service_request' AND reference_id = $1`,
+      [requestId],
+    );
+
+  it('gives back what a denied request charged, once', async () => {
+    const { operator, item } = await freshItem();
+    const collector = await signIn(SEED.collector);
+    const before = await walletOf(collector);
+    const req = (await collector.post('/services/grading', GRADING_REQUEST(item.id))).body;
+    const charged = before - (await walletOf(collector));
+    expect(charged).toBeGreaterThan(0);
+
+    expect((await operator.post(`/services/requests/${req.id}/deny`)).status).toBe(201);
+    expect(await walletOf(collector)).toBe(before);
+    expect((await refundsFor(req.id)).map((r) => Number(r.amount))).toEqual([charged]);
+
+    const again = await operator.post(`/services/requests/${req.id}/deny`);
+    expect(again.status).toBe(409);
+    expect(await walletOf(collector)).toBe(before);
+    expect(await refundsFor(req.id)).toHaveLength(1);
+  });
+
+  it('gives a member back the allowance a denied request used, and charges nothing', async () => {
+    const operator = await signIn(SEED.operator);
+    const admin = await signIn(SEED.admin);
+    const account = await activeAccount('deny-cover');
+    const member = await passwordOnly(account);
+    const cashIn = await member.post('/finance/wallet-requests', {
+      type: 'cash_in',
+      amountMinor: 20_000,
+      currency: 'USD',
+      fundingSource: 'bank_transfer',
+      reference: `deny-cover-${Date.now()}`,
+    });
+    expect(cashIn.status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/approve`, {})).status).toBe(201);
+    expect((await admin.post(`/admin/wallet-requests/${cashIn.body.id}/complete`, {})).status).toBe(201);
+    expect([200, 201]).toContain((await member.post('/membership/subscribe', { tier: 'folio' })).status);
+    const bins = (await operator.get('/custody/bins')).body as { id: string }[];
+    const intake = await operator.post('/intake/items', {
+      ownerUsername: account.username,
+      typeClass: 'trading_card',
+      binId: bins[0]!.id,
+      conditionGrade: 'PSA 8',
+      description: 'Deslab a member asked for',
+    });
+    expect(intake.status).toBe(201);
+    const item = intake.body as { id: string };
+
+    const used = async () => {
+      const [row] = await sql<{ used: number | null }>(
+        `SELECT (consumed ->> 'service_fee:deslab')::int AS used
+           FROM membership_period WHERE user_id = $1 ORDER BY period_start DESC LIMIT 1`,
+        [account.id],
+      );
+      return row?.used ?? 0;
+    };
+
+    const before = await walletOf(member);
+    const challenge = (await member.post('/services/deslab', { itemId: item.id })).body;
+    const req = (await member.post('/services/deslab/confirm', { confirmationToken: challenge.confirmationToken })).body;
+    expect(await used()).toBe(1);
+    expect(await walletOf(member)).toBe(before);
+
+    expect((await operator.post(`/services/requests/${req.id}/deny`)).status).toBe(201);
+    expect(await used()).toBe(0);
+    expect(await walletOf(member)).toBe(before);
+    expect(await refundsFor(req.id)).toHaveLength(0);
   });
 
   it('gives every service request a recognizable SR- id (Requirement 9.4)', async () => {

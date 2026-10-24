@@ -4,9 +4,11 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { ErrorCode } from '../../shared/errors/error-codes';
-import { BILLING_PORT, type BillingPort } from '../../shared/billing/billing.port';
+import { BILLING_PORT, type BillingPort, type ChargeOutcome } from '../../shared/billing/billing.port';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { WalletService } from '../pay/wallet.service';
+import { LedgerService } from '../pay/ledger.service';
+import { MembershipService } from '../mem/membership.service';
 import { serviceRequest } from './dis.schema';
 import { userAccount } from '../acc/acc.schema';
 import { item } from '../cst/cst.schema';
@@ -24,6 +26,10 @@ type ServiceType =
   | 'deslab'
   | 'remove_commons'
   | 'custom';
+
+type Billed = Exclude<ChargeOutcome, { kind: 'free' }>;
+
+const OPEN_STATUSES = ['requested', 'in_progress'] as const;
 
 const SERVICE_LABEL: Record<ServiceType, string> = {
   batch_split: 'A lot split',
@@ -46,6 +52,8 @@ export class ServiceRequestService {
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(BILLING_PORT) private readonly billing: BillingPort,
     private readonly wallet: WalletService,
+    private readonly ledger: LedgerService,
+    private readonly memberships: MembershipService,
   ) {}
 
   async create(
@@ -65,14 +73,15 @@ export class ServiceRequestService {
     if (!input.allowDuplicate) {
       await this.assertNotAlreadyOpen(tx, input.type, input.requesterId, input.itemId);
     }
-    if (!input.free) {
-      await this.billing.charge(tx, {
-        userId: input.requesterId,
-        actionType: 'service',
-        itemId: input.itemId,
-        feeActionType: input.feeActionType,
-      });
-    }
+    const outcome = input.free
+      ? null
+      : await this.billing.charge(tx, {
+          userId: input.requesterId,
+          actionType: 'service',
+          itemId: input.itemId,
+          feeActionType: input.feeActionType,
+        });
+    const billed = outcome && outcome.kind !== 'free' ? { billed: outcome } : {};
     const [row] = await tx
       .insert(serviceRequest)
       .values({
@@ -81,7 +90,7 @@ export class ServiceRequestService {
         requesterId: input.requesterId,
         itemId: input.itemId,
         batchId: input.batchId,
-        typeFields: input.typeFields ?? {},
+        typeFields: { ...(input.typeFields ?? {}), ...billed },
         status: 'requested',
       })
       .returning();
@@ -103,7 +112,7 @@ export class ServiceRequestService {
           eq(serviceRequest.itemId, itemId),
           eq(serviceRequest.requesterId, requesterId),
           eq(serviceRequest.type, type),
-          inArray(serviceRequest.status, ['requested', 'in_progress']),
+          inArray(serviceRequest.status, OPEN_STATUSES),
         ),
       )
       .limit(1);
@@ -149,7 +158,7 @@ export class ServiceRequestService {
       .from(serviceRequest)
       .leftJoin(userAccount, eq(userAccount.id, serviceRequest.requesterId))
       .leftJoin(item, eq(item.id, serviceRequest.itemId))
-      .where(inArray(serviceRequest.status, ['requested', 'in_progress']))
+      .where(inArray(serviceRequest.status, OPEN_STATUSES))
       .orderBy(sql`${serviceRequest.createdAt} asc`);
   }
 
@@ -158,10 +167,48 @@ export class ServiceRequestService {
   }
 
   async deny(requestId: string) {
-    return this.transition(requestId, 'requested', 'cancelled', 'Only a pending request can be denied');
+    return this.db.transaction(async (tx) => {
+      const cur = await this.get(requestId, tx as Database);
+      if (!(OPEN_STATUSES as readonly string[]).includes(cur.status)) {
+        throw new AppError(ErrorCode.CONFLICT, `That request is already ${cur.status}.`, 409);
+      }
+      return this.refundAndCancel(tx as Database, cur, { deniedAt: new Date().toISOString() });
+    });
   }
 
-  private async transition(requestId: string, from: string, to: 'in_progress' | 'cancelled', msg: string) {
+  async refundAndCancel(
+    tx: Database,
+    req: typeof serviceRequest.$inferSelect,
+    mergeFields: Record<string, unknown> = {},
+  ) {
+    const billed = ((req.typeFields as Record<string, unknown>) ?? {}).billed as Billed | undefined;
+    let refundedMinor = 0;
+    if (billed?.kind === 'charged') {
+      await this.ledger.lockWallet(req.requesterId, tx);
+      await this.ledger.record(
+        {
+          userId: req.requesterId,
+          type: 'service_refund',
+          amount: billed.amountMinor,
+          direction: 'credit',
+          currency: billed.currency,
+          referenceType: 'service_request',
+          referenceId: req.id,
+        },
+        tx,
+      );
+      refundedMinor = billed.amountMinor;
+    } else if (billed?.kind === 'covered') {
+      await this.memberships.restoreCounted(tx, billed.periodId, billed.allowance);
+    }
+    return this.setStatus(tx, req.id, 'cancelled', {
+      ...mergeFields,
+      ...(refundedMinor > 0 ? { refundedMinor } : {}),
+      ...(billed?.kind === 'covered' ? { allowanceRestored: true } : {}),
+    });
+  }
+
+  private async transition(requestId: string, from: string, to: 'in_progress', msg: string) {
     return this.db.transaction(async (tx) => {
       const [cur] = await tx.select().from(serviceRequest).where(eq(serviceRequest.id, requestId)).for('update').limit(1);
       if (!cur) throw AppError.notFound('Service request not found');

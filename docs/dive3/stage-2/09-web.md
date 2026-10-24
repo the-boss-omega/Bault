@@ -208,7 +208,7 @@ About 1.5 minutes. It builds on T9.1, T9.2 and T9.3.
 
 About 1 minute. It builds on T10.1, T10.2 and T11.6.
 
-`ServiceQueue` accepts or denies requests, then closes one with its form from `FORMS`, which posts a route such as `/services/photography/:id/complete`. The form needs every field and `itemVerified`. `GradingSubmissions` batches cards for a grading company. `SupportQueue` assigns tickets. `HouseOrdersPanel` shelves the copy a house-store buyer paid for.
+`ServiceQueue` accepts or declines a pending request. It closes a request under way with its form from `FORMS`, which posts a route such as `/services/photography/:id/complete`. The form needs every field and `itemVerified`. It can also cancel and refund a request under way through `/services/requests/:id/deny`. `GradingSubmissions` batches cards for a grading company. `SupportQueue` assigns tickets. `HouseOrdersPanel` shelves the copy a house-store buyer paid for.
 
 #### `apps/web/src/areas/admin/AdminConsole.tsx`
 
