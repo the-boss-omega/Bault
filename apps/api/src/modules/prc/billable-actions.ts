@@ -19,6 +19,7 @@ export interface BillableAction {
   fallsBackTo: string | null;
   chargedBy: string;
   description: string;
+  percentOf: string | null;
 }
 
 const action = (
@@ -27,7 +28,9 @@ const action = (
   chargedBy: string,
   description: string,
   fallsBackTo: string | null = null,
-): BillableAction => ({ actionType, resolution, fallsBackTo, chargedBy, description });
+): BillableAction => ({ actionType, resolution, fallsBackTo, chargedBy, description, percentOf: null });
+
+const ofAmount = (billable: BillableAction, percentOf: string): BillableAction => ({ ...billable, percentOf });
 
 export function billableActions(): BillableAction[] {
   return [
@@ -47,11 +50,20 @@ export function billableActions(): BillableAction[] {
       action(tierFeeAction(tier.key), 'fallback_rule', 'dis/grading.service.ts', `Grading at the ${tier.key} tier.`, 'service'),
     ),
 
-    action('marketplace_fee', 'required', 'mkt/purchase.service.ts, dis/consignment.service.ts', 'Commission on a marketplace sale, charged to the seller.'),
-    ...CONSIGNMENT_CHANNELS.map((channel) =>
-      action(channelFeeAction(channel.key), 'fallback_rule', 'dis/consignment.service.ts', `Bault's commission on a ${channel.key} consignment sale.`, 'marketplace_fee'),
+    ofAmount(
+      action('marketplace_fee', 'required', 'mkt/purchase.service.ts, dis/consignment.service.ts', 'Commission on a marketplace sale, charged to the seller.'),
+      'the sale price',
     ),
-    action(ESCROW_FEE_ACTION, 'code_constant', 'esc/escrow.service.ts (escrow-terms.ts)', 'Escrow fee. Charged from ESCROW_FEE_BPS and its minimum; a rule is only reported on the published terms.'),
+    ...CONSIGNMENT_CHANNELS.map((channel) =>
+      ofAmount(
+        action(channelFeeAction(channel.key), 'fallback_rule', 'dis/consignment.service.ts', `Bault's commission on a ${channel.key} consignment sale.`, 'marketplace_fee'),
+        'the sale price',
+      ),
+    ),
+    ofAmount(
+      action(ESCROW_FEE_ACTION, 'code_constant', 'esc/escrow.service.ts (escrow-terms.ts)', 'Escrow fee. Charged from ESCROW_FEE_BPS and its minimum; a rule is only reported on the published terms.'),
+      'the agreed value',
+    ),
 
     action('shipping', 'required', 'shp/shipment.service.ts', 'Handling added on top of the carrier rate. Every carrier quote needs it.'),
     action('shipping_rush', 'free_if_unpriced', 'shp/shipment.service.ts', 'Same-day picking and packing.'),
@@ -70,7 +82,10 @@ export function billableActions(): BillableAction[] {
       action(tier.feeActionType, 'required', 'mem/membership.service.ts, worker jobs/membership-renewal.ts', `The ${tier.key} membership. Joining falls back to the catalogue price, but renewal refuses without a rule and the member lapses.`),
     ),
 
-    action(CASHOUT_FEE_ACTION, 'code_constant', 'pay/wallet-request.service.ts (money-terms.ts)', 'Cash-out fee. Charged from the schedule in money-terms.ts; a rule is only shown on the price list.'),
+    ofAmount(
+      action(CASHOUT_FEE_ACTION, 'code_constant', 'pay/wallet-request.service.ts (money-terms.ts)', 'Cash-out fee. Charged from the schedule in money-terms.ts; a rule is only shown on the price list.'),
+      'the amount cashed out',
+    ),
     action(CHARGEBACK_FEE_ACTION, 'code_constant', 'pay/chargeback.service.ts (CHARGEBACK_FEE_MINOR)', 'Handling fee on a reversed payment; a rule is only shown on the price list.'),
     action('interest', 'code_constant', 'worker jobs/interest-accrual.ts (WALLET_DEBT_INTEREST_BPS)', 'Daily interest on a negative balance past the grace period. Set by environment, not by a rule.'),
   ];

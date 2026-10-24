@@ -48,8 +48,14 @@ describe('admin accounting', () => {
       month: '2026-10',
       currency: 'USD',
       byType: [{ type: 'fee', direction: 'debit', count: 2, totalMinor: 700 }],
-      revenue: { totalMinor: 700, lines: [{ key: 'cash_out_fee', totalMinor: 700 }], carrierCostOnShippingChargesMinor: 0 },
-      customerMoney: { inMinor: 50_000, outMinor: 20_000, reversedMinor: 0, netMinor: 30_000 },
+      revenue: {
+        totalMinor: 700,
+        lines: [{ key: 'cash_out_fee', totalMinor: 700 }],
+        refundsMinor: 0,
+        cashOutFeesReturnedMinor: 0,
+        carrierCostOnShippingChargesMinor: 0,
+      },
+      customerMoney: { inMinor: 50_000, outMinor: 20_000, payoutsReturnedMinor: 0, reversedMinor: 0, netMinor: 30_000 },
       balancesHeld: {
         asOf: '2026-10-15T00:00:00.000Z',
         customerTotalMinor: 29_300,
@@ -68,6 +74,38 @@ describe('admin accounting', () => {
     expect(screen.getByText('Customer money in')).toBeInTheDocument();
     expect(screen.getByText('Customer balances held')).toBeInTheDocument();
     expect(screen.getByText('Cash-out fees')).toBeInTheDocument();
+  });
+
+  it('shows what the month gave back: refunds, returned cash-out fees and returned payouts', async () => {
+    const user = userEvent.setup();
+    get.mockResolvedValueOnce({
+      month: '2026-10',
+      currency: 'USD',
+      byType: [],
+      revenue: {
+        totalMinor: 3_000,
+        lines: [{ key: 'service_charge', totalMinor: 3_000 }],
+        refundsMinor: 2_000,
+        cashOutFeesReturnedMinor: 99,
+        carrierCostOnShippingChargesMinor: 0,
+      },
+      customerMoney: { inMinor: 50_000, outMinor: 18_500, payoutsReturnedMinor: 1_500, reversedMinor: 0, netMinor: 31_500 },
+      balancesHeld: {
+        asOf: '2026-10-15T00:00:00.000Z',
+        customerTotalMinor: 31_500,
+        owedToCustomersMinor: 31_500,
+        owedByCustomersMinor: 0,
+        accountsWithBalance: 1,
+        platformAccountMinor: 0,
+      },
+      note: '',
+    });
+    renderIn(<AccountingSection onError={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /show summary/i }));
+
+    expect(await screen.findByText(/\$20\.00 refunded/)).toBeInTheDocument();
+    expect(screen.getByText(/\$0\.99 in cash-out fees given back/)).toBeInTheDocument();
+    expect(screen.getByText(/\$15\.00 in payouts returned/)).toBeInTheDocument();
   });
 
   it('runs the reconciliation and lists each difference', async () => {

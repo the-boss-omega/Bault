@@ -50,6 +50,11 @@ describe('infra/production/prices.json', () => {
     expect(result.unknownRules).toEqual([]);
   });
 
+  it('gives a percentage only to an action priced on an amount, as the API requires', () => {
+    const onAmount = new Set(billableActions().filter((a) => a.percentOf).map((a) => a.actionType));
+    for (const r of rules.filter((x) => x.model === 'percentage')) expect(onAmount, keyOf(r)).toContain(r.actionType);
+  });
+
   it('names only item classes the intake bench knows', () => {
     const known = new Set(ITEM_CLASSES.map((c) => c.key));
     for (const r of rules.filter((x) => x.itemClass)) expect(known, keyOf(r)).toContain(r.itemClass);
