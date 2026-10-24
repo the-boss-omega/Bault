@@ -7,7 +7,8 @@ import { ErrorCode } from '../../shared/errors/error-codes';
 import { BILLING_PORT, type BillingPort, type ChargeOutcome } from '../../shared/billing/billing.port';
 import { ID_PREFIX, prefixedId } from '../../shared/ids';
 import { WalletService } from '../pay/wallet.service';
-import { LedgerService } from '../pay/ledger.service';
+import { LedgerService, DEFAULT_CURRENCY } from '../pay/ledger.service';
+import { ledgerRecord } from '../pay/pay.schema';
 import { MembershipService } from '../mem/membership.service';
 import { serviceRequest } from './dis.schema';
 import { userAccount } from '../acc/acc.schema';
@@ -182,9 +183,10 @@ export class ServiceRequestService {
     mergeFields: Record<string, unknown> = {},
   ) {
     const billed = ((req.typeFields as Record<string, unknown>) ?? {}).billed as Billed | undefined;
+    const paidMinor = await this.paidDirectly(tx, req.requesterId, req.id);
     let refundedMinor = 0;
+    if (billed?.kind === 'charged' || paidMinor > 0) await this.ledger.lockWallet(req.requesterId, tx);
     if (billed?.kind === 'charged') {
-      await this.ledger.lockWallet(req.requesterId, tx);
       await this.ledger.record(
         {
           userId: req.requesterId,
@@ -200,6 +202,21 @@ export class ServiceRequestService {
       refundedMinor = billed.amountMinor;
     } else if (billed?.kind === 'covered') {
       await this.memberships.restoreCounted(tx, billed.periodId, billed.allowance);
+    }
+    if (paidMinor > 0) {
+      await this.ledger.record(
+        {
+          userId: req.requesterId,
+          type: 'service_refund',
+          amount: paidMinor,
+          direction: 'credit',
+          currency: DEFAULT_CURRENCY,
+          referenceType: 'service_request',
+          referenceId: req.id,
+        },
+        tx,
+      );
+      refundedMinor += paidMinor;
     }
     return this.setStatus(tx, req.id, 'cancelled', {
       ...mergeFields,
@@ -218,7 +235,29 @@ export class ServiceRequestService {
     });
   }
 
+  async paidDirectly(tx: Database, userId: string, requestId: string): Promise<number> {
+    const [row] = await tx
+      .select({
+        net: sql<string>`coalesce(sum(case
+          when ${ledgerRecord.type} = 'fee' and ${ledgerRecord.direction} = 'debit' then ${ledgerRecord.amount}
+          when ${ledgerRecord.type} = 'service_refund' and ${ledgerRecord.direction} = 'credit' then -${ledgerRecord.amount}
+          else 0 end), 0)::text`,
+      })
+      .from(ledgerRecord)
+      .where(
+        and(
+          eq(ledgerRecord.userId, userId),
+          eq(ledgerRecord.referenceType, 'service_request'),
+          eq(ledgerRecord.referenceId, requestId),
+        ),
+      );
+    return Math.max(0, Number(row?.net ?? '0'));
+  }
+
   assertAccepted(req: { status: string }): void {
+    if (req.status === 'completed' || req.status === 'cancelled') {
+      throw new AppError(ErrorCode.CONFLICT, `That request is already ${req.status}.`, 409);
+    }
     if (req.status !== 'in_progress') {
       throw new AppError(ErrorCode.CONFLICT, 'Request must be accepted by an operator first', 409);
     }

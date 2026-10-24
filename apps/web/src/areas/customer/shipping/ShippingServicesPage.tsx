@@ -919,6 +919,7 @@ function RequestTable({
                     {request.type === 'custom' && <CustomRequestRow request={request} />}
 
                     {request.type === 'custom' &&
+                      request.status === 'in_progress' &&
                       (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
                         <div className="actions actions--row">
                           <Button
@@ -945,6 +946,7 @@ function RequestTable({
                       )}
 
                     {request.type === 'buyout' &&
+                      request.status === 'in_progress' &&
                       (request.typeFields as { stage?: string } | null)?.stage === 'quoted' && (
                         <div className="actions">
                           <span className="hint">
