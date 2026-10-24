@@ -593,6 +593,44 @@ describe('SHP outbound shipping', () => {
     expect(locked.body.memberCount).toBe(2);
   });
 
+  it('shows a shared parcel only to its members and to staff', async () => {
+    const operator = await signIn(SEED.operator);
+    const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });
+    const theirs = await intakeFor(operator, SEED.collector2, { typeClass: 'trading_card' });
+    const red = await signIn(SEED.collector);
+    const golden = await signIn(SEED.collector2);
+    const stranger = await signIn(SEED.collector3);
+
+    const shared = {
+      label: 'Show hotel',
+      recipient: 'Front desk — Bault group',
+      line1: '1 Convention Way',
+      city: 'Secaucus',
+      region: 'NJ',
+      country: 'US',
+      postalCode: '07094',
+    };
+    const redShip = (
+      await red.post('/shipping/shipments', { itemIds: [mine.id], addressId: await addressFor(red, shared) })
+    ).body;
+    const goldenShip = (
+      await golden.post('/shipping/shipments', { itemIds: [theirs.id], addressId: await addressFor(golden, shared) })
+    ).body;
+    const group = (await red.post('/shipping/groups', { shipmentId: redShip.id, notes: 'Table 7' })).body;
+    expect(
+      (await golden.post('/shipping/groups/join', { groupCode: group.code, shipmentId: goldenShip.id })).status,
+    ).toBe(201);
+
+    expect((await red.get(`/shipping/groups/${group.id}`)).status).toBe(200);
+    expect((await golden.get(`/shipping/groups/${group.id}`)).status).toBe(200);
+    expect((await operator.get(`/shipping/groups/${group.id}`)).status).toBe(200);
+    expect((await stranger.get(`/shipping/groups/${group.id}`)).status).toBe(404);
+
+    expect((await golden.post('/shipping/groups/leave', { shipmentId: goldenShip.id })).status).toBe(201);
+    expect((await golden.get(`/shipping/groups/${group.id}`)).status).toBe(404);
+    expect((await red.get(`/shipping/groups/${group.id}`)).status).toBe(200);
+  });
+
   it('refuses to join a shared parcel going somewhere else', async () => {
     const operator = await signIn(SEED.operator);
     const mine = await intakeFor(operator, SEED.collector, { typeClass: 'trading_card' });

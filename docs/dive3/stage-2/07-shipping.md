@@ -88,7 +88,7 @@ About 1.5 minutes. It builds on T13.7.
 
 This service lets several collectors share one box and one payer, while each keeps and pays for their own shipment. `open` and `join` take `requested` shipments only, and joining needs the identical address. `leave` ignores the shipment's status, but the group must still be `forming`, and the payer cannot leave. `assertForming` takes a share lock on the group row, so a join and a `lock` wait for each other, and no join lands after a lock.
 
-`lock` and `cancel` are for the payer only. `lock` moves the group from `forming` to `locked` conditionally, counts the members again, and emits one `group_shipment_locked` per member. `cancel` clears every member's `groupId`. Its check for `dispatched` runs outside its transaction and never fires, because nothing writes that status. `describe` serves `GET /shipping/groups/:id` and checks no ownership, so any signed-in user with the id can read the members. It throws once any member's card has left `stored`.
+`lock` and `cancel` are for the payer only. `lock` moves the group from `forming` to `locked` conditionally, counts the members again, and emits one `group_shipment_locked` per member. `cancel` clears every member's `groupId`. Its check for `dispatched` runs outside its transaction and never fires, because nothing writes that status. `describe` serves `GET /shipping/groups/:id`. Given a viewer, it answers 404 unless the viewer is the payer, has a shipment in the group, or is staff, so a stranger or a member who left cannot read the members' names and insured values. `mine` and the other internal callers pass no viewer. It throws once any member's card has left `stored`.
 
 #### `apps/api/src/modules/shp/direct-ship.service.ts`
 

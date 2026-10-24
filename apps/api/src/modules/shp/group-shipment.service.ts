@@ -137,7 +137,7 @@ export class GroupShipmentService {
     return { status: 'left' as const };
   }
 
-  async describe(groupId: string) {
+  async describe(groupId: string, viewer?: ShipmentActor) {
     const [group] = await this.db.select().from(shipmentGroup).where(eq(shipmentGroup.id, groupId)).limit(1);
     if (!group) throw AppError.notFound('Group not found');
 
@@ -151,6 +151,11 @@ export class GroupShipmentService {
       .from(shipment)
       .leftJoin(userAccount, eq(userAccount.id, shipment.userId))
       .where(eq(shipment.groupId, groupId));
+
+    const staff = viewer?.role === 'warehouse_operator' || viewer?.role === 'admin';
+    if (viewer && !staff && group.payerUserId !== viewer.id && !members.some((m) => m.shipment.userId === viewer.id)) {
+      throw AppError.notFound('Group not found');
+    }
 
     let totalWeightGrams = 0;
     let totalItems = 0;

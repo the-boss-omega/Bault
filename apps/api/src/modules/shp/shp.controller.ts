@@ -194,8 +194,8 @@ export class ShpController {
   }
 
   @Get('groups/:id')
-  group(@Param('id') id: string) {
-    return this.groups.describe(id);
+  group(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.groups.describe(id, user);
   }
 
   @Post('groups/:id/lock')
