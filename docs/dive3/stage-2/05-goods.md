@@ -34,7 +34,7 @@ When the tracking number matches an `expected` registration, `receiveIn` locks t
 
 About 1 minute. It builds on T6.2 and T6.3.
 
-This file holds the parcel routes. Customer routes sit under `me/` and warehouse routes under `parcels`. `detail` and `photos` go through `detailFor`, which answers 404 for another owner's parcel unless the caller is staff. `@Roles('warehouse_operator', 'admin')` sits on each warehouse method, not on the class. So a new warehouse route that lacks it is open to every signed-in account. The `workflow` route already lacks it, so anyone signed in can read the queue counts.
+This file holds the parcel routes. Customer routes sit under `me/` and warehouse routes under `parcels`. `detail` and `photos` go through `detailFor`, which answers 404 for another owner's parcel unless the caller is staff. `@Roles('warehouse_operator', 'admin')` sits on each warehouse method, not on the class. So a new warehouse route that lacks it is open to every signed-in account. The `workflow` route lacks it on purpose. It returns only totals and the oldest wait, and the collector's processing tab shows them.
 
 #### `apps/api/src/modules/cst/cst.schema.ts`
 
