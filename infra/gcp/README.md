@@ -169,6 +169,33 @@ with your own login. Restores, including Cloud SQL's point-in-time clone, are in
 
 The same commands, with `--url https://<domain>`.
 
+## SSH without an open port (optional)
+
+Google's IAP can carry SSH for you, so port 22 never faces the internet and
+your changing home IP stops mattering. You reach the server through your
+Google account and its 2-step verification instead.
+
+1. Give `provision.sh` and `bootstrap.sh` Google's IAP range as the admin
+   address: `--admin-ip 35.235.240.0/20`, and `bootstrap.sh 35.235.240.0/20`.
+   The VPC rule and `ufw` then admit SSH from IAP only.
+2. Your Google account needs `roles/iap.tunnelResourceAccessor` on the project
+   (an owner has it already).
+3. Connect with your usual key through the tunnel, from `~/.ssh/config`:
+
+```
+Host bault
+  HostName bault-vm
+  User deploy
+  IdentitiesOnly yes
+  ForwardAgent no
+  ForwardX11 no
+  ProxyCommand gcloud compute start-iap-tunnel %h 22 --listen-on-stdin --zone <zone> --project <project>
+```
+
+Then `ssh bault` and `scp file bault:` work as before. Do not use
+`gcloud compute ssh` for this server: it adds keys through metadata and gives
+that user `sudo`.
+
 ## Before you have a domain
 
 Use a free `sslip.io` name. sslip.io answers any name of the form

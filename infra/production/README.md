@@ -41,7 +41,9 @@ ssh root@<server> bash bootstrap.sh <ADMIN_IP>
 
 Docker, ufw, age, rclone (the backup upload) and the PostgreSQL 16 client are
 installed; `deploy` gets your key; the firewall allows 80, 443 and SSH from
-`ADMIN_IP` only; SSH takes keys only. Re-running it is safe. A database on another major version:
+`ADMIN_IP` only; SSH takes keys only and forwards nothing (no agent, X11, TCP or
+socket forwarding, so a hacked server cannot reach back through your session).
+Re-running it is safe. A database on another major version:
 `sudo PG_MAJOR=17 bash bootstrap.sh <ADMIN_IP>`.
 
 Docker publishes container ports with its own iptables rules, which ufw does
@@ -269,12 +271,104 @@ Migrations are not undone: each release must leave a schema the previous code
 still runs on. If a migration itself did the damage, stop `api` and `worker` and
 restore the dump `deploy.sh` printed (`infra/ops/RESTORE.md`).
 
+## Connecting safely
+
+Connect as if the server might one day be hostile, so that it cannot reach back
+into your own machine.
+
+- Use plain `ssh`. Never `ssh -A` or `ForwardAgent yes`: while you are
+  connected, anyone with root on the server could use your forwarded key to
+  sign in elsewhere as you, GitHub included. The server refuses forwarding
+  anyway, so a forgotten flag does nothing.
+- No VS Code Remote-SSH and no `ssh -X` here. Both open a channel from the
+  server into your machine, and Remote-SSH needs the TCP forwarding the server
+  refuses.
+- Copy files to the server, not from it. If you must bring a log down, read it
+  as text. Never run or open a script or document that came from the server.
+- Type no secret on the server that it does not already hold.
+- Give your SSH key a passphrase.
+
+An entry in your own `~/.ssh/config` makes this the default:
+
+```
+Host bault
+  HostName <server>
+  User deploy
+  IdentitiesOnly yes
+  ForwardAgent no
+  ForwardX11 no
+```
+
+## If you think the server was broken into
+
+Do not log in to fix it. The server holds no data of its own: the database and
+the images live outside it, and the backups sit where the server can add but
+not delete. Replace it instead.
+
+1. Stop it, after a disk snapshot if you want to investigate later. On Google
+   Cloud: `gcloud compute disks snapshot bault-vm --zone <zone>`, then
+   `gcloud compute instances delete bault-vm --zone <zone>`. The static IP is a
+   separate resource and stays.
+2. Create a fresh server (`infra/gcp/provision.sh` again creates only the
+   missing VM), run sections 1 to 3 with **new** secrets, and deploy the same
+   tag.
+3. Rotate everything the old server held:
+   - the database passwords: `bault_owner` with `gcloud sql users
+     set-password`, and `bault_app` and `bault_worker` by running `roles.sql`
+     again with new `BAULT_APP_PASSWORD` and `BAULT_WORKER_PASSWORD`;
+   - the images and backups storage keys: deactivate and delete the old ones
+     (`gcloud storage hmac list`, `update --deactivate`, `delete`), remove
+     them from `bault-gcp.env`, and run `provision.sh` again, which makes new
+     ones;
+   - the PayPal client secret, the EasyPost key, the SMTP password,
+     `API_DOCS_PASSWORD` and the registry token.
+
+   Changing `MFA_ENCRYPTION_KEY` as well means every staff member enrols
+   two-factor again; do it if the intruder had root. The backups' age private
+   key was never on the server.
+4. End every session, so nobody stays signed in with a stolen cookie. As
+   `bault_owner`: `UPDATE login_session SET revoked_at = now() WHERE revoked_at IS NULL;`
+5. Read the audit and sign-in logs, and run the reconciliation on the admin
+   console's accounting tab, for the time the intruder was in.
+
 ## Behind Cloudflare
 
 Proxy on, SSL mode **Full (strict)**. In `production.env` set
 `BAULT_TRUSTED_PROXIES` to the ranges at <https://www.cloudflare.com/ips-v4>
 and <https://www.cloudflare.com/ips-v6>, space-separated; Caddy then takes the
 visitor's address from `CF-Connecting-IP`, and only from those ranges.
+
+Then admit web traffic from Cloudflare only. Otherwise anyone who finds the
+server's IP goes straight past Cloudflare. On the server:
+
+```sh
+for r in $(curl -fsS https://www.cloudflare.com/ips-v4) $(curl -fsS https://www.cloudflare.com/ips-v6); do
+  sudo ufw allow proto tcp from "$r" to any port 80,443
+done
+sudo ufw delete allow 80/tcp; sudo ufw delete allow 443/tcp; sudo ufw delete allow 443/udp
+sudo ufw status numbered
+```
+
+On Google Cloud, narrow the VPC rule too (the VM has IPv4 only):
+
+```sh
+gcloud compute firewall-rules update bault-allow-web --project <project> \
+  --rules tcp:80,tcp:443 \
+  --source-ranges "$(curl -fsS https://www.cloudflare.com/ips-v4 | paste -sd, -)"
+```
+
+Cloudflare's ranges change rarely; run both again when they announce a change.
+Caddy keeps renewing its certificate through Cloudflare.
+
+In the Cloudflare dashboard, on the free plan:
+- Add one rate-limiting rule for paths starting with `/api/v1/auth/`, for
+  example 20 requests per 10 seconds per IP. The API keeps its own limits; this
+  stops a flood before it reaches the server.
+- Leave Bot Fight Mode off. On the free plan it cannot skip
+  `/api/v1/webhooks/payment`, so PayPal's webhook would be challenged and
+  top-ups would stop confirming.
+- Leave caching at the defaults. Cloudflare then caches the web app's static
+  files and never the `/api` answers.
 
 ## Day to day
 
