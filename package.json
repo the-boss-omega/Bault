@@ -55,7 +55,8 @@
   "pnpm": {
     "overrides": {
       "proxy-addr": "^2.0.8",
-      "multer": "^2.4.0",
+      "multer": "^2.5.0",
+      "body-parser": "^2.4.0",
       "qs": "^6.16.0",
       "js-yaml": "^5.4.1",
       "shell-quote": "^1.11.0",
