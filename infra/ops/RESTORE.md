@@ -65,6 +65,21 @@ database and never over the live one.
    # AWS RDS
    aws rds restore-db-instance-to-point-in-time --source-db-instance-identifier bault-prod \
      --target-db-instance-identifier bault-pitr-drill --restore-time <T, e.g. 2026-10-11T14:37:00Z>
+   # Google Cloud SQL: the clone is a new instance, with the users and roles
+   gcloud sql instances clone bault-db bault-pitr-drill --project=<project> \
+     --point-in-time='<T, e.g. 2026-10-11T14:37:00Z>'
+   ```
+
+   On Google Cloud the clone has a private IP only, like production, so your
+   restore machine cannot reach it. For the drill, give it a public IP without
+   authorised networks, so that only the Cloud SQL Auth Proxy can connect, and
+   connect through the proxy with your own `gcloud` login. Every
+   `<restored-host>:<port>` below is then `127.0.0.1:55433`, without
+   `?sslmode=require`: the proxy carries the TLS.
+
+   ```
+   gcloud sql instances patch bault-pitr-drill --project=<project> --assign-ip
+   cloud-sql-proxy --port 55433 <project>:<region>:bault-pitr-drill &
    ```
 
    Write down when you asked and when the cluster accepted connections.
@@ -102,6 +117,9 @@ database and never over the live one.
    ```
 
 7. **Tear down** the restored cluster (it is billed by the hour) and fill in the log.
+   A Cloud SQL clone keeps deletion protection:
+   `gcloud sql instances patch bault-pitr-drill --no-deletion-protection`, then
+   `gcloud sql instances delete bault-pitr-drill`.
 
 ## Drill 2. Restore the nightly dump from the off-site bucket
 
@@ -111,6 +129,9 @@ database and never over the live one.
    aws s3 ls s3://<backup-bucket>/nightly/ [--endpoint-url <endpoint>] | tail -3
    aws s3 cp s3://<backup-bucket>/nightly/bault-<stamp>.dump.age        ./drill/
    aws s3 cp s3://<backup-bucket>/nightly/bault-<stamp>.dump.age.sha256 ./drill/
+   # Google Cloud Storage, with your own login (the server's key can only add)
+   gcloud storage ls gs://<backup-bucket>/nightly/ | tail -3
+   gcloud storage cp 'gs://<backup-bucket>/nightly/bault-<stamp>.dump.age*' ./drill/
    ```
 
 2. **Verify it:** checksum, decryption, table of contents, a full restore into a
@@ -172,6 +193,9 @@ database and never over the live one.
    live (each service's own role, so change the host and keep the user), and in
    `/etc/bault/backup.env`, or the next nightly dump is of the damaged cluster.
    If `api.env` names a pooler, point the pooler at the new cluster instead.
+   On Google Cloud the URLs name the proxy and stay as they are: set
+   `CLOUDSQL_INSTANCE` in `/etc/bault/production.env` to the new instance and
+   recreate the proxy (`docker compose … up -d cloudsql`).
    Re-run `roles.sql` without passwords (it only re-asserts grants), then
    `docker compose up -d api` and `readyz`. Start the worker last, once the API
    is ready.

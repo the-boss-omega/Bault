@@ -1,6 +1,6 @@
 ## 2.10 Infrastructure, CI and tests
 
-This section covers how the code becomes images, runs locally and in production, is backed up, is checked by CI and is tested. Read the Dockerfiles, then the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts and last the tests. The section takes about 34 minutes.
+This section covers how the code becomes images, runs locally and in production, is backed up, is checked by CI and is tested. Read the Dockerfiles, then the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts and last the tests. The section takes about 36 minutes.
 
 #### `apps/api/Dockerfile`, `apps/worker/Dockerfile`
 
@@ -52,6 +52,8 @@ About 2 minutes. It builds on T17.2.
 
 `deploy.sh <tag>` pulls the images and backs up with `backup.sh dump`. It then migrates, runs `roles.sql` and starts the stack with `compose up --wait`. It probes `/api/v1/readyz` through Caddy and waits for `/api/v1/readyz/worker` to show an outbox dispatch by the new worker. Last, it runs `roles.sql` again. It records `CURRENT_TAG` and `PREVIOUS_TAG` on success and prints the rollback steps either way. It warns when the checkout is not at the tag, because the compose file, the Caddyfile and `roles.sql` come from the checkout. Migrations run while the old release still serves, and a rollback does not undo them, so every migration must suit the previous code.
 
+Three settings let `deploy.sh` run on Google Cloud, and they are empty everywhere else. `BAULT_COMPOSE_EXTRA` adds compose files. `BAULT_DB_SIDECAR` names a service that starts first, and the script waits until `pg_isready` answers. `HOST_DIRECT_DATABASE_URL`, in `migrate.env`, is the owner's URL from the host, for when the containers use a name the host cannot resolve.
+
 #### `infra/production/README.md`, `infra/production/production.env.example`, `infra/production/api.env.example`, `infra/production/worker.env.example`, `infra/production/migrate.env.example`
 
 About 1.5 minutes. It builds on T4.5 and T17.2.
@@ -76,6 +78,14 @@ These are the Day 6 checks, run from outside. `ops:load-test` sends `MIX`, which
 
 `ops:security-check` tests the HTTPS redirect, the certificate, the refusal of TLS 1.0 and 1.1, and the SSL Labs grade. It runs `gradeHeaders` on the page, a script and the API, and `docsVerdict` on the docs paths. It scans the open ports with nmap, or with a connect scan of `COMMON_PORTS`. Last, `adminNeedsCode` checks that an administrator's password alone opens no session.
 
+#### `infra/gcp/provision.sh`, `infra/gcp/compose.gcp.yml`, `infra/gcp/claim-database.sql`, `infra/gcp/README.md`
+
+About 2 minutes. It builds on T17.2, T17.3 and T5.7.
+
+`provision.sh` creates the Google Cloud side of T17.2 from your own `gcloud` login. It makes a network with an SSH rule for `ADMIN_IP`. It makes Cloud SQL with a private IP only, `ENCRYPTED_ONLY`, point-in-time recovery and `--edition=ENTERPRISE`. It makes the two buckets, and the backups bucket lives in a second project with a 30-day retention policy. It makes three service accounts with one job each, their HMAC keys, and the VM. It skips what already exists, and `--dry-run` prints every command without running it. The settings go to a local file at mode 600, and its output masks the secrets.
+
+`compose.gcp.yml` adds `cloudsql`, the Cloud SQL Auth Proxy, pinned by digest. The api, the worker and migrate reach it as `cloudsql`, and the host reaches it on `127.0.0.1`, both on port 5432. `claim-database.sql` makes `bault_owner` the owner of the database that Cloud SQL created, so `roles.sql` can grant on it. Cloud SQL has no superuser. Anything new in a migration or in `roles.sql` that needs one breaks Google Cloud first, and the CI job `cloud-sql-privileges` catches it.
+
 #### `infra/ops/backup.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md`
 
 About 2 minutes. It builds on T17.4.
@@ -86,7 +96,7 @@ About 2 minutes. It builds on T17.4.
 
 About 2 minutes. It builds on T17.6 and T18.2.
 
-`verify` starts Postgres and MinIO, then runs lint, typecheck, the web build and the five suites that need nothing. It applies `dev-settings.sql`, migrates, starts the built API, and runs each database suite after a fresh seed. `audit` runs `pnpm audit` on production dependencies. `migrate-image` migrates an empty database with the API image and counts the guard triggers and the uuid and text operators. `secret-scan` runs gitleaks over the history. CI never runs design-lint or Prettier, never builds the web or worker image, and never starts a worker.
+`verify` starts Postgres and MinIO, then runs lint, typecheck, the web build and the five suites that need nothing. It applies `dev-settings.sql`, migrates, starts the built API, and runs each database suite after a fresh seed. `audit` runs `pnpm audit` on production dependencies. `migrate-image` migrates an empty database with the API image and counts the guard triggers and the uuid and text operators. `cloud-sql-privileges` migrates with the same image as a `bault_owner` that has CREATEROLE and CREATEDB but no superuser, the way Cloud SQL creates it in `infra/gcp/cloudsql-emulate.sql`. It then runs `roles.sql` twice, and the app and worker roles must show the 30-second timeout and no right to update history. `secret-scan` runs gitleaks over the history. CI never runs design-lint or Prettier, never builds the web or worker image, and never starts a worker.
 
 #### `.github/workflows/release.yml`, `.github/workflows/deploy.yml`, `.github/dependabot.yml`
 

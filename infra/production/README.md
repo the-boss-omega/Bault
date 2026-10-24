@@ -14,6 +14,10 @@ Run every command as written; `<…>` is yours to fill in.
 | `deploy.sh` | pull, back up, migrate, roles, start, smoke-test |
 | `prices.json` | every price, loaded with `pnpm prices:load` (section 7) |
 
+On Google Cloud (Compute Engine, Cloud SQL, Cloud Storage), follow
+[`infra/gcp/README.md`](../gcp/README.md): it creates everything this page
+assumes with one script, then maps each step below to it.
+
 ## Before you start
 
 - A Postgres 16 database, with the admin role able to create `bault_owner`
