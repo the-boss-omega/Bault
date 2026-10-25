@@ -118,7 +118,7 @@ cssCode.forEach((line, i) => {
 
 // The theme and motion layers sit outside the token-block rules above, but the
 // logical-properties rule and the reduced-motion guarantee apply to them too.
-for (const name of ['theme.css', 'motion.css']) {
+for (const name of ['theme.css', 'components.css', 'motion.css']) {
   const file = join(webSrc, name);
   const short = relative(repoRoot, file).split(sep).join('/');
   const raw = readFileSync(file, 'utf8');
