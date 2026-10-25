@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useId } from 'react';
+import { cloneElement, isValidElement, useId, useLayoutEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
@@ -356,6 +356,28 @@ export function ContextTabs({
   actions?: ReactNode;
   label: string;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Position the gliding indicator under the active tab. Offsets are measured
+  // from the inline-start edge, so the same maths serves LTR and RTL.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !tab) return;
+    const place = () => {
+      const l = list.getBoundingClientRect();
+      const t = tab.getBoundingClientRect();
+      const rtl = document.documentElement.dir === 'rtl';
+      const x = rtl ? t.right - l.right : t.left - l.left;
+      list.style.setProperty('--tab-x', `${x + list.scrollLeft}px`);
+      list.style.setProperty('--tab-w', `${t.width}px`);
+      list.dataset.ready = 'true';
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [active, tabs]);
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);
     if (index < 0) return;
@@ -375,7 +397,7 @@ export function ContextTabs({
 
   return (
     <div className="ctx-bar">
-      <div className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      <div ref={listRef} className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
         {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (

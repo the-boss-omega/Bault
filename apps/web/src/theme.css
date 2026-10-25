@@ -1,0 +1,123 @@
+/* ============================================================
+   shadcn/ui theme
+
+   Part 1 is the theme itself, in shadcn's own variable names: the shadcndesign
+   plugin's "Export variables -> CSS" output pastes straight over it. Part 2 maps
+   those names onto Bault's tokens, so nothing in index.css has to know a theme
+   exists. Loaded after index.css (see main.tsx).
+
+   The values in part 1 are shadcn's stock neutral theme, standing in until the
+   owner's export replaces them.
+   ============================================================ */
+
+/* ---- Part 1: theme variables (paste target) ---- */
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.5 0.2 27);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.85 0 0);
+  --ring: oklch(0.55 0 0);
+  --radius: 0.625rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.72 0 0);
+    --accent: oklch(0.32 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.75 0.15 22);
+    --border: oklch(1 0 0 / 12%);
+    --input: oklch(1 0 0 / 20%);
+    --ring: oklch(0.6 0 0);
+  }
+}
+
+:root[data-theme='dark'] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.32 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.75 0.15 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 20%);
+  --ring: oklch(0.6 0 0);
+}
+
+/* ---- Part 2: mapping onto Bault's tokens ----
+   `:root:root` ties in specificity with the dark blocks in index.css and wins
+   by coming later, so one mapping serves light and dark: each var() below
+   resolves against whichever theme block is active. */
+
+:root:root {
+  --surface-page: var(--background);
+  --surface-raised: var(--card);
+  --surface-sunken: var(--muted);
+  --surface-sunken-2: var(--accent);
+  --surface-input: var(--background);
+
+  --line: var(--border);
+  --line-strong: var(--input);
+
+  --ink: var(--foreground);
+  --ink-body: var(--foreground);
+  --ink-2: var(--muted-foreground);
+  --ink-on-accent: var(--primary-foreground);
+
+  --custody: var(--primary);
+  --custody-mark: var(--primary);
+  --custody-wash: color-mix(in oklab, var(--primary) 10%, var(--background));
+  --teal-strong: color-mix(in oklab, var(--primary) 85%, var(--foreground));
+  --oxblood: var(--destructive);
+  --oxblood-mark: var(--destructive);
+  --oxblood-wash: color-mix(in oklab, var(--destructive) 10%, var(--background));
+  --error-strong: color-mix(in oklab, var(--destructive) 85%, var(--foreground));
+
+  --focus-color: var(--ring);
+
+  --r-xs: max(2px, calc(var(--radius) - 4px));
+  --r-sm: max(2px, calc(var(--radius) - 2px));
+  --r-md: var(--radius);
+  --r-lg: calc(var(--radius) + 4px);
+  --r-pill: var(--radius);
+
+  --shadow-xs: 0 1px 2px oklch(0 0 0 / 5%);
+  --shadow-overlay: 0 4px 6px -1px oklch(0 0 0 / 10%), 0 12px 32px oklch(0 0 0 / 14%);
+  --shadow-card: var(--shadow-xs);
+
+  --font-ui: var(--font-sans, 'IBM Plex Sans'), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
+}

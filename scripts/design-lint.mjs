@@ -116,6 +116,22 @@ cssCode.forEach((line, i) => {
   }
 });
 
+// The theme and motion layers sit outside the token-block rules above, but the
+// logical-properties rule and the reduced-motion guarantee apply to them too.
+for (const name of ['theme.css', 'motion.css']) {
+  const file = join(webSrc, name);
+  const short = relative(repoRoot, file).split(sep).join('/');
+  const raw = readFileSync(file, 'utf8');
+  stripComments(raw)
+    .split('\n')
+    .forEach((line, i) => {
+      if (PHYSICAL_CSS.test(line)) report(short, i + 1, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
+    });
+  if (name === 'motion.css' && !/@media \(prefers-reduced-motion: reduce\)/.test(raw)) {
+    report(short, 1, 'motion layer has no prefers-reduced-motion: reduce block');
+  }
+}
+
 const monoRules = [...cssCode.entries()].filter(([, l]) => /font-family:\s*var\(--font-mono\)/.test(l));
 for (const [i] of monoRules) {
   let j = i;
