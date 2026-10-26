@@ -128,3 +128,16 @@
 .auth-card {
   animation: dialog-in var(--dur-enter) var(--ease-out) both;
 }
+
+.auth-headline {
+  font-size: clamp(28px, 3.3vw, 46px);
+  line-height: 1.08;
+  max-width: 16ch;
+}
+
+@media (min-width: 900px) {
+  .auth-stage {
+    justify-content: center;
+    grid-template-columns: minmax(0, 240px) minmax(0, 480px);
+  }
+}
