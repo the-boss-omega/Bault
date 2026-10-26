@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button, IconButton } from './primitives';
 import { IconClose } from './icons';
 import { useT } from '../i18n';
@@ -38,6 +38,28 @@ function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
   }
 }
 
+/**
+ * Plays the exit animation, then closes. Without matchMedia (a test renderer)
+ * or under reduced motion it closes at once, exactly as before.
+ */
+function useExit(onClose: () => void): { closing: boolean; requestClose: () => void } {
+  const [closing, setClosing] = useState(false);
+  const latest = useRef(onClose);
+  latest.current = onClose;
+  const requestClose = useCallback(() => {
+    const animate =
+      typeof window.matchMedia === 'function' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!animate) {
+      latest.current();
+      return;
+    }
+    setClosing(true);
+    window.setTimeout(() => latest.current(), 180);
+  }, []);
+  return { closing, requestClose };
+}
+
 export function DetailDrawer({
   title,
   subtitle,
@@ -60,6 +82,7 @@ export function DetailDrawer({
   children: ReactNode;
 }) {
   const t = useT();
+  const { closing, requestClose } = useExit(onClose);
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -75,7 +98,7 @@ export function DetailDrawer({
       if (!isTopOverlay(token)) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        requestClose();
         return;
       }
       trapTab(event, panel);
@@ -91,20 +114,20 @@ export function DetailDrawer({
       popOverlay();
       openerRef.current?.focus?.();
     };
-  }, [onClose]);
+  }, [requestClose]);
 
   return (
     <>
       <div
-        className="drawer-backdrop"
+        className={closing ? 'drawer-backdrop is-closing' : 'drawer-backdrop'}
         role="presentation"
         onClick={() => {
-          if (!dirty) onClose();
+          if (!dirty) requestClose();
         }}
       />
       <aside
         ref={panelRef}
-        className={wide ? 'drawer drawer--sheet' : 'drawer'}
+        className={`${wide ? 'drawer drawer--sheet' : 'drawer'}${closing ? ' is-closing' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -118,7 +141,7 @@ export function DetailDrawer({
             </h2>
             {subtitle && <p className="drawer-subtitle">{subtitle}</p>}
           </div>
-          <IconButton label={t('ui.close')} onClick={onClose}>
+          <IconButton label={t('ui.close')} onClick={requestClose}>
             <IconClose />
           </IconButton>
         </header>
@@ -148,6 +171,7 @@ export function ConfirmationModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { closing, requestClose: requestCancel } = useExit(onCancel);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -161,7 +185,7 @@ export function ConfirmationModal({
       if (!isTopOverlay(token)) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onCancel();
+        requestCancel();
         return;
       }
       trapTab(event, dialog);
@@ -172,13 +196,17 @@ export function ConfirmationModal({
       popOverlay();
       opener?.focus?.();
     };
-  }, [onCancel]);
+  }, [requestCancel]);
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={() => !busy && onCancel()}>
+    <div
+      className={closing ? 'modal-backdrop is-closing' : 'modal-backdrop'}
+      role="presentation"
+      onClick={() => !busy && requestCancel()}
+    >
       <div
         ref={dialogRef}
-        className="modal"
+        className={closing ? 'modal is-closing' : 'modal'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -190,7 +218,7 @@ export function ConfirmationModal({
         </div>
         <div>{body}</div>
         <div className="modal-actions">
-          <Button variant="secondary" disabled={busy} onClick={onCancel}>
+          <Button variant="secondary" disabled={busy} onClick={requestCancel}>
             {cancelLabel}
           </Button>
           <Button variant={tone === 'danger' ? 'danger' : 'gold'} loading={busy} onClick={onConfirm}>
