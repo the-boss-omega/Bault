@@ -352,3 +352,28 @@ like.
 - **Custom requests are three steps**: ask (free) → operator proposes → you accept.
 - **Shipping eligibility rules** are unchanged.
 - **A suspended user keeps support access** and nothing else, and the rail is narrowed to match.
+
+---
+
+## 12. Showcase theme (shadcn/ui kit, October 2026)
+
+Custody Grade keeps its principles (serial first, money names itself, append-only registers, state is
+structural, photography is the colour). Its **surface** changed to a dark showcase built on the
+shadcn/ui kit (Nova style, neutral palette) and the Developer Portfolio template.
+
+- **Tokens.** `apps/web/src/theme.css` holds the kit's variables in shadcn's own names
+  (`--background`, `--card`, `--primary`, `--muted`, `--border`, `--ring`, `--radius`, …), light and
+  dark, and maps them onto the Bault tokens above. Re-theming is a paste into part 1 of that file.
+  The status accents (custody, brass, frost, amber) keep their own hues; `--oxblood` follows
+  `--destructive`.
+- **Default is dark.** `ThemeProvider` starts on `dark`; light and system remain on the toggle.
+- **Type.** Geist (UI), Geist Mono (display headings, codes), IBM Plex Sans Hebrew (Hebrew). All
+  self-hosted from `assets/fonts` by `scripts/fetch-fonts.mjs`. Serials stay mono and left-to-right.
+- **Layers.** `components.css` (buttons, fields, panels as cards, pill badges, tables, overlays),
+  `landing.css` (the public page), `app.css` (shell, metric cards, sign-in stage), `motion.css`
+  (all transitions and keyframes). Loaded after `index.css`, in that order.
+- **Motion.** Hover lift and press, a gliding tab indicator, drawer and dialog entrance, page
+  fade-in, shimmer placeholders, a scroll reveal and pointer spotlight on the landing page, and
+  figures that count up. All of it is off under `prefers-reduced-motion: reduce`.
+- **Lint.** `scripts/design-lint.mjs` keeps the logical-properties rule and now also applies it to the
+  four layers above, and requires the reduced-motion block in `motion.css`.
