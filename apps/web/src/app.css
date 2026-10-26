@@ -1,0 +1,130 @@
+/* ============================================================
+   App shell and shared surfaces
+
+   The signed-in product in the dark showcase look: a faint aurora behind the
+   workspace, a lit brand mark, bordered metric cards that lift on hover,
+   single-border panels, and the sign-in stage matched to the landing hero.
+   Reads theme tokens only; loaded after components.css.
+   ============================================================ */
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset-block-start: -240px;
+  inset-inline-start: 50%;
+  z-index: -1;
+  width: 900px;
+  height: 520px;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--custody) 14%, transparent), transparent);
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+/* Brand mark */
+
+.rail-mark {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-family: var(--font-mono);
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 1px var(--border), 0 4px 18px -4px color-mix(in oklab, var(--custody) 45%, transparent);
+}
+
+/* Page title */
+
+.page-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  font-weight: var(--fw-medium);
+}
+
+/* Metric strip becomes separate cards. */
+
+.metric-grid {
+  gap: var(--sp-3);
+  border-block: 0;
+}
+
+.metric-card,
+.metric-card:first-child {
+  padding: var(--sp-5);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+.metric-card:hover {
+  border-color: var(--input);
+  transform: translateY(-2px);
+}
+
+.metric-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--track-label);
+}
+
+/* One border per surface: a table inside a panel does not draw its own frame. */
+
+.panel .dt-wrap {
+  border: 0;
+  border-radius: 0;
+  border-block-start: var(--border-w) solid var(--border);
+}
+
+/* Sign-in stage matches the landing hero. */
+
+.auth-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.auth-stage::before {
+  content: '';
+  position: absolute;
+  inset-block-start: -20%;
+  inset-inline-start: 10%;
+  z-index: -1;
+  width: 640px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--custody) 24%, transparent), transparent 72%);
+  filter: blur(40px);
+  animation: aurora-drift 14s var(--ease-in-out) infinite alternate;
+}
+
+.auth-headline {
+  color: var(--foreground);
+  letter-spacing: -0.02em;
+}
+
+.auth-lede,
+.auth-caption,
+.auth-custody dt {
+  color: var(--muted-foreground);
+}
+
+.auth-custody dd,
+.auth-custody .serial {
+  color: var(--foreground);
+}
+
+.auth-stage-photo .photo-thumb {
+  filter: drop-shadow(0 24px 40px color-mix(in oklab, #000 55%, transparent));
+  animation: float 6s var(--ease-in-out) infinite alternate;
+}
+
+.auth-card {
+  animation: dialog-in var(--dur-enter) var(--ease-out) both;
+}

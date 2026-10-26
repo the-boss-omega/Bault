@@ -8,6 +8,7 @@ import './index.css';
 import './theme.css';
 import './components.css';
 import './landing.css';
+import './app.css';
 import './motion.css';
 
 try {

@@ -252,9 +252,8 @@ describe('Legal documents', () => {
     expect(shipped.length).toBeGreaterThan(0);
     const families: Record<string, string> = {
       'plex-sans-hebrew-': 'IBM Plex Sans Hebrew',
-      'plex-sans-': 'IBM Plex Sans',
-      'plex-mono-': 'IBM Plex Mono',
-      'frank-ruhl-': 'Frank Ruhl Libre',
+      'geist-mono-': 'Geist Mono',
+      'geist-': 'Geist',
     };
     for (const file of shipped) {
       const prefix = Object.keys(families).find((p) => file.startsWith(p));

@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement, useId, useLayoutEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
+import { CountUp } from './CountUp';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
 
 type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
@@ -331,7 +332,7 @@ export function MetricCard({
       <span className={`metric-icon metric-icon--${tone}`}>{icon}</span>
       <div>
         <p className="metric-label">{label}</p>
-        <p className="metric-value">{value}</p>
+        <p className="metric-value">{typeof value === 'string' ? <CountUp value={value} /> : value}</p>
       </div>
       {footer && <p className="metric-foot">{footer}</p>}
     </article>
