@@ -32,7 +32,7 @@
 .rail-mark {
   background: var(--primary);
   color: var(--primary-foreground);
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   border-radius: var(--r-md);
   box-shadow: 0 0 0 1px var(--border), 0 4px 18px -4px color-mix(in oklab, var(--custody) 45%, transparent);
 }
@@ -67,7 +67,7 @@
 }
 
 .metric-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: var(--fs-caption);
   letter-spacing: var(--track-label);
 }
@@ -140,4 +140,91 @@
     justify-content: center;
     grid-template-columns: minmax(0, 240px) minmax(0, 480px);
   }
+}
+
+/* Avatar: a quiet disc, not a white blob. */
+
+.avatar {
+  background: linear-gradient(135deg, var(--secondary), var(--accent));
+  color: var(--foreground);
+  border: var(--border-w) solid var(--border);
+}
+
+/* Navigation rail: the active destination is lit. */
+
+.rail-item.is-active {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--custody) 14%, transparent), transparent);
+}
+
+[dir='rtl'] .rail-item.is-active {
+  background: linear-gradient(270deg, color-mix(in oklab, var(--custody) 14%, transparent), transparent);
+}
+
+.rail-item.is-active .rail-icon {
+  filter: drop-shadow(0 0 8px color-mix(in oklab, var(--custody) 70%, transparent));
+}
+
+/* Panels carry a hairline highlight along the top edge. */
+
+.panel {
+  position: relative;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline: var(--sp-6);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--foreground) 22%, transparent), transparent);
+  pointer-events: none;
+}
+
+/* Table headers read as labels. */
+
+.data-table thead th,
+.table thead th {
+  font-family: var(--font-display);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+/* Page sections arrive in sequence. */
+
+.page > * {
+  animation: rise 600ms var(--ease-out) both;
+}
+
+.page > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.page > :nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.page > :nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.page > :nth-child(n + 5) {
+  animation-delay: 240ms;
+}
+
+/* Surfaces the old theme painted with --ink (a dark band in light mode) take
+   the kit's own surfaces instead, so they read in both themes. */
+
+.mobile-bar {
+  background: color-mix(in oklab, var(--background) 80%, transparent);
+  color: var(--foreground);
+  border-block-end: var(--border-w) solid var(--border);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.parcel-row-index {
+  background: var(--secondary);
+  color: var(--foreground);
+  border: var(--border-w) solid var(--border);
 }
