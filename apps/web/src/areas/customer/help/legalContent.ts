@@ -327,7 +327,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
       {
         "id": "notice",
         "heading": "Notice",
-        "body": "This application bundles these fonts, served from /fonts:\n\n  IBM Plex Sans, IBM Plex Sans Hebrew, IBM Plex Mono\n    Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\"\n\n  Frank Ruhl Libre\n    Copyright 2015 The Frank Ruhl Libre Project Authors\n    (https://github.com/fontef/frankruhllibre)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://openfontlicense.org\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------"
+        "body": "This application bundles these fonts, served from /fonts:\n\n  Geist, Geist Mono\n    Copyright 2023 The Geist Project Authors\n    (https://github.com/vercel/geist-font)\n\n  IBM Plex Sans Hebrew\n    Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\"\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://openfontlicense.org\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------"
       },
       {
         "id": "preamble",

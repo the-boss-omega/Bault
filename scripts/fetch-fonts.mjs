@@ -14,15 +14,14 @@ const UA =
 const KEEP = new Set(['latin', 'latin-ext', 'hebrew']);
 
 const FAMILIES = [
-  { slug: 'plex-sans', query: 'IBM+Plex+Sans:wght@400;500;600', family: 'IBM Plex Sans' },
+  { slug: 'geist', query: 'Geist:wght@400;500;600', family: 'Geist' },
+  { slug: 'geist-mono', query: 'Geist+Mono:wght@400;500;600', family: 'Geist Mono' },
   {
     slug: 'plex-sans-hebrew',
     query: 'IBM+Plex+Sans+Hebrew:wght@400;500;600',
     family: 'IBM Plex Sans Hebrew',
     subsets: ['hebrew'],
   },
-  { slug: 'plex-mono', query: 'IBM+Plex+Mono:wght@400;500', family: 'IBM Plex Mono' },
-  { slug: 'frank-ruhl', query: 'Frank+Ruhl+Libre:wght@500;700', family: 'Frank Ruhl Libre' },
 ];
 
 function parseFaces(css) {

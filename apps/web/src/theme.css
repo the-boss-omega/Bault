@@ -6,82 +6,87 @@
    those names onto Bault's tokens, so nothing in index.css has to know a theme
    exists. Loaded after index.css (see main.tsx).
 
-   The values in part 1 are shadcn's stock neutral theme, standing in until the
-   owner's export replaces them.
+   The values in part 1 are the shadcn/ui kit's Nova style on its neutral
+   palette (read from the owner's Figma copy), light and dark.
    ============================================================ */
 
 /* ---- Part 1: theme variables (paste target) ---- */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.94 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.5 0.2 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.85 0 0);
-  --ring: oklch(0.55 0 0);
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #5f5f68;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --destructive: #c70010;
+  --border: #e5e5e5;
+  --input: #d4d4d4;
+  --ring: #a1a1a1;
   --radius: 0.625rem;
+
+  --font-sans: 'Geist';
+  --font-mono-face: 'Geist Mono';
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.72 0 0);
-    --accent: oklch(0.32 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.75 0.15 22);
-    --border: oklch(1 0 0 / 12%);
-    --input: oklch(1 0 0 / 20%);
-    --ring: oklch(0.6 0 0);
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --card: #141414;
+    --card-foreground: #fafafa;
+    --popover: #171717;
+    --popover-foreground: #fafafa;
+    --primary: #e5e5e5;
+    --primary-foreground: #171717;
+    --secondary: #262626;
+    --secondary-foreground: #fafafa;
+    --muted: #1c1c1c;
+    --muted-foreground: #a3a3a3;
+    --accent: #262626;
+    --accent-foreground: #fafafa;
+    --destructive: #ff6467;
+    --border: #ffffff1a;
+    --input: #ffffff26;
+    --ring: #737373;
   }
 }
 
 :root[data-theme='dark'] {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent: oklch(0.32 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.75 0.15 22);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 20%);
-  --ring: oklch(0.6 0 0);
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
+  --primary: #e5e5e5;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #1c1c1c;
+  --muted-foreground: #a3a3a3;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #ff6467;
+  --border: #ffffff1a;
+  --input: #ffffff26;
+  --ring: #737373;
 }
 
 /* ---- Part 2: mapping onto Bault's tokens ----
    `:root:root` ties in specificity with the dark blocks in index.css and wins
    by coming later, so one mapping serves light and dark: each var() below
-   resolves against whichever theme block is active. */
+   resolves against whichever theme block is active. The five status accents
+   (custody, brass, frost, amber, and the destructive tint) keep their own
+   hues, so "verified" never turns white when the theme's primary is neutral. */
 
 :root:root {
   --surface-page: var(--background);
@@ -98,13 +103,9 @@
   --ink-2: var(--muted-foreground);
   --ink-on-accent: var(--primary-foreground);
 
-  --custody: var(--primary);
-  --custody-mark: var(--primary);
-  --custody-wash: color-mix(in oklab, var(--primary) 10%, var(--background));
-  --teal-strong: color-mix(in oklab, var(--primary) 85%, var(--foreground));
   --oxblood: var(--destructive);
   --oxblood-mark: var(--destructive);
-  --oxblood-wash: color-mix(in oklab, var(--destructive) 10%, var(--background));
+  --oxblood-wash: color-mix(in oklab, var(--destructive) 12%, var(--background));
   --error-strong: color-mix(in oklab, var(--destructive) 85%, var(--foreground));
 
   --focus-color: var(--ring);
@@ -119,5 +120,7 @@
   --shadow-overlay: 0 4px 6px -1px oklch(0 0 0 / 10%), 0 12px 32px oklch(0 0 0 / 14%);
   --shadow-card: var(--shadow-xs);
 
-  --font-ui: var(--font-sans, 'IBM Plex Sans'), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
+  --font-ui: var(--font-sans), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-display: var(--font-mono-face), 'IBM Plex Sans Hebrew', ui-monospace, monospace;
 }

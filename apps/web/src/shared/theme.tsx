@@ -16,9 +16,9 @@ const ThemeContext = createContext<ThemeValue | null>(null);
 function storedChoice(): ThemeChoice {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
+    return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'dark';
   } catch {
-    return 'system';
+    return 'dark';
   }
 }
 

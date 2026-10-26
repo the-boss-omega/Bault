@@ -1,0 +1,475 @@
+/* ============================================================
+   Landing page
+
+   The public front door, redesigned as a dark showcase: an aurora-lit hero
+   with a tilting card on a stage, bento promise cards with a pointer
+   spotlight, a numbered timeline, and a closing panel. Reads theme tokens
+   only. Motion is driven by motion.css (.reveal) and useLandingMotion; all of
+   it is switched off by the reduced-motion block there.
+   ============================================================ */
+
+.landing {
+  --glow: color-mix(in oklab, var(--custody) 26%, transparent);
+  background: var(--background);
+  overflow-x: clip;
+}
+
+/* Header: sticky, translucent, blurred. */
+
+.landing-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-sticky);
+  padding-block: var(--sp-3);
+  border-block-end: var(--border-w) solid var(--border);
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+
+.landing-word {
+  letter-spacing: 0.02em;
+  font-weight: var(--fw-medium);
+}
+
+/* Hero */
+
+.landing-stage {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  color: var(--foreground);
+  padding-block: var(--sp-16) var(--sp-24);
+}
+
+@media (min-width: 900px) {
+  .landing-stage {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: var(--sp-16);
+    padding-block: var(--sp-24) 144px;
+    max-width: 1200px;
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  .landing-pitch {
+    order: -1;
+  }
+}
+
+.landing-stage::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(50% - 50vw);
+  z-index: -2;
+  background-image: linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 20%, transparent 75%);
+  opacity: 0.55;
+}
+
+.landing-aurora {
+  position: absolute;
+  inset-block-start: -18%;
+  inset-inline-start: 50%;
+  z-index: -1;
+  width: min(900px, 120vw);
+  aspect-ratio: 1;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow), transparent 72%);
+  filter: blur(40px);
+  animation: aurora-drift 14s var(--ease-in-out) infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes aurora-drift {
+  from {
+    transform: translate3d(-6%, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6%, 6%, 0) scale(1.12);
+  }
+}
+
+.landing-headline {
+  font-size: clamp(40px, 6.2vw, 80px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  max-width: 14ch;
+  color: var(--foreground);
+  background: linear-gradient(180deg, var(--foreground) 30%, color-mix(in oklab, var(--foreground) 45%, transparent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rise 800ms var(--ease-out) both;
+}
+
+.landing-lede {
+  color: var(--muted-foreground);
+  font-size: var(--fs-lg);
+  max-width: 52ch;
+  animation: rise 800ms 120ms var(--ease-out) both;
+}
+
+.landing-cta {
+  animation: rise 800ms 240ms var(--ease-out) both;
+}
+
+.landing-cta .btn {
+  min-height: 44px;
+  padding-inline: var(--sp-6);
+  font-size: var(--fs-md);
+}
+
+.landing-cta .btn--gold:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px var(--primary), 0 8px 32px -4px var(--glow);
+  transform: translateY(-1px);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+/* The card on its stage: tilts toward the pointer, ringed by a slow conic light. */
+
+.landing-stage-photo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  perspective: 1000px;
+  padding: var(--sp-8);
+  border-radius: var(--r-lg);
+  --rx: 0deg;
+  --ry: 0deg;
+  animation: rise 900ms 200ms var(--ease-out) both;
+}
+
+.landing-stage-photo::before {
+  content: '';
+  position: absolute;
+  inset: var(--sp-4);
+  border-radius: calc(var(--r-lg) + 4px);
+  background: conic-gradient(from var(--spin, 0deg), transparent 0 60%, var(--custody) 80%, transparent);
+  opacity: 0.55;
+  filter: blur(18px);
+  animation: spin 9s linear infinite;
+  z-index: -1;
+}
+
+@property --spin {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes spin {
+  to {
+    --spin: 360deg;
+  }
+}
+
+.landing-stage-photo::after {
+  content: '';
+  position: absolute;
+  inset: var(--sp-4);
+  border-radius: var(--r-lg);
+  border: var(--border-w) solid var(--border);
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 30%), color-mix(in oklab, var(--foreground) 9%, transparent), transparent 70%),
+    color-mix(in oklab, var(--card) 80%, transparent);
+  z-index: -1;
+}
+
+.landing-stage-photo .photo-thumb {
+  inline-size: min(300px, 64vw);
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform var(--dur) var(--ease);
+  filter: drop-shadow(0 24px 40px color-mix(in oklab, #000 55%, transparent));
+  animation: float 6s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes float {
+  from {
+    translate: 0 -6px;
+  }
+  to {
+    translate: 0 8px;
+  }
+}
+
+/* The custody facts become a glass strip. */
+
+.landing-custody {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: rise 800ms 180ms var(--ease-out) both;
+}
+
+.landing-custody dt {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--track-label);
+}
+
+.landing-custody dd,
+.landing-custody .serial {
+  color: var(--foreground);
+}
+
+.landing-custody .pill--success {
+  color: var(--custody);
+}
+
+.landing-caption {
+  color: var(--muted-foreground);
+}
+
+.landing-stage .btn--secondary {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  border-color: var(--input);
+  color: var(--foreground);
+}
+
+.landing-stage .btn--secondary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--input);
+}
+
+/* Sections */
+
+.landing-section,
+.landing-close {
+  max-width: 1200px;
+  padding-block: 96px;
+  border-block-end: 0;
+  gap: var(--sp-5);
+}
+
+.landing-h2 {
+  position: relative;
+  padding-block-start: var(--sp-5);
+  font-size: clamp(28px, 3.6vw, 44px);
+  letter-spacing: -0.02em;
+}
+
+.landing-h2::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--custody);
+  box-shadow: 0 0 16px var(--custody);
+}
+
+.landing-sub {
+  color: var(--muted-foreground);
+  font-size: var(--fs-md);
+  max-width: 60ch;
+}
+
+/* Bento claim cards with a pointer spotlight. */
+
+.landing-claims {
+  counter-reset: bento;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--sp-4);
+  padding-block-start: var(--sp-6);
+}
+
+.landing-claims article {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  min-height: 240px;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-lg);
+  background: radial-gradient(360px circle at var(--mx, -200px) var(--my, -200px), color-mix(in oklab, var(--foreground) 7%, transparent), transparent 70%),
+    var(--card);
+  counter-increment: bento;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+.landing-claims article:hover {
+  border-color: var(--input);
+  transform: translateY(-3px);
+}
+
+.landing-claims article::before {
+  content: counter(bento, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--track-label);
+  color: var(--custody);
+}
+
+.landing-claims h3 {
+  font-size: var(--fs-lg);
+  color: var(--foreground);
+}
+
+.landing-claims p {
+  color: var(--muted-foreground);
+}
+
+/* Price table sits in a card. */
+
+.landing-section .dt-wrap {
+  background: var(--card);
+}
+
+.landing-price-table tbody tr {
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.landing-price-table tbody tr:hover {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
+/* Timeline: numbered nodes on a rule that draws itself in. */
+
+.landing-steps {
+  counter-reset: node;
+  gap: var(--sp-4);
+  border-block-start: 0;
+  padding-block-start: var(--sp-8);
+}
+
+.landing-steps .step {
+  position: relative;
+  flex: 1 1 220px;
+  margin: 0;
+  padding: var(--sp-6) 0 0;
+  border: 0;
+  counter-increment: node;
+  color: var(--muted-foreground);
+}
+
+.landing-steps .step:first-child {
+  padding-inline-start: 0;
+}
+
+.landing-steps .step::before {
+  content: counter(node);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: var(--border-w) solid var(--input);
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  z-index: 1;
+}
+
+.landing-steps .step::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 14px;
+  inset-inline: 28px calc(var(--sp-4) * -1);
+  height: 1px;
+  background: linear-gradient(90deg, var(--custody), var(--border));
+  transform-origin: left center;
+}
+
+.landing-steps .step:last-child::after {
+  display: none;
+}
+
+[dir='rtl'] .landing-steps .step::after {
+  transform-origin: right center;
+  background: linear-gradient(270deg, var(--custody), var(--border));
+}
+
+.landing-steps .step.is-visible::after {
+  animation: draw 900ms var(--ease-out) both;
+  animation-delay: calc(var(--reveal-delay, 0ms) + 200ms);
+}
+
+@keyframes draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.landing-steps .step-name {
+  margin-block-start: var(--sp-4);
+  font-size: var(--fs-md);
+  color: var(--foreground);
+}
+
+.landing-steps .step-detail {
+  margin-block-start: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+
+/* Closing panel */
+
+.landing-close {
+  position: relative;
+  isolation: isolate;
+  margin-block: var(--sp-8) var(--sp-16);
+  padding: var(--sp-16) var(--sp-8);
+  width: min(1200px, calc(100% - var(--sp-12)));
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--r-lg) + 8px);
+  justify-items: center;
+  text-align: center;
+  overflow: clip;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), var(--glow), transparent 70%), var(--card);
+}
+
+.landing-close .landing-h2::before {
+  inset-inline-start: calc(50% - 20px);
+}
+
+.landing-close .landing-cta {
+  justify-content: center;
+}
+
+.landing-foot {
+  border-block-start: var(--border-w) solid var(--border);
+  max-width: 1200px;
+}
+
+@media (max-width: 719px) {
+  .landing-section,
+  .landing-close {
+    padding-block: var(--sp-16);
+  }
+
+  .landing-steps .step::after {
+    display: none;
+  }
+
+  .landing-close {
+    padding-inline: var(--sp-5);
+  }
+}
+
+.landing-price-table th[scope='row'] {
+  text-align: start;
+}

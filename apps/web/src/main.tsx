@@ -7,6 +7,7 @@ import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import './index.css';
 import './theme.css';
 import './components.css';
+import './landing.css';
 import './motion.css';
 
 try {

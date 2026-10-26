@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { bpsToPercent, formatUsd } from '../../../shared/money';
@@ -7,6 +7,7 @@ import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
 import { Button } from '../../../shared/ui/primitives';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
+import { useLandingMotion } from '../../../shared/ui/useLandingMotion';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
 import type { AccountTerms } from '../help/FaqLegalPage';
 
@@ -50,6 +51,8 @@ function param(entry: PriceEntry | undefined, key: string): number | null {
 
 export function LandingPage() {
   const { t } = useI18n();
+  const pageRef = useRef<HTMLDivElement>(null);
+  useLandingMotion(pageRef);
   const [prices, setPrices] = useState<Map<string, PriceEntry> | null>(null);
   const [pricesFailed, setPricesFailed] = useState(false);
   const [cashOut, setCashOut] = useState<AccountTerms['cashOut'] | null | undefined>(undefined);
@@ -121,7 +124,7 @@ export function LandingPage() {
   const goSignIn = () => navigate({ section: 'signin' });
 
   return (
-    <div className="landing" data-density="marketing">
+    <div className="landing" data-density="marketing" ref={pageRef}>
       <header className="landing-bar">
         <span className="rail-mark" aria-hidden="true">
           B
@@ -139,6 +142,7 @@ export function LandingPage() {
       </header>
 
       <section className="landing-stage" aria-labelledby="landing-headline">
+        <span className="landing-aurora" aria-hidden="true" />
         <div className="landing-stage-photo">
           <CardPhotoThumb serialNumber={LANDING_SERIAL} title={LANDING_TITLE} />
         </div>
