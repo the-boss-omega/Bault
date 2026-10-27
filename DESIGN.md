@@ -335,7 +335,8 @@ pieces. Each keeps the old markup's contracts and message keys.
   statement's total is) — beside the entry count. A perforated stub carries a barcode and the house
   mark. Money asked for and not yet moved is two dashed slips and one sentence (`InTransit`). On a
   phone the ledger is a list of lines (type, what it was for, amount, the balance after it, the
-  date).
+  date). The figures are isolated left to right inside cells that read the page's way, so in Hebrew
+  they hang from the same edge as their names.
 - **Membership — tier cards.** An outlined ordinal, the tier's name and price in the display face, the
   four allowances that matter most (from the same figures as the schedule), and the action; the foil
   trim marks the tier you are on. The full schedule sits under the cards (on a phone, one small stack
@@ -359,7 +360,6 @@ pieces. Each keeps the old markup's contracts and message keys.
   its count from the shelf report and a mark per item (twelve, then `+n`). Empty shelves are dashed,
   shelves out of service are hatched, oversized shelves are wide, and items on no shelf stand on a
   tray. The table is still on the Inventory tab.
-
 - **Shipping and services — the departures.** Three lines on a board, the figure first in the display
   face and counted up: how many cards are ready to ship, a lookup for the shipments that have gone
   (an icon, because a lookup has no count), and the requests that are open, with those closed under
@@ -376,6 +376,12 @@ control, so the keyboard and a screen reader reach exactly what they did; the ph
 and adds nothing to its name. The focus ring goes round the card. A big collection scrolls inside its
 own room (640 px), so what follows the list stays within reach. Outside a label, in a list of cards
 already chosen, an `ItemPick` is a row.
+
+### Numeric columns
+A column of figures hangs from one edge, header and figures alike. The figures are left to right
+(`td.num`), so their decimals line up at the right-hand edge in either language, and the header
+(`th.td-end`, `th.num`) is set the same way; read in the page's direction, in Hebrew it hangs from the
+other edge and the word sits a column away from the numbers it names.
 
 ### Status
 `.pill` / `.badge` / `.status-badge`: an LED (7 px, the semantic colour, a soft halo) and the state in
