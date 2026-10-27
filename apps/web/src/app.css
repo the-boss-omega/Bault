@@ -110,7 +110,9 @@ body::before {
   border-end-end-radius: var(--r-bar);
   background: var(--foil);
   background-size: 100% 300%;
-  animation: foil-rise 5s linear infinite;
+  /* Once, as the page opens: the foil passes and settles. A bar that never stops moving at the edge of every
+     product page is movement the reader cannot turn off, and the page they are on is not news after a moment. */
+  animation: foil-rise 4s var(--ease-out-expo) 1;
 }
 
 .rail-item.is-active .rail-icon {

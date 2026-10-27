@@ -79,7 +79,8 @@ textarea {
   content: '';
   position: absolute;
   inset-inline-start: 0;
-  inset-block-end: 0;
+  /* The strip has room round its tabs for their focus rings (index.css); the bar sits on the tabs' own edge. */
+  inset-block-end: var(--sp-1);
   width: var(--tab-w, 0);
   height: 2px;
   background: var(--foil);
@@ -196,5 +197,61 @@ textarea {
   from {
     opacity: 0;
     transform: translateY(22px);
+  }
+}
+
+/* ---- Forced colours ----
+   The system draws the page in its own palette: tints and gradients are gone, and a border that was
+   transparent is drawn. Whatever said "this one" by colour alone says nothing until it is drawn in the
+   system's highlight, and a border that was meant to be empty has to be made the canvas. This block is
+   last in the cascade so that it wins over the rules that paint these. */
+@media (forced-colors: active) {
+  /* The current tab and the current page. */
+  .ctx-tab.is-active::after,
+  .ctx-tabs[data-ready='true']::after,
+  .rail-item.is-active::before {
+    background: Highlight;
+  }
+
+  /* A row's edge is empty until a state paints it. */
+  .data-table tbody tr > td:first-child,
+  .table tbody tr > td:first-child {
+    border-inline-start-color: Canvas;
+  }
+
+  .data-table tbody tr.is-frozen > td:first-child,
+  .data-table tbody tr.is-alert > td:first-child,
+  .data-table tbody tr.is-attention > td:first-child {
+    border-inline-start-color: Highlight;
+  }
+
+  .data-table tbody tr.is-departed > td:first-child {
+    border-inline-start-color: GrayText;
+  }
+
+  .data-table tbody tr.is-selected,
+  .label-card.is-selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  /* How far a request or a parcel has got. */
+  .step.is-done,
+  .step.is-current {
+    border-block-start-color: Highlight;
+  }
+
+  .data-table .step.is-done,
+  .data-table .step.is-current {
+    border-inline-start-color: Highlight;
+  }
+
+  .label-track li[data-reached='true']::before {
+    border-color: Highlight;
+    background: Highlight;
+  }
+
+  .label-track li[data-reached='true']:has(+ li[data-reached='true'])::after {
+    background: Highlight;
   }
 }

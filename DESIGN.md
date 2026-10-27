@@ -99,8 +99,9 @@ of three jobs: **confirm** (a press, a focus, a drawer closing), **orient** (a p
 indicator travelling, a card entering a shelf) or **argue** (the front page's journey, in which one
 card changes state while you read). Only two kinds of thing loop, and the lint holds the list:
 *waiting* (a skeleton's shimmer, a button's spinner, the boot mark) and *alive* (the foil on the
-brand mark and on the rule above the landing's headings, the register's caret, the hero card's breathing,
-which stops when it is off screen). `prefers-reduced-motion: reduce` removes all of it, including
+rule above the landing's headings, the register's caret, the hero card's breathing, which stops when it is
+off screen). Inside the product only the waiting ones loop; the rail's mark for the page you are on glints
+once as the page opens and then rests. `prefers-reduced-motion: reduce` removes all of it, including
 smooth scrolling that a script asks for, and nothing is ever hidden *waiting* for an animation that
 will not run.
 

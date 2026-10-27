@@ -105,8 +105,8 @@ const PHYSICAL_KEYWORD =
 
 /**
  * The loops. Anything that animates forever has to be one of these: the ones that
- * say "waiting" (loaders) and the few living things (the foil on the brand mark
- * and the landing headline, the register's caret, the hero slab's breathing).
+ * say "waiting" (loaders) and the few living things (the foil on the landing
+ * headline's rule, the register's caret, the hero slab's breathing).
  * Adding a loop is allowed; doing it without being asked to name it here is not.
  */
 const LOOPS = new Set([
@@ -114,7 +114,6 @@ const LOOPS = new Set([
   'btn-spin',
   'skel-pulse',
   'boot-breathe',
-  'foil-rise',
   'foil-slide',
   'caret',
   'slab-breathe',

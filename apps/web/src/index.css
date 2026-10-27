@@ -763,7 +763,8 @@ time,
   background: var(--surface-page);
 }
 
-.rail-item:focus-visible {
+.rail-item:focus-visible,
+.rail-brand:focus-visible {
   outline: var(--focus-width) solid var(--focus-color);
   outline-offset: calc(-1 * var(--focus-width));
 }
@@ -1340,6 +1341,10 @@ time,
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* A box that scrolls clips what is drawn outside it, and a focus ring is drawn outside its tab:
+     the room for it is padding, taken back from the margin so that nothing moves. */
+  padding: var(--sp-1);
+  margin: calc(-1 * var(--sp-1));
 }
 
 .ctx-tabs::-webkit-scrollbar {
@@ -3267,10 +3272,8 @@ input[type='search'] {
 }
 
 @media (max-width: 767px) {
-  :root {
-    --rail-w: 0px;
-  }
-
+  /* The rail's own measures (its icons are a rail wide, its dot sits over the middle of one) stay what they
+     are: it is a sheet on a phone, but the same rail. The workspace is what stops making room for it. */
   .workspace {
     margin-inline-start: 0;
   }
@@ -3302,16 +3305,21 @@ input[type='search'] {
     font-weight: var(--fw-semibold);
   }
 
+  /* Closed, the sheet is off screen and also out of the way of the keyboard and of a screen reader: hidden
+     once it has slid out (the delay is the slide), and visible again the instant it opens. */
   .rail {
     width: min(280px, 82vw);
     transform: translateX(calc(-100% * var(--dir)));
     box-shadow: var(--shadow-rail);
-    transition: transform var(--dur-lg) var(--ease-out);
+    visibility: hidden;
+    transition: transform var(--dur-lg) var(--ease-out), visibility 0s linear var(--dur-lg);
   }
 
   .rail.is-open {
     width: min(280px, 82vw);
     transform: none;
+    visibility: visible;
+    transition: transform var(--dur-lg) var(--ease-out), visibility 0s;
   }
 
   .rail-brand-text,
