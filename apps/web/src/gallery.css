@@ -151,7 +151,7 @@
 
 .card .proportion > span {
   border-radius: 3px;
-  background: var(--foil);
+  background: var(--foreground);
 }
 
 /* States are on the object: frozen has a frost halo, departed loses its colour. */

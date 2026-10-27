@@ -10,6 +10,8 @@
 //
 // It uses the Chromium that design-screens already drives (canvas -> WebP), so
 // it adds no dependency.
+/* global Image, document */
+import { Buffer } from 'node:buffer';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, extname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';

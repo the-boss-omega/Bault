@@ -111,7 +111,7 @@ export function ProposeTradePanel({
   return (
     <Panel title={t('market.propose.title')} subtitle={t('market.propose.subtitle')}>
       <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-        <div className="row" style={{ alignItems: 'end' }}>
+        <div className="row" style={{ alignItems: 'start' }}>
           <Field
             label={t('market.propose.username')}
             hint={t('market.propose.usernameHint')}
@@ -126,6 +126,7 @@ export function ProposeTradePanel({
           </Field>
           <Button
             variant="secondary"
+            className="btn--field-aligned"
             icon={<IconSearch />}
             disabled={!usernameOk || lookingUp}
             onClick={() => void lookup()}
@@ -172,7 +173,7 @@ export function ProposeTradePanel({
 
         {!gift && counterparty && (
           <>
-            <div className="row" style={{ alignItems: 'end' }}>
+            <div className="row" style={{ alignItems: 'start' }}>
               <Field
                 label={t('market.propose.wantSerial')}
                 hint={t('market.propose.wantHint')}
@@ -180,7 +181,12 @@ export function ProposeTradePanel({
               >
                 <input value={serial} onChange={(e) => setSerial(e.target.value)} dir="ltr" />
               </Field>
-              <Button variant="secondary" disabled={!serial.trim()} onClick={() => void addWanted()}>
+              <Button
+                variant="secondary"
+                className="btn--field-aligned"
+                disabled={!serial.trim()}
+                onClick={() => void addWanted()}
+              >
                 {t('market.propose.addWanted')}
               </Button>
             </div>

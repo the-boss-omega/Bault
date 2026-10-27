@@ -461,3 +461,22 @@ body::before {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
 }
+
+/* ---- Right-to-left: a chevron points the way you are reading ---- */
+
+.breadcrumb-sep:dir(rtl) {
+  display: inline-block;
+  transform: scaleX(-1);
+}
+
+/* ---- Money is set in the display face; it needs no accent colour ---- */
+
+.amount--brass {
+  color: var(--foreground);
+}
+
+/* ---- A button that sits beside a labelled field lines up with the field, not its hint ---- */
+
+.btn--field-aligned {
+  margin-block-start: calc(var(--fs-base) * var(--lh-snug) + var(--gap-field) + 1px);
+}

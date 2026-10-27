@@ -12,7 +12,7 @@ import { useLandingMotion } from '../../../shared/ui/useLandingMotion';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
 import type { AccountTerms } from '../help/FaqLegalPage';
-import { LedgerArt, PlateArt, RuleArt, TicketArt } from './LandingArt';
+import { LedgerArt, PlateArt, RuleArt } from './LandingArt';
 
 /**
  * The cards on the shelf. They are real items from the demo vault, so the
@@ -41,6 +41,15 @@ const FAN: { serial: string; title: string; slot: 'c' | 'l1' | 'r1' | 'l2' | 'r2
     title: '2009 Pokémon Supreme Victors — Rayquaza C LV.X #146/147 · Rare Holo LV.X',
     slot: 'r2',
   },
+];
+
+/** The closing shelf leads with a different card, so the page is not one card said five times. */
+const CLOSE_FAN: typeof FAN = [
+  { ...FAN[2]!, slot: 'c' },
+  { ...FAN[4]!, slot: 'l1' },
+  { ...FAN[0]!, slot: 'r1' },
+  { ...FAN[3]!, slot: 'l2' },
+  { ...FAN[1]!, slot: 'r2' },
 ];
 
 const FEATURED: { actionType: string; labelKey: MessageKey }[] = [
@@ -392,7 +401,7 @@ export function LandingPage() {
         </header>
 
         <div className="lp-tickets">
-          {(['carrier', 'glove', 'pickup'] as const).map((key) => (
+          {(['carrier', 'glove', 'pickup'] as const).map((key, i) => (
             <article
               className="lp-ticket"
               key={key}
@@ -403,9 +412,12 @@ export function LandingPage() {
               <div className="tilt-case lp-ticket-face">
                 <div className="lp-ticket-main">
                   <h3>{t(`landing.out.${key}.title` as MessageKey)}</h3>
-                  <TicketArt kind={key} />
+                  <p>{t(`landing.out.${key}.body` as MessageKey)}</p>
                 </div>
-                <p className="lp-ticket-stub">{t(`landing.out.${key}.body` as MessageKey)}</p>
+                <div className="lp-ticket-stub" aria-hidden="true">
+                  <span className="lp-stub-no">{`0${i + 1} / 03`}</span>
+                  <span className="lp-stub-bars" />
+                </div>
                 <span className="lp-ticket-glare" aria-hidden="true" />
               </div>
             </article>
@@ -430,7 +442,7 @@ export function LandingPage() {
         </div>
 
         <div className="lp-fan lp-fan--close" aria-hidden="true">
-          {FAN.map((card, i) => (
+          {CLOSE_FAN.map((card, i) => (
             <div
               className={`lp-card lp-card--${card.slot}`}
               key={card.serial}
