@@ -60,7 +60,7 @@
   clip-path: inset(0 -40px -40px -40px);
   opacity: 0;
   transform: scaleX(0.7);
-  transition: opacity 420ms var(--ease-out-expo), transform 420ms var(--ease-out-expo);
+  transition: opacity var(--dur-surface) var(--ease-out-expo), transform var(--dur-surface) var(--ease-out-expo);
 }
 
 .btn--gold:hover:not(:disabled)::after,
@@ -427,7 +427,7 @@ input[type='radio'] {
   inline-size: 2px;
   background: var(--foil);
   transform: scaleY(0);
-  transition: transform 260ms var(--ease-out-expo);
+  transition: transform var(--dur-slow) var(--ease-out-expo);
 }
 
 .data-table tbody tr.is-clickable:hover td:first-child::before {

@@ -77,7 +77,7 @@ equals net.
 The UI is monochrome. Accents are semantic, and there are five of them. The one place the UI itself
 is allowed to be colourful is the foil, and only as a hairline or a band.
 
-### One radius family, one border weight, shadows only for objects
+### One radius family, a hairline, shadows only for objects
 The kit's radius (`--radius`, 10 px) and the sizes derived from it: `--r-xs` 6 · `--r-sm` 8 ·
 `--r-md` 10 · `--r-lg` 14 · `--r-xl` 18 · `--r-2xl` 24 (the landing's one large stage), plus `--r-bar`
 (3 px, the end of a bar a few pixels thick) and `--r-capsule` (the product's one pill, used on
@@ -86,8 +86,11 @@ are container-relative (`cqw`) so they scale with it. Panels have none: **a pane
 rule, not a floating rectangle**. A corner is one of these, nothing, or a circle; the lint rejects
 anything else in `index.css` and in the layers, including arithmetic on a token (`calc(var(--r-xl) +
 6px)` is a size the family does not have: if one is needed it is named in `theme.css`). A 1 px
-hairline is the only border weight; shadows are for objects that are physically in the room: a slab,
-a paper piece, a popover, a drawer, a dialog.
+hairline is the border of every rule and box. Heavier edges exist, each for one job and none for a
+box: 1.5 px for the ring of a small marker (a register's node, the selection circle on a card in a
+picker); a 2 px or 3 px bar down the start edge of a register entry, an alert or a state, in the
+state's colour; 2 px for a spinner's ring and for the landing's paper rules. Shadows are for objects
+that are physically in the room: a slab, a paper piece, a popover, a drawer, a dialog.
 
 ### Density follows the job
 Marketing generous, vault comfortable, warehouse compact — the same component adapting, not three
@@ -108,8 +111,10 @@ will not run.
 ### Two scripts, one rhythm
 The same type scale in both languages. Layout mirrors through logical properties. The few things
 logical properties cannot turn around (a gradient's angle, a transform origin, a background position,
-a chevron, the side a drawer slides from) multiply by one token, `--dir`, declared once in
-`theme.css`; **no other rule may ask which way the page reads**. The display face carries both
+a chevron, the side a drawer slides from) multiply by one token, `--dir`; the one thing a number
+cannot say, the edge a block that takes the direction of its own text hangs from, is its twin,
+`--text-start` (`left` or `right`). Both are declared once in `theme.css`; **no other rule may ask
+which way the page reads**. The display face carries both
 scripts. **Any screen that looks worse in one language is not done.**
 
 ---
@@ -139,11 +144,14 @@ unambiguous `1/l/I`). Money, dates and counts are set in the UI face, or in the 
 are the point of the screen.
 
 ### Scale
-The product's UI scale is `12 · 13 · 14 · 16 · 18 · 22 · 28 · 36 · 48 · 64` (`--fs-*`), and
-`index.css` is linted against it. The public page, the page titles and lead figures use fluid display
-sizes (`clamp`) between 34 and 128 px, because a headline is not a control; the small caps labels are
-11–13 px and a few body-adjacent sizes (13.5, 14.5, 15, 15.5 px) sit between steps in the layers. The
-layers are not linted for size.
+The product's UI scale is `12 · 13 · 14 · 16 · 18 · 22 · 28 · 36 · 48 · 64` (`--fs-*`). In
+`index.css` a size is a step of it, or relative to the text it sits in (`em`), and the lint says so
+when it is not. The layers are not held to it, because they draw single objects: the public page, the
+page titles and lead figures use fluid display sizes (`clamp`) between 34 and 128 px (a headline is
+not a control); the small caps labels are 10–13 px (10, 11, 11.5, 12.5); a few body-adjacent sizes
+(13.5, 14.5, 15, 15.5 px) sit between steps; and a wordmark, an amount or a numeral the display
+face draws as part of an object (the marks and wordmarks, a listing's price, a membership offer's
+numeral, the charge stamp, the statement's operators) is 20, 24, 26, 30, 34, 38 or 112 px.
 
 Line height: `--lh-tight` 1.15 (display), `--lh-snug` 1.35, `--lh-normal` 1.5. Display headings set at
 1.0–1.1; Hebrew display gets an extra 0.05. **Tracking is Latin-only**: Hebrew display tracking is 0
@@ -167,10 +175,15 @@ locale-formatted through `Intl.DateTimeFormat`.
 ## 4. Colour
 
 The theme is the shadcn/ui kit's (`theme.css`, part 1: `--background`, `--card`, `--primary`,
-`--muted`, `--border`, `--input`, `--ring`, `--destructive`, light and dark, pasted from the kit's
-own export). Part 2 maps those names onto Bault's tokens, so re-theming is a paste. **Dark is the
-default**; light and system stay on the toggle. The two dark blocks (system-dark and explicit dark) are
-one theme written twice; the lint fails if they drift apart.
+`--muted`, `--border`, `--input`, `--ring`, `--destructive`, light and dark: the Nova style on its
+neutral palette, as the owner's Figma copy defines it). Two values are **not** the kit's. Both are in
+the light theme, and both are darkened because the kit's measure under 4.5:1 as text on the surfaces
+they are drawn on: `--muted-foreground` is `#5f5f68` (the kit's `#737373` is 4.35:1 on the dimmest
+surface), and `--destructive` is `#c70010` (the kit's `#e7000b` is 4.38:1 there, and 4.07:1 on its own
+wash). The dark theme is the kit's, unchanged. Part 2 maps those names onto Bault's tokens, so nothing
+else has to know a theme exists. **Dark is the default**; light and system stay on the toggle. The two
+dark blocks (system-dark and explicit dark) are one theme written twice; the lint fails if they drift
+apart.
 
 ### Ground and ink (dark)
 | Token | Value | Job |
@@ -186,8 +199,8 @@ one theme written twice; the lint fails if they drift apart.
 | `--focus-color` | 72 % foreground over the page | The focus ring |
 | `--control-border` | 46 % foreground over the page | The edge of a field and of a search box |
 
-Fields are the foreground at 3.5 % over the page, with the control border. Light is the kit's light:
-white page, `#171717` primary, `#5f5f68` secondary ink.
+Fields are the foreground at 3.5 % over the page, with the control border. Light is the kit's light
+(white page, `#171717` primary) with the two darker inks above: `#5f5f68` secondary, `#c70010` error.
 
 ### Measured
 `design-lint` computes these from `theme.css` on every run and fails below the threshold.
@@ -235,15 +248,18 @@ with the page, so the room is dark in both themes and its ring is `--room-ink`.
 | `--r-xs` / `--r-sm` / `--r-md` / `--r-lg` / `--r-xl` / `--r-2xl` | radius − 4 / − 2 / 0 / + 4 / + 8 / + 14 | Paper slips and clauses / shelf slots / controls / cards and tables / tickets, dialogs and large stages / the landing's stage |
 | `--r-bar` | `3px` | A rule or a bar a few pixels thick |
 | `--r-capsule` | `999px` | The three deliberate pills |
-| `--border-w` | `1px` | The only border weight |
+| `--border-w` | `1px` | The hairline, the border of every rule and box (heavier edges: section 2) |
 | `--shadow-overlay` | popover/drawer/dialog | Overlays |
 | the slab shadow | inside `.slab-case` | The one resting shadow: an object on a table |
 
-**Focus.** A two-pixel `outline` in `--focus-color` at a two-pixel offset (`:focus-visible`, never
-`:focus`), which measures about 9:1 in both themes, and a field's border takes the same colour. The
-kit's own ring (a soft halo, about 1.5:1) is a decoration, not an indicator, and is not used. An
-outline follows the element's radius and does not replace its shadow, so hover cannot remove it.
-A search box rings the box around its input (`:focus-within`). Surfaces that keep their palette in
+**Focus.** A two-pixel `outline` in `--focus-color` at a two-pixel offset (`:focus-visible`), which
+measures about 9:1 in both themes, and a field's border takes the same colour. The kit's own ring (a
+soft halo, about 1.5:1) is a decoration, not an indicator, and is not used. An outline follows the
+element's radius and does not replace its shadow, so hover cannot remove it. A search box and a select
+ring the box around the field (`:focus-within`) and the field's own outline is turned off, so there is
+one ring and not two; the skip link is the one thing that answers a bare `:focus`, because that is
+what brings it into view. A ring is never drawn where a box that scrolls would cut it off: the room is
+padding, with a negative margin to give it back (`audit` measures it, section 14). Surfaces that keep their palette in
 both themes set their own ring: `--paper-ink` on paper, `--room-ink` on the room. A heading that a
 jump link focuses (`tabindex="-1"`) shows none: it is not a control.
 
@@ -254,7 +270,10 @@ jump link focuses (`tabindex="-1"`) shows none: it is not a control.
 4 px base: `--sp-1` 4 … `--sp-24` 96. This is Tailwind's spacing scale, which the kit uses, and it is
 held in `index.css` (after its token block) and in every layer: every padding, margin, gap and inset
 is a multiple of four or one of the scale's half steps (2, 6, 10, 14 px), with the 1 px hairline for
-a nudge, and `design-lint` says so when one is not. Sizes (a glyph, a ring, a rail's width) are not
+a nudge, and `design-lint` says so when one is not. A `rem` is read as sixteen pixels to the unit and
+held to the same grid; a space in `em` is space in the glyph's own size, which is on no grid, and the
+lint refuses it unless the line says why (`design-lint-allow`: the wallet statement's operators are
+placed from their own glyph, and that is the one). Sizes (a glyph, a ring, a rail's width) are not
 space, so they are not held to it; when a size has to be taken out of a space, it is a custom
 property that both read, not a number written twice.
 
@@ -279,8 +298,9 @@ Tokens: `--dur-fast` 150 · `--dur` 200 · `--dur-slow` 250 · `--dur-enter` 300
 (a reveal) · `--dur-hero` 1400 ms; `--ease-out-expo` `cubic-bezier(0.16, 1, 0.3, 1)` for arrivals,
 `--ease-in-out-quart` for departures and breathing, `--ease-in-out` for the in-between. A length that
 belongs to one piece of choreography (an arrival, a stagger, the landing's headline words) is written
-beside the thing it times and not given a name it would share with nothing; a transition on a state
-(hover, selected) reads the tokens.
+beside the thing it times and not given a name it would share with nothing (the slab's pointer tilt
+settles over 560 ms and follows the pointer over 90 ms; the landing's hero card, tickets and fan settle
+over 450–1000 ms); a transition on a state (hover, selected) reads the tokens.
 
 | Where | What | Job |
 | --- | --- | --- |
@@ -362,10 +382,13 @@ pieces. Each keeps the old markup's contracts and message keys.
 - **Inbound — parcel labels.** Contents and code, the facility, and under them the four-stop journey
   (expected, received, opened, processed) with the date of each stop reached; past a perforation, the
   tracking number as a barcode.
-- **Warehouse — the shelf map** (`ShelfMap`). Racks by zone; each slot is a shelf with its barcode,
-  its count from the shelf report and a mark per item (twelve, then `+n`). Empty shelves are dashed,
-  shelves out of service are hatched, oversized shelves are wide, and items on no shelf stand on a
-  tray. The table is still on the Inventory tab.
+- **Warehouse — the shelf map** (`ShelfMap`). A zone's heading is an aisle sign, a strip of paper
+  with its letter and what stands in it; its rack is a grid that fills the panel. Each slot is a
+  shelf with its barcode, its count from the shelf report and a mark per item (twelve, then `+n`).
+  Empty shelves are dashed, shelves out of service are hatched, an oversized shelf takes two places,
+  and items on no shelf stand on a tray. The product declares no capacity for a shelf and the API has
+  no list of a shelf's items, so there is no fill bar and no hover that names a serial. The table is
+  still on the Inventory tab.
 - **Shipping and services — the departures.** Three lines on a board, the figure first in the display
   face and counted up: how many cards are ready to ship, a lookup for the shipments that have gone
   (an icon, because a lookup has no count), and the requests that are open, with those closed under
@@ -374,9 +397,24 @@ pieces. Each keeps the old markup's contracts and message keys.
   along the same line a label's journey is drawn on; a place with parcels in it is lit, and the line
   runs on past the last. Each place says how many, in the display face, and what it means; under them
   is how long the oldest has waited and since when. A figure that has not arrived is a dash.
-- **Notifications — a register.** The same register as the item's history: a rule down the leading
-  edge, when (a date reads the way the page does) and what kind, then what it says (a sentence the
-  API wrote in English is its own island, so its full stop stays at its end).
+- **Notifications — a register in days.** The same register as the item's history, under a heading
+  per day on a dashed rule ("today · Tuesday, October 27", from the browser's own tables, so in the
+  page's language and with no message of ours). An entry is stamped with its time; one about a card
+  shows the card in its case with its serial in mono, the rest carry the kind of thing they are in a
+  tile the width of the case; what it says is a sentence the API wrote in English, its own island, so
+  its full stop stays at its end. The bell's menu is the same register in small: a heading per day,
+  the mark, the kind, two lines of what it says and the time. A day's list is named by its heading and
+  is not a landmark.
+- **Drawers about a sum — the tag** (`DrawerTag`). An escrow deal, a wallet request and a ledger entry
+  open on a tag of paper, as the statement is paper: the amount named, in the display face and read
+  left to right, and under it, on a dashed rule, where it stands (the state's light and word, in ink)
+  and what goes with it (the fee, the currency). The history under it is a register, in the product's
+  own words for each step; a step the product does not know is shown as recorded.
+- **Accounting — the month as a statement.** The summary is one sheet of that paper: the revenue as a
+  figure with the lines it is made of under it (a name, a leader of dots, an amount), what customers
+  put in and what is held for them stacked beside it, each with the sentence that says what the figure
+  leaves out, and the shipping and platform-account sentence as the sheet's foot. How many sit side by
+  side is the sheet's own width, not the window's. The ledger by type is the table under it.
 
 ### Choosing cards (`ItemPick`; `components.css`)
 Wherever the list is of cards to choose among (the items to ship, to offer in a trade, to hand over
@@ -407,12 +445,21 @@ A rule down the leading edge, a node per entry, the newest node lit.
 ### Paper pieces
 The **shelf plate** (serial · state · where, on paper, under the fan of cards), the **label** (the
 serial drawn as a barcode label), the **colophon** (the front page's footer), the **record
-section**, the **statement slip**, the **clauses**. All use `--paper`, `--paper-ink` and a foil strip.
+section**, the **statement slip**, the **clauses**, the **drawer tag** and the **month's statement**.
+All use `--paper`, `--paper-ink` and a foil strip.
 
 ### Overlays (`useOverlay`, `useExit`)
 Drawers, confirmation dialogs and the photo lightbox share one behaviour: while it is the topmost it
 is all the keyboard reaches (Tab stays inside, Escape closes it and nothing under it), the page
 behind does not scroll, focus goes back to what opened it, and it plays its exit before it closes.
+They are drawn into `<body>`, so a transform or a clip on an ancestor can neither trap a fixed overlay
+nor cut it off, and an open one covers the window (`tests/ux/layout-in-a-browser.test.tsx` measures
+it). The photograph opens in the room: the dark a card is photographed against, the card large in its
+case with a plate that names it. On a phone the rail is one too: it takes focus when it opens, on the
+page you are on, Escape closes it, and while it is closed it is out of the keyboard's way.
+
+A strip of tabs that scrolls brings the selected tab into view and moves focus with the arrow keys; it
+keeps room for the ring of the tab at either end.
 
 ### Empty and loading
 An empty state is a dashed empty case with a serif title. Loading is an empty slab with a shimmer.
@@ -430,9 +477,15 @@ stands on in the drawer; `.offer` is a membership tier's card.
   `inline-end`, `margin-inline`, `padding-block`, `border-inline-start`. Things logical properties
   cannot express read `--dir` (1 or −1): gradient angles (`calc(90deg * var(--dir))`), transform
   origins, background positions, the chevron flip, the drawer's and the rail's offscreen offset.
-  `[dir='rtl']` and `:dir(rtl)` appear only in `theme.css`, where `--dir` is set.
-- `scripts/design-lint.mjs` (section 14) fails on physical properties and on `left`/`right` keywords
-  in origins, positions and gradients, standing in for the slop detector the brief assumed.
+  `--text-start` (`left` or `right`) is its twin for one case: a block that takes the direction of its
+  own text (`unicode-bidi: plaintext`, a name in whatever language it was typed in) keeps that text's
+  characters in order, and `text-align: start` would then hang it from *that text's* edge, which on a
+  Hebrew page puts an English name at the wrong side of the column; `text-align: var(--text-start)`
+  hangs it from the page's. `[dir='rtl']` and `:dir(rtl)` appear only in `theme.css`, where both are set.
+- `scripts/design-lint.mjs` (section 14) fails on physical properties, on four-value shorthands that
+  name a right and a left, on corners that are not mirrored, on `float` and `clear`, and on `left` /
+  `right` keywords, angles and horizontal moves that point the same way in both languages, standing in
+  for the slop detector the brief assumed.
 - **LTR islands inside RTL** are mandatory for: serials, bin/parcel/ticket codes, tracking numbers,
   amounts, catalogue descriptions, and any free-text string coming back from the API in English. All
   of them go through `.serial`, `.code-inline`, `.amount`, `.ltr-run` or a `<bdi dir="ltr">` inside a
@@ -514,8 +567,10 @@ like.
 
 ## 13. Not in this edition
 
-- The management consoles (users, pricing, accounting, disputes, shelf yield) are restyled to the
-  kit and the statement language, not redesigned.
+- Most of the management consoles (users, pricing, disputes, sign-ins, the outbox) are restyled to the
+  kit and the statement language, not redesigned. Two are: the accounting summary (a statement on
+  paper) and the shelf map (aisle signs over racks).
+- The transactional emails come from `packages/`, outside this change, and keep the first edition's look.
 - Two strings in `shared/i18n.tsx`, which the design did not touch, still describe the bundled
   fonts as "IBM Plex and Frank Ruhl Libre" (`legal.provenance.ofl`, Hebrew and English). The licence
   page's own text (`legalContent.ts`) and `assets/fonts/OFL.txt` list all four families.
@@ -530,14 +585,15 @@ like.
 | --- | --- | --- |
 | Contrast of every pair the interface draws text or a boundary in, in both themes (table in section 4) | `design-lint` reads `theme.css` | `pnpm test:web` (CI) and by hand |
 | The two dark blocks stay one theme | `design-lint` | same |
-| Physical properties; `left`/`right` keywords in origins, positions, gradients; any `[dir]` / `:dir()` outside `theme.css` | `design-lint` | same |
+| Physical properties (including `float`, `clear`, four-value shorthands that name a side, corners that are not mirrored); `left`/`right` keywords, angles and horizontal moves that point one way in both languages; any `[dir]` / `:dir()` outside `theme.css`; a block that takes its own text's direction and is aligned to `start` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
-| Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid (section 6) | `design-lint` | same |
-| In a component: no physical utility class or inline style, and no date forced left to right (section 9) | `design-lint` | same |
+| Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid, with no `em` that is not declared (section 6); a font size in `index.css` is a step of the scale or relative (section 3) | `design-lint` | same |
+| In a component: no physical utility class or inline style, no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring | `design-lint` | same |
-| Every infinite animation is on the list in section 2 | `design-lint` | same |
+| Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it, anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first; the transactional emails are inspected as documents. `--forced` also captures with forced colours on and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip, the month's statement is where it should be at three widths; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
@@ -548,15 +604,15 @@ like.
 | File | Holds |
 | --- | --- |
 | `index.css` | The first-edition stylesheet: tokens, shell, every component's structure |
-| `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--dir`, and Bault's own: foil, paper, the room, easing |
+| `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--dir` and `--text-start`, and Bault's own: foil, paper, the room, easing |
 | `fonts.css` | Generated by `scripts/fetch-fonts.mjs`: one `@font-face` per variable subset |
 | `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
 | `components.css` | Buttons, focus, fields, selects, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
 | `landing.css` | The public page |
 | `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
 | `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |
-| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures |
-| `motion.css` | Transitions and keyframes shared by all of the above, and the reduced-motion switch |
+| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag, the month's statement |
+| `motion.css` | Transitions and keyframes shared by all of the above, the reduced-motion switch, and what forced colours draw in place of the foil |
 
 Loaded in that order after `index.css` (`main.tsx`). Components and hooks: `shared/CardPhoto.tsx`
 (slab), `shared/ui/slabTilt.ts` (pointer tilt), `shared/ui/useLandingMotion.ts` (`useMotionReady`;
@@ -565,12 +621,18 @@ scroll reveal, journey, parallax, progress), `shared/ui/useOverlay.ts` and `useE
 `shared/ui/CountUp.tsx`, `shared/ui/useScrollableRegions.ts` (a table wider than its room scrolls
 sideways, and while it does it is in the tab order, with a name, so a keyboard can reach its far
 columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
-`areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`.
+`areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`, `shared/ui/DrawerTag.tsx`,
+`shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
+script that walks the app (`scripts/design-screens.mjs`), so that the tests can show them a planted mistake.
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px
 WebP first and falls back to the original; 7.8 MB of photographs became 1.2 MB). Re-run it when a
 photograph is added. `scripts/lib/color.mjs` is the colour maths the lint uses.
 
-**To re-theme:** paste the kit's CSS export over part 1 of `theme.css`. Colours, radius and the UI
-font follow, and the lint re-measures every pair; foil, paper, the room and the slab are Bault's own
-and do not.
+**To re-theme:** take the kit's CSS export and put its `:root` block over part 1's `:root`, and its
+`.dark` block over **both** dark blocks (the export's selector is `.dark`; Bault's are the system's
+`prefers-color-scheme` block and `[data-theme='dark']`, which are one theme written twice). It is a
+paste of values, not of selectors. Colours, radius and the UI font follow, and the lint re-measures
+every pair in both themes and names the ones that fail: expect it to want the light `--muted-foreground`
+and `--destructive` darkened again (section 4). Foil, paper, the room and the slab are Bault's own and
+do not follow.
