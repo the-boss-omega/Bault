@@ -5,8 +5,8 @@ import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
+import { audit, auditFocus, auditForced, auditTheme, inspect } from './lib/audit-checks.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -36,19 +36,33 @@ Options:
                      theme the pages render, not only the browser's preference
   --axe              also run axe-core's WCAG 2.x A and AA rules (contrast, names,
                      labels, ARIA) on every screen, and walk the keyboard focus order
-                     of each desktop English screen to measure every focus ring against
-                     what is behind it (axe does not check focus indicators); what it
-                     finds is listed as flags
+                     of every screen, in both languages and at both widths, to measure
+                     every focus ring against what is behind it and to see whether
+                     the box it sits in cuts it off (axe does not check focus
+                     indicators); what it finds is listed as flags
+  --focus-stops <n>  how many stops the focus walk takes on each screen (default 40)
+  --motion           run with motion as a visitor who has not asked for less sees it.
+                     Without it every page is captured with reduced motion, so that
+                     nothing is mid-fade; the overlays are opened with motion either way
+  --forced           capture with forced colours on too, and check that the current
+                     page, the selected tab and the selected row are still drawn
+  --no-overlays      skip opening the header's menus, a drawer, the photograph and a
+                     confirmation, and measuring that each one is on screen, covers
+                     what it should and can be reached
   --only <text>      capture only screens whose name contains this text
   --browser <path>   Chromium or Chrome to drive (default /opt/pw-browsers/chromium
                      when it exists, otherwise the installed Google Chrome)
   --password <pw>    the seeded accounts' password (default 11111111)
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
-cents, an enum name or English words on a Hebrew page, a date, a price or a
-sentence drawn the wrong way round on a Hebrew page, sideways scrolling or
-content cut off at the edge at phone width, a console error, a failed API call or,
-with --axe, an accessibility violation) are listed first.`;
+cents, an enum name or English words on a Hebrew page, an English phrase, a date,
+a price or a figure drawn out of order on a Hebrew page, English text in a Hebrew
+cell that nothing isolates, a page that is not in the theme it was asked for, sideways
+scrolling or content cut off at the edge at phone width, a menu, a drawer or the
+photograph that is off screen, does not cover what it should or cannot be clicked,
+a console error, a failed API call or, with --axe, an accessibility violation or a
+focus ring that is absent, faint or cut off) are listed first. The emails are looked
+at the same way, as the two-language messages they are.`;
 
 const PERSONAS = {
   anonymous: { login: null },
@@ -95,6 +109,10 @@ function parseArgs(argv) {
     widths: [390, 1440],
     theme: 'dark',
     axe: false,
+    focusStops: 40,
+    motion: false,
+    forced: false,
+    overlays: true,
     only: null,
     browser: null,
     password: '11111111',
@@ -118,6 +136,10 @@ function parseArgs(argv) {
     else if (flag === '--widths') out.widths = list().map(Number);
     else if (flag === '--theme') out.theme = value();
     else if (flag === '--axe') out.axe = true;
+    else if (flag === '--focus-stops') out.focusStops = Number(value());
+    else if (flag === '--motion') out.motion = true;
+    else if (flag === '--forced') out.forced = true;
+    else if (flag === '--no-overlays') out.overlays = false;
     else if (flag === '--only') out.only = value();
     else if (flag === '--browser') out.browser = value();
     else if (flag === '--password') out.password = value();
@@ -292,6 +314,10 @@ async function open(page, url) {
   await page.goto(url);
 }
 
+// How long a page is given to finish arriving before it is looked at: with motion on, its entrances are
+// part of it.
+let settleMs = 250;
+
 async function settle(page) {
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page
@@ -301,238 +327,133 @@ async function settle(page) {
   await page
     .waitForFunction(() => [...globalThis.document.images].every((img) => img.complete), null, { timeout: 10000 })
     .catch(() => {});
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(settleMs);
 }
 
-async function inspect(page, locale, width) {
-  return page.evaluate(
-    ({ locale, width }) => {
-      const { document, window, NodeFilter } = globalThis;
-      const ISOLATES = '.serial, .amount, .ltr-run, .code-inline, .bidi, [dir="ltr"], code, kbd, input, textarea, select, script, style';
-      const flags = [];
-      const text = document.body.innerText;
-      const uuid = text.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i);
-      if (uuid) flags.push(`id on screen: ${uuid[0]}`);
-      const cents = text.match(/\b\d[\d,]*\s*cents\b/i);
-      if (cents) flags.push(`minor units on screen: ${cents[0]}`);
-      const enums = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])].filter((w) => !w.includes('@'));
-      if (enums.length) flags.push(`enum names on screen: ${enums.slice(0, 6).join(', ')}`);
-      if (document.documentElement.scrollWidth > window.innerWidth + 1 && width < 800) {
-        flags.push(`scrolls sideways: ${document.documentElement.scrollWidth}px wide at ${window.innerWidth}px`);
-      }
-      if (width < 800) {
-        // Anything that reaches past the edge of a phone and is not inside something that scrolls sideways
-        // is cut off by whatever clips the page, and cannot be read or reached.
-        const past = [];
-        for (const el of document.body.querySelectorAll('*')) {
-          if (el.closest('.rail, .rail-scrim, .modal-backdrop, .toast, [aria-hidden="true"]')) continue;
-          const box = el.getBoundingClientRect();
-          if (box.width === 0 || box.height === 0) continue;
-          if (box.right <= window.innerWidth + 1 && box.left >= -1) continue;
-          const style = window.getComputedStyle(el);
-          if (style.display === 'none' || style.visibility === 'hidden') continue;
-          let scrolls = false;
-          for (let up = el.parentElement; up && up !== document.body && up !== document.documentElement; up = up.parentElement) {
-            const overflow = window.getComputedStyle(up).overflowX;
-            if (overflow === 'auto' || overflow === 'scroll') {
-              scrolls = true;
-              break;
-            }
-          }
-          if (!scrolls) past.push(el);
-        }
-        const outermost = past.filter((el) => !past.includes(el.parentElement));
-        if (outermost.length) {
-          const named = outermost
-            .slice(0, 3)
-            .map((el) => `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''} "${(el.textContent ?? '').trim().slice(0, 24)}"`);
-          flags.push(`content past the edge of the screen: ${named.join(', ')}`);
-        }
-      }
-      if (locale === 'he') {
-        // Text that is drawn the wrong way round. The bidirectional algorithm is not asked what it did;
-        // where the characters ended up is measured, and compared with where a Hebrew reader expects them.
-        const spot = (node, start, end) => {
-          const range = document.createRange();
-          range.setStart(node, start);
-          range.setEnd(node, end);
-          const box = range.getBoundingClientRect();
-          return box.width > 0 ? box : null;
-        };
-        const backwards = [];
-        const reading = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        for (let node = reading.nextNode(); node; node = reading.nextNode()) {
-          const owner = node.parentElement;
-          if (!owner || !owner.checkVisibility?.() || owner.closest('script, style, input, textarea, select')) continue;
-          const value = node.textContent ?? '';
-          // Hebrew is read from the right, so what comes first is the right-most. A phrase whose first word is
-          // to the left of its last one (a date drawn year-first, a price before 'a month' in the wrong order)
-          // was drawn left to right by something that forced it.
-          const letters = (value.match(/\p{L}/gu) ?? []).length;
-          const hebrew = (value.match(/\p{Script=Hebrew}/gu) ?? []).length;
-          if (letters >= 3 && hebrew / letters >= 0.4) {
-            const words = [...value.matchAll(/\S+/g)].filter((m) => /[\p{L}\d]/u.test(m[0]));
-            if (words.length >= 2) {
-              const head = words[0];
-              const tail = words[words.length - 1];
-              const first = spot(node, head.index, head.index + head[0].length);
-              const last = spot(node, tail.index, tail.index + tail[0].length);
-              if (first && last && Math.abs(first.top - last.top) < 4 && first.left + 1 < last.left) {
-                backwards.push(`Hebrew drawn left to right "${value.trim().slice(0, 30)}"`);
-              }
-            }
-          }
-          // A price: the sign is drawn before the figure (to its left), as it is written.
-          const price = /\$(?=\d)/.exec(value);
-          if (price) {
-            const sign = spot(node, price.index, price.index + 1);
-            const figure = spot(node, price.index + 1, price.index + 2);
-            if (sign && figure && Math.abs(sign.top - figure.top) < 4 && sign.left > figure.left) backwards.push(`price drawn figure-first "${value.slice(price.index, price.index + 9)}"`);
-          }
-          // An English sentence: its full stop ends it, so it is to the right of where it began.
-          const trimmed = value.trim();
-          if (/^[A-Za-z][^\p{Script=Hebrew}]{12,}[.!?]$/u.test(trimmed) && !owner.closest(ISOLATES)) {
-            const at = value.indexOf(trimmed);
-            const first = spot(node, at, at + 1);
-            const last = spot(node, at + trimmed.length - 1, at + trimmed.length);
-            if (first && last && Math.abs(first.top - last.top) < 4 && last.left < first.left) backwards.push(`full stop drawn at the start "${trimmed.slice(0, 28)}"`);
-          }
-        }
-        if (backwards.length) flags.push(`text drawn the wrong way round: ${[...new Set(backwards)].slice(0, 4).join('; ')}`);
-      }
-      const foreign = [];
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const el = node.parentElement;
-        if (!el || el.closest(ISOLATES) || !el.checkVisibility?.()) continue;
-        const value = node.textContent ?? '';
-        if (locale === 'he') {
-          for (const word of value.match(/(?<![\p{L}\d])[a-z][a-z'’]{2,}(?![\p{L}\d])/gu) ?? []) foreign.push(word);
-        } else if (/[֐-׿]/.test(value)) {
-          foreign.push(value.trim().slice(0, 40));
-        }
-      }
-      if (foreign.length) {
-        const sample = [...new Set(foreign)].slice(0, 8).join(', ');
-        flags.push(locale === 'he' ? `English words on a Hebrew page: ${sample}` : `Hebrew on an English page: ${sample}`);
-      }
-      return { flags, title: document.title };
+/**
+ * Opens what a visitor opens, with motion on, and measures it where it is: each menu in the header, the
+ * drawer a card opens, the photograph, and that each is on screen, covers what it should and can be reached
+ * (a menu that is drawn but cannot be clicked, a backdrop that is a box inside a tile, a sheet that starts
+ * off the edge of a phone). A static capture sees none of this: an entrance that is still in flight, or a
+ * box that moves what is fixed inside it, only shows when the thing is opened.
+ */
+async function auditOverlays(state, browser, persona, locale, width) {
+  const mobile = width < 800;
+  const context = await browser.newContext({
+    viewport: { width, height: mobile ? 844 : 900 },
+    deviceScaleFactor: 1,
+    isMobile: mobile,
+    hasTouch: mobile,
+    colorScheme: state.opts.theme,
+    reducedMotion: 'no-preference',
+    locale: locale === 'he' ? 'he-IL' : 'en-US',
+  });
+  await context.addInitScript(
+    ([l, t]) => {
+      try {
+        globalThis.localStorage.setItem('bault.locale', l);
+        globalThis.localStorage.setItem('bault.theme', t);
+      } catch {}
     },
-    { locale, width },
+    [locale, state.opts.theme],
   );
-}
-
-/**
- * axe-core's WCAG 2.x A and AA rules over the page as it stands. Contrast is
- * the reason this exists: it is measured against the computed colours of
- * whichever theme is on screen, which no reading of the stylesheet can do.
- * Motion is reduced for the whole run, so nothing is mid-fade when it looks.
- */
-async function audit(page) {
-  const result = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .analyze();
-  return result.violations.map((v) => {
-    const target = v.nodes[0]?.target?.join(' ') ?? '';
-    return `axe ${v.id} (${v.impact}) x${v.nodes.length}: ${target}`.slice(0, 200);
-  });
-}
-
-/**
- * Tabs through the first stops of the page and measures the focus indicator of
- * each against the colour behind it. A ring that is absent, or under 3:1
- * (WCAG 1.4.11), is a flag. The colour behind is the nearest opaque background
- * up the tree; where something with an image or gradient comes first the
- * contrast is not known and is not reported.
- */
-async function auditFocus(page, stops = 30) {
-  const flags = [];
-  await page.evaluate(() => {
-    globalThis.document.activeElement?.blur?.();
-    globalThis.scrollTo(0, 0);
-  });
-  const seen = new Set();
-  for (let i = 0; i < stops; i += 1) {
-    await page.keyboard.press('Tab');
-    const stop = await page.evaluate(() => {
-      const { document, getComputedStyle } = globalThis;
-      const el = document.activeElement;
-      if (!el || el === document.body || el === document.documentElement) return { end: true };
-      const box = el.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0) return { skip: true };
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 1;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      const rgba = (css) => {
-        ctx.clearRect(0, 0, 1, 1);
-        ctx.fillStyle = '#000';
-        ctx.fillStyle = css;
-        ctx.fillRect(0, 0, 1, 1);
-        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-        return { r, g, b, a: a / 255 };
-      };
-      const lum = ({ r, g, b }) => {
-        const f = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-      };
-      const over = (top, under) => ({
-        r: top.r * top.a + under.r * (1 - top.a),
-        g: top.g * top.a + under.g * (1 - top.a),
-        b: top.b * top.a + under.b * (1 - top.a),
-        a: 1,
-      });
-      const name = `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/)[0] : ''}`;
-      const label = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 30);
-      // The element draws its own ring, or a wrapper does (a search box rings the
-      // box around its input, with :focus-within).
-      const ringOf = (node) => {
-        const style = getComputedStyle(node);
-        if (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) {
-          return { css: style.outlineColor, inside: parseFloat(style.outlineOffset) < 0 };
+  const page = await context.newPage();
+  const record = async (name, flags) => {
+    const file = `${slug(`${persona}-${name}`)}-${locale}-${width}.png`;
+    await page.screenshot({ path: join(state.outDir, file) });
+    state.shots.push({ name: `${persona}-${name}`, persona, locale, width, file, title: name, flags });
+    process.stdout.write(flags.length ? '!' : '.');
+  };
+  // Where something that is open actually is: on screen, as large as it should be, and the thing under a
+  // point inside it is it (and not what it is drawn over).
+  const measure = (selector, { covers = false, label }) =>
+    page.evaluate(
+      ({ selector, covers, label }) => {
+        const { document, window, getComputedStyle } = globalThis;
+        const el = [...document.querySelectorAll(selector)].find((node) => node.checkVisibility?.({ checkVisibilityCSS: true }));
+        if (!el) return [`${label}: nothing visible matches ${selector}`];
+        const out = [];
+        const box = el.getBoundingClientRect();
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (covers) {
+          if (box.width < w - 1 || box.height < h - 1 || box.left > 1 || box.top > 1) {
+            out.push(`${label} covers ${Math.round(box.width)}x${Math.round(box.height)} of a ${w}x${h} window, from (${Math.round(box.left)}, ${Math.round(box.top)})`);
+          }
+        } else {
+          const scrolls = ['auto', 'scroll'].includes(getComputedStyle(el).overflowY) && box.height <= h + 1;
+          if (box.left < -1 || box.right > w + 1 || box.top < -1 || (box.bottom > h + 1 && !scrolls)) {
+            out.push(`${label} is not on screen: (${Math.round(box.left)}, ${Math.round(box.top)}) to (${Math.round(box.right)}, ${Math.round(box.bottom)}) in a ${w}x${h} window`);
+          }
         }
-        // A shadow is a ring only if it is a solid band round the box: no offset, no blur, a spread.
-        const band = /(rgba?\([^)]*\)|oklab\([^)]*\)|oklch\([^)]*\)|color\([^)]*\))\s+0px\s+0px\s+0px\s+(?:[2-9]|\d{2,})px/.exec(
-          style.boxShadow,
-        );
-        if (band) return { css: band[1], inside: false };
-        return null;
-      };
-      let ringNode = el;
-      let ring = ringOf(el);
-      for (let up = el.parentElement, hops = 0; !ring && up && hops < 3; up = up.parentElement, hops += 1) {
-        ring = ringOf(up);
-        ringNode = up;
-      }
-      if (!ring) return { name, label, none: true };
-      // What is behind the ring: the nearest opaque background, from the element (ring inside it) or its parent.
-      let node = ring.inside ? ringNode : ringNode.parentElement;
-      let under = null;
-      const layers = [];
-      for (; node; node = node.parentElement) {
-        const style = getComputedStyle(node);
-        if (style.backgroundImage !== 'none') {
-          const alpha = rgba(style.backgroundColor).a;
-          if (alpha < 1) return { name, label, unknown: true };
+        const x = Math.min(w - 2, Math.max(2, box.left + Math.min(box.width, w) / 2));
+        const y = Math.min(h - 2, Math.max(2, box.top + Math.min(box.height, h) / 2));
+        const top = document.elementFromPoint(x, y);
+        // A backdrop is behind what it backs: the middle of it is the dialog's, not its own.
+        if (!covers && (!top || !(el.contains(top) || top.contains(el)))) {
+          out.push(`${label} cannot be reached: at (${Math.round(x)}, ${Math.round(y)}) there is ${top ? `${top.tagName.toLowerCase()}${top.className && typeof top.className === 'string' ? '.' + top.className.trim().split(/\s+/)[0] : ''}` : 'nothing'}`);
         }
-        const bg = rgba(style.backgroundColor);
-        if (bg.a > 0) layers.push(bg);
-        if (bg.a >= 1) break;
+        return out;
+      },
+      { selector, covers, label },
+    );
+  try {
+    await page.goto(`${state.baseUrl}/#/`);
+    await settle(page);
+    await signIn(page, persona, state.opts, state.secrets);
+    await open(page, `${state.baseUrl}/#/vault`);
+    await settle(page);
+
+    // The header's menus: the language, the notifications, the account.
+    const triggers = [];
+    for (const handle of await page.$$('[aria-haspopup]')) if (await handle.isVisible()) triggers.push(handle);
+    for (let index = 0; index < triggers.length; index += 1) {
+      const trigger = triggers[index];
+      const label = (await trigger.getAttribute('aria-label')) || (await trigger.innerText()).trim().slice(0, 20) || `menu ${index + 1}`;
+      await trigger.click();
+      await page.waitForTimeout(900);
+      const flags = await measure('.pop, [role="menu"], [role="dialog"]:not(.modal):not(.drawer)', { label: `the "${label}" menu` });
+      await record(`menu-${index + 1}`, flags);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      const closed = await page.evaluate(() => !globalThis.document.querySelector('.pop') && globalThis.document.activeElement?.getAttribute('aria-haspopup') !== null);
+      if (!closed) state.shots[state.shots.length - 1].flags.push(`the "${label}" menu does not close on Escape, or does not give focus back`);
+    }
+
+    // The drawer a card opens, and the photograph in it.
+    const card = await page.$('.card-hit');
+    if (card) {
+      await card.click({ force: true });
+      await page.waitForSelector('[role="dialog"]', { timeout: 4000 }).catch(() => {});
+      await page.waitForTimeout(1000);
+      const drawerFlags = [
+        ...(await measure('.drawer-backdrop', { covers: true, label: 'the drawer\'s backdrop' })),
+        ...(await measure('.drawer', { label: 'the drawer' })),
+      ];
+      await record('drawer', drawerFlags);
+      const photo = await page.$('.drawer .photo-btn, .drawer .photo-thumb');
+      if (photo) {
+        await photo.click({ force: true });
+        await page.waitForSelector('.lightbox', { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(1000);
+        const lightFlags = [
+          ...(await measure('.lightbox', { covers: true, label: 'the photograph\'s room' })),
+          ...(await measure('.lightbox-close', { label: 'the photograph\'s close button' })),
+          ...(await measure('.lightbox .modal-slab, .lightbox .photo-thumb', { label: 'the photograph' })),
+        ];
+        await record('photograph', lightFlags);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        const stillOpen = await page.evaluate(() => !!globalThis.document.querySelector('.lightbox') );
+        if (stillOpen) state.shots[state.shots.length - 1].flags.push('the photograph does not close on Escape');
       }
-      if (layers.length === 0 || layers[layers.length - 1].a < 1) layers.push({ r: 255, g: 255, b: 255, a: 1 });
-      under = layers.reduceRight((acc, layer) => over(layer, acc), { r: 255, g: 255, b: 255, a: 1 });
-      const fg = over(rgba(ring.css), under);
-      const [hi, lo] = [lum(fg), lum(under)].sort((a, b) => b - a);
-      return { name, label, ratio: (hi + 0.05) / (lo + 0.05) };
-    });
-    if (stop.end) break;
-    if (stop.skip || stop.unknown) continue;
-    const key = `${stop.name}|${stop.label}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (stop.none) flags.push(`focus: no visible indicator on ${stop.name} "${stop.label}"`);
-    else if (stop.ratio < 3) flags.push(`focus: ring ${stop.ratio.toFixed(2)}:1 on ${stop.name} "${stop.label}"`);
+      await page.keyboard.press('Escape');
+    }
+  } catch (error) {
+    state.shots.push({ name: `${persona}-overlays`, persona, locale, width, file: '', title: 'overlays', flags: [`the overlay pass failed: ${error.message.slice(0, 140)}`] });
+  } finally {
+    await context.close();
   }
-  return flags;
 }
 
 function slug(value) {
@@ -546,8 +467,10 @@ async function capture(state, page, name, ctx) {
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
   const found = await inspect(page, ctx.locale, ctx.width);
   const accessibility = state.opts.axe ? await audit(page) : [];
-  if (state.opts.axe && ctx.locale === 'en' && ctx.width >= 800) accessibility.push(...(await auditFocus(page)));
-  const flags = [...found.flags, ...accessibility, ...ctx.problems.splice(0)];
+  if (state.opts.axe) accessibility.push(...(await auditFocus(page, state.opts.focusStops)));
+  if (ctx.forced) accessibility.push(...(await auditForced(page)));
+  const theme = await auditTheme(page, state.opts.theme);
+  const flags = [...found.flags, ...theme, ...accessibility, ...ctx.problems.splice(0)];
   state.shots.push({ name, persona: ctx.persona, locale: ctx.locale, width: ctx.width, file, title: found.title, flags });
   process.stdout.write(flags.length ? '!' : '.');
 }
@@ -591,7 +514,8 @@ async function runPersona(state, browser, persona, locale, width) {
     isMobile: mobile,
     hasTouch: mobile,
     colorScheme: state.opts.theme,
-    reducedMotion: 'reduce',
+    reducedMotion: state.opts.motion ? 'no-preference' : 'reduce',
+    forcedColors: state.opts.forced ? 'active' : 'none',
     locale: locale === 'he' ? 'he-IL' : 'en-US',
   });
   await context.addInitScript(
@@ -604,7 +528,7 @@ async function runPersona(state, browser, persona, locale, width) {
     [locale, state.opts.theme],
   );
   const page = await context.newPage();
-  const ctx = { persona, locale, width, problems: [], expected: [] };
+  const ctx = { persona, locale, width, problems: [], expected: [], forced: state.opts.forced };
   page.on('console', (msg) => {
     if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) {
       ctx.problems.push(`console: ${msg.text().slice(0, 160)}`);
@@ -664,6 +588,9 @@ async function runPersona(state, browser, persona, locale, width) {
   } finally {
     await context.close();
   }
+  if (persona !== 'anonymous' && state.opts.overlays && (!state.opts.only || state.opts.only === 'overlay')) {
+    await auditOverlays(state, browser, persona, locale, width);
+  }
 }
 
 async function captureEmails(state, browser) {
@@ -678,12 +605,17 @@ async function captureEmails(state, browser) {
     for (const width of state.opts.widths) {
       const name = `email-${template.replace(/_/g, '-')}`;
       if (state.opts.only && !name.includes(state.opts.only)) continue;
-      const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
+      const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
       await page.setContent(`<!doctype html><meta charset="utf-8"><body style="margin:0;background:#ffffff">${renderEmail(template, { link }).html}</body>`);
       const file = `${name}-he-en-${width}.png`;
       await page.screenshot({ path: join(state.outDir, file), fullPage: true });
-      state.shots.push({ name, persona: 'email', locale: 'he+en', width, file, title: template, flags: [] });
-      await page.close();
+      // Both languages are in the one message by design, so what is looked for is the layout and, in the
+      // Hebrew, the order of what is drawn; not English words on a Hebrew page.
+      const found = await inspect(page, 'mixed', width);
+      const accessibility = state.opts.axe ? await audit(page) : [];
+      state.shots.push({ name, persona: 'email', locale: 'he+en', width, file, title: template, flags: [...found.flags, ...accessibility] });
+      await context.close();
       process.stdout.write('.');
     }
   }
@@ -745,6 +677,7 @@ ${sections}
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  settleMs = opts.motion ? 1400 : 250;
   const outDir = resolve(repoRoot, opts.out);
   assertLocal(opts.baseUrl ?? opts.api);
   mkdirSync(outDir, { recursive: true });
@@ -777,7 +710,11 @@ async function main() {
   console.log(`\n${state.shots.length} captures, ${flagged} with flags. Open ${join(opts.out, 'index.html')}`);
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Run when it is the script being run, not when its checks are imported (the tests that plant a mistake
+// and see whether it is flagged do that).
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
