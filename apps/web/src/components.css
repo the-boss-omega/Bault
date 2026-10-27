@@ -348,6 +348,16 @@ input[type='radio'] {
   border-block-end-color: var(--input);
 }
 
+/* A numeric column hangs from one edge, its header and its figures alike. The figures are left to
+   right (their decimals line up at the right-hand edge in either language), so the header is set
+   the same way: read in the page's direction it hangs from the opposite edge in Hebrew, and the
+   word sits a whole column away from the numbers it names. */
+.data-table th.td-end,
+.data-table th.num {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 /* The actions beside a tab bar wrap rather than run off a narrow phone. */
 @media (max-width: 640px) {
   .ctx-actions {

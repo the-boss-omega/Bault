@@ -747,6 +747,12 @@
   gap: 4px;
 }
 
+/* An amount typed into a slip is in the display size: it needs room for seven digits and the dollar sign. */
+.slip .money-input input {
+  inline-size: 12ch;
+  max-inline-size: 100%;
+}
+
 .slip-money .amount--lead {
   font: 500 clamp(26px, 2.4vw, 32px) / 1 var(--font-display);
   letter-spacing: -0.01em;

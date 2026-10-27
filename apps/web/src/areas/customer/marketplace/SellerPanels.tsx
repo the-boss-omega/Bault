@@ -131,7 +131,6 @@ export function MyListingsPanel({
                         value={price}
                         autoFocus
                         onChange={(e) => setPrice(e.target.value)}
-                        style={{ width: '6rem' }}
                       />
                     </div>
                   ) : (
@@ -392,7 +391,6 @@ function OfferActions({
                 value={amount}
                 autoFocus
                 onChange={(e) => onAmount(e.target.value)}
-                style={{ width: '6rem' }}
               />
             </div>
           </label>
