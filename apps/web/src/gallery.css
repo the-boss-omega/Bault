@@ -60,7 +60,7 @@
   overflow: visible;
   background: none;
   border-radius: 0;
-  transition: transform 600ms var(--ease-out-expo);
+  transition: transform var(--dur-colour) var(--ease-out-expo);
 }
 
 .card--interactive:hover .card-art {
@@ -109,7 +109,7 @@
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 14px;
+  gap: 6px 16px;
   padding-inline: 2px;
 }
 
@@ -230,7 +230,7 @@
   content: '';
   position: absolute;
   inset-inline: 30%;
-  inset-block-end: 26px;
+  inset-block-end: 28px;
   height: 22px;
   background: radial-gradient(closest-side, oklch(0 0 0 / 70%), transparent);
   filter: blur(8px);
@@ -317,20 +317,22 @@
 /* ---- The register: a rule down the leading edge, a node for each entry ---- */
 
 .timeline {
-  margin-inline-start: 5px;
-  border-inline-start: 1px solid var(--input);
+  --node: 9px;
+  --rule: 1px;
+  margin-inline-start: calc(var(--node) / 2);
+  border-inline-start: var(--rule) solid var(--input);
 }
 
 .timeline > li {
-  padding-inline-start: 22px;
+  padding-inline-start: 24px;
   border-block-end: 0;
 }
 
 .timeline > li::before {
-  inset-block-start: calc(var(--sp-3) + 5px);
-  inset-inline-start: -5px;
-  width: 9px;
-  height: 9px;
+  inset-block-start: calc(var(--sp-3) + 6px);
+  inset-inline-start: calc((var(--node) + var(--rule)) / -2);
+  width: var(--node);
+  height: var(--node);
   border-radius: 50%;
   background: var(--background);
   border: 1.5px solid var(--input);

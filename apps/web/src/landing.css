@@ -37,9 +37,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: 14px max(var(--lp-pad), calc((100% - var(--lp-max)) / 2 + var(--lp-pad)));
+  padding: 16px max(var(--lp-pad), calc((100% - var(--lp-max)) / 2 + var(--lp-pad)));
   border-block-end: 1px solid transparent;
-  transition: background 400ms var(--ease-out-expo), border-color 400ms var(--ease-out-expo),
+  transition: background var(--dur-surface) var(--ease-out-expo), border-color var(--dur-surface) var(--ease-out-expo),
     padding 400ms var(--ease-out-expo);
 }
 
@@ -111,7 +111,7 @@
 
 .lp-section-head {
   display: grid;
-  gap: 22px;
+  gap: 24px;
   align-content: start;
 }
 
@@ -157,7 +157,7 @@
 
 .lp-hero-copy {
   display: grid;
-  gap: 30px;
+  gap: 32px;
   align-content: center;
   min-width: 0;
 }
@@ -247,7 +247,7 @@
   transform-origin: 50% 185%;
   transform: translate(calc(var(--fx) * 7px * var(--depth)), var(--y))
     rotate(calc(var(--a) + var(--fx) * 1.1deg * var(--depth)));
-  transition: transform 900ms var(--ease-out-expo);
+  transition: transform var(--dur-reveal) var(--ease-out-expo);
 }
 
 .lp-card .photo-thumb {
@@ -319,9 +319,9 @@
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   align-items: end;
-  gap: 14px 28px;
+  gap: 16px 28px;
   margin: 0;
-  padding: 14px 22px 16px;
+  padding: 16px 24px 16px;
   border-radius: var(--r-sm);
   background:
     var(--foil) top / 100% 3px no-repeat,
@@ -379,7 +379,7 @@
 }
 
 .lp-truth h3 {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   font: 500 clamp(30px, 3.6vw, 52px) / 1.06 var(--font-display);
   letter-spacing: -0.02em;
   text-wrap: balance;
@@ -440,7 +440,7 @@
 .lp-plate-art::after {
   content: 'BAULT';
   position: absolute;
-  inset-block-start: 22px;
+  inset-block-start: 24px;
   inset-inline-end: 24px;
   font: 700 11px/1 var(--font-display);
   letter-spacing: 0.32em;
@@ -483,8 +483,8 @@
 .lp-ledger::before {
   content: '';
   position: absolute;
-  inset-block: 14px;
-  inset-inline-start: 74px;
+  inset-block: 16px;
+  inset-inline-start: 76px;
   width: 1px;
   background: linear-gradient(var(--input), var(--input));
 }
@@ -493,7 +493,7 @@
   display: grid;
   grid-template-columns: 50px minmax(0, 1fr);
   align-items: center;
-  gap: 38px;
+  gap: 40px;
   min-height: 46px;
   border-block-end: 1px dashed var(--border);
   color: var(--foreground);
@@ -567,7 +567,7 @@
 }
 
 .lp-rates .data-table thead th {
-  padding: 0 0 14px;
+  padding: 0 0 16px;
   border-block-end: 1px solid var(--input);
   background: none;
   color: var(--muted-foreground);
@@ -578,11 +578,11 @@
 
 .lp-rates .data-table tbody th,
 .lp-rates .data-table tbody td {
-  padding-block: clamp(20px, 2.4vw, 30px);
+  padding-block: clamp(20px, 2.4vw, 32px);
   border-block-end: 1px solid var(--border);
   background: none;
   vertical-align: baseline;
-  transition: padding 400ms var(--ease-out-expo), background 300ms;
+  transition: padding var(--dur-surface) var(--ease-out-expo), background var(--dur-enter);
 }
 
 .lp-rates .data-table tbody th {
@@ -591,7 +591,7 @@
 }
 
 .lp-rates .data-table tbody tr:hover th {
-  padding-inline-start: 14px;
+  padding-inline-start: 16px;
 }
 
 .lp-rates .data-table tbody tr:hover {
@@ -681,7 +681,7 @@
 
 .lp-stage-slab {
   width: min(46%, 250px);
-  transition: filter 900ms var(--ease-out-expo), transform 1000ms var(--ease-out-expo);
+  transition: filter var(--dur-reveal) var(--ease-out-expo), transform 1000ms var(--ease-out-expo);
   z-index: 2;
 }
 
@@ -691,7 +691,7 @@
   height: 26px;
   border: 0 solid oklch(1 0 0 / 40%);
   opacity: 0;
-  transition: opacity 600ms;
+  transition: opacity var(--dur-colour);
 }
 
 .lp-crop--a {
@@ -746,7 +746,7 @@
   position: absolute;
   inset-inline-start: 14%;
   inset-block-end: 8.5%;
-  padding: 7px 12px 8px;
+  padding: 8px 12px;
   border-radius: var(--r-xs);
   background:
     var(--foil) top / 100% 2px no-repeat,
@@ -757,7 +757,7 @@
   direction: ltr;
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 600ms, transform 800ms var(--ease-out-expo);
+  transition: opacity var(--dur-colour), transform 800ms var(--ease-out-expo);
 }
 
 .lp-shelf-tag::before {
@@ -780,7 +780,7 @@
 
 /* design-lint-allow: artwork, aria-hidden; nothing in it can be focused. */
 .lp-exits li {
-  padding: 7px 14px;
+  padding: 8px 16px;
   border: 1px solid oklch(1 0 0 / 22%);
   border-radius: var(--r-capsule);
   background: var(--room-glass);
@@ -789,7 +789,7 @@
   line-height: 1;
   opacity: 0;
   transform: translateY(-10px);
-  transition: opacity 600ms, transform 800ms var(--ease-out-expo);
+  transition: opacity var(--dur-colour), transform 800ms var(--ease-out-expo);
   transition-delay: calc(var(--k, 0) * 120ms);
 }
 
@@ -830,7 +830,7 @@
 }
 
 .lp-journey[data-stage='2'] .lp-flash {
-  animation: flash 900ms var(--ease-out-expo) both;
+  animation: flash var(--dur-reveal) var(--ease-out-expo) both;
 }
 
 @keyframes flash {
@@ -862,26 +862,26 @@
   height: var(--prog);
   border-radius: var(--r-bar);
   background: var(--foil);
-  transition: height 900ms var(--ease-out-expo);
+  transition: height var(--dur-reveal) var(--ease-out-expo);
 }
 
 .lp-steps .step {
   display: grid;
   align-content: center;
-  gap: 14px;
+  gap: 16px;
   min-height: 52svh;
   margin: 0;
   padding: 0;
   border: 0;
   color: var(--muted-foreground);
-  transition: color 600ms var(--ease-out-expo);
+  transition: color var(--dur-colour) var(--ease-out-expo);
 }
 
 /* A step that is not centred is dimmed, never below 4.5:1: its name is a large
    heading, but its detail is body copy and inherits the step's colour. */
 .lp-steps .step .step-name {
   color: color-mix(in oklab, var(--foreground) 62%, var(--background));
-  transition: color 600ms var(--ease-out-expo);
+  transition: color var(--dur-colour) var(--ease-out-expo);
 }
 
 .lp-journey[data-stage='1'] .step[data-step='1'],
@@ -1044,7 +1044,7 @@
   .lp-js .lp-hero .lp-rule,
   .lp-js .lp-hero .lp-lede,
   .lp-js .lp-hero .lp-cta {
-    animation: rise 900ms var(--ease-out-expo) backwards;
+    animation: rise var(--dur-reveal) var(--ease-out-expo) backwards;
     animation-delay: 80ms;
   }
 
@@ -1057,7 +1057,7 @@
   }
 
   .lp-js .lp-card {
-    animation: fan-in 1400ms var(--ease-out-expo) backwards;
+    animation: fan-in var(--dur-hero) var(--ease-out-expo) backwards;
     animation-delay: calc(var(--d) * 120ms + 280ms);
   }
 
@@ -1069,7 +1069,7 @@
   }
 
   .lp-js .lp-shelf {
-    animation: rise 900ms var(--ease-out-expo) backwards;
+    animation: rise var(--dur-reveal) var(--ease-out-expo) backwards;
     animation-delay: 1000ms;
   }
 
@@ -1080,7 +1080,7 @@
   .lp-js .lp-close-copy .lp-cta {
     opacity: 0;
     transform: translateY(18px);
-    transition: opacity 900ms var(--ease-out-expo) 300ms, transform 900ms var(--ease-out-expo) 300ms;
+    transition: opacity var(--dur-reveal) var(--ease-out-expo) 300ms, transform var(--dur-reveal) var(--ease-out-expo) 300ms;
   }
 
   .lp-js .is-visible .lp-rule,
@@ -1163,8 +1163,8 @@
 .lp-colophon {
   --focus-color: var(--paper-ink);
   display: grid;
-  gap: 22px;
-  padding: 26px 30px 30px;
+  gap: 24px;
+  padding: 28px 32px 32px;
   border-radius: var(--r-lg);
   background:
     var(--foil) bottom / 100% 6px no-repeat,
@@ -1178,7 +1178,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 18px 36px;
+  gap: 20px 36px;
 }
 
 .lp-colophon-word {
@@ -1204,7 +1204,7 @@
   text-decoration-color: var(--paper-rule-soft);
   text-underline-offset: 5px;
   cursor: pointer;
-  transition: text-decoration-color 250ms;
+  transition: text-decoration-color var(--dur-slow);
 }
 
 .lp-colophon-nav a:hover,
@@ -1234,7 +1234,7 @@
 
 .lp-tickets {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   max-width: 980px;
   margin-block-start: clamp(36px, 5vw, 72px);
   perspective: 1400px;
@@ -1267,7 +1267,7 @@
   background: var(--card);
   box-shadow: inset 0 0 0 1px var(--border);
   transform: rotateX(calc(var(--ty) * var(--tilt))) rotateY(calc(var(--tx) * var(--tilt)));
-  transition: transform 600ms var(--ease-out-expo), box-shadow 400ms;
+  transition: transform var(--dur-colour) var(--ease-out-expo), box-shadow var(--dur-surface);
   overflow: hidden;
 }
 
@@ -1284,7 +1284,7 @@
   display: grid;
   gap: 12px;
   align-content: center;
-  padding: clamp(22px, 3vw, 34px) clamp(22px, 3.4vw, 40px);
+  padding: clamp(24px, 3vw, 36px) clamp(24px, 3.4vw, 40px);
 }
 
 .lp-ticket-main h3 {
@@ -1313,7 +1313,7 @@
   display: grid;
   align-content: space-between;
   justify-items: center;
-  gap: 14px;
+  gap: 16px;
   padding: 20px 16px;
   border-inline-start: 1px dashed var(--input);
 }
@@ -1322,20 +1322,20 @@
 .lp-ticket-stub::after {
   content: '';
   position: absolute;
-  inset-inline-start: -14px;
-  inline-size: 26px;
-  block-size: 26px;
+  inset-inline-start: -12px;
+  inline-size: 24px;
+  block-size: 24px;
   border-radius: 50%;
   background: var(--background);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .lp-ticket-stub::before {
-  inset-block-start: -13px;
+  inset-block-start: -12px;
 }
 
 .lp-ticket-stub::after {
-  inset-block-end: -13px;
+  inset-block-end: -12px;
 }
 
 .lp-stub-no {
@@ -1360,7 +1360,7 @@
     transparent 12px 14px
   );
   opacity: 0.75;
-  transition: opacity 400ms;
+  transition: opacity var(--dur-surface);
 }
 
 .lp-ticket-face:hover .lp-stub-bars {
@@ -1373,7 +1373,7 @@
   pointer-events: none;
   opacity: 0;
   background: radial-gradient(circle at calc(var(--px) * 100%) calc(var(--py) * 100%), oklch(1 0 0 / 12%), transparent 50%);
-  transition: opacity 400ms;
+  transition: opacity var(--dur-surface);
 }
 
 .lp-ticket-face[data-live] .lp-ticket-glare {
@@ -1394,24 +1394,24 @@
   .lp-ticket-stub {
     grid-auto-flow: column;
     align-content: center;
-    padding: 10px 18px;
+    padding: 10px 20px;
     border-inline-start: 0;
     border-block-start: 1px dashed var(--input);
   }
 
   .lp-ticket-stub::before,
   .lp-ticket-stub::after {
-    inset-block-start: -13px;
+    inset-block-start: -12px;
     inset-block-end: auto;
   }
 
   .lp-ticket-stub::before {
-    inset-inline-start: -13px;
+    inset-inline-start: -12px;
   }
 
   .lp-ticket-stub::after {
     inset-inline-start: auto;
-    inset-inline-end: -13px;
+    inset-inline-end: -12px;
   }
 
   .lp-stub-bars {
@@ -1443,7 +1443,7 @@
   gap: 16px;
   inline-size: min(100%, 360px);
   /* The bottom edge leaves room for the stamp, which sits in its own corner. */
-  padding: 24px 24px 70px;
+  padding: 24px 24px 72px;
   border-radius: var(--r-xs);
   background: var(--paper-bright);
   color: var(--paper-ink);
@@ -1464,7 +1464,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 20px;
 }
 
 .lp-charge-line i {
@@ -1497,9 +1497,9 @@
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 4px 16px;
   max-inline-size: 62%;
-  padding-block-start: 14px;
+  padding-block-start: 16px;
   border-block-start: 1px dashed var(--paper-rule);
   direction: ltr;
   font: 500 11.5px/1.2 var(--font-mono);
@@ -1522,7 +1522,7 @@
 
 .lp-charge-stamp {
   position: absolute;
-  inset-block-end: 14px;
+  inset-block-end: 16px;
   inset-inline-end: 20px;
   display: grid;
   place-items: center;
@@ -1579,7 +1579,7 @@
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  transition: color 250ms;
+  transition: color var(--dur-slow);
 }
 
 .lp-nav a::after {

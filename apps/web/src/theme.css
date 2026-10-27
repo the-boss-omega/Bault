@@ -180,6 +180,13 @@
   --room-glass: oklch(0.2 0.004 260 / 80%);
   --room-ink: oklch(0.93 0 0);
 
+  /* The long motions of the public page and the shell. The short ones are the
+     --dur family in index.css and motion.css; the delays that stagger one thing
+     after another are written beside the thing they time. */
+  --dur-surface: 400ms;
+  --dur-colour: 600ms;
+  --dur-reveal: 900ms;
+  --dur-hero: 1400ms;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
 }

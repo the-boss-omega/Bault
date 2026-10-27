@@ -140,7 +140,7 @@ textarea {
   border-color: var(--control-border);
   background: color-mix(in oklab, var(--foreground) 3.5%, transparent);
   box-shadow: var(--shadow-xs);
-  transition: border-color 200ms, background 200ms, box-shadow 200ms;
+  transition: border-color var(--dur), background var(--dur), box-shadow var(--dur);
 }
 
 input:hover:not(:disabled),
@@ -160,7 +160,7 @@ textarea:hover:not(:disabled) {
 select {
   appearance: none;
   -webkit-appearance: none;
-  padding-inline-end: 34px;
+  padding-inline-end: 36px;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
     linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
@@ -348,7 +348,7 @@ input[type='radio'] {
 
 .data-table tbody tr,
 .table tbody tr {
-  transition: background 200ms;
+  transition: background var(--dur);
 }
 
 .data-table tbody tr.is-clickable:hover,

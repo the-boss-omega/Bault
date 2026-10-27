@@ -247,7 +247,12 @@ jump link focuses (`tabindex="-1"`) shows none: it is not a control.
 
 ## 6. Space and density
 
-4 px base: `--sp-1` 4 … `--sp-24` 96.
+4 px base: `--sp-1` 4 … `--sp-24` 96. This is Tailwind's spacing scale, which the kit uses, and it is
+held in the layers as well as in `index.css`: every padding, margin, gap and inset is a multiple of
+four or one of the scale's half steps (2, 6, 10, 14 px), with the 1 px hairline for a nudge, and
+`design-lint` says so when one is not. Sizes (a glyph, a ring, a rail's width) are not space, so they
+are not held to it; when a size has to be taken out of a space (a 3 px bar out of a padding), it is a
+custom property that both read, not a number written twice.
 
 Four variables carry the rhythm, and switching `data-density` on a subtree changes all of them:
 
@@ -265,10 +270,12 @@ Register and Field get denser without a single component being rewritten.
 ## 7. Motion
 
 Tokens: `--dur-fast` 150 · `--dur` 200 · `--dur-slow` 250 · `--dur-enter` 300 · `--dur-exit` 180 ms
-(read by `useExit`, so the exit's length is set in one place); `--ease-out-expo`
-`cubic-bezier(0.16, 1, 0.3, 1)` for arrivals, `--ease-in-out-quart` for departures and breathing,
-`--ease-in-out` for the in-between. The landing's reveals use longer, literal durations (0.4–1.4 s)
-written beside the thing they time.
+(read by `useExit`, so the exit's length is set in one place); for the slower, larger moves
+`--dur-surface` 400 (a surface settling) · `--dur-colour` 600 (a colour moving) · `--dur-reveal` 900
+(a reveal) · `--dur-hero` 1400 ms; `--ease-out-expo` `cubic-bezier(0.16, 1, 0.3, 1)` for arrivals,
+`--ease-in-out-quart` for departures and breathing, `--ease-in-out` for the in-between. A length that
+belongs to one piece of choreography (a stagger, the landing's headline words) is written beside the
+thing it times and not given a name it would share with nothing.
 
 | Where | What | Job |
 | --- | --- | --- |
@@ -335,7 +342,8 @@ old markup's contracts and message keys.
   per row). What no tier covers is a numbered list of clauses on paper.
 - **Offers — bid slips.** The card in its case, who made the offer and whose move it is, the offer
   named and in the display face, a rule showing how it stands against the asking price, the state,
-  and the actions. The maker of an offer sees only Change and Withdraw.
+  and the actions. The maker of an offer sees only Change and Withdraw; to whom it was made, Accept,
+  Counter and Reject, with Reject set a step apart from the other two (space as well as colour).
 - **Inbound — parcel labels.** Contents and code, the facility, and under them the four-stop journey
   (expected, received, opened, processed) with the date of each stop reached; past a perforation, the
   tracking number as a barcode.
@@ -471,6 +479,7 @@ like.
 | The two dark blocks stay one theme | `design-lint` | same |
 | Physical properties; `left`/`right` keywords in origins, positions, gradients; any `[dir]` / `:dir()` outside `theme.css` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family | `design-lint` | same |
+| Every padding, margin, gap and inset in the layers is on the 4 px grid (section 6) | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring | `design-lint` | same |
 | Every infinite animation is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |

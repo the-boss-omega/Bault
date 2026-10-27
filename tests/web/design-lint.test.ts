@@ -108,6 +108,24 @@ describe('design-lint', () => {
       expect(r.out).toContain('design-lint: clean');
     });
 
+    it('space that is off the 4px grid', () => {
+      const r = withChange((d) => appendFileSync(join(d, 'screens.css'), '\n.x { padding: 7px 12px; }\n.y { gap: 5px; margin-inline-start: -9px; }\n'));
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('padding 7px is off the 4px grid');
+      expect(r.out).toContain('gap 5px is off the 4px grid');
+      expect(r.out).toContain('margin-inline-start 9px is off the 4px grid');
+    });
+
+    it('lets multiples of four, the half steps, tokens, and sizes that are not space through', () => {
+      const r = withChange((d) =>
+        appendFileSync(
+          join(d, 'screens.css'),
+          '\n.a { padding: 4px 6px 10px 14px; margin: -12px 2px; }\n.b { gap: 1px var(--sp-3); inset: calc(var(--sp-3) + 6px) 0; }\n.c { inline-size: 26px; font-size: 13px; border-inline-start: 3px solid var(--border); }\n',
+        ),
+      );
+      expect(r.out).toContain('design-lint: clean');
+    });
+
     it('a colour with no name', () => {
       const r = withChange((d) => appendFileSync(join(d, 'gallery.css'), '\n.x { color: oklch(0.5 0.2 30); }\n.y { color: #123abc; }\n'));
       expect(r.out).toContain('raw colour oklch(0.5 0.2 30)');

@@ -195,6 +195,15 @@ function rulesOf(text) {
  */
 const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper|room[\w-]*)\)/;
 
+/**
+ * Space is laid out on the 4px grid, Tailwind's spacing scale, which the kit uses:
+ * padding, margin, gap and inset are multiples of four or one of its half steps
+ * (2, 6, 10 and 14px), with the 1px hairline for optical nudges. Sizes are not held
+ * to it here (a glyph is the size it is drawn at); the spaces between things are.
+ */
+const SPACING_HALF_STEPS = new Set(['1px', '2px', '6px', '10px', '14px']);
+const SPACING_DECLARATION = /(?:^|[\s;{])((?:padding|margin|inset)(?:-[\w-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/g;
+
 // The theme and motion layers sit outside the token-block rules above, but the
 // logical-properties rule, the direction rule, the colour rule and the
 // reduced-motion guarantee apply to them too.
@@ -219,8 +228,14 @@ for (const name of LAYERS) {
         report(short, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
       }
       checkLoop(short, n, line);
+      for (const decl of line.matchAll(SPACING_DECLARATION)) {
+        for (const px of decl[2].matchAll(/(?<![\w.-])-?(\d+(?:\.\d+)?px)/g)) {
+          if (px[1] === '0px' || SPACING_HALF_STEPS.has(px[1]) || onScale(px[1])) continue;
+          report(short, n, `${decl[1]} ${px[1]} is off the 4px grid — use a multiple of four, a half step (2, 6, 10, 14) or a --sp-* token: ${line.trim()}`);
+        }
+      }
       if (name !== 'theme.css') {
-        const radius = /border(?:-(?:start|end)-(?:start|end))?-radius\s*:\s*([^;]+);/.exec(line)?.[1];
+        const radius =/border(?:-(?:start|end)-(?:start|end))?-radius\s*:\s*([^;]+);/.exec(line)?.[1];
         // One radius family: the kit's tokens (or a calc of them), a circle, nothing, or a
         // size relative to its container (the slab's corners scale with the slab).
         if (radius && !/var\(--(?:r-[\w-]+|radius)\)|cqw/.test(radius) && !/^(?:0|50%|inherit|initial|unset)(?:\s+(?:0|50%))*$/.test(radius.trim())) {
