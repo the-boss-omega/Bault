@@ -254,10 +254,12 @@ async function inspect(page, locale, width) {
  * whichever theme is on screen, which no reading of the stylesheet can do.
  * Motion is reduced for the whole run, so nothing is mid-fade when it looks.
  */
-async function audit(page) {
-  const result = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .analyze();
+async function audit(page, { forced = false } = {}) {
+  const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
+  // Under forced colours the person's own palette is drawn, which no stylesheet chooses and which the contrast
+  // criterion does not hold a page to: axe reads the colours the stylesheet asked for, not the ones that are shown.
+  if (forced) builder.disableRules(['color-contrast']);
+  const result = await builder.analyze();
   return result.violations.map((v) => {
     const target = v.nodes[0]?.target?.join(' ') ?? '';
     return `axe ${v.id} (${v.impact}) x${v.nodes.length}: ${target}`.slice(0, 200);
@@ -442,7 +444,9 @@ async function auditTheme(page, expected) {
     const attribute = root.getAttribute('data-theme');
     if (attribute && attribute !== theme) flags.push(`theme: the page says ${attribute}, it was asked for ${theme}`);
     const scheme = getComputedStyle(root).colorScheme;
-    if (scheme !== theme) flags.push(`theme: the browser draws its own controls in "${scheme}" on a ${theme} page`);
+    // Forced colours take the colour scheme away (it computes to "light dark"): the person's palette is drawn.
+    const forced = globalThis.matchMedia?.('(forced-colors: active)').matches;
+    if (!forced && scheme !== theme) flags.push(`theme: the browser draws its own controls in "${scheme}" on a ${theme} page`);
     const chrome = document.querySelector('meta[name="theme-color"]')?.getAttribute('content');
     if (chrome) {
       const canvas = document.createElement('canvas');

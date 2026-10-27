@@ -14,6 +14,7 @@ const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as
   inspect: (page: Page, locale: string, width: number) => Promise<{ flags: string[] }>;
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
   auditForced: (page: Page) => Promise<string[]>;
+  auditTheme: (page: Page, expected: string) => Promise<string[]>;
 };
 
 let browser: Browser | null = null;
@@ -169,6 +170,30 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
       const page = await context.newPage();
       await page.setContent(`<!doctype html><meta charset="utf-8"><body>${tabs('Highlight')}</body>`);
       expect(await audit.auditForced(page)).toEqual([]);
+      await context.close();
+    });
+  });
+
+  describe('a page that is not in the theme it was asked for', () => {
+    const darkPage = '<!doctype html><html data-theme="dark" style="color-scheme: dark"><meta charset="utf-8"><body>Page</body></html>';
+
+    it('is flagged when the browser draws its controls in the other scheme', async () => {
+      const page = await browser!.newPage();
+      await page.setContent('<!doctype html><html data-theme="dark" style="color-scheme: light"><meta charset="utf-8"><body>Page</body></html>');
+      expect((await audit.auditTheme(page, 'dark')).join()).toMatch(/draws its own controls in "light" on a dark page/);
+      await page.close();
+    });
+
+    it('is not when it is, and is not under forced colours, which take the scheme away', async () => {
+      const page = await browser!.newPage();
+      await page.setContent(darkPage);
+      expect(await audit.auditTheme(page, 'dark')).toEqual([]);
+      await page.close();
+
+      const context = await browser!.newContext({ forcedColors: 'active' });
+      const forced = await context.newPage();
+      await forced.setContent(darkPage);
+      expect(await audit.auditTheme(forced, 'dark')).toEqual([]);
       await context.close();
     });
   });

@@ -466,7 +466,7 @@ async function capture(state, page, name, ctx) {
   const file = `${slug(name)}-${ctx.locale}-${ctx.width}.png`;
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
   const found = await inspect(page, ctx.locale, ctx.width);
-  const accessibility = state.opts.axe ? await audit(page) : [];
+  const accessibility = state.opts.axe ? await audit(page, { forced: state.opts.forced }) : [];
   if (state.opts.axe) accessibility.push(...(await auditFocus(page, state.opts.focusStops)));
   if (ctx.forced) accessibility.push(...(await auditForced(page)));
   const theme = await auditTheme(page, state.opts.theme);
@@ -615,7 +615,7 @@ async function captureEmails(state, browser) {
       // Both languages are in the one message by design, so what is looked for is the layout and, in the
       // Hebrew, the order of what is drawn; not English words on a Hebrew page.
       const found = await inspect(page, 'mixed', width);
-      const accessibility = state.opts.axe ? await audit(page) : [];
+      const accessibility = state.opts.axe ? await audit(page, { forced: state.opts.forced }) : [];
       state.shots.push({ name, persona: 'email', locale: 'he+en', width, file, title: template, flags: [...found.flags, ...accessibility] });
       await context.close();
       process.stdout.write('.');
