@@ -408,8 +408,24 @@ pieces. Each keeps the old markup's contracts and message keys.
 - **Drawers about a sum — the tag** (`DrawerTag`). An escrow deal, a wallet request and a ledger entry
   open on a tag of paper, as the statement is paper: the amount named, in the display face and read
   left to right, and under it, on a dashed rule, where it stands (the state's light and word, in ink)
-  and what goes with it (the fee, the currency). The history under it is a register, in the product's
+  and what goes with it (the fee, the currency). With lines (a name and its value to a line, a leader
+  of dots between) and no amount, the same tag is a slip that says where something goes. The history under it is a register, in the product's
   own words for each step; a step the product does not know is shown as recorded.
+- **Forms with a slip — cash in, cash out, the shipment.** What was a narrow column of fields on an
+  empty band is the fields and, beside them, the request as it will be read, on the same paper,
+  written while it is typed: the tag with lines. A request for cash out is its amount (named, in the
+  display face), the destination, the beneficiary and the reference (a dash for what is not typed
+  yet) and, once the server has quoted it, what the fee takes and what reaches the person. A route
+  that is paid by transfer is the payment slip it is: where to send it, one line to a fact. The
+  shipment is the parcel as it will be sent: the price of the service the warehouse would pick, where
+  it goes, how many cards, and what was asked for (express, a box, cover, the signature that cover
+  makes necessary), each only once it has been. Beside the fields on a wide window (sticky, while the
+  panels scroll), between the last field and the button that sends it on a phone. Every label and
+  sentence on a slip is one the form already had.
+- **The sign-in log — a statement and a register.** Three counts on one sheet (the same paper, three
+  columns of a width), then the attempts in days, a heading for each on a dashed rule and a list named
+  by it: the time, the outcome as a light and a word, the account, where from and on what. A line to an
+  attempt on a wide window, because a log is read down; two on a phone.
 - **Accounting — the month as a statement.** The summary is one sheet of that paper: the revenue as a
   figure with the lines it is made of under it (a name, a leader of dots, an amount), what customers
   put in and what is held for them stacked beside it, each with the sentence that says what the figure
@@ -567,9 +583,11 @@ like.
 
 ## 13. Not in this edition
 
-- Most of the management consoles (users, pricing, disputes, sign-ins, the outbox) are restyled to the
-  kit and the statement language, not redesigned. Two are: the accounting summary (a statement on
-  paper) and the shelf map (aisle signs over racks).
+- Most of the management consoles (users, pricing, disputes, the outbox) are restyled to the kit and
+  the statement language, not redesigned. Three are: the accounting summary (a statement on paper),
+  the sign-in log (a statement and a register) and the shelf map (aisle signs over racks).
+- Of the forms, cash in, cash out and the shipment have their slip. Selling, trading, registering a
+  parcel, a support ticket and the security settings are the kit's fields in a column.
 - The transactional emails come from `packages/`, outside this change, and keep the first edition's look.
 - Two strings in `shared/i18n.tsx`, which the design did not touch, still describe the bundled
   fonts as "IBM Plex and Frank Ruhl Libre" (`legal.provenance.ofl`, Hebrew and English). The licence
@@ -593,7 +611,7 @@ like.
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
 | WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first; the transactional emails are inspected as documents. `--forced` also captures with forced colours on and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
-| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip, the month's statement is where it should be at three widths; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
+| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls; the month's statement, a form and its slip, the shipment and the sign-in log are where they should be at their widths; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
