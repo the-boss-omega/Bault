@@ -16,13 +16,13 @@ import {
 } from '../../../shared/walletRequests';
 import { WalletRequestForm } from './WalletRequestForms';
 import { TopUpPanel } from './MoneyPanels';
+import { InTransit, StatementSlip } from './StatementSlip';
 import {
   Button,
   ContextTabs,
   DetailRow,
   EmptyState,
   ErrorState,
-  MetricCard,
   Panel,
   SkeletonBlock,
   SkeletonTable,
@@ -33,11 +33,8 @@ import {
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import {
-  IconArrowDown,
-  IconArrowUp,
   IconCalendar,
   IconChart,
-  IconChevronDown,
   IconDownload,
   IconFilter,
   IconMarketplace,
@@ -47,8 +44,6 @@ import {
   IconShield,
   IconTag,
   IconUpload,
-  IconWallet,
-  VaultDoorArt,
 } from '../../../shared/ui/icons';
 
 interface Money {
@@ -171,29 +166,24 @@ export function WalletPage() {
 
   const balanceAfter = useMemo(() => runningBalances(ledger ?? []), [ledger]);
 
+  const flows = useMemo(() => {
+    const rows = ledger ?? [];
+    const inflow = rows.filter((r) => r.direction === 'credit').reduce((sum, r) => sum + r.amount, 0);
+    const outflow = rows.filter((r) => r.direction === 'debit').reduce((sum, r) => sum + r.amount, 0);
+    return { inflow, outflow, count: rows.length };
+  }, [ledger]);
+
   const tabs = TABS.map((key) => ({ key, label: t(`wallet.tab.${key}` as MessageKey) }));
 
   return (
     <>
       {balance ? (
-        <section className="hero-balance">
-          <div className="hero-inner">
-            <p className="hero-label">{t('wallet.currentBalance')}</p>
-            <p className="hero-value" dir="ltr">
-              {formatUsd(balance.amount)}
-            </p>
-            <div className="hero-meta">
-              <span className="hero-currency">
-                <IconChevronDown />
-                {t('wallet.currencyName')}
-              </span>
-              <span className="hero-note">{t('wallet.derivedNote')}</span>
-            </div>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <VaultDoorArt />
-          </div>
-        </section>
+        <StatementSlip
+          amount={balance.amount}
+          flows={flows}
+          expanded={tab === 'overview' && ledger !== null}
+          t={t}
+        />
       ) : (
         <SkeletonBlock className="skel-hero" />
       )}
@@ -337,65 +327,12 @@ function OverviewTab({
   onViewAll: () => void;
   selectedId: string | null;
 }) {
-  const flows = useMemo(() => {
-    const rows = ledger ?? [];
-    const inflow = rows.filter((r) => r.direction === 'credit').reduce((sum, r) => sum + r.amount, 0);
-    const outflow = rows.filter((r) => r.direction === 'debit').reduce((sum, r) => sum + r.amount, 0);
-    return { inflow, outflow, count: rows.length };
-  }, [ledger]);
-
   const recent = (ledger ?? []).slice(0, 6);
 
   return (
     <>
-      <div className="metric-grid">
-        <MetricCard
-          label={t('wallet.inflow')}
-          value={<span dir="ltr">{formatUsd(flows.inflow)}</span>}
-          icon={<IconArrowDown />}
-          tone="green"
-          footer={t('wallet.inflowNote')}
-        />
-        <MetricCard
-          label={t('wallet.outflow')}
-          value={<span dir="ltr">{formatUsd(flows.outflow)}</span>}
-          icon={<IconArrowUp />}
-          tone="amber"
-          footer={t('wallet.outflowNote')}
-        />
-        <MetricCard
-          label={t('wallet.netFlow')}
-          value={<span dir="ltr">{formatUsd(flows.inflow - flows.outflow)}</span>}
-          icon={<IconWallet />}
-          tone="blue"
-          footer={t('wallet.netFlowNote')}
-        />
-        <MetricCard
-          label={t('wallet.txCount')}
-          value={flows.count}
-          icon={<IconReceipt />}
-          tone="violet"
-          footer={t('wallet.txCountNote')}
-        />
-      </div>
-
       {pending && pending.count > 0 && (
-        <div className="metric-grid">
-          <MetricCard
-            label={t('wallet.pendingIn')}
-            value={<span dir="ltr">{formatUsd(pending.cashInMinor)}</span>}
-            icon={<IconArrowDown />}
-            tone="blue"
-            footer={t('wallet.pendingNote')}
-          />
-          <MetricCard
-            label={t('wallet.pendingOut')}
-            value={<span dir="ltr">{formatUsd(pending.cashOutMinor)}</span>}
-            icon={<IconUpload />}
-            tone="amber"
-            footer={t('wallet.pendingNote')}
-          />
-        </div>
+        <InTransit cashIn={pending.cashInMinor} cashOut={pending.cashOutMinor} t={t} />
       )}
 
       <Panel
@@ -562,7 +499,7 @@ function TransactionTable({
 
   return (
     <div className="dt-wrap dt-wrap--stack">
-      <table className="data-table">
+      <table className="data-table data-table--ledger">
         <caption>{t('wallet.transactions')}</caption>
         <thead>
           <tr>

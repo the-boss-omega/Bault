@@ -1,0 +1,417 @@
+/* ============================================================
+   The money and operations screens
+
+   The pieces that give the signed-in product faces of its own, beyond the shared
+   panel and table: a statement for the wallet, slips for offers, tier cards for
+   membership, a shelf map for the warehouse, labels for parcels. They are made of
+   what the public page is made of: paper where the page is the record, hairlines
+   everywhere else, the display face for figures, and foil kept for what is alive.
+
+   Reads theme tokens only; loaded after gallery.css.
+   ============================================================ */
+
+/* ---- The wallet: a statement ---- */
+
+.statement-sheet {
+  --focus-color: var(--paper-ink);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(64px, 8vw, 112px);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    0 0 0 1px var(--paper-line),
+    0 36px 64px -36px oklch(0 0 0 / 70%);
+  overflow: clip;
+}
+
+.statement-sheet::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 2;
+  block-size: 5px;
+  background: var(--foil);
+}
+
+.statement-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: var(--paper-grain);
+}
+
+.statement-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  padding: clamp(24px, 3.4vw, 40px) clamp(22px, 3.6vw, 48px) clamp(22px, 3vw, 34px);
+}
+
+.statement-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 24px;
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .statement-head {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.statement-label {
+  margin: clamp(22px, 3vw, 36px) 0 0;
+  color: var(--paper-ink-2);
+  font-size: var(--fs-base);
+  font-weight: 500;
+}
+
+.statement-balance {
+  margin: 4px 0 0;
+  font: 500 clamp(56px, 8.6vw, 128px) / 0.95 var(--font-display);
+  letter-spacing: -0.03em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper-ink);
+}
+
+/* The sum the ledger keeps: credited, less debited, is the balance. */
+
+.statement-sum {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.72fr);
+  margin: clamp(22px, 3vw, 34px) 0 0;
+  padding-block-start: clamp(16px, 2vw, 22px);
+  border-block-start: 1px dashed var(--paper-rule);
+  animation: statement-print 700ms var(--ease-out-expo) backwards;
+}
+
+.statement-term {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-inline-size: 0;
+  margin: 0;
+  padding-inline: clamp(12px, 2.2vw, 30px);
+}
+
+.statement-term:first-child {
+  padding-inline-start: 0;
+}
+
+.statement-term dt {
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .statement-term dt {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.statement-term dd {
+  margin: 0;
+}
+
+.statement-term dd:nth-of-type(1) {
+  font: 500 clamp(22px, 2.5vw, 34px) / 1.1 var(--font-display);
+  letter-spacing: -0.01em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.statement-note {
+  color: var(--paper-ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* The operators sit in the gutter before the term they act on. */
+
+.statement-term--minus::before,
+.statement-term--equals::before {
+  position: absolute;
+  inset-inline-start: -0.45em;
+  inset-block-start: 0.92em;
+  font: 400 26px/1 var(--font-display);
+  color: var(--paper-ink-3);
+}
+
+.statement-term--minus::before {
+  content: '\2212';
+  content: '\2212' / '';
+}
+
+.statement-term--equals::before {
+  content: '=';
+  content: '=' / '';
+}
+
+/* The total, double-ruled, as a statement's total is. */
+
+.statement-term--equals dd:nth-of-type(1) {
+  text-decoration: underline double;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 7px;
+}
+
+.statement-term--count {
+  border-inline-start: 1px dashed var(--paper-rule);
+}
+
+/* The stub: the perforated end of a slip, with a barcode and the house mark. */
+
+.statement-stub {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 36px 14px 24px;
+  border-inline-start: 1px dashed var(--paper-rule);
+}
+
+.statement-stub::before,
+.statement-stub::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -13px;
+  z-index: 3;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 50%;
+  background: var(--background);
+}
+
+.statement-stub::before {
+  inset-block-start: -13px;
+}
+
+.statement-stub::after {
+  inset-block-end: -13px;
+}
+
+.statement-bars {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  max-inline-size: 56px;
+  min-block-size: 110px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--paper-ink) 0 2px,
+    transparent 2px 5px,
+    var(--paper-ink) 5px 6px,
+    transparent 6px 9px,
+    var(--paper-ink) 9px 12px,
+    transparent 12px 14px,
+    var(--paper-ink) 14px 15px,
+    transparent 15px 19px
+  );
+  opacity: 0.78;
+}
+
+.statement-wordmark::before {
+  content: 'BAULT';
+  content: 'BAULT' / '';
+  display: block;
+  writing-mode: vertical-rl;
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: 0.32em;
+  color: var(--paper-ink-3);
+}
+
+@keyframes statement-print {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@media (max-width: 640px) {
+  .statement-sheet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .statement-stub {
+    display: none;
+  }
+
+  .statement-sum {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 20px;
+  }
+
+  .statement-term,
+  .statement-term:first-child {
+    padding-inline: 0;
+  }
+
+  .statement-term--minus::before,
+  .statement-term--equals::before {
+    content: none;
+  }
+
+  .statement-term--count {
+    border-inline-start: 0;
+  }
+}
+
+/* Money that has been asked for and has not moved: two slips, not statistics. */
+
+.transit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.transit-slip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--r-md);
+}
+
+.transit-slip::before {
+  content: '';
+  align-self: center;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.transit-label {
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+:lang(he) .transit-label {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.transit-amount {
+  font: 500 22px/1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.transit-note {
+  flex: 1 1 22rem;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+}
+
+/* ---- A ledger on a phone is a list of lines, not a stack of cards ----
+   Type and what it was for on the start side, the amount and the balance after it
+   on the end side, the date under the type. The balance keeps its name; the amount
+   is named by the line it sits on. */
+
+@media (max-width: 767px) {
+  .dt-wrap--stack .data-table--ledger tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'type amount'
+      'ref balance'
+      'date balance';
+    column-gap: var(--sp-4);
+    row-gap: 3px;
+    align-items: baseline;
+    padding-block: 14px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td {
+    display: block;
+    min-inline-size: 0;
+    padding: 0;
+  }
+
+  .dt-wrap--stack .data-table--ledger td::before {
+    content: none;
+  }
+
+  /* The selected-row bar belongs to the line, not to the date cell that happens to be first. */
+  .dt-wrap--stack .data-table--ledger tbody tr > td:first-child {
+    border-inline-start: 0;
+  }
+
+  .dt-wrap--stack .data-table--ledger tr.is-selected {
+    border-inline-start: 3px solid var(--foreground);
+    padding-inline-start: calc(var(--sp-4) - 3px);
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(1) {
+    grid-area: date;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(2) {
+    grid-area: type;
+    font-size: var(--fs-md, 16px);
+    font-weight: 500;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(3) {
+    grid-area: ref;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(4) {
+    grid-area: amount;
+    text-align: end;
+    font: 500 20px/1.1 var(--font-display);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(5) {
+    grid-area: balance;
+    align-self: start;
+    text-align: end;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(5)::before {
+    content: attr(data-label);
+    display: block;
+    font: 500 10px/1.4 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  :lang(he) .dt-wrap--stack .data-table--ledger td:nth-child(5)::before {
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}

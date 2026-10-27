@@ -11,6 +11,7 @@ import './components.css';
 import './landing.css';
 import './app.css';
 import './gallery.css';
+import './screens.css';
 import './motion.css';
 
 try {
