@@ -41,7 +41,9 @@ body::before {
 /* ---- Brand mark: the paper label ---- */
 
 .rail-mark {
-  background: var(--paper);
+  background:
+    var(--foil) bottom / 100% 3px no-repeat,
+    var(--paper);
   color: var(--paper-ink);
   font-family: var(--font-display);
   font-weight: 700;

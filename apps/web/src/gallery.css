@@ -250,3 +250,85 @@
 .drawer-head .identity-serial {
   font-size: 15px;
 }
+
+/* ---- Loading: empty cases, in the shape of what is coming ---- */
+
+.card-grid:has(> li > .skel-metric) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 44px 32px;
+  padding: var(--sp-4) 0 var(--sp-8);
+}
+
+.card-grid > li > .skel-metric {
+  height: auto;
+  aspect-ratio: 5 / 8;
+  border-radius: 18px;
+}
+
+/* ---- Nothing here: an empty case, not an apology ---- */
+
+.empty {
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-16) var(--sp-4);
+  text-align: center;
+  border-block-start: 0;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 76px;
+  block-size: 112px;
+  margin-block-end: var(--sp-2);
+  border: 1px dashed var(--input);
+  border-radius: 16px;
+  color: var(--muted-foreground);
+  background: linear-gradient(160deg, color-mix(in oklab, var(--foreground) 5%, transparent), transparent 60%);
+}
+
+.empty-icon svg {
+  inline-size: 26px;
+  block-size: 26px;
+}
+
+.empty-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.empty-text {
+  color: var(--muted-foreground);
+  font-size: var(--fs-base);
+}
+
+/* ---- The register: a rule down the leading edge, a node for each entry ---- */
+
+.timeline {
+  margin-inline-start: 5px;
+  border-inline-start: 1px solid var(--input);
+}
+
+.timeline > li {
+  padding-inline-start: 22px;
+  border-block-end: 0;
+}
+
+.timeline > li::before {
+  inset-block-start: calc(var(--sp-3) + 5px);
+  inset-inline-start: -5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--background);
+  border: 1.5px solid var(--input);
+}
+
+.timeline > li:first-child::before {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
