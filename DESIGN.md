@@ -1,11 +1,10 @@
-# Bault — Custody Grade
+# Bault — Custody Grade, showcase edition
 
 The design system for a platform that holds other people's property and is the only record of who
 owns it, where it is, and what it costs.
 
-This document is the spec. `apps/web/src/index.css` is the implementation, and every token named
-here exists there under the same name. Where the two disagree, the CSS is right and this file is a
-bug.
+This document is the spec. `apps/web/src/*.css` is the implementation, and every token named here
+exists there under the same name. Where the two disagree, the CSS is right and this file is a bug.
 
 ---
 
@@ -13,71 +12,83 @@ bug.
 
 Bault must communicate **trust, ownership, care, transparency, and the pleasure of collecting**.
 
-The direction is a **precision instrument, in daylight**: a well-run lab, or the back office of a
-serious institution that happens to love trading cards. Not a vault door, not a safe, not a dark
-dashboard with a neon accent — those are pictures of security, and a picture of security is what you
-show when you cannot show the thing itself.
+The first edition of this system was a precision instrument in daylight: neutral, ruled, quiet. It
+was right about trust and wrong about pleasure. The showcase edition keeps every one of its rules
+and changes the room: **a vault with the lights turned to the objects.**
 
-What Bault can show is the thing itself: the serial, the register, the photograph, the ledger line,
-the custody event with the operator's name on it. **Trust comes from precision and legibility, not
-from mood.** So the palette is neutral and the collector's photographs are the most saturated thing
-on any screen.
+Three ideas carry it, and everything else is subordinate to them.
+
+1. **The object is the interface.** Every card photograph in the product is a card *in its case*: a
+   graded slab, smoked acrylic with a paper label that carries the name and the serial. The thing the
+   platform exists to hold looks like the thing it holds, in the list, on the shelf, in the drawer,
+   on the front page.
+2. **Paper is the record.** The product is dark, because a lit object wants a dark room. Where
+   something *is* the record (a label, the ledger, the colophon) it is paper: cream, ink-black type,
+   a foil strip under it. Paper is never decoration; it marks the places where the truth is written.
+3. **Foil is what is alive.** One iridescent spectrum, borrowed from the sheen of a holographic card,
+   is the only accent that moves: the active tab, the active destination, the title rule of a panel,
+   the light under a primary button, the sweep across a slab. It never fills a surface and it never
+   means a status.
+
+Trust still comes from precision and legibility, not from mood: the serial, the register, the
+photograph, the ledger line with an operator's name on it.
 
 ## 2. Principles
 
-Nine rules. Each of them was written against something the audit found.
+Nine rules. Each of them was written against something the audit found; seven are unchanged.
 
 ### The serial is the identity
-Every item view opens with **photograph → serial → status**, in that order. Serials are IBM Plex
-Mono, never truncated, always copyable (`user-select: all`), and always laid out left-to-right even
-inside a Hebrew sentence. The catalogue description is the item's *name*; `type_class` is a
-classification and belongs on a quiet line, not in the title. *(Before: every item in the product was
-called `trading_card`.)*
+Every item view opens with **photograph → serial → status**, in that order. Serials are Geist Mono,
+never truncated, always copyable (`user-select: all`), and always laid out left-to-right even inside
+a Hebrew sentence. The catalogue description is the item's *name*; `type_class` is a classification
+and belongs on a quiet line, not in the title. The slab label repeats the serial as a *drawing* (CSS
+from a data attribute), so a serial is in the document once, where the page prints it.
 
 ### State is structural, not decorative
-- **Active** — full colour, full chrome, every action offered. No modifier; this is the component.
-- **Frozen** — colour retained, a visible **lock rail** along the leading edge in frost, actions
-  muted **with a stated reason**. A frozen card is not broken and it is not gone; somebody else is
-  holding the decision, and the screen says who and why.
-- **Departed** — the **photograph desaturates**, the chrome stays, the history stays navigable.
-  *A departed item never looks deleted.* *(Before: departed items were painted near-black with white
-  text inside a light product, which read as redaction.)*
+- **Active** — full colour, every action offered. No modifier; this is the component.
+- **Frozen** — colour retained, a frost halo on the case, actions muted **with a stated reason**.
+- **Departed** — the case and photograph **desaturate**; the chrome stays, the history stays
+  navigable. *A departed item never looks deleted.*
+- A status is a **light and a word** (`.pill` and `.badge`): a 7 px LED in the semantic colour, the
+  state in words beside it. Colour is never the only signal.
 
 ### Money names itself first
-Amount before verb, everywhere: `$12.40 · Storage, Aug`. Tabular numerals
-(`font-variant-numeric: tabular-nums`), decimal-aligned in tables, bidi-isolated so an RTL row cannot
-reorder it. **No charge appears anywhere without its amount adjacent** — a service action may not
-render its button before its price.
+Amount before verb, everywhere: `$12.40 · Storage, Aug`. Tabular lining numerals. Every amount is
+wrapped in `.amount` (`direction: ltr; unicode-bidi: isolate`). **No charge appears anywhere without
+its amount adjacent.** Lead figures (a balance, a statistic, a price on the rate card) are set in the
+display face, large, because money is the one thing a collector reads twice.
 
 ### Append-only looks append-only
-Custody events, ledger lines, wallet-request history and support messages all render as **one
-component**: a dated vertical register with a continuous rule down the leading edge. No hover-to-edit,
-no pencil icons, no chat bubbles, nothing implying mutability. The rule runs *through* the last row
-rather than tapering off — the record has not ended, that is just the most recent thing so far.
+Custody events, ledger lines, wallet-request history and support messages render as **a register**:
+a dated vertical rule with a node per entry, the newest lit. No hover-to-edit, no pencil icons, no
+bubbles. On the front page the same idea is shown literally: a ledger that writes itself a line at a
+time, whose fourth line is a *correction* appended under the others while nothing above it moves.
 
 ### Photography is the colour
-The UI palette is neutral. Accents are semantic only, and there are five of them. The one dark
-surface in the product is the **photography stage** at the top of an item view, because a card is an
-object and objects are lit.
+The UI is monochrome. Accents are semantic, and there are five of them. The one place the UI itself
+is allowed to be colourful is the foil, and only as a hairline.
 
-### One radius, one border weight, one shadow — and most surfaces have none
-3px, 1px, and a single overlay shadow used **only** for popovers, sheets, dialogs and toasts. A panel
-is a heading and a rule, not a floating white rectangle. **No cards inside cards.** Grouping is done
-with spacing and rules, which is what grouping is.
+### One radius family, one border weight, shadows only for objects
+The kit's radius (`--radius`, 10 px) with `--r-lg` for panels and sheets; a 1 px hairline; and shadows
+only where something is physically in the room: a slab, a popover, a drawer, a dialog. **A panel is a
+heading and a rule, not a floating rectangle**, and there are no cards inside cards.
 
 ### Density follows the job
-Marketing generous, vault comfortable, warehouse compact — and it is **the same component adapting**,
-not three components. Four variables change; everything measured in them follows.
+Marketing generous, vault comfortable, warehouse compact — the same component adapting, not three
+components. Four variables change; everything measured in them follows.
 
-### Motion confirms, never entertains
-150–250 ms, ease-out, one purpose per animation. Irreversible actions get a deliberately slower
-confirmation. `prefers-reduced-motion: reduce` disables all of it.
+### Motion shows a change of state or makes an argument
+It is allowed to be generous on the public page and exact in the product. Every animation does one
+of three jobs: **confirm** (a press, a focus, a drawer closing), **orient** (a page arriving, a tab
+indicator travelling, a card entering a shelf) or **argue** (the front page's journey, in which one
+card changes state while you read). Nothing loops except two things that are alive on purpose: the
+foil, and a hero card that breathes. `prefers-reduced-motion: reduce` removes all of it, and nothing
+is ever hidden *waiting* for an animation that will not run.
 
 ### Two scripts, one rhythm
 The same type scale in both languages. Layout mirrors through logical properties — there is no
-`[dir='rtl']` layout branch, only `inline-start` and `inline-end`. The globe control is the same
-component in the same logical position in both directions. **Any screen that looks worse in one
-language is not done.**
+`[dir='rtl']` layout branch, only `inline-start` and `inline-end`. The display face carries both
+scripts. **Any screen that looks worse in one language is not done.**
 
 ---
 
@@ -85,120 +96,80 @@ language is not done.**
 
 | Face | Weights | Job |
 | --- | --- | --- |
-| **IBM Plex Sans** | 400 / 500 / 600 | Latin UI, and money |
-| **IBM Plex Sans Hebrew** | 400 / 500 / 600 | Hebrew UI (hebrew subset only) |
-| **IBM Plex Mono** | 400 / 500 | Codes. Serials, bins, parcels, tickets, barcodes. **Nothing else.** |
-| **Frank Ruhl Libre** | 500 / 700 | Display, **both scripts**, marketing sizes only |
+| **Frank Ruhl Libre** | 500 / 700 | Display, **both scripts**: page titles, section headings, lead figures, the wordmark |
+| **Geist** | 400 / 500 / 600 | Latin UI, body copy |
+| **IBM Plex Sans Hebrew** | 400 / 500 / 600 | Hebrew UI and body (hebrew subset only) |
+| **Geist Mono** | 400 / 500 / 600 | Codes: serials, bins, parcels, tickets, barcodes. Also the labels on a physical plate (shelf plate, paper label) and the `§` marks |
 
-Self-hosted from `assets/fonts`, subset to `latin` / `latin-ext` / `hebrew`, `font-display: swap`,
-512 kB over 19 files. Regenerate with `node scripts/fetch-fonts.mjs`. The Latin and Hebrew UI faces
-are preloaded in `index.html`; everything else arrives on demand through `unicode-range`.
+Self-hosted from `assets/fonts`, subset to `latin` / `latin-ext` / `hebrew`, `font-display: swap`.
+Regenerate with `node scripts/fetch-fonts.mjs`. The Latin UI face, the Hebrew UI face and the display
+face (both scripts) are preloaded in `index.html`; the rest arrive through `unicode-range`.
 
-**Why one display family instead of a pair.** The brief asked for Frank Ruhl Libre in Hebrew paired
-with a Latin serif of similar contrast, and for the pair to be confirmed as one voice before
-adoption. Frank Ruhl Libre ships a Latin companion drawn for its Hebrew, so the two scripts share a
-skeleton, a stroke contrast and a vertical rhythm **by construction rather than by resemblance**.
-Set side by side at 48/64 px in `docs/design/type-specimen.html`, it holds. Source Serif 4 was the
-alternative and was not adopted: 436 kB to assert a similarity this family gets for free.
+**Why a serif.** The kit's grotesque is the right voice for controls and the wrong voice for a house
+that keeps people's property: a catalogue, a ledger and a deed are all set in a serif. Frank Ruhl
+Libre ships a Latin companion drawn for its Hebrew, so a Hebrew headline and an English one share a
+skeleton, a stroke contrast and a vertical rhythm by construction.
 
-**Codes are mono; figures are not.** The old stylesheet put money, dates, counts, serials and
-barcodes in one mono bucket on the reasoning that they all contain numbers. They do — which is why
-the bucket was wrong. When a price and a barcode are set identically, neither is saying what it is.
-Mono does real work on a serial (fixed advance, slashed zero, unambiguous `1/l/I`); on money it was
-only being borrowed for column alignment, which `tabular-nums` already provides.
+**Codes are mono; figures are not.** Mono does real work on a serial (fixed advance, slashed zero,
+unambiguous `1/l/I`). Money, dates and counts are set in the UI face, or in the display face when they
+are the point of the screen.
 
 ### Scale
-`12 · 13 · 14 · 16 · 18 · 22 · 28 · 36 · 48 · 64`. Ten steps, nothing between them.
+`12 · 13 · 14 · 16 · 18 · 22 · 28 · 36 · 48 · 64` — ten steps for the product. The public page and
+the page titles use fluid display sizes (`clamp`) between 34 and 112 px, because a headline is not a
+control.
 
-| Token | px | Used for |
-| --- | --- | --- |
-| `--fs-caption` | 12 | table headers, timestamps, meta |
-| `--fs-sm` | 13 | dense cells, warehouse body |
-| `--fs-base` | 14 | controls, vault body |
-| `--fs-md` | 16 | reading copy |
-| `--fs-lg` | 18 | panel titles |
-| `--fs-xl` | 22 | section headings |
-| `--fs-2xl` | 28 | page titles |
-| `--fs-3xl` | 36 | the one figure on a screen that deserves it |
-| `--fs-4xl` | 48 | marketing |
-| `--fs-5xl` | 64 | marketing, one line only |
+Line height: `--lh-tight` 1.15 (display), `--lh-snug` 1.35, `--lh-normal` 1.5. Display headings set at
+1.0–1.1; Hebrew display gets an extra 0.05. **Tracking is Latin-only**: Hebrew display tracking is 0
+(`:lang(he)`).
 
-Line height: `--lh-tight` 1.15 (display), `--lh-snug` 1.35 (controls, cells, UI headings),
-`--lh-normal` 1.5 (body).
-
-Weights: `--fw-regular` 400, `--fw-medium` 500, `--fw-semibold` 600. **`--fw-bold` is also 600** —
-the loaded faces ship no 700, and `font-synthesis: none` is set, so asking for one gets 600 rather
-than a smeared 400. *(Before: `font-weight: 550` appeared twelve times against a stack with no
-variable font.)*
+Weights: 400 / 500 / 600; `--fw-bold` is 600; `font-synthesis: none`.
 
 ### Numerals
-- Money, quantities, dates, percentages: `font-variant-numeric: tabular-nums`.
-- Every amount is wrapped in `.amount`, which sets `direction: ltr; unicode-bidi: isolate`.
-- Decimal alignment in a column is `text-align: end` + tabular figures. There is no
-  character-alignment property shipping in browsers; this is the alignment.
+- Money, quantities, dates, percentages: `font-variant-numeric: tabular-nums` (and `lining-nums` in
+  the display face).
+- Decimal alignment in a column is `text-align: end` + tabular figures.
 
-### Currency, and a decision worth stating
-Money renders as `$1,234.56` in **both** locales, rather than switching to Hebrew's trailing-symbol
-convention. USD is the platform's only settlement currency; a collector comparing a Bault price to a
-price guide is comparing the same string; and a ledger column that changes shape when somebody
-switches language is a column two people cannot read together. Dates, by contrast, **are**
-locale-formatted through `Intl.DateTimeFormat` with the real locale. This is a decision, not an
-oversight, and it is the one place the system deliberately departs from "locale-correct".
+### Currency
+Money renders as `$1,234.56` in **both** locales. USD is the only settlement currency, a collector
+comparing a Bault price to a price guide is comparing the same string, and a ledger column that
+changes shape when somebody switches language is a column two people cannot read together. Dates are
+locale-formatted through `Intl.DateTimeFormat`.
 
 ---
 
 ## 4. Colour
 
-Every token below is measured against `--surface-page` in the light theme. Ratios are stated because
-a palette that has not been measured is a mood board.
+The theme is the shadcn/ui kit's (`theme.css`, part 1: `--background`, `--card`, `--primary`,
+`--muted`, `--border`, `--input`, `--ring`, `--destructive`, light and dark, pasted from the kit's
+own export). Part 2 maps those names onto Bault's tokens, so re-theming is a paste. **Dark is the
+default**; light and system stay on the toggle.
 
-### Ground
+### Ground and ink (dark)
+| Token | Value | Job |
+| --- | --- | --- |
+| `--surface-page` | `#0a0a0a` (`--background`) | The room |
+| `--surface-raised` | `#141414` (`--card`) | Inputs, overlays, the colophon's neighbours |
+| `--surface-sunken` | `#1c1c1c` (`--muted`) | Table headers, hover grounds |
+| `--line` | white 10 % (`--border`) | The hairline |
+| `--line-strong` | white 15 % (`--input`) | A rule that separates sections |
+| `--ink` | `#fafafa` | Headings, values |
+| `--ink-2` | `#a3a3a3` | Secondary — 8.3:1 on the page |
 
-| Token | Light | Dark | Job |
-| --- | --- | --- | --- |
-| `--surface-page` | `#f3f4f2` | `#14161a` | The ground. Off-white with a **cool** cast — deliberately not warm cream, which plus a serif is a mood this product is not selling. |
-| `--surface-raised` | `#f3f4f2` | `#14161a` | Same as the page. **Panels are not lighter rectangles.** |
-| `--surface-sunken` | `#e9ebe7` | `#1c1f24` | Register rails, table headers, the navigation rail |
-| `--surface-sunken-2` | `#dfe2dc` | `#24282e` | The unfilled part of a proportion bar |
-| `--surface-input` | `#ffffff` | `#1c1f24` | **True white, and only where somebody types.** The only white rectangle on screen is therefore unmistakably a field. |
-| `--surface-stage` | `#16181c` | `#0c0d10` | The photography stage. The one dark surface. |
-| `--line` | `#dcded9` | `#2b2f36` | The hairline. One step darker than the surface. |
-| `--line-strong` | `#c3c6bf` | `#3d434c` | A rule that separates sections rather than rows |
+Light is the kit's light: white page, `#171717` primary, `#5f5f68` secondary ink (6.4:1).
 
-### Ink
+### Accents — five, one job each, unchanged
+`--custody` (in Bault's care: verified, stored) · `--brass` (money) · `--frost` (frozen) · `--amber`
+(warning) · `--oxblood` (destructive; follows `--destructive`). Each has an ink value that clears AA as
+text, a mark value, and a wash. The theme's `--primary` is *not* an accent: it is the primary button.
 
-| Token | Light | Contrast on page | Job |
-| --- | --- | --- | --- |
-| `--ink` | `#111318` | **16.7:1** AAA | Headings, values, the answer in a row |
-| `--ink-body` | `#2a2d33` | **12.5:1** AAA | Body copy |
-| `--ink-2` | `#676c74` | **4.8:1** AA | Secondary, captions, the question in a row |
+### Foil
+`--foil` — a 115° ramp of five light hues (`--foil-a` … `--foil-e`, rose → amber → mint → sky →
+violet). Hairlines and strips only; always still or sliding slowly (a 6–7 s loop).
 
-**No grey text on a coloured background, anywhere.**
-
-### Accents — five, one job each
-
-Each has an **ink** value that passes AA as text on the page, a **mark** value for rules, rails and
-seals where 3:1 is the bar, and a **wash** for the rare filled ground.
-
-| Token | Light | Contrast | The one job |
-| --- | --- | --- | --- |
-| `--custody` | `#0f5b4a` | **7.3:1** AAA | In Bault's care: verified, active, custody confirmed. Also the focus ring and the primary button. |
-| `--brass` | `#7a5f1f` | **5.5:1** AA | Money. Prices, wallet, ledger, fees. Never a highlight, never a border. |
-| `--brass-mark` | `#9a7a2e` | 3.7:1 | Money as a rule or a seal, and figures ≥ 22 px only |
-| `--frost` | `#4a6e8f` | **4.9:1** AA | Frozen. A held card, a paused action, a decision somebody else controls. |
-| `--amber` | `#96591a` | **5.1:1** AA | Warning. Break-Even Watch approaching, a deadline. |
-| `--amber-mark` | `#a8641a` | 4.2:1 | The amber rail and bar |
-| `--oxblood` | `#8c2b2b` | **7.6:1** AAA | Irreversible, destructive, disputed. |
-
-There is **no violet**. It was a sixth status with no job; `--violet` now points at `--ink-2`.
-
-### The dark theme
-Not an inversion and not a second brand: the ground becomes the colour the photography stage already
-is, the accents lift until they clear AA against it, and every relationship holds — money is still
-brass, frozen is still frost, the ink is still three weights apart. Three states, as browsers report
-them: an explicit choice stamps `data-theme`; the default "system" stamps nothing, so the media query
-is guarded as `:root:not([data-theme='light'])` and the `[data-theme='dark']` block repeats the
-tokens so the toggle wins in both directions.
+### Paper
+`--paper` `#f3efe6`, `--paper-ink` `#15130f`, `--paper-line` `#d6d0c2`. The slab label, the shelf plate,
+the colophon, the record section of the front page. Paper is the same in both themes.
 
 ---
 
@@ -206,16 +177,15 @@ tokens so the toggle wins in both directions.
 
 | Token | Value | Rule |
 | --- | --- | --- |
-| `--radius` | `3px` | **The** radius. `--r-xs`/`sm`/`md`/`lg`/`pill` all point at it, so there are no pills. |
-| `--radius-flat` | `0` | Tables, registers, photography stages, proportion bars |
+| `--radius` | `0.625rem` (the kit's) | Controls |
+| `--r-lg` | `--radius + 4px` | Panels, sheets, dialogs |
+| `--r-pill` | `--radius` | There are no pills; a status is a light and a word |
 | `--border-w` | `1px` | The only border weight |
-| `--shadow-overlay` | `0 1px 2px …, 0 12px 32px …` | **The only shadow.** Popovers, sheets, dialogs, toasts. A resting surface never has one — `--shadow-card`, `--shadow-hero` and `--shadow-rail` are all `none`. |
+| `--shadow-overlay` | popover/drawer/dialog | Overlays |
+| the slab shadow | inside `.slab-case` | The one resting shadow: an object on a table |
 
-**Focus.** `--focus-width` 2px, `--focus-color` custody green, `--focus-offset` 2px. One rule, on
-every focusable element, in both directions, both themes. `:focus-visible`, never `:focus` — a ring
-that appears on mouse click is a ring on every field somebody has merely touched. Compound controls
-(the vault search, the `.control` select) take the ring on the wrapper via `:focus-within` and
-suppress it on the inner element, which is the only legitimate `outline: none` in the file.
+**Focus.** A three-pixel ring in `--ring` at 55 % (`box-shadow`, as the kit draws it); the field's
+border takes `--ring`. `:focus-visible`, never `:focus`.
 
 ---
 
@@ -238,52 +208,72 @@ Register and Field get denser without a single component being rewritten.
 
 ## 7. Motion
 
-`--dur-fast` 150 ms · `--dur` 200 ms · `--dur-slow` 250 ms · `--ease` `cubic-bezier(0.16, 1, 0.3, 1)`.
+Tokens: `--dur-fast` 150 · `--dur` 200 · `--dur-slow` 250 · `--dur-enter` 300 · `--dur-exit` 180 ms;
+`--ease-out-expo` `cubic-bezier(0.16, 1, 0.3, 1)` for arrivals, `--ease-in-out-quart` for departures and
+drawing, `--ease-spring` for the one overshoot.
 
-One purpose per animation. Sheets slide in at `--dur-slow`; hovers and focus resolve at `--dur-fast`;
-nothing loops, nothing bounces, nothing draws attention to itself. **Irreversible actions are slower
-on purpose** — the confirmation sheet opens at `--dur-slow` and its confirm control does not become
-available until the typed confirmation matches, so the fastest possible path through it is still
-slower than a click.
+| Where | What | Job |
+| --- | --- | --- |
+| Slab | Tilts toward the pointer (±9°), the card shifts against it, a spot of light and a holographic spectrum slide across the case | Orient / delight |
+| Hero slab | Breathes (a slow idle sway of the sheen) | Alive on purpose |
+| Landing hero | Headline words rise out of a mask; text and buttons rise; five cards fan out from a stack; the plate rises; the fan leans toward the pointer | Argue |
+| Landing, scrolling | Section words rise; the ledger writes itself; the receipt draws; rows lean on hover; tickets tilt and their pictograms draw; a foil progress line; a header that blurs | Orient |
+| Landing, journey | One card moves through four states while you read (unidentified → booked in, with a flash → shelved → decided) | Argue |
+| Shell | Page and tab panels rise; cards in a gallery arrive in sequence; figures count up; the tab indicator and the active rail mark are foil and travel | Orient |
+| Controls | Press settles (`scale(.98)`); a primary button throws a little foil light under itself | Confirm |
+| Overlays | Drawers slide, dialogs rise, both *exit* (`.is-closing` for `--dur-exit`) | Confirm |
+| Loading | Placeholders are empty cases in the shape of what is coming, with a shimmer; the boot mark breathes | Orient |
 
-Under `prefers-reduced-motion: reduce`, all durations collapse to 0.01 ms and the press-down
-transform is removed.
+Under `prefers-reduced-motion: reduce` every animation and transition is removed. Hidden *initial*
+states exist only under `prefers-reduced-motion: no-preference` and only after the page has proved it
+can run the observer (`.lp-js`), so nothing is ever left invisible.
+
+**Irreversible actions are slower on purpose**: the confirmation sheet opens at `--dur-slow` and its
+confirm control is not available until the typed confirmation matches.
 
 ---
 
 ## 8. The components
 
-### Existing components, brought onto the system
+### The slab (`CardPhotoThumb`, `CardSlab`; `slab.css`)
+The signature object. Every card photograph is shown this way. Anatomy: the **case** (smoked acrylic,
+inner edge light, a drop shadow); the **label** (paper, the name up to the first ` · ` on two lines,
+the serial in mono, a foil strip underneath); the **window** (the photography mat: a dark well with a
+top light and an inner shadow); the **glare** (pointer-tracked light plus the foil spectrum,
+`mix-blend-mode: overlay`). It is sized in container units, so one slab scales from a 44 px table
+thumbnail (no label text) to a 400 px hero. States are on the object: frozen has a frost halo,
+departed loses its colour. The lightbox is the same slab, large.
 
-| Component | What changed |
-| --- | --- |
-| **Panel** | Was a white rounded card with a border and a shadow. Now a heading, a rule and padding from the density scope. |
-| **Button** | Five legacy variants mapped onto four jobs: `gold` → primary (custody, filled), `navy` → strong secondary (ink, filled), `secondary`, `ghost` → quiet, `danger` → destructive. A loading button **keeps its label**; the spinner replaces the icon, so the width does not change. |
-| **Register** (`.data-table`, `.table`) | Square corners, sunken header at 12 px sentence case (was 11 px uppercase, 0.07 em tracked), rows ruled, numbers decimal-aligned, a 3 px state rail reserved on the leading edge of every row. |
-| **Status** (`.pill`, `.badge`) | Two components became one. A 2 px leading rule in the semantic colour on the ground, square, with the status still stated in words. `.badge`'s duplicate nine-modifier block is deleted. |
-| **Sheet** (`.drawer`) | 440 px default; `.drawer--sheet` is 960 px for the item, which has a photograph, an identity, services with prices and a custody register to hold. `overscroll-behavior: contain`, safe-area padding. |
-| **Empty state** | The 44 px tinted rounded square with a generic glyph is deleted. Typographic, start-aligned, and it names the next action. |
-| **Metric** | The four-identical-cards-with-icon-tiles grid became a ruled row of figures. `.metric-icon` is `display: none`. |
-| **Balance** | The dark navy panel with a gold gradient, a glowing text-shadow and a cropped vault-door illustration became a figure and a rule. `.hero-art` is deleted. |
-| **Navigation rail** | Was a navy monolith with an animated gold plate, a machined notch and a turned rivet. Now the second surface with a hairline, and the active destination takes the same 2 px custody rule as everything else. |
-| **Type glyph** in ledger rows | Deleted. A 24 px tinted square beside a label that already said "Cash in". |
-| **Support thread** | Chat bubbles became register rows. Support messages are append-only; a bubble is the shape of a conversation that can be deleted. |
+### Gallery (`gallery.css`)
+The vault and the marketplace show items as slabs on a table: serial, name, state light, bin, cost.
+The markup is the old register's, unchanged (same buttons, same hit areas); only the layout changed.
+The photo button is inert in the gallery so the whole card opens the item.
 
-### Components this product did not have
+### Panel and statement
+A panel is a **section of a printed statement**: a hairline across the top with a 48 px foil segment
+at its start, a serif heading, content. Statistics are columns divided by hairlines with lead figures
+in the display face. A table is hairline rows under a quiet header, with a foil mark on the leading
+edge of a row you point at.
 
-| Component | Why |
-| --- | --- |
-| **`.serial`** | The identity. `dir=ltr` + `unicode-bidi: isolate`, mono, `user-select: all`, never truncated. |
-| **`.amount`** | Money. Isolated, tabular, figure-first. `--lead` and `--display` sizes; `--brass`/`--credit`/`--debit` tones. |
-| **`.seal`** | Bault's mark on something it checked with its own hands — an inspected escrow deal, a signed condition report. A rule and a mark, not a chip, and it never appears on anything Bault has not physically handled. |
-| **`.identity`** | Photograph → serial → status, as one line, in that order, in every place an item is named. |
-| **State treatments** | `.is-frozen` / `.card--frozen`, `.is-departed` / `.card--historical`, `.frozen-reason`, `.departed-note`. |
-| **`.stage`** | The photography stage and its `.stage-photo` (`object-fit: contain` — this is evidence, cropping it hides the corner somebody is trying to see). |
-| **`.proportion`** | The Break-Even Watch and the shelf-yield bar, one component. Goes **amber before it says anything**. |
-| **`.steps`** | The custom-request register: ask (free) → operator proposes price and scope → you accept, with the current step marked by the same rule as everything else. |
-| **`.confirm-sheet`** | Full-height, the item's photograph present, the consequence in one plain sentence as the largest text in the sheet, a typed confirmation, and `--dur-slow`. |
-| **`.ltr-run` / `.bidi`** | Bidi isolation, applied to every string that can carry Latin inside Hebrew. |
-| **`.offer`** | A service with its price stated before its button. Structurally impossible to render one without the other. |
+### Status
+`.pill` / `.badge` / `.status-badge`: an LED (7 px, the semantic colour, a soft halo) and the state in
+words. Departed is a hollow LED.
+
+### The register (`.timeline`)
+A rule down the leading edge, a node per entry, the newest node lit.
+
+### Paper pieces
+The **shelf plate** (serial · state · where, on paper, under the fan of cards), the **label** (the
+serial drawn as a barcode label), the **colophon** (the front page's footer), and the **record
+section** (the front page's one paper section). All use `--paper`, `--paper-ink` and a foil strip.
+
+### Empty and loading
+An empty state is a dashed empty case with a serif title. Loading is an empty slab with a shimmer.
+
+### Components this product has always had
+`.serial`, `.amount`, `.seal`, `.identity`, `.stage`, `.proportion`, `.steps`, `.confirm-sheet`,
+`.ltr-run` / `.bidi`, `.offer` — as in the first edition. `.stage` is now the lit mat the item's slab
+stands on in the drawer.
 
 ---
 
@@ -307,31 +297,31 @@ transform is removed.
 
 | Surface | Density | Notes |
 | --- | --- | --- |
-| Public / sign-in | `marketing` | The only serif. The photograph is the pitch. |
-| Marketplace list & detail | `marketing` heading, `vault` body | Price is the first text line; the seal is a mark, not a badge. |
-| Vault, item, wallet, services, support | `vault` | The register is the default shape. |
-| Warehouse | `warehouse` | Compact, keyboard- and scanner-first, no photography stage. |
+| Public / sign-in | `marketing` | The only place the display face runs at poster size; real cards on a shelf are the pitch. |
+| Marketplace list & detail | `marketing` heading, `vault` body | Price is the first text line, set in the display face. |
+| Vault, item, wallet, services, support | `vault` | The gallery and the statement are the default shapes. |
+| Warehouse | `warehouse` | Compact, keyboard- and scanner-first. Barcodes stay white for scanners. |
 | Management | `vault` | Charts are graphite bars/lines with a single accent, tabular axis labels, no gradients. |
 
 ---
 
 ## 11. Anti-patterns — rejected, and where they were
 
-Each of these was in the product and is named in the audit.
+From the first edition (still rejected): identical rounded cards for everything; the same soft shadow
+under everything; icon tiles above headings; generic illustrations; "balance cards"; decorative
+animation that has no job.
 
-- Arbitrary gradients — the rail, the balance card, the gold button, the selector plate.
-- Identical rounded cards for everything — panel inside panel inside tile.
-- The same soft grey shadow under everything — seven resting surfaces shared one.
-- Tracked-out ALL-CAPS eyebrow labels above every heading — every table header, every metric label.
-- Middle-dot meta strings as default chrome.
-- Icon tiles above headings — the wallet and management KPI grids, the empty state, the ledger rows.
-- Generic illustrations — the cropped vault door.
-- Monospace for ordinary data labels — money, dates, counts, usernames.
-- Dark-mode-with-one-neon-accent.
-- Cream paper plus serif everywhere.
-- Interchangeable dashboard grids of KPI cards.
-- Decorative animation — the rail selector's travel, the notch, the rivet.
-- "Balance cards" for money.
+From the showcase edition's own first draft (rejected after review, because they are what every
+generated site looks like):
+
+- A blurred coloured glow behind the hero or the app (an "aurora").
+- A grid-line backdrop.
+- Gradient headline text.
+- Bento grids of identical cards with a pointer spotlight and counters.
+- Glass panels.
+- The same eyebrow-plus-heading-plus-grey-paragraph-plus-visual rhythm in every section. (The page
+  alternates dark, paper, and sticky scroll scenes; its section marks are `§ 01`, not a decorative rule.)
+- A giant ghosted wordmark as a footer. (The footer is a paper colophon with real links.)
 
 ---
 
@@ -355,25 +345,25 @@ like.
 
 ---
 
-## 12. Showcase theme (shadcn/ui kit, October 2026)
+## 13. Implementation map
 
-Custody Grade keeps its principles (serial first, money names itself, append-only registers, state is
-structural, photography is the colour). Its **surface** changed to a dark showcase built on the
-shadcn/ui kit (Nova style, neutral palette) and the Developer Portfolio template.
+| File | Holds |
+| --- | --- |
+| `index.css` | The first-edition stylesheet: tokens, shell, every component's structure |
+| `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens, foil / paper / easing tokens |
+| `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
+| `components.css` | Buttons, focus, fields, selects, panels, status LEDs, tables, tabs, overlays |
+| `landing.css` | The public page |
+| `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
+| `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |
+| `motion.css` | Transitions and keyframes shared by all of the above, and the reduced-motion switch |
 
-- **Tokens.** `apps/web/src/theme.css` holds the kit's variables in shadcn's own names
-  (`--background`, `--card`, `--primary`, `--muted`, `--border`, `--ring`, `--radius`, …), light and
-  dark, and maps them onto the Bault tokens above. Re-theming is a paste into part 1 of that file.
-  The status accents (custody, brass, frost, amber) keep their own hues; `--oxblood` follows
-  `--destructive`.
-- **Default is dark.** `ThemeProvider` starts on `dark`; light and system remain on the toggle.
-- **Type.** Geist (UI), Geist Mono (display headings, codes), IBM Plex Sans Hebrew (Hebrew). All
-  self-hosted from `assets/fonts` by `scripts/fetch-fonts.mjs`. Serials stay mono and left-to-right.
-- **Layers.** `components.css` (buttons, fields, panels as cards, pill badges, tables, overlays),
-  `landing.css` (the public page), `app.css` (shell, metric cards, sign-in stage), `motion.css`
-  (all transitions and keyframes). Loaded after `index.css`, in that order.
-- **Motion.** Hover lift and press, a gliding tab indicator, drawer and dialog entrance, page
-  fade-in, shimmer placeholders, a scroll reveal and pointer spotlight on the landing page, and
-  figures that count up. All of it is off under `prefers-reduced-motion: reduce`.
-- **Lint.** `scripts/design-lint.mjs` keeps the logical-properties rule and now also applies it to the
-  four layers above, and requires the reduced-motion block in `motion.css`.
+Loaded in that order after `index.css` (`main.tsx`). Components: `shared/CardPhoto.tsx` (slab),
+`shared/ui/slabTilt.ts` (pointer tilt), `shared/ui/useLandingMotion.ts` (scroll reveal, journey,
+parallax), `shared/ui/SplitWords.tsx`, `shared/ui/CountUp.tsx`, `areas/customer/marketing/LandingArt.tsx`.
+
+`scripts/design-lint.mjs` keeps the logical-properties rule and applies it to all of the layers
+above, and requires the reduced-motion block in `motion.css`.
+
+**To re-theme:** paste the kit's CSS export over part 1 of `theme.css`. Colours, radius and the UI
+font follow; foil, paper and the slab are Bault's own and do not.
