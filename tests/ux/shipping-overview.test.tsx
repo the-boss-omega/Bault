@@ -35,8 +35,9 @@ const request = (id: string, status: string) => ({
   typeFields: null,
 });
 
-function renderOverview(items: unknown[], requests: unknown[]) {
+function renderOverview(items: unknown[], requests: unknown[], pending = false) {
   get.mockImplementation((path: string) => {
+    if (pending) return new Promise(() => {});
     if (path === '/vault/items') return Promise.resolve(items);
     if (path === '/services/mine') return Promise.resolve(requests);
     return Promise.resolve([]);
@@ -76,6 +77,26 @@ describe('shipping and services, the overview', () => {
     expect(screen.getByRole('button', { name: 'Create a shipment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Track a shipment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'My requests' })).toBeInTheDocument();
+  });
+
+  it('puts each title before its figure in the document, so jumping by heading lands on it and meets the figure next', async () => {
+    renderOverview([item('i1', 'SN-0001')], []);
+
+    const lines = await screen.findAllByRole('listitem');
+    for (const line of lines) {
+      const heading = within(line).getByRole('heading', { level: 3 });
+      const figure = line.querySelector('.departure-figure')!;
+      expect(heading.compareDocumentPosition(figure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it('shows a dash, not a zero, for what has not arrived yet', async () => {
+    const { container } = renderOverview([], [], true);
+
+    await screen.findAllByRole('listitem');
+    const numbers = Array.from(container.querySelectorAll('.departure-number')).map((n) => n.textContent);
+    expect(numbers).toEqual(['—', '—']);
+    expect(screen.queryByText(/Closed requests/)).not.toBeInTheDocument();
   });
 
   it('takes you to the tab a line is about', async () => {

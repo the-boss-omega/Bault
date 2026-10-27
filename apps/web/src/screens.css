@@ -984,11 +984,25 @@
   border-block-end: 0;
 }
 
+/* The title comes first in the document, so a reader who jumps by heading lands on it and meets its figure
+   next; the board still reads figure, words, way in. */
 .departure-figure {
+  grid-column: 1;
+  grid-row: 1;
   display: grid;
   justify-items: start;
   gap: 8px;
   margin: 0;
+}
+
+.departure-text {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.departure-action {
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .departure-number {
@@ -1041,6 +1055,17 @@
     grid-template-columns: minmax(0, 1fr);
     row-gap: 16px;
     padding: 24px 0;
+  }
+
+  .departure-figure,
+  .departure-text,
+  .departure-action {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .departure-figure {
+    order: -1;
   }
 
   .departure-action .btn {

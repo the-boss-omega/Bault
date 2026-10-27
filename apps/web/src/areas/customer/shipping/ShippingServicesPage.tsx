@@ -78,7 +78,7 @@ export function ShippingServicesPage() {
   const route = useRoute();
   const { goTab, openRecord, closeRecord } = useNavigation(route);
 
-  const { items, error: itemsError, reload } = useVaultItems(true);
+  const { items, error: itemsError, loaded: itemsLoaded, reload } = useVaultItems(true);
   const [requests, setRequests] = useState<MyRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -118,16 +118,16 @@ export function ShippingServicesPage() {
           <Panel title={t('ss.overview.title')} subtitle={t('ss.overview.subtitle')}>
             <ul className="departures">
               <li className="departure">
-                <p className="departure-figure">
-                  <span className="departure-number">
-                    <CountUp value={String(items.length)} />
-                  </span>
-                  <span className="slip-label">{t('ss.metric.shippable')}</span>
-                </p>
                 <div className="departure-text">
                   <h3 className="departure-title">{t('ss.tab.shipping')}</h3>
                   <p className="departure-desc">{t('ss.overview.shippingDesc')}</p>
                 </div>
+                <p className="departure-figure">
+                  <span className="departure-number">
+                    {itemsLoaded ? <CountUp value={String(items.length)} /> : '—'}
+                  </span>
+                  <span className="slip-label">{t('ss.metric.shippable')}</span>
+                </p>
                 <div className="departure-action">
                   <Button variant="gold" onClick={() => goTab('shipping')}>
                     {t('ss.overview.goShipping')}
@@ -135,15 +135,15 @@ export function ShippingServicesPage() {
                 </div>
               </li>
               <li className="departure">
+                <div className="departure-text">
+                  <h3 className="departure-title">{t('ss.tab.tracking')}</h3>
+                  <p className="departure-desc">{t('ss.overview.trackingDesc')}</p>
+                </div>
                 <p className="departure-figure">
                   <span className="departure-icon" aria-hidden="true">
                     <IconScan />
                   </span>
                 </p>
-                <div className="departure-text">
-                  <h3 className="departure-title">{t('ss.tab.tracking')}</h3>
-                  <p className="departure-desc">{t('ss.overview.trackingDesc')}</p>
-                </div>
                 <div className="departure-action">
                   <Button variant="secondary" onClick={() => goTab('tracking')}>
                     {t('ss.overview.goTracking')}
@@ -151,19 +151,21 @@ export function ShippingServicesPage() {
                 </div>
               </li>
               <li className="departure">
-                <p className="departure-figure">
-                  <span className="departure-number">
-                    <CountUp value={String(open.length)} />
-                  </span>
-                  <span className="slip-label">{t('ss.metric.openRequests')}</span>
-                  <span className="departure-aside">
-                    {past.length} {t('ss.metric.pastRequests')}
-                  </span>
-                </p>
                 <div className="departure-text">
                   <h3 className="departure-title">{t('ss.tab.requests')}</h3>
                   <p className="departure-desc">{t('ss.overview.requestsDesc')}</p>
                 </div>
+                <p className="departure-figure">
+                  <span className="departure-number">
+                    {requests === null ? '—' : <CountUp value={String(open.length)} />}
+                  </span>
+                  <span className="slip-label">{t('ss.metric.openRequests')}</span>
+                  {requests !== null && (
+                    <span className="departure-aside">
+                      {past.length} {t('ss.metric.pastRequests')}
+                    </span>
+                  )}
+                </p>
                 <div className="departure-action">
                   <Button variant="secondary" onClick={() => goTab('requests')}>
                     {t('ss.overview.goRequests')}

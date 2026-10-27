@@ -151,9 +151,9 @@ const AUTH_ROUTES: Record<string, AuthMode> = {
 const LANDING_ROUTES = ['', 'welcome'];
 
 export default function App() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const route = useRoute();
-  useScrollableRegions();
+  useScrollableRegions(locale);
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
 
   const loadSession = useCallback(async () => {

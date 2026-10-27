@@ -3,8 +3,8 @@ import { render } from '@testing-library/react';
 
 const { useScrollableRegions } = await import('../../apps/web/src/shared/ui/useScrollableRegions');
 
-function Page({ withCaption = false }: { withCaption?: boolean }) {
-  useScrollableRegions();
+function Page({ withCaption = false, language = 'en' }: { withCaption?: boolean; language?: string }) {
+  useScrollableRegions(language);
   return (
     <section className="panel">
       <h2 className="panel-title">My deals</h2>
@@ -137,5 +137,96 @@ describe('a table that scrolls sideways can be reached from the keyboard', () =>
     size(wrap, 320, 320);
     await resized();
     expect(wrap).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('names each of two tables in a panel by the heading just above it, not both by the panel', async () => {
+    function Two() {
+      useScrollableRegions('en');
+      return (
+        <section className="panel">
+          <h2 className="panel-title">Preferences</h2>
+          <h3>Offers</h3>
+          <div className="dt-wrap" data-testid="first">
+            <table>
+              <tbody>
+                <tr>
+                  <td>a</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Shipments</h3>
+          <div className="dt-wrap" data-testid="second">
+            <table>
+              <tbody>
+                <tr>
+                  <td>b</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      );
+    }
+    const { getByTestId } = render(<Two />);
+    size(getByTestId('first'), 640, 320);
+    size(getByTestId('second'), 640, 320);
+    await resized();
+
+    expect(getByTestId('first')).toHaveAttribute('aria-label', 'Offers');
+    expect(getByTestId('second')).toHaveAttribute('aria-label', 'Shipments');
+  });
+
+  it('leaves a placeholder that is hidden from assistive technology out of the tab order', async () => {
+    function Loading() {
+      useScrollableRegions('en');
+      return (
+        <div aria-hidden="true">
+          <div className="dt-wrap" data-testid="skeleton">
+            <table>
+              <tbody>
+                <tr>
+                  <td>…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+    const { getByTestId } = render(<Loading />);
+    size(getByTestId('skeleton'), 640, 320);
+    await resized();
+
+    expect(getByTestId('skeleton')).not.toHaveAttribute('tabindex');
+  });
+
+  it('gives a table its name again in the new language', async () => {
+    function Titled({ language, title }: { language: string; title: string }) {
+      useScrollableRegions(language);
+      return (
+        <section className="panel">
+          <h2 className="panel-title">{title}</h2>
+          <div className="dt-wrap" data-testid="wrap">
+            <table>
+              <tbody>
+                <tr>
+                  <td>a</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      );
+    }
+    const { getByTestId, rerender } = render(<Titled language="en" title="My deals" />);
+    const wrap = getByTestId('wrap');
+    size(wrap, 640, 320);
+    await resized();
+    expect(wrap).toHaveAttribute('aria-label', 'My deals');
+
+    rerender(<Titled language="he" title="העסקאות שלי" />);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(wrap).toHaveAttribute('aria-label', 'העסקאות שלי');
   });
 });

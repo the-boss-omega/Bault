@@ -14,6 +14,7 @@ export interface VaultItem {
 export function useVaultItems(storedOnly = false) {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -22,6 +23,8 @@ export function useVaultItems(storedOnly = false) {
       setError(null);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setLoaded(true);
     }
   }, [storedOnly]);
 
@@ -29,5 +32,5 @@ export function useVaultItems(storedOnly = false) {
     void reload();
   }, [reload]);
 
-  return { items, error, reload };
+  return { items, error, loaded, reload };
 }
