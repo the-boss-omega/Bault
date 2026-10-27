@@ -1,0 +1,298 @@
+/* ============================================================
+   The slab
+
+   Bault's signature object: a collector's card in a graded case. Every card
+   photograph in the product is shown this way (CardPhotoThumb), so the thing
+   the platform exists to hold looks like the thing it holds. The case is
+   smoked acrylic, the label is paper, and a foil strip runs under it.
+
+   Everything is sized in container units, so one slab scales from a 44px
+   table thumbnail to a 400px hero without a second set of rules. The label
+   text is drawn from data attributes, so a serial is in the document once.
+   ============================================================ */
+
+@property --px {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.5;
+}
+
+@property --py {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.5;
+}
+
+@property --tx {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --ty {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.photo-thumb {
+  --tilt: 9deg;
+  --slab-edge: oklch(1 0 0 / 16%);
+  container-type: inline-size;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 8;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+  cursor: pointer;
+  perspective: 900px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.photo-thumb:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 6px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.slab-case {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3cqw;
+  width: 100%;
+  height: 100%;
+  padding: 4.5cqw;
+  border-radius: clamp(8px, 7cqw, 20px);
+  background:
+    linear-gradient(155deg, oklch(1 0 0 / 15%), oklch(1 0 0 / 3%) 36%, oklch(1 0 0 / 0%) 58%, oklch(1 0 0 / 9%)),
+    oklch(0.21 0.004 260);
+  box-shadow:
+    inset 0 0 0 1px var(--slab-edge),
+    inset 0 1px 0 oklch(1 0 0 / 30%),
+    0 1px 2px oklch(0 0 0 / 50%),
+    0 18px 34px -14px oklch(0 0 0 / 75%);
+  transform: rotateX(calc(var(--ty) * var(--tilt))) rotateY(calc(var(--tx) * var(--tilt)));
+  transform-style: preserve-3d;
+  transition: transform 560ms var(--ease-out-expo), box-shadow 360ms var(--ease-out-expo);
+  will-change: transform;
+}
+
+.slab-case[data-live] {
+  transition-duration: 90ms, 360ms;
+  animation: none;
+}
+
+.photo-thumb:hover .slab-case,
+.photo-thumb:focus-visible .slab-case {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 28%),
+    inset 0 1px 0 oklch(1 0 0 / 40%),
+    0 2px 4px oklch(0 0 0 / 50%),
+    0 28px 48px -14px oklch(0 0 0 / 85%);
+}
+
+/* The label: paper, a line of name, the serial, and a foil strip under it. */
+
+.slab-band {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 2.5cqw;
+  height: 16cqw;
+  padding-inline: 3.2cqw;
+  padding-block-end: 1.2cqw;
+  border-radius: 2.4cqw;
+  background:
+    var(--foil) bottom / 100% 1.2cqw no-repeat,
+    var(--paper);
+  color: var(--paper-ink);
+  direction: ltr;
+  overflow: hidden;
+}
+
+.slab-band::before {
+  content: attr(data-title);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font: 600 4.1cqw/1.18 var(--font-ui);
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+}
+
+.slab-band::after {
+  content: attr(data-serial);
+  font: 500 3.5cqw/1 var(--font-mono);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+/* The window: the card on the photography mat. */
+
+.slab-window {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 4cqw;
+  border-radius: 3cqw;
+  background:
+    radial-gradient(120% 80% at 50% 0%, oklch(0.27 0.006 260), oklch(0.11 0.004 260));
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 8%),
+    inset 0 10px 26px oklch(0 0 0 / 55%);
+  overflow: hidden;
+}
+
+.photo-thumb-img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 2.2cqw;
+  filter: drop-shadow(0 6px 10px oklch(0 0 0 / 55%));
+  transform: translate(calc(var(--tx) * -1.4cqw), calc(var(--ty) * 1.4cqw));
+  transition: transform 560ms var(--ease-out-expo);
+}
+
+.slab-case[data-live] .photo-thumb-img {
+  transition-duration: 90ms;
+}
+
+.photo-thumb-empty {
+  display: grid;
+  place-items: center;
+  padding: 4cqw;
+  color: var(--ink-on-dark-2);
+  font-size: clamp(10px, 4.4cqw, 13px);
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* The sheen: a spot of light plus a holographic spectrum that slides with the pointer. */
+
+.slab-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: overlay;
+  background:
+    radial-gradient(circle at calc(var(--px) * 100%) calc(var(--py) * 100%), oklch(1 0 0 / 70%), oklch(1 0 0 / 0%) 46%),
+    linear-gradient(
+      calc(100deg + var(--tx) * 30deg),
+      transparent 16%,
+      var(--foil-a) 28%,
+      var(--foil-b) 37%,
+      var(--foil-c) 46%,
+      var(--foil-d) 55%,
+      var(--foil-e) 64%,
+      transparent 76%
+    );
+  background-size: 100% 100%, 240% 240%;
+  background-position: 0 0, calc(var(--px) * 100%) calc(var(--py) * 100%);
+  transition: opacity 360ms var(--ease-out-expo);
+}
+
+.photo-thumb:hover .slab-glare,
+.photo-thumb:focus-visible .slab-glare,
+.slab-case[data-live] .slab-glare {
+  opacity: 0.9;
+}
+
+/* Idle: hero slabs breathe, so a still page still has a pulse. */
+
+.slab-idle .slab-case:not([data-live]) {
+  animation: slab-breathe 7s var(--ease-in-out-quart) infinite alternate;
+}
+
+.slab-idle .slab-glare {
+  opacity: 0.55;
+}
+
+@keyframes slab-breathe {
+  from {
+    --tx: -0.32;
+    --ty: 0.18;
+    --px: 0.28;
+    --py: 0.3;
+  }
+  to {
+    --tx: 0.32;
+    --ty: -0.14;
+    --px: 0.72;
+    --py: 0.62;
+  }
+}
+
+/* Small slabs (table cells, dense lists) drop the label text and thin the band. */
+
+@container (max-width: 140px) {
+  .slab-band {
+    height: 9cqw;
+  }
+
+  .slab-band::before,
+  .slab-band::after {
+    content: none;
+  }
+
+  .slab-case {
+    padding: 5cqw;
+    gap: 4cqw;
+  }
+}
+
+.data-table .photo-thumb,
+.table .photo-thumb {
+  width: 44px;
+  flex: 0 0 auto;
+}
+
+/* Lightbox: the same slab, large, on a dimmed room. */
+
+.modal:has(.modal-slab) {
+  width: min(92vw, 440px);
+  gap: var(--sp-3);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.modal:has(.modal-slab) .modal-head h4 {
+  color: oklch(1 0 0 / 90%);
+}
+
+.modal-slab {
+  --tilt: 11deg;
+  width: min(100%, 360px);
+  margin-inline: auto;
+  cursor: default;
+}
+
+.modal:has(.modal-slab) .modal-serial {
+  align-self: center;
+  background: none;
+  border: 0;
+  color: oklch(1 0 0 / 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slab-idle .slab-case:not([data-live]) {
+    animation: none;
+  }
+}

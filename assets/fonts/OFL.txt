@@ -5,6 +5,11 @@ Geist, Geist Mono
   (geist-*.woff2, geist-mono-*.woff2)
   Copyright 2023 The Geist Project Authors (https://github.com/vercel/geist-font)
 
+Frank Ruhl Libre
+  (frank-ruhl-*.woff2)
+  Copyright 2015 The Frank Ruhl Libre Project Authors
+  (https://github.com/fontef/frankruhllibre)
+
 IBM Plex Sans Hebrew
   (plex-sans-hebrew-*.woff2)
   Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"

@@ -254,6 +254,7 @@ describe('Legal documents', () => {
       'plex-sans-hebrew-': 'IBM Plex Sans Hebrew',
       'geist-mono-': 'Geist Mono',
       'geist-': 'Geist',
+      'frank-ruhl-': 'Frank Ruhl Libre',
     };
     for (const file of shipped) {
       const prefix = Object.keys(families).find((p) => file.startsWith(p));

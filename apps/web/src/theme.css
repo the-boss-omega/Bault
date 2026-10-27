@@ -122,5 +122,34 @@
 
   --font-ui: var(--font-sans), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
   --font-mono: var(--font-mono-face), ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  --font-display: var(--font-mono-face), 'IBM Plex Sans Hebrew', ui-monospace, monospace;
+  --font-display: 'Frank Ruhl Libre', 'Times New Roman', serif;
+}
+
+/* ---- Part 3: Bault's own layer on top of the kit ----
+   The kit supplies structure and geometry. These tokens are what make the
+   product itself: a foil spectrum (the sheen on a holographic card), the paper
+   of a grading label, and one easing family for all motion. */
+
+:root {
+  --foil-a: oklch(0.82 0.13 18);
+  --foil-b: oklch(0.88 0.12 88);
+  --foil-c: oklch(0.86 0.12 160);
+  --foil-d: oklch(0.82 0.12 235);
+  --foil-e: oklch(0.8 0.14 305);
+  --foil: linear-gradient(115deg, var(--foil-a), var(--foil-b), var(--foil-c), var(--foil-d), var(--foil-e), var(--foil-a));
+
+  --paper: #f3efe6;
+  --paper-ink: #15130f;
+  --paper-line: #d6d0c2;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --dur-reveal: 900ms;
+}
+
+/* Hebrew sets tight and wide tracking badly; the Latin display tracking is Latin-only. */
+:lang(he) {
+  --track-tight: 0;
+  --track-label: 0.02em;
 }

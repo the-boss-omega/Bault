@@ -1,475 +1,1401 @@
 /* ============================================================
-   Landing page
+   The public page
 
-   The public front door, redesigned as a dark showcase: an aurora-lit hero
-   with a tilting card on a stage, bento promise cards with a pointer
-   spotlight, a numbered timeline, and a closing panel. Reads theme tokens
-   only. Motion is driven by motion.css (.reveal) and useLandingMotion; all of
-   it is switched off by the reduced-motion block there.
+   An editorial front door for a vault. The argument is made in four ways: the
+   headline (real copy, set large and serif), the shelf (real cards, in their
+   cases, on a plate that carries the real serial), the register (a ledger that
+   writes itself and never edits a line), and the rate card (live prices, set
+   like a printed schedule). Nothing here is decoration for its own sake.
+
+   Reads theme tokens only. Motion is switched on under `.lp-js` (set by
+   useLandingMotion when IntersectionObserver exists) and only for people who
+   have not asked for less of it.
    ============================================================ */
 
-.landing {
-  --glow: color-mix(in oklab, var(--custody) 26%, transparent);
+.lp {
+  --lp-pad: clamp(20px, 4.5vw, 56px);
+  --lp-max: 1280px;
+  --lp-sec: clamp(88px, 11vw, 168px);
+  --lp-room: oklch(0.15 0.004 260);
+  position: relative;
+  display: block;
+  min-height: 100vh;
   background: var(--background);
+  color: var(--foreground);
   overflow-x: clip;
 }
 
-/* Header: sticky, translucent, blurred. */
+/* ---- Header ---- */
 
-.landing-bar {
-  position: sticky;
+.lp-bar {
+  position: fixed;
   inset-block-start: 0;
-  z-index: var(--z-sticky);
-  padding-block: var(--sp-3);
-  border-block-end: var(--border-w) solid var(--border);
-  background: color-mix(in oklab, var(--background) 72%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
+  inset-inline: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 14px var(--lp-pad);
+  border-block-end: 1px solid transparent;
+  transition: background 400ms var(--ease-out-expo), border-color 400ms var(--ease-out-expo),
+    padding 400ms var(--ease-out-expo);
 }
 
-.landing-word {
-  letter-spacing: 0.02em;
-  font-weight: var(--fw-medium);
+.lp.is-scrolled .lp-bar {
+  padding-block: 10px;
+  border-color: var(--border);
+  background: color-mix(in oklab, var(--background) 76%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
 }
 
-/* Hero */
+.lp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
 
-.landing-stage {
-  position: relative;
-  isolation: isolate;
-  background: transparent;
+.lp-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  font: 700 20px/1 var(--font-display);
+  box-shadow: inset 0 -3px 0 -1px oklch(0 0 0 / 14%), 0 0 0 1px oklch(1 0 0 / 10%);
+}
+
+.lp-word {
+  font: 600 26px/1 var(--font-display);
+  letter-spacing: 0.01em;
   color: var(--foreground);
-  padding-block: var(--sp-16) var(--sp-24);
 }
 
-@media (min-width: 900px) {
-  .landing-stage {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: var(--sp-16);
-    padding-block: var(--sp-24) 144px;
-    max-width: 1200px;
-    margin-inline: auto;
-    width: 100%;
-  }
-
-  .landing-pitch {
-    order: -1;
-  }
+.lp .landing-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-.landing-stage::before {
+/* ---- Shared: foil rule, split headings, section frame ---- */
+
+.lp-rule {
+  display: block;
+  width: 72px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--foil);
+  background-size: 300% 100%;
+}
+
+.lp-w {
+  display: inline-block;
+}
+
+.lp-w-in {
+  display: inline-block;
+}
+
+.lp-section {
+  max-width: var(--lp-max);
+  margin-inline: auto;
+  padding: var(--lp-sec) var(--lp-pad);
+}
+
+.lp-section-head {
+  display: grid;
+  gap: 22px;
+  align-content: start;
+}
+
+.lp-h2 {
+  margin: 0;
+  font: 500 clamp(36px, 5vw, 72px) / 1.02 var(--font-display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+.lp-sub {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: clamp(17px, 1.4vw, 20px);
+  line-height: 1.6;
+}
+
+:lang(he) .lp-h2,
+:lang(he) .lp-headline,
+:lang(he) .lp-close-title {
+  letter-spacing: 0;
+}
+
+:lang(he) .lp-h2 {
+  line-height: 1.1;
+}
+
+/* ---- Hero ---- */
+
+.lp-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 72px);
+  max-width: var(--lp-max);
+  min-height: 100svh;
+  margin-inline: auto;
+  padding: 104px var(--lp-pad) 48px;
+}
+
+.lp-hero-copy {
+  display: grid;
+  gap: 30px;
+  align-content: center;
+  min-width: 0;
+}
+
+.lp-headline {
+  margin: 0;
+  max-width: 15ch;
+  font: 500 clamp(46px, 6.1vw, 100px) / 0.98 var(--font-display);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+:lang(he) .lp-headline {
+  max-width: 11ch;
+  font-size: clamp(46px, 6.4vw, 100px);
+  line-height: 1.04;
+}
+
+.lp-lede {
+  max-width: 44ch;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: clamp(17px, 1.5vw, 21px);
+  line-height: 1.6;
+}
+
+.lp-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-block-start: 6px;
+}
+
+.lp-cta .btn {
+  min-height: 46px;
+  padding-inline: 24px;
+  font-size: 16px;
+  border-radius: 999px;
+}
+
+/* ---- The shelf: a fan of real cards in their cases ---- */
+
+.lp-fan {
+  --fx: 0;
+  --fy: 0;
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  aspect-ratio: 1 / 1.06;
+  min-width: 0;
+}
+
+.lp-fan::before {
   content: '';
   position: absolute;
-  inset-block: 0;
-  inset-inline: calc(50% - 50vw);
-  z-index: -2;
-  background-image: linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 64px 64px;
-  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 20%, transparent 75%);
-  mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 20%, transparent 75%);
+  inset-inline: 2%;
+  inset-block-end: 17.5%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 38%) 20%, oklch(1 0 0 / 38%) 80%, transparent);
+}
+
+.lp-fan::after {
+  content: '';
+  position: absolute;
+  inset-inline: 6%;
+  inset-block-end: 12%;
+  height: 7%;
+  background: radial-gradient(closest-side, oklch(0 0 0 / 55%), transparent);
+  filter: blur(6px);
+  z-index: 0;
+}
+
+.lp-card {
+  --a0: 0deg;
+  --a: var(--a0);
+  --y: 0%;
+  --depth: 1;
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 18%;
+  z-index: var(--z, 1);
+  width: var(--w, 36%);
+  margin-inline: auto;
+  transform-origin: 50% 185%;
+  transform: translate(calc(var(--fx) * 7px * var(--depth)), var(--y))
+    rotate(calc(var(--a) + var(--fx) * 1.1deg * var(--depth)));
+  transition: transform 900ms var(--ease-out-expo);
+}
+
+.lp-card .photo-thumb {
+  --tilt: 6deg;
+}
+
+.lp-card .slab-case {
+  --tx: calc(var(--fx) * 0.5);
+  --ty: calc(var(--fy) * -0.4);
+}
+
+.lp-card--c {
+  --w: 44%;
+  --z: 5;
+  --depth: 1.4;
+}
+
+.lp-card--l1,
+.lp-card--r1 {
+  --w: 37%;
+  --z: 4;
+  --depth: 0.9;
+  --y: 3.5%;
+}
+
+.lp-card--l2,
+.lp-card--r2 {
+  --w: 32%;
+  --z: 3;
+  --depth: 0.5;
+  --y: 9%;
+}
+
+.lp-card--l1 {
+  --a0: -9deg;
+}
+
+.lp-card--r1 {
+  --a0: 9deg;
+}
+
+.lp-card--l2 {
+  --a0: -18deg;
+}
+
+.lp-card--r2 {
+  --a0: 18deg;
+}
+
+.lp-card:hover {
+  --a: calc(var(--a0) * 0.3);
+  --y: -5%;
+  z-index: 9;
+}
+
+.lp-card--l2 .slab-case,
+.lp-card--r2 .slab-case {
+  filter: brightness(0.78);
+}
+
+/* The plate the shelf carries: paper, like the labels on the cases. */
+
+.lp-shelf {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: end;
+  gap: 14px 28px;
+  margin: 0;
+  padding: 14px 22px 16px;
+  border-radius: 8px;
+  background:
+    var(--foil) top / 100% 3px no-repeat,
+    var(--paper);
+  color: var(--paper-ink);
+  box-shadow: 0 18px 30px -14px oklch(0 0 0 / 70%), inset 0 -2px 0 oklch(0 0 0 / 10%);
+}
+
+.lp-shelf dt {
+  margin: 0 0 4px;
+  color: oklch(0.42 0.01 80);
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lp-shelf dd {
+  margin: 0;
+  color: var(--paper-ink);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.lp-shelf .serial {
+  color: var(--paper-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.lp-shelf .pill {
+  color: var(--paper-ink);
+}
+
+.lp-shelf .ltr-run {
+  white-space: nowrap;
+}
+
+/* ---- Three truths ---- */
+
+.lp-truths {
+  display: grid;
+  margin: clamp(40px, 6vw, 88px) 0 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: 1px solid var(--input);
+}
+
+.lp-truth {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: clamp(28px, 6vw, 96px);
+  padding-block: clamp(36px, 5.5vw, 80px);
+  border-block-end: 1px solid var(--border);
+}
+
+.lp-truth h3 {
+  margin: 0 0 18px;
+  font: 500 clamp(30px, 3.6vw, 52px) / 1.06 var(--font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+:lang(he) .lp-truth h3 {
+  letter-spacing: 0;
+  line-height: 1.12;
+}
+
+.lp-truth p {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.65;
+}
+
+.lp-art {
+  display: grid;
+  place-items: center;
+  min-height: 200px;
+  color: var(--muted-foreground);
+}
+
+/* The serial, as a label. */
+
+.lp-plate-art {
+  position: relative;
+  width: min(100%, 400px);
+  aspect-ratio: 3.1 / 1;
+  padding: 20px 24px 0;
+  border-radius: 10px;
+  background:
+    var(--foil) bottom / 100% 7px no-repeat,
+    var(--paper);
+  color: var(--paper-ink);
+  direction: ltr;
+  box-shadow: 0 24px 40px -18px oklch(0 0 0 / 70%), inset 0 0 0 1px oklch(0 0 0 / 6%);
+  transform: rotate(-2.2deg);
+  transition: transform 700ms var(--ease-out-expo);
+}
+
+.lp-truth:hover .lp-plate-art {
+  transform: rotate(0deg) scale(1.02);
+}
+
+.lp-plate-art::before {
+  content: attr(data-serial);
+  display: block;
+  font: 600 clamp(20px, 2.5vw, 30px) / 1 var(--font-mono);
+  letter-spacing: 0.01em;
+}
+
+.lp-plate-art::after {
+  content: 'BAULT';
+  position: absolute;
+  inset-block-start: 22px;
+  inset-inline-end: 24px;
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: 0.32em;
   opacity: 0.55;
 }
 
-.landing-aurora {
+.lp-plate-bars {
   position: absolute;
-  inset-block-start: -18%;
-  inset-inline-start: 50%;
-  z-index: -1;
-  width: min(900px, 120vw);
-  aspect-ratio: 1;
-  translate: -50% 0;
+  inset-inline: 24px;
+  inset-block-end: 24px;
+  height: 30%;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--paper-ink) 0 2px,
+    transparent 2px 5px,
+    var(--paper-ink) 5px 6px,
+    transparent 6px 9px,
+    var(--paper-ink) 9px 12px,
+    transparent 12px 14px,
+    var(--paper-ink) 14px 15px,
+    transparent 15px 19px
+  );
+  opacity: 0.88;
+}
+
+/* The ledger: it writes itself, a line at a time, and never edits a line. */
+
+.lp-ledger {
+  position: relative;
+  width: min(100%, 420px);
+  margin: 0;
+  padding: 10px 24px 10px 24px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  font: 400 13px/1.3 var(--font-mono);
+}
+
+.lp-ledger::before {
+  content: '';
+  position: absolute;
+  inset-block: 14px;
+  inset-inline-start: 74px;
+  width: 1px;
+  background: linear-gradient(var(--input), var(--input));
+}
+
+.lp-ledger li {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: center;
+  gap: 38px;
+  min-height: 46px;
+  border-block-end: 1px dashed var(--border);
+  color: var(--foreground);
+}
+
+.lp-ledger li:last-child {
+  border-block-end: 0;
+}
+
+.lp-ledger-n {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-ledger-k {
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+}
+
+.lp-ledger li:nth-child(4) .lp-ledger-k::after {
+  content: '';
+  display: inline-block;
+  inline-size: 7px;
+  block-size: 7px;
+  margin-inline-start: 10px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, var(--glow), transparent 72%);
-  filter: blur(40px);
-  animation: aurora-drift 14s var(--ease-in-out) infinite alternate;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--amber) 22%, transparent);
+}
+
+.lp-ledger-caret {
+  inline-size: 9px;
+  block-size: 18px;
+  background: var(--foreground);
+  animation: caret 1.1s steps(1) infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The receipt with its clause mark. */
+
+.lp-art--rule svg {
+  width: min(100%, 300px);
+  height: auto;
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lp-art--rule .lp-rule-mark {
+  fill: var(--foreground);
+  stroke: none;
+  font: 500 22px var(--font-display);
+}
+
+.lp-art--rule .draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+/* ---- The rate card ---- */
+
+.lp-prices {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: clamp(32px, 7vw, 120px);
+  align-items: start;
+}
+
+.lp-prices .lp-section-head {
+  position: sticky;
+  inset-block-start: 120px;
+}
+
+.lp-footnote {
+  margin: 8px 0 0;
+  max-width: 40ch;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.lp-rates .data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: none;
+}
+
+.lp-rates .data-table thead th {
+  padding: 0 0 14px;
+  border-block-end: 1px solid var(--input);
+  background: none;
+  color: var(--muted-foreground);
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lp-rates .data-table tbody th,
+.lp-rates .data-table tbody td {
+  padding-block: clamp(20px, 2.4vw, 30px);
+  border-block-end: 1px solid var(--border);
+  background: none;
+  vertical-align: baseline;
+  transition: padding 400ms var(--ease-out-expo), background 300ms;
+}
+
+.lp-rates .data-table tbody th {
+  text-align: start;
+  font-weight: 400;
+}
+
+.lp-rates .data-table tbody tr:hover th {
+  padding-inline-start: 14px;
+}
+
+.lp-rates .data-table tbody tr:hover {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--foreground) 4%, transparent), transparent);
+}
+
+.landing-price-what {
+  display: block;
+  font: 500 clamp(21px, 2.2vw, 30px) / 1.15 var(--font-display);
+  color: var(--foreground);
+}
+
+.landing-terms {
+  display: block;
+  margin-block-start: 8px;
+  max-width: 38ch;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.lp-rates .data-table td.num {
+  text-align: end;
+  white-space: normal;
+}
+
+.lp-rates .amount {
+  font: 500 clamp(28px, 3.2vw, 46px) / 1 var(--font-display);
+  color: var(--foreground);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.landing-included {
+  display: block;
+  max-width: 26ch;
+  margin-inline-start: auto;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---- Journey: a card passes through four states while you read ---- */
+
+.lp-journey {
+  --prog: 25%;
+}
+
+.lp-journey[data-stage='2'] {
+  --prog: 50%;
+}
+
+.lp-journey[data-stage='3'] {
+  --prog: 75%;
+}
+
+.lp-journey[data-stage='4'] {
+  --prog: 100%;
+}
+
+.lp-journey-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+  gap: clamp(32px, 7vw, 112px);
+  align-items: start;
+  margin-block-start: clamp(32px, 5vw, 64px);
+}
+
+.lp-stage {
+  position: sticky;
+  inset-block-start: 104px;
+  height: min(660px, calc(100svh - 136px));
+}
+
+.lp-stage-room {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  overflow: clip;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background:
+    radial-gradient(70% 55% at 50% 0%, oklch(0.26 0.006 260), transparent 70%),
+    var(--lp-room);
+}
+
+.lp-stage-slab {
+  width: min(46%, 250px);
+  transition: filter 900ms var(--ease-out-expo), transform 1000ms var(--ease-out-expo);
+  z-index: 2;
+}
+
+.lp-crop {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 0 solid oklch(1 0 0 / 40%);
+  opacity: 0;
+  transition: opacity 600ms;
+}
+
+.lp-crop--a {
+  inset-block-start: 22%;
+  inset-inline-start: 22%;
+  border-block-start-width: 1px;
+  border-inline-start-width: 1px;
+}
+
+.lp-crop--b {
+  inset-block-start: 22%;
+  inset-inline-end: 22%;
+  border-block-start-width: 1px;
+  border-inline-end-width: 1px;
+}
+
+.lp-crop--c {
+  inset-block-end: 22%;
+  inset-inline-start: 22%;
+  border-block-end-width: 1px;
+  border-inline-start-width: 1px;
+}
+
+.lp-crop--d {
+  inset-block-end: 22%;
+  inset-inline-end: 22%;
+  border-block-end-width: 1px;
+  border-inline-end-width: 1px;
+}
+
+.lp-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: oklch(1 0 0 / 85%);
+  opacity: 0;
   pointer-events: none;
 }
 
-@keyframes aurora-drift {
-  from {
-    transform: translate3d(-6%, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(6%, 6%, 0) scale(1.12);
-  }
-}
-
-.landing-headline {
-  font-size: clamp(40px, 6.2vw, 80px);
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  max-width: 14ch;
-  color: var(--foreground);
-  background: linear-gradient(180deg, var(--foreground) 30%, color-mix(in oklab, var(--foreground) 45%, transparent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: rise 800ms var(--ease-out) both;
-}
-
-.landing-lede {
-  color: var(--muted-foreground);
-  font-size: var(--fs-lg);
-  max-width: 52ch;
-  animation: rise 800ms 120ms var(--ease-out) both;
-}
-
-.landing-cta {
-  animation: rise 800ms 240ms var(--ease-out) both;
-}
-
-.landing-cta .btn {
-  min-height: 44px;
-  padding-inline: var(--sp-6);
-  font-size: var(--fs-md);
-}
-
-.landing-cta .btn--gold:hover:not(:disabled) {
-  box-shadow: 0 0 0 1px var(--primary), 0 8px 32px -4px var(--glow);
-  transform: translateY(-1px);
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-}
-
-/* The card on its stage: tilts toward the pointer, ringed by a slow conic light. */
-
-.landing-stage-photo {
-  position: relative;
-  display: grid;
-  place-items: center;
-  perspective: 1000px;
-  padding: var(--sp-8);
-  border-radius: var(--r-lg);
-  --rx: 0deg;
-  --ry: 0deg;
-  animation: rise 900ms 200ms var(--ease-out) both;
-}
-
-.landing-stage-photo::before {
-  content: '';
+.lp-shelf-line {
   position: absolute;
-  inset: var(--sp-4);
-  border-radius: calc(var(--r-lg) + 4px);
-  background: conic-gradient(from var(--spin, 0deg), transparent 0 60%, var(--custody) 80%, transparent);
-  opacity: 0.55;
-  filter: blur(18px);
-  animation: spin 9s linear infinite;
-  z-index: -1;
-}
-
-@property --spin {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes spin {
-  to {
-    --spin: 360deg;
-  }
-}
-
-.landing-stage-photo::after {
-  content: '';
-  position: absolute;
-  inset: var(--sp-4);
-  border-radius: var(--r-lg);
-  border: var(--border-w) solid var(--border);
-  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 30%), color-mix(in oklab, var(--foreground) 9%, transparent), transparent 70%),
-    color-mix(in oklab, var(--card) 80%, transparent);
-  z-index: -1;
-}
-
-.landing-stage-photo .photo-thumb {
-  inline-size: min(300px, 64vw);
-  transform: rotateX(var(--rx)) rotateY(var(--ry));
-  transition: transform var(--dur) var(--ease);
-  filter: drop-shadow(0 24px 40px color-mix(in oklab, #000 55%, transparent));
-  animation: float 6s var(--ease-in-out) infinite alternate;
-}
-
-@keyframes float {
-  from {
-    translate: 0 -6px;
-  }
-  to {
-    translate: 0 8px;
-  }
-}
-
-/* The custody facts become a glass strip. */
-
-.landing-custody {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-5);
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--r-lg);
-  background: color-mix(in oklab, var(--card) 70%, transparent);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  animation: rise 800ms 180ms var(--ease-out) both;
-}
-
-.landing-custody dt {
-  color: var(--muted-foreground);
-  font-family: var(--font-display);
-  font-size: var(--fs-caption);
-  letter-spacing: var(--track-label);
-}
-
-.landing-custody dd,
-.landing-custody .serial {
-  color: var(--foreground);
-}
-
-.landing-custody .pill--success {
-  color: var(--custody);
-}
-
-.landing-caption {
-  color: var(--muted-foreground);
-}
-
-.landing-stage .btn--secondary {
-  background: color-mix(in oklab, var(--foreground) 4%, transparent);
-  border-color: var(--input);
-  color: var(--foreground);
-}
-
-.landing-stage .btn--secondary:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--input);
-}
-
-/* Sections */
-
-.landing-section,
-.landing-close {
-  max-width: 1200px;
-  padding-block: 96px;
-  border-block-end: 0;
-  gap: var(--sp-5);
-}
-
-.landing-h2 {
-  position: relative;
-  padding-block-start: var(--sp-5);
-  font-size: clamp(28px, 3.6vw, 44px);
-  letter-spacing: -0.02em;
-}
-
-.landing-h2::before {
-  content: '';
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  width: 40px;
-  height: 2px;
-  background: var(--custody);
-  box-shadow: 0 0 16px var(--custody);
-}
-
-.landing-sub {
-  color: var(--muted-foreground);
-  font-size: var(--fs-md);
-  max-width: 60ch;
-}
-
-/* Bento claim cards with a pointer spotlight. */
-
-.landing-claims {
-  counter-reset: bento;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--sp-4);
-  padding-block-start: var(--sp-6);
-}
-
-.landing-claims article {
-  position: relative;
-  display: grid;
-  align-content: start;
-  gap: var(--sp-3);
-  padding: var(--sp-6);
-  min-height: 240px;
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--r-lg);
-  background: radial-gradient(360px circle at var(--mx, -200px) var(--my, -200px), color-mix(in oklab, var(--foreground) 7%, transparent), transparent 70%),
-    var(--card);
-  counter-increment: bento;
-  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
-}
-
-.landing-claims article:hover {
-  border-color: var(--input);
-  transform: translateY(-3px);
-}
-
-.landing-claims article::before {
-  content: counter(bento, decimal-leading-zero);
-  font-family: var(--font-display);
-  font-size: var(--fs-caption);
-  letter-spacing: var(--track-label);
-  color: var(--custody);
-}
-
-.landing-claims h3 {
-  font-size: var(--fs-lg);
-  color: var(--foreground);
-}
-
-.landing-claims p {
-  color: var(--muted-foreground);
-}
-
-/* Price table sits in a card. */
-
-.landing-section .dt-wrap {
-  background: var(--card);
-}
-
-.landing-price-table tbody tr {
-  transition: background var(--dur-fast) var(--ease);
-}
-
-.landing-price-table tbody tr:hover {
-  background: color-mix(in oklab, var(--foreground) 4%, transparent);
-}
-
-/* Timeline: numbered nodes on a rule that draws itself in. */
-
-.landing-steps {
-  counter-reset: node;
-  gap: var(--sp-4);
-  border-block-start: 0;
-  padding-block-start: var(--sp-8);
-}
-
-.landing-steps .step {
-  position: relative;
-  flex: 1 1 220px;
-  margin: 0;
-  padding: var(--sp-6) 0 0;
-  border: 0;
-  counter-increment: node;
-  color: var(--muted-foreground);
-}
-
-.landing-steps .step:first-child {
-  padding-inline-start: 0;
-}
-
-.landing-steps .step::before {
-  content: counter(node);
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: var(--border-w) solid var(--input);
-  border-radius: 50%;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-display);
-  font-size: var(--fs-caption);
-  z-index: 1;
-}
-
-.landing-steps .step::after {
-  content: '';
-  position: absolute;
-  inset-block-start: 14px;
-  inset-inline: 28px calc(var(--sp-4) * -1);
+  inset-inline: 10%;
+  inset-block-end: 17%;
   height: 1px;
-  background: linear-gradient(90deg, var(--custody), var(--border));
-  transform-origin: left center;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 45%) 20%, oklch(1 0 0 / 45%) 80%, transparent);
+  transform: scaleX(0);
+  transition: transform 1000ms var(--ease-out-expo);
 }
 
-.landing-steps .step:last-child::after {
-  display: none;
+.lp-shelf-tag {
+  position: absolute;
+  inset-inline-start: 14%;
+  inset-block-end: 8.5%;
+  padding: 7px 12px 8px;
+  border-radius: 5px;
+  background:
+    var(--foil) top / 100% 2px no-repeat,
+    var(--paper);
+  color: var(--paper-ink);
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.02em;
+  direction: ltr;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms, transform 800ms var(--ease-out-expo);
 }
 
-[dir='rtl'] .landing-steps .step::after {
-  transform-origin: right center;
-  background: linear-gradient(270deg, var(--custody), var(--border));
+.lp-shelf-tag::before {
+  content: attr(data-tag);
 }
 
-.landing-steps .step.is-visible::after {
-  animation: draw 900ms var(--ease-out) both;
-  animation-delay: calc(var(--reveal-delay, 0ms) + 200ms);
+.lp-exits {
+  position: absolute;
+  inset-inline: 7%;
+  inset-block-start: 6%;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-@keyframes draw {
+.lp-exits li {
+  padding: 7px 14px;
+  border: 1px solid oklch(1 0 0 / 22%);
+  border-radius: 999px;
+  background: oklch(0.2 0.004 260 / 80%);
+  color: oklch(1 0 0 / 88%);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 600ms, transform 800ms var(--ease-out-expo);
+  transition-delay: calc(var(--k, 0) * 120ms);
+}
+
+.lp-exits li:nth-child(2) {
+  --k: 1;
+}
+
+.lp-exits li:nth-child(3) {
+  --k: 2;
+}
+
+.lp-journey[data-stage='1'] .lp-crop {
+  opacity: 1;
+}
+
+.lp-journey[data-stage='3'] .lp-shelf-line,
+.lp-journey[data-stage='4'] .lp-shelf-line {
+  transform: scaleX(1);
+}
+
+.lp-journey[data-stage='3'] .lp-shelf-tag,
+.lp-journey[data-stage='4'] .lp-shelf-tag {
+  opacity: 1;
+  transform: none;
+}
+
+.lp-journey[data-stage='3'] .lp-stage-slab {
+  transform: translateY(-9%);
+}
+
+.lp-journey[data-stage='4'] .lp-stage-slab {
+  transform: translateY(-17%) scale(0.88);
+}
+
+.lp-journey[data-stage='4'] .lp-exits li {
+  opacity: 1;
+  transform: none;
+}
+
+.lp-journey[data-stage='2'] .lp-flash {
+  animation: flash 900ms var(--ease-out-expo) both;
+}
+
+@keyframes flash {
   from {
-    transform: scaleX(0);
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
   }
 }
 
-.landing-steps .step-name {
-  margin-block-start: var(--sp-4);
-  font-size: var(--fs-md);
+.lp-steps {
+  position: relative;
+  display: grid;
+  margin: 0;
+  padding: 6svh 0 6svh;
+  padding-inline-start: clamp(28px, 4vw, 56px);
+  list-style: none;
+  border: 0;
+  border-inline-start: 1px solid var(--input);
+}
+
+.lp-steps::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: -2px;
+  width: 3px;
+  height: var(--prog);
+  border-radius: 3px;
+  background: var(--foil);
+  transition: height 900ms var(--ease-out-expo);
+}
+
+.lp-steps .step {
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  min-height: 52svh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--muted-foreground);
+  transition: color 600ms var(--ease-out-expo);
+}
+
+.lp-steps .step .step-name {
+  transition: color 600ms var(--ease-out-expo);
+}
+
+.lp-journey[data-stage='1'] .step[data-step='1'],
+.lp-journey[data-stage='2'] .step[data-step='2'],
+.lp-journey[data-stage='3'] .step[data-step='3'],
+.lp-journey[data-stage='4'] .step[data-step='4'] {
   color: var(--foreground);
 }
 
-.landing-steps .step-detail {
-  margin-block-start: var(--sp-2);
-  font-size: var(--fs-sm);
+.lp-steps .step:not(:is(.lp-journey[data-stage='1'] [data-step='1'], .lp-journey[data-stage='2'] [data-step='2'], .lp-journey[data-stage='3'] [data-step='3'], .lp-journey[data-stage='4'] [data-step='4'])) .step-name {
+  color: color-mix(in oklab, var(--foreground) 62%, var(--background));
 }
 
-/* Closing panel */
+.lp-steps .step-name {
+  margin: 0;
+  font: 500 clamp(28px, 3.4vw, 48px) / 1.08 var(--font-display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
 
-.landing-close {
+:lang(he) .lp-steps .step-name {
+  letter-spacing: 0;
+  line-height: 1.14;
+}
+
+.lp-steps .step-detail {
+  max-width: 44ch;
+  margin: 0;
+  color: color-mix(in oklab, var(--muted-foreground) 78%, var(--background));
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.65;
+}
+
+/* ---- Three ways out: tickets ---- */
+
+.lp-tickets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-block-start: clamp(36px, 5vw, 72px);
+  perspective: 1400px;
+}
+
+.lp-ticket {
+  min-width: 0;
+}
+
+.lp-ticket-face {
+  --tilt: 5deg;
   position: relative;
-  isolation: isolate;
-  margin-block: var(--sp-8) var(--sp-16);
-  padding: var(--sp-16) var(--sp-8);
-  width: min(1200px, calc(100% - var(--sp-12)));
-  border: var(--border-w) solid var(--border);
-  border-radius: calc(var(--r-lg) + 8px);
-  justify-items: center;
-  text-align: center;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 380px;
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transform: rotateX(calc(var(--ty) * var(--tilt))) rotateY(calc(var(--tx) * var(--tilt)));
+  transition: transform 600ms var(--ease-out-expo);
+  overflow: hidden;
+  -webkit-mask:
+    radial-gradient(circle 13px at 0% 66%, transparent 12px, #000 13px) left / 51% 100% no-repeat,
+    radial-gradient(circle 13px at 100% 66%, transparent 12px, #000 13px) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 13px at 0% 66%, transparent 12px, #000 13px) left / 51% 100% no-repeat,
+    radial-gradient(circle 13px at 100% 66%, transparent 12px, #000 13px) right / 51% 100% no-repeat;
+}
+
+.lp-ticket-face[data-live] {
+  transition-duration: 90ms;
+}
+
+.lp-ticket-face::before {
+  content: '';
+  position: absolute;
+  inset-inline: 22px;
+  inset-block-start: 66%;
+  border-block-start: 1px dashed var(--input);
+}
+
+.lp-ticket-face h3 {
+  align-self: start;
+  margin: 0;
+  padding: 30px 30px 0;
+  font: 500 clamp(30px, 3vw, 44px) / 1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+:lang(he) .lp-ticket-face h3 {
+  letter-spacing: 0;
+}
+
+.lp-ticket-face p {
+  margin: 0;
+  padding: 26px 30px 30px;
+  min-height: 34%;
+  color: var(--muted-foreground);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.lp-ticket-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at calc(var(--px) * 100%) calc(var(--py) * 100%), oklch(1 0 0 / 14%), transparent 50%);
+  transition: opacity 400ms;
+}
+
+.lp-ticket-face[data-live] .lp-ticket-glare {
+  opacity: 1;
+}
+
+/* ---- Close ---- */
+
+.lp-close {
+  position: relative;
+  display: grid;
+  max-width: var(--lp-max);
+  margin-inline: auto;
+  padding: var(--lp-sec) var(--lp-pad) 0;
   overflow: clip;
-  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), var(--glow), transparent 70%), var(--card);
 }
 
-.landing-close .landing-h2::before {
-  inset-inline-start: calc(50% - 20px);
+.lp-close-copy {
+  display: grid;
+  gap: 28px;
+  justify-items: start;
 }
 
-.landing-close .landing-cta {
-  justify-content: center;
+.lp-close-title {
+  margin: 0;
+  max-width: 11ch;
+  font: 500 clamp(56px, 12vw, 188px) / 0.92 var(--font-display);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  color: var(--foreground);
 }
 
-.landing-foot {
-  border-block-start: var(--border-w) solid var(--border);
-  max-width: 1200px;
+:lang(he) .lp-close-title {
+  max-width: 9ch;
+  font-size: clamp(54px, 11vw, 170px);
+  line-height: 1;
 }
 
-@media (max-width: 719px) {
-  .landing-section,
-  .landing-close {
-    padding-block: var(--sp-16);
+.lp-fan--close {
+  max-width: 860px;
+  aspect-ratio: 2.1 / 1;
+  margin-block-start: clamp(24px, 4vw, 56px);
+  overflow: clip;
+}
+
+.lp-fan--close .lp-card {
+  inset-block-end: -42%;
+}
+
+.lp-fan--close::before,
+.lp-fan--close::after {
+  content: none;
+}
+
+/* ---- Footer ---- */
+
+.lp-foot {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  max-width: var(--lp-max);
+  margin-inline: auto;
+  padding: 40px var(--lp-pad) 56px;
+  border-block-start: 1px solid var(--border);
+  overflow: clip;
+}
+
+.lp-foot-word {
+  order: 2;
+  font: 700 clamp(88px, 21vw, 300px) / 0.78 var(--font-display);
+  letter-spacing: -0.04em;
+  color: color-mix(in oklab, var(--foreground) 7%, transparent);
+  user-select: none;
+}
+
+.lp-foot .hint {
+  max-width: 56ch;
+  color: var(--muted-foreground);
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 899px) {
+  .lp-hero {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    padding-block: 104px 40px;
   }
 
-  .landing-steps .step::after {
+  .lp-fan {
+    max-width: 460px;
+  }
+
+  .lp-truth,
+  .lp-prices,
+  .lp-journey-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-prices .lp-section-head {
+    position: static;
+  }
+
+  .lp-stage {
+    inset-block-start: 64px;
+    z-index: 4;
+    height: 300px;
+  }
+
+  .lp-stage-slab {
+    width: min(30%, 150px);
+  }
+
+  .lp-steps .step {
+    min-height: 40svh;
+  }
+
+  .lp-tickets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-ticket-face {
+    min-height: 300px;
+  }
+
+  .lp .landing-bar-actions .btn--ghost {
     display: none;
   }
+}
 
-  .landing-close {
-    padding-inline: var(--sp-5);
+/* ---- Motion: only for people who have not asked for less ---- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-rule {
+    animation: foil-slide 7s linear infinite;
+  }
+
+  .lp-js .lp-w {
+    overflow: hidden;
+    padding-block: 0.08em 0.16em;
+    margin-block: -0.08em -0.16em;
+    vertical-align: top;
+  }
+
+  .lp-js .lp-w-in {
+    transform: translateY(115%);
+  }
+
+  .lp-js .lp-hero .lp-w-in,
+  .lp-js .is-visible .lp-w-in {
+    animation: word-up 1100ms var(--ease-out-expo) forwards;
+    animation-delay: calc(var(--i) * 65ms + 140ms);
+  }
+
+  @keyframes word-up {
+    to {
+      transform: none;
+    }
+  }
+
+  .lp-js .lp-hero .lp-rule,
+  .lp-js .lp-hero .lp-lede,
+  .lp-js .lp-hero .lp-cta {
+    animation: rise 900ms var(--ease-out-expo) backwards;
+    animation-delay: 80ms;
+  }
+
+  .lp-js .lp-hero .lp-lede {
+    animation-delay: 620ms;
+  }
+
+  .lp-js .lp-hero .lp-cta {
+    animation-delay: 760ms;
+  }
+
+  .lp-js .lp-card {
+    animation: fan-in 1400ms var(--ease-out-expo) backwards;
+    animation-delay: calc(var(--d) * 120ms + 280ms);
+  }
+
+  @keyframes fan-in {
+    from {
+      opacity: 0;
+      transform: translateY(30%) rotate(0deg) scale(0.86);
+    }
+  }
+
+  .lp-js .lp-shelf {
+    animation: rise 900ms var(--ease-out-expo) backwards;
+    animation-delay: 1000ms;
+  }
+
+  .lp-js .lp-section-head .lp-rule,
+  .lp-js .lp-section-head .lp-sub,
+  .lp-js .lp-section-head .lp-footnote,
+  .lp-js .lp-close-copy .lp-sub,
+  .lp-js .lp-close-copy .lp-cta {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 900ms var(--ease-out-expo) 300ms, transform 900ms var(--ease-out-expo) 300ms;
+  }
+
+  .lp-js .is-visible .lp-rule,
+  .lp-js .is-visible .lp-sub,
+  .lp-js .is-visible .lp-footnote,
+  .lp-js .is-visible .lp-cta {
+    opacity: 1;
+    transform: none;
+  }
+
+  .lp-js .lp-truth[data-reveal],
+  .lp-js .lp-rates[data-reveal],
+  .lp-js .lp-ticket[data-reveal] {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 1000ms var(--ease-out-expo), transform 1000ms var(--ease-out-expo);
+  }
+
+  .lp-js .lp-truth.is-visible,
+  .lp-js .lp-rates.is-visible,
+  .lp-js .lp-ticket.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  .lp-js .lp-ticket:nth-child(2) {
+    transition-delay: 120ms;
+  }
+
+  .lp-js .lp-ticket:nth-child(3) {
+    transition-delay: 240ms;
+  }
+
+  .lp-js .lp-ledger li {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  .lp-js .is-visible .lp-ledger li {
+    animation: ledger-in 700ms var(--ease-out-expo) forwards;
+    animation-delay: calc(var(--i) * 600ms + 500ms);
+  }
+
+  @keyframes ledger-in {
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .lp-js .lp-art--rule .draw {
+    stroke-dashoffset: 1;
+  }
+
+  .lp-js .is-visible .lp-art--rule .draw {
+    animation: draw 1800ms var(--ease-in-out-quart) forwards;
+  }
+
+  .lp-js .is-visible .lp-art--rule .draw:nth-of-type(2) {
+    animation-delay: 300ms;
+  }
+
+  .lp-js .is-visible .lp-art--rule .draw:nth-of-type(3) {
+    animation-delay: 600ms;
+  }
+
+  .lp-js .is-visible .lp-art--rule .draw:nth-of-type(4) {
+    animation-delay: 900ms;
+  }
+
+  @keyframes draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .lp-js .lp-journey[data-stage='1'] .lp-stage-slab {
+    filter: grayscale(1) brightness(0.55);
+  }
+
+  .lp-js .lp-journey[data-stage='1'] .lp-stage-slab .slab-band::before,
+  .lp-js .lp-journey[data-stage='1'] .lp-stage-slab .slab-band::after {
+    content: none;
+  }
+
+  .lp-js .lp-close-copy .lp-close-title {
+    transform-origin: 0 100%;
+  }
+
+  .lp-js .lp-fan--close .lp-card {
+    animation: none;
   }
 }
 
-.landing-price-table th[scope='row'] {
-  text-align: start;
+@media (prefers-reduced-motion: reduce) {
+  .lp-ledger li {
+    opacity: 1;
+  }
+}
+
+.lp-ticket-art {
+  position: absolute;
+  inset-inline-start: 30px;
+  inset-block-end: calc(34% + 26px);
+  width: 108px;
+  height: auto;
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 400ms, transform 700ms var(--ease-out-expo);
+}
+
+.lp-ticket-face:hover .lp-ticket-art {
+  stroke: var(--foreground);
+  transform: translateY(-4px) scale(1.04);
+}
+
+.lp-ticket-art .draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-js .lp-ticket .lp-ticket-art .draw {
+    stroke-dashoffset: 1;
+  }
+
+  .lp-js .lp-ticket.is-visible .lp-ticket-art .draw {
+    animation: draw 1600ms var(--ease-in-out-quart) forwards;
+  }
+
+  .lp-js .lp-ticket.is-visible .lp-ticket-art .draw:nth-child(2) {
+    animation-delay: 250ms;
+  }
+
+  .lp-js .lp-ticket.is-visible .lp-ticket-art .draw:nth-child(3) {
+    animation-delay: 500ms;
+  }
+
+  .lp-js .lp-ticket.is-visible .lp-ticket-art .draw:nth-child(4) {
+    animation-delay: 750ms;
+  }
+}
+
+/* ---- Phone ---- */
+
+@media (max-width: 640px) {
+  .lp-shelf {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px 20px;
+    padding: 12px 16px 14px;
+  }
+
+  .lp-shelf > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .lp-rates .data-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .lp-rates .data-table,
+  .lp-rates .data-table tbody,
+  .lp-rates .data-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .lp-rates .data-table tbody tr {
+    padding-block: 22px;
+    border-block-end: 1px solid var(--border);
+  }
+
+  .lp-rates .data-table tbody th,
+  .lp-rates .data-table tbody td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .lp-rates .data-table td.num {
+    margin-block-start: 10px;
+    text-align: start;
+  }
+
+  .landing-included {
+    margin-inline-start: 0;
+    max-width: none;
+  }
+
+  .lp-rates .data-table tbody tr:hover th {
+    padding-inline-start: 0;
+  }
 }

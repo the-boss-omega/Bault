@@ -1,19 +1,21 @@
 /* ============================================================
-   shadcn component look
+   Components
 
-   Restyles Bault's building blocks (buttons, fields, panels, badges, tables,
-   drawers, dialogs, notices) to the shadcn/ui treatment: a small shadow-free
-   outline, a ring on focus, rounded corners from --radius, soft washed badges.
-   Layouts, routes and copy are untouched; this file only changes appearance
-   and reads only theme tokens. Loaded after theme.css.
+   The kit's building blocks (buttons, fields, panels, tables, tabs, overlays)
+   in Bault's own hand: the kit supplies geometry, colour and rhythm; Bault
+   supplies the foil, the LED status mark and the register rule. Layouts,
+   routes and copy are untouched; this file changes appearance only and reads
+   only theme tokens. Loaded after theme.css and slab.css.
    ============================================================ */
 
-/* Buttons */
+/* ---- Buttons ---- */
 
 .btn {
-  min-height: 36px;
+  position: relative;
+  isolation: isolate;
+  min-height: 40px;
   border-radius: var(--r-md);
-  background: var(--background);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
   border-color: var(--input);
   color: var(--foreground);
   box-shadow: var(--shadow-xs);
@@ -28,20 +30,46 @@
 .btn--gold,
 .btn--navy {
   background: var(--primary);
-  border-color: var(--primary);
+  border-color: transparent;
   color: var(--primary-foreground);
 }
 
 .btn--gold:hover:not(:disabled),
 .btn--navy:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 90%, var(--background));
+  background: var(--foreground);
   border-color: transparent;
-  color: var(--primary-foreground);
+  color: var(--background);
+}
+
+/* A primary button, when it is reached for, throws a little holographic light under itself. */
+
+.btn--gold::after,
+.btn--navy::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--foil);
+  background-size: 300% 100%;
+  filter: blur(14px);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 420ms var(--ease-out-expo), transform 420ms var(--ease-out-expo);
+}
+
+.btn--gold:hover:not(:disabled)::after,
+.btn--navy:hover:not(:disabled)::after,
+.btn--gold:focus-visible::after,
+.btn--navy:focus-visible::after {
+  opacity: 0.6;
+  transform: translateY(8px);
 }
 
 .btn--ghost {
+  background: transparent;
   box-shadow: none;
-  color: var(--foreground);
+  color: var(--muted-foreground);
 }
 
 .btn--ghost:hover:not(:disabled) {
@@ -50,21 +78,24 @@
 }
 
 .btn--danger {
+  background: color-mix(in oklab, var(--destructive) 14%, transparent);
+  border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
+  color: var(--destructive);
+}
+
+.btn--danger:hover:not(:disabled) {
   background: var(--destructive);
   border-color: var(--destructive);
   color: var(--background);
 }
 
-.btn--danger:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--destructive) 90%, var(--background));
-  border-color: transparent;
-  color: var(--background);
-}
-
 .btn--link {
+  min-height: 0;
   box-shadow: none;
   background: none;
-  color: var(--primary);
+  border: 0;
+  color: var(--foreground);
+  text-decoration-color: var(--muted-foreground);
 }
 
 .btn--sm {
@@ -72,11 +103,11 @@
   border-radius: var(--r-md);
 }
 
-/* Focus: a soft three-pixel ring, as shadcn draws it. */
+/* ---- Focus: a three-pixel ring, as the kit draws it ---- */
 
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 55%, transparent);
 }
 
 .btn:focus-visible,
@@ -85,29 +116,31 @@ select:focus-visible,
 textarea:focus-visible {
   outline: none;
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 55%, transparent);
 }
 
-/* Fields */
+/* ---- Fields ---- */
 
 input,
 select,
 textarea {
-  min-height: 36px;
+  min-height: 38px;
   border-radius: var(--r-md);
   border-color: var(--input);
-  background: transparent;
+  background: color-mix(in oklab, var(--foreground) 3.5%, transparent);
   box-shadow: var(--shadow-xs);
+  transition: border-color 200ms, background 200ms, box-shadow 200ms;
 }
 
 input:hover:not(:disabled),
 select:hover:not(:disabled),
 textarea:hover:not(:disabled) {
-  border-color: var(--input);
+  border-color: color-mix(in oklab, var(--input) 60%, var(--foreground));
 }
 
-input[type='checkbox'] {
-  border-radius: var(--r-xs);
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--foreground);
   box-shadow: none;
 }
 
@@ -120,21 +153,43 @@ input[type='checkbox'] {
   color: var(--muted-foreground);
 }
 
-/* Panels become cards */
+/* ---- Panels: a sheet with a heading, a hairline and a lit top edge ---- */
 
 .panel {
+  position: relative;
+  padding-block: var(--sp-5);
   background: var(--card);
   color: var(--card-foreground);
   border: var(--border-w) solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-xs);
-  padding-block: var(--sp-5);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: none;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline: var(--sp-8);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--foreground) 26%, transparent), transparent);
+  pointer-events: none;
 }
 
 .panel-head {
   padding-inline: var(--sp-6);
   padding-block-end: var(--sp-4);
   border-block-end: 0;
+}
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--track-tight);
+}
+
+.panel-subtitle {
+  color: var(--muted-foreground);
 }
 
 .panel-body {
@@ -149,24 +204,42 @@ input[type='checkbox'] {
   padding-inline: var(--sp-6);
 }
 
-.metric-card,
-.card {
-  background: var(--card);
-  color: var(--card-foreground);
-  border-color: var(--border);
-  border-radius: var(--r-lg);
+.panel .dt-wrap {
+  border: 0;
+  border-radius: 0;
+  border-block-start: var(--border-w) solid var(--border);
 }
 
-/* Badges: pill, washed ground, no leading bar. */
+/* ---- Status: an LED and a word. State is a light, not a chip. ---- */
 
 .pill,
 .badge,
 .status-badge {
-  border: var(--border-w) solid transparent;
-  border-radius: var(--r-pill);
-  padding-inline: var(--sp-2);
-  background: var(--secondary);
-  color: var(--secondary-foreground);
+  --led: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--foreground);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+}
+
+.pill::before,
+.badge::before,
+.status-badge::before {
+  content: '';
+  flex: 0 0 auto;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--led);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--led) 20%, transparent), 0 0 10px color-mix(in oklab, var(--led) 55%, transparent);
 }
 
 .pill--success,
@@ -174,23 +247,20 @@ input[type='checkbox'] {
 .badge--done,
 .badge--stored,
 .status-badge--success {
-  background: var(--custody-wash);
-  border-color: color-mix(in oklab, var(--custody) 25%, transparent);
+  --led: var(--custody);
 }
 
 .pill--warning,
 .badge--pending,
 .status-badge--warning {
-  background: var(--amber-wash);
-  border-color: color-mix(in oklab, var(--amber) 25%, transparent);
+  --led: var(--amber);
 }
 
 .pill--error,
 .badge--denied,
 .badge--danger,
 .status-badge--error {
-  background: var(--oxblood-wash);
-  border-color: color-mix(in oklab, var(--oxblood) 25%, transparent);
+  --led: var(--oxblood);
 }
 
 .pill--info,
@@ -199,29 +269,33 @@ input[type='checkbox'] {
 .badge--listed,
 .pill--frozen,
 .badge--hold {
-  background: var(--frost-wash);
-  border-color: color-mix(in oklab, var(--frost) 25%, transparent);
+  --led: var(--frost);
 }
 
 .pill--gold,
 .badge--sold {
-  background: var(--brass-wash);
-  border-color: color-mix(in oklab, var(--brass) 25%, transparent);
+  --led: var(--brass);
 }
 
 .pill--departed,
 .badge--departed,
 .pill--plain,
 .pill--violet {
-  background: var(--muted);
-  border-color: var(--border);
+  --led: var(--muted-foreground);
 }
 
-/* Tables: quiet header, hairline rows, rounded frame. */
+.pill--departed::before,
+.badge--departed::before {
+  box-shadow: none;
+  background: transparent;
+  border: 1px solid var(--led);
+}
+
+/* ---- Tables: hairline rows, quiet header, a mark on the row you point at ---- */
 
 .dt-wrap {
   border: var(--border-w) solid var(--border);
-  border-radius: var(--r-lg);
+  border-radius: calc(var(--radius) + 4px);
   overflow: hidden;
 }
 
@@ -229,15 +303,53 @@ input[type='checkbox'] {
 .table thead th {
   background: transparent;
   color: var(--muted-foreground);
-  border-block-end-color: var(--border);
+  border-block-end-color: var(--input);
+}
+
+.data-table tbody tr,
+.table tbody tr {
+  transition: background 200ms;
 }
 
 .data-table tbody tr.is-clickable:hover,
 .table tbody tr:hover {
-  background: color-mix(in oklab, var(--muted) 50%, transparent);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 
-/* Drawers and dialogs */
+.data-table tbody td:first-child,
+.table tbody td:first-child {
+  position: relative;
+}
+
+.data-table tbody tr.is-clickable td:first-child::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  background: var(--foil);
+  transform: scaleY(0);
+  transition: transform 260ms var(--ease-out-expo);
+}
+
+.data-table tbody tr.is-clickable:hover td:first-child::before {
+  transform: scaleY(1);
+}
+
+/* ---- Tabs ---- */
+
+.ctx-tab {
+  font-size: var(--fs-base);
+}
+
+.ctx-tabs[data-ready='true']::after {
+  height: 2px;
+  background: var(--foil);
+  background-size: 300% 100%;
+  animation: foil-slide 6s linear infinite;
+}
+
+/* ---- Overlays ---- */
 
 .drawer {
   background: var(--popover);
@@ -249,13 +361,19 @@ input[type='checkbox'] {
   background: var(--popover);
   color: var(--popover-foreground);
   border-color: var(--border);
-  border-radius: var(--r-lg);
+  border-radius: calc(var(--radius) + 6px);
 }
 
-/* Notices */
+.drawer-title,
+.modal-head h4 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- Notices ---- */
 
 .errorbox {
-  border-radius: var(--r-lg);
+  border-radius: calc(var(--radius) + 4px);
   border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
   background: var(--oxblood-wash);
 }

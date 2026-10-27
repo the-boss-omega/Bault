@@ -16,6 +16,7 @@ const KEEP = new Set(['latin', 'latin-ext', 'hebrew']);
 const FAMILIES = [
   { slug: 'geist', query: 'Geist:wght@400;500;600', family: 'Geist' },
   { slug: 'geist-mono', query: 'Geist+Mono:wght@400;500;600', family: 'Geist Mono' },
+  { slug: 'frank-ruhl', query: 'Frank+Ruhl+Libre:wght@500;700', family: 'Frank Ruhl Libre' },
   {
     slug: 'plex-sans-hebrew',
     query: 'IBM+Plex+Sans+Hebrew:wght@400;500;600',

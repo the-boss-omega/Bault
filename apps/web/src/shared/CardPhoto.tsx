@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useT } from './i18n';
+import { slabLeave, slabMove } from './ui/slabTilt';
 
 const PHOTO_EXTENSIONS = ['png', 'jpg'] as const;
 
@@ -40,6 +41,85 @@ export function CardPhotoButton({ serialNumber, title }: { serialNumber: string;
   );
 }
 
+/**
+ * The card in its case: a graded-slab frame with a label band, set on the
+ * photography mat. The band's text is drawn from data attributes in CSS, so the
+ * serial appears once in the document (where the caller prints it), not twice.
+ */
+/** The label carries the name up to the first " · " (year, set, card), not the whole catalogue line. */
+function labelTitle(title: string): string {
+  return title.split(' · ')[0] ?? title;
+}
+
+function SlabFace({
+  serialNumber,
+  title,
+  photo,
+  noneLabel,
+  labelSerial,
+}: {
+  serialNumber: string;
+  title: string;
+  photo: ReturnType<typeof useCardPhotoSource>;
+  noneLabel: string;
+  labelSerial?: string;
+}) {
+  return (
+    <span className="slab-case">
+      <span
+        className="slab-band"
+        aria-hidden="true"
+        data-serial={labelSerial ?? serialNumber}
+        data-title={labelTitle(title)}
+      />
+      <span className="slab-window">
+        {photo.exhausted ? (
+          <span className="photo-thumb-empty">{noneLabel}</span>
+        ) : (
+          <img
+            className="photo-thumb-img"
+            src={photo.src}
+            alt={title}
+            loading="lazy"
+            onError={photo.onError}
+          />
+        )}
+      </span>
+      <span className="slab-glare" aria-hidden="true" />
+    </span>
+  );
+}
+
+/**
+ * A slab with no button around it, for pages that present a card rather than
+ * offer it: the landing page and the sign-in stage. It is hidden from
+ * assistive technology, because whatever text the page prints beside it says
+ * what it is.
+ */
+export function CardSlab({
+  serialNumber,
+  title,
+  className = '',
+  labelSerial,
+}: {
+  serialNumber: string;
+  title: string;
+  className?: string;
+  labelSerial?: string;
+}) {
+  const photo = useCardPhotoSource(serialNumber);
+  return (
+    <div
+      className={`photo-thumb slab-static ${className}`.trim()}
+      aria-hidden="true"
+      onPointerMove={slabMove}
+      onPointerLeave={slabLeave}
+    >
+      <SlabFace serialNumber={serialNumber} title={title} photo={photo} noneLabel="" labelSerial={labelSerial} />
+    </div>
+  );
+}
+
 export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; title: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -53,18 +133,10 @@ export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; 
         title={t('photo.show')}
         aria-label={t('photo.showOf', { title })}
         onClick={() => setOpen(true)}
+        onPointerMove={slabMove}
+        onPointerLeave={slabLeave}
       >
-        {photo.exhausted ? (
-          <span className="photo-thumb-empty">{t('photo.none')}</span>
-        ) : (
-          <img
-            className="photo-thumb-img"
-            src={photo.src}
-            alt={title}
-            loading="lazy"
-            onError={photo.onError}
-          />
-        )}
+        <SlabFace serialNumber={serialNumber} title={title} photo={photo} noneLabel={t('photo.none')} />
       </button>
       {open && (
         <CardPhotoModal serialNumber={serialNumber} title={title} onClose={() => setOpen(false)} />
@@ -116,7 +188,9 @@ function CardPhotoModal({
         {photo.exhausted ? (
           <p className="hint modal-empty">{t('photo.missing')}</p>
         ) : (
-          <img className="modal-photo" src={photo.src} alt={title} onError={photo.onError} />
+          <div className="modal-slab photo-thumb" onPointerMove={slabMove} onPointerLeave={slabLeave}>
+            <SlabFace serialNumber={serialNumber} title={title} photo={photo} noneLabel={t('photo.none')} />
+          </div>
         )}
         <code className="modal-serial" dir="ltr">
           {serialNumber}
