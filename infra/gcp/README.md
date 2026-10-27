@@ -16,6 +16,7 @@ Postgres; S3-compatible object storage. On Google Cloud those are:
 | File | What it is |
 |---|---|
 | `provision.sh` | creates all of the above, or finds it, and writes every setting to a local file (mode 600) |
+| `configure.sh` | on the server: turns that file and the templates into `/etc/bault`, asking for what only you know |
 | `compose.gcp.yml` | added after `compose.yml`: the proxy, and the api, worker and migrate waiting for it |
 | `claim-database.sql` | run once as `bault_owner`: it takes over the database Cloud SQL created |
 | `cloudsql-emulate.sql` | CI only: the roles Cloud SQL creates, on a plain Postgres, so CI migrates without a superuser |
@@ -49,152 +50,218 @@ Postgres; S3-compatible object storage. On Google Cloud those are:
 
 ## Before you start (in the Google Cloud console, about 15 minutes)
 
-1. **Two projects**, for example `bault-prod` and `bault-backups`, each linked
-   to a billing account (IAM & Admin → Create a project; Billing → Link). The
-   backups live in the second one, so that a key or a mistake in the first
+1. **Two projects**, for example `bault-prod-4821` and `bault-backups-4821`
+   (a project ID is unique across Google Cloud, so add a few digits), each
+   linked to a billing account (IAM & Admin → Create a project; Billing → Link).
+   The backups live in the second one, so that a key or a mistake in the first
    cannot delete them.
 2. **A budget alert** on the billing account (Billing → Budgets & alerts), at
    about $150 a month.
 3. **2-Step Verification** on the Google account that owns both projects.
 
-On your own machine: the [gcloud CLI](https://cloud.google.com/sdk/docs/install),
-then `gcloud auth login`; your public IP (`curl -s https://ifconfig.me`); and an
-SSH key (`ssh-keygen -t ed25519` if you have none).
+Everything below runs in **Cloud Shell**, the `>_` button at the top right of
+the console: `gcloud` is installed there and signed in as you, and the server
+never talks to your own computer. Have these ready for step 5: the PayPal
+sandbox app's client ID and secret, an EasyPost test key (`EZTK…`), your SMTP
+provider's host, user and password, the bank details collectors transfer to,
+and your age public key (`age1…`, from `age-keygen`; the private key stays in
+your password manager).
 
-## 1. Create everything (20 to 30 minutes, mostly waiting for Cloud SQL)
-
-From your checkout. Read the dry run first: it prints every command and runs none.
-
-```sh
-infra/gcp/provision.sh --project bault-prod --backup-project bault-backups \
-  --admin-ip <ADMIN_IP> --ssh-key ~/.ssh/id_ed25519.pub --dry-run
-infra/gcp/provision.sh --project bault-prod --backup-project bault-backups \
-  --admin-ip <ADMIN_IP> --ssh-key ~/.ssh/id_ed25519.pub
-```
-
-Running it again is safe: it creates only what is missing. A new `--admin-ip`
-updates the SSH rule. It writes `./bault-gcp.env` (mode 600), which holds:
-
-- the server's IP;
-- the Cloud SQL instance;
-- three database passwords;
-- two HMAC keys;
-- a ready-made section for each file under `/etc/bault`.
-
-It never prints a secret.
-
-It does not:
-- set `BACKUP_AGE_RECIPIENT`. That's your age public key, from the password
-  manager (production README, section 6);
-- choose prices, providers or the domain.
-
-## 2. Prepare the server (production README, section 1)
-
-Compute Engine does not let root log in, so log in as `bault-admin`, the user
-your key was installed for, and run the script with `sudo`. It copies your key
-to `deploy`.
+## 1. Create everything (Cloud Shell, 20 to 30 minutes, mostly waiting for Cloud SQL)
 
 ```sh
-scp infra/production/bootstrap.sh bault-admin@<STATIC_IP>:
-ssh bault-admin@<STATIC_IP> sudo bash bootstrap.sh <ADMIN_IP>
+git clone https://github.com/the-boss-omega/Bault.git && cd Bault
+ssh-keygen -t ed25519 -f ~/.ssh/bault -C bault      # give it a passphrase
+P=<prod-project-id>; B=<backups-project-id>
+infra/gcp/provision.sh --project "$P" --backup-project "$B" --admin-ip 35.235.240.0/20 \
+  --ssh-key ~/.ssh/bault.pub --out ~/bault-gcp.env --dry-run      # read it: it runs nothing
+infra/gcp/provision.sh --project "$P" --backup-project "$B" --admin-ip 35.235.240.0/20 \
+  --ssh-key ~/.ssh/bault.pub --out ~/bault-gcp.env
 ```
 
-## 3. Check out the release (section 2)
+`35.235.240.0/20` is Google's IAP range. SSH reaches the server only through
+IAP, behind your Google sign-in and its 2-step verification, so port 22 never
+faces the internet and a changing home IP does not matter. Running the script
+again is safe: it creates only what is missing.
 
-As written, as `deploy@<STATIC_IP>`.
+It writes `~/bault-gcp.env` (mode 600): the server's IP, the Cloud SQL
+instance, three database passwords, two HMAC keys and a section for each file
+under `/etc/bault`. It never prints a secret. Do not paste the file anywhere;
+step 5 copies it to the server.
 
-## 4. Configuration (section 3)
+## 2. SSH through IAP (Cloud Shell, once)
 
-Copy the four example files as section 3 says, then paste each section of
-`bault-gcp.env` into the file it names. The proxy needs no CA file, but compose
-mounts one, so:
+The zone is `us-east4-a` unless you gave `provision.sh` another region
+(`GCP_ZONE` in `~/bault-gcp.env`).
 
 ```sh
-cp /etc/ssl/certs/ca-certificates.crt /etc/bault/db-ca.crt && chmod 644 /etc/bault/db-ca.crt
+cat >> ~/.ssh/config <<EOF
+Host bault-admin bault
+  HostName bault-vm
+  IdentityFile ~/.ssh/bault
+  IdentitiesOnly yes
+  ForwardAgent no
+  ForwardX11 no
+  ProxyCommand gcloud compute start-iap-tunnel %h 22 --listen-on-stdin --zone us-east4-a --project $P
+Host bault-admin
+  User bault-admin
+Host bault
+  User deploy
+EOF
+chmod 600 ~/.ssh/config
 ```
 
-Compute Engine blocks outgoing port 25, so `SMTP_PORT` is 587 or 465. Once the
-files are filled in, move `bault-gcp.env` into your password manager and
-delete it from your disk.
+`bault-admin` is the user `provision.sh` installed your key for, with `sudo`,
+for step 3 only. `bault` is `deploy`, for everything after. Do not use
+`gcloud compute ssh` for this server: it adds keys through metadata and gives
+that user `sudo`. The same lines work from your own machine once the gcloud CLI
+is installed there and `~/.ssh/bault` is copied to it.
 
-## 5. Database roles, the first time only (section 4)
+## 3. Prepare the server (Cloud Shell)
 
-The same, plus one step: Cloud SQL creates the database owned by
-`cloudsqlsuperuser`, and `roles.sql`'s grants need `bault_owner` to own it.
+```sh
+scp infra/production/bootstrap.sh bault-admin:
+ssh bault-admin sudo bash bootstrap.sh 35.235.240.0/20
+ssh bault true && echo "deploy can sign in"
+```
+
+It installs Docker, ufw, age, rclone and the PostgreSQL client, creates
+`deploy` with your key, admits SSH from IAP only, and turns off every kind of
+forwarding (production README, section 1).
+
+## 4. The release
+
+The release is a tag, such as `v0.1.0`, published in GitHub (Releases → Draft a
+new release). `release.yml` then builds `bault-api`, `bault-web` and
+`bault-worker` into `ghcr.io/<owner>`. GitHub makes a new package private, so
+either set each of the three to public (the package's page → Package settings
+→ Change visibility), which is fine because an image holds no secret, or log
+the server in with a token that may only read packages:
+
+```sh
+read -rs GHCR_TOKEN && printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin; unset GHCR_TOKEN
+```
+
+## 5. Configuration (Cloud Shell, then the server as deploy)
+
+```sh
+scp ~/bault-gcp.env bault:
+ssh bault
+```
+
+On the server:
+
+```sh
+git clone https://github.com/the-boss-omega/Bault.git /opt/bault
+cd /opt/bault && git checkout <tag>
+infra/gcp/configure.sh
+```
+
+`configure.sh` writes `/etc/bault/production.env`, `api.env`, `worker.env`,
+`migrate.env` and `backup.env` (mode 600) from `~/bault-gcp.env` and the
+templates, and copies the system CA bundle to `db-ca.crt`, which compose mounts
+although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, and asks for:
+
+- the host name, where Enter takes the free `<ip-with-dashes>.sslip.io`;
+- PayPal: `sandbox`, the client ID and secret, and the ID of a webhook you add
+  in the PayPal app for `https://<host>/api/v1/webhooks/payment`;
+- the EasyPost key, and SMTP (587 or 465, since Compute Engine blocks 25);
+- the bank details, where Enter leaves one out;
+- your age public key.
+
+Secrets are read without echo, and nothing it prints holds one. It ends with a
+check of every value production refuses to start without, and offers to delete
+`~/bault-gcp.env`. Run it again whenever you like: it keeps what is set, and
+`--change smtp` (or `domain`, `paypal`, `easypost`, `bank`, `age`) asks for one
+group again. Then, in Cloud Shell, keep the file in your password manager (⋮ →
+Download) and delete it there too: `shred -u ~/bault-gcp.env`. Copy
+`/etc/bault/production.env` into the password manager as well: losing
+`MFA_ENCRYPTION_KEY` locks every authenticator out.
+
+## 6. Database roles, the first time only (the server, as deploy)
+
+Cloud SQL creates the database owned by `cloudsqlsuperuser`, and `roles.sql`'s
+grants need `bault_owner` to own it. The two role passwords are already in
+`api.env` and `worker.env`, so nothing is typed:
 
 ```sh
 cd /opt/bault
-alias bault='BAULT_TAG=<tag> BAULT_ENV_DIR=/etc/bault docker compose --env-file /etc/bault/production.env -f infra/production/compose.yml -f infra/gcp/compose.gcp.yml'
+export BAULT_TAG=<tag> BAULT_ENV_DIR=/etc/bault
+alias bault='docker compose --env-file /etc/bault/production.env -f infra/production/compose.yml -f infra/gcp/compose.gcp.yml'
 bault up -d cloudsql
 OWNER_URL="$(grep ^HOST_DIRECT_DATABASE_URL= /etc/bault/migrate.env | cut -d= -f2-)"
 psql "$OWNER_URL" -X -f infra/gcp/claim-database.sql
 bault --profile migrate run --rm -T migrate
-read -rs BAULT_APP_PASSWORD; read -rs BAULT_WORKER_PASSWORD; export BAULT_APP_PASSWORD BAULT_WORKER_PASSWORD
-psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 -f infra/production/roles.sql
-unset BAULT_APP_PASSWORD BAULT_WORKER_PASSWORD
+BAULT_APP_PASSWORD="$(sed -nE 's#^DIRECT_DATABASE_URL=postgres://[^:]+:([^@]+)@.*#\1#p' /etc/bault/api.env)" \
+BAULT_WORKER_PASSWORD="$(sed -nE 's#^DIRECT_DATABASE_URL=postgres://[^:]+:([^@]+)@.*#\1#p' /etc/bault/worker.env)" \
+  psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 -f infra/production/roles.sql
+psql "$(sed -nE 's#^DIRECT_DATABASE_URL=(postgres://[^@]+@)cloudsql(.*)#\1127.0.0.1\2#p' /etc/bault/api.env)" \
+  -c 'show statement_timeout'      # 30s
 ```
 
-The two passwords are `BAULT_APP_PASSWORD` and `BAULT_WORKER_PASSWORD` from
-`bault-gcp.env`. Check the timeout through the proxy, as the API's role:
+## 7. Deploy (every release)
 
 ```sh
-psql "postgres://bault_app:<BAULT_APP_PASSWORD>@127.0.0.1:5432/bault" -c 'show statement_timeout'   # 30s
+cd /opt/bault && git fetch --tags && git checkout <tag>
+./infra/production/deploy.sh <tag>
 ```
 
-## 6. Deploy (section 5)
-
-`./infra/production/deploy.sh <tag>`, unchanged. It reads `BAULT_COMPOSE_EXTRA`
-and `BAULT_DB_SIDECAR` from `production.env`, so it adds `compose.gcp.yml`,
-starts the proxy and waits for it before the backup. It reaches the database
-from the host at `HOST_DIRECT_DATABASE_URL`. For day to day, the `bault` alias
-in step 5 replaces the one in "Day to day", with the tag taken from
+`deploy.sh` reads `BAULT_COMPOSE_EXTRA` and `BAULT_DB_SIDECAR` from
+`production.env`, so it adds `compose.gcp.yml`, starts the proxy and waits for
+it before the backup. The first start takes a few seconds more while Caddy
+fetches the certificate. For day to day, the `bault` alias in step 6 replaces
+the one in the production README's "Day to day", with the tag taken from
 `/opt/bault/CURRENT_TAG`.
 
-## 7. Nightly backup (section 6)
+## 8. The first administrator (after the first deploy only)
 
-`/etc/bault/backup.env` is the last section of `bault-gcp.env`, plus your
-`BACKUP_AGE_RECIPIENT`. Install the crontab as section 6 says, then run one
-dump by hand and look for it from your own machine:
+In the shell of step 6, which has the `bault` alias and `BAULT_TAG`:
 
 ```sh
-cd /opt/bault && set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump
-gcloud storage ls gs://<backup-project>-bault-backups/nightly/      # on your machine
+read -rs ADMIN_PASSWORD      # at least 12 characters; it is not echoed
+printf '%s\n' "$ADMIN_PASSWORD" | bault --profile migrate run --rm -T migrate node dist/db/create-admin.js \
+  --email <your email> --username <username> --first-name <first> --last-name <last>
+unset ADMIN_PASSWORD
 ```
 
-The server's key can add a dump and nothing else, so the listing works only
-with your own login. Restores, including Cloud SQL's point-in-time clone, are in
+Sign in at `https://<host>` and enrol two-factor. The command refuses, and
+changes nothing, once an administrator exists.
+
+## 9. Nightly backup and the watchdog
+
+```sh
+crontab infra/ops/crontab.example      # replaces deploy's crontab
+(set -a && . /etc/bault/backup.env && set +a && ./infra/ops/backup.sh dump)
+```
+
+The crontab holds two jobs. The nightly backup encrypts a dump to your age key
+and uploads it to the backups project, where the server's key can add a dump
+and nothing else. So list it from Cloud Shell, with your own login:
+`gcloud storage ls gs://<backups-project>-bault-backups/nightly/`. Restores,
+including Cloud SQL's point-in-time clone, are in
 [`infra/ops/RESTORE.md`](../ops/RESTORE.md).
 
-## 8. Prices and checks (sections 7 to 9)
+The watchdog, `infra/ops/watchdog.sh`, runs every two minutes. Compose restarts
+a container that exits, never one that hangs, so the watchdog restarts `api` or
+`web` when Docker reports them unhealthy, and `worker` when the API answers but
+the outbox has not been dispatched for five minutes. It leaves alone a
+container in its first ten minutes, waits 15 minutes between two restarts of
+one service, and after three restarts in six hours it stops and writes that a
+person is needed. It does nothing while `deploy.sh` runs. Everything it does is
+in `/var/log/bault/watchdog.log`.
 
-The same commands, with `--url https://<domain>`.
+## 10. An alert when the site is down (the console, 5 minutes)
 
-## SSH without an open port (optional)
+The watchdog cannot help when the whole server is down, so let Google check
+from outside. In the console: Monitoring → Uptime checks → Create uptime check.
+Protocol HTTPS, resource type URL, host `<host>`, path `/api/v1/readyz`, every
+5 minutes. Under "Alert & notification", keep the alert, add an email
+notification channel with your address, and create it. Test the channel from
+Monitoring → Alerting → Edit notification channels.
 
-Google's IAP can carry SSH for you, so port 22 never faces the internet and
-your changing home IP stops mattering. You reach the server through your
-Google account and its 2-step verification instead.
+## 11. Prices and checks (production README, sections 7 to 9)
 
-1. Give `provision.sh` and `bootstrap.sh` Google's IAP range as the admin
-   address: `--admin-ip 35.235.240.0/20`, and `bootstrap.sh 35.235.240.0/20`.
-   The VPC rule and `ufw` then admit SSH from IAP only.
-2. Your Google account needs `roles/iap.tunnelResourceAccessor` on the project
-   (an owner has it already).
-3. Connect with your usual key through the tunnel, from `~/.ssh/config`:
-
-```
-Host bault
-  HostName bault-vm
-  User deploy
-  IdentitiesOnly yes
-  ForwardAgent no
-  ForwardX11 no
-  ProxyCommand gcloud compute start-iap-tunnel %h 22 --listen-on-stdin --zone <zone> --project <project>
-```
-
-Then `ssh bault` and `scp file bault:` work as before. Do not use
-`gcloud compute ssh` for this server: it adds keys through metadata and gives
-that user `sudo`.
+The same commands, from your own checkout, with `--url https://<host>`.
 
 ## Before you have a domain
 
@@ -203,7 +270,7 @@ Use a free `sslip.io` name. sslip.io answers any name of the form
 `34-1-2-3.sslip.io`, with nothing to buy or register. Caddy then gets a real
 Let's Encrypt certificate for it, and browsers show a normal secure site.
 
-**In `production.env`:**
+`configure.sh` offers that name as its default (step 5), and sets:
 - `BAULT_DOMAIN=<ip-with-dashes>.sslip.io`, built from `<STATIC_IP>`;
 - `APP_BASE_URL=https://<ip-with-dashes>.sslip.io`;
 - `CADDY_LOCAL_CERTS` empty.
@@ -235,8 +302,10 @@ CURL_CA_BUNDLE=$PWD/caddy-root.crt ./infra/production/deploy.sh <tag>
 
 **When the domain arrives:**
 1. Point its A record at `<STATIC_IP>`.
-2. Set `BAULT_DOMAIN` and `APP_BASE_URL` to the domain (and empty `CADDY_LOCAL_CERTS` if you used rehearsal mode).
-3. Deploy again.
+2. Run `infra/gcp/configure.sh --change domain`, which sets `BAULT_DOMAIN` and
+   `APP_BASE_URL` (and empty `CADDY_LOCAL_CERTS` by hand if you used rehearsal mode).
+3. In the PayPal app, change the webhook's URL to the new host.
+4. Deploy again, and point the uptime check (step 10) at the new host.
 
 ## What it costs
 

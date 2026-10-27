@@ -129,7 +129,7 @@ fi
 
 step "1/9 APIs"
 run gcloud services enable compute.googleapis.com sqladmin.googleapis.com servicenetworking.googleapis.com \
-  storage.googleapis.com iam.googleapis.com cloudresourcemanager.googleapis.com --project="$PROJECT"
+  storage.googleapis.com iam.googleapis.com cloudresourcemanager.googleapis.com iap.googleapis.com --project="$PROJECT"
 run gcloud services enable storage.googleapis.com iam.googleapis.com --project="$BACKUP_PROJECT"
 
 step "2/9 network: ${NETWORK}, firewall, private access for Cloud SQL"
@@ -343,5 +343,5 @@ delete it or move it into your password manager.
 
 Server: ${STATIC_IP}
   ssh bault-admin@${STATIC_IP}    (with --ssh-key; otherwise gcloud compute ssh ${VM} --zone=${ZONE})
-Next: infra/gcp/README.md, step 3.
+Next: infra/gcp/README.md, step 2.
 EOF

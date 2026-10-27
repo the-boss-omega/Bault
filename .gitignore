@@ -39,6 +39,8 @@ _local/
 # host's checkout (/opt/bault).
 /CURRENT_TAG
 /PREVIOUS_TAG
+# The lock deploy.sh holds and infra/ops/watchdog.sh respects.
+/.deploy.lock
 
 # What pnpm design:screens captures, regenerated on every run.
 /design-screens/
