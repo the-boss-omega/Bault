@@ -365,6 +365,59 @@ describe('ContextTabs', () => {
     list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     expect(picked).toEqual(['b']);
   });
+
+  it('takes focus to the tab it selects, so the ring is on what is selected', () => {
+    document.documentElement.dir = 'ltr';
+    render(<ContextTabs label="t" tabs={tabs} active="a" onSelect={() => {}} />);
+    screen.getByRole('tab', { name: 'Alpha' }).focus();
+
+    screen.getByRole('tablist').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Beta' }));
+  });
+
+  describe('on a phone, where the strip scrolls sideways', () => {
+    afterEach(() => {
+      // @ts-expect-error — the test put it there
+      delete Element.prototype.scrollTo;
+    });
+
+    it('brings a selected tab that is out of sight into view, with room beside it', () => {
+      document.documentElement.dir = 'ltr';
+      const scrollTo = vi.fn();
+      Element.prototype.scrollTo = scrollTo;
+      // The strip shows 0 to 300; the selected tab is at 400 to 480, past its end.
+      rects(box(0, 300), box(400, 80));
+
+      render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
+
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ left: 400 + 80 + 16 - 300 }));
+    });
+
+    it('brings it back from the other side too', () => {
+      document.documentElement.dir = 'rtl';
+      const scrollTo = vi.fn();
+      Element.prototype.scrollTo = scrollTo;
+      // In right-to-left the strip starts at its right end; the tab is out past its left end, at -120 to -40.
+      rects(box(0, 300), box(-120, 80));
+
+      render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
+
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ left: -120 - 16 }));
+    });
+
+    it('leaves a selected tab that is already in view where it is', () => {
+      document.documentElement.dir = 'ltr';
+      const scrollTo = vi.fn();
+      Element.prototype.scrollTo = scrollTo;
+      rects(box(0, 300), box(100, 80));
+
+      render(<ContextTabs label="t" tabs={tabs} active="b" onSelect={() => {}} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+  });
 });
 
 function Harness({ children }: { children?: React.ReactNode }) {

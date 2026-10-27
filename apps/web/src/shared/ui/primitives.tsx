@@ -2,6 +2,7 @@ import { cloneElement, isValidElement, useId, useLayoutEffect, useRef } from 're
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { CountUp } from './CountUp';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
+import { scrollBehavior } from './motionPreference';
 
 type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
 
@@ -384,11 +385,27 @@ export function ContextTabs({
       list.style.setProperty('--tab-w', `${t.width}px`);
       list.dataset.ready = 'true';
     };
+    // On a phone the strip scrolls sideways, and the page can open on a tab that is out of sight (a link to
+    // the storefront or to escrow). Bring it into view: only when the selection changes, so a person
+    // who scrolls the strip by hand is not pulled back by a resize.
+    const reveal = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!live || !tab) return;
+      const room = 16;
+      const l = list.getBoundingClientRect();
+      const t = tab.getBoundingClientRect();
+      const past = t.left - room < l.left ? t.left - room - l.left : t.right + room > l.right ? t.right + room - l.right : 0;
+      if (past) list.scrollTo?.({ left: list.scrollLeft + past, behavior: scrollBehavior() });
+    };
     place();
+    reveal();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
     observer?.observe(list);
     list.querySelectorAll('[role="tab"]').forEach((el) => observer?.observe(el));
-    void document.fonts?.ready.then(place);
+    void document.fonts?.ready.then(() => {
+      place();
+      reveal();
+    });
     return () => {
       live = false;
       observer?.disconnect();
@@ -409,7 +426,10 @@ export function ContextTabs({
     if (next === null) return;
     event.preventDefault();
     const target = tabs[next];
-    if (target) onSelect(target.key);
+    if (!target) return;
+    onSelect(target.key);
+    // Focus goes with the selection, so what the ring is on is what is selected.
+    listRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   }
 
   return (
