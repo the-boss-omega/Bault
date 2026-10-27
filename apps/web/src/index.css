@@ -1731,10 +1731,13 @@ input[type='search'] {
   margin-block-start: var(--sp-5);
 }
 
+/* A price is typed left to right, so its sign stands before the figure on the left in either language
+   (the figure is an island on a Hebrew page, and the sign belongs to it). */
 .money-input {
   position: relative;
   display: flex;
   align-items: center;
+  direction: ltr;
 }
 
 .money-input span {
