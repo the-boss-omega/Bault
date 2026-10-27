@@ -332,3 +332,35 @@
   border-color: var(--foreground);
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
 }
+
+/* Cards arrive one after another. */
+
+.card-grid--register > .card,
+.card-grid--listings > .card {
+  animation: rise 700ms var(--ease-out-expo) backwards;
+}
+
+.card-grid--register > .card:nth-child(3),
+.card-grid--listings > .card:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.card-grid--register > .card:nth-child(4),
+.card-grid--listings > .card:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.card-grid--register > .card:nth-child(5),
+.card-grid--listings > .card:nth-child(5) {
+  animation-delay: 180ms;
+}
+
+.card-grid--register > .card:nth-child(6),
+.card-grid--listings > .card:nth-child(6) {
+  animation-delay: 240ms;
+}
+
+.card-grid--register > .card:nth-child(n + 7),
+.card-grid--listings > .card:nth-child(n + 7) {
+  animation-delay: 300ms;
+}

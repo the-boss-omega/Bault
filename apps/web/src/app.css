@@ -407,3 +407,26 @@ body::before {
 .auth-fan .lp-shelf > div:last-child {
   grid-column: 1 / -1;
 }
+
+/* ---- The language switch: a globe and the code, side by side ---- */
+
+.icon-btn:has(.lang-code) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  padding-inline: 12px;
+}
+
+.icon-btn:has(.lang-code) svg {
+  transform: none;
+  width: 16px;
+  height: 16px;
+}
+
+.lang-code {
+  position: static;
+  color: inherit;
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}

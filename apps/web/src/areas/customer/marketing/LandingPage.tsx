@@ -159,6 +159,7 @@ export function LandingPage() {
 
   return (
     <div className="landing lp" data-density="marketing" ref={pageRef}>
+      <span className="lp-progress" aria-hidden="true" />
       <header className="landing-bar lp-bar">
         <span className="lp-brand">
           <span className="lp-mark" aria-hidden="true">
@@ -166,6 +167,26 @@ export function LandingPage() {
           </span>
           <span className="landing-word lp-word">Bault</span>
         </span>
+        <nav className="lp-nav" aria-label={t('nav.primary')}>
+          {(
+            [
+              ['costs', t('landing.prices.title')],
+              ['journey', t('landing.journey.title')],
+              ['exits', t('landing.out.title')],
+            ] as const
+          ).map(([id, label]) => (
+            <a
+              key={id}
+              href="#/"
+              onClick={(event) => {
+                event.preventDefault();
+                document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
         <div className="landing-bar-actions">
           <LanguageSwitcher />
           <Button variant="ghost" onClick={goSignIn}>
@@ -226,9 +247,9 @@ export function LandingPage() {
         </div>
       </section>
 
+      <div className="lp-paper">
       <section className="lp-section lp-promises" aria-labelledby="landing-promises">
         <header className="lp-section-head" data-reveal>
-          <span className="lp-rule" aria-hidden="true" />
           <h2 className="lp-h2" id="landing-promises" aria-label={t('landing.promises.title')}>
             <SplitWords text={t('landing.promises.title')} />
           </h2>
@@ -259,10 +280,10 @@ export function LandingPage() {
           </li>
         </ol>
       </section>
+      </div>
 
-      <section className="lp-section lp-prices" aria-labelledby="landing-prices">
+      <section className="lp-section lp-prices" id="costs" aria-labelledby="landing-prices">
         <header className="lp-section-head" data-reveal>
-          <span className="lp-rule" aria-hidden="true" />
           <h2 className="lp-h2" id="landing-prices" aria-label={t('landing.prices.title')}>
             <SplitWords text={t('landing.prices.title')} />
           </h2>
@@ -322,9 +343,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="lp-section lp-journey" data-stage="1" aria-labelledby="landing-journey">
+      <section className="lp-section lp-journey" id="journey" data-stage="1" aria-labelledby="landing-journey">
         <header className="lp-section-head" data-reveal>
-          <span className="lp-rule" aria-hidden="true" />
           <h2 className="lp-h2" id="landing-journey" aria-label={t('landing.journey.title')}>
             <SplitWords text={t('landing.journey.title')} />
           </h2>
@@ -363,9 +383,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="lp-section lp-out" aria-labelledby="landing-out">
+      <section className="lp-section lp-out" id="exits" aria-labelledby="landing-out">
         <header className="lp-section-head" data-reveal>
-          <span className="lp-rule" aria-hidden="true" />
           <h2 className="lp-h2" id="landing-out" aria-label={t('landing.out.title')}>
             <SplitWords text={t('landing.out.title')} />
           </h2>
@@ -382,9 +401,11 @@ export function LandingPage() {
               onPointerLeave={slabLeave}
             >
               <div className="tilt-case lp-ticket-face">
-                <TicketArt kind={key} />
-                <h3>{t(`landing.out.${key}.title` as MessageKey)}</h3>
-                <p>{t(`landing.out.${key}.body` as MessageKey)}</p>
+                <div className="lp-ticket-main">
+                  <h3>{t(`landing.out.${key}.title` as MessageKey)}</h3>
+                  <TicketArt kind={key} />
+                </div>
+                <p className="lp-ticket-stub">{t(`landing.out.${key}.body` as MessageKey)}</p>
                 <span className="lp-ticket-glare" aria-hidden="true" />
               </div>
             </article>
@@ -422,10 +443,40 @@ export function LandingPage() {
       </section>
 
       <footer className="landing-foot lp-foot">
-        <span className="lp-foot-word" aria-hidden="true">
-          Bault
-        </span>
-        <p className="hint">{t('landing.foot')}</p>
+        <div className="lp-colophon">
+          <div className="lp-colophon-top">
+            <span className="lp-colophon-word">Bault</span>
+            <nav className="lp-colophon-nav" aria-label={t('nav.primary')}>
+              {(
+                [
+                  ['costs', t('landing.prices.title')],
+                  ['journey', t('landing.journey.title')],
+                  ['exits', t('landing.out.title')],
+                ] as const
+              ).map(([id, label]) => (
+                <a
+                  key={id}
+                  href="#/"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
+            <span className="lp-colophon-actions">
+              <button type="button" className="lp-colophon-link" onClick={goSignIn}>
+                {t('landing.nav.signIn')}
+              </button>
+              <button type="button" className="lp-colophon-link" onClick={goSignUp}>
+                {t('landing.nav.signUp')}
+              </button>
+            </span>
+          </div>
+          <p className="lp-colophon-note">{t('landing.foot')}</p>
+        </div>
       </footer>
     </div>
   );

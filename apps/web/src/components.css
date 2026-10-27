@@ -153,15 +153,18 @@ input[type='radio'] {
   color: var(--muted-foreground);
 }
 
-/* ---- Panels: a sheet with a heading, a hairline and a lit top edge ---- */
+/* ---- Panels: a section of a printed statement ----
+   A heading, a rule, the content. Not a floating rectangle: grouping is done
+   with space and a hairline, which is what grouping is. */
 
 .panel {
   position: relative;
-  padding-block: var(--sp-5);
-  background: var(--card);
-  color: var(--card-foreground);
-  border: var(--border-w) solid var(--border);
-  border-radius: calc(var(--radius) + 4px);
+  padding: var(--sp-6) 0 var(--sp-2);
+  background: none;
+  color: inherit;
+  border: 0;
+  border-block-start: var(--border-w) solid var(--input);
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -169,15 +172,15 @@ input[type='radio'] {
   content: '';
   position: absolute;
   inset-block-start: -1px;
-  inset-inline: var(--sp-8);
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--foreground) 26%, transparent), transparent);
-  pointer-events: none;
+  inset-inline-start: 0;
+  inline-size: 48px;
+  block-size: 2px;
+  background: var(--foil);
+  background-size: 300% 100%;
 }
 
 .panel-head {
-  padding-inline: var(--sp-6);
-  padding-block-end: var(--sp-4);
+  padding: 0 0 var(--sp-4);
   border-block-end: 0;
 }
 
@@ -193,21 +196,20 @@ input[type='radio'] {
 }
 
 .panel-body {
-  padding-inline: var(--sp-6);
+  padding: var(--gap-group) 0 0;
 }
 
 .panel-body--flush {
-  padding-inline: 0;
+  padding: 0;
 }
 
 .panel-foot {
-  padding-inline: var(--sp-6);
+  padding-inline: 0;
 }
 
 .panel .dt-wrap {
   border: 0;
   border-radius: 0;
-  border-block-start: var(--border-w) solid var(--border);
 }
 
 /* ---- Status: an LED and a word. State is a light, not a chip. ---- */

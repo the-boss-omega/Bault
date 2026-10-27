@@ -54,7 +54,11 @@ export function useLandingMotion(root: RefObject<HTMLElement | null>): void {
       }
     }
 
-    const onScroll = () => el.classList.toggle('is-scrolled', window.scrollY > 24);
+    const onScroll = () => {
+      el.classList.toggle('is-scrolled', window.scrollY > 24);
+      const span = document.documentElement.scrollHeight - window.innerHeight;
+      el.style.setProperty('--sp', span > 0 ? String(Math.min(1, window.scrollY / span)) : '0');
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     cleanups.push(() => window.removeEventListener('scroll', onScroll));
