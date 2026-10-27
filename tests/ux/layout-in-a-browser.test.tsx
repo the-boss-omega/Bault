@@ -20,6 +20,7 @@ const { StatementSlip } = await import('../../apps/web/src/areas/customer/financ
 const { AccountingSection } = await import('../../apps/web/src/areas/admin/AccountingSection');
 const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
 const { WalletRequestForm } = await import('../../apps/web/src/areas/customer/finance/WalletRequestForms');
+const { ShipmentComposer } = await import('../../apps/web/src/areas/customer/shipping/ShipmentComposer');
 const { api } = await import('../../apps/web/src/shared/api');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -451,6 +452,54 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       }
     }
   });
+  describe('a shipment with its slip', () => {
+    const address = { id: 'a1', label: 'Home', recipient: 'Red Ashwood', line1: '12 Vine St', city: 'Trenton', region: 'NJ', country: 'US', postalCode: '08608', isDefault: true };
+    const items = [{ id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: '2011 Pokémon Call of Legends' }];
+
+    for (const locale of ['en', 'he'] as const) {
+      it(`has the slip beside the panels on a wide window and between the last two on a phone, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        vi.mocked(api.get).mockImplementation(async (path: string) =>
+          path === '/shipping/services'
+            ? { services: [], addOns: [], boxes: [], maxInsuredValueMinor: 100_000, signatureRequiredAboveMinor: 50_000, paymentWindowDays: 7 }
+            : path === '/me/addresses'
+              ? [address]
+              : [],
+        );
+        render(
+          <I18nProvider>
+            <ShipmentComposer items={items} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />
+          </I18nProvider>,
+        );
+        await screen.findByRole('region', { name: /./ });
+        for (const width of [1440, 390]) {
+          const page = await inBrowser(width, locale);
+          const boxes = await page.$$eval('.composer > .panel, .composer > .composer-slip', (els) =>
+            els.map((el) => ({ slip: el.classList.contains('composer-slip'), ...el.getBoundingClientRect().toJSON() })),
+          );
+          const slip = boxes.find((b) => b.slip)!;
+          const panels = boxes.filter((b) => !b.slip);
+          expect(panels).toHaveLength(4);
+          if (width >= 1180) {
+            // Beside: on the side the page ends on, level with the first panel.
+            for (const panel of panels) {
+              if (locale === 'en') expect(slip.left).toBeGreaterThanOrEqual(panel.right - 1);
+              else expect(slip.right).toBeLessThanOrEqual(panel.left + 1);
+            }
+            expect(Math.abs(slip.top - panels[0]!.top)).toBeLessThan(2);
+          } else {
+            // Between the panel of options and the panel of prices, as wide as they are.
+            expect(slip.top).toBeGreaterThanOrEqual(panels[2]!.bottom - 1);
+            expect(panels[3]!.top).toBeGreaterThanOrEqual(slip.bottom - 1);
+            expect(Math.abs(slip.width - panels[2]!.width)).toBeLessThan(2);
+          }
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+          await page.close();
+        }
+      });
+    }
+  });
+
   describe('a form with its slip', () => {
     for (const locale of ['en', 'he'] as const) {
       it(`has the slip beside the fields on a wide window and between the fields and the button on a phone, in ${locale}`, async () => {

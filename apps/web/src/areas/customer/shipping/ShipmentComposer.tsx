@@ -15,6 +15,7 @@ import {
   type ServiceCatalogue,
 } from '../../../shared/carriers';
 import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconAlert, IconBox, IconLocation, IconShipping } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
 import { countryName, lacksRegion, useShippingCountries } from '../../../shared/countries';
@@ -196,8 +197,32 @@ export function ShipmentComposer({
   const refused = (quote?.rates ?? []).filter((r) => !r.eligible);
   const blocked = (quote?.optionProblems ?? []).length > 0;
 
+  // The parcel as it will be sent, written while it is chosen: the price is the recommended service's.
+  const best = eligible.find((r) => r.recommended) ?? eligible[0];
+  const yes = <span>✓</span>;
+  const slipLines = [
+    ...(address
+      ? [
+          {
+            label: t('shipping.destination'),
+            value: (
+              <bdi dir="auto">
+                {address.city}, {countryName(address.country, countries)}
+              </bdi>
+            ),
+          },
+        ]
+      : []),
+    ...(boxSize && catalogue?.boxes.find((b) => b.key === boxSize)
+      ? [{ label: t('ship.boxSize'), value: boxLabel(t, { key: boxSize }) }]
+      : []),
+    ...(rush ? [{ label: t('shipping.rush'), value: yes }] : []),
+    ...(insuredMinor > 0 ? [{ label: t('ship.insuredValue'), value: formatUsd(insuredMinor) }] : []),
+    ...(effectiveSignature ? [{ label: t('ship.signature'), value: yes }] : []),
+  ];
+
   return (
-    <>
+    <div className="composer">
       <Panel
         title={t('shipping.selectItems')}
         subtitle={t('shipping.selectItemsSubtitle')}
@@ -345,6 +370,24 @@ export function ShipmentComposer({
         </div>
       </Panel>
 
+      <aside className="composer-slip">
+        <DrawerTag
+          kicker={t('ship.quote')}
+          amount={best ? formatUsd(best.totalMinor) : '—'}
+          lines={slipLines}
+          status={
+            selectedIds.length > 0 ? (
+              <StatusBadge tone="info">{t('shipping.selectedCount', { count: selectedIds.length })}</StatusBadge>
+            ) : undefined
+          }
+          note={
+            best
+              ? `${serviceLabel(t, best)} · ${t('ship.transit', { min: best.transitDaysMin, max: best.transitDaysMax })}`
+              : t('ship.quoteEmptySubtitle')
+          }
+        />
+      </aside>
+
       <Panel
         title={t('ship.quote')}
         subtitle={
@@ -463,7 +506,7 @@ export function ShipmentComposer({
           </>
         )}
       </Panel>
-    </>
+    </div>
   );
 }
 
