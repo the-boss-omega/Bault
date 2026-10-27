@@ -111,6 +111,36 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       }
     });
 
+    it('a drawer that scrolls keeps a control that is half in view, and its ring, off the edge it is scrolled to', async () => {
+      render(
+        <I18nProvider>
+          <DetailDrawer title="SN-CL10-0005" subtitle="2011 Pokémon Call of Legends" onClose={() => {}}>
+            <p>Body</p>
+            <div id="spacer" />
+            <button type="button" className="btn">
+              Consignment sale $20.00
+            </button>
+            <div style={{ height: 600 }} />
+          </DetailDrawer>
+        </I18nProvider>,
+      );
+      for (const width of [1440, 390]) {
+        const page = await inBrowser(width, 'en', 'dark', false);
+        // The button is half below the fold, as one is when the content above it is as tall as it happens to be.
+        await page.evaluate(() => {
+          const body = document.querySelector('.drawer-body') as HTMLElement;
+          const button = body.querySelector('button.btn') as HTMLElement;
+          const spacer = document.getElementById('spacer') as HTMLElement;
+          const target = body.getBoundingClientRect().bottom - button.getBoundingClientRect().height / 2;
+          spacer.style.height = `${Math.max(0, target - button.getBoundingClientRect().top)}px`;
+        });
+        // Tab to it, as a keyboard does: the browser scrolls the edge of the button to the edge of the body.
+        const cut = (await audit.auditFocus(page, 4)).filter((flag) => /cut off/.test(flag));
+        expect(cut).toEqual([]);
+        await page.close();
+      }
+    });
+
     it('the photograph is a room that covers the window, with the card, its plate and its close button in it', async () => {
       const user = userEvent.setup();
       render(
