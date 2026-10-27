@@ -45,7 +45,8 @@ Options:
   --password <pw>    the seeded accounts' password (default 11111111)
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
-cents, an enum name or English words on a Hebrew page, sideways scrolling or
+cents, an enum name or English words on a Hebrew page, a date, a price or a
+sentence drawn the wrong way round on a Hebrew page, sideways scrolling or
 content cut off at the edge at phone width, a console error, a failed API call or,
 with --axe, an accessibility violation) are listed first.`;
 
@@ -347,6 +348,57 @@ async function inspect(page, locale, width) {
             .map((el) => `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''} "${(el.textContent ?? '').trim().slice(0, 24)}"`);
           flags.push(`content past the edge of the screen: ${named.join(', ')}`);
         }
+      }
+      if (locale === 'he') {
+        // Text that is drawn the wrong way round. The bidirectional algorithm is not asked what it did;
+        // where the characters ended up is measured, and compared with where a Hebrew reader expects them.
+        const spot = (node, start, end) => {
+          const range = document.createRange();
+          range.setStart(node, start);
+          range.setEnd(node, end);
+          const box = range.getBoundingClientRect();
+          return box.width > 0 ? box : null;
+        };
+        const backwards = [];
+        const reading = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let node = reading.nextNode(); node; node = reading.nextNode()) {
+          const owner = node.parentElement;
+          if (!owner || !owner.checkVisibility?.() || owner.closest('script, style, input, textarea, select')) continue;
+          const value = node.textContent ?? '';
+          // Hebrew is read from the right, so what comes first is the right-most. A phrase whose first word is
+          // to the left of its last one (a date drawn year-first, a price before 'a month' in the wrong order)
+          // was drawn left to right by something that forced it.
+          const letters = (value.match(/\p{L}/gu) ?? []).length;
+          const hebrew = (value.match(/\p{Script=Hebrew}/gu) ?? []).length;
+          if (letters >= 3 && hebrew / letters >= 0.4) {
+            const words = [...value.matchAll(/\S+/g)].filter((m) => /[\p{L}\d]/u.test(m[0]));
+            if (words.length >= 2) {
+              const head = words[0];
+              const tail = words[words.length - 1];
+              const first = spot(node, head.index, head.index + head[0].length);
+              const last = spot(node, tail.index, tail.index + tail[0].length);
+              if (first && last && Math.abs(first.top - last.top) < 4 && first.left + 1 < last.left) {
+                backwards.push(`Hebrew drawn left to right "${value.trim().slice(0, 30)}"`);
+              }
+            }
+          }
+          // A price: the sign is drawn before the figure (to its left), as it is written.
+          const price = /\$(?=\d)/.exec(value);
+          if (price) {
+            const sign = spot(node, price.index, price.index + 1);
+            const figure = spot(node, price.index + 1, price.index + 2);
+            if (sign && figure && Math.abs(sign.top - figure.top) < 4 && sign.left > figure.left) backwards.push(`price drawn figure-first "${value.slice(price.index, price.index + 9)}"`);
+          }
+          // An English sentence: its full stop ends it, so it is to the right of where it began.
+          const trimmed = value.trim();
+          if (/^[A-Za-z][^\p{Script=Hebrew}]{12,}[.!?]$/u.test(trimmed) && !owner.closest(ISOLATES)) {
+            const at = value.indexOf(trimmed);
+            const first = spot(node, at, at + 1);
+            const last = spot(node, at + trimmed.length - 1, at + trimmed.length);
+            if (first && last && Math.abs(first.top - last.top) < 4 && last.left < first.left) backwards.push(`full stop drawn at the start "${trimmed.slice(0, 28)}"`);
+          }
+        }
+        if (backwards.length) flags.push(`text drawn the wrong way round: ${[...new Set(backwards)].slice(0, 4).join('; ')}`);
       }
       const foreign = [];
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);

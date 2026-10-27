@@ -536,7 +536,7 @@ like.
 | A rule that paints the paper or the room names its focus ring | `design-lint` | same |
 | Every infinite animation is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it, and anything cut off at the edge of a phone that is not in something that scrolls sideways, on every screen | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it, anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
