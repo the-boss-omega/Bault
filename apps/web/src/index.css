@@ -1225,6 +1225,10 @@ time,
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* What the server wrote is usually English: its own run, which keeps its punctuation and is cut off at
+     its end, not at the other end of the line. It hangs from the page's edge, like what is around it. */
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
 }
 
 .pop-row-date {
@@ -1349,6 +1353,11 @@ time,
 
 .ctx-tabs::-webkit-scrollbar {
   display: none;
+}
+
+/* A scrolling box does not count its end padding in how far it scrolls: the last tab's ring needs its room as a margin. */
+.ctx-tabs > .ctx-tab:last-child {
+  margin-inline-end: var(--sp-1);
 }
 
 .ctx-tab {

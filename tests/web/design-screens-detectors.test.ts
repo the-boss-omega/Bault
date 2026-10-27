@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { existsSync } from 'node:fs';
 import { chromium, type Browser, type Page } from 'playwright-core';
 

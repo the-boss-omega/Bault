@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -139,8 +139,8 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
 
   describe('a menu in the header', () => {
     const items = [
-      { id: 'n1', eventType: 'item_received', payload: {}, createdAt: '2026-10-27T10:00:00Z', seenAt: null },
-      { id: 'n2', eventType: 'wallet_credited', payload: {}, createdAt: '2026-10-26T10:00:00Z', seenAt: null },
+      { id: 'n1', eventType: 'item_received', content: { barcode: 'SN-CL10-0005', message: 'Item SN-CL10-0005 was received.' }, channel: 'in_app', status: 'sent', createdAt: '2026-10-27T10:00:00Z' },
+      { id: 'n2', eventType: 'wallet_request_completed', content: { message: 'Your cash-in was approved.' }, channel: 'in_app', status: 'sent', createdAt: '2026-10-26T10:00:00Z' },
     ] as never;
 
     function Header() {
@@ -230,12 +230,24 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     const tabs = Array.from({ length: 9 }, (_, i) => ({ key: `t${i}`, label: `Section number ${i}` }));
 
     it('does not cut off the ring of the tab that has focus, whichever end of the strip it is at', async () => {
-      render(<ContextTabs label="sections" tabs={tabs} active="t0" onSelect={() => {}} />);
-      for (const [locale, width] of [['en', 390], ['he', 390], ['en', 1440]] as const) {
-        const page = await inBrowser(width, locale);
-        const flags = await audit.auditFocus(page, 4);
-        expect(flags.filter((f) => /cut off/.test(f)), `${locale} ${width}`).toEqual([]);
-        await page.close();
+      for (const active of ['t0', 't8']) {
+        cleanup();
+        render(<ContextTabs label="sections" tabs={tabs} active={active} onSelect={() => {}} />);
+        for (const [locale, width] of [['en', 390], ['he', 390], ['en', 1440]] as const) {
+          const page = await inBrowser(width, locale);
+          // The strip has been scrolled to where the tab is: the end of it, for the last.
+          await page.evaluate(() => {
+            const strip = document.querySelector('.ctx-tabs')!;
+            const selected = document.querySelector('[aria-selected="true"]')!;
+            // As far as the strip goes, for the last tab; the start of it for the first.
+            const rtl = getComputedStyle(strip).direction === 'rtl';
+            const far = selected.matches(':last-child') ? strip.scrollWidth : 0;
+            strip.scrollLeft = rtl ? -far : far;
+          });
+          const flags = await audit.auditFocus(page, 4);
+          expect(flags.filter((f) => /cut off/.test(f)), `${active}, ${locale} ${width}`).toEqual([]);
+          await page.close();
+        }
       }
     });
   });
