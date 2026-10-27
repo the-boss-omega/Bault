@@ -358,14 +358,21 @@ export function ContextTabs({
   label: string;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const count = tabs.length;
+  const labels = tabs.map((t) => t.label).join('\u0000');
 
   // Position the gliding indicator under the active tab. Offsets are measured
-  // from the inline-start edge, so the same maths serves LTR and RTL.
+  // from the inline-start edge, so the same maths serves LTR and RTL. A tab's
+  // width changes when the webfont arrives, when the language changes and when
+  // the bar is resized, so it is measured again for each of those; measuring
+  // once would leave the indicator where the fallback font put the tab.
   useLayoutEffect(() => {
     const list = listRef.current;
-    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!list || !tab) return;
+    if (!list) return;
+    let live = true;
     const place = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!live || !tab) return;
       const l = list.getBoundingClientRect();
       const t = tab.getBoundingClientRect();
       const rtl = document.documentElement.dir === 'rtl';
@@ -375,9 +382,15 @@ export function ContextTabs({
       list.dataset.ready = 'true';
     };
     place();
-    window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
-  }, [active, tabs]);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    observer?.observe(list);
+    list.querySelectorAll('[role="tab"]').forEach((el) => observer?.observe(el));
+    void document.fonts?.ready.then(place);
+    return () => {
+      live = false;
+      observer?.disconnect();
+    };
+  }, [active, count, labels]);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);

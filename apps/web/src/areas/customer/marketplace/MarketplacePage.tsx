@@ -264,6 +264,7 @@ export function MarketplacePage() {
                     </div>
 
                     <div className="card-id">
+                      <span className="money-label">{t('market.mine.col.price')}</span>
                       <p className="price">
                         <Amount>{formatUsd(listing.askingPrice)}</Amount>
                       </p>

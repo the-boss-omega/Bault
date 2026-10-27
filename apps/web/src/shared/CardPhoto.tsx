@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useT } from './i18n';
 import { slabLeave, slabMove } from './ui/slabTilt';
+import { useExit } from './ui/useExit';
+import { useOverlay } from './ui/useOverlay';
 
 /**
  * Where a photograph is looked for, in order. The first is a 640 px WebP made by
@@ -21,13 +23,32 @@ export function cardPhotoUrl(serialNumber: string, attempt = 0, full = false): s
   return make(encodeURIComponent(serialNumber));
 }
 
+/**
+ * Which source each photograph settled on, kept for the life of the page. A
+ * serial with no photograph walks the whole list once and is then remembered as
+ * missing, instead of walking it again (three failed requests) every time a card
+ * for it is drawn.
+ */
+const settled = new Map<string, number>();
+
 function useCardPhotoSource(serialNumber: string, full = false) {
-  const [attempt, setAttempt] = useState(0);
+  const key = `${full ? 'full' : 'thumb'}:${serialNumber}`;
+  const [attempt, setAttempt] = useState(() => settled.get(key) ?? 0);
+  const [forKey, setForKey] = useState(key);
+  if (forKey !== key) {
+    // The same card component was handed another serial: start that one afresh.
+    setForKey(key);
+    setAttempt(settled.get(key) ?? 0);
+  }
   const exhausted = attempt >= (full ? FULL_SOURCES : PHOTO_SOURCES).length;
   return {
     src: cardPhotoUrl(serialNumber, attempt, full),
     exhausted,
-    onError: () => setAttempt((a) => a + 1),
+    onLoad: () => settled.set(key, attempt),
+    onError: () => {
+      settled.set(key, attempt + 1);
+      setAttempt((a) => a + 1);
+    },
   };
 }
 
@@ -97,6 +118,7 @@ function SlabFace({
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             {...(priority ? { fetchPriority: 'high' as const } : {})}
+            onLoad={photo.onLoad}
             onError={photo.onError}
           />
         )}
@@ -118,6 +140,7 @@ export function CardSlab({
   className = '',
   labelSerial,
   priority,
+  noneLabel = '',
 }: {
   serialNumber: string;
   title: string;
@@ -125,6 +148,8 @@ export function CardSlab({
   labelSerial?: string;
   /** The first thing on the page: load it now, not when it scrolls near. */
   priority?: boolean;
+  /** What the window says when there is no photograph. */
+  noneLabel?: string;
 }) {
   const photo = useCardPhotoSource(serialNumber);
   return (
@@ -138,7 +163,7 @@ export function CardSlab({
         serialNumber={serialNumber}
         title={title}
         photo={photo}
-        noneLabel=""
+        noneLabel={noneLabel}
         labelSerial={labelSerial}
         priority={priority}
       />
@@ -146,10 +171,23 @@ export function CardSlab({
   );
 }
 
-export function CardPhotoThumb({ serialNumber, title }: { serialNumber: string; title: string }) {
+export function CardPhotoThumb({
+  serialNumber,
+  title,
+  decorative,
+}: {
+  serialNumber: string;
+  title: string;
+  /** The card around it is already the button (it opens the item), so the photograph is not a second one. */
+  decorative?: boolean;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const photo = useCardPhotoSource(serialNumber);
+
+  if (decorative) {
+    return <CardSlab serialNumber={serialNumber} title={title} noneLabel={t('photo.none')} />;
+  }
 
   return (
     <>
@@ -182,32 +220,28 @@ function CardPhotoModal({
 }) {
   const t = useT();
   const photo = useCardPhotoSource(serialNumber, true);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [onClose]);
+  const { closing, requestClose } = useExit(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useOverlay(dialogRef, requestClose);
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className={closing ? 'modal-backdrop is-closing' : 'modal-backdrop'}
+      role="presentation"
+      onClick={requestClose}
+    >
       <div
-        className="modal"
+        ref={dialogRef}
+        className={closing ? 'modal is-closing' : 'modal'}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="modal-head">
           <h4>{title}</h4>
-          <button type="button" className="btn btn--ghost modal-close" aria-label={t('photo.close')} onClick={onClose}>
+          <button type="button" className="btn btn--ghost modal-close" aria-label={t('photo.close')} onClick={requestClose}>
             ✕
           </button>
         </header>

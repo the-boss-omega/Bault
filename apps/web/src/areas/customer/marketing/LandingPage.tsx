@@ -8,6 +8,7 @@ import { Serial } from '../../../shared/ui/Serial';
 import { SplitWords } from '../../../shared/ui/SplitWords';
 import { Button } from '../../../shared/ui/primitives';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
+import { scrollBehavior } from '../../../shared/ui/motionPreference';
 import { useLandingMotion } from '../../../shared/ui/useLandingMotion';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { LANDING_SERIAL, LANDING_TITLE } from '../auth/AuthPage';
@@ -78,7 +79,9 @@ function priceOf(entry: PriceEntry): string {
     : formatUsd(entry.value);
 }
 
-function cashOutOf(terms: Partial<AccountTerms> | null | undefined): AccountTerms['cashOut'] | null {
+function cashOutOf(
+  terms: Partial<AccountTerms> | null | undefined,
+): AccountTerms['cashOut'] | null {
   const c = terms?.cashOut;
   if (!c) return null;
   const figures = [c.bandMinor, c.smallBps, c.smallMinimumMinor, c.largeFixedMinor, c.largeBps];
@@ -88,6 +91,38 @@ function cashOutOf(terms: Partial<AccountTerms> | null | undefined): AccountTerm
 function param(entry: PriceEntry | undefined, key: string): number | null {
   const raw = entry?.parameters?.[key];
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+}
+
+/**
+ * The page is one route of a hash router, so a section link cannot be a #fragment.
+ * Scrolling is smooth only for a visitor who has not asked for less motion, and
+ * focus moves to the section's heading so a keyboard or screen-reader user lands
+ * where the page has scrolled to, not on the link they left.
+ */
+function jumpTo(id: string) {
+  const section = document.getElementById(id);
+  if (!section) return;
+  section.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  const heading = section.querySelector<HTMLElement>('h2');
+  if (heading) {
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }
+}
+
+function SectionLinks({ links }: { links: readonly (readonly [string, string])[] }) {
+  return links.map(([id, label]) => (
+    <a
+      key={id}
+      href="#/"
+      onClick={(event) => {
+        event.preventDefault();
+        jumpTo(id);
+      }}
+    >
+      {label}
+    </a>
+  ));
 }
 
 export function LandingPage() {
@@ -107,8 +142,16 @@ export function LandingPage() {
         const byAction = new Map<string, PriceEntry>();
         for (const group of list.groups ?? []) {
           for (const entry of group.entries ?? []) {
-            if (entry.itemClass && !(entry.actionType === 'intake' && entry.itemClass === 'trading_card')) continue;
-            if (entry.actionType === 'intake' && byAction.get('intake')?.itemClass === 'trading_card') continue;
+            if (
+              entry.itemClass &&
+              !(entry.actionType === 'intake' && entry.itemClass === 'trading_card')
+            )
+              continue;
+            if (
+              entry.actionType === 'intake' &&
+              byAction.get('intake')?.itemClass === 'trading_card'
+            )
+              continue;
             byAction.set(entry.actionType, entry);
           }
         }
@@ -165,6 +208,11 @@ export function LandingPage() {
   const goSignIn = () => navigate({ section: 'signin' });
   const headline = t('landing.hero.headline');
   const closeTitle = t('landing.close.title');
+  const sectionLinks = [
+    ['costs', t('landing.prices.title')],
+    ['journey', t('landing.journey.title')],
+    ['exits', t('landing.out.title')],
+  ] as const;
 
   return (
     <div className="landing lp" data-density="marketing" ref={pageRef}>
@@ -174,27 +222,10 @@ export function LandingPage() {
           <span className="lp-mark" aria-hidden="true">
             B
           </span>
-          <span className="landing-word lp-word">Bault</span>
+          <span className="lp-word">Bault</span>
         </span>
         <nav className="lp-nav" aria-label={t('nav.primary')}>
-          {(
-            [
-              ['costs', t('landing.prices.title')],
-              ['journey', t('landing.journey.title')],
-              ['exits', t('landing.out.title')],
-            ] as const
-          ).map(([id, label]) => (
-            <a
-              key={id}
-              href="#/"
-              onClick={(event) => {
-                event.preventDefault();
-                document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            >
-              {label}
-            </a>
-          ))}
+          <SectionLinks links={sectionLinks} />
         </nav>
         <div className="landing-bar-actions">
           <LanguageSwitcher />
@@ -207,277 +238,273 @@ export function LandingPage() {
         </div>
       </header>
 
-      <section className="lp-hero" aria-labelledby="landing-headline">
-        <div className="lp-hero-copy">
-          <span className="lp-rule" aria-hidden="true" />
-          <h1 className="lp-headline" id="landing-headline" aria-label={headline}>
-            <SplitWords text={headline} />
-          </h1>
-          <p className="lp-lede">{t('landing.hero.lede')}</p>
-          <div className="landing-cta lp-cta">
-            <Button variant="gold" onClick={goSignUp}>
-              {t('landing.hero.primary')}
-            </Button>
-            <Button variant="secondary" onClick={goSignIn}>
-              {t('landing.hero.secondary')}
-            </Button>
-          </div>
-        </div>
-
-        <div className="lp-fan">
-          {FAN.map((card, i) => (
-            <div
-              className={`lp-card lp-card--${card.slot}${i === 0 ? ' slab-idle' : ''}`}
-              key={card.serial}
-              style={{ '--d': i } as CSSProperties}
-            >
-              <CardSlab serialNumber={card.serial} title={card.title} priority={i < 3} />
-            </div>
-          ))}
-
-          <dl className="lp-shelf">
-            <div>
-              <dt>{t('vault.serial')}</dt>
-              <dd>
-                <Serial value={LANDING_SERIAL} lead />
-              </dd>
-            </div>
-            <div>
-              <dt>{t('vault.item.state')}</dt>
-              <dd>
-                <span className="pill pill--success">{t('auth.landing.state')}</span>
-              </dd>
-            </div>
-            <div>
-              <dt>{t('auth.landing.whereLabel')}</dt>
-              <dd className="ltr-run">{t('auth.landing.where')}</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <div className="lp-paper">
-      <section className="lp-section lp-promises" aria-labelledby="landing-promises">
-        <header className="lp-section-head" data-reveal>
-          <h2 className="lp-h2" id="landing-promises" aria-label={t('landing.promises.title')}>
-            <SplitWords text={t('landing.promises.title')} />
-          </h2>
-          <p className="lp-sub">{t('landing.promises.subtitle')}</p>
-        </header>
-
-        <ol className="lp-truths">
-          <li className="lp-truth" data-reveal>
-            <div className="lp-truth-copy">
-              <h3>{t('landing.promise.serial.title')}</h3>
-              <p>{t('landing.promise.serial.body')}</p>
-            </div>
-            <PlateArt serial={LANDING_SERIAL} />
-          </li>
-          <li className="lp-truth" data-reveal>
-            <div className="lp-truth-copy">
-              <h3>{t('landing.promise.register.title')}</h3>
-              <p>{t('landing.promise.register.body')}</p>
-            </div>
-            <LedgerArt />
-          </li>
-          <li className="lp-truth" data-reveal>
-            <div className="lp-truth-copy">
-              <h3>{t('landing.promise.money.title')}</h3>
-              <p>{t('landing.promise.money.body')}</p>
-            </div>
-            <RuleArt />
-          </li>
-        </ol>
-      </section>
-      </div>
-
-      <section className="lp-section lp-prices" id="costs" aria-labelledby="landing-prices">
-        <header className="lp-section-head" data-reveal>
-          <h2 className="lp-h2" id="landing-prices" aria-label={t('landing.prices.title')}>
-            <SplitWords text={t('landing.prices.title')} />
-          </h2>
-          <p className="lp-sub">{t('landing.prices.subtitle')}</p>
-          <p className="landing-footnote lp-footnote">{t('landing.prices.footnote')}</p>
-        </header>
-
-        <div className="lp-rates" data-reveal>
-          {pricesFailed ? (
-            <p className="hint">{t('landing.prices.unavailable')}</p>
-          ) : (
-            <table className="data-table landing-price-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('landing.prices.col.what')}</th>
-                  <th scope="col" className="num">
-                    {t('landing.prices.col.price')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {FEATURED.map(({ actionType, labelKey }) => {
-                  const entry = prices?.get(actionType);
-                  const isStorage = actionType === 'storage';
-                  const isCashOut = actionType === 'cash_out_fee';
-                  return (
-                    <tr key={actionType}>
-                      <th scope="row">
-                        <span className="landing-price-what">{t(labelKey)}</span>
-                        {isStorage && storageTerms !== null && (
-                          <span className="landing-terms">{storageTerms}</span>
-                        )}
-                      </th>
-                      <td className="num">
-                        {entry !== undefined && !isStorage && !isCashOut && (
-                          <span className="amount">{priceOf(entry)}</span>
-                        )}
-                        {isCashOut && (
-                          <span className="landing-included">
-                            {cashOut === undefined
-                              ? t('grp.loading')
-                              : (cashOutTerms ?? t('landing.price.unavailable'))}
-                          </span>
-                        )}
-                        {isStorage && storageTerms !== null && (
-                          <span className="landing-included">
-                            {t('landing.price.storageIncluded')}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
-
-      <section className="lp-section lp-journey" id="journey" data-stage="1" aria-labelledby="landing-journey">
-        <header className="lp-section-head" data-reveal>
-          <h2 className="lp-h2" id="landing-journey" aria-label={t('landing.journey.title')}>
-            <SplitWords text={t('landing.journey.title')} />
-          </h2>
-          <p className="lp-sub">{t('landing.journey.subtitle')}</p>
-        </header>
-
-        <div className="lp-journey-grid">
-          <div className="lp-stage" aria-hidden="true">
-            <div className="lp-stage-room">
-              <span className="lp-crop lp-crop--a" />
-              <span className="lp-crop lp-crop--b" />
-              <span className="lp-crop lp-crop--c" />
-              <span className="lp-crop lp-crop--d" />
-              <CardSlab serialNumber={LANDING_SERIAL} title={LANDING_TITLE} className="lp-stage-slab" />
-              <span className="lp-flash" />
-              <span className="lp-shelf-line" />
-              <span className="lp-shelf-tag" data-tag="BIN-HT39VTZX · B" />
-              <ul className="lp-exits">
-                <li>{t('landing.out.carrier.title')}</li>
-                <li>{t('landing.out.glove.title')}</li>
-                <li>{t('landing.out.pickup.title')}</li>
-              </ul>
+      <main className="lp-main">
+        <section className="lp-hero" aria-labelledby="landing-headline">
+          <div className="lp-hero-copy">
+            <span className="lp-rule" aria-hidden="true" />
+            <h1 className="lp-headline" id="landing-headline" aria-label={headline}>
+              <SplitWords text={headline} />
+            </h1>
+            <p className="lp-lede">{t('landing.hero.lede')}</p>
+            <div className="lp-cta">
+              <Button variant="gold" onClick={goSignUp}>
+                {t('landing.hero.primary')}
+              </Button>
+              <Button variant="secondary" onClick={goSignIn}>
+                {t('landing.hero.secondary')}
+              </Button>
             </div>
           </div>
 
-          <ol className="steps landing-steps lp-steps">
-            {(['arrive', 'book', 'shelf', 'decide'] as const).map((key, i) => (
-              <li className="step" key={key} data-step={i + 1}>
-                <span className="step-name">{t(`landing.journey.${key}.name` as MessageKey)}</span>
-                <span className="step-detail">
-                  {t(`landing.journey.${key}.detail` as MessageKey)}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="lp-section lp-out" id="exits" aria-labelledby="landing-out">
-        <header className="lp-section-head" data-reveal>
-          <h2 className="lp-h2" id="landing-out" aria-label={t('landing.out.title')}>
-            <SplitWords text={t('landing.out.title')} />
-          </h2>
-          <p className="lp-sub">{t('landing.out.subtitle')}</p>
-        </header>
-
-        <div className="lp-tickets">
-          {(['carrier', 'glove', 'pickup'] as const).map((key, i) => (
-            <article
-              className="lp-ticket"
-              key={key}
-              data-reveal
-              onPointerMove={slabMove}
-              onPointerLeave={slabLeave}
-            >
-              <div className="tilt-case lp-ticket-face">
-                <div className="lp-ticket-main">
-                  <h3>{t(`landing.out.${key}.title` as MessageKey)}</h3>
-                  <p>{t(`landing.out.${key}.body` as MessageKey)}</p>
-                </div>
-                <div className="lp-ticket-stub" aria-hidden="true">
-                  <span className="lp-stub-no">{`0${i + 1} / 03`}</span>
-                  <span className="lp-stub-bars" />
-                </div>
-                <span className="lp-ticket-glare" aria-hidden="true" />
+          <div className="lp-fan">
+            {FAN.map((card, i) => (
+              <div
+                className={`lp-card lp-card--${card.slot}${i === 0 ? ' slab-idle' : ''}`}
+                key={card.serial}
+                style={{ '--d': i } as CSSProperties}
+              >
+                <CardSlab serialNumber={card.serial} title={card.title} priority={i < 3} />
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+            ))}
 
-      <section className="landing-close lp-close" aria-labelledby="landing-close-h">
-        <div className="lp-close-copy" data-reveal>
-          <h2 className="lp-close-title" id="landing-close-h" aria-label={closeTitle}>
-            <SplitWords text={closeTitle} />
-          </h2>
-          <p className="lp-sub">{t('landing.close.body')}</p>
-          <div className="landing-cta lp-cta">
-            <Button variant="gold" onClick={goSignUp}>
-              {t('landing.close.cta')}
-            </Button>
-            <Button variant="secondary" onClick={goSignIn}>
-              {t('landing.nav.signIn')}
-            </Button>
+            <dl className="lp-shelf">
+              <div>
+                <dt>{t('vault.serial')}</dt>
+                <dd>
+                  <Serial value={LANDING_SERIAL} lead />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('vault.item.state')}</dt>
+                <dd>
+                  <span className="pill pill--success">{t('auth.landing.state')}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>{t('auth.landing.whereLabel')}</dt>
+                <dd className="ltr-run">{t('auth.landing.where')}</dd>
+              </div>
+            </dl>
           </div>
+        </section>
+
+        <div className="lp-paper">
+          <section className="lp-section lp-promises" aria-labelledby="landing-promises">
+            <header className="lp-section-head" data-reveal>
+              <h2 className="lp-h2" id="landing-promises" aria-label={t('landing.promises.title')}>
+                <SplitWords text={t('landing.promises.title')} />
+              </h2>
+              <p className="lp-sub">{t('landing.promises.subtitle')}</p>
+            </header>
+
+            <ol className="lp-truths">
+              <li className="lp-truth" data-reveal>
+                <div className="lp-truth-copy">
+                  <h3>{t('landing.promise.serial.title')}</h3>
+                  <p>{t('landing.promise.serial.body')}</p>
+                </div>
+                <PlateArt serial={LANDING_SERIAL} />
+              </li>
+              <li className="lp-truth" data-reveal>
+                <div className="lp-truth-copy">
+                  <h3>{t('landing.promise.register.title')}</h3>
+                  <p>{t('landing.promise.register.body')}</p>
+                </div>
+                <LedgerArt />
+              </li>
+              <li className="lp-truth" data-reveal>
+                <div className="lp-truth-copy">
+                  <h3>{t('landing.promise.money.title')}</h3>
+                  <p>{t('landing.promise.money.body')}</p>
+                </div>
+                <RuleArt />
+              </li>
+            </ol>
+          </section>
         </div>
 
-        <div className="lp-fan lp-fan--close" aria-hidden="true">
-          {CLOSE_FAN.map((card, i) => (
-            <div
-              className={`lp-card lp-card--${card.slot}`}
-              key={card.serial}
-              style={{ '--d': i } as CSSProperties}
-            >
-              <CardSlab serialNumber={card.serial} title={card.title} />
+        <section className="lp-section lp-prices" id="costs" aria-labelledby="landing-prices">
+          <header className="lp-section-head" data-reveal>
+            <h2 className="lp-h2" id="landing-prices" aria-label={t('landing.prices.title')}>
+              <SplitWords text={t('landing.prices.title')} />
+            </h2>
+            <p className="lp-sub">{t('landing.prices.subtitle')}</p>
+            <p className="lp-footnote">{t('landing.prices.footnote')}</p>
+          </header>
+
+          <div className="lp-rates" data-reveal>
+            {pricesFailed ? (
+              <p className="hint">{t('landing.prices.unavailable')}</p>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{t('landing.prices.col.what')}</th>
+                    <th scope="col" className="num">
+                      {t('landing.prices.col.price')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {FEATURED.map(({ actionType, labelKey }) => {
+                    const entry = prices?.get(actionType);
+                    const isStorage = actionType === 'storage';
+                    const isCashOut = actionType === 'cash_out_fee';
+                    return (
+                      <tr key={actionType}>
+                        <th scope="row">
+                          <span className="landing-price-what">{t(labelKey)}</span>
+                          {isStorage && storageTerms !== null && (
+                            <span className="landing-terms">{storageTerms}</span>
+                          )}
+                        </th>
+                        <td className="num">
+                          {entry !== undefined && !isStorage && !isCashOut && (
+                            <span className="amount">{priceOf(entry)}</span>
+                          )}
+                          {isCashOut && (
+                            <span className="landing-included">
+                              {cashOut === undefined
+                                ? t('grp.loading')
+                                : (cashOutTerms ?? t('landing.price.unavailable'))}
+                            </span>
+                          )}
+                          {isStorage && storageTerms !== null && (
+                            <span className="landing-included">
+                              {t('landing.price.storageIncluded')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        <section
+          className="lp-section lp-journey"
+          id="journey"
+          data-stage="1"
+          aria-labelledby="landing-journey"
+        >
+          <header className="lp-section-head" data-reveal>
+            <h2 className="lp-h2" id="landing-journey" aria-label={t('landing.journey.title')}>
+              <SplitWords text={t('landing.journey.title')} />
+            </h2>
+            <p className="lp-sub">{t('landing.journey.subtitle')}</p>
+          </header>
+
+          <div className="lp-journey-grid">
+            <div className="lp-stage" aria-hidden="true">
+              <div className="lp-stage-room">
+                <span className="lp-crop lp-crop--a" />
+                <span className="lp-crop lp-crop--b" />
+                <span className="lp-crop lp-crop--c" />
+                <span className="lp-crop lp-crop--d" />
+                <CardSlab
+                  serialNumber={LANDING_SERIAL}
+                  title={LANDING_TITLE}
+                  className="lp-stage-slab"
+                />
+                <span className="lp-flash" />
+                <span className="lp-shelf-line" />
+                <span className="lp-shelf-tag" data-tag="BIN-HT39VTZX · B" />
+                <ul className="lp-exits">
+                  <li>{t('landing.out.carrier.title')}</li>
+                  <li>{t('landing.out.glove.title')}</li>
+                  <li>{t('landing.out.pickup.title')}</li>
+                </ul>
+              </div>
             </div>
-          ))}
-        </div>
-      </section>
 
-      <footer className="landing-foot lp-foot">
+            <ol className="steps lp-steps">
+              {(['arrive', 'book', 'shelf', 'decide'] as const).map((key, i) => (
+                <li className="step" key={key} data-step={i + 1}>
+                  <span className="step-name">
+                    {t(`landing.journey.${key}.name` as MessageKey)}
+                  </span>
+                  <span className="step-detail">
+                    {t(`landing.journey.${key}.detail` as MessageKey)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="lp-section lp-out" id="exits" aria-labelledby="landing-out">
+          <header className="lp-section-head" data-reveal>
+            <h2 className="lp-h2" id="landing-out" aria-label={t('landing.out.title')}>
+              <SplitWords text={t('landing.out.title')} />
+            </h2>
+            <p className="lp-sub">{t('landing.out.subtitle')}</p>
+          </header>
+
+          <div className="lp-tickets">
+            {(['carrier', 'glove', 'pickup'] as const).map((key, i) => (
+              <article
+                className="lp-ticket"
+                key={key}
+                data-reveal
+                onPointerMove={slabMove}
+                onPointerLeave={slabLeave}
+              >
+                <div className="tilt-case lp-ticket-face">
+                  <div className="lp-ticket-main">
+                    <h3>{t(`landing.out.${key}.title` as MessageKey)}</h3>
+                    <p>{t(`landing.out.${key}.body` as MessageKey)}</p>
+                  </div>
+                  <div className="lp-ticket-stub" aria-hidden="true">
+                    <span className="lp-stub-no">{`0${i + 1} / 03`}</span>
+                    <span className="lp-stub-bars" />
+                  </div>
+                  <span className="lp-ticket-glare" aria-hidden="true" />
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="lp-close" aria-labelledby="landing-close-h">
+          <div className="lp-close-copy" data-reveal>
+            <h2 className="lp-close-title" id="landing-close-h" aria-label={closeTitle}>
+              <SplitWords text={closeTitle} />
+            </h2>
+            <p className="lp-sub">{t('landing.close.body')}</p>
+            <div className="lp-cta">
+              <Button variant="gold" onClick={goSignUp}>
+                {t('landing.close.cta')}
+              </Button>
+              <Button variant="secondary" onClick={goSignIn}>
+                {t('landing.nav.signIn')}
+              </Button>
+            </div>
+          </div>
+
+          <div className="lp-fan lp-fan--close" aria-hidden="true">
+            {CLOSE_FAN.map((card, i) => (
+              <div
+                className={`lp-card lp-card--${card.slot}`}
+                key={card.serial}
+                style={{ '--d': i } as CSSProperties}
+              >
+                <CardSlab serialNumber={card.serial} title={card.title} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="lp-foot">
         <div className="lp-colophon">
           <div className="lp-colophon-top">
             <span className="lp-colophon-word">Bault</span>
-            <nav className="lp-colophon-nav" aria-label={t('nav.primary')}>
-              {(
-                [
-                  ['costs', t('landing.prices.title')],
-                  ['journey', t('landing.journey.title')],
-                  ['exits', t('landing.out.title')],
-                ] as const
-              ).map(([id, label]) => (
-                <a
-                  key={id}
-                  href="#/"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }}
-                >
-                  {label}
-                </a>
-              ))}
-            </nav>
+            <div className="lp-colophon-nav">
+              <SectionLinks links={sectionLinks} />
+            </div>
             <span className="lp-colophon-actions">
               <button type="button" className="lp-colophon-link" onClick={goSignIn}>
                 {t('landing.nav.signIn')}

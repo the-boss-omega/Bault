@@ -19,16 +19,20 @@ export function PlateArt({ serial }: { serial: string }) {
 export function LedgerArt() {
   const t = useT();
   const rows = [
-    { n: '0001', kind: t('timeline.intake'), detail: '' },
-    { n: '0002', kind: t('timeline.detail.shelvedIn', { bin: '\u2066BIN-HT39VTZX\u2069' }), detail: '' },
-    { n: '0003', kind: t('timeline.state_change'), detail: '' },
-    { n: '0004', kind: t('timeline.correction'), detail: '' },
+    { n: '0001', kind: t('timeline.intake') },
+    { n: '0002', kind: t('timeline.detail.shelvedIn', { bin: '\u2066BIN-HT39VTZX\u2069' }) },
+    { n: '0003', kind: t('timeline.state_change') },
+    { n: '0004', kind: t('timeline.correction'), correction: true },
   ];
   return (
     <div className="lp-art lp-art--ledger" aria-hidden="true">
       <ol className="lp-ledger">
         {rows.map((row, i) => (
-          <li key={row.n} style={{ '--i': i } as React.CSSProperties}>
+          <li
+            key={row.n}
+            className={row.correction ? 'is-correction' : undefined}
+            style={{ '--i': i } as React.CSSProperties}
+          >
             <span className="lp-ledger-n">{row.n}</span>
             <span className="lp-ledger-k">{row.kind}</span>
           </li>

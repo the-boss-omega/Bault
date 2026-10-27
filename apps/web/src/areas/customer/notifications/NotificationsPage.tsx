@@ -200,6 +200,11 @@ export function NotificationsPage({
                                     <label className="check">
                                       <input
                                         type="checkbox"
+                                        aria-label={`${
+                                          EVENT_TYPES.includes(row.eventType)
+                                            ? eventLabel(t, row.eventType)
+                                            : row.label
+                                        } · ${channelLabel(t, c.channel)}`}
                                         checked={c.enabled}
                                         disabled={saving || c.mandatory}
                                         onChange={(e) => void toggle(row.eventType, c.channel, e.target.checked)}

@@ -512,7 +512,7 @@ function CardTile({
       </button>
 
       <div className="card-art">
-        <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
+        <CardPhotoThumb serialNumber={item.serialNumber} title={name} decorative />
         {historical && (
           <span className="card-archive-mark" aria-hidden="true">
             <IconArchive />
@@ -593,6 +593,7 @@ function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
   return (
     <div className="watch">
       <div className="watch-line">
+        <span className="money-label">{t('vault.col.cost')}</span>
         <span className="watch-amount">{formatUsd(row.totalSpentMinor)}</span>
       </div>
       {known ? (

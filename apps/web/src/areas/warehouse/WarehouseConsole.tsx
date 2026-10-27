@@ -22,6 +22,7 @@ import {
   TabPanel,
   ViewAllLink,
 } from '../../shared/ui/primitives';
+import { scrollBehavior } from '../../shared/ui/motionPreference';
 import {
   IconAlert,
   IconBox,
@@ -246,7 +247,7 @@ export function WarehouseConsole() {
               requestAnimationFrame(() => {
                 document
                   .getElementById('intake-bench')
-                  ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+                  ?.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' });
               });
             }}
           />

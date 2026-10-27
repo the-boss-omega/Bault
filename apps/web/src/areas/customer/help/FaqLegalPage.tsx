@@ -72,7 +72,11 @@ export function FaqLegalPage() {
           <FaqPanel />
         </TabPanel>
       )}
-      {tab === 'policy' && <IntakePolicyPanel />}
+      {tab === 'policy' && (
+        <TabPanel tab="policy">
+          <IntakePolicyPanel />
+        </TabPanel>
+      )}
 
       {tab === 'prices' && (
         <TabPanel tab="prices">

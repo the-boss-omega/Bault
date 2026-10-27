@@ -1,5 +1,6 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { LanguageSwitcher } from '../../../shared/ui/PageHeader';
+import { useMotionReady } from '../../../shared/ui/useLandingMotion';
 import { CardSlab } from '../../../shared/CardPhoto';
 import { Serial } from '../../../shared/ui/Serial';
 import { useI18n } from '../../../shared/i18n';
@@ -37,11 +38,13 @@ const AUTH_FAN: { serial: string; title: string; slot: 'c' | 'l1' | 'r1' }[] = [
 
 export function AuthShell({ children, bare }: { children: ReactNode; bare?: boolean }) {
   const { t } = useI18n();
+  const stageRef = useRef<HTMLElement>(null);
+  useMotionReady(stageRef);
 
   return (
     <div className={bare ? 'auth-shell auth-shell--bare' : 'auth-shell'} data-density="marketing">
       {!bare && (
-        <section className="auth-stage lp-js" aria-labelledby="auth-pitch">
+        <section className="auth-stage" aria-labelledby="auth-pitch" ref={stageRef}>
           <div className="auth-pitch">
             <span className="lp-rule" aria-hidden="true" />
             <h1 className="auth-headline" id="auth-pitch">

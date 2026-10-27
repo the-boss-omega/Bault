@@ -1,64 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { Button, IconButton } from './primitives';
 import { IconClose } from './icons';
 import { useT } from '../i18n';
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const overlays: symbol[] = [];
-
-function pushOverlay(token: symbol): () => void {
-  overlays.push(token);
-  return () => {
-    const at = overlays.indexOf(token);
-    if (at >= 0) overlays.splice(at, 1);
-  };
-}
-
-const isTopOverlay = (token: symbol) => overlays[overlays.length - 1] === token;
-
-function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
-  if (event.key !== 'Tab' || !container) return;
-  const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement,
-  );
-  if (nodes.length === 0) {
-    event.preventDefault();
-    return;
-  }
-  const first = nodes[0]!;
-  const last = nodes[nodes.length - 1]!;
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
-
-/**
- * Plays the exit animation, then closes. Without matchMedia (a test renderer)
- * or under reduced motion it closes at once, exactly as before.
- */
-function useExit(onClose: () => void): { closing: boolean; requestClose: () => void } {
-  const [closing, setClosing] = useState(false);
-  const latest = useRef(onClose);
-  latest.current = onClose;
-  const requestClose = useCallback(() => {
-    const animate =
-      typeof window.matchMedia === 'function' &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!animate) {
-      latest.current();
-      return;
-    }
-    setClosing(true);
-    window.setTimeout(() => latest.current(), 180);
-  }, []);
-  return { closing, requestClose };
-}
+import { useExit } from './useExit';
+import { useOverlay } from './useOverlay';
 
 export function DetailDrawer({
   title,
@@ -84,37 +29,8 @@ export function DetailDrawer({
   const t = useT();
   const { closing, requestClose } = useExit(onClose);
   const panelRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
-
-  useEffect(() => {
-    openerRef.current = document.activeElement as HTMLElement | null;
-    const panel = panelRef.current;
-    const token = Symbol('drawer');
-    const popOverlay = pushOverlay(token);
-    panel?.focus();
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (!isTopOverlay(token)) return;
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        requestClose();
-        return;
-      }
-      trapTab(event, panel);
-    }
-
-    document.addEventListener('keydown', onKeyDown, true);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.body.style.overflow = previousOverflow;
-      popOverlay();
-      openerRef.current?.focus?.();
-    };
-  }, [requestClose]);
+  useOverlay(panelRef, requestClose);
 
   return (
     <>
@@ -174,29 +90,7 @@ export function ConfirmationModal({
   const { closing, requestClose: requestCancel } = useExit(onCancel);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    const dialog = dialogRef.current;
-    const token = Symbol('confirm');
-    const popOverlay = pushOverlay(token);
-    dialog?.focus();
-    function onKey(event: KeyboardEvent) {
-      if (!isTopOverlay(token)) return;
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        requestCancel();
-        return;
-      }
-      trapTab(event, dialog);
-    }
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      popOverlay();
-      opener?.focus?.();
-    };
-  }, [requestCancel]);
+  useOverlay(dialogRef, requestCancel);
 
   return (
     <div
