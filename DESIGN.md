@@ -79,12 +79,15 @@ is allowed to be colourful is the foil, and only as a hairline or a band.
 
 ### One radius family, one border weight, shadows only for objects
 The kit's radius (`--radius`, 10 px) and the sizes derived from it: `--r-xs` 6 · `--r-sm` 8 ·
-`--r-md` 10 · `--r-lg` 14 · `--r-xl` 18, plus `--r-bar` (3 px, the end of a bar a few pixels thick)
-and `--r-capsule` (the product's one pill, used on purpose: the header's control group, the landing's
-buttons, the journey's chips). The slab's corners are container-relative (`cqw`) so they scale with
-it. Panels have none: **a panel is a heading and a rule, not a floating rectangle**. The lint rejects
-any other radius in the layers. A 1 px hairline is the only border weight; shadows are for objects
-that are physically in the room: a slab, a paper piece, a popover, a drawer, a dialog.
+`--r-md` 10 · `--r-lg` 14 · `--r-xl` 18 · `--r-2xl` 24 (the landing's one large stage), plus `--r-bar`
+(3 px, the end of a bar a few pixels thick) and `--r-capsule` (the product's one pill, used on
+purpose: the header's control group, the landing's buttons, the journey's chips). The slab's corners
+are container-relative (`cqw`) so they scale with it. Panels have none: **a panel is a heading and a
+rule, not a floating rectangle**. A corner is one of these, nothing, or a circle; the lint rejects
+anything else in `index.css` and in the layers, including arithmetic on a token (`calc(var(--r-xl) +
+6px)` is a size the family does not have: if one is needed it is named in `theme.css`). A 1 px
+hairline is the only border weight; shadows are for objects that are physically in the room: a slab,
+a paper piece, a popover, a drawer, a dialog.
 
 ### Density follows the job
 Marketing generous, vault comfortable, warehouse compact — the same component adapting, not three
@@ -228,7 +231,7 @@ with the page, so the room is dark in both themes and its ring is `--room-ink`.
 | Token | Value | Rule |
 | --- | --- | --- |
 | `--radius` | `0.625rem` (the kit's) | Controls |
-| `--r-xs` / `--r-sm` / `--r-md` / `--r-lg` / `--r-xl` | radius − 4 / − 2 / 0 / + 4 / + 8 | Paper slips and clauses / shelf slots / controls / cards / tickets and large stages |
+| `--r-xs` / `--r-sm` / `--r-md` / `--r-lg` / `--r-xl` / `--r-2xl` | radius − 4 / − 2 / 0 / + 4 / + 8 / + 14 | Paper slips and clauses / shelf slots / controls / cards and tables / tickets, dialogs and large stages / the landing's stage |
 | `--r-bar` | `3px` | A rule or a bar a few pixels thick |
 | `--r-capsule` | `999px` | The three deliberate pills |
 | `--border-w` | `1px` | The only border weight |
@@ -248,11 +251,11 @@ jump link focuses (`tabindex="-1"`) shows none: it is not a control.
 ## 6. Space and density
 
 4 px base: `--sp-1` 4 … `--sp-24` 96. This is Tailwind's spacing scale, which the kit uses, and it is
-held in the layers as well as in `index.css`: every padding, margin, gap and inset is a multiple of
-four or one of the scale's half steps (2, 6, 10, 14 px), with the 1 px hairline for a nudge, and
-`design-lint` says so when one is not. Sizes (a glyph, a ring, a rail's width) are not space, so they
-are not held to it; when a size has to be taken out of a space (a 3 px bar out of a padding), it is a
-custom property that both read, not a number written twice.
+held in `index.css` (after its token block) and in every layer: every padding, margin, gap and inset
+is a multiple of four or one of the scale's half steps (2, 6, 10, 14 px), with the 1 px hairline for
+a nudge, and `design-lint` says so when one is not. Sizes (a glyph, a ring, a rail's width) are not
+space, so they are not held to it; when a size has to be taken out of a space, it is a custom
+property that both read, not a number written twice.
 
 Four variables carry the rhythm, and switching `data-density` on a subtree changes all of them:
 
@@ -274,8 +277,9 @@ Tokens: `--dur-fast` 150 · `--dur` 200 · `--dur-slow` 250 · `--dur-enter` 300
 `--dur-surface` 400 (a surface settling) · `--dur-colour` 600 (a colour moving) · `--dur-reveal` 900
 (a reveal) · `--dur-hero` 1400 ms; `--ease-out-expo` `cubic-bezier(0.16, 1, 0.3, 1)` for arrivals,
 `--ease-in-out-quart` for departures and breathing, `--ease-in-out` for the in-between. A length that
-belongs to one piece of choreography (a stagger, the landing's headline words) is written beside the
-thing it times and not given a name it would share with nothing.
+belongs to one piece of choreography (an arrival, a stagger, the landing's headline words) is written
+beside the thing it times and not given a name it would share with nothing; a transition on a state
+(hover, selected) reads the tokens.
 
 | Where | What | Job |
 | --- | --- | --- |
@@ -288,7 +292,7 @@ thing it times and not given a name it would share with nothing.
 | Wallet | The statement's sum prints in when the overview opens; the balance counts up | Orient |
 | Controls | Press settles (`scale(.98)`); a primary button throws a little foil light under itself, clipped at its lower edge so it never hazes the face | Confirm |
 | Overlays | Drawers slide, dialogs and the photo lightbox rise, all *exit* (`.is-closing` for `--dur-exit`) | Confirm |
-| Loading | Placeholders are empty cases in the shape of what is coming, with a shimmer; the boot mark breathes | Orient |
+| Loading | Placeholders hold the room of what is coming (an empty case for a card, rows for a table) with a shimmer; the boot mark breathes | Orient |
 
 Under `prefers-reduced-motion: reduce` every animation and transition is removed, and a script that
 scrolls asks `scrollBehavior()` instead of saying `'smooth'`. Hidden *initial* states exist only
@@ -344,7 +348,8 @@ pieces. Each keeps the old markup's contracts and message keys.
 - **Offers — bid slips.** The card in its case, who made the offer and whose move it is, the offer
   named and in the display face, a rule showing how it stands against the asking price, the state,
   and the actions. The maker of an offer sees only Change and Withdraw; to whom it was made, Accept,
-  Counter and Reject, with Reject set a step apart from the other two (space as well as colour).
+  Counter and Reject. The answer that ends the offer (Withdraw, Reject) is set a step apart from the
+  others, by space as well as colour.
 - **Trade — the same slip, two sides facing each other.** What *they* receive and what *you* receive,
   each card in its case beside its serial, and between them the way the cards travel: both ways for a
   swap, one way for a gift, toward whoever is receiving (decorative; the two labelled groups say it in
@@ -363,19 +368,27 @@ pieces. Each keeps the old markup's contracts and message keys.
 - **Shipping and services — the departures.** Three lines on a board, the figure first in the display
   face and counted up: how many cards are ready to ship, a lookup for the shipments that have gone
   (an icon, because a lookup has no count), and the requests that are open, with those closed under
-  them. What each is, and the way in.
+  them. What each is, and the way in. A figure that has not arrived is a dash, never a zero.
+- **Inbound, the processing floor.** The two places a parcel waits (to be opened, to be catalogued),
+  along the same line a label's journey is drawn on; a place with parcels in it is lit, and the line
+  runs on past the last. Each place says how many, in the display face, and what it means; under them
+  is how long the oldest has waited and since when. A figure that has not arrived is a dash.
 - **Notifications — a register.** The same register as the item's history: a rule down the leading
-  edge, when (left to right) and what kind, then what it says.
+  edge, when (a date reads the way the page does) and what kind, then what it says (a sentence the
+  API wrote in English is its own island, so its full stop stays at its end).
 
 ### Choosing cards (`ItemPick`; `components.css`)
 Wherever the list is of cards to choose among (the items to ship, to offer in a trade, to hand over
-in person, and the one to sell, where the control is a radio because only one can be chosen), it is the
-cards: each in its case with its serial and name under it, in a grid. Choosing
-one pulls it from the shelf: a foil edge and a filled mark in the corner. The checkbox is still the
-control, so the keyboard and a screen reader reach exactly what they did; the photograph is decoration
-and adds nothing to its name. The focus ring goes round the card. A big collection scrolls inside its
-own room (640 px), so what follows the list stays within reach. Outside a label, in a list of cards
-already chosen, an `ItemPick` is a row.
+in person, and the one to sell or to give away, where the control is a radio because only one can be
+chosen), it is the cards: each in its case with its serial and name under it, in a grid. Choosing
+one pulls it from the shelf: a foil edge and a filled mark in the corner. The checkbox (or radio) is
+still the control, so the keyboard and a screen reader reach exactly what they did; the photograph is
+decoration and adds nothing to its name. The set is a `fieldset` with a name (drawn for the one to
+sell, read aloud for the rest), so a screen reader says what it has entered and, for a radio, "1 of
+n". The focus ring goes round the card. On a wide screen a big collection scrolls inside its own room
+(640 px), so what follows the list stays within reach; on a phone the page is what scrolls, because a
+scroller inside a scroller takes the thumb. Outside a label, in a list of cards already chosen, an
+`ItemPick` is a row.
 
 ### Numeric columns
 A column of figures hangs from one edge, header and figures alike. The figures are left to right
@@ -424,6 +437,12 @@ stands on in the drawer; `.offer` is a membership tier's card.
   of them go through `.serial`, `.code-inline`, `.amount`, `.ltr-run` or a `<bdi dir="ltr">` inside a
   block that keeps the page's direction (so the run is isolated but its label still sits at the start
   edge). What a sender wrote (a parcel's contents) sets its own direction (`unicode-bidi: plaintext`).
+- **A date is not an island.** A locale-formatted date reads in the page's direction (`.date`, which
+  is `unicode-bidi: plaintext`), so its day, month and year keep the order the language gives them; a
+  `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month")
+  is isolated where it stands (`isolateLtr()` in `money.ts`), so the phrase keeps its own order. A
+  cell that holds only a pill, a date or a code is set `unicode-bidi: normal`, or it would fall back
+  to left to right and hang from the wrong edge.
 - **Icons that flip**: chevrons, back/forward arrows, the "view all" caret — anything expressing
   *direction of travel through the interface*. **Icons that do not flip**: the external-link arrow
   (it means "leaves this site", not "goes right"), clocks, checkmarks, the camera, the box.
@@ -509,13 +528,13 @@ like.
 | Contrast of every pair the interface draws text or a boundary in, in both themes (table in section 4) | `design-lint` reads `theme.css` | `pnpm test:web` (CI) and by hand |
 | The two dark blocks stay one theme | `design-lint` | same |
 | Physical properties; `left`/`right` keywords in origins, positions, gradients; any `[dir]` / `:dir()` outside `theme.css` | `design-lint` | same |
-| Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family | `design-lint` | same |
-| Every padding, margin, gap and inset in the layers is on the 4 px grid (section 6) | `design-lint` | same |
+| Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
+| Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid (section 6) | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring | `design-lint` | same |
 | Every infinite animation is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
 | WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it, and anything cut off at the edge of a phone that is not in something that scrolls sideways, on every screen | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
-| The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each in a copy of the source | `pnpm test:web` |
+| The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
 ---

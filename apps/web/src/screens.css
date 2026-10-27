@@ -1375,6 +1375,103 @@
   }
 }
 
+/* ---- Inbound, the processing floor ----
+   The two places a parcel waits, along the line it travels (the same line as a
+   label's journey): a place with parcels in it is lit, the line runs on past the
+   last one, and under them is how long the oldest has waited. */
+
+.queue-board {
+  padding-block: 8px 4px;
+}
+
+.queue {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-stop {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-block: 28px 8px;
+  padding-inline-end: 24px;
+}
+
+.queue-stop::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  inline-size: 10px;
+  block-size: 10px;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--background);
+}
+
+.queue-stop::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline: 20px 8px;
+  block-size: 1px;
+  background: var(--border);
+}
+
+.queue-stop:last-child::after {
+  inset-inline-end: 0;
+  background: none;
+  border-block-start: 1px dashed var(--control-border);
+  block-size: 0;
+}
+
+.queue-stop[data-waiting='true']::before {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.queue-figure {
+  font: 500 clamp(48px, 6vw, 80px) / 1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.queue-note {
+  max-inline-size: 36ch;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.queue-oldest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 24px;
+  margin-block: 28px 20px;
+  padding-block-start: 20px;
+  border-block-start: 1px solid var(--border);
+}
+
+.queue-hours {
+  font: 500 28px / 1.1 var(--font-display);
+  letter-spacing: -0.01em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+@media (max-width: 767px) {
+  .queue-stop {
+    padding-inline-end: 16px;
+  }
+}
+
 /* ---- The warehouse: the floor as a map ----
    Shelves in their zones, as racks. Each slot is a shelf: its barcode, how many
    items stand on it, and a mark for each. */

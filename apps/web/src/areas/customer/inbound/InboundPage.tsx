@@ -21,23 +21,15 @@ import {
   EmptyState,
   ErrorState,
   Field,
-  MetricCard,
   Panel,
   SkeletonTable,
   StatusBadge,
   SuccessNote,
   TabPanel,
 } from '../../../shared/ui/primitives';
+import { CountUp } from '../../../shared/ui/CountUp';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
-import {
-  IconAlert,
-  IconBox,
-  IconCheck,
-  IconClock,
-  IconInbox,
-  IconLocation,
-  IconPlus,
-} from '../../../shared/ui/icons';
+import { IconCheck, IconInbox, IconLocation, IconPlus } from '../../../shared/ui/icons';
 
 const TABS = ['addresses', 'parcels', 'processing'] as const;
 type InboundTab = (typeof TABS)[number];
@@ -589,41 +581,51 @@ function ProcessingTab({ onError }: { onError: (m: string) => void }) {
     void load();
   }, [load]);
 
+  const stations = [
+    {
+      key: 'open',
+      label: t('inbound.workflow.awaitingOpen'),
+      note: t('inbound.workflow.awaitingOpenNote'),
+      count: workflow?.awaitingOpen,
+    },
+    {
+      key: 'processing',
+      label: t('inbound.workflow.awaitingProcessing'),
+      note: t('inbound.workflow.awaitingProcessingNote'),
+      count: workflow?.awaitingProcessing,
+    },
+  ];
+
   return (
     <>
-      <div className="metric-grid">
-        <MetricCard
-          label={t('inbound.workflow.awaitingOpen')}
-          value={workflow?.awaitingOpen ?? '—'}
-          icon={<IconBox />}
-          tone="blue"
-          footer={t('inbound.workflow.awaitingOpenNote')}
-        />
-        <MetricCard
-          label={t('inbound.workflow.awaitingProcessing')}
-          value={workflow?.awaitingProcessing ?? '—'}
-          icon={<IconClock />}
-          tone="amber"
-          footer={t('inbound.workflow.awaitingProcessingNote')}
-        />
-        <MetricCard
-          label={t('inbound.workflow.oldest')}
-          value={
-            workflow?.oldestWaitingHours == null
+      <section className="queue-board">
+        {/* The two places a parcel waits, along the line it travels; a place with parcels in it is lit. */}
+        <ol className="queue" aria-label={t('inbound.tab.processing')}>
+          {stations.map((station) => (
+            <li className="queue-stop" key={station.key} data-waiting={station.count ? 'true' : 'false'}>
+              <p className="slip-label">{station.label}</p>
+              <p className="queue-figure">
+                {workflow ? <CountUp value={String(station.count ?? 0)} /> : '—'}
+              </p>
+              <p className="queue-note">{station.note}</p>
+            </li>
+          ))}
+        </ol>
+
+        <p className="queue-oldest">
+          <span className="slip-label">{t('inbound.workflow.oldest')}</span>
+          <span className="queue-hours">
+            {workflow?.oldestWaitingHours == null
               ? '—'
-              : t('inbound.workflow.hours', { hours: workflow.oldestWaitingHours })
-          }
-          icon={<IconAlert />}
-          tone="violet"
-          footer={
-            workflow?.oldestReceivedAt
-              ? t('inbound.workflow.since', {
-                  date: formatDate(workflow.oldestReceivedAt, locale),
-                })
-              : t('inbound.workflow.oldestNote')
-          }
-        />
-      </div>
+              : t('inbound.workflow.hours', { hours: workflow.oldestWaitingHours })}
+          </span>
+          <span className="queue-note">
+            {workflow?.oldestReceivedAt
+              ? t('inbound.workflow.since', { date: formatDate(workflow.oldestReceivedAt, locale) })
+              : t('inbound.workflow.oldestNote')}
+          </span>
+        </p>
+      </section>
 
       <Panel title={t('inbound.workflow.title')} subtitle={t('inbound.workflow.subtitle')}>
         <p className="field-hint">{t('inbound.workflow.explainer')}</p>
