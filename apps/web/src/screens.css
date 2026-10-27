@@ -1340,6 +1340,56 @@
   text-transform: uppercase;
 }
 
+/* ---- A ticket as it is written: its subject in the display face, its kind, and how its message begins ---- */
+
+.ticket-note {
+  display: grid;
+  gap: var(--sp-1);
+  margin-block: var(--sp-2) var(--sp-3);
+}
+
+.ticket-note p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+/* A register's entry that opens something: the words are the control, and they read as what they are until pointed at. */
+.register-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.register-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The subject of a ticket is what the entry is: it leads its line in the size of the text around the register. */
+.register-entry .register-link {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+
+li.is-clickable {
+  cursor: pointer;
+}
+
 /* ---- A trade as it is composed: the two sides on the tag, one above the other, and the way the cards travel between them ---- */
 
 .trade-slip {
