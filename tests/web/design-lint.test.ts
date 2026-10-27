@@ -89,7 +89,7 @@ describe('design-lint', () => {
 
     it('a dark theme that does not tell the browser it is dark', () => {
       const r = withChange((d) =>
-        edit(d, 'theme.css', (text) => text.replace(/:root\[data-theme='dark'\] \{\n  color-scheme: dark;\n\}/, ":root[data-theme='dark'] {\n}")),
+        edit(d, 'theme.css', (text) => text.replace(/:root\[data-theme='dark'\] \{\n {2}color-scheme: dark;\n\}/, ":root[data-theme='dark'] {\n}")),
       );
       expect(r.status).toBe(1);
       expect(r.out).toContain("must declare color-scheme: dark");

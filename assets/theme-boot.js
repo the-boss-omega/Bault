@@ -1,3 +1,4 @@
+/* global document, localStorage, matchMedia */
 /*
  * Sets the theme and the language before the first paint, so a page that is light opens light
  * instead of dark and then flipping, and an English page opens left to right instead of right to
@@ -14,7 +15,7 @@
   try {
     choice = localStorage.getItem('bault.theme');
     locale = localStorage.getItem('bault.locale');
-  } catch (e) {
+  } catch {
     /* storage can be blocked; the page's own defaults stand */
   }
   if (locale === 'he' || locale === 'en') {
