@@ -497,7 +497,7 @@ function TrackingTab({
                       )}
                     </td>
                     <td data-label={t('ss.tracking.col.updated')}>
-                      <span dir="ltr">
+                      <span className="date">
                         {formatDate(shipment.updatedAt ?? shipment.createdAt, locale)}
                       </span>
                     </td>

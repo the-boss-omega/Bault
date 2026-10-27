@@ -532,6 +532,7 @@ like.
 | Physical properties; `left`/`right` keywords in origins, positions, gradients; any `[dir]` / `:dir()` outside `theme.css` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
 | Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid (section 6) | `design-lint` | same |
+| In a component: no physical utility class or inline style, and no date forced left to right (section 9) | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring | `design-lint` | same |
 | Every infinite animation is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |

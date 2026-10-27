@@ -193,10 +193,14 @@ export function ShowsPanel() {
               <li key={s.id}>
                 <span>
                   {s.name}
-                  <span className="hint" dir="ltr">
+                  <span className="hint">
                     {' '}
-                    {s.venue}
-                    {s.city ? `, ${s.city}` : ''} · {formatDate(s.startsAt, locale)}
+                    <bdi dir="auto">
+                      {s.venue}
+                      {s.city ? `, ${s.city}` : ''}
+                    </bdi>
+                    {' · '}
+                    <span className="date">{formatDate(s.startsAt, locale)}</span>
                   </span>
                 </span>
                 <span className="row" style={{ gap: 'var(--sp-2)' }}>
@@ -225,9 +229,11 @@ export function ShowsPanel() {
               <li key={s.id}>
                 <span>
                   {s.name}
-                  <span className="hint" dir="ltr">
+                  <span className="hint">
                     {' '}
-                    {s.venue} · {formatDate(s.startsAt, locale)}
+                    <bdi dir="auto">{s.venue}</bdi>
+                    {' · '}
+                    <span className="date">{formatDate(s.startsAt, locale)}</span>
                   </span>
                 </span>
               </li>

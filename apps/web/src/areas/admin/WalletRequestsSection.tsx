@@ -444,9 +444,14 @@ function WalletRequestDrawer({
                     })
                   : t('wallet.requests.eventInitial', { to: statusLabel(t, event.toStatus) })}
               </p>
-              <p className="dt-sub" dir="ltr">
+              <p className="dt-sub">
                 {formatDateTime(event.occurredAt, locale)}
-                {event.actorRole ? ' · ' + event.actorRole : ''}
+                {event.actorRole && (
+                  <>
+                    {' · '}
+                    <bdi dir="ltr">{event.actorRole}</bdi>
+                  </>
+                )}
               </p>
               {event.reason && <p className="card-desc">{event.reason}</p>}
             </li>

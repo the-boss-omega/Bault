@@ -213,6 +213,24 @@ describe('design-lint', () => {
       expect(r.out).toContain('unlisted infinite animation "wobble"');
     });
 
+    it('a date forced left to right, which a Hebrew page draws the wrong way round', () => {
+      const r = withChange((d) =>
+        writeFileSync(join(d, 'probe.tsx'), 'export const A = () => (\n  <span className="hint" dir="ltr">\n    {formatDate(x, locale)}\n  </span>\n);\n'),
+      );
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('a date forced left to right');
+    });
+
+    it('lets a serial be an island and a date stand in the direction of the page', () => {
+      const r = withChange((d) =>
+        writeFileSync(
+          join(d, 'probe.tsx'),
+          'export const A = () => (\n  <p>\n    <bdi dir="ltr">{serial}</bdi> · <span className="date">{formatDate(x, locale)}</span>\n    <input dir="ltr" value={formatDate(x, locale)} />\n  </p>\n);\n',
+        ),
+      );
+      expect(r.out).toContain('design-lint: clean');
+    });
+
     it('a physical utility class or inline style in a component', () => {
       const r = withChange((d) => writeFileSync(join(d, 'probe.tsx'), 'export const A = () => <div className="ml-4 text-left" style={{ marginLeft: 4 }} />;\n'));
       expect(r.out).toContain('physical utility class');

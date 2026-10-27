@@ -427,19 +427,33 @@ function walk(dir) {
 const PHYSICAL_CLASS = /\b(?:ml|mr|pl|pr)-\d|\btext-(?:left|right)\b/;
 const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|textAlign:\s*['"](?:left|right)['"])/;
 
+/**
+ * A locale-formatted date is not a left-to-right island. Forced left to right, a Hebrew date
+ * (day, month, year) is drawn the other way round; read in the page's direction it keeps the
+ * order its language gives it. Serials, codes and amounts are islands; dates are not.
+ */
+const FORCED_LTR = /\bdir=(?:"ltr"|\{'ltr'\})/;
+const DATE_CALL = /\bformatDate(?:Time)?\(/;
+
 for (const file of walk(webSrc)) {
   const short = relative(repoRoot, file).split(sep).join('/');
-  readFileSync(file, 'utf8')
-    .split('\n')
-    .forEach((line, i) => {
-      if (PHYSICAL_CLASS.test(line)) report(short, i + 1, `physical utility class: ${line.trim()}`);
-      if (PHYSICAL_STYLE.test(line)) {
-        report(short, i + 1, `physical inline style — use marginInlineStart / textAlign: 'start': ${line.trim()}`);
+  const lines = readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    if (FORCED_LTR.test(line) && !/<(?:input|textarea|select)\b/.test(line)) {
+      // From the opening tag to the first closing one.
+      const inner = lines.slice(i, i + 6).join('\n').split(/<\/[a-z]+>/)[0];
+      if (DATE_CALL.test(inner)) {
+        report(short, i + 1, `a date forced left to right is drawn the wrong way round in Hebrew — drop dir="ltr" (className="date" if it stands alone): ${line.trim()}`);
       }
-      if (/behavior\s*:\s*['"]smooth['"]/.test(line)) {
-        report(short, i + 1, `smooth scrolling that ignores prefers-reduced-motion — choose 'auto' when it is set: ${line.trim()}`);
-      }
-    });
+    }
+    if (PHYSICAL_CLASS.test(line)) report(short, i + 1, `physical utility class: ${line.trim()}`);
+    if (PHYSICAL_STYLE.test(line)) {
+      report(short, i + 1, `physical inline style — use marginInlineStart / textAlign: 'start': ${line.trim()}`);
+    }
+    if (/behavior\s*:\s*['"]smooth['"]/.test(line)) {
+      report(short, i + 1, `smooth scrolling that ignores prefers-reduced-motion — choose 'auto' when it is set: ${line.trim()}`);
+    }
+  });
 }
 
 if (!quiet) {

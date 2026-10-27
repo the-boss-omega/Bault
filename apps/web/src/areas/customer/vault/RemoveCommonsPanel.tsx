@@ -104,10 +104,15 @@ export function RemoveCommonsPanel({
                   />
                   <span>
                     {itemName(t, it)}
-                    <span className="hint" dir="ltr">
+                    <span className="hint">
                       {' '}
-                      {it.serialNumber}
-                      {it.receivedAt ? ` · ${formatDate(it.receivedAt, locale)}` : ''}
+                      <bdi dir="ltr">{it.serialNumber}</bdi>
+                      {it.receivedAt && (
+                        <>
+                          {' · '}
+                          <span className="date">{formatDate(it.receivedAt, locale)}</span>
+                        </>
+                      )}
                     </span>
                   </span>
                 </label>

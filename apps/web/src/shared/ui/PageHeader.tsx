@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n, useT, type Locale } from '../i18n';
+import { formatDate } from '../money';
 import { useTheme } from '../theme';
 import type { AppNotification } from '../hooks';
 import { IconButton } from './primitives';
@@ -137,7 +138,7 @@ export function NotificationBell({
   renderTitle: (n: AppNotification) => string;
   renderText: (n: AppNotification) => string;
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = usePopover(open, () => setOpen(false));
   const recent = items.slice(0, 5);
@@ -182,8 +183,8 @@ export function NotificationBell({
                     <p className="pop-row-text">
                       <bdi dir="auto">{renderText(n)}</bdi>
                     </p>
-                    <p className="pop-row-date" dir="ltr">
-                      {n.createdAt?.slice(0, 10)}
+                    <p className="pop-row-date">
+                      <span className="date">{formatDate(n.createdAt, locale)}</span>
                     </p>
                   </div>
                 </li>

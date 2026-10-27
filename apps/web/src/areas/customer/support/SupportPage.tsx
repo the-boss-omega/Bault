@@ -375,9 +375,7 @@ export function ThreadDrawer({
                   <StatusBadge tone={m.authorRole === 'staff' ? 'gold' : 'info'} plain>
                     {m.authorRole === 'staff' ? t('support.fromStaff') : t('support.fromYou')}
                   </StatusBadge>
-                  <span className="hint" dir="ltr">
-                    {formatDateTime(m.createdAt, locale)}
-                  </span>
+                  <span className="hint date">{formatDateTime(m.createdAt, locale)}</span>
                 </div>
                 <p style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{m.body}</p>
               </li>

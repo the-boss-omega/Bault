@@ -889,9 +889,7 @@ function RequestDrawer({
                             to: requestStatusLabel(t, event.toStatus),
                           })}
                     </p>
-                    <p className="dt-sub" dir="ltr">
-                      {formatDateTime(event.occurredAt, locale)}
-                    </p>
+                    <p className="dt-sub">{formatDateTime(event.occurredAt, locale)}</p>
                     {event.reason && <p className="card-desc">{event.reason}</p>}
                   </li>
                 ))}

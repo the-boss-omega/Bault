@@ -710,7 +710,7 @@ function StoragePanel({
             <dd className="detail-value">
               <StatusBadge tone="success">{t('vault.storage.freeNow')}</StatusBadge>
               {storage.freeUntil && (
-                <span className="detail-value-sub" dir="ltr">
+                <span className="detail-value-sub">
                   {t('vault.storage.until', { date: formatDate(storage.freeUntil, locale) })}
                 </span>
               )}
