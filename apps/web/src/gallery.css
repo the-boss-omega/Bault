@@ -63,10 +63,6 @@
   transition: transform 600ms var(--ease-out-expo);
 }
 
-.card-art .photo-thumb {
-  pointer-events: none;
-}
-
 .card--interactive:hover .card-art {
   transform: translateY(-8px);
 }
@@ -133,6 +129,7 @@
 
 .card .watch-line {
   justify-content: space-between;
+  align-items: baseline;
 }
 
 .card .watch-amount {
@@ -215,14 +212,16 @@
 
 /* ---- The item drawer: the case on the table, then the record ---- */
 
+/* The stage is dark in both themes, so its ring is the light one. */
 .drawer .stage {
+  --focus-color: var(--room-ink);
   position: relative;
   display: grid;
   place-items: center;
   padding: 44px 24px 64px;
   background:
-    radial-gradient(58% 90% at 50% 0%, oklch(0.27 0.006 260), transparent 72%),
-    oklch(0.145 0.004 260);
+    radial-gradient(58% 90% at 50% 0%, var(--room-pool), transparent 72%),
+    var(--room);
   border-block-end: var(--border-w) solid var(--border);
   overflow: clip;
 }
@@ -249,6 +248,16 @@
 
 .drawer-head .identity-serial {
   font-size: 15px;
+}
+
+/* The catalogue name sits inside the title's heading, so it would inherit the
+   display serif at body size; a long line of small serif reads badly. */
+.drawer-head .identity-name {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--muted-foreground);
 }
 
 /* ---- Loading: empty cases, in the shape of what is coming ---- */

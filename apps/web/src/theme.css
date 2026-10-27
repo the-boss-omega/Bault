@@ -108,7 +108,12 @@
   --oxblood-wash: color-mix(in oklab, var(--destructive) 12%, var(--background));
   --error-strong: color-mix(in oklab, var(--destructive) 85%, var(--foreground));
 
-  --focus-color: var(--ring);
+  /* The kit's own ring is #a1a1a1 in light, about 2.6:1 on white. WCAG 1.4.11
+     asks 3:1 of a focus indicator and of the edge that identifies a field, so
+     both are drawn from the foreground instead of from --ring. design-lint
+     measures them against every surface in both themes. */
+  --focus-color: color-mix(in oklab, var(--foreground) 72%, var(--background));
+  --control-border: color-mix(in oklab, var(--foreground) 46%, var(--background));
 
   --r-xs: max(2px, calc(var(--radius) - 4px));
   --r-sm: max(2px, calc(var(--radius) - 2px));
@@ -121,7 +126,10 @@
   --shadow-card: var(--shadow-xs);
 
   --font-ui: var(--font-sans), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
-  --font-mono: var(--font-mono-face), ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Geist Mono has no Hebrew, and a missing glyph falls to whatever monospace the
+     system has. Plex Sans Hebrew sits second so Hebrew in a label is its own face
+     while serials and digits stay Geist Mono. */
+  --font-mono: var(--font-mono-face), 'IBM Plex Sans Hebrew', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Frank Ruhl Libre', 'Times New Roman', serif;
 }
 
@@ -143,10 +151,44 @@
   --paper-line: #d6d0c2;
   --paper-bright: #fffdf8;
 
+  /* Printed ink on the paper: body copy, labels, the rules, the shadow under a
+     slip and the one amber mark. The paper is cream in both themes, so none of
+     these follow the theme. */
+  --paper-ink-2: oklch(0.36 0.012 80);
+  --paper-ink-3: oklch(0.4 0.01 80);
+  --paper-rule: oklch(0.55 0.02 80 / 55%);
+  --paper-rule-soft: oklch(0.5 0.01 80 / 40%);
+  --paper-shadow: oklch(0.2 0.02 80 / 55%);
+  --paper-amber: oklch(0.62 0.15 60);
+  /* The fibre of the paper: fractal noise, laid over it with multiply. */
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .46 0 0 0 0 .38 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* The room: the dark a card is photographed against (the slab's case, the
+     item drawer's stage, the journey's shelf). A photograph does not change with
+     the page, so it is dark in both themes, and --room-ink is what reads on it. */
+  --room-deep: oklch(0.11 0.004 260);
+  --room: oklch(0.145 0.004 260);
+  --room-raised: oklch(0.18 0.004 260);
+  --room-case: oklch(0.21 0.004 260);
+  --room-pool: oklch(0.27 0.006 260);
+  --room-glass: oklch(0.2 0.004 260 / 80%);
+  --room-ink: oklch(0.93 0 0);
+
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
-  --dur-reveal: 900ms;
+}
+
+/* Direction, declared once. Logical properties place things, but they cannot turn
+   a gradient, a transform origin or a background position around. Anything that
+   has to face the way the page is read multiplies by --dir (1 left to right, -1
+   right to left). This is the only place the stylesheet asks which way the page
+   reads: design-lint forbids [dir='rtl'] and :dir(rtl) in every other rule. */
+:root {
+  --dir: 1;
+}
+
+:root[dir='rtl'] {
+  --dir: -1;
 }
 
 /* Hebrew sets tight and wide tracking badly; the Latin display tracking is Latin-only. */

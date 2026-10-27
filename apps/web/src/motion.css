@@ -7,7 +7,6 @@
 
 :root {
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --dur-enter: 300ms;
   --dur-exit: 180ms;
   --lift: -2px;
@@ -38,6 +37,14 @@
 .card--interactive:hover {
   transform: translateY(var(--lift));
   box-shadow: var(--shadow-overlay);
+}
+
+/* A gallery tile has no surface of its own, so a lifted shadow would box the
+   photograph in a grey rectangle; the slab tilts and glares instead. */
+.card-grid--register .card--interactive:hover,
+.card-grid--listings .card--interactive:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .card--interactive:active {
@@ -75,7 +82,7 @@ textarea {
   inset-block-end: 0;
   width: var(--tab-w, 0);
   height: 2px;
-  background: var(--custody-mark);
+  background: var(--foil);
   transform: translateX(var(--tab-x, 0));
   transition: transform var(--dur-slow) var(--ease), width var(--dur-slow) var(--ease);
   pointer-events: none;
@@ -145,32 +152,9 @@ textarea {
   }
 }
 
-/* Page and section entrance. */
-
-.page {
-  /* backwards, not both: a forwards-filling transform would make this element the
-     containing block of every fixed-position drawer and dialog inside it. */
-  animation: page-in var(--dur-enter) var(--ease-out) backwards;
-}
-
-@keyframes page-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
-.reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out);
-  transition-delay: var(--reveal-delay, 0ms);
-}
-
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
-}
+/* Page entrance: the page's own sections rise in sequence (app.css). The page
+   container itself does not move, so there is one entrance, not two stacked
+   transforms, and nothing inside it is ever positioned against a moving ancestor. */
 
 /* Shimmer placeholders. */
 
@@ -196,11 +180,6 @@ textarea {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
-  }
-
-  .reveal {
-    opacity: 1;
-    transform: none;
   }
 }
 

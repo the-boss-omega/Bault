@@ -54,12 +54,13 @@
 }
 
 .photo-thumb:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: var(--focus-width) solid var(--focus-color);
   outline-offset: 6px;
   border-radius: 14px;
   box-shadow: none;
 }
 
+/* design-lint-allow: the ring of a slab is drawn on its button, outside it, on the page. */
 .slab-case {
   position: relative;
   display: flex;
@@ -71,7 +72,7 @@
   border-radius: clamp(8px, 7cqw, 20px);
   background:
     linear-gradient(155deg, oklch(1 0 0 / 15%), oklch(1 0 0 / 3%) 36%, oklch(1 0 0 / 0%) 58%, oklch(1 0 0 / 9%)),
-    oklch(0.21 0.004 260);
+    var(--room-case);
   box-shadow:
     inset 0 0 0 1px var(--slab-edge),
     inset 0 1px 0 oklch(1 0 0 / 30%),
@@ -99,6 +100,7 @@
 
 /* The label: paper, a line of name, the serial, and a foil strip under it. */
 
+/* design-lint-allow: a painted label; nothing in it can be focused. */
 .slab-band {
   position: relative;
   flex: 0 0 auto;
@@ -138,6 +140,7 @@
 
 /* The window: the card on the photography mat. */
 
+/* design-lint-allow: a photograph window; nothing in it can be focused. */
 .slab-window {
   position: relative;
   flex: 1 1 auto;
@@ -147,7 +150,7 @@
   padding: 4cqw;
   border-radius: 3cqw;
   background:
-    radial-gradient(120% 80% at 50% 0%, oklch(0.27 0.006 260), oklch(0.11 0.004 260));
+    radial-gradient(120% 80% at 50% 0%, var(--room-pool), var(--room-deep));
   box-shadow:
     inset 0 0 0 1px oklch(1 0 0 / 8%),
     inset 0 10px 26px oklch(0 0 0 / 55%);
@@ -217,6 +220,11 @@
 
 .slab-idle .slab-case:not([data-live]) {
   animation: slab-breathe 7s var(--ease-in-out-quart) infinite alternate;
+}
+
+/* The landing hook marks a hero that has scrolled away; nothing there needs a pulse. */
+.is-offscreen .slab-idle .slab-case:not([data-live]) {
+  animation-play-state: paused;
 }
 
 .slab-idle .slab-glare {

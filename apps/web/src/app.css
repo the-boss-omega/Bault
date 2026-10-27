@@ -8,7 +8,11 @@
    components.css.
    ============================================================ */
 
-/* ---- The room: grain, and a ceiling light that is barely there ---- */
+/* ---- The room: grain, and a ceiling light that is barely there ----
+   The grain is the foreground colour, cut to a noise mask, so it is light specks
+   on dark and dark specks on light from one rule. It is a plain layer, not a
+   blend: a blend mode makes the compositor read the whole viewport back on every
+   frame. Phones skip it; it costs most where it is seen least. */
 
 body::before {
   content: '';
@@ -16,10 +20,19 @@ body::before {
   inset: 0;
   z-index: 999;
   pointer-events: none;
-  opacity: 0.07;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
+  contain: strict;
+  background: var(--foreground);
+  opacity: 0.045;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.4 0 0 0 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.4 0 0 0 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  -webkit-mask-size: 200px 200px;
+  mask-size: 200px 200px;
+}
+
+@media (max-width: 899px) {
+  body::before {
+    content: none;
+  }
 }
 
 .app-shell {
@@ -40,6 +53,7 @@ body::before {
 
 /* ---- Brand mark: the paper label ---- */
 
+/* design-lint-allow: the brand mark; its ring is drawn outside it, on the rail. */
 .rail-mark {
   background:
     var(--foil) bottom / 100% 3px no-repeat,
@@ -83,11 +97,7 @@ body::before {
 
 .rail-item.is-active {
   color: var(--foreground);
-  background: linear-gradient(90deg, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
-}
-
-[dir='rtl'] .rail-item.is-active {
-  background: linear-gradient(270deg, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
+  background: linear-gradient(calc(90deg * var(--dir)), color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
 }
 
 .rail-item.is-active::before {
@@ -146,6 +156,13 @@ body::before {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted-foreground);
+}
+
+/* A button resets text-transform and letter-spacing to its own, so the crumbs that
+   are links stayed sentence case beside the uppercase one that is not. */
+.breadcrumb button {
+  text-transform: inherit;
+  letter-spacing: inherit;
 }
 
 .breadcrumb-sep {
@@ -302,7 +319,7 @@ body::before {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   align-items: center;
   align-content: center;
   gap: clamp(24px, 3vw, 48px);
@@ -394,10 +411,6 @@ body::before {
   }
 }
 
-.auth-stage {
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-}
-
 .auth-fan .lp-shelf {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px 20px;
@@ -464,9 +477,9 @@ body::before {
 
 /* ---- Right-to-left: a chevron points the way you are reading ---- */
 
-.breadcrumb-sep:dir(rtl) {
+.breadcrumb-sep {
   display: inline-block;
-  transform: scaleX(-1);
+  transform: scaleX(var(--dir));
 }
 
 /* ---- Money is set in the display face; it needs no accent colour ---- */

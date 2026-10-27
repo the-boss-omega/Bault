@@ -1031,7 +1031,8 @@ time,
   align-items: center;
   gap: var(--sp-2);
   height: 40px;
-  padding: 3px 10px 3px 3px;
+  padding-block: 3px;
+  padding-inline: 3px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   background: var(--surface);
@@ -1039,10 +1040,6 @@ time,
   font: inherit;
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease);
-}
-
-[dir='rtl'] .user-trigger {
-  padding: 3px 3px 3px 10px;
 }
 
 .user-trigger:hover {
@@ -1228,14 +1225,6 @@ time,
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
-  animation: page-in var(--dur-sm) var(--ease-out);
-}
-
-@keyframes page-in {
-  from {
-    opacity: 0.96;
-    transform: translateY(8px);
-  }
 }
 
 .stack {
@@ -1533,10 +1522,7 @@ time,
 .link-more svg {
   width: 16px;
   height: 16px;
-}
-
-[dir='rtl'] .link-more svg {
-  transform: scaleX(-1);
+  transform: scaleX(var(--dir));
 }
 
 .control {
@@ -2303,22 +2289,12 @@ input[type='search'] {
   border-radius: 0;
   box-shadow: var(--shadow-overlay);
   overscroll-behavior: contain;
-  animation: drawer-in var(--dur-slow) var(--ease);
+  /* The entrance and exit are in motion.css; this is the side it comes from. */
+  --drawer-from: calc(24px * var(--dir));
 }
 
 .drawer--sheet {
   width: min(var(--sheet-w), 100vw);
-}
-
-@keyframes drawer-in {
-  from {
-    transform: translateX(var(--drawer-from, 24px));
-    opacity: 0.6;
-  }
-}
-
-[dir='rtl'] .drawer {
-  --drawer-from: -24px;
 }
 
 .drawer-head {
@@ -3320,13 +3296,9 @@ input[type='search'] {
 
   .rail {
     width: min(280px, 82vw);
-    transform: translateX(var(--rail-off, -100%));
+    transform: translateX(calc(-100% * var(--dir)));
     box-shadow: var(--shadow-rail);
     transition: transform var(--dur-lg) var(--ease-out);
-  }
-
-  [dir='rtl'] .rail {
-    --rail-off: 100%;
   }
 
   .rail.is-open {

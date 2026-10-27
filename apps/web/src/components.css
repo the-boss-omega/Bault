@@ -48,13 +48,16 @@
   content: '';
   position: absolute;
   inset-inline: 12%;
-  inset-block-end: -7px;
-  block-size: 12px;
+  inset-block-start: 100%;
+  block-size: 10px;
   z-index: -1;
   border-radius: 50%;
   background: var(--foil);
   background-size: 300% 100%;
-  filter: blur(11px);
+  filter: blur(10px);
+  /* The glow begins at the button's lower edge and is clipped there, after the
+     blur, so the light is under the button and never a haze on its face. */
+  clip-path: inset(0 -40px -40px -40px);
   opacity: 0;
   transform: scaleX(0.7);
   transition: opacity 420ms var(--ease-out-expo), transform 420ms var(--ease-out-expo);
@@ -105,20 +108,26 @@
   border-radius: var(--r-md);
 }
 
-/* ---- Focus: a three-pixel ring, as the kit draws it ---- */
+/* ---- Focus: one crisp two-pixel ring that holds 3:1 on every surface ----
+   The kit's soft halo (ring at half strength) measures about 1.5:1 in light and
+   2:1 in dark, which is a decoration, not an indicator. An outline also follows
+   the element's radius and leaves its own shadow alone. */
 
 :focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 55%, transparent);
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
 }
 
-.btn:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
+  border-color: var(--focus-color);
+}
+
+/* A jump link focuses the heading it lands on so the jump arrives somewhere;
+   the heading is not a control and is not in the tab order. */
+:is(h1, h2, h3)[tabindex='-1']:focus-visible {
   outline: none;
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 55%, transparent);
 }
 
 /* ---- Fields ---- */
@@ -128,7 +137,7 @@ select,
 textarea {
   min-height: 38px;
   border-radius: var(--r-md);
-  border-color: var(--input);
+  border-color: var(--control-border);
   background: color-mix(in oklab, var(--foreground) 3.5%, transparent);
   box-shadow: var(--shadow-xs);
   transition: border-color 200ms, background 200ms, box-shadow 200ms;
@@ -137,7 +146,15 @@ textarea {
 input:hover:not(:disabled),
 select:hover:not(:disabled),
 textarea:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--input) 60%, var(--foreground));
+  border-color: color-mix(in oklab, var(--control-border) 70%, var(--foreground));
+}
+
+/* The search boxes draw their own edge around an input that has none. */
+.control,
+.search,
+.search--wide,
+.vault-search {
+  border-color: var(--control-border);
 }
 
 select {
@@ -149,11 +166,10 @@ select {
     linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
-  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
-}
-
-select:dir(rtl) {
-  background-position: 18px 50%, 13px 50%;
+  /* 18px and 13px from the end edge: 100% - 18px going left to right, 18px going right to left. */
+  background-position:
+    calc(50% + var(--dir) * (50% - 18px)) 50%,
+    calc(50% + var(--dir) * (50% - 13px)) 50%;
 }
 
 select option {
@@ -366,13 +382,6 @@ input[type='radio'] {
   font-size: var(--fs-base);
 }
 
-.ctx-tabs[data-ready='true']::after {
-  height: 2px;
-  background: var(--foil);
-  background-size: 300% 100%;
-  animation: foil-slide 6s linear infinite;
-}
-
 /* ---- Overlays ---- */
 
 .drawer {
@@ -414,9 +423,29 @@ input[type='radio'] {
   padding-inline-end: 0;
 }
 
-/* The tab bar already draws the rule; the first section does not draw it twice. */
+/* The tab bar already draws the rule; the first section does not draw it twice.
+   General sibling, not adjacent: a status region can sit between the bar and the panel. */
 
-.ctx-bar + [role='tabpanel'] > .panel:first-child,
-.ctx-bar + [role='tabpanel'] > .stack > .panel:first-child {
+.ctx-bar ~ [role='tabpanel'] > .panel:first-child,
+.ctx-bar ~ [role='tabpanel'] > .stack > .panel:first-child {
   border-block-start-color: transparent;
+}
+
+/* ---- A figure on a card never travels without its name ----
+   The register header that names the column is hidden in every card layout, so
+   the name goes on the card. Hebrew has no capitals and Geist Mono has no Hebrew
+   glyphs, so there the label is the UI face. */
+
+.money-label {
+  font: 500 11px/1.2 var(--font-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+:lang(he) .money-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
 }
