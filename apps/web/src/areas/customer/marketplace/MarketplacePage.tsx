@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useVaultItems } from '../../../shared/useVaultItems';
-import { ITEM_CLASSES, itemClassLabel, itemName, itemPickText } from '../../../shared/itemClasses';
+import { ITEM_CLASSES, itemClassLabel, itemName } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
-import { Amount, Code, Serial } from '../../../shared/ui/Serial';
+import { Amount, Code, ItemPick, Serial } from '../../../shared/ui/Serial';
 import { storefrontHref } from '../../../shared/market';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
@@ -419,7 +419,7 @@ function SellerLine({ t, username }: { t: TranslateFn; username: string }) {
   );
 }
 
-function SellPanel({
+export function SellPanel({
   items,
   t,
   onListed,
@@ -458,42 +458,52 @@ function SellPanel({
       {items.length === 0 ? (
         <EmptyState title={t('services.noItems')} text={t('market.sell.noItemsText')} icon={<IconTag />} />
       ) : (
-        <div className="stack stack--tight" style={{ maxWidth: 460 }}>
-          <label className="field">
-            <span className="field-label">{t('market.sell.itemLabel')}</span>
-            <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              <option value="">{t('market.selectItemOption')}</option>
+        <div className="stack stack--tight">
+          <fieldset className="field field--cards">
+            <legend className="field-label">{t('market.sell.itemLabel')}</legend>
+            <ul className="check-list">
               {items.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {itemPickText(t, item)}
-                </option>
+                <li key={item.id}>
+                  <label className="check">
+                    <input
+                      type="radio"
+                      name="sell-item"
+                      value={item.id}
+                      checked={itemId === item.id}
+                      onChange={() => setItemId(item.id)}
+                    />
+                    <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
+                  </label>
+                </li>
               ))}
-            </select>
-          </label>
+            </ul>
+          </fieldset>
 
-          <div className="field">
-            <label className="field-label" htmlFor="ask-price">
-              {t('market.sell.priceLabel')}
-            </label>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input
-                id="ask-price"
-                inputMode="decimal"
-                dir="ltr"
-                value={price}
-                aria-describedby="ask-hint"
-                onChange={(e) => setPrice(e.target.value)}
-              />
+          <div className="stack stack--tight" style={{ maxWidth: 460 }}>
+            <div className="field">
+              <label className="field-label" htmlFor="ask-price">
+                {t('market.sell.priceLabel')}
+              </label>
+              <div className="money-input">
+                <span aria-hidden="true">$</span>
+                <input
+                  id="ask-price"
+                  inputMode="decimal"
+                  dir="ltr"
+                  value={price}
+                  aria-describedby="ask-hint"
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+              </div>
+              <p className="field-hint" id="ask-hint">
+                {cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
+              </p>
             </div>
-            <p className="field-hint" id="ask-hint">
-              {cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
-            </p>
-          </div>
 
-          <Button variant="gold" block disabled={busy || !itemId || cents === null} onClick={sell}>
-            {t('market.listForSale')}
-          </Button>
+            <Button variant="gold" block disabled={busy || !itemId || cents === null} onClick={sell}>
+              {t('market.listForSale')}
+            </Button>
+          </div>
         </div>
       )}
     </Panel>

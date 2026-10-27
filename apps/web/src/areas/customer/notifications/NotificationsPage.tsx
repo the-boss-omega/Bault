@@ -12,7 +12,6 @@ import {
   ErrorState,
   Panel,
   SkeletonTable,
-  StatusBadge,
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { IconBell } from '../../../shared/ui/icons';
@@ -120,32 +119,19 @@ export function NotificationsPage({
             ) : feed.items.length === 0 ? (
               <EmptyState title={t('notifications.empty')} text={t('notifications.emptyText')} icon={<IconBell />} />
             ) : (
-              <div className="dt-wrap dt-wrap--stack">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('notifications.col.event')}</th>
-                      <th scope="col">{t('notifications.col.content')}</th>
-                      <th scope="col">{t('notifications.col.date')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {feed.items.map((n: AppNotification) => (
-                      <tr key={n.id}>
-                        <td data-label={t('notifications.col.event')}>
-                          <StatusBadge tone="info">{eventLabel(t, n.eventType)}</StatusBadge>
-                        </td>
-                        <td data-label={t('notifications.col.content')}>
-                          {renderContent(n.content, eventLabel(t, n.eventType))}
-                        </td>
-                        <td data-label={t('notifications.col.date')}>
-                          <span dir="ltr">{formatDateTime(n.createdAt, locale)}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ul className="timeline timeline--stamped" aria-label={t('notifications.mine', { n: feed.items.length })}>
+                {feed.items.map((n: AppNotification) => (
+                  <li key={n.id}>
+                    <span className="hint date" dir="ltr">
+                      {formatDateTime(n.createdAt, locale)}
+                    </span>
+                    <div>
+                      <span className="register-kind">{eventLabel(t, n.eventType)}</span>
+                      <p className="register-entry">{renderContent(n.content, eventLabel(t, n.eventType))}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </Panel>
         </TabPanel>

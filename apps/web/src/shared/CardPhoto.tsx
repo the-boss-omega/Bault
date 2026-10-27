@@ -141,6 +141,7 @@ export function CardSlab({
   labelSerial,
   priority,
   noneLabel = '',
+  as: Tag = 'div',
 }: {
   serialNumber: string;
   title: string;
@@ -150,10 +151,12 @@ export function CardSlab({
   priority?: boolean;
   /** What the window says when there is no photograph. */
   noneLabel?: string;
+  /** A span where it sits inside phrasing content, such as a label. */
+  as?: 'div' | 'span';
 }) {
   const photo = useCardPhotoSource(serialNumber);
   return (
-    <div
+    <Tag
       className={`photo-thumb slab-static ${className}`.trim()}
       aria-hidden="true"
       onPointerMove={slabMove}
@@ -167,7 +170,7 @@ export function CardSlab({
         labelSerial={labelSerial}
         priority={priority}
       />
-    </div>
+    </Tag>
   );
 }
 

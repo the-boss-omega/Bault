@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const get = vi.fn();
 const post = vi.fn();
@@ -13,7 +14,9 @@ vi.mock('../../apps/web/src/shared/api', () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-const { OffersPanel } = await import('../../apps/web/src/areas/customer/marketplace/SellerPanels');
+const { MyListingsPanel, OffersPanel, SwapsPanel } = await import(
+  '../../apps/web/src/areas/customer/marketplace/SellerPanels'
+);
 const { InboundPage } = await import('../../apps/web/src/areas/customer/inbound/InboundPage');
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 
@@ -138,6 +141,221 @@ describe('the offers, one bid slip each', () => {
       .queryAllByRole('button')
       .filter((b) => !b.classList.contains('photo-thumb'));
     expect(actions).toHaveLength(0);
+  });
+});
+
+const SWAP_BASE = {
+  status: 'pending',
+  createdAt: '2026-10-27T08:00:00.000Z',
+  proposerApproved: false,
+  responderApproved: false,
+};
+
+/** A swap someone proposed to me: they would get the Deoxys, I would get the Rayquaza. */
+const SWAP_TO_ME = {
+  ...SWAP_BASE,
+  id: 's-in',
+  kind: 'swap',
+  direction: 'incoming',
+  proposerUsername: 'golden',
+  responderUsername: 'red',
+  offeredItems: [{ id: 'i1', serialNumber: 'SN-DR97-0001', description: 'Rayquaza ★ (Gold Star)' }],
+  requestedItems: [{ id: 'i2', serialNumber: 'SN-DX107-0003', description: 'Deoxys — Rayquaza ★' }],
+  awaitingMe: true,
+};
+
+/** A gift I proposed: the other person would get the card and I would get nothing back. */
+const GIFT_BY_ME = {
+  ...SWAP_BASE,
+  id: 's-gift',
+  kind: 'transfer',
+  direction: 'outgoing',
+  proposerUsername: 'red',
+  responderUsername: 'golden',
+  offeredItems: [{ id: 'i3', serialNumber: 'SN-ZZ-0001', description: 'A spare holo' }],
+  requestedItems: [],
+  awaitingMe: false,
+};
+
+function renderSwaps(rows: unknown[]) {
+  get.mockImplementation((path: string) =>
+    path === '/marketplace/swaps' ? Promise.resolve(rows) : Promise.reject(new Error(`unexpected ${path}`)),
+  );
+  const onChanged = vi.fn();
+  render(
+    <I18nProvider>
+      <SwapsPanel onChanged={onChanged} onError={() => {}} />
+    </I18nProvider>,
+  );
+  return { onChanged };
+}
+
+async function tradeSlips(): Promise<HTMLElement[]> {
+  const list = await screen.findByRole('list', { name: 'Swaps and gifts' });
+  return Array.from(list.querySelectorAll<HTMLElement>(':scope > li'));
+}
+
+describe('the trades, one slip each', () => {
+  it('sets what each side receives facing the other, every card beside its serial', async () => {
+    renderSwaps([SWAP_TO_ME]);
+
+    const [swap] = await tradeSlips();
+    expect(within(swap!).getByText('Swap')).toBeInTheDocument();
+    expect(within(swap!).getByText('@golden')).toBeInTheDocument();
+
+    const theyGet = within(swap!).getByRole('group', { name: 'They get' });
+    expect(within(theyGet).getByText('SN-DX107-0003')).toBeInTheDocument();
+    const youGet = within(swap!).getByRole('group', { name: 'You get' });
+    expect(within(youGet).getByText('SN-DR97-0001')).toBeInTheDocument();
+    expect(within(youGet).queryByText('SN-DX107-0003')).not.toBeInTheDocument();
+  });
+
+  it('draws a swap both ways and a gift one way, toward whoever is receiving', async () => {
+    renderSwaps([SWAP_TO_ME, GIFT_BY_ME]);
+
+    const [swap, gift] = await tradeSlips();
+    expect(swap!.querySelector('.trade-swap')).not.toHaveClass('trade-swap--one');
+    expect(swap!.querySelector('.trade-swap')).toHaveAttribute('aria-hidden', 'true');
+
+    expect(within(gift!).getByText('Gift')).toBeInTheDocument();
+    expect(gift!.querySelector('.trade-swap')).toHaveClass('trade-swap--one');
+    // The card goes to the other person, who is on the start side of the slip.
+    expect(gift!.querySelector('.trade-swap')).toHaveClass('trade-swap--back');
+    expect(within(within(gift!).getByRole('group', { name: 'You get' })).getByText('—')).toBeInTheDocument();
+  });
+
+  it('asks the person it is waiting on to approve or reject, and no one else', async () => {
+    renderSwaps([SWAP_TO_ME, GIFT_BY_ME]);
+
+    const [swap, gift] = await tradeSlips();
+    expect(within(swap!).getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    expect(within(swap!).getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+
+    expect(within(gift!).getByText('Waiting on them')).toBeInTheDocument();
+    expect(within(gift!).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(within(gift!).queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  });
+
+  it('approves from the slip', async () => {
+    post.mockResolvedValue({});
+    const { onChanged } = renderSwaps([SWAP_TO_ME]);
+
+    const [swap] = await tradeSlips();
+    await act(async () => {
+      within(swap!).getByRole('button', { name: 'Approve' }).click();
+    });
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/marketplace/swaps/s-in/approve'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith('Approved'));
+  });
+
+  it('says so when there are none', async () => {
+    renderSwaps([]);
+    expect(await screen.findByText('No proposals')).toBeInTheDocument();
+  });
+});
+
+const LISTING = {
+  id: 'l1',
+  itemId: 'i1',
+  askingPrice: 320_000,
+  currency: 'USD',
+  status: 'active',
+  publishedAt: '2026-10-27T08:00:00.000Z',
+  serialNumber: 'SN-DX107-0003',
+  typeClass: 'trading_card',
+  description: '2005 Pokémon EX Deoxys — Rayquaza ★ (Gold Star) #107/107',
+  conditionGrade: null,
+  pendingOffers: 1,
+};
+
+function renderListings(rows: unknown[]) {
+  get.mockImplementation((path: string) =>
+    path === '/marketplace/listings/mine' ? Promise.resolve(rows) : Promise.reject(new Error(`unexpected ${path}`)),
+  );
+  const onChanged = vi.fn();
+  render(
+    <I18nProvider>
+      <MyListingsPanel onChanged={onChanged} onError={() => {}} />
+    </I18nProvider>,
+  );
+  return { onChanged };
+}
+
+async function listingSlips(): Promise<HTMLElement[]> {
+  const list = await screen.findByRole('list', { name: 'My listings' });
+  return Array.from(list.querySelectorAll<HTMLElement>(':scope > li'));
+}
+
+describe('the listings, one slip each', () => {
+  it('puts the price first, named, with the offers waiting on it and where the listing stands', async () => {
+    renderListings([LISTING]);
+
+    const [slip] = await listingSlips();
+    expect(within(slip!).getByText('SN-DX107-0003')).toBeInTheDocument();
+    expect(within(slip!).getByText('Price').nextElementSibling).toHaveTextContent('$3,200.00');
+    expect(within(slip!).getByText('Offers').nextElementSibling).toHaveTextContent('1');
+    expect(within(slip!).getByText('Active')).toBeInTheDocument();
+    expect(within(slip!).getByText(/^Listed/)).toHaveTextContent('Oct 27, 2026');
+  });
+
+  it('shows a dash where no offers are waiting', async () => {
+    renderListings([{ ...LISTING, pendingOffers: 0 }]);
+
+    const [slip] = await listingSlips();
+    expect(within(slip!).getByText('Offers').nextElementSibling).toHaveTextContent('—');
+  });
+
+  it('offers a listing that is live a new price or to take it down, and nothing once it is sold', async () => {
+    renderListings([LISTING, { ...LISTING, id: 'l2', status: 'sold', serialNumber: 'SN-DR97-0001' }]);
+
+    const [live, sold] = await listingSlips();
+    expect(within(live!).getByRole('button', { name: 'Reprice' })).toBeInTheDocument();
+    expect(within(live!).getByRole('button', { name: 'Delist' })).toBeInTheDocument();
+
+    const actions = within(sold!)
+      .queryAllByRole('button')
+      .filter((b) => !b.classList.contains('photo-thumb'));
+    expect(actions).toHaveLength(0);
+  });
+
+  it('reprices in place, from the price it has', async () => {
+    const user = userEvent.setup();
+    const { onChanged } = renderListings([LISTING]);
+    const patch = (await import('../../apps/web/src/shared/api')).api.patch as ReturnType<typeof vi.fn>;
+    patch.mockResolvedValue({});
+
+    const [slip] = await listingSlips();
+    await user.click(within(slip!).getByRole('button', { name: 'Reprice' }));
+    const input = within(slip!).getByRole('textbox', { name: 'Price' });
+    expect(input).toHaveValue('3200.00');
+
+    await user.clear(input);
+    await user.type(input, '3100');
+    await act(async () => {
+      within(slip!).getByRole('button', { name: 'Save' }).click();
+      await vi.waitFor(() => expect(onChanged).toHaveBeenCalledWith('Price updated to $3,100.00'));
+    });
+
+    expect(patch).toHaveBeenCalledWith('/marketplace/listings/l1', { askingPrice: 310_000 });
+  });
+
+  it('asks before it takes a listing down', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue({ confirmationToken: 'tok' });
+    renderListings([LISTING]);
+
+    const [slip] = await listingSlips();
+    await user.click(within(slip!).getByRole('button', { name: 'Delist' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(post).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Delist' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/marketplace/listings/l1/remove'));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/marketplace/listings/remove/confirm', { confirmationToken: 'tok' }),
+    );
   });
 });
 

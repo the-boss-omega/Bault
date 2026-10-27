@@ -4,6 +4,7 @@ import { render, screen, within } from '@testing-library/react';
 const { I18nProvider, useI18n } = await import('../../apps/web/src/shared/i18n');
 const { StatementSlip, InTransit } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
 const { ShelfMap } = await import('../../apps/web/src/areas/warehouse/ShelfMap');
+const { ItemPick } = await import('../../apps/web/src/shared/ui/Serial');
 
 /** Renders a component that needs the translator, in English. */
 function WithT({ children }: { children: (t: ReturnType<typeof useI18n>['t']) => React.ReactNode }) {
@@ -134,5 +135,37 @@ describe('the warehouse shelf map', () => {
     const barcode = screen.getByText('BIN-AAAA1111');
     expect(barcode.tagName).toBe('BDI');
     expect(barcode).toHaveAttribute('dir', 'ltr');
+  });
+});
+
+describe('choosing cards', () => {
+  it('shows the card in its case, and the control is still named by its serial and its name', () => {
+    const { container } = renderT(() => (
+      <ul className="check-list">
+        <li>
+          <label className="check">
+            <input type="checkbox" />
+            <ItemPick serial="SN-DX107-0003" name="2005 Pokémon EX Deoxys" />
+          </label>
+        </li>
+      </ul>
+    ));
+
+    expect(screen.getByRole('checkbox', { name: 'SN-DX107-0003 2005 Pokémon EX Deoxys' })).toBeInTheDocument();
+    const art = container.querySelector('.item-pick-art > .photo-thumb');
+    // A label holds phrasing content, and the photograph adds nothing to what the control is called.
+    expect(art?.tagName).toBe('SPAN');
+    expect(art).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('keeps the serial left to right whatever the page reads', () => {
+    renderT(() => <ItemPick serial="SN-DX107-0003" name="2005 Pokémon EX Deoxys" />);
+    expect(screen.getByText('SN-DX107-0003')).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('is only words for something with no serial', () => {
+    const { container } = renderT(() => <ItemPick serial={null} name="A card on its way" />);
+    expect(container.querySelector('.item-pick-art')).toBeNull();
+    expect(screen.getByText('A card on its way')).toBeInTheDocument();
   });
 });

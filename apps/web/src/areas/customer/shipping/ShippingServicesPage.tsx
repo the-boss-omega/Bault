@@ -22,7 +22,6 @@ import {
   DetailRow,
   EmptyState,
   ErrorState,
-  MetricCard,
   Panel,
   SkeletonTable,
   StatusBadge,
@@ -30,20 +29,13 @@ import {
   TabPanel,
   type StatusTone,
 } from '../../../shared/ui/primitives';
+import { CountUp } from '../../../shared/ui/CountUp';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { serviceLabel, type QuotedRate } from '../../../shared/carriers';
 import { ShipmentComposer } from './ShipmentComposer';
 import { SharedParcelsTab } from './SharedParcelsTab';
 import { ShowPickupPanel, WhiteGlovePanel, WhiteGloveQuotes } from './HumanFulfilmentPanels';
-import {
-  IconAlert,
-  IconArchive,
-  IconBox,
-  IconClock,
-  IconScan,
-  IconServices,
-  IconShipping,
-} from '../../../shared/ui/icons';
+import { IconAlert, IconScan } from '../../../shared/ui/icons';
 
 const TABS = ['overview', 'shipping', 'in-person', 'tracking', 'shared', 'requests', 'history', 'not-accepted'] as const;
 type SsTab = (typeof TABS)[number];
@@ -123,64 +115,57 @@ export function ShippingServicesPage() {
 
       {tab === 'overview' && (
         <TabPanel tab="overview">
-          <div className="metric-grid">
-            <MetricCard
-              label={t('ss.metric.shippable')}
-              value={items.length}
-              icon={<IconBox />}
-              tone="green"
-              footer={t('ss.metric.shippableNote')}
-            />
-            <MetricCard
-              label={t('ss.metric.openRequests')}
-              value={open.length}
-              icon={<IconClock />}
-              tone="amber"
-              footer={t('ss.metric.openRequestsNote')}
-            />
-            <MetricCard
-              label={t('ss.metric.pastRequests')}
-              value={past.length}
-              icon={<IconArchive />}
-              tone="violet"
-              footer={t('ss.metric.pastRequestsNote')}
-            />
-          </div>
-
           <Panel title={t('ss.overview.title')} subtitle={t('ss.overview.subtitle')}>
-            <ul className="card-grid">
-              <li className="card">
-                <span className="metric-icon metric-icon--blue">
-                  <IconShipping />
-                </span>
-                <h3 className="card-title">{t('ss.tab.shipping')}</h3>
-                <p className="card-desc">{t('ss.overview.shippingDesc')}</p>
-                <div className="actions">
-                  <Button size="sm" variant="gold" block onClick={() => goTab('shipping')}>
+            <ul className="departures">
+              <li className="departure">
+                <p className="departure-figure">
+                  <span className="departure-number">
+                    <CountUp value={String(items.length)} />
+                  </span>
+                  <span className="slip-label">{t('ss.metric.shippable')}</span>
+                </p>
+                <div className="departure-text">
+                  <h3 className="departure-title">{t('ss.tab.shipping')}</h3>
+                  <p className="departure-desc">{t('ss.overview.shippingDesc')}</p>
+                </div>
+                <div className="departure-action">
+                  <Button variant="gold" onClick={() => goTab('shipping')}>
                     {t('ss.overview.goShipping')}
                   </Button>
                 </div>
               </li>
-              <li className="card">
-                <span className="metric-icon metric-icon--blue">
-                  <IconScan />
-                </span>
-                <h3 className="card-title">{t('ss.tab.tracking')}</h3>
-                <p className="card-desc">{t('ss.overview.trackingDesc')}</p>
-                <div className="actions">
-                  <Button size="sm" variant="secondary" block onClick={() => goTab('tracking')}>
+              <li className="departure">
+                <p className="departure-figure">
+                  <span className="departure-icon" aria-hidden="true">
+                    <IconScan />
+                  </span>
+                </p>
+                <div className="departure-text">
+                  <h3 className="departure-title">{t('ss.tab.tracking')}</h3>
+                  <p className="departure-desc">{t('ss.overview.trackingDesc')}</p>
+                </div>
+                <div className="departure-action">
+                  <Button variant="secondary" onClick={() => goTab('tracking')}>
                     {t('ss.overview.goTracking')}
                   </Button>
                 </div>
               </li>
-              <li className="card">
-                <span className="metric-icon metric-icon--blue">
-                  <IconServices />
-                </span>
-                <h3 className="card-title">{t('ss.tab.requests')}</h3>
-                <p className="card-desc">{t('ss.overview.requestsDesc')}</p>
-                <div className="actions">
-                  <Button size="sm" variant="secondary" block onClick={() => goTab('requests')}>
+              <li className="departure">
+                <p className="departure-figure">
+                  <span className="departure-number">
+                    <CountUp value={String(open.length)} />
+                  </span>
+                  <span className="slip-label">{t('ss.metric.openRequests')}</span>
+                  <span className="departure-aside">
+                    {past.length} {t('ss.metric.pastRequests')}
+                  </span>
+                </p>
+                <div className="departure-text">
+                  <h3 className="departure-title">{t('ss.tab.requests')}</h3>
+                  <p className="departure-desc">{t('ss.overview.requestsDesc')}</p>
+                </div>
+                <div className="departure-action">
+                  <Button variant="secondary" onClick={() => goTab('requests')}>
                     {t('ss.overview.goRequests')}
                   </Button>
                 </div>

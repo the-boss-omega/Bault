@@ -16,6 +16,7 @@ import {
   type MyListing,
   type MyOffer,
   type MySwap,
+  type SwapItemRef,
 } from '../../../shared/market';
 import { Button, EmptyState, Panel, SkeletonTable, StatusBadge } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
@@ -106,101 +107,96 @@ export function MyListingsPanel({
             }
           />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <caption>{t('market.mine.title')}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t('market.mine.col.item')}</th>
-                  <th scope="col">{t('market.mine.col.price')}</th>
-                  <th scope="col">{t('market.mine.col.offers')}</th>
-                  <th scope="col">{t('support.col.status')}</th>
-                  <th scope="col">{t('market.mine.col.listed')}</th>
-                  <th scope="col" className="td-tight" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td data-label={t('market.mine.col.item')} className="dt-primary">
-                      {itemName(t, row)}
-                      <span className="dt-sub" dir="ltr">
-                        {row.serialNumber}
-                      </span>
-                    </td>
-                    <td data-label={t('market.mine.col.price')} dir="ltr">
+          <ul className="slips" aria-label={t('market.mine.title')}>
+            {rows.map((row) => (
+              <li className="slip slip--listing" key={row.id} onPointerMove={slabMove} onPointerLeave={slabLeave}>
+                <div className="slip-item">
+                  <span className="slip-thumb">
+                    <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
+                  </span>
+                  <span className="slip-name">
+                    <Serial value={row.serialNumber} />
+                    <span className="slip-desc ltr-run">{itemName(t, row)}</span>
+                  </span>
+                </div>
+
+                <div className="slip-money">
+                  <span className="money-label">{t('market.mine.col.price')}</span>
+                  {editing === row.id ? (
+                    <div className="money-input">
+                      <span aria-hidden="true">$</span>
+                      <input
+                        inputMode="decimal"
+                        aria-label={t('market.mine.col.price')}
+                        value={price}
+                        autoFocus
+                        onChange={(e) => setPrice(e.target.value)}
+                        style={{ width: '6rem' }}
+                      />
+                    </div>
+                  ) : (
+                    <Amount size="lead">{formatUsd(row.askingPrice)}</Amount>
+                  )}
+                  <span className="slip-asking">
+                    {t('market.mine.col.listed')} {formatDate(row.publishedAt, locale)}
+                  </span>
+                </div>
+
+                <div className="slip-side">
+                  <span className="slip-label">{t('market.mine.col.offers')}</span>
+                  {row.pendingOffers > 0 ? (
+                    <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
+
+                <div className="slip-state">
+                  <StatusBadge tone={LISTING_TONE[row.status] ?? 'neutral'}>
+                    {listingStatusLabel(t, row.status)}
+                  </StatusBadge>
+                </div>
+
+                <div className="slip-actions">
+                  {row.status === 'active' && (
+                    <div className="actions">
                       {editing === row.id ? (
-                        <div className="money-input">
-                          <span aria-hidden="true">$</span>
-                          <input
-                            inputMode="decimal"
-                            value={price}
-                            autoFocus
-                            onChange={(e) => setPrice(e.target.value)}
-                            style={{ width: '6rem' }}
-                          />
-                        </div>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="gold"
+                            disabled={busy || dollarsToCents(price) === null}
+                            onClick={() => void reprice(row)}
+                          >
+                            {t('market.mine.save')}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                            {t('ui.cancel')}
+                          </Button>
+                        </>
                       ) : (
-                        formatUsd(row.askingPrice)
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setEditing(row.id);
+                              setPrice((row.askingPrice / 100).toFixed(2));
+                            }}
+                          >
+                            {t('market.mine.reprice')}
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => setRemoving(row)}>
+                            {t('market.mine.delist')}
+                          </Button>
+                        </>
                       )}
-                    </td>
-                    <td data-label={t('market.mine.col.offers')}>
-                      {row.pendingOffers > 0 ? (
-                        <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td data-label={t('support.col.status')}>
-                      <StatusBadge tone={LISTING_TONE[row.status] ?? 'neutral'}>
-                        {listingStatusLabel(t, row.status)}
-                      </StatusBadge>
-                    </td>
-                    <td data-label={t('market.mine.col.listed')}>
-                      {formatDate(row.publishedAt, locale)}
-                    </td>
-                    <td className="td-tight">
-                      {row.status === 'active' && (
-                        <div className="actions">
-                          {editing === row.id ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="gold"
-                                disabled={busy || dollarsToCents(price) === null}
-                                onClick={() => void reprice(row)}
-                              >
-                                {t('market.mine.save')}
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                                {t('ui.cancel')}
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => {
-                                  setEditing(row.id);
-                                  setPrice((row.askingPrice / 100).toFixed(2));
-                                }}
-                              >
-                                {t('market.mine.reprice')}
-                              </Button>
-                              <Button size="sm" variant="danger" onClick={() => setRemoving(row)}>
-                                {t('market.mine.delist')}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </Panel>
 
@@ -486,9 +482,6 @@ export function SwapsPanel({
     }
   }
 
-  const names = (items: MySwap['offeredItems']) =>
-    items.map((i) => i.description || (i.typeClass ? itemName(t, { typeClass: i.typeClass }) : i.id)).join(', ') || '—';
-
   return (
     <Panel title={t('market.swaps.title')} subtitle={t('market.swaps.subtitle')} flush>
       {rows === null ? (
@@ -496,65 +489,122 @@ export function SwapsPanel({
       ) : rows.length === 0 ? (
         <EmptyState title={t('market.swaps.empty')} text={t('market.swaps.emptyText')} icon={<IconMarketplace />} />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <caption>{t('market.swaps.title')}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t('market.swaps.col.kind')}</th>
-                <th scope="col">{t('market.swaps.col.with')}</th>
-                <th scope="col">{t('market.swaps.col.theyGet')}</th>
-                <th scope="col">{t('market.swaps.col.youGet')}</th>
-                <th scope="col">{t('support.col.status')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const incoming = row.direction === 'incoming';
-                const theyGet = incoming ? row.requestedItems : row.offeredItems;
-                const youGet = incoming ? row.offeredItems : row.requestedItems;
-                return (
-                  <tr key={row.id}>
-                    <td data-label={t('market.swaps.col.kind')} className="dt-primary">
-                      {t(row.kind === 'transfer' ? 'market.swaps.gift' : 'market.swaps.swap')}
-                      <span className="dt-sub" dir="ltr">
-                        {formatDate(row.createdAt, locale)}
-                      </span>
-                    </td>
-                    <td data-label={t('market.swaps.col.with')} dir="ltr">
-                      <code>{(incoming ? row.proposerUsername : row.responderUsername) ?? '—'}</code>
-                    </td>
-                    <td data-label={t('market.swaps.col.theyGet')}>{names(theyGet)}</td>
-                    <td data-label={t('market.swaps.col.youGet')}>
-                      {row.kind === 'transfer' && incoming ? names(row.offeredItems) : names(youGet)}
-                    </td>
-                    <td data-label={t('support.col.status')}>
-                      <StatusBadge tone={SWAP_TONE[row.status] ?? 'neutral'}>
-                        {swapStatusLabel(t, row.status)}
-                      </StatusBadge>
-                    </td>
-                    <td className="td-tight">
-                      {row.awaitingMe ? (
-                        <div className="actions">
-                          <Button size="sm" variant="gold" disabled={busy} onClick={() => void act(row, 'approve')}>
-                            {t('market.swaps.approve')}
-                          </Button>
-                          <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(row, 'reject')}>
-                            {t('market.swaps.reject')}
-                          </Button>
-                        </div>
-                      ) : row.status === 'pending' ? (
-                        <span className="hint">{t('market.swaps.awaitingThem')}</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ul className="slips" aria-label={t('market.swaps.title')}>
+          {rows.map((row) => {
+            const incoming = row.direction === 'incoming';
+            const gift = row.kind === 'transfer';
+            const theyGet = incoming ? row.requestedItems : row.offeredItems;
+            const youGet = incoming ? row.offeredItems : row.requestedItems;
+            const other = incoming ? row.proposerUsername : row.responderUsername;
+            return (
+              <li className="slip slip--trade" key={row.id} onPointerMove={slabMove} onPointerLeave={slabLeave}>
+                <div className="slip-side">
+                  <StatusBadge tone={gift ? 'gold' : 'info'} plain>
+                    {t(gift ? 'market.swaps.gift' : 'market.swaps.swap')}
+                  </StatusBadge>
+                  {other && (
+                    <span className="slip-turn">
+                      {t('market.swaps.col.with')} <Code value={`@${other}`} />
+                    </span>
+                  )}
+                  <span className="date">{formatDate(row.createdAt, locale)}</span>
+                </div>
+
+                <TradeSide label={t('market.swaps.col.theyGet')} items={theyGet} area="give" t={t} />
+                <SwapGlyph oneWay={gift} towardStart={theyGet.length > 0} />
+                <TradeSide label={t('market.swaps.col.youGet')} items={youGet} area="get" t={t} />
+
+                <div className="slip-state">
+                  <StatusBadge tone={SWAP_TONE[row.status] ?? 'neutral'}>
+                    {swapStatusLabel(t, row.status)}
+                  </StatusBadge>
+                  {!row.awaitingMe && row.status === 'pending' && (
+                    <span className="slip-turn">{t('market.swaps.awaitingThem')}</span>
+                  )}
+                </div>
+
+                <div className="slip-actions">
+                  {row.awaitingMe && (
+                    <div className="actions">
+                      <Button size="sm" variant="gold" disabled={busy} onClick={() => void act(row, 'approve')}>
+                        {t('market.swaps.approve')}
+                      </Button>
+                      <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(row, 'reject')}>
+                        {t('market.swaps.reject')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </Panel>
+  );
+}
+
+/** One side of a trade: what that person receives, each card in its case beside its serial. */
+function TradeSide({
+  label,
+  items,
+  area,
+  t,
+}: {
+  label: string;
+  items: readonly SwapItemRef[];
+  area: 'give' | 'get';
+  t: TranslateFn;
+}) {
+  return (
+    <div className={`trade-side trade-side--${area}`} role="group" aria-label={label}>
+      <span className="slip-label" aria-hidden="true">
+        {label}
+      </span>
+      {items.length === 0 ? (
+        <span className="trade-nothing">—</span>
+      ) : (
+        <ul className="trade-items">
+          {items.map((item) => (
+            <li key={item.id}>
+              {item.serialNumber && (
+                <span className="slip-thumb">
+                  <CardPhotoThumb serialNumber={item.serialNumber} title={swapItemName(t, item)} />
+                </span>
+              )}
+              <span className="slip-name">
+                {item.serialNumber && <Serial value={item.serialNumber} />}
+                <span className="slip-desc ltr-run">{swapItemName(t, item)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function swapItemName(t: TranslateFn, item: SwapItemRef): string {
+  return item.description || (item.typeClass ? itemName(t, { typeClass: item.typeClass }) : item.id);
+}
+
+/**
+ * Between the two sides: both ways for a swap, one way for a gift, toward the
+ * side that is receiving. Decorative; the two labelled groups say it in words.
+ */
+function SwapGlyph({ oneWay, towardStart }: { oneWay: boolean; towardStart: boolean }) {
+  return (
+    <span className={`trade-swap${oneWay ? ' trade-swap--one' : ''}${oneWay && towardStart ? ' trade-swap--back' : ''}`} aria-hidden="true">
+      <svg viewBox="0 0 32 20" width="32" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+        {oneWay ? (
+          <path d="M3 10h26M22 3l7 7-7 7" />
+        ) : (
+          <>
+            <path d="M3 6h26M23 1l6 5-6 5" />
+            <path d="M29 14H3M9 9l-6 5 6 5" />
+          </>
+        )}
+      </svg>
+    </span>
   );
 }
