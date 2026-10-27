@@ -1,8 +1,11 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
+
+// The first page a browser gives is slow on a busy runner, and the files that use one run side by side, each with its own: five seconds is not enough.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /**
  * What a visitor sees before the application has started: the page as the server sends it, its stylesheet,

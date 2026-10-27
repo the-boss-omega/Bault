@@ -5,6 +5,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 
+// The first page a browser gives is slow on a busy runner, and the files that use one run side by side, each with its own: five seconds is not enough.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
 vi.mock('../../apps/web/src/shared/api', () => ({
   api: { get: vi.fn(() => Promise.resolve([])), post: vi.fn(), patch: vi.fn(), del: vi.fn() },
   ApiError: class ApiError extends Error {},
