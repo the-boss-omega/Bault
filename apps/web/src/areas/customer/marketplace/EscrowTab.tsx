@@ -468,7 +468,11 @@ function DealDrawer({
               <span className="hint date">{formatDate(e.occurredAt, locale)}</span>
               {e.onBehalfOf && <StatusBadge tone="neutral" plain>{t('esc.onBehalf')}</StatusBadge>}
             </div>
-            {e.notes && <p style={{ marginBlockStart: 4, fontSize: 13.5 }}>{e.notes}</p>}
+            {e.notes && (
+              <p style={{ marginBlockStart: 4, fontSize: 13.5 }}>
+                <bdi dir="auto">{e.notes}</bdi>
+              </p>
+            )}
           </li>
         ))}
       </ul>

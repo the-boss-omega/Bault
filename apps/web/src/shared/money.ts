@@ -15,6 +15,17 @@ export function isolateLtr(text: string): string {
   return `\u2066${text}\u2069`;
 }
 
+/**
+ * A name set into a sentence keeps its own order: a first-strong isolate (FSI … PDI) takes the
+ * direction of the name's first letter, so an English card name ("2011 Pokémon Call of Legends")
+ * is read left to right inside a Hebrew sentence instead of being drawn "Call of Legends 2011",
+ * and a full stop after it is the sentence's. Invisible where the sentence reads the same way.
+ * For a name in a string that goes through `t()`; in markup, a `<bdi dir="auto">` does the same.
+ */
+export function isolate(text: string): string {
+  return `\u2068${text}\u2069`;
+}
+
 export function formatUsd(minorUnits: number): string {
   return USD.format((minorUnits ?? 0) / 100);
 }

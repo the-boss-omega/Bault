@@ -75,4 +75,14 @@ describe('FAQ & Legal', () => {
     expect(screen.getByText('-$20.00')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/content/account-terms');
   });
+
+  it('draws the suspension threshold as an amount of its own, so its minus stays in front of it in Hebrew', async () => {
+    localStorage.setItem('bault.locale', 'he');
+    renderAt('#/faq/legal');
+    const threshold = await screen.findByText('-$20.00');
+
+    // Left to right and isolated: a bare "-$20.00" in a right-to-left cell is drawn "$20.00-".
+    expect(threshold).toHaveClass('amount');
+    expect(threshold).toHaveAttribute('dir', 'ltr');
+  });
 });

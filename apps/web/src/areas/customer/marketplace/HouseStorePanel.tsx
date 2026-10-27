@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { itemClassLabel } from '../../../shared/itemClasses';
-import { formatUsd } from '../../../shared/money';
+import { formatUsd, isolate, isolateLtr } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { Amount, Serial } from '../../../shared/ui/Serial';
 import { Button, EmptyState, Panel, SkeletonBlock } from '../../../shared/ui/primitives';
@@ -137,8 +137,8 @@ export function HouseStorePanel({
             <>
               <p>
                 {t('market.buy.confirmBody', {
-                  item: buying.product.description,
-                  amount: formatUsd(buying.product.askingPrice),
+                  item: isolate(buying.product.description),
+                  amount: isolateLtr(formatUsd(buying.product.askingPrice)),
                 })}
               </p>
               <p className="field-hint">{t('house.confirmNote')}</p>

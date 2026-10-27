@@ -85,7 +85,7 @@ export function Field({
       {control}
       {error ? (
         <span className="field-error" id={`${id}-error`} role="alert">
-          {error}
+          <bdi dir="auto">{error}</bdi>
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${id}-hint`}>
@@ -139,7 +139,7 @@ export function MoneyField({
       </div>
       {error ? (
         <span className="field-error" id={`${controlId}-error`} role="alert">
-          {error}
+          <bdi dir="auto">{error}</bdi>
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${controlId}-hint`}>
@@ -261,7 +261,10 @@ export function ErrorState({
       <IconAlert />
       <div className="errorbox-body">
         {title && <p className="errorbox-title">{title}</p>}
-        <p>{message}</p>
+        {/* What the server wrote is its own island: an English sentence keeps its full stop at its end. */}
+        <p>
+          <bdi dir="auto">{message}</bdi>
+        </p>
       </div>
       {onRetry && retryLabel && (
         <Button size="sm" variant="secondary" onClick={onRetry}>

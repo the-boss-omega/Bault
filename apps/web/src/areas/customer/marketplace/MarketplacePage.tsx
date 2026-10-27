@@ -7,7 +7,7 @@ import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { Amount, Code, ItemPick, Serial } from '../../../shared/ui/Serial';
 import { storefrontHref } from '../../../shared/market';
-import { dollarsToCents, formatUsd } from '../../../shared/money';
+import { dollarsToCents, formatUsd, isolate, isolateLtr } from '../../../shared/money';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -326,8 +326,8 @@ export function MarketplacePage() {
           body={
             <p>
               {t('market.buy.confirmBody', {
-                item: itemName(t, buying),
-                amount: formatUsd(buying.askingPrice),
+                item: isolate(itemName(t, buying)),
+                amount: isolateLtr(formatUsd(buying.askingPrice)),
               })}
             </p>
           }

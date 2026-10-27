@@ -377,7 +377,9 @@ export function ThreadDrawer({
                   </StatusBadge>
                   <span className="hint date">{formatDateTime(m.createdAt, locale)}</span>
                 </div>
-                <p style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{m.body}</p>
+                <p className="bidi" style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>
+                  {m.body}
+                </p>
               </li>
             ))}
           </ul>

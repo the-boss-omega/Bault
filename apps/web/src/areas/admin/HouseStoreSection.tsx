@@ -153,7 +153,7 @@ export function HouseStoreSection({
                     </td>
                     <td>
                       {row.photoRef && <CardPhotoButton serialNumber={row.photoRef} title={row.description} />}{' '}
-                      {row.description}
+                      <bdi dir="auto">{row.description}</bdi>
                       <span className="card-sub"> · {itemClassLabel(t, row.typeClass)}</span>
                     </td>
                     <td className="td-end num">{formatUsd(row.askingPrice)}</td>

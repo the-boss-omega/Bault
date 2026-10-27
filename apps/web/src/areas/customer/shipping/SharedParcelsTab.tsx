@@ -194,8 +194,8 @@ export function SharedParcelsTab({
                     })}
                   </span>
                 </div>
-                <p className="hint">{g.destinationAddress}</p>
-                {g.notes && <p className="hint">{g.notes}</p>}
+                <p className="hint bidi">{g.destinationAddress}</p>
+                {g.notes && <p className="hint bidi">{g.notes}</p>}
 
                 <ul className="check-list list-unbounded">
                   {g.members.map((m) => (

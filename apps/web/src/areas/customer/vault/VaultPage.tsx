@@ -15,7 +15,7 @@ import {
   type Departure,
   type TimelineEvent,
 } from '../../../shared/itemTimeline';
-import { formatDate, formatUsd } from '../../../shared/money';
+import { formatDate, formatUsd, isolate } from '../../../shared/money';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -1085,7 +1085,7 @@ function ItemDrawer({
             <>
               <p>
                 {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                  item: `\u2068${itemName(t, item)}\u2069`,
+                  item: isolate(itemName(t, item)),
                 })}
               </p>
               {(() => {

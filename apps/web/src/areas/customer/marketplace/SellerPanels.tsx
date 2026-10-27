@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
-import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { dollarsToCents, formatDate, formatUsd, isolate } from '../../../shared/money';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { useI18n, type TranslateFn } from '../../../shared/i18n';
@@ -201,7 +201,7 @@ export function MyListingsPanel({
       {removing && (
         <ConfirmationModal
           title={t('market.mine.delistTitle')}
-          body={<p>{t('market.mine.delistBody', { item: itemName(t, removing) })}</p>}
+          body={<p>{t('market.mine.delistBody', { item: isolate(itemName(t, removing)) })}</p>}
           confirmLabel={t('market.mine.delist')}
           cancelLabel={t('ui.cancel')}
           tone="danger"

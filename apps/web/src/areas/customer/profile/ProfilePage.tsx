@@ -8,6 +8,7 @@ import {
   isValidNamePart,
   normalizeNamePart,
 } from '../../../shared/names';
+import { isolate } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import { countryName, lacksRegion, regionRequired, useShippingCountries } from '../../../shared/countries';
 import {
@@ -287,7 +288,7 @@ export function ProfilePage() {
       {deleting && (
         <ConfirmationModal
           title={t('profile.address.deleteTitle')}
-          body={<p>{t('profile.address.deleteBody', { label: deleting.label })}</p>}
+          body={<p>{t('profile.address.deleteBody', { label: isolate(deleting.label) })}</p>}
           confirmLabel={t('profile.addresses.delete')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
