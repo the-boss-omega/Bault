@@ -77,6 +77,8 @@ describe('an item is named by its serial and description, never by its class key
     renderIn(<ShipmentComposer items={[ITEM]} onError={() => {}} onStatus={() => {}} onCreated={() => {}} />);
     const label = await screen.findByRole('checkbox', { name: /Rayquaza ex #97\/97/ });
     expect(label.closest('label')!.textContent).toContain('SN-DR97-0001');
+    // The cards are one group with a name, so a screen reader says what it has entered.
+    expect(label.closest('fieldset')).toHaveAccessibleName('Select items to ship');
     expect(document.body.textContent).not.toContain('trading_card');
   });
 

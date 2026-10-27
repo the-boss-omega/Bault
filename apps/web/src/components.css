@@ -559,6 +559,14 @@ fieldset.field--cards > legend {
   border-radius: var(--r-lg);
 }
 
+/* On a phone the page is what scrolls; a second scroller inside it takes the thumb that was going down the page. */
+@media (max-width: 767px) {
+  .check-list:has(> li > .check > .item-pick) {
+    max-block-size: none;
+    overflow-y: visible;
+  }
+}
+
 .check-list:has(> li > .check > .item-pick) > li:hover {
   background: none;
 }

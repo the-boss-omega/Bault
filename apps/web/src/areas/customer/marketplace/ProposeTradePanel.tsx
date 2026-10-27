@@ -65,6 +65,17 @@ export function ProposeTradePanel({
     }
   }
 
+  /** A gift moves one item, so what was ticked for a swap is cut to the first of it. */
+  function chooseGift(on: boolean) {
+    setGift(on);
+    if (on) {
+      setOffered((prev) => {
+        const first = Object.keys(prev).find((id) => prev[id]);
+        return first ? { [first]: true } : {};
+      });
+    }
+  }
+
   async function addWanted() {
     if (!counterparty) return;
     try {
@@ -143,7 +154,7 @@ export function ProposeTradePanel({
         )}
 
         <label className="check">
-          <input type="checkbox" checked={gift} onChange={(e) => setGift(e.target.checked)} />
+          <input type="checkbox" checked={gift} onChange={(e) => chooseGift(e.target.checked)} />
           {t('market.propose.asGift')}
         </label>
         <p className="field-hint">{t(gift ? 'market.propose.giftHint' : 'market.propose.swapHint')}</p>
@@ -151,24 +162,27 @@ export function ProposeTradePanel({
         {items.length === 0 ? (
           <EmptyState title={t('services.noItems')} text={t('market.sell.noItemsText')} icon={<IconBox />} />
         ) : (
-          <ul className="check-list">
-            {items.map((item) => (
-              <li key={item.id}>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={!!offered[item.id]}
-                    onChange={() =>
-                      setOffered((prev) =>
-                        gift ? { [item.id]: !prev[item.id] } : { ...prev, [item.id]: !prev[item.id] },
-                      )
-                    }
-                  />
-                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
-                </label>
-              </li>
-            ))}
-          </ul>
+          <fieldset className="field field--cards">
+            <legend className="sr-only">{t('market.swaps.col.theyGet')}</legend>
+            {/* A swap can be of several cards; a gift is of one, so it is a radio and says "1 of n". */}
+            <ul className="check-list" key={gift ? 'one' : 'several'}>
+              {items.map((item) => (
+                <li key={item.id}>
+                  <label className="check">
+                    <input
+                      type={gift ? 'radio' : 'checkbox'}
+                      name={gift ? 'gift-item' : undefined}
+                      checked={!!offered[item.id]}
+                      onChange={() =>
+                        setOffered((prev) => (gift ? { [item.id]: true } : { ...prev, [item.id]: !prev[item.id] }))
+                      }
+                    />
+                    <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
         )}
 
         {!gift && counterparty && (
@@ -191,7 +205,7 @@ export function ProposeTradePanel({
               </Button>
             </div>
             {wanted.length > 0 && (
-              <ul className="check-list list-unbounded">
+              <ul className="check-list list-unbounded" aria-label={t('market.swaps.col.youGet')}>
                 {wanted.map((w) => (
                   <li key={w.id}>
                     <ItemPick serial={w.serialNumber} name={itemName(t, w)} />

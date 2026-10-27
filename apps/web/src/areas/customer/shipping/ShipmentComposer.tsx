@@ -210,16 +210,19 @@ export function ShipmentComposer({
         {items.length === 0 ? (
           <EmptyState title={t('shipping.noItems')} text={t('shipping.noItemsText')} icon={<IconBox />} />
         ) : (
-          <ul className="check-list">
-            {items.map((item) => (
-              <li key={item.id}>
-                <label className="check">
-                  <input type="checkbox" checked={!!selected[item.id]} onChange={() => toggleItem(item.id)} />
-                  <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
-                </label>
-              </li>
-            ))}
-          </ul>
+          <fieldset className="field field--cards">
+            <legend className="sr-only">{t('shipping.selectItems')}</legend>
+            <ul className="check-list">
+              {items.map((item) => (
+                <li key={item.id}>
+                  <label className="check">
+                    <input type="checkbox" checked={!!selected[item.id]} onChange={() => toggleItem(item.id)} />
+                    <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
         )}
       </Panel>
 
