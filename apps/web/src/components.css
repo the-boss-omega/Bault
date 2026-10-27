@@ -355,6 +355,21 @@ input[type='radio'] {
   overflow-y: hidden;
 }
 
+/* A box that scrolls brings a control that takes focus to its edge, and the ring is drawn outside the control:
+   the browser keeps this much of the box clear of it. */
+.dt-wrap,
+.drawer-body,
+.confirm-body,
+.modal--wide,
+.pop,
+.pop-list,
+.check-list,
+.media-strip,
+.state-controls,
+.terms-reader {
+  scroll-padding: var(--sp-2);
+}
+
 .data-table thead th,
 .table thead th {
   background: transparent;
@@ -479,6 +494,16 @@ input[type='radio'] {
 .panel .data-table th:last-child,
 .panel .data-table td:last-child {
   padding-inline-end: 0;
+}
+
+/* A cell that ends the row and holds a control keeps the room for the control's ring: a table that scrolls
+   sideways does not count the padding of the box that scrolls it, so the room is in the table itself. */
+.panel .data-table td:first-child:has(:is(button, input, select, textarea, a[href])) {
+  padding-inline-start: var(--sp-1);
+}
+
+.panel .data-table td:last-child:has(:is(button, input, select, textarea, a[href])) {
+  padding-inline-end: var(--sp-1);
 }
 
 /* The tab bar already draws the rule; the first section does not draw it twice.

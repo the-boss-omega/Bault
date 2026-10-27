@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
+import { scrollBehavior } from './motionPreference';
 
 const SELECTOR = '.dt-wrap';
 const HEADINGS = 'h2, h3, h4, .panel-title';
+/** How far a focus ring reaches outside the control it rings (its width and its offset), and a little more. */
+const RING = 6;
 
 /**
  * What a person who cannot see the table would be told it is: its caption, or the
@@ -83,6 +86,20 @@ export function useScrollableRegions(language: string): void {
       if (!frame) frame = requestAnimationFrame(sync);
     }
 
+    // The browser scrolls a control that takes focus into view only when none of it is in view, so one that is
+    // half out of a table's room stays half out, and its ring is cut off at the table's edge. A control that has
+    // focus is shown whole, with its ring (the box's scroll-padding leaves the room).
+    const reveal = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const wrap = target.closest<HTMLElement>(SELECTOR);
+      if (!wrap || wrap.dataset.scrollable !== 'true') return;
+      const room = wrap.getBoundingClientRect();
+      const box = target.getBoundingClientRect();
+      if (box.left - RING >= room.left && box.right + RING <= room.right) return;
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: scrollBehavior() });
+    };
+
     // A figure counting up, a toast, a drawer opening: none of them can change how wide a table is, so
     // only a change inside a table, or the arrival of one, is worth a measurement (which is a layout).
     const involvesATable = (record: MutationRecord) => {
@@ -97,6 +114,7 @@ export function useScrollableRegions(language: string): void {
     });
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', schedule);
+    document.addEventListener('focusin', reveal);
     // Widths change when the fonts arrive.
     void document.fonts?.ready.then(schedule);
     schedule();
@@ -106,6 +124,7 @@ export function useScrollableRegions(language: string): void {
       sizes?.disconnect();
       watched.clear();
       window.removeEventListener('resize', schedule);
+      document.removeEventListener('focusin', reveal);
       if (frame) cancelAnimationFrame(frame);
     };
   }, [language]);

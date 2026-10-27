@@ -18,6 +18,7 @@ const { NavigationRail } = await import('../../apps/web/src/shared/ui/Navigation
 const { ContextTabs } = await import('../../apps/web/src/shared/ui/primitives');
 const { StatementSlip } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
 const { AccountingSection } = await import('../../apps/web/src/areas/admin/AccountingSection');
+const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
 const { api } = await import('../../apps/web/src/shared/api');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -364,6 +365,59 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
           await page.close();
         }
       });
+    }
+  });
+  describe('a table in a management panel', () => {
+    const user = (id: string, username: string, mfaEnabled: boolean) => ({
+      id,
+      email: `${username}@bault.dev`,
+      username,
+      firstName: username[0]!.toUpperCase() + username.slice(1),
+      lastName: 'Cohen',
+      nameReviewRequired: false,
+      role: 'collector',
+      status: 'active',
+      autoSuspended: false,
+      intakeId: null,
+      mfaEnabled,
+    });
+
+    for (const locale of ['en', 'he'] as const) {
+      for (const width of [1440, 390]) {
+        it(`shows a control whole with its ring wherever the table has scrolled to, ${locale}, ${width}px`, async () => {
+          localStorage.setItem('bault.locale', locale);
+          window.location.hash = '#/admin/users';
+          vi.mocked(api.get).mockImplementation(async (path: string) =>
+            path === '/admin/users' ? [user('u1', 'eldar', true), user('u2', 'hermon', true), user('u3', 'red', false)] : [],
+          );
+          render(
+            <I18nProvider>
+              <AdminConsole currentUserId="me" />
+            </I18nProvider>,
+          );
+          await screen.findByDisplayValue('Eldar');
+          const page = await inBrowser(width, locale);
+          // What the page does when a control takes focus (the scrollable-regions hook asks for it to be shown
+          // whole), and then: is its ring, which is drawn outside it, in the table's room?
+          const cut = await page.evaluate(() => {
+            const out: string[] = [];
+            for (const wrap of document.querySelectorAll<HTMLElement>('.dt-wrap')) {
+              for (const el of wrap.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]')) {
+                el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                const box = el.getBoundingClientRect();
+                const room = wrap.getBoundingClientRect();
+                const left = room.left + wrap.clientLeft;
+                const right = left + wrap.clientWidth;
+                // The ring is two pixels wide at a two-pixel offset.
+                if (box.left - 4 < left - 0.5 || box.right + 4 > right + 0.5) out.push(el.getAttribute('aria-label') ?? el.textContent ?? el.tagName);
+              }
+            }
+            return out;
+          });
+          expect(cut).toEqual([]);
+          await page.close();
+        });
+      }
     }
   });
 });

@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 
 const { useScrollableRegions } = await import('../../apps/web/src/shared/ui/useScrollableRegions');
 
-function Page({ withCaption = false, language = 'en' }: { withCaption?: boolean; language?: string }) {
+function Page({ withCaption = false, language = 'en', withControl = false }: { withCaption?: boolean; language?: string; withControl?: boolean }) {
   useScrollableRegions(language);
   return (
     <section className="panel">
@@ -14,6 +14,11 @@ function Page({ withCaption = false, language = 'en' }: { withCaption?: boolean;
           <tbody>
             <tr>
               <td>one</td>
+              {withControl && (
+                <td>
+                  <button type="button">Save</button>
+                </td>
+              )}
             </tr>
           </tbody>
         </table>
@@ -228,5 +233,67 @@ describe('a table that scrolls sideways can be reached from the keyboard', () =>
     rerender(<Titled language="he" title="העסקאות שלי" />);
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(wrap).toHaveAttribute('aria-label', 'העסקאות שלי');
+  });
+});
+
+describe('a control that takes focus in a table that scrolls', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => cb(0), 0));
+    vi.stubGlobal('cancelAnimationFrame', (handle: number) => clearTimeout(handle));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Where the table's room is on the page, and where its control is: jsdom lays nothing out. */
+  function place(el: Element, left: number, right: number) {
+    el.getBoundingClientRect = () => ({ left, right, top: 0, bottom: 40, width: right - left, height: 40, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
+  }
+
+  it('is shown whole when part of it, or its ring, is out of the room', async () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const { getByTestId, getByRole } = render(<Page withControl />);
+    const wrap = getByTestId('wrap');
+    size(wrap, 640, 320);
+    await resized();
+
+    place(wrap, 12, 332);
+    const button = getByRole('button', { name: 'Save' });
+    // Half in the room: the browser would leave it where it is.
+    place(button, 300, 420);
+    button.focus();
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest', inline: 'nearest' }));
+  });
+
+  it('is left where it is when it, and its ring, are in the room', async () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const { getByTestId, getByRole } = render(<Page withControl />);
+    const wrap = getByTestId('wrap');
+    size(wrap, 640, 320);
+    await resized();
+
+    place(wrap, 12, 332);
+    const button = getByRole('button', { name: 'Save' });
+    place(button, 100, 180);
+    button.focus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('is left to the browser when the table does not scroll', async () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const { getByTestId, getByRole } = render(<Page withControl />);
+    const wrap = getByTestId('wrap');
+    size(wrap, 300, 320);
+    await resized();
+
+    place(wrap, 12, 332);
+    const button = getByRole('button', { name: 'Save' });
+    place(button, 300, 420);
+    button.focus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
