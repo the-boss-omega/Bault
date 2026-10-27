@@ -1,8 +1,6 @@
 @import './fonts.css';
 
 :root {
-  color-scheme: light dark;
-
   --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Hebrew', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Frank Ruhl Libre', Georgia, 'Times New Roman', serif;

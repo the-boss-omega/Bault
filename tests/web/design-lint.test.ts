@@ -82,9 +82,17 @@ describe('design-lint', () => {
     });
 
     it('a theme.css that is no longer in the shape the lint reads', () => {
-      const r = withChange((d) => edit(d, 'theme.css', (t) => t.replace(":root[data-theme='dark']", ":root[data-theme='night']")));
+      const r = withChange((d) => edit(d, 'theme.css', (t) => t.replaceAll(":root[data-theme='dark']", ":root[data-theme='night']")));
       expect(r.status).toBe(1);
       expect(r.out).toContain('theme.css is not in the shape the lint reads');
+    });
+
+    it('a dark theme that does not tell the browser it is dark', () => {
+      const r = withChange((d) =>
+        edit(d, 'theme.css', (text) => text.replace(/:root\[data-theme='dark'\] \{\n  color-scheme: dark;\n\}/, ":root[data-theme='dark'] {\n}")),
+      );
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("must declare color-scheme: dark");
     });
 
     it('a [dir=rtl] branch outside theme.css', () => {

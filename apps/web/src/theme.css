@@ -81,6 +81,26 @@
   --ring: #737373;
 }
 
+/* ---- The theme's native controls ----
+   A checkbox, a date picker, a select's list and a scrollbar are drawn by the browser in the
+   scheme it is told, and it is told the theme that is on the page, not the system's: dark is the
+   default, so a light system would otherwise get dark text on dark in a calendar icon and a white
+   checkbox on a dark page. Outside part 1, so pasting the kit's export does not take it away. */
+
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 /* ---- Part 2: mapping onto Bault's tokens ----
    `:root:root` ties in specificity with the dark blocks in index.css and wins
    by coming later, so one mapping serves light and dark: each var() below

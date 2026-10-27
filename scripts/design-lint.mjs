@@ -393,6 +393,22 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
   }
 }
 
+// The browser draws a checkbox, a date picker, a select's list and a scrollbar in the colour scheme
+// it is told. It is told the theme that is on the page (not the system's), by theme.css, outside
+// the part the kit's export is pasted over.
+for (const [selector, scheme] of [
+  [':root', 'light'],
+  [":root:not([data-theme='light'])", 'dark'],
+  [":root[data-theme='dark']", 'dark'],
+]) {
+  const declared = rulesOf(stripComments(themeCss)).some(
+    (rule) => rule.selector === selector && new RegExp(`(?:^|[\\s;{])color-scheme\\s*:\\s*${scheme}\\s*;`).test(rule.body),
+  );
+  if (!declared) {
+    report(themeRel, 1, `${selector} must declare color-scheme: ${scheme}, or the browser's own controls are drawn for the system's theme and not the page's`);
+  }
+}
+
 const monoRules = [...cssCode.entries()].filter(([, l]) => /font-family:\s*var\(--font-mono\)/.test(l));
 for (const [i] of monoRules) {
   let j = i;
