@@ -137,7 +137,9 @@ export function HouseStoreSection({
                 <tr>
                   <th scope="col">{t('house.admin.col.code')}</th>
                   <th scope="col">{t('warehouse.intake.description')}</th>
-                  <th scope="col">{t('house.admin.price')}</th>
+                  <th scope="col" className="td-end">
+                    {t('house.admin.price')}
+                  </th>
                   <th scope="col">{t('house.admin.stock')}</th>
                   <th scope="col">{t('admin.col.status')}</th>
                   <th scope="col" className="td-tight" />
@@ -154,7 +156,7 @@ export function HouseStoreSection({
                       {row.description}
                       <span className="card-sub"> · {itemClassLabel(t, row.typeClass)}</span>
                     </td>
-                    <td dir="ltr">{formatUsd(row.askingPrice)}</td>
+                    <td className="td-end num">{formatUsd(row.askingPrice)}</td>
                     <td>
                       <input
                         key={`${row.id}:${row.stock}`}

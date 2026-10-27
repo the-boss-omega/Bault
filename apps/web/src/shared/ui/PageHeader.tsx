@@ -179,7 +179,9 @@ export function NotificationBell({
                 <li key={n.id}>
                   <div className="pop-row">
                     <p className="pop-row-title">{renderTitle(n)}</p>
-                    <p className="pop-row-text">{renderText(n)}</p>
+                    <p className="pop-row-text">
+                      <bdi dir="auto">{renderText(n)}</bdi>
+                    </p>
                     <p className="pop-row-date" dir="ltr">
                       {n.createdAt?.slice(0, 10)}
                     </p>

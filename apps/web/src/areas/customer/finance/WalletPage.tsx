@@ -624,7 +624,7 @@ function TransactionDrawer({
       <dl className="detail-list">
         <DetailRow label={t('wallet.col.type')}>{typeLabel(t, row.type)}</DetailRow>
         <DetailRow label={t('wallet.col.date')}>
-          <span dir="ltr">{formatDateTime(row.occurredAt, locale)}</span>
+          <span className="date">{formatDateTime(row.occurredAt, locale)}</span>
         </DetailRow>
         <DetailRow label={t('wallet.tx.recordId')}>
           <code dir="ltr">{row.id}</code>
@@ -748,10 +748,10 @@ function RequestsTab({
                     </StatusBadge>
                   </td>
                   <td data-label={t('wallet.requests.col.created')}>
-                    <span dir="ltr">{formatDate(request.createdAt, locale)}</span>
+                    <span className="date">{formatDate(request.createdAt, locale)}</span>
                   </td>
                   <td data-label={t('wallet.requests.col.updated')}>
-                    <span dir="ltr">{formatDate(request.updatedAt, locale)}</span>
+                    <span className="date">{formatDate(request.updatedAt, locale)}</span>
                   </td>
                 </tr>
               ))}
@@ -860,10 +860,10 @@ function RequestDrawer({
               <DetailRow label={t('wallet.request.reference')}>{detail.reference || '—'}</DetailRow>
               <DetailRow label={t('wallet.request.notes')}>{detail.notes || '—'}</DetailRow>
               <DetailRow label={t('wallet.requests.col.created')}>
-                <span dir="ltr">{formatDateTime(detail.createdAt, locale)}</span>
+                <span className="date">{formatDateTime(detail.createdAt, locale)}</span>
               </DetailRow>
               <DetailRow label={t('wallet.requests.col.updated')}>
-                <span dir="ltr">{formatDateTime(detail.updatedAt, locale)}</span>
+                <span className="date">{formatDateTime(detail.updatedAt, locale)}</span>
               </DetailRow>
               {detail.rejectionReason && (
                 <DetailRow label={t('wallet.requests.rejectionReason')}>{detail.rejectionReason}</DetailRow>

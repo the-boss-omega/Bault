@@ -114,16 +114,18 @@ export function GradingSubmissions() {
             <tbody>
               {submissions.map((s) => (
                 <tr key={s.id}>
-                  <td dir="ltr">
-                    <code>{s.code}</code>
+                  <td>
+                    <code dir="ltr">{s.code}</code>
                   </td>
-                  <td dir="ltr">{s.gradingBody}</td>
+                  <td>
+                    <bdi dir="ltr">{s.gradingBody}</bdi>
+                  </td>
                   <td>
                     <StatusBadge tone={SUBMISSION_TONE[s.status] ?? 'neutral'}>
                       {submissionStatusLabel(t, s.status)}
                     </StatusBadge>
                     {s.shippedAt && (
-                      <span className="hint" dir="ltr">
+                      <span className="hint date">
                         {' '}
                         {formatDate(s.shippedAt, locale)}
                       </span>

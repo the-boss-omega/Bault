@@ -465,11 +465,11 @@ function TrackingTab({
                         </span>
                       )}
                     </td>
-                    <td data-label={t('ss.tracking.col.username')} dir="ltr">
-                      {shipment.username ? <code>{shipment.username}</code> : '—'}
+                    <td data-label={t('ss.tracking.col.username')}>
+                      {shipment.username ? <code dir="ltr">{shipment.username}</code> : '—'}
                     </td>
                     <td data-label={t('ss.tracking.col.created')}>
-                      <span dir="ltr">{formatDate(shipment.createdAt, locale)}</span>
+                      <span className="date">{formatDate(shipment.createdAt, locale)}</span>
                     </td>
                     <td data-label={t('ss.tracking.col.carrier')}>
                       {shipment.carrier ?? '—'}
@@ -489,7 +489,7 @@ function TrackingTab({
                     </td>
                     <td data-label={t('ss.tracking.col.eta')}>
                       {shipment.estimatedDeliveryAt ? (
-                        <span dir="ltr">{formatDate(shipment.estimatedDeliveryAt, locale)}</span>
+                        <span className="date">{formatDate(shipment.estimatedDeliveryAt, locale)}</span>
                       ) : (
                         <span className="muted">—</span>
                       )}
@@ -619,7 +619,7 @@ export function ShipmentDrawer({
         </DetailRow>
         <DetailRow label={t('ss.tracking.col.eta')}>
           {shipment.estimatedDeliveryAt ? (
-            <span dir="ltr">{formatDate(shipment.estimatedDeliveryAt, locale)}</span>
+            <span className="date">{formatDate(shipment.estimatedDeliveryAt, locale)}</span>
           ) : (
             '—'
           )}
@@ -630,7 +630,7 @@ export function ShipmentDrawer({
         <DetailRow label={t('ss.tracking.itemCount')}>{shipment.itemIds.length}</DetailRow>
         <DetailRow label={t('ss.tracking.destination')}>{shipment.destinationAddress}</DetailRow>
         <DetailRow label={t('ss.tracking.created')}>
-          <span dir="ltr">{formatDate(shipment.createdAt, locale)}</span>
+          <span className="date">{formatDate(shipment.createdAt, locale)}</span>
         </DetailRow>
         {shipment.insuredValueMinor > 0 && (
           <DetailRow label={t('ship.insuredValue')}>
@@ -662,7 +662,7 @@ export function ShipmentDrawer({
         )}
         {shipment.paymentDueAt && (
           <DetailRow label={t('ship.paymentDue')}>
-            <span dir="ltr">{formatDate(shipment.paymentDueAt, locale)}</span>
+            <span className="date">{formatDate(shipment.paymentDueAt, locale)}</span>
           </DetailRow>
         )}
         {shipment.cancelReason && (
@@ -677,7 +677,7 @@ export function ShipmentDrawer({
         )}
         {shipment.fulfilledAt && (
           <DetailRow label={t('ss.tracking.dispatched')}>
-            <span dir="ltr">{formatDate(shipment.fulfilledAt, locale)}</span>
+            <span className="date">{formatDate(shipment.fulfilledAt, locale)}</span>
           </DetailRow>
         )}
       </dl>

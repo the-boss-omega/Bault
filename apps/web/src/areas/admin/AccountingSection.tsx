@@ -323,7 +323,7 @@ function ReconciliationView({ recon, locale }: { recon: Reconciliation; locale: 
                     {m.recordedMinor === null ? '—' : formatUsd(m.recordedMinor)}
                   </td>
                   <td data-label={t('admin.accounting.col.when')}>
-                    <span dir="ltr">{formatDateTime(m.at, locale)}</span>
+                    <span className="date">{formatDateTime(m.at, locale)}</span>
                   </td>
                 </tr>
               ))}

@@ -348,6 +348,15 @@ input[type='radio'] {
   border-block-end-color: var(--input);
 }
 
+/* A cell takes the direction of its own text (index.css: plaintext), so an English sentence keeps its
+   full stop. A cell that holds only a badge, a date, a code or a button has no text of its own to take a
+   direction from, so it fell back to left to right and, in Hebrew, hung from the left under a header on
+   the right (and, stacked, under its own label). Such a cell reads the page's way. */
+.data-table tbody td:has(> :is(.pill, .badge, .status-badge, .date, .amount, .code-inline, .serial, code, kbd, bdi, .btn, button, input, select)),
+.table tbody td:has(> :is(.pill, .badge, .status-badge, .date, .amount, .code-inline, .serial, code, kbd, bdi, .btn, button, input, select)) {
+  unicode-bidi: normal;
+}
+
 /* A numeric column hangs from one edge, its header and its figures alike. The figures are left to
    right (their decimals line up at the right-hand edge in either language), so the header is set
    the same way: read in the page's direction it hangs from the opposite edge in Hebrew, and the
@@ -363,6 +372,17 @@ input[type='radio'] {
   .ctx-actions {
     flex-wrap: wrap;
   }
+
+  /* A cell of figures reads left to right whatever the page does, which, stacked, would swap its label
+     to the other side from every other cell's in Hebrew. The order puts the label back at the page's start. */
+  .dt-wrap--stack .data-table td.num::before {
+    order: calc(var(--dir) * -1);
+  }
+}
+
+/* A code is read whole, on one line. */
+.data-table code {
+  white-space: nowrap;
 }
 
 /* The steps of a request inside a cell are prose, not a label: they wrap, or a long detail makes the whole table wider than a phone. */
@@ -510,6 +530,7 @@ fieldset.field--cards > legend {
 
 .item-pick-text {
   display: grid;
+  justify-items: start;
   gap: 4px;
   min-inline-size: 0;
 }

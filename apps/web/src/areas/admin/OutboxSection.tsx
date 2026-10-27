@@ -100,10 +100,10 @@ export function OutboxSection({
                     </span>
                   </td>
                   <td data-label={t('admin.outbox.col.created')}>
-                    <span dir="ltr">{formatDateTime(m.createdAt, locale)}</span>
+                    <span className="date">{formatDateTime(m.createdAt, locale)}</span>
                   </td>
                   <td data-label={t('admin.outbox.col.lastAttempt')}>
-                    <span dir="ltr">{m.lastAttemptAt ? formatDateTime(m.lastAttemptAt, locale) : '—'}</span>
+                    <span className="date">{m.lastAttemptAt ? formatDateTime(m.lastAttemptAt, locale) : '—'}</span>
                   </td>
                   <td className="td-tight">
                     <Button

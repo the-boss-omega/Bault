@@ -542,22 +542,22 @@ function ParcelDrawer({
         )}
         {parcel.receivedAt && (
           <DetailRow label={t('inbound.parcel.receivedAt')}>
-            <span dir="ltr">{formatDate(parcel.receivedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.receivedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.forwardedAt && (
           <DetailRow label={t('inbound.parcel.forwardedAt')}>
-            <span dir="ltr">{formatDate(parcel.forwardedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.forwardedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.openedAt && (
           <DetailRow label={t('inbound.parcel.openedAt')}>
-            <span dir="ltr">{formatDate(parcel.openedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.openedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.processedAt && (
           <DetailRow label={t('inbound.parcel.processedAt')}>
-            <span dir="ltr">{formatDate(parcel.processedAt, locale)}</span>
+            <span className="date">{formatDate(parcel.processedAt, locale)}</span>
           </DetailRow>
         )}
         {parcel.condition && (

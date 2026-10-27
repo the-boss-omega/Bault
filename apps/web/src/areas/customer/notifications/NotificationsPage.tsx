@@ -122,12 +122,13 @@ export function NotificationsPage({
               <ul className="timeline timeline--stamped" aria-label={t('notifications.mine', { n: feed.items.length })}>
                 {feed.items.map((n: AppNotification) => (
                   <li key={n.id}>
-                    <span className="hint date" dir="ltr">
-                      {formatDateTime(n.createdAt, locale)}
-                    </span>
+                    <span className="hint date">{formatDateTime(n.createdAt, locale)}</span>
                     <div>
                       <span className="register-kind">{eventLabel(t, n.eventType)}</span>
-                      <p className="register-entry">{renderContent(n.content, eventLabel(t, n.eventType))}</p>
+                      {/* What the server wrote is usually English: an island of its own direction, so its full stop stays at its end. */}
+                      <p className="register-entry">
+                        <bdi dir="auto">{renderContent(n.content, eventLabel(t, n.eventType))}</bdi>
+                      </p>
                     </div>
                   </li>
                 ))}

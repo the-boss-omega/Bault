@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
-import { formatUsd, formatDate } from '../../../shared/money';
+import { formatUsd, formatDate, isolateLtr } from '../../../shared/money';
 import { Button, ErrorState, Panel, SkeletonBlock, SuccessNote } from '../../../shared/ui/primitives';
 import {
   COMPARISON_ROWS,
@@ -205,9 +205,7 @@ export function MembershipPage() {
                 <div className="offer-what">
                   <span className="offer-name">{t(tierNameKey(tier.key))}</span>
                   <span className="offer-price">
-                    <span className="amount">
-                      {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
-                    </span>
+                    {t('membership.perMonth', { amount: isolateLtr(formatUsd(tier.priceMinor)) })}
                   </span>
                   <span className="offer-note">
                     {confirming === tier.key ? confirmSentence(action, tier) : t(tierForKey(tier.key))}
@@ -263,8 +261,8 @@ export function MembershipPage() {
                   {catalogue.tiers.map((tier) => (
                     <th scope="col" key={tier.key} className="num">
                       <span className="mem-tier-name">{t(tierNameKey(tier.key))}</span>
-                      <span className="mem-tier-price amount">
-                        {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
+                      <span className="mem-tier-price">
+                        {t('membership.perMonth', { amount: isolateLtr(formatUsd(tier.priceMinor)) })}
                       </span>
                       <span className="mem-tier-for">{t(tierForKey(tier.key))}</span>
                     </th>

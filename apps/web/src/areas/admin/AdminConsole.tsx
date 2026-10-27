@@ -404,16 +404,16 @@ function UserRow({
 
   return (
     <tr>
-      <td dir="ltr" className="dt-primary">
-        {user.email}
+      <td className="dt-primary">
+        <bdi dir="ltr">{user.email}</bdi>
         {user.intakeId && (
           <span className="dt-sub" dir="ltr" title={t('admin.users.legacyIntakeIdTitle')}>
             {user.intakeId}
           </span>
         )}
       </td>
-      <td dir="ltr">
-        <code>{user.username}</code>
+      <td>
+        <code dir="ltr">{user.username}</code>
       </td>
       <td>
         <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
@@ -552,8 +552,8 @@ function ItemRow({
 
   return (
     <tr>
-      <td dir="ltr">
-        <div className="barcode-label">
+      <td>
+        <div className="barcode-label" dir="ltr">
           <code>{item.barcode}</code>
           <BarcodePrintButton value={item.barcode} caption={item.description || item.typeClass} />
         </div>
@@ -897,7 +897,7 @@ function PricingSection({
                         {billingKey ? t(billingKey) : rule.billingTrigger}
                       </td>
                       <td data-label={t('admin.pricing.col.effectiveFrom')}>
-                        <span dir="ltr">{formatDate(rule.effectiveFrom, locale)}</span>
+                        <span className="date">{formatDate(rule.effectiveFrom, locale)}</span>
                       </td>
                     </tr>
                   );
@@ -1090,11 +1090,11 @@ function DisputeRow({
 
   return (
     <tr>
-      <td dir="ltr">
-        <code>{dispute.id.slice(0, 8)}</code>
+      <td>
+        <code dir="ltr">{dispute.id.slice(0, 8)}</code>
       </td>
-      <td dir="ltr">
-        <code>{dispute.transactionId.slice(0, 8)}</code>
+      <td>
+        <code dir="ltr">{dispute.transactionId.slice(0, 8)}</code>
       </td>
       <td>
         <StatusBadge tone={DISPUTE_TONE[dispute.status] ?? 'neutral'}>
@@ -1191,7 +1191,7 @@ function StorageFeesSection({ onError }: { onError: (m: string) => void }) {
                 {runs.map((run) => (
                   <tr key={run.id}>
                     <td data-label={t('admin.storage.col.date')}>
-                      <span dir="ltr">{formatDate(run.runAt, locale)}</span>
+                      <span className="date">{formatDate(run.runAt, locale)}</span>
                     </td>
                     <td data-label={t('admin.storage.col.thresholdDays')} className="td-end num">
                       {run.thresholdDays}

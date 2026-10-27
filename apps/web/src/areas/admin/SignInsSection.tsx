@@ -104,7 +104,7 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                       {s.addresses}
                     </td>
                     <td data-label={t('admin.signIns.col.last')}>
-                      <span dir="ltr">{formatDateTime(s.lastAt, locale)}</span>
+                      <span className="date">{formatDateTime(s.lastAt, locale)}</span>
                     </td>
                   </tr>
                 ))}
@@ -135,7 +135,7 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
                 {log.attempts.map((a) => (
                   <tr key={a.id} className={ROUTINE.has(a.outcome) ? undefined : 'is-attention'}>
                     <td data-label={t('admin.signIns.col.when')}>
-                      <span dir="ltr">{formatDateTime(a.occurredAt, locale)}</span>
+                      <span className="date">{formatDateTime(a.occurredAt, locale)}</span>
                     </td>
                     <td data-label={t('admin.signIns.col.outcome')}>
                       <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>

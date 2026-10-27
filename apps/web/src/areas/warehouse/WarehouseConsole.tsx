@@ -1121,8 +1121,8 @@ function BinsPanel({
               <tbody>
                 {bins.map((b) => (
                   <tr key={b.id}>
-                    <td dir="ltr">
-                      <div className="barcode-label">
+                    <td>
+                      <div className="barcode-label" dir="ltr">
                         <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />
                         <code>{b.serialNumber}</code>
                         <BarcodePrintButton value={b.barcode} caption={`Zone ${b.zone}`} />

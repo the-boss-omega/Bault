@@ -5,6 +5,16 @@ const USD = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+/**
+ * A figure set into a sentence that reads the other way keeps its own direction: a
+ * left-to-right isolate (LRI … PDI), invisible where the sentence is also left to right.
+ * It is for a figure that is part of a phrase ("$39.00 a month"); a figure on its own
+ * is an `Amount`, and a code is a `Code` or a `Serial`.
+ */
+export function isolateLtr(text: string): string {
+  return `\u2066${text}\u2069`;
+}
+
 export function formatUsd(minorUnits: number): string {
   return USD.format((minorUnits ?? 0) / 100);
 }

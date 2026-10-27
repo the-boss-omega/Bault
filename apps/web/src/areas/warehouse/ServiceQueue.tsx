@@ -95,11 +95,11 @@ export function ServiceQueue({ onChanged }: { onChanged?: () => Promise<void> | 
             <tbody>
               {queue.map((q) => (
                 <tr key={q.id}>
-                  <td dir="ltr">
-                    <code>{q.code ?? q.id.slice(0, 8)}</code>
+                  <td>
+                    <code dir="ltr">{q.code ?? q.id.slice(0, 8)}</code>
                   </td>
                   <td className="dt-primary">{serviceTypeLabel(t, q.type)}</td>
-                  <td dir="ltr">{q.requesterEmail ?? '—'}</td>
+                  <td>{q.requesterEmail ? <bdi dir="ltr">{q.requesterEmail}</bdi> : '—'}</td>
                   <td>{q.itemDescription ?? '—'}</td>
                   <td>
                     <StatusBadge tone={STATUS_TONE[q.status] ?? 'neutral'}>

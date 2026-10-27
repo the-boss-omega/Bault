@@ -210,8 +210,8 @@ export function WalletRequestsSection({
               <tbody>
                 {rows.map((request) => (
                   <tr key={request.id} className={selected?.id === request.id ? 'is-selected' : undefined}>
-                    <td dir="ltr" className="dt-primary">
-                      {request.code}
+                    <td className="dt-primary">
+                      <bdi dir="ltr">{request.code}</bdi>
                     </td>
                     <td>
                       {request.customerName || request.email || '—'}
@@ -222,15 +222,13 @@ export function WalletRequestsSection({
                       )}
                     </td>
                     <td>{typeLabel(t, request.type)}</td>
-                    <td className="td-end num" dir="ltr">
-                      {formatUsd(request.amount)}
-                    </td>
+                    <td className="td-end num">{formatUsd(request.amount)}</td>
                     <td>
                       <StatusBadge tone={WALLET_REQUEST_TONE[request.status] ?? 'neutral'}>
                         {statusLabel(t, request.status)}
                       </StatusBadge>
                     </td>
-                    <td dir="ltr">{formatDate(request.createdAt, locale)}</td>
+                    <td className="td-date">{formatDate(request.createdAt, locale)}</td>
                     <td className="td-tight">
                       <Button size="sm" variant="secondary" onClick={() => void openDetail(request.id)}>
                         {t('wallet.requests.detail')}
@@ -410,7 +408,7 @@ function WalletRequestDrawer({
         </DetailRow>
         <DetailRow label={t('wallet.request.notes')}>{request.notes || '—'}</DetailRow>
         <DetailRow label={t('wallet.requests.col.created')}>
-          <span dir="ltr">{formatDateTime(request.createdAt, locale)}</span>
+          <span className="date">{formatDateTime(request.createdAt, locale)}</span>
         </DetailRow>
         {request.rejectionReason && (
           <DetailRow label={t('wallet.requests.rejectionReason')}>{request.rejectionReason}</DetailRow>

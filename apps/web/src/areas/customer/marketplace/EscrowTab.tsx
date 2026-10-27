@@ -11,6 +11,7 @@ import {
 } from '../../../shared/escrow';
 import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { Amount } from '../../../shared/ui/Serial';
 import { IconAlert, IconShield, IconUsers } from '../../../shared/ui/icons';
 
 interface Terms {
@@ -210,7 +211,9 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                 <tr>
                   <th scope="col">{t('esc.col.deal')}</th>
                   <th scope="col">{t('esc.col.what')}</th>
-                  <th scope="col">{t('esc.col.value')}</th>
+                  <th scope="col" className="td-end">
+                    {t('esc.col.value')}
+                  </th>
                   <th scope="col">{t('esc.col.status')}</th>
                   <th scope="col">{t('esc.col.next')}</th>
                 </tr>
@@ -221,13 +224,24 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                     (d.raiserRole === 'buyer' && d.raisedBy === meId) ||
                     (d.raiserRole === 'seller' && d.counterpartyUserId === meId);
                   return (
-                    <tr key={d.id} className="is-clickable" tabIndex={0} onClick={() => setOpenId(d.id)}>
-                      <td data-label={t('esc.col.deal')} dir="ltr" className="dt-primary">
-                        <code>{d.code}</code>
+                    <tr
+                      key={d.id}
+                      className="is-clickable"
+                      tabIndex={0}
+                      onClick={() => setOpenId(d.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setOpenId(d.id);
+                        }
+                      }}
+                    >
+                      <td data-label={t('esc.col.deal')} className="dt-primary">
+                        <code dir="ltr">{d.code}</code>
                       </td>
                       <td data-label={t('esc.col.what')}>{d.description}</td>
-                      <td data-label={t('esc.col.value')} dir="ltr">
-                        {formatUsd(d.valueMinor)}
+                      <td data-label={t('esc.col.value')} className="td-end num">
+                        <Amount>{formatUsd(d.valueMinor)}</Amount>
                       </td>
                       <td data-label={t('esc.col.status')}>
                         <StatusBadge tone={ESCROW_TONE[d.status] ?? 'neutral'}>

@@ -500,11 +500,9 @@
 
 .mem-offers .offer-price {
   display: block;
-}
-
-.mem-offers .offer-price .amount {
   font: 500 24px/1.15 var(--font-display);
   font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
   color: var(--foreground);
 }
 
@@ -616,6 +614,12 @@
   }
 }
 
+/* The tiers' headers are sentences, not figures: they read the way the page does. */
+.mem-table th.num {
+  direction: inherit;
+  unicode-bidi: normal;
+}
+
 .mem-table .mem-tier-price {
   color: var(--muted-foreground);
   font-size: var(--fs-sm);
@@ -712,6 +716,7 @@
 
 .slip-name {
   display: grid;
+  justify-items: start;
   gap: 6px;
   min-inline-size: 0;
 }

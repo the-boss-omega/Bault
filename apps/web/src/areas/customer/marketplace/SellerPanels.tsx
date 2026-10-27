@@ -3,7 +3,6 @@ import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
-import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { useI18n, type TranslateFn } from '../../../shared/i18n';
 import { itemName } from '../../../shared/itemClasses';
 import {
@@ -109,7 +108,7 @@ export function MyListingsPanel({
         ) : (
           <ul className="slips" aria-label={t('market.mine.title')}>
             {rows.map((row) => (
-              <li className="slip slip--listing" key={row.id} onPointerMove={slabMove} onPointerLeave={slabLeave}>
+              <li className="slip slip--listing" key={row.id}>
                 <div className="slip-item">
                   <span className="slip-thumb">
                     <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
@@ -285,7 +284,7 @@ export function OffersPanel({
             const live = row.status === 'pending' && row.listingStatus === 'active';
             const against = row.askingPrice > 0 ? Math.min(1, row.amount / row.askingPrice) : 0;
             return (
-              <li className="slip" key={row.id} onPointerMove={slabMove} onPointerLeave={slabLeave}>
+              <li className="slip" key={row.id}>
                 <div className="slip-item">
                   <span className="slip-thumb">
                     <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
@@ -495,7 +494,7 @@ export function SwapsPanel({
             const youGet = incoming ? row.offeredItems : row.requestedItems;
             const other = incoming ? row.proposerUsername : row.responderUsername;
             return (
-              <li className="slip slip--trade" key={row.id} onPointerMove={slabMove} onPointerLeave={slabLeave}>
+              <li className="slip slip--trade" key={row.id}>
                 <div className="slip-side">
                   <StatusBadge tone={gift ? 'gold' : 'info'} plain>
                     {t(gift ? 'market.swaps.gift' : 'market.swaps.swap')}
