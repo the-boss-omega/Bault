@@ -142,6 +142,29 @@ curl -s https://<domain>/api/v1/readyz                                # {"status
 curl -sI https://<domain>/ | grep -iE 'strict-transport|content-security'
 ```
 
+### The first administrator (after the first deploy only)
+
+The migration already created `platform@bault.dev`, the platform's own
+account, which nobody signs in as. Create your own administrator with the
+command in the release image. The password goes in on standard input, so it is
+in neither the shell history nor the process list; `read -rs` does not echo
+it. Use at least 12 characters:
+
+```sh
+cd /opt/bault
+read -rs ADMIN_PASSWORD
+printf '%s\n' "$ADMIN_PASSWORD" | BAULT_TAG=<tag> BAULT_ENV_DIR=/etc/bault docker compose \
+  --env-file /etc/bault/production.env -f infra/production/compose.yml --profile migrate \
+  run --rm -T migrate node dist/db/create-admin.js \
+  --email <your email> --username <username> --first-name <first> --last-name <last>
+unset ADMIN_PASSWORD
+```
+
+It prints `✔ administrator … created`. Sign in at `https://<domain>` and enrol
+two-factor, which production asks of every administrator. The command refuses,
+and changes nothing, once any administrator exists; add further staff from the
+console.
+
 ## 6. Nightly backup
 
 ```sh
