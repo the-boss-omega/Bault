@@ -500,7 +500,7 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
 
   describe('a shipment with its slip', () => {
     const address = { id: 'a1', label: 'Home', recipient: 'Red Ashwood', line1: '12 Vine St', city: 'Trenton', region: 'NJ', country: 'US', postalCode: '08608', isDefault: true };
-    const items = [{ id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: '2011 Pokémon Call of Legends' }];
+    const items = [{ id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: '2011 Pokémon Call of Legends — Rayquaza' }];
 
     for (const locale of ['en', 'he'] as const) {
       it(`has the slip beside the panels on a wide window and between the last two on a phone, in ${locale}`, async () => {
