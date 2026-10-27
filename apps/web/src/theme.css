@@ -220,10 +220,16 @@
    reads: design-lint forbids [dir='rtl'] and :dir(rtl) in every other rule. */
 :root {
   --dir: 1;
+  /* The edge a block of text hangs from. A block that takes the direction of its own text
+     (unicode-bidi: plaintext, so an English sentence keeps its full stop) would hang from that
+     text's edge, and `start` follows it: a serial or an English name at the left of a Hebrew
+     tile, under a status at the right. The order of the letters is the text's; the edge is the page's. */
+  --text-start: left;
 }
 
 :root[dir='rtl'] {
   --dir: -1;
+  --text-start: right;
 }
 
 /* Hebrew sets tight and wide tracking badly; the Latin display tracking is Latin-only. */

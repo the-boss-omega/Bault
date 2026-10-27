@@ -529,11 +529,25 @@ time,
 .ltr-run {
   direction: ltr;
   unicode-bidi: isolate;
-  text-align: start;
+  text-align: var(--text-start);
 }
 
+/* What a person wrote (a message, a note) is read as the language it is in, and hangs from that language's edge. */
 .bidi {
   unicode-bidi: plaintext;
+}
+
+/* The blocks of the product that take the direction of their own text hang from the page's edge (theme.css: --text-start),
+   so a serial, a code or an English name sits with the labels and statuses around it. */
+.card-title,
+.card-desc,
+.drawer-title,
+.drawer-subtitle,
+.detail-value,
+.dt-sub,
+.dt-primary,
+.identity-name {
+  text-align: var(--text-start);
 }
 
 .date {
@@ -1978,6 +1992,7 @@ input[type='search'] {
   vertical-align: middle;
   color: var(--ink-body);
   unicode-bidi: plaintext;
+  text-align: var(--text-start);
 }
 
 .data-table tbody tr:last-child td,
@@ -3176,6 +3191,15 @@ input[type='search'] {
 
 .check-list li:hover {
   background: var(--surface-2);
+}
+
+/* A choice with a note of its own beside it (why it cannot be chosen): the note is at the far end, never against the choice. */
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
 }
 
 .stepper {
