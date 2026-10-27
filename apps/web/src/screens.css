@@ -1312,6 +1312,34 @@
   }
 }
 
+/* ---- A parcel's label as it is typed: what is in it, where it goes, and its number as a barcode ---- */
+
+/* What was left unsaid is said in the quieter ink, so the tag never looks like it was filled in. */
+.drawer-tag-quiet {
+  color: var(--paper-ink-3);
+}
+
+.parcel-stub {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-2);
+  margin-block: var(--sp-3);
+  padding-block: var(--sp-3);
+  border-block: 1px dashed var(--paper-rule);
+}
+
+/* The barcode is its own white label, laid on the paper: it is printed black on white whichever way the page is. */
+.parcel-stub .barcode {
+  max-inline-size: 100%;
+}
+
+.parcel-stub-empty {
+  color: var(--paper-ink-3);
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* ---- A trade as it is composed: the two sides on the tag, one above the other, and the way the cards travel between them ---- */
 
 .trade-slip {

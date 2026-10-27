@@ -27,7 +27,9 @@ import {
   SuccessNote,
   TabPanel,
 } from '../../../shared/ui/primitives';
+import { Barcode } from '../../../shared/Barcode';
 import { CountUp } from '../../../shared/ui/CountUp';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { IconCheck, IconInbox, IconLocation, IconPlus } from '../../../shared/ui/icons';
 
@@ -365,7 +367,7 @@ function ParcelsTab({
   );
 }
 
-function RegisterParcelForm({
+export function RegisterParcelForm({
   onRegistered,
   onError,
 }: {
@@ -416,46 +418,74 @@ function RegisterParcelForm({
     }
   }
 
+  const facility = addresses.find((a) => a.code === facilityCode);
+  const tracking = trackingNumber.trim();
+  const contents = declaredContents.trim();
+
   return (
     <Panel title={t('inbound.register.title')} subtitle={t('inbound.register.subtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">{t('inbound.register.facility')}</span>
-            <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
-              {addresses.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+      <div className="request-form">
+        <div className="stack stack--tight request-form-fields">
+          <div className="form-grid">
+            <label className="field">
+              <span className="field-label">{t('inbound.register.facility')}</span>
+              <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
+                {addresses.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">{t('inbound.register.carrier')}</span>
+              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
+            </label>
+            <Field label={t('inbound.register.tracking')} hint={t('inbound.register.trackingHint')}>
+              <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} dir="ltr" />
+            </Field>
+            <label className="field">
+              <span className="field-label">{t('inbound.register.contents')}</span>
+              <input value={declaredContents} onChange={(e) => setDeclaredContents(e.target.value)} />
+            </label>
+          </div>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={internationalOrigin}
+              onChange={(e) => setInternationalOrigin(e.target.checked)}
+            />
+            {t('inbound.register.international')}
           </label>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.carrier')}</span>
-            <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
-          </label>
-          <Field label={t('inbound.register.tracking')} hint={t('inbound.register.trackingHint')}>
-            <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} dir="ltr" />
-          </Field>
-          <label className="field">
-            <span className="field-label">{t('inbound.register.contents')}</span>
-            <input value={declaredContents} onChange={(e) => setDeclaredContents(e.target.value)} />
-          </label>
+          {internationalOrigin && (
+            <p className="field-hint">{t('inbound.register.internationalHint')}</p>
+          )}
         </div>
 
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={internationalOrigin}
-            onChange={(e) => setInternationalOrigin(e.target.checked)}
-          />
-          {t('inbound.register.international')}
-        </label>
-        {internationalOrigin && (
-          <p className="field-hint">{t('inbound.register.internationalHint')}</p>
-        )}
+        {/* The label the parcel will have once it is registered: what is in it, where it is going, and its number as a barcode. */}
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('inbound.register.title')}
+            title={contents || <span className="drawer-tag-quiet">{t('inbound.parcels.undeclared')}</span>}
+            status={<StatusBadge tone={PARCEL_TONE.expected ?? 'neutral'}>{parcelStatusLabel(t, 'expected')}</StatusBadge>}
+            lines={[
+              { label: t('inbound.register.facility'), value: facility?.name ?? '—' },
+              ...(carrier.trim() ? [{ label: t('inbound.register.carrier'), value: carrier.trim() }] : []),
+              ...(internationalOrigin ? [{ label: t('inbound.register.international'), value: '✓' }] : []),
+            ]}
+          >
+            <div className="parcel-stub">
+              {tracking ? (
+                <Barcode value={tracking} options={{ moduleWidth: 1, height: 44 }} />
+              ) : (
+                <span className="parcel-stub-empty">{t('inbound.parcels.col.tracking')} —</span>
+              )}
+            </div>
+          </DrawerTag>
+        </aside>
 
-        <div className="row">
+        <div className="row request-form-actions">
           <Button variant="gold" icon={<IconPlus />} disabled={busy || !facilityCode} onClick={() => void submit()}>
             {t('inbound.register.submit')}
           </Button>
