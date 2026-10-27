@@ -630,3 +630,20 @@ fieldset.field--cards > legend {
 .check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):focus-visible {
   outline: none;
 }
+
+/* In forced colours the system draws the page's colours; a chosen card still has to look chosen. */
+@media (forced-colors: active) {
+  .check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):checked {
+    border-color: Highlight;
+    background: Highlight;
+  }
+
+  .check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):checked::after {
+    background: HighlightText;
+  }
+
+  .check:has(> .item-pick):has(> input:checked) {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
+}
