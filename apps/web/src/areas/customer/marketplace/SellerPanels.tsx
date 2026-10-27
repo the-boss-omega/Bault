@@ -3,6 +3,7 @@ import { api } from '../../../shared/api';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { useI18n, type TranslateFn } from '../../../shared/i18n';
 import { itemName } from '../../../shared/itemClasses';
 import {
@@ -284,85 +285,78 @@ export function OffersPanel({
       ) : rows.length === 0 ? (
         <EmptyState title={t('market.offers.empty')} text={t('market.offers.emptyText')} />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <caption>{t('market.offers.title')}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t('market.mine.col.item')}</th>
-                <th scope="col">{t('market.offers.col.side')}</th>
-                <th scope="col">{t('market.offers.col.offer')}</th>
-                <th scope="col">{t('support.col.status')}</th>
-                <th scope="col">{t('support.col.activity')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td data-label={t('market.mine.col.item')} className="dt-primary">
-                    <span className="dt-cell">
-                      <span className="dt-thumb">
-                        <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
-                      </span>
-                      <span>
-                        <Serial value={row.serialNumber} />
-                        <span className="dt-sub ltr-run">{itemName(t, row)}</span>
-                      </span>
+        <ul className="slips" aria-label={t('market.offers.title')}>
+          {rows.map((row) => {
+            const live = row.status === 'pending' && row.listingStatus === 'active';
+            const against = row.askingPrice > 0 ? Math.min(1, row.amount / row.askingPrice) : 0;
+            return (
+              <li className="slip" key={row.id} onPointerMove={slabMove} onPointerLeave={slabLeave}>
+                <div className="slip-item">
+                  <span className="slip-thumb">
+                    <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
+                  </span>
+                  <span className="slip-name">
+                    <Serial value={row.serialNumber} />
+                    <span className="slip-desc ltr-run">{itemName(t, row)}</span>
+                  </span>
+                </div>
+
+                <div className="slip-side">
+                  <StatusBadge tone={row.direction === 'incoming' ? 'gold' : 'info'} plain>
+                    {t(row.direction === 'incoming' ? 'market.offers.incoming' : 'market.offers.outgoing')}
+                  </StatusBadge>
+                  {row.direction === 'incoming' && row.buyerUsername && (
+                    <span className="slip-turn">
+                      <Code value={`@${row.buyerUsername}`} />
                     </span>
-                  </td>
-                  <td data-label={t('market.offers.col.side')}>
-                    <StatusBadge tone={row.direction === 'incoming' ? 'gold' : 'info'} plain>
-                      {t(row.direction === 'incoming' ? 'market.offers.incoming' : 'market.offers.outgoing')}
-                    </StatusBadge>
-                    {row.direction === 'incoming' && row.buyerUsername && (
-                      <span className="dt-sub">
-                        <Code value={`@${row.buyerUsername}`} />
-                      </span>
-                    )}
-                    {row.status === 'pending' && row.listingStatus === 'active' && (
-                      <span className="dt-sub">
-                        {t(row.yourTurn ? 'market.offers.turnYours' : 'market.offers.turnTheirs')}
-                      </span>
-                    )}
-                  </td>
-                  <td data-label={t('market.offers.col.offer')} className="num">
-                    <Amount size="lead">{formatUsd(row.amount)}</Amount>
-                    <span className="dt-sub">
-                      {t('market.offers.asking', { amount: formatUsd(row.askingPrice) })}
+                  )}
+                  {live && (
+                    <span className="slip-turn">
+                      {t(row.yourTurn ? 'market.offers.turnYours' : 'market.offers.turnTheirs')}
                     </span>
-                  </td>
-                  <td data-label={t('support.col.status')}>
-                    <StatusBadge tone={OFFER_TONE[row.status] ?? 'neutral'}>
-                      {offerStatusLabel(t, row.status)}
-                    </StatusBadge>
-                  </td>
-                  <td data-label={t('support.col.activity')} className="td-tight">
-                    <span className="date">{formatDate(row.createdAt, locale)}</span>
-                  </td>
-                  <td className="td-tight">
-                    {row.status === 'pending' && row.listingStatus === 'active' && (
-                      <OfferActions
-                        offer={row}
-                        countering={countering === row.id}
-                        amount={amount}
-                        busy={busy}
-                        t={t}
-                        onCounterStart={() => {
-                          setCountering(row.id);
-                          setAmount((row.amount / 100).toFixed(2));
-                        }}
-                        onCounterCancel={() => setCountering(null)}
-                        onAmount={setAmount}
-                        onRespond={(action) => void respond(row, action)}
-                      />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </div>
+
+                <div className="slip-money">
+                  <span className="money-label">{t('market.offers.col.offer')}</span>
+                  <Amount size="lead">{formatUsd(row.amount)}</Amount>
+                  <span className="slip-asking">
+                    {t('market.offers.asking', { amount: formatUsd(row.askingPrice) })}
+                  </span>
+                  <span className="slip-gauge" aria-hidden="true">
+                    <span style={{ inlineSize: `${Math.round(against * 100)}%` }} />
+                  </span>
+                </div>
+
+                <div className="slip-state">
+                  <StatusBadge tone={OFFER_TONE[row.status] ?? 'neutral'}>
+                    {offerStatusLabel(t, row.status)}
+                  </StatusBadge>
+                  <span className="date">{formatDate(row.createdAt, locale)}</span>
+                </div>
+
+                <div className="slip-actions">
+                  {live && (
+                    <OfferActions
+                      offer={row}
+                      countering={countering === row.id}
+                      amount={amount}
+                      busy={busy}
+                      t={t}
+                      onCounterStart={() => {
+                        setCountering(row.id);
+                        setAmount((row.amount / 100).toFixed(2));
+                      }}
+                      onCounterCancel={() => setCountering(null)}
+                      onAmount={setAmount}
+                      onRespond={(action) => void respond(row, action)}
+                    />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </Panel>
   );

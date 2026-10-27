@@ -23,6 +23,7 @@ import {
   ViewAllLink,
 } from '../../shared/ui/primitives';
 import { scrollBehavior } from '../../shared/ui/motionPreference';
+import { ShelfMap } from './ShelfMap';
 import {
   IconAlert,
   IconBox,
@@ -212,13 +213,17 @@ export function WarehouseConsole() {
             flush
             footer={<ViewAllLink onClick={() => goTab('inventory')}>{t('warehouse.viewInventory')}</ViewAllLink>}
           >
-            <InventoryRows
-              rows={(shelfRows ?? []).slice(0, 6)}
-              loading={shelfRows === null}
-              cut="shelf"
-              bins={bins}
-              t={t}
-            />
+            {bins.length > 0 && shelfRows !== null ? (
+              <ShelfMap bins={bins} counts={shelfRows} t={t} />
+            ) : (
+              <InventoryRows
+                rows={(shelfRows ?? []).slice(0, 6)}
+                loading={shelfRows === null}
+                cut="shelf"
+                bins={bins}
+                t={t}
+              />
+            )}
           </Panel>
 
           <Panel title={t('warehouse.log.title')} flush>

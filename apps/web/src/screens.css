@@ -415,3 +415,850 @@
     text-transform: none;
   }
 }
+
+/* ---- Membership: the tiers are cards, the schedule is under them ---- */
+
+.mem-offers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 16px;
+  margin: 0 0 var(--sp-8);
+  padding: 0;
+  border: 0;
+  counter-reset: tier;
+}
+
+.mem-offers .offer {
+  counter-increment: tier;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 22px;
+  padding: 28px 26px 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  overflow: clip;
+  transition:
+    border-color 300ms,
+    transform 500ms var(--ease-out-expo);
+}
+
+.mem-offers .offer:hover {
+  border-color: var(--input);
+  transform: translateY(-3px);
+}
+
+/* The ordinal is outlined and behind the text: a watermark, not content. */
+
+.mem-offers .offer::before {
+  content: counter(tier, decimal-leading-zero);
+  content: counter(tier, decimal-leading-zero) / '';
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 18px;
+  z-index: -1;
+  font: 500 112px/1 var(--font-display);
+  color: transparent;
+  -webkit-text-stroke: 1px var(--border);
+  pointer-events: none;
+}
+
+/* The tier you are on carries the foil. */
+
+.mem-offers .offer[data-current='true'] {
+  border-color: var(--input);
+}
+
+.mem-offers .offer[data-current='true']::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 3px;
+  background: var(--foil);
+}
+
+.mem-offers .offer-what {
+  display: grid;
+  gap: 8px;
+}
+
+.mem-offers .offer-name {
+  font: 500 clamp(32px, 3.2vw, 42px) / 1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+:lang(he) .mem-offers .offer-name {
+  letter-spacing: 0;
+}
+
+.mem-offers .offer-price {
+  display: block;
+}
+
+.mem-offers .offer-price .amount {
+  font: 500 24px/1.15 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.mem-offers .offer-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.offer-facts {
+  display: grid;
+  margin: 0;
+  border-block-start: 1px dashed var(--control-border);
+}
+
+.offer-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--border);
+}
+
+.offer-facts dt {
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+
+.offer-facts dd {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block-start: auto;
+}
+
+.offer-actions .btn {
+  flex: 1 1 auto;
+}
+
+/* The schedule under the cards: the full list, set quietly. The cards already
+   say who each tier is for and what it costs, so its header is just the names. */
+
+.mem-table .mem-tier-for {
+  display: none;
+}
+
+/* Labels start-aligned and plain; each tier's values centred under its name, so
+   a row reads across instead of leaving a gap the width of the page. */
+
+.mem-table tbody th[scope='row'] {
+  text-align: start;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.mem-table :is(th, td).num {
+  text-align: center;
+}
+
+.mem-table tbody td.num .amount {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* A row's label is ruled like its cells, so the line runs the width of the table. */
+
+.mem-table tbody th[scope='row'] {
+  border-block-end: 1px solid var(--border);
+}
+
+@media (max-width: 767px) {
+  /* On a phone each row is a small stack: its label, then a line for each tier. */
+  .dt-wrap--stack .mem-table tbody th[scope='row'] {
+    display: block;
+    padding: 0 0 6px;
+    border: 0;
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  /* One line per tier: its name at the start, its value at the end. (A second,
+     older rule at 640px makes every cell a block; this one is more specific.) */
+  .dt-wrap--stack .mem-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 4px;
+  }
+
+  .dt-wrap--stack .mem-table td.num {
+    direction: inherit;
+    text-align: end;
+  }
+
+  .dt-wrap--stack .mem-table .mem-perks {
+    justify-items: end;
+    text-align: end;
+  }
+}
+
+.mem-table .mem-tier-price {
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+/* What no tier covers: the fine print, as numbered clauses on paper. */
+
+.mem-uncovered {
+  --focus-color: var(--paper-ink);
+  position: relative;
+  isolation: isolate;
+  display: block;
+  margin: 0;
+  padding: 26px clamp(20px, 3vw, 34px) 14px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    0 0 0 1px var(--paper-line),
+    0 30px 50px -34px oklch(0 0 0 / 65%);
+  counter-reset: clause;
+  overflow: clip;
+}
+
+.mem-uncovered::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 4px;
+  background: var(--foil);
+}
+
+.mem-uncovered li {
+  counter-increment: clause;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  padding: 13px 0;
+  border: 0;
+  border-block-end: 1px dashed var(--paper-rule);
+  color: var(--paper-ink);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+.mem-uncovered li:last-child {
+  border-block-end: 0;
+}
+
+.mem-uncovered li::before {
+  content: '\200E§' counter(clause, decimal-leading-zero) '\200E';
+  content: '\200E§' counter(clause, decimal-leading-zero) '\200E' / '';
+  padding-block-start: 3px;
+  font: 500 12px/1.5 var(--font-mono);
+  letter-spacing: 0.12em;
+  color: var(--paper-ink-3);
+}
+
+/* ---- Offers: a bid slip each ----
+   The card in its case, who made the offer and whose move it is, the offer in the
+   display face with its name and how it stands against the asking price, then
+   the state and the actions. */
+
+.slips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, auto);
+  grid-template-areas: 'item side money state actions';
+  align-items: center;
+  column-gap: 28px;
+  padding: 24px 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.slip-item {
+  grid-area: item;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-inline-size: 0;
+}
+
+.slip-thumb {
+  flex: 0 0 auto;
+  inline-size: 78px;
+}
+
+.slip-name {
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.slip-desc {
+  display: -webkit-box;
+  max-inline-size: 48ch;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.slip-side {
+  grid-area: side;
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+}
+
+.slip-turn {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.slip-money {
+  grid-area: money;
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+}
+
+.slip-money .amount--lead {
+  font: 500 clamp(26px, 2.4vw, 32px) / 1 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+.slip-asking {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+/* How the offer stands against the asking price: a rule, filled to the fraction. */
+
+.slip-gauge {
+  display: block;
+  inline-size: min(100%, 150px);
+  block-size: 3px;
+  margin-block-start: 3px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.slip-gauge > span {
+  display: block;
+  block-size: 100%;
+  border-radius: 3px;
+  background: var(--foreground);
+}
+
+.slip-state {
+  grid-area: state;
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.slip-actions {
+  grid-area: actions;
+  display: flex;
+  justify-content: flex-end;
+  min-inline-size: 0;
+}
+
+.slip-actions .actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 1179px) {
+  .slip {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'item item'
+      'side money'
+      'state actions';
+    row-gap: 18px;
+  }
+}
+
+@media (max-width: 767px) {
+  .slip {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'item'
+      'money'
+      'side'
+      'state'
+      'actions';
+    row-gap: 14px;
+  }
+
+  .slip-actions,
+  .slip-actions .actions {
+    justify-content: flex-start;
+  }
+
+  .slip-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ---- Inbound: a label for each parcel ----
+   What is in it and where it is on the start side; on the end side, past the
+   perforation, the tracking number as a barcode, the way it is on the box. Under
+   the contents, how far it has got, with the date of each stop it has reached. */
+
+.labels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.label-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(132px, 15vw, 200px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  overflow: clip;
+  cursor: pointer;
+  transition:
+    border-color 300ms,
+    transform 500ms var(--ease-out-expo);
+}
+
+.label-card:hover,
+.label-card.is-selected {
+  border-color: var(--input);
+}
+
+.label-card:hover {
+  transform: translateY(-2px);
+}
+
+.label-main {
+  display: grid;
+  gap: 14px;
+  min-inline-size: 0;
+  padding: 22px 26px;
+}
+
+.label-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.label-code {
+  font: 500 12px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+}
+
+.label-what {
+  margin: 0;
+  max-inline-size: 52ch;
+  font: 500 clamp(20px, 2vw, 26px) / 1.25 var(--font-display);
+  color: var(--foreground);
+  text-wrap: balance;
+  /* What the sender wrote: its own language sets its own direction. */
+  unicode-bidi: plaintext;
+}
+
+.label-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+
+.label-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The journey: four stops on a rule, filled as far as it has got. */
+
+.label-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.label-track li {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding-block-start: 20px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.label-track li::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  inline-size: 10px;
+  block-size: 10px;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--card);
+}
+
+.label-track li::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline: 14px 4px;
+  block-size: 1px;
+  background: var(--border);
+}
+
+.label-track li:last-child::after {
+  content: none;
+}
+
+.label-track li[data-reached='true']::before {
+  border-color: var(--foreground);
+  background: var(--foreground);
+}
+
+.label-track li[data-reached='true']:has(+ li[data-reached='true'])::after {
+  background: var(--foreground);
+}
+
+.label-track li[aria-current='step'] {
+  color: var(--foreground);
+}
+
+.label-track li[aria-current='step'] .label-stop {
+  font-weight: 600;
+}
+
+.label-track li[aria-current='step']::before {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.label-when {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+/* The stub: past the perforation, the barcode and the tracking number. */
+
+.label-stub {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  border-inline-start: 1px dashed var(--control-border);
+}
+
+.label-stub::before,
+.label-stub::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -13px;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.label-stub::before {
+  inset-block-start: -13px;
+}
+
+.label-stub::after {
+  inset-block-end: -13px;
+}
+
+.label-bars {
+  inline-size: 100%;
+  block-size: 46px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--foreground) 0 2px,
+    transparent 2px 4px,
+    var(--foreground) 4px 5px,
+    transparent 5px 8px,
+    var(--foreground) 8px 11px,
+    transparent 11px 13px,
+    var(--foreground) 13px 14px,
+    transparent 14px 18px
+  );
+  opacity: 0.75;
+}
+
+.label-tracking {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.label-tracking code {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0;
+  color: var(--foreground);
+}
+
+.label-carrier {
+  color: var(--muted-foreground);
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .label-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .label-main {
+    padding: 20px 20px 18px;
+  }
+
+  .label-stub {
+    border-inline-start: 0;
+    border-block-start: 1px dashed var(--control-border);
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-items: start;
+    align-content: center;
+    padding: 16px 20px;
+  }
+
+  .label-stub::before,
+  .label-stub::after {
+    inset-block-start: -13px;
+    inset-block-end: auto;
+  }
+
+  .label-stub::before {
+    inset-inline-start: -13px;
+  }
+
+  .label-stub::after {
+    inset-inline-start: auto;
+    inset-inline-end: -13px;
+  }
+
+  .label-bars {
+    grid-column: 1 / -1;
+    block-size: 34px;
+  }
+
+  .label-tracking {
+    text-align: start;
+  }
+
+  :lang(he) .label-carrier {
+    font-family: var(--font-ui);
+    letter-spacing: 0;
+  }
+}
+
+/* ---- The warehouse: the floor as a map ----
+   Shelves in their zones, as racks. Each slot is a shelf: its barcode, how many
+   items stand on it, and a mark for each. */
+
+.shelf-map {
+  display: grid;
+  gap: 22px;
+  padding: var(--pad-panel);
+}
+
+.shelf-zone {
+  display: grid;
+  gap: 10px;
+}
+
+.shelf-zone-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block-end: 8px;
+  border-block-end: 1px solid var(--border);
+}
+
+.shelf-zone-name {
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+:lang(he) .shelf-zone-name {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.shelf-zone-name b {
+  margin-inline-start: 4px;
+  font: 500 22px/1 var(--font-display);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--foreground);
+}
+
+.shelf-zone-total {
+  font: 500 20px/1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+/* A rack is as wide as its shelves: it has no capacity to show, only what stands on it. */
+
+.shelf-rack {
+  list-style: none;
+  margin: 0;
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  border-radius: 10px;
+  background: var(--muted);
+  box-shadow: inset 0 -4px 0 -1px var(--border);
+}
+
+.shelf-slot {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  flex: 0 0 168px;
+  min-block-size: 108px;
+  padding: 12px 14px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.shelf-slot[data-wide='true'] {
+  flex-basis: 346px;
+  max-inline-size: 100%;
+}
+
+.shelf-slot[data-state='empty'] {
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+}
+
+.shelf-slot[data-state='out'] {
+  border-color: var(--border);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 7px,
+    color-mix(in oklab, var(--foreground) 9%, transparent) 7px 8px
+  );
+}
+
+.shelf-slot[data-state='tray'] {
+  flex-basis: 168px;
+  min-block-size: 56px;
+  border-style: dashed;
+  border-color: var(--amber);
+  background: transparent;
+}
+
+.shelf-bin {
+  /* The count sits at the end edge; the label stays clear of it. */
+  padding-inline-end: 2.4em;
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.shelf-count {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 14px;
+  font: 500 28px/1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.shelf-slot[data-state='empty'] .shelf-count,
+.shelf-slot[data-state='out'] .shelf-count {
+  color: var(--muted-foreground);
+}
+
+.shelf-pips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px;
+  min-block-size: 15px;
+}
+
+.shelf-pip {
+  inline-size: 9px;
+  block-size: 14px;
+  border-radius: 2px;
+  background: var(--foreground);
+  opacity: 0.85;
+}
+
+.shelf-more {
+  align-self: center;
+  margin-inline-start: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.shelf-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}

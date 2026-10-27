@@ -16,6 +16,9 @@ import {
   type TierCatalogue,
 } from '../../../shared/membership';
 
+/** The lines a tier card leads with; the schedule under the cards has them all. */
+const HIGHLIGHT_ROWS = ['storedItems', 'intake', 'parcel_processing', 'postage'] as const;
+
 export function MembershipPage() {
   const { t, locale } = useI18n();
   const [catalogue, setCatalogue] = useState<TierCatalogue | null>(null);
@@ -192,78 +195,39 @@ export function MembershipPage() {
       )}
 
       <Panel title={t('membership.tiers.title')} subtitle={t('membership.tiers.subtitle')}>
-        {catalogue && (
-          <div className="dt-wrap">
-            <table className="data-table mem-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('membership.col.included')}</th>
-                  {catalogue.tiers.map((tier) => (
-                    <th scope="col" key={tier.key} className="num">
-                      <span className="mem-tier-name">{t(tierNameKey(tier.key))}</span>
-                      <span className="mem-tier-price amount">
-                        {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
-                      </span>
-                      <span className="mem-tier-for">{t(tierForKey(tier.key))}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON_ROWS.map((row) => (
-                  <tr key={row}>
-                    <th scope="row">{t(rowLabelKey(row))}</th>
-                    {catalogue.tiers.map((tier) => {
-                      const cell = allowanceCell(tier, row);
-                      return (
-                        <td key={tier.key} className="num">
-                          {cell === null ? (
-                            <span className="mem-not-included" aria-label={t('membership.notIncluded')}>
-                              —
-                            </span>
-                          ) : (
-                            <span className="amount">{cell}</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-                <tr>
-                  <th scope="row">{t('membership.row.perks')}</th>
-                  {catalogue.tiers.map((tier) => (
-                    <td key={tier.key}>
-                      <ul className="mem-perks">
-                        {tier.perks.map((p) => (
-                          <li key={p}>{t(perkKey(p))}</li>
-                        ))}
-                      </ul>
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
         <div className="mem-offers">
           {catalogue?.tiers.map((tier) => {
             const action = tierAction(mine, tier, tierOrder);
             const isCurrent =
               action.kind === 'keep' && mine?.status === 'active' && !mine.scheduledTier;
             return (
-              <div className="offer" key={tier.key}>
+              <div className="offer" key={tier.key} data-current={isCurrent ? 'true' : undefined}>
                 <div className="offer-what">
                   <span className="offer-name">{t(tierNameKey(tier.key))}</span>
+                  <span className="offer-price">
+                    <span className="amount">
+                      {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
+                    </span>
+                  </span>
                   <span className="offer-note">
                     {confirming === tier.key ? confirmSentence(action, tier) : t(tierForKey(tier.key))}
                   </span>
                 </div>
 
-                <div className="offer-price">
-                  <span className="amount">
-                    {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
-                  </span>
+                <dl className="offer-facts">
+                  {HIGHLIGHT_ROWS.map((row) => {
+                    const cell = allowanceCell(tier, row);
+                    if (cell === null) return null;
+                    return (
+                      <div key={row}>
+                        <dt>{t(rowLabelKey(row))}</dt>
+                        <dd>{cell}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+
+                <div className="offer-actions">
                   {isCurrent ? (
                     <span className="pill pill--success">{t('membership.yourTier')}</span>
                   ) : confirming === tier.key ? (
@@ -289,6 +253,61 @@ export function MembershipPage() {
             );
           })}
         </div>
+
+        {catalogue && (
+          <div className="dt-wrap dt-wrap--stack">
+            <table className="data-table mem-table">
+              <thead>
+                <tr>
+                  <th scope="col">{t('membership.col.included')}</th>
+                  {catalogue.tiers.map((tier) => (
+                    <th scope="col" key={tier.key} className="num">
+                      <span className="mem-tier-name">{t(tierNameKey(tier.key))}</span>
+                      <span className="mem-tier-price amount">
+                        {t('membership.perMonth', { amount: formatUsd(tier.priceMinor) })}
+                      </span>
+                      <span className="mem-tier-for">{t(tierForKey(tier.key))}</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row}>
+                    <th scope="row">{t(rowLabelKey(row))}</th>
+                    {catalogue.tiers.map((tier) => {
+                      const cell = allowanceCell(tier, row);
+                      return (
+                        <td key={tier.key} className="num" data-label={t(tierNameKey(tier.key))}>
+                          {cell === null ? (
+                            <span className="mem-not-included" aria-label={t('membership.notIncluded')}>
+                              —
+                            </span>
+                          ) : (
+                            <span className="amount">{cell}</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                <tr>
+                  <th scope="row">{t('membership.row.perks')}</th>
+                  {catalogue.tiers.map((tier) => (
+                    <td key={tier.key} data-label={t(tierNameKey(tier.key))}>
+                      <ul className="mem-perks">
+                        {tier.perks.map((p) => (
+                          <li key={p}>{t(perkKey(p))}</li>
+                        ))}
+                      </ul>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
       </Panel>
 
       <Panel title={t('membership.uncovered.title')} subtitle={t('membership.uncovered.subtitle')}>

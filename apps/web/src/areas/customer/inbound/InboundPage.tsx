@@ -237,6 +237,9 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
   );
 }
 
+/** The stops of a parcel's journey, in order; unclaimed and disposed are not on it. */
+const PARCEL_STOPS = ['expected', 'received', 'opened', 'processed'] as const;
+
 function ParcelsTab({
   parcels,
   openId,
@@ -272,61 +275,63 @@ function ParcelsTab({
             icon={<IconInbox />}
           />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <caption>{t('inbound.parcels.title')}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t('inbound.parcels.col.parcel')}</th>
-                  <th scope="col">{t('inbound.parcels.col.tracking')}</th>
-                  <th scope="col">{t('inbound.parcels.col.where')}</th>
-                  <th scope="col">{t('inbound.parcels.col.status')}</th>
-                  <th scope="col">{t('inbound.parcels.col.updated')}</th>
-                  <th scope="col" className="td-tight" />
-                </tr>
-              </thead>
-              <tbody>
-                {parcels.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={'is-clickable' + (p.id === openId ? ' is-selected' : '')}
-                    tabIndex={0}
-                    onClick={() => onOpen(p.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onOpen(p.id);
-                      }
-                    }}
-                  >
-                    <td data-label={t('inbound.parcels.col.parcel')} className="dt-primary">
-                      {p.declaredContents || t('inbound.parcels.undeclared')}
-                      <span className="dt-sub" dir="ltr">
+          <ul className="labels" aria-label={t('inbound.parcels.title')}>
+            {parcels.map((p) => {
+              const stamps: Record<(typeof PARCEL_STOPS)[number], string | null> = {
+                expected: p.expectedAt,
+                received: p.receivedAt,
+                opened: p.openedAt,
+                processed: p.processedAt,
+              };
+              const onTrack = (PARCEL_STOPS as readonly string[]).includes(p.status);
+              return (
+                <li
+                  key={p.id}
+                  className={'label-card' + (p.id === openId ? ' is-selected' : '')}
+                  onClick={() => onOpen(p.id)}
+                >
+                  <div className="label-main">
+                    <div className="label-head">
+                      <span className="label-code" dir="ltr">
                         {p.code}
                       </span>
-                    </td>
-                    <td data-label={t('inbound.parcels.col.tracking')} dir="ltr">
-                      {p.trackingNumber ? <code>{p.trackingNumber}</code> : <span className="muted">—</span>}
-                      {p.carrier && <span className="dt-sub">{p.carrier}</span>}
-                    </td>
-                    <td data-label={t('inbound.parcels.col.where')}>
-                      {p.facilityName ?? '—'}
-                      {p.forwardedAt && (
-                        <span className="dt-sub">{t('inbound.parcels.forwarded')}</span>
-                      )}
-                    </td>
-                    <td data-label={t('inbound.parcels.col.status')}>
                       <StatusBadge tone={PARCEL_TONE[p.status] ?? 'neutral'}>
                         {parcelStatusLabel(t, p.status)}
                       </StatusBadge>
-                    </td>
-                    <td data-label={t('inbound.parcels.col.updated')}>
-                      {formatDate(
-                        p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt ?? '',
-                        locale,
-                      ) || '—'}
-                    </td>
-                    <td className="td-tight">
+                    </div>
+
+                    <p className="label-what">{p.declaredContents || t('inbound.parcels.undeclared')}</p>
+
+                    <p className="label-meta">
+                      <span>{p.facilityName ?? '—'}</span>
+                      {p.forwardedAt && <span>{t('inbound.parcels.forwarded')}</span>}
+                      <span>
+                        {t('inbound.parcels.col.updated')}{' '}
+                        {formatDate(
+                          p.processedAt ?? p.openedAt ?? p.receivedAt ?? p.expectedAt ?? '',
+                          locale,
+                        ) || '—'}
+                      </span>
+                    </p>
+
+                    {onTrack && (
+                      <ol className="label-track" aria-label={t('inbound.parcels.col.status')}>
+                        {PARCEL_STOPS.map((stop) => (
+                          <li
+                            key={stop}
+                            data-reached={stamps[stop] ? 'true' : 'false'}
+                            aria-current={p.status === stop ? 'step' : undefined}
+                          >
+                            <span className="label-stop">{parcelStatusLabel(t, stop)}</span>
+                            <span className="label-when">
+                              {stamps[stop] ? formatDate(stamps[stop] ?? '', locale) : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+
+                    <div className="label-actions">
                       <Button
                         size="sm"
                         variant="secondary"
@@ -337,12 +342,20 @@ function ParcelsTab({
                       >
                         {t('ss.tracking.details')}
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+
+                  <div className="label-stub">
+                    <span className="label-bars" aria-hidden="true" />
+                    <span className="label-tracking" dir="ltr">
+                      {p.trackingNumber ? <code>{p.trackingNumber}</code> : <span className="muted">—</span>}
+                    </span>
+                    {p.carrier && <span className="label-carrier">{p.carrier}</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </Panel>
 

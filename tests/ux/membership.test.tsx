@@ -126,6 +126,42 @@ describe('the membership screen', () => {
     expect(screen.getByText(/hand delivery/i)).toBeInTheDocument();
   });
 
+  it('leads each tier card with its main allowances, from the same figures as the schedule', async () => {
+    answer();
+    renderPage();
+
+    const joins = await screen.findAllByRole('button', { name: /^join$/i });
+    const folio = joins[0]!.closest('.offer') as HTMLElement;
+    const registry = joins[1]!.closest('.offer') as HTMLElement;
+
+    expect(within(folio).getByText('Items in storage').nextElementSibling).toHaveTextContent('60');
+    expect(within(folio).getByText('Items booked in (a month)').nextElementSibling).toHaveTextContent('4');
+    expect(within(folio).getByText('Postage credit (a month)').nextElementSibling).toHaveTextContent('$10.00');
+    expect(within(registry).getByText('Items in storage').nextElementSibling).toHaveTextContent('200');
+  });
+
+  it('marks the card of the tier you are on, and no other', async () => {
+    answer({
+      tier: 'registry',
+      status: 'active',
+      cycleLive: true,
+      currentPeriodStart: '2026-09-01T00:00:00.000Z',
+      currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+      cancelledAt: null,
+      perCycle: { intake: { allowed: 10, used: 2, remaining: 8 } },
+      storedItems: 200,
+      insuredShipments: { allowed: 3, used: 0, capMinor: 100_000 },
+      postage: { creditMinor: 3_000, usedMinor: 0 },
+      commission: { waivedOnMinor: 100_000, usedMinor: 0 },
+      perks: ['storage_clock_stops'],
+    });
+    renderPage();
+
+    const mine = (await screen.findByText('Your tier')).closest('.offer');
+    expect(mine).toHaveAttribute('data-current', 'true');
+    expect(document.querySelectorAll('.offer[data-current="true"]')).toHaveLength(1);
+  });
+
   it('does not offer to join the tier you are already on', async () => {
     answer({
       tier: 'registry',
