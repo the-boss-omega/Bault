@@ -36,6 +36,16 @@ describe('the wallet statement', () => {
     expect(within(slip).getByText('Transactions').nextElementSibling).toHaveTextContent('8');
   });
 
+  it('isolates each figure left to right inside a cell that reads the page’s way, so it hangs from its name’s edge', () => {
+    renderT((t) => <StatementSlip amount={970_000} flows={flows} expanded t={t} />);
+
+    for (const name of ['Total credited', 'Total debited', 'Net movement']) {
+      const cell = screen.getByText(name).nextElementSibling!;
+      expect(cell).not.toHaveAttribute('dir');
+      expect(cell.querySelector('bdi')).toHaveAttribute('dir', 'ltr');
+    }
+  });
+
   it('keeps the slip short on the other tabs: the balance, without the sum', () => {
     renderT((t) => <StatementSlip amount={970_000} flows={flows} expanded={false} t={t} />);
 

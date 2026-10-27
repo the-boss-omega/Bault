@@ -508,7 +508,7 @@ like.
 | A rule that paints the paper or the room names its focus ring | `design-lint` | same |
 | Every infinite animation is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| WCAG 2.x A and AA rules (axe-core), and every focus ring measured against what is behind it, on every screen | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it, and anything cut off at the edge of a phone that is not in something that scrolls sideways, on every screen | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each in a copy of the source | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
@@ -533,7 +533,9 @@ Loaded in that order after `index.css` (`main.tsx`). Components and hooks: `shar
 (slab), `shared/ui/slabTilt.ts` (pointer tilt), `shared/ui/useLandingMotion.ts` (`useMotionReady`;
 scroll reveal, journey, parallax, progress), `shared/ui/useOverlay.ts` and `useExit.ts` (dialogs),
 `shared/ui/motionPreference.ts` (`prefersReducedMotion`, `scrollBehavior`), `shared/ui/SplitWords.tsx`,
-`shared/ui/CountUp.tsx`, `areas/customer/marketing/LandingArt.tsx`,
+`shared/ui/CountUp.tsx`, `shared/ui/useScrollableRegions.ts` (a table wider than its room scrolls
+sideways, and while it does it is in the tab order, with a name, so a keyboard can reach its far
+columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
 `areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`.
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px

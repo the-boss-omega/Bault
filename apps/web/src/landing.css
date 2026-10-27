@@ -316,9 +316,10 @@
   inset-inline: 0;
   inset-block-end: 0;
   z-index: 6;
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: end;
+  /* Three facts side by side while there is room for them, and the last on a line of its own when there is not. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 16px 28px;
   margin: 0;
   padding: 16px 24px 16px;
@@ -588,6 +589,8 @@
 .lp-rates .data-table tbody th {
   text-align: start;
   font-weight: 400;
+  /* The base table keeps its row headings on one line; here they are sentences and wrap, or the card is wider than a phone. */
+  white-space: normal;
 }
 
 .lp-rates .data-table tbody tr:hover th {
@@ -1008,6 +1011,18 @@
 
   .lp .landing-bar-actions .btn--ghost {
     display: none;
+  }
+}
+
+/* On the narrowest phones the mark stands for the name, which stays in the page for a screen reader. */
+@media (max-width: 359px) {
+  .lp-word {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

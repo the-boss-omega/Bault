@@ -47,21 +47,28 @@ export function StatementSlip({
             </span>
           </p>
 
+          {/* The figures are isolated left to right inside a cell that reads the page's way, so they hang from the same edge as their names. */}
           {expanded && (
             <dl className="statement-sum">
               <div className="statement-term">
                 <dt>{t('wallet.inflow')}</dt>
-                <dd dir="ltr">{formatUsd(flows.inflow)}</dd>
+                <dd>
+                  <bdi dir="ltr">{formatUsd(flows.inflow)}</bdi>
+                </dd>
                 <dd className="statement-note">{t('wallet.inflowNote')}</dd>
               </div>
               <div className="statement-term statement-term--minus">
                 <dt>{t('wallet.outflow')}</dt>
-                <dd dir="ltr">{formatUsd(flows.outflow)}</dd>
+                <dd>
+                  <bdi dir="ltr">{formatUsd(flows.outflow)}</bdi>
+                </dd>
                 <dd className="statement-note">{t('wallet.outflowNote')}</dd>
               </div>
               <div className="statement-term statement-term--equals">
                 <dt>{t('wallet.netFlow')}</dt>
-                <dd dir="ltr">{formatUsd(flows.inflow - flows.outflow)}</dd>
+                <dd>
+                  <bdi dir="ltr">{formatUsd(flows.inflow - flows.outflow)}</bdi>
+                </dd>
                 <dd className="statement-note">{t('wallet.netFlowNote')}</dd>
               </div>
               <div className="statement-term statement-term--count">

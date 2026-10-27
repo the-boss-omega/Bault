@@ -336,7 +336,9 @@ input[type='radio'] {
 .dt-wrap {
   border: var(--border-w) solid var(--border);
   border-radius: calc(var(--radius) + 4px);
-  overflow: hidden;
+  /* A table that is wider than its room scrolls sideways, as it always has; the corners are still cut. */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .data-table thead th,
@@ -344,6 +346,18 @@ input[type='radio'] {
   background: transparent;
   color: var(--muted-foreground);
   border-block-end-color: var(--input);
+}
+
+/* The actions beside a tab bar wrap rather than run off a narrow phone. */
+@media (max-width: 640px) {
+  .ctx-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* The steps of a request inside a cell are prose, not a label: they wrap, or a long detail makes the whole table wider than a phone. */
+.data-table .steps {
+  white-space: normal;
 }
 
 .data-table tbody tr,

@@ -45,9 +45,9 @@ Options:
   --password <pw>    the seeded accounts' password (default 11111111)
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
-cents, an enum name or English words on a Hebrew page, sideways scrolling at
-phone width, a console error, a failed API call or, with --axe, an accessibility
-violation) are listed first.`;
+cents, an enum name or English words on a Hebrew page, sideways scrolling or
+content cut off at the edge at phone width, a console error, a failed API call or,
+with --axe, an accessibility violation) are listed first.`;
 
 const PERSONAS = {
   anonymous: { login: null },
@@ -318,6 +318,35 @@ async function inspect(page, locale, width) {
       if (enums.length) flags.push(`enum names on screen: ${enums.slice(0, 6).join(', ')}`);
       if (document.documentElement.scrollWidth > window.innerWidth + 1 && width < 800) {
         flags.push(`scrolls sideways: ${document.documentElement.scrollWidth}px wide at ${window.innerWidth}px`);
+      }
+      if (width < 800) {
+        // Anything that reaches past the edge of a phone and is not inside something that scrolls sideways
+        // is cut off by whatever clips the page, and cannot be read or reached.
+        const past = [];
+        for (const el of document.body.querySelectorAll('*')) {
+          if (el.closest('.rail, .rail-scrim, .modal-backdrop, .toast, [aria-hidden="true"]')) continue;
+          const box = el.getBoundingClientRect();
+          if (box.width === 0 || box.height === 0) continue;
+          if (box.right <= window.innerWidth + 1 && box.left >= -1) continue;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') continue;
+          let scrolls = false;
+          for (let up = el.parentElement; up && up !== document.body && up !== document.documentElement; up = up.parentElement) {
+            const overflow = window.getComputedStyle(up).overflowX;
+            if (overflow === 'auto' || overflow === 'scroll') {
+              scrolls = true;
+              break;
+            }
+          }
+          if (!scrolls) past.push(el);
+        }
+        const outermost = past.filter((el) => !past.includes(el.parentElement));
+        if (outermost.length) {
+          const named = outermost
+            .slice(0, 3)
+            .map((el) => `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''} "${(el.textContent ?? '').trim().slice(0, 24)}"`);
+          flags.push(`content past the edge of the screen: ${named.join(', ')}`);
+        }
       }
       const foreign = [];
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);

@@ -204,7 +204,7 @@ export function EscrowTab({ meId }: { meId: string | null }) {
         ) : deals.length === 0 ? (
           <EmptyState title={t('esc.none')} text={t('esc.noneText')} icon={<IconShield />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
@@ -222,17 +222,21 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                     (d.raiserRole === 'seller' && d.counterpartyUserId === meId);
                   return (
                     <tr key={d.id} className="is-clickable" tabIndex={0} onClick={() => setOpenId(d.id)}>
-                      <td dir="ltr" className="dt-primary">
+                      <td data-label={t('esc.col.deal')} dir="ltr" className="dt-primary">
                         <code>{d.code}</code>
                       </td>
-                      <td>{d.description}</td>
-                      <td dir="ltr">{formatUsd(d.valueMinor)}</td>
-                      <td>
+                      <td data-label={t('esc.col.what')}>{d.description}</td>
+                      <td data-label={t('esc.col.value')} dir="ltr">
+                        {formatUsd(d.valueMinor)}
+                      </td>
+                      <td data-label={t('esc.col.status')}>
                         <StatusBadge tone={ESCROW_TONE[d.status] ?? 'neutral'}>
                           {escrowStatusLabel(t, d.status)}
                         </StatusBadge>
                       </td>
-                      <td className="hint">{nextStep(t, d, viewerIsBuyer)}</td>
+                      <td data-label={t('esc.col.next')} className="hint">
+                        {nextStep(t, d, viewerIsBuyer)}
+                      </td>
                     </tr>
                   );
                 })}
