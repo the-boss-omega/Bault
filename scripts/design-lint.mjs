@@ -3,9 +3,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { contrast, mixOklab, over, parseColor } from './lib/color.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const webSrc = join(repoRoot, 'apps', 'web', 'src');
+// DESIGN_LINT_SRC points the lint at another copy of the web source; the lint's own tests use it.
+const webSrc = process.env.DESIGN_LINT_SRC ?? join(repoRoot, 'apps', 'web', 'src');
 const cssFile = join(webSrc, 'index.css');
 
 const TOKEN_BLOCK_END = '/* ============================================================\n   Application shell';
@@ -66,6 +68,47 @@ const PHYSICAL_CSS =
   /(?:^|[\s;{])(margin|padding|border)-(left|right)\b|(?:^|[\s;{])(left|right)\s*:|text-align\s*:\s*(left|right)\b/;
 
 /**
+ * Logical properties place things, but they cannot turn a gradient, a transform
+ * origin or a background position around. Those multiply by --dir, which
+ * theme.css sets once, and that is the only place the stylesheet may ask which way
+ * the page is read.
+ */
+const DIRECTION_BRANCH = /\[dir\s*=|:dir\(/;
+const PHYSICAL_KEYWORD =
+  /(?:transform-origin|background-position|object-position|mask-position)\s*:[^;]*\b(?:left|right)\b|\bto\s+(?:top\s+|bottom\s+)?(?:left|right)\b/;
+
+/**
+ * The loops. Anything that animates forever has to be one of these: the ones that
+ * say "waiting" (loaders) and the few living things (the foil on the brand mark
+ * and the landing headline, the register's caret, the hero slab's breathing).
+ * Adding a loop is allowed; doing it without being asked to name it here is not.
+ */
+const LOOPS = new Set([
+  'shimmer',
+  'btn-spin',
+  'skel-pulse',
+  'boot-breathe',
+  'foil-rise',
+  'foil-slide',
+  'caret',
+  'slab-breathe',
+]);
+
+function checkLoop(file, line, text) {
+  const m = /animation\s*:\s*([\w-]+)[^;]*\binfinite\b/.exec(text);
+  if (m && !LOOPS.has(m[1])) report(file, line, `unlisted infinite animation "${m[1]}" — name it in LOOPS in design-lint.mjs: ${text.trim()}`);
+}
+
+/**
+ * A colour literal is a colour with no name. Pure black or white at some alpha is
+ * not one (it only darkens or lightens what is under it, and it is how shadows,
+ * glints and mask edges are written); anything else is named once, as a custom
+ * property, and referenced. theme.css is where the names are made.
+ */
+const COLOUR_LITERAL = /oklch\([^)]*\)|hsla?\([^)]*\)|rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}\b/g;
+const SHADE = /^(?:oklch\(\s*[01]\s+0\s+0(?:\s*\/\s*[\d.]+%?)?\s*\)|#(?:000|0000|fff|ffff|000000|ffffff))$/i;
+
+/**
  * A declared, explained exemption.
  *
  * A `design-lint-allow: <why>` block comment on the line itself, or on either
@@ -94,6 +137,10 @@ cssCode.forEach((line, i) => {
   if (PHYSICAL_CSS.test(line)) {
     report(rel, n, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
   }
+  if (DIRECTION_BRANCH.test(line)) {
+    report(rel, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
+  }
+  checkLoop(rel, n, line);
   if (n <= tokenEndLine) return;
 
   const inMediaQuery = /@media/.test(line);
@@ -116,19 +163,206 @@ cssCode.forEach((line, i) => {
   }
 });
 
+/** The rules of a stylesheet (comments already blanked) as { selector, body, line }, at-rules flattened. */
+function rulesOf(text) {
+  const rules = [];
+  const open = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === '{') {
+      open.push({ head: text.slice(start, i).trim(), at: i + 1 });
+      start = i + 1;
+    } else if (ch === '}') {
+      const rule = open.pop();
+      if (rule && !rule.head.startsWith('@')) {
+        rules.push({ selector: rule.head.replace(/\s+/g, ' '), body: text.slice(rule.at, i), line: text.slice(0, rule.at).split('\n').length });
+      }
+      start = i + 1;
+    } else if (ch === ';' && open.length === 0) {
+      start = i + 1;
+    }
+  }
+  return rules;
+}
+
+/**
+ * Two surfaces keep their palette in both themes, the paper (cream) and the room
+ * (the dark a card is photographed against). The theme's focus ring is drawn from
+ * the theme's own foreground, so on either of them it can be the wrong way round
+ * (a light ring on cream, a dark ring on the room). A rule that paints one says
+ * which ring reads on it, or says why it needs none.
+ */
+const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper|room[\w-]*)\)/;
+
 // The theme and motion layers sit outside the token-block rules above, but the
-// logical-properties rule and the reduced-motion guarantee apply to them too.
-for (const name of ['theme.css', 'slab.css', 'components.css', 'landing.css', 'app.css', 'gallery.css', 'motion.css']) {
+// logical-properties rule, the direction rule, the colour rule and the
+// reduced-motion guarantee apply to them too.
+const LAYERS = ['theme.css', 'slab.css', 'components.css', 'landing.css', 'app.css', 'gallery.css', 'screens.css', 'motion.css'];
+for (const name of LAYERS) {
   const file = join(webSrc, name);
   const short = relative(repoRoot, file).split(sep).join('/');
   const raw = readFileSync(file, 'utf8');
+  const rawLines = raw.split('\n');
+  const allowedHere = (index) => {
+    for (let i = Math.max(0, index - 2); i <= index; i += 1) if (rawLines[i]?.includes('design-lint-allow')) return true;
+    return false;
+  };
   stripComments(raw)
     .split('\n')
     .forEach((line, i) => {
-      if (PHYSICAL_CSS.test(line)) report(short, i + 1, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
+      if (allowedHere(i)) return;
+      const n = i + 1;
+      if (PHYSICAL_CSS.test(line)) report(short, n, `physical property — use the inline-start/inline-end equivalent: ${line.trim()}`);
+      if (PHYSICAL_KEYWORD.test(line)) report(short, n, `physical keyword — multiply by var(--dir) instead of saying left or right: ${line.trim()}`);
+      if (name !== 'theme.css' && DIRECTION_BRANCH.test(line)) {
+        report(short, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
+      }
+      checkLoop(short, n, line);
+      if (name !== 'theme.css' && !line.includes('data:image')) {
+        for (const m of line.matchAll(COLOUR_LITERAL)) {
+          // A colour that is the value of a custom property is being named, which is the point.
+          if (/--[\w-]+\s*:[^;{}]*$/.test(line.slice(0, m.index))) continue;
+          if (!SHADE.test(m[0])) report(short, n, `raw colour ${m[0]} — name it as a token in theme.css: ${line.trim()}`);
+        }
+      }
     });
-  if (name === 'motion.css' && !/@media \(prefers-reduced-motion: reduce\)/.test(raw)) {
-    report(short, 1, 'motion layer has no prefers-reduced-motion: reduce block');
+  if (name !== 'theme.css') {
+    for (const rule of rulesOf(stripComments(raw))) {
+      if (!FIXED_SURFACE.test(rule.body) || /--focus-color\s*:/.test(rule.body)) continue;
+      if (allowedHere(rule.line - 1)) continue;
+      report(short, rule.line, `${rule.selector} paints a fixed-palette surface; set --focus-color to the ring that reads on it (or design-lint-allow why none can be focused there)`);
+    }
+  }
+  if (name === 'motion.css') {
+    const reduce = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(raw)?.[1] ?? null;
+    if (reduce === null) report(short, 1, 'motion layer has no prefers-reduced-motion: reduce block');
+    else if (!/animation:\s*none\s*!important/.test(reduce) || !/transition:\s*none\s*!important/.test(reduce) || !/scroll-behavior:\s*auto\s*!important/.test(reduce)) {
+      report(short, 1, 'the reduced-motion block must turn off animation, transition and smooth scrolling for everything, with !important');
+    }
+  }
+}
+
+// ---- The theme's own numbers -------------------------------------------------
+// theme.css is the one place colours are made, so it is the one place they are
+// measured. Every pair the interface actually draws text or a boundary in is
+// checked in BOTH themes, from the values in the file, so changing a token to
+// something that fails cannot reach a push.
+
+const themeFile = join(webSrc, 'theme.css');
+const themeRel = relative(repoRoot, themeFile).split(sep).join('/');
+const themeCss = readFileSync(themeFile, 'utf8').split('\r\n').join('\n');
+
+/** The custom properties declared in the block that opens at `selector`: name to { value, line }. */
+function blockOf(selector, from = 0) {
+  const at = themeCss.indexOf(selector, from);
+  if (at < 0) return null;
+  const open = themeCss.indexOf('{', at);
+  let depth = 0;
+  let close = open;
+  for (let i = open; i < themeCss.length; i += 1) {
+    if (themeCss[i] === '{') depth += 1;
+    else if (themeCss[i] === '}' && --depth === 0) {
+      close = i;
+      break;
+    }
+  }
+  const firstLine = themeCss.slice(0, open + 1).split('\n').length;
+  const out = new Map();
+  themeCss
+    .slice(open + 1, close)
+    .split('\n')
+    .forEach((line, i) => {
+      const m = /^\s*(--[\w-]+)\s*:\s*(.+?);\s*$/.exec(line);
+      if (m) out.set(m[1], { value: m[2], line: firstLine + i });
+    });
+  return out;
+}
+
+const part2 = themeCss.indexOf('Part 2');
+const part3 = themeCss.indexOf('Part 3');
+const lightBlock = blockOf(':root {');
+const darkMedia = blockOf(":root:not([data-theme='light'])");
+const darkExplicit = blockOf(":root[data-theme='dark']");
+const mapping = blockOf(':root:root {', part2);
+const bault = blockOf(':root {', part3);
+
+if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
+  report(themeRel, 1, 'theme.css is not in the shape the lint reads: light :root, the two dark blocks, the :root:root mapping and the Part 3 :root');
+} else {
+  // The system-dark block and the explicit dark block are one theme written twice.
+  for (const [name, entry] of darkExplicit) {
+    const twin = darkMedia.get(name);
+    if (!twin || twin.value !== entry.value) {
+      report(themeRel, entry.line, `${name} differs between the two dark blocks (the system-dark one has ${twin?.value ?? 'nothing'}); they are one theme written twice`);
+    }
+  }
+  for (const name of darkMedia.keys()) {
+    if (!darkExplicit.has(name)) report(themeRel, darkMedia.get(name).line, `${name} is in the system-dark block but not in the explicit dark one`);
+  }
+
+  const themes = { light: lightBlock, dark: darkExplicit };
+  const resolve = (value, theme, depth = 0) => {
+    const v = value.trim();
+    if (depth > 8) return null;
+    const ref = /^var\((--[\w-]+)\)$/.exec(v);
+    if (ref) {
+      const entry = themes[theme].get(ref[1]) ?? mapping.get(ref[1]) ?? bault.get(ref[1]);
+      return entry ? resolve(entry.value, theme, depth + 1) : null;
+    }
+    const mix = /^color-mix\(\s*in oklab\s*,\s*(.+?)\s+([\d.]+)%\s*,\s*(.+)\)$/.exec(v);
+    if (mix) {
+      const [, a, pct, b] = mix;
+      const first = resolve(a, theme, depth + 1);
+      const second = resolve(b, theme, depth + 1);
+      return first && second ? mixOklab(first, Number(pct), second) : null;
+    }
+    return parseColor(v);
+  };
+  const lineOf = (name, theme) => (themes[theme].get(name) ?? mapping.get(name) ?? bault.get(name))?.line ?? 1;
+
+  const SURFACES = ['--background', '--card', '--popover', '--muted', '--secondary', '--accent'];
+  const TEXT = 4.5;
+  const BOUNDARY = 3;
+  const THEME_PAIRS = [
+    ['--foreground', SURFACES, TEXT, 'body text'],
+    ['--card-foreground', ['--card'], TEXT, 'text on a card'],
+    ['--popover-foreground', ['--popover'], TEXT, 'text on an overlay'],
+    ['--secondary-foreground', ['--secondary'], TEXT, 'text on a secondary surface'],
+    ['--accent-foreground', ['--accent'], TEXT, 'text on an accent surface'],
+    ['--muted-foreground', SURFACES, TEXT, 'secondary text'],
+    ['--primary-foreground', ['--primary'], TEXT, 'text on a primary button'],
+    ['--destructive', ['--background', '--card', '--popover'], TEXT, 'error text'],
+    ['--primary', ['--background', '--card'], BOUNDARY, 'the edge of a primary button'],
+    ['--focus-color', ['--background', '--card', '--popover', '--muted'], BOUNDARY, 'a focus indicator (WCAG 1.4.11)'],
+    ['--control-border', ['--background', '--card', '--muted'], BOUNDARY, "a field's edge (WCAG 1.4.11)"],
+  ];
+  const measure = (fgName, bgNames, min, why, theme) => {
+    const fg = resolve(`var(${fgName})`, theme);
+    for (const bgName of bgNames) {
+      const bg = resolve(`var(${bgName})`, theme);
+      if (!fg || !bg) {
+        report(themeRel, lineOf(fgName, theme), `cannot resolve ${fg ? bgName : fgName} in the ${theme} theme to measure ${why}`);
+        continue;
+      }
+      const ratio = contrast(over(fg, bg), bg);
+      if (ratio < min) {
+        report(themeRel, lineOf(fgName, theme), `${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 in the ${theme} theme; ${why} needs ${min}:1`);
+      }
+    }
+  };
+  for (const theme of Object.keys(themes)) {
+    for (const [fg, bgs, min, why] of THEME_PAIRS) measure(fg, bgs, min, why, theme);
+  }
+
+  // Two surfaces keep their palette in both themes: the paper and the room.
+  const PAPER = ['--paper', '--paper-bright'];
+  const ROOM = ['--room-deep', '--room', '--room-raised', '--room-case', '--room-pool'];
+  for (const theme of Object.keys(themes)) {
+    measure('--paper-ink', PAPER, 7, 'print on the paper', theme);
+    measure('--paper-ink-2', PAPER, TEXT, 'copy on the paper', theme);
+    measure('--paper-ink-3', PAPER, TEXT, 'labels on the paper', theme);
+    measure('--room-ink', ROOM, 7, 'text and focus rings on the room', theme);
   }
 }
 
@@ -174,6 +408,9 @@ for (const file of walk(webSrc)) {
       if (PHYSICAL_CLASS.test(line)) report(short, i + 1, `physical utility class: ${line.trim()}`);
       if (PHYSICAL_STYLE.test(line)) {
         report(short, i + 1, `physical inline style — use marginInlineStart / textAlign: 'start': ${line.trim()}`);
+      }
+      if (/behavior\s*:\s*['"]smooth['"]/.test(line)) {
+        report(short, i + 1, `smooth scrolling that ignores prefers-reduced-motion — choose 'auto' when it is set: ${line.trim()}`);
       }
     });
 }

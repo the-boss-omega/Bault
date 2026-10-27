@@ -5,6 +5,7 @@ import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,7 +31,14 @@ Options:
   --personas <list>  anonymous,collector,seller,suspended,operator,admin (default all)
   --locales <list>   he,en (default both)
   --widths <list>    390,1440 (default both)
-  --theme <name>     light or dark (default light)
+  --theme <name>     dark or light (default dark, the product's default). The choice is
+                     stored the way the app's own switch stores it, so this is the
+                     theme the pages render, not only the browser's preference
+  --axe              also run axe-core's WCAG 2.x A and AA rules (contrast, names,
+                     labels, ARIA) on every screen, and walk the keyboard focus order
+                     of each desktop English screen to measure every focus ring against
+                     what is behind it (axe does not check focus indicators); what it
+                     finds is listed as flags
   --only <text>      capture only screens whose name contains this text
   --browser <path>   Chromium or Chrome to drive (default /opt/pw-browsers/chromium
                      when it exists, otherwise the installed Google Chrome)
@@ -38,7 +46,8 @@ Options:
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
 cents, an enum name or English words on a Hebrew page, sideways scrolling at
-phone width, a console error or a failed API call) are listed first.`;
+phone width, a console error, a failed API call or, with --axe, an accessibility
+violation) are listed first.`;
 
 const PERSONAS = {
   anonymous: { login: null },
@@ -83,7 +92,8 @@ function parseArgs(argv) {
     personas: Object.keys(PERSONAS),
     locales: ['he', 'en'],
     widths: [390, 1440],
-    theme: 'light',
+    theme: 'dark',
+    axe: false,
     only: null,
     browser: null,
     password: '11111111',
@@ -106,6 +116,7 @@ function parseArgs(argv) {
     else if (flag === '--locales') out.locales = list();
     else if (flag === '--widths') out.widths = list().map(Number);
     else if (flag === '--theme') out.theme = value();
+    else if (flag === '--axe') out.axe = true;
     else if (flag === '--only') out.only = value();
     else if (flag === '--browser') out.browser = value();
     else if (flag === '--password') out.password = value();
@@ -330,6 +341,120 @@ async function inspect(page, locale, width) {
   );
 }
 
+/**
+ * axe-core's WCAG 2.x A and AA rules over the page as it stands. Contrast is
+ * the reason this exists: it is measured against the computed colours of
+ * whichever theme is on screen, which no reading of the stylesheet can do.
+ * Motion is reduced for the whole run, so nothing is mid-fade when it looks.
+ */
+async function audit(page) {
+  const result = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  return result.violations.map((v) => {
+    const target = v.nodes[0]?.target?.join(' ') ?? '';
+    return `axe ${v.id} (${v.impact}) x${v.nodes.length}: ${target}`.slice(0, 200);
+  });
+}
+
+/**
+ * Tabs through the first stops of the page and measures the focus indicator of
+ * each against the colour behind it. A ring that is absent, or under 3:1
+ * (WCAG 1.4.11), is a flag. The colour behind is the nearest opaque background
+ * up the tree; where something with an image or gradient comes first the
+ * contrast is not known and is not reported.
+ */
+async function auditFocus(page, stops = 30) {
+  const flags = [];
+  await page.evaluate(() => {
+    globalThis.document.activeElement?.blur?.();
+    globalThis.scrollTo(0, 0);
+  });
+  const seen = new Set();
+  for (let i = 0; i < stops; i += 1) {
+    await page.keyboard.press('Tab');
+    const stop = await page.evaluate(() => {
+      const { document, getComputedStyle } = globalThis;
+      const el = document.activeElement;
+      if (!el || el === document.body || el === document.documentElement) return { end: true };
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) return { skip: true };
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const rgba = (css) => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = '#000';
+        ctx.fillStyle = css;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+        return { r, g, b, a: a / 255 };
+      };
+      const lum = ({ r, g, b }) => {
+        const f = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const over = (top, under) => ({
+        r: top.r * top.a + under.r * (1 - top.a),
+        g: top.g * top.a + under.g * (1 - top.a),
+        b: top.b * top.a + under.b * (1 - top.a),
+        a: 1,
+      });
+      const cs = getComputedStyle(el);
+      const name = `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/)[0] : ''}`;
+      const label = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 30);
+      // The element draws its own ring, or a wrapper does (a search box rings the
+      // box around its input, with :focus-within).
+      const ringOf = (node) => {
+        const style = getComputedStyle(node);
+        if (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) {
+          return { css: style.outlineColor, inside: parseFloat(style.outlineOffset) < 0 };
+        }
+        // A shadow is a ring only if it is a solid band round the box: no offset, no blur, a spread.
+        const band = /(rgba?\([^)]*\)|oklab\([^)]*\)|oklch\([^)]*\)|color\([^)]*\))\s+0px\s+0px\s+0px\s+(?:[2-9]|\d{2,})px/.exec(
+          style.boxShadow,
+        );
+        if (band) return { css: band[1], inside: false };
+        return null;
+      };
+      let ringNode = el;
+      let ring = ringOf(el);
+      for (let up = el.parentElement, hops = 0; !ring && up && hops < 3; up = up.parentElement, hops += 1) {
+        ring = ringOf(up);
+        ringNode = up;
+      }
+      if (!ring) return { name, label, none: true };
+      // What is behind the ring: the nearest opaque background, from the element (ring inside it) or its parent.
+      let node = ring.inside ? ringNode : ringNode.parentElement;
+      let under = null;
+      const layers = [];
+      for (; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.backgroundImage !== 'none') {
+          const alpha = rgba(style.backgroundColor).a;
+          if (alpha < 1) return { name, label, unknown: true };
+        }
+        const bg = rgba(style.backgroundColor);
+        if (bg.a > 0) layers.push(bg);
+        if (bg.a >= 1) break;
+      }
+      if (layers.length === 0 || layers[layers.length - 1].a < 1) layers.push({ r: 255, g: 255, b: 255, a: 1 });
+      under = layers.reduceRight((acc, layer) => over(layer, acc), { r: 255, g: 255, b: 255, a: 1 });
+      const fg = over(rgba(ring.css), under);
+      const [hi, lo] = [lum(fg), lum(under)].sort((a, b) => b - a);
+      return { name, label, ratio: (hi + 0.05) / (lo + 0.05) };
+    });
+    if (stop.end) break;
+    if (stop.skip || stop.unknown) continue;
+    const key = `${stop.name}|${stop.label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (stop.none) flags.push(`focus: no visible indicator on ${stop.name} "${stop.label}"`);
+    else if (stop.ratio < 3) flags.push(`focus: ring ${stop.ratio.toFixed(2)}:1 on ${stop.name} "${stop.label}"`);
+  }
+  return flags;
+}
+
 function slug(value) {
   return value.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
 }
@@ -340,7 +465,9 @@ async function capture(state, page, name, ctx) {
   const file = `${slug(name)}-${ctx.locale}-${ctx.width}.png`;
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
   const found = await inspect(page, ctx.locale, ctx.width);
-  const flags = [...found.flags, ...ctx.problems.splice(0)];
+  const accessibility = state.opts.axe ? await audit(page) : [];
+  if (state.opts.axe && ctx.locale === 'en' && ctx.width >= 800) accessibility.push(...(await auditFocus(page)));
+  const flags = [...found.flags, ...accessibility, ...ctx.problems.splice(0)];
   state.shots.push({ name, persona: ctx.persona, locale: ctx.locale, width: ctx.width, file, title: found.title, flags });
   process.stdout.write(flags.length ? '!' : '.');
 }
@@ -387,11 +514,15 @@ async function runPersona(state, browser, persona, locale, width) {
     reducedMotion: 'reduce',
     locale: locale === 'he' ? 'he-IL' : 'en-US',
   });
-  await context.addInitScript((l) => {
-    try {
-      globalThis.localStorage.setItem('bault.locale', l);
-    } catch {}
-  }, locale);
+  await context.addInitScript(
+    ([l, t]) => {
+      try {
+        globalThis.localStorage.setItem('bault.locale', l);
+        globalThis.localStorage.setItem('bault.theme', t);
+      } catch {}
+    },
+    [locale, state.opts.theme],
+  );
   const page = await context.newPage();
   const ctx = { persona, locale, width, problems: [], expected: [] };
   page.on('console', (msg) => {
