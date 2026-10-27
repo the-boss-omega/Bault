@@ -676,7 +676,7 @@
   height: 100%;
   overflow: clip;
   border: 1px solid var(--border);
-  border-radius: calc(var(--r-xl) + 6px);
+  border-radius: var(--r-2xl);
   background:
     radial-gradient(70% 55% at 50% 0%, var(--room-pool), transparent 70%),
     var(--lp-room);

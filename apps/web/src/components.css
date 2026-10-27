@@ -335,7 +335,7 @@ input[type='radio'] {
 
 .dt-wrap {
   border: var(--border-w) solid var(--border);
-  border-radius: calc(var(--radius) + 4px);
+  border-radius: var(--r-lg);
   /* A table that is wider than its room scrolls sideways, as it always has; the corners are still cut. */
   overflow-x: auto;
   overflow-y: hidden;
@@ -438,7 +438,7 @@ input[type='radio'] {
   background: var(--popover);
   color: var(--popover-foreground);
   border-color: var(--border);
-  border-radius: calc(var(--radius) + 6px);
+  border-radius: var(--r-xl);
 }
 
 .drawer-title,
@@ -450,7 +450,7 @@ input[type='radio'] {
 /* ---- Notices ---- */
 
 .errorbox {
-  border-radius: calc(var(--radius) + 4px);
+  border-radius: var(--r-lg);
   border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
   background: var(--oxblood-wash);
 }

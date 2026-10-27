@@ -445,7 +445,6 @@ export function VaultPage() {
           />
         ) : (
           <ul className="card-grid card-grid--register">
-            <RegisterHead t={t} scope={scope} />
             {items.map((item) => (
               <CardTile
                 key={item.id}
@@ -568,18 +567,6 @@ function CardTile({
       </div>
 
       {watch && !historical ? <Watch row={watch} t={t} /> : <div className="watch" />}
-    </li>
-  );
-}
-
-function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
-  return (
-    <li className="register-head" aria-hidden="true">
-      <span />
-      <span>{t('vault.col.item')}</span>
-      <span>{t('vault.col.state')}</span>
-      <span>{scope === 'history' ? t('vault.historical.dateLabel') : t('vault.col.where')}</span>
-      <span className="register-head-end">{scope === 'history' ? '' : t('vault.col.cost')}</span>
     </li>
   );
 }

@@ -788,7 +788,7 @@ time,
   margin-inline-start: auto;
   margin-inline-end: var(--sp-4);
   min-width: 20px;
-  padding-inline: 5px;
+  padding-inline: 6px;
   border: var(--border-w) solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-page);
@@ -988,7 +988,7 @@ time,
 
 .lang-code {
   position: absolute;
-  inset-block-end: 3px;
+  inset-block-end: 4px;
   inset-inline-end: 4px;
   font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
@@ -1009,8 +1009,8 @@ time,
 
 .bell-badge {
   position: absolute;
-  inset-block-start: 5px;
-  inset-inline-end: 5px;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
   min-width: 16px;
   height: 16px;
   padding-inline: 4px;
@@ -1031,8 +1031,8 @@ time,
   align-items: center;
   gap: var(--sp-2);
   height: 40px;
-  padding-block: 3px;
-  padding-inline: 3px 10px;
+  padding: 2px;
+  padding-inline-end: 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   background: var(--surface);
@@ -1058,6 +1058,11 @@ time,
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
+}
+
+/* Centred in 34px of room, the avatar is 4px from the pill's edge above and below; this is the same 4px at its end. */
+.user-trigger .avatar {
+  margin-inline-start: 1px;
 }
 
 .user-trigger svg {
@@ -1276,7 +1281,7 @@ time,
 }
 
 .panel-subtitle {
-  margin-block-start: 3px;
+  margin-block-start: 4px;
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
   color: var(--ink-2);
@@ -1602,7 +1607,7 @@ textarea {
   font: inherit;
   font-size: var(--fs-base);
   min-height: 36px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: var(--border-w) solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-input);
@@ -1710,7 +1715,7 @@ input[type='search'] {
 }
 
 .consent .check input {
-  margin-block-start: 3px;
+  margin-block-start: 2px;
 }
 
 .terms-reader {
@@ -1734,7 +1739,7 @@ input[type='search'] {
 
 .money-input span {
   position: absolute;
-  inset-inline-start: 13px;
+  inset-inline-start: 12px;
   font-size: var(--fs-md);
   font-weight: var(--fw-semibold);
   color: var(--text-muted);
@@ -2318,7 +2323,7 @@ input[type='search'] {
 }
 
 .drawer-subtitle {
-  margin-block-start: 3px;
+  margin-block-start: 4px;
   font-size: var(--fs-sm);
   color: var(--ink-2);
   unicode-bidi: plaintext;
@@ -2736,23 +2741,6 @@ input[type='search'] {
   --register-cols: 56px minmax(12rem, 1fr) 13rem 13rem 12rem;
 }
 
-.register-head {
-  display: grid;
-  grid-template-columns: var(--register-cols);
-  align-items: baseline;
-  column-gap: var(--sp-4);
-  padding: var(--sp-2) var(--sp-4);
-  padding-inline-start: calc(var(--sp-4) + 3px);
-  border-block-end: var(--border-w) solid var(--line-strong);
-  background: var(--surface-sunken);
-  color: var(--ink-2);
-  font-size: var(--fs-caption);
-}
-
-.register-head-end {
-  text-align: end;
-}
-
 .card {
   position: relative;
   display: flex;
@@ -2829,7 +2817,7 @@ input[type='search'] {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   font-size: var(--fs-sm);
   color: var(--ink-body);
@@ -2856,10 +2844,6 @@ input[type='search'] {
 @media (max-width: 1099px) {
   .card-grid--register {
     --register-cols: 56px minmax(0, 1fr);
-  }
-
-  .register-head {
-    display: none;
   }
 
   .card-grid--register .card,
@@ -3418,7 +3402,7 @@ input[type='search'] {
     justify-content: space-between;
     gap: var(--sp-4);
     height: auto;
-    padding: 5px 0;
+    padding: 6px 0;
     border: 0;
   }
 
@@ -3927,16 +3911,10 @@ input[type='search'] {
   margin-block-start: 0;
 }
 
+/* The node's size, place and colour are the register's (gallery.css). */
 .timeline > li::before {
   content: '';
   position: absolute;
-  inset-block-start: calc(var(--sp-3) + 7px);
-  inset-inline-start: -3px;
-  width: 5px;
-  height: 5px;
-  border-radius: 0;
-  background: var(--line-strong);
-  box-shadow: none;
 }
 
 .timeline > li:last-child {

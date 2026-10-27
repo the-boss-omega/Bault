@@ -28,11 +28,6 @@
   padding: var(--sp-4) 0 var(--sp-8);
 }
 
-.card-grid--register .register-head,
-.card-grid--listings .register-head {
-  display: none;
-}
-
 .card-grid--register .card,
 .card-grid--listings .card {
   display: flex;

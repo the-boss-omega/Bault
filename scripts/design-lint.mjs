@@ -12,17 +12,9 @@ const cssFile = join(webSrc, 'index.css');
 
 const TOKEN_BLOCK_END = '/* ============================================================\n   Application shell';
 
-const ALLOWED_PX = new Set([
-  '1px',
-  '2px',
-  '3px',
-  '5px',
-  '6px',
-  '7px',
-  '10px',
-  '11px',
-  '0px',
-]);
+// Lengths in index.css that are not on the 4px scale: the hairline, the half steps
+// (2, 6, 10) and the 3px bar that marks a state down a row's leading edge.
+const ALLOWED_PX = new Set(['0px', '1px', '2px', '3px', '6px', '10px']);
 
 const TYPE_PX = new Set(['12px', '13px', '14px', '16px', '18px', '22px', '28px', '36px', '48px', '64px']);
 
@@ -63,6 +55,40 @@ function stripComments(text) {
 }
 
 const cssCode = stripComments(css).split('\n');
+
+/**
+ * Space is laid out on the 4px grid, Tailwind's spacing scale, which the kit uses:
+ * padding, margin, gap and inset are multiples of four or one of its half steps
+ * (2, 6, 10 and 14px), with the 1px hairline for optical nudges. Sizes are not held
+ * to it here (a glyph is the size it is drawn at); the spaces between things are.
+ * It holds for index.css after its token block, and for every layer.
+ */
+const SPACING_HALF_STEPS = new Set(['1px', '2px', '6px', '10px', '14px']);
+const SPACING_DECLARATION = /(?:^|[\s;{])((?:padding|margin|inset)(?:-[\w-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/g;
+
+/**
+ * One radius family. A corner is a --r-* token (or the kit's --radius), nothing, a circle,
+ * or a size relative to its container (the slab's corners scale with the slab). Arithmetic on
+ * a token is not a size the family has: if a corner needs one, it is named in theme.css.
+ */
+const RADIUS_DECLARATION = /border(?:-(?:start|end)-(?:start|end))?-radius\s*:\s*([^;]+);/;
+function checkRadius(file, line, text) {
+  const radius = RADIUS_DECLARATION.exec(text)?.[1]?.trim();
+  if (!radius || /cqw/.test(radius)) return;
+  const atoms = radius.replace(/var\(--(?:r-[\w-]+|radius)\)/g, 'T');
+  if (!/^(?:T|0|50%|inherit|initial|unset)(?:\s*\/?\s*(?:T|0|50%))*$/.test(atoms)) {
+    report(file, line, `hardcoded radius ${radius} — use a --r-* token (there is one family, and it is named in theme.css): ${text.trim()}`);
+  }
+}
+
+function checkSpacing(file, line, text) {
+  for (const decl of text.matchAll(SPACING_DECLARATION)) {
+    for (const px of decl[2].matchAll(/(?<![\w.-])-?(\d+(?:\.\d+)?px)/g)) {
+      if (px[1] === '0px' || SPACING_HALF_STEPS.has(px[1]) || onScale(px[1])) continue;
+      report(file, line, `${decl[1]} ${px[1]} is off the 4px grid — use a multiple of four, a half step (2, 6, 10, 14) or a --sp-* token: ${text.trim()}`);
+    }
+  }
+}
 
 const PHYSICAL_CSS =
   /(?:^|[\s;{])(margin|padding|border)-(left|right)\b|(?:^|[\s;{])(left|right)\s*:|text-align\s*:\s*(left|right)\b/;
@@ -142,6 +168,7 @@ cssCode.forEach((line, i) => {
   }
   checkLoop(rel, n, line);
   if (n <= tokenEndLine) return;
+  checkSpacing(rel, n, line);
 
   const inMediaQuery = /@media/.test(line);
   if (!inMediaQuery) {
@@ -151,9 +178,7 @@ cssCode.forEach((line, i) => {
       report(rel, n, `off-scale length ${value} — 4px base: ${line.trim()}`);
     }
   }
-  if (/border-radius\s*:/.test(line) && !/var\(--radius|:\s*0|50%|var\(--r-/.test(line)) {
-    report(rel, n, `hardcoded radius — there is one: ${line.trim()}`);
-  }
+  checkRadius(rel, n, line);
   if (/box-shadow\s*:/.test(line) && !/var\(--shadow|:\s*none|inset/.test(line)) {
     report(rel, n, `hardcoded shadow — there is one, and it is for overlays: ${line.trim()}`);
   }
@@ -195,15 +220,6 @@ function rulesOf(text) {
  */
 const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper|room[\w-]*)\)/;
 
-/**
- * Space is laid out on the 4px grid, Tailwind's spacing scale, which the kit uses:
- * padding, margin, gap and inset are multiples of four or one of its half steps
- * (2, 6, 10 and 14px), with the 1px hairline for optical nudges. Sizes are not held
- * to it here (a glyph is the size it is drawn at); the spaces between things are.
- */
-const SPACING_HALF_STEPS = new Set(['1px', '2px', '6px', '10px', '14px']);
-const SPACING_DECLARATION = /(?:^|[\s;{])((?:padding|margin|inset)(?:-[\w-]+)?|gap|row-gap|column-gap)\s*:\s*([^;{}]+)/g;
-
 // The theme and motion layers sit outside the token-block rules above, but the
 // logical-properties rule, the direction rule, the colour rule and the
 // reduced-motion guarantee apply to them too.
@@ -228,20 +244,8 @@ for (const name of LAYERS) {
         report(short, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
       }
       checkLoop(short, n, line);
-      for (const decl of line.matchAll(SPACING_DECLARATION)) {
-        for (const px of decl[2].matchAll(/(?<![\w.-])-?(\d+(?:\.\d+)?px)/g)) {
-          if (px[1] === '0px' || SPACING_HALF_STEPS.has(px[1]) || onScale(px[1])) continue;
-          report(short, n, `${decl[1]} ${px[1]} is off the 4px grid — use a multiple of four, a half step (2, 6, 10, 14) or a --sp-* token: ${line.trim()}`);
-        }
-      }
-      if (name !== 'theme.css') {
-        const radius =/border(?:-(?:start|end)-(?:start|end))?-radius\s*:\s*([^;]+);/.exec(line)?.[1];
-        // One radius family: the kit's tokens (or a calc of them), a circle, nothing, or a
-        // size relative to its container (the slab's corners scale with the slab).
-        if (radius && !/var\(--(?:r-[\w-]+|radius)\)|cqw/.test(radius) && !/^(?:0|50%|inherit|initial|unset)(?:\s+(?:0|50%))*$/.test(radius.trim())) {
-          report(short, n, `hardcoded radius ${radius.trim()} — use a --r-* token (there is one family): ${line.trim()}`);
-        }
-      }
+      checkSpacing(short, n, line);
+      if (name !== 'theme.css') checkRadius(short, n, line);
       if (name !== 'theme.css' && !line.includes('data:image')) {
         for (const m of line.matchAll(COLOUR_LITERAL)) {
           // A colour that is the value of a custom property is being named, which is the point.

@@ -243,12 +243,6 @@ export function MarketplacePage() {
               />
             ) : (
               <ul className="card-grid card-grid--listings">
-                <li className="register-head" aria-hidden="true">
-                  <span />
-                  <span>{t('market.mine.col.price')}</span>
-                  <span>{t('vault.col.state')}</span>
-                  <span />
-                </li>
                 {listings.map((listing) => (
                   <li
                     key={listing.id}

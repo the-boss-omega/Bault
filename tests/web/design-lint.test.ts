@@ -81,6 +81,12 @@ describe('design-lint', () => {
       expect(r.out).toContain('--card differs between the two dark blocks');
     });
 
+    it('a theme.css that is no longer in the shape the lint reads', () => {
+      const r = withChange((d) => edit(d, 'theme.css', (t) => t.replace(":root[data-theme='dark']", ":root[data-theme='night']")));
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('theme.css is not in the shape the lint reads');
+    });
+
     it('a [dir=rtl] branch outside theme.css', () => {
       const r = withChange((d) => appendFileSync(join(d, 'landing.css'), "\n[dir='rtl'] .x { margin-inline: 0; }\n"));
       expect(r.out).toContain('direction branch');
@@ -98,11 +104,17 @@ describe('design-lint', () => {
       expect(r.out).toContain('hardcoded radius 7px');
     });
 
+    it('arithmetic on a radius token, which is a size the family does not have', () => {
+      const r = withChange((d) => appendFileSync(join(d, 'landing.css'), '\n.x { border-radius: calc(var(--r-xl) + 6px); }\n'));
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('hardcoded radius calc(var(--r-xl) + 6px)');
+    });
+
     it('lets the radius tokens, a circle, none and container-relative corners through', () => {
       const r = withChange((d) =>
         appendFileSync(
           join(d, 'screens.css'),
-          '\n.a { border-radius: var(--r-lg); }\n.b { border-radius: calc(var(--r-xl) + 6px); }\n.c { border-radius: 50%; }\n.d { border-radius: 0; }\n.e { border-radius: 3cqw; }\n.f { border-start-end-radius: var(--r-bar); }\n',
+          '\n.a { border-radius: var(--r-lg); }\n.b { border-radius: var(--r-xl) var(--r-xl) 0 0; }\n.c { border-radius: 50%; }\n.d { border-radius: 0; }\n.e { border-radius: 3cqw; }\n.f { border-start-end-radius: var(--r-bar); }\n',
         ),
       );
       expect(r.out).toContain('design-lint: clean');
@@ -114,6 +126,15 @@ describe('design-lint', () => {
       expect(r.out).toContain('padding 7px is off the 4px grid');
       expect(r.out).toContain('gap 5px is off the 4px grid');
       expect(r.out).toContain('margin-inline-start 9px is off the 4px grid');
+    });
+
+    it('space off the grid in index.css too, and a length that is on no scale at all', () => {
+      const r = withChange((d) => appendFileSync(join(d, 'index.css'), '\n.x { padding: 7px 12px; }\n.y { margin-block-start: 3px; width: 11px; }\n'));
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('index.css:');
+      expect(r.out).toContain('padding 7px is off the 4px grid');
+      expect(r.out).toContain('margin-block-start 3px is off the 4px grid');
+      expect(r.out).toContain('off-scale length 11px');
     });
 
     it('lets multiples of four, the half steps, tokens, and sizes that are not space through', () => {
@@ -164,6 +185,46 @@ describe('design-lint', () => {
     it('smooth scrolling that ignores reduced motion', () => {
       const r = withChange((d) => writeFileSync(join(d, 'probe.tsx'), "el.scrollIntoView({ behavior: 'smooth' });\n"));
       expect(r.out).toContain('smooth scrolling that ignores prefers-reduced-motion');
+    });
+
+    it('the first-edition stylesheet is held to the same rules as the layers', () => {
+      const r = withChange((d) =>
+        appendFileSync(
+          join(d, 'index.css'),
+          [
+            '.a { margin-left: 4px; }',
+            "[dir='rtl'] .b { margin-inline: 0; }",
+            '.c { border-radius: 7px; }',
+            '.d { box-shadow: 0 2px 4px #123456; }',
+            '.e { color: #123abc; }',
+            '.f { font-family: var(--font-mono); }',
+            '.g { animation: wobble 2s linear infinite; }',
+            '',
+          ].join('\n'),
+        ),
+      );
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('physical property');
+      expect(r.out).toContain('direction branch');
+      expect(r.out).toContain('hardcoded radius');
+      expect(r.out).toContain('hardcoded shadow');
+      expect(r.out).toContain('raw colour #123abc');
+      expect(r.out).toContain('mono on a non-code selector');
+      expect(r.out).toContain('unlisted infinite animation "wobble"');
+    });
+
+    it('a physical utility class or inline style in a component', () => {
+      const r = withChange((d) => writeFileSync(join(d, 'probe.tsx'), 'export const A = () => <div className="ml-4 text-left" style={{ marginLeft: 4 }} />;\n'));
+      expect(r.out).toContain('physical utility class');
+      expect(r.out).toContain('physical inline style');
+    });
+
+    it('print on the paper, or text on the room, that stops being readable', () => {
+      const paper = withChange((d) => edit(d, 'theme.css', (t) => t.replace('--paper-ink: #15130f;', '--paper-ink: #9a968c;')));
+      expect(paper.out).toMatch(/--paper-ink on --paper is [\d.]+:1 in the (light|dark) theme/);
+
+      const room = withChange((d) => edit(d, 'theme.css', (t) => t.replace('--room-ink: oklch(0.93 0 0);', '--room-ink: oklch(0.4 0 0);')));
+      expect(room.out).toMatch(/--room-ink on --room(-deep|-raised|-case|-pool)? is [\d.]+:1/);
     });
 
     it('a physical property in a layer', () => {
