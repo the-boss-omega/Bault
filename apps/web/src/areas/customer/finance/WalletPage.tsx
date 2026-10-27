@@ -32,6 +32,7 @@ import {
   ViewAllLink,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import {
   IconCalendar,
   IconChart,
@@ -621,6 +622,13 @@ function TransactionDrawer({
         </>
       }
     >
+      <DrawerTag
+        kicker={t('wallet.col.amount')}
+        amount={formatLedgerAmount(row.amount, row.direction)}
+        status={<StatusBadge tone="success">{t('wallet.tx.settled')}</StatusBadge>}
+        note={<span dir="ltr">{row.currency}</span>}
+      />
+
       <dl className="detail-list">
         <DetailRow label={t('wallet.col.type')}>{typeLabel(t, row.type)}</DetailRow>
         <DetailRow label={t('wallet.col.date')}>
@@ -643,17 +651,7 @@ function TransactionDrawer({
         <DetailRow label={t('wallet.tx.status')} sub={t('wallet.tx.statusNote')}>
           <StatusBadge tone="success">{t('wallet.tx.settled')}</StatusBadge>
         </DetailRow>
-        <DetailRow label={t('wallet.tx.currency')}>
-          <span dir="ltr">{row.currency}</span>
-        </DetailRow>
       </dl>
-
-      <div className="detail-amount">
-        <p className="detail-amount-label">{t('wallet.col.amount')}</p>
-        <p className={`detail-amount-value ${credit ? 'amt-pos' : 'amt-neg'}`} dir="ltr">
-          {formatLedgerAmount(row.amount, row.direction)}
-        </p>
-      </div>
     </DetailDrawer>
   );
 }
@@ -831,18 +829,17 @@ function RequestDrawer({
 
         {detail && (
           <>
-            <dl className="detail-list">
-              <DetailRow label={t('wallet.requests.col.status')}>
+            <DrawerTag
+              kicker={requestTypeLabel(t, detail.type)}
+              amount={formatUsd(detail.amount)}
+              status={
                 <StatusBadge tone={WALLET_REQUEST_TONE[detail.status] ?? 'neutral'}>
                   {requestStatusLabel(t, detail.status)}
                 </StatusBadge>
-              </DetailRow>
-              <DetailRow label={t('wallet.requests.col.type')}>{requestTypeLabel(t, detail.type)}</DetailRow>
-              <DetailRow label={t('wallet.requests.col.amount')}>
-                <span dir="ltr">
-                  {formatUsd(detail.amount)} {detail.currency}
-                </span>
-              </DetailRow>
+              }
+              note={<span dir="ltr">{detail.currency}</span>}
+            />
+            <dl className="detail-list">
               {detail.type === 'cash_in' ? (
                 <DetailRow label={t('wallet.request.fundingSource')}>
                   {fundingSourceLabel(t, detail.fundingSource)}
@@ -870,7 +867,8 @@ function RequestDrawer({
               )}
               {detail.settledLedgerId && (
                 <DetailRow label={t('wallet.requests.settledLedger')}>
-                  <code dir="ltr">{detail.settledLedgerId}</code>
+                  {/* The ledger shows this entry by the start of its id (the transactions table does); the whole of it is in the entry. */}
+                  <code dir="ltr">{detail.settledLedgerId.slice(0, 8)}</code>
                 </DetailRow>
               )}
             </dl>

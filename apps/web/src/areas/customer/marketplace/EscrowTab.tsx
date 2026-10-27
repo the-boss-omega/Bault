@@ -4,6 +4,7 @@ import { useI18n } from '../../../shared/i18n';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import {
   ESCROW_TONE,
+  escrowEventLabel,
   escrowStatusLabel,
   nextStep,
   type EscrowDeal,
@@ -11,6 +12,7 @@ import {
 } from '../../../shared/escrow';
 import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { Amount } from '../../../shared/ui/Serial';
 import { IconAlert, IconShield, IconUsers } from '../../../shared/ui/icons';
 
@@ -334,7 +336,6 @@ function DealDrawer({
   return (
     <DetailDrawer
       title={deal.code}
-      subtitle={escrowStatusLabel(t, deal.status)}
       onClose={onClose}
       footer={
         <Button variant="ghost" onClick={onClose}>
@@ -342,24 +343,30 @@ function DealDrawer({
         </Button>
       }
     >
+      <DrawerTag
+        kicker={t('esc.col.value')}
+        amount={formatUsd(deal.valueMinor)}
+        status={<StatusBadge tone={ESCROW_TONE[deal.status] ?? 'neutral'}>{escrowStatusLabel(t, deal.status)}</StatusBadge>}
+        note={t('esc.feeLine', { amount: formatUsd(deal.feeMinor) })}
+      />
+
       <dl className="detail-list">
         <div className="detail-row">
           <dt className="detail-label">{t('esc.col.what')}</dt>
-          <dd className="detail-value">{deal.description}</dd>
-        </div>
-        <div className="detail-row">
-          <dt className="detail-label">{t('esc.col.value')}</dt>
-          <dd className="detail-value" dir="ltr">
-            {formatUsd(deal.valueMinor)}
-            <span className="detail-value-sub">{t('esc.feeLine', { amount: formatUsd(deal.feeMinor) })}</span>
+          <dd className="detail-value">
+            <bdi dir="auto">{deal.description}</bdi>
           </dd>
         </div>
         <div className="detail-row">
           <dt className="detail-label">{t('esc.otherSide')}</dt>
           <dd className="detail-value">
-            {deal.counterpartyUserId
-              ? t('esc.otherAccount')
-              : `${deal.counterpartyName ?? '—'} (${deal.counterpartyEmail ?? ''})`}
+            {deal.counterpartyUserId ? (
+              t('esc.otherAccount')
+            ) : (
+              <>
+                <bdi dir="auto">{deal.counterpartyName ?? '—'}</bdi> <bdi dir="ltr">({deal.counterpartyEmail ?? ''})</bdi>
+              </>
+            )}
           </dd>
         </div>
         {deal.fundedAt && (
@@ -458,21 +465,23 @@ function DealDrawer({
       )}
 
       <h3 className="drawer-heading">{t('esc.trail')}</h3>
-      <ul className="timeline">
+      <ul className="timeline timeline--drawer">
         {events.map((e) => (
-          <li key={e.id} className="detail-row" style={{ display: 'block' }}>
-            <div className="row" style={{ gap: 'var(--sp-2)' }}>
-              <StatusBadge tone="info" plain>
-                {e.eventType.replace(/_/g, ' ')}
-              </StatusBadge>
-              <span className="hint date">{formatDate(e.occurredAt, locale)}</span>
-              {e.onBehalfOf && <StatusBadge tone="neutral" plain>{t('esc.onBehalf')}</StatusBadge>}
+          <li key={e.id}>
+            <span className="hint date">{formatDate(e.occurredAt, locale)}</span>
+            <div className="register-text">
+              <span className="register-kind">{escrowEventLabel(t, e, deal)}</span>
+              {e.onBehalfOf && (
+                <StatusBadge tone="neutral" plain>
+                  {t('esc.onBehalf')}
+                </StatusBadge>
+              )}
+              {e.notes && (
+                <p className="register-entry">
+                  <bdi dir="auto">{e.notes}</bdi>
+                </p>
+              )}
             </div>
-            {e.notes && (
-              <p style={{ marginBlockStart: 4, fontSize: 13.5 }}>
-                <bdi dir="auto">{e.notes}</bdi>
-              </p>
-            )}
           </li>
         ))}
       </ul>
