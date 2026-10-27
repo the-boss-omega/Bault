@@ -427,10 +427,9 @@ function FulfillmentForm({
       {q.type === 'custom' && (
         <div className="ask-notice">
           <IconAsk />
-          <span>
-            <strong>{String((q.typeFields as { summary?: string } | null)?.summary ?? '')}</strong>
-            <br />
-            {String((q.typeFields as { detail?: string } | null)?.detail ?? '')}
+          <span className="ask-notice-text">
+            <strong className="bidi ask-line">{String((q.typeFields as { summary?: string } | null)?.summary ?? '')}</strong>
+            <span className="bidi ask-line">{String((q.typeFields as { detail?: string } | null)?.detail ?? '')}</span>
           </span>
         </div>
       )}

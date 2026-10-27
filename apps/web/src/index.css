@@ -546,7 +546,8 @@ time,
 .detail-value,
 .dt-sub,
 .dt-primary,
-.identity-name {
+.identity-name,
+.ask-line {
   text-align: var(--text-start);
 }
 
@@ -3978,6 +3979,14 @@ input[type='search'] {
 .ask-notice {
   background: var(--info-bg);
   color: var(--info);
+}
+
+/* What the customer wrote is in whatever language it was written in: a block of its own, so its full stop is at
+   its end, hung from the page's edge like the labels around it. */
+.ask-notice-text {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
 }
 
 .ask-log {

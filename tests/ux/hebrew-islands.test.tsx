@@ -14,6 +14,7 @@ const { isolate, isolateLtr } = await import('../../apps/web/src/shared/money');
 const { ErrorState, Field } = await import('../../apps/web/src/shared/ui/primitives');
 const { HouseStoreSection } = await import('../../apps/web/src/areas/admin/HouseStoreSection');
 const { RemoveCommonsPanel } = await import('../../apps/web/src/areas/customer/vault/RemoveCommonsPanel');
+const { ServiceQueue } = await import('../../apps/web/src/areas/warehouse/ServiceQueue');
 const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 
 function inHebrew(ui: React.ReactElement) {
@@ -130,5 +131,34 @@ describe('removing commons', () => {
     // The reason is the row's, not the label's: set against the end of the label it had no gap from its date.
     const reason = within(row).getByText('לא מאוחסן');
     expect(blocked.closest('label')!.contains(reason)).toBe(false);
+  });
+});
+
+describe('what a customer wrote in a request for a service', () => {
+  it('is a block of its own in the warehouse queue, so the sentence keeps its full stop at its end', async () => {
+    get.mockImplementation(async (path: string) =>
+      path === '/services/queue'
+        ? [
+            {
+              id: 'r1',
+              code: 'SR-1',
+              type: 'custom',
+              status: 'accepted',
+              itemId: null,
+              requesterEmail: 'red@bault.dev',
+              itemDescription: null,
+              typeFields: {
+                summary: 'Photograph the back under raking light',
+                detail: 'Two additional photographs of the reverse. No handling out of the sleeve.',
+              },
+            },
+          ]
+        : [],
+    );
+    inHebrew(<ServiceQueue />);
+    const detail = await screen.findByText('Two additional photographs of the reverse. No handling out of the sleeve.');
+    // `unicode-bidi: plaintext` on a block (the stylesheet hangs it from the page's edge): not a run inside a line that reads the page's way.
+    expect(detail).toHaveClass('bidi', 'ask-line');
+    expect(screen.getByText('Photograph the back under raking light')).toHaveClass('bidi', 'ask-line');
   });
 });
