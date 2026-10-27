@@ -607,7 +607,9 @@ async function captureEmails(state, browser) {
       if (state.opts.only && !name.includes(state.opts.only)) continue;
       const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
       const page = await context.newPage();
-      await page.setContent(`<!doctype html><meta charset="utf-8"><body style="margin:0;background:#ffffff">${renderEmail(template, { link }).html}</body>`);
+      const email = renderEmail(template, { link });
+      // The harness is a document with a language and a title, so that what the audit says is about the message.
+      await page.setContent(`<!doctype html><html lang="en"><meta charset="utf-8"><title>${email.subject ?? template}</title><body style="margin:0;background:#ffffff">${email.html}</body></html>`);
       const file = `${name}-he-en-${width}.png`;
       await page.screenshot({ path: join(state.outDir, file), fullPage: true });
       // Both languages are in the one message by design, so what is looked for is the layout and, in the

@@ -786,6 +786,13 @@ function ItemDrawer({
 
   useEffect(() => {
     setMedia(null);
+    // A card that has left the vault has no card page to ask for (the server answers 404): there are no
+    // photographs of it to load and nothing open on it.
+    if (historical) {
+      setMedia([]);
+      setOpenRequests([]);
+      return;
+    }
     void (async () => {
       try {
         const card = await api.get<{ images: ItemMedia[]; openRequests?: OpenServiceRequest[] }>(
@@ -798,7 +805,7 @@ function ItemDrawer({
         setOpenRequests([]);
       }
     })();
-  }, [item.id]);
+  }, [item.id, historical]);
 
   useEffect(() => {
     setStorage(null);
