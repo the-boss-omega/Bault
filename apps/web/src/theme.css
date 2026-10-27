@@ -172,6 +172,7 @@
   --foil-c: oklch(0.86 0.12 160);
   --foil-d: oklch(0.82 0.12 235);
   --foil-e: oklch(0.8 0.14 305);
+  /* design-lint-allow: a band of foil colour: it reads the same either way round */
   --foil: linear-gradient(115deg, var(--foil-a), var(--foil-b), var(--foil-c), var(--foil-d), var(--foil-e), var(--foil-a));
 
   --paper: #f3efe6;

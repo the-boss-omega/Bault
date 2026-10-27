@@ -210,7 +210,7 @@ body::before {
 }
 
 .avatar {
-  background: linear-gradient(135deg, var(--secondary), var(--accent));
+  background: linear-gradient(calc(135deg * var(--dir)), var(--secondary), var(--accent));
   color: var(--foreground);
   border: var(--border-w) solid var(--border);
 }

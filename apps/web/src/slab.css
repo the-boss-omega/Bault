@@ -70,6 +70,7 @@
   height: 100%;
   padding: 4.5cqw;
   border-radius: clamp(8px, 7cqw, 20px);
+  /* design-lint-allow: light falls on the case from the same side whichever way the page is read */
   background:
     linear-gradient(155deg, oklch(1 0 0 / 15%), oklch(1 0 0 / 3%) 36%, oklch(1 0 0 / 0%) 58%, oklch(1 0 0 / 9%)),
     var(--room-case);

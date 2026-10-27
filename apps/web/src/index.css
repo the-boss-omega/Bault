@@ -2716,6 +2716,7 @@ input[type='search'] {
 
 .skel {
   border-radius: var(--r-xs);
+  /* design-lint-allow: a skeleton shimmer: it reads as waiting whichever way round it sweeps */
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
@@ -4478,6 +4479,7 @@ textarea[aria-invalid='true'] {
 .skel,
 .skel-block,
 .skel-metric {
+  /* design-lint-allow: a skeleton shimmer: it reads as waiting whichever way round it sweeps */
   background: linear-gradient(
     90deg,
     var(--surface-2) 0%,
@@ -4786,8 +4788,8 @@ textarea[aria-invalid='true'] {
 
 .data-table .step {
   flex: 1 1 auto;
-  padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
-  padding-inline-start: var(--sp-3);
+  padding-block: var(--sp-1);
+  padding-inline: var(--sp-3) 0;
   border-block-start: 0;
   border-inline-start: 2px solid var(--line);
   margin-block-start: 0;

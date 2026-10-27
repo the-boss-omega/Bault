@@ -289,7 +289,7 @@
   border: 1px dashed var(--input);
   border-radius: var(--r-lg);
   color: var(--muted-foreground);
-  background: linear-gradient(160deg, color-mix(in oklab, var(--foreground) 5%, transparent), transparent 60%);
+  background: linear-gradient(calc(160deg * var(--dir)), color-mix(in oklab, var(--foreground) 5%, transparent), transparent 60%);
 }
 
 .empty-icon svg {

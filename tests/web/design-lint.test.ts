@@ -149,7 +149,7 @@ describe('design-lint', () => {
       const r = withChange((d) =>
         appendFileSync(
           join(d, 'screens.css'),
-          '\n.a { padding: 4px 6px 10px 14px; margin: -12px 2px; }\n.b { gap: 1px var(--sp-3); inset: calc(var(--sp-3) + 6px) 0; }\n.c { inline-size: 26px; font-size: 13px; border-inline-start: 3px solid var(--border); }\n',
+          '\n.a { padding: 4px 6px 10px 6px; padding-inline-start: 14px; margin: -12px 2px; }\n.b { gap: 1px var(--sp-3); inset: calc(var(--sp-3) + 6px) 0; }\n.c { inline-size: 26px; font-size: 13px; border-inline-start: 3px solid var(--border); }\n',
         ),
       );
       expect(r.out).toContain('design-lint: clean');
@@ -161,9 +161,9 @@ describe('design-lint', () => {
       expect(r.out).toContain('raw colour #123abc');
     });
 
-    it('lets pure black and white shades through, and custom property definitions', () => {
+    it('lets pure black and white shades through, and a custom property that points at a name', () => {
       const r = withChange((d) =>
-        appendFileSync(join(d, 'gallery.css'), '\n.x { box-shadow: 0 4px 12px oklch(0 0 0 / 40%); }\n.y { --edge: oklch(0.6 0.1 40); }\n'),
+        appendFileSync(join(d, 'gallery.css'), '\n.x { box-shadow: 0 4px 12px oklch(0 0 0 / 40%); }\n.y { --edge: var(--border); --veil: oklch(0 0 0 / 20%); }\n'),
       );
       expect(r.out).toContain('design-lint: clean');
     });
@@ -256,6 +256,115 @@ describe('design-lint', () => {
     it('a physical property in a layer', () => {
       const r = withChange((d) => appendFileSync(join(d, 'components.css'), '\n.x { margin-left: 4px; }\n'));
       expect(r.out).toContain('physical property');
+    });
+  });
+
+  /**
+   * The same rules, said the other way: a reviewer planted seventeen violations that were each equivalent to
+   * one a rule already forbade, and the lint caught one. Each is planted again here, in the spelling that
+   * got past it, and in the place that got past it.
+   */
+  describe('does not let the same mistake through in another spelling', () => {
+    let copy = '';
+
+    beforeAll(() => {
+      copy = mkdtempSync(join(tmpdir(), 'design-lint-spelling-'));
+    });
+
+    afterAll(() => {
+      rmSync(copy, { recursive: true, force: true });
+    });
+
+    function planted(file: string, text: string) {
+      rmSync(copy, { recursive: true, force: true });
+      cpSync(SRC, copy, { recursive: true });
+      writeFileSync(join(copy, file), text);
+      return lint(copy);
+    }
+
+    const cases: Array<[string, string, string, RegExp]> = [
+      ['a four-value margin that names a side', 'app.css', '.x { margin: 0 8px 0 0; }', /four-value shorthand names its right/],
+      ['a four-value padding that names a side', 'screens.css', '.x { padding: var(--sp-1) 0 var(--sp-1) var(--sp-3); }', /four-value shorthand names its right/],
+      ['a four-value inset that names a side', 'screens.css', '.x { inset: 0 0 0 12px; }', /four-value shorthand names its right/],
+      ['a float', 'app.css', '.x { float: left; }', /physical property/],
+      ['a clear', 'app.css', '.x { clear: right; }', /physical property/],
+      ['a physical corner', 'landing.css', '.x { border-top-left-radius: var(--r-lg); }', /physical property/],
+      ['corners that are not mirrored', 'landing.css', '.x { border-radius: var(--r-lg) 0 0 var(--r-lg); }', /corners that are not mirrored/],
+      ['space in rem', 'screens.css', '.x { padding: 0.3rem; }', /off the 4px grid/],
+      ['space in em', 'screens.css', '.x { margin-block-start: 0.5em; }', /glyph's own size/],
+      ['an angle that points one way', 'gallery.css', '.x { background: linear-gradient(90deg, var(--card), var(--muted)); }', /points one way/],
+      ['a conic angle that points one way', 'gallery.css', '.x { background: conic-gradient(from 30deg, var(--card), var(--muted)); }', /points one way/],
+      ['a move that goes the same way in both languages', 'motion.css', '.x { transform: translateX(12px); }', /goes the same way in both languages/],
+      ['a three-dimensional move', 'motion.css', '.x { transform: translate3d(-100%, 0, 0); }', /goes the same way in both languages/],
+      ['the translate property', 'motion.css', '.x { translate: 8px 0; }', /goes the same way in both languages/],
+      ['a position that names a side', 'app.css', '.x { background: url(a.png) no-repeat right center; }', /names left or right/],
+      ['a loop spelled with its longhand', 'slab.css', '.x { animation-name: wobble; animation-duration: 2s; animation-iteration-count: infinite; }', /unlisted infinite animation "wobble"/],
+      ['a loop with no name beside its count', 'slab.css', '.x { animation-iteration-count: infinite; }', /no animation-name beside it/],
+      ['a loop that is second in a list', 'slab.css', '.x { animation: slab-breathe 7s linear infinite, wobble 2s linear infinite; }', /unlisted infinite animation "wobble"/],
+      ['a named colour', 'gallery.css', '.x { color: rebeccapurple; border-color: red; }', /the colour "rebeccapurple" has no name/],
+      ['a named colour in a gradient', 'gallery.css', '.x { background: linear-gradient(var(--card), tomato); }', /the colour "tomato" has no name/],
+      ['a colour function the lint did not know', 'gallery.css', '.x { color: lab(50% 40 59); }', /raw colour lab\(50% 40 59\)/],
+      ['a colour named in a layer, as a custom property', 'components.css', ':root { --mine: #ff8800; }', /colours are named in theme.css, not in a layer/],
+      ['the paper, brighter, with no ring', 'app.css', '.x {\n  background: var(--paper-bright);\n}', /paints a fixed-palette surface/],
+      ['a block that takes its own text\'s direction and aligns to it', 'app.css', '.x { unicode-bidi: plaintext; text-align: start; }', /hangs from that text's edge/],
+    ];
+
+    for (const [name, file, css, expected] of cases) {
+      it(name, () => {
+        const r = planted(file, `\n${css}\n`);
+        expect(r.status).toBe(1);
+        expect(r.out).toMatch(expected);
+      });
+    }
+
+    it('a stylesheet nobody listed, which is held the same way the day it is added', () => {
+      const r = planted('brand-new.css', '.x { margin-left: 4px; color: #123abc; animation: wobble 2s linear infinite; }\n');
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('brand-new.css');
+      expect(r.out).toContain('physical property');
+      expect(r.out).toContain('raw colour #123abc');
+      expect(r.out).toContain('unlisted infinite animation "wobble"');
+    });
+
+    it('a date made another way and forced left to right', () => {
+      for (const call of ['d.toLocaleDateString(locale)', 'new Intl.DateTimeFormat(locale).format(d)', 'd.toLocaleTimeString(locale)']) {
+        const r = planted('probe.tsx', `export const A = () => (\n  <span dir="ltr">\n    {${call}}\n  </span>\n);\n`);
+        expect(r.status).toBe(1);
+        expect(r.out).toContain('a date forced left to right');
+      }
+    });
+
+    it('a timer that never stops', () => {
+      const r = planted('probe.tsx', 'useEffect(() => {\n  const id = setInterval(() => setTick((n) => n + 1), 1000);\n  return () => clearInterval(id);\n}, []);\n');
+      expect(r.status).toBe(1);
+      expect(r.out).toContain('an interval that runs for as long as the page is open');
+    });
+
+    it('a physical corner or a float in an inline style', () => {
+      const r = planted('probe.tsx', "export const A = () => <div style={{ float: 'left', borderTopLeftRadius: 4 }} />;\n");
+      expect(r.out).toContain('physical inline style');
+    });
+
+    it('lets what is symmetric, mirrored or declared through', () => {
+      const r = planted(
+        'screens.css',
+        [
+          '.a { padding: 4px 8px; margin: 0 var(--sp-2) 0 var(--sp-2); inset: 0 4px; }',
+          '.b { border-radius: var(--r-lg) var(--r-lg) 0 0; }',
+          '.c { background: linear-gradient(calc(90deg * var(--dir)), var(--card), var(--muted)); }',
+          '.d { background: linear-gradient(180deg, var(--card), var(--muted)); }',
+          '.e { transform: translateX(calc(12px * var(--dir))); }',
+          '.f { transform: translateX(var(--tab-x, 0)) translateY(-4px) rotate(20deg); }',
+          '.g { padding: 0.5rem 0.25rem; margin-block: 0.125rem; }',
+          '.h { color: black; background: white; border-color: transparent; outline-color: currentColor; }',
+          '.i { /* design-lint-allow: a hatch, either diagonal reads the same */ background: repeating-linear-gradient(135deg, var(--card) 0 4px, transparent 4px 8px); }',
+          '.j { animation: slab-breathe 7s linear infinite; }',
+          '.k { unicode-bidi: plaintext; text-align: var(--text-start); }',
+          '.l { padding-block-start: 0.4em; /* design-lint-allow: attached to the glyph */ }',
+          '',
+        ].join('\n'),
+      );
+      expect(r.out).toContain('design-lint: clean');
     });
   });
 });

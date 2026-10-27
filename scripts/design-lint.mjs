@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { contrast, mixOklab, over, parseColor } from './lib/color.mjs';
@@ -91,7 +91,7 @@ function checkSpacing(file, line, text) {
 }
 
 const PHYSICAL_CSS =
-  /(?:^|[\s;{])(margin|padding|border)-(left|right)\b|(?:^|[\s;{])(left|right)\s*:|text-align\s*:\s*(left|right)\b/;
+  /(?:^|[\s;{])(?:(?:scroll-)?(?:margin|padding)|border)-(?:left|right)\b|(?:^|[\s;{])(?:left|right)\s*:|(?:^|[\s;{])(?:float|clear)\s*:\s*(?:left|right)\b|text-align\s*:\s*(?:left|right)\b|border-(?:top|bottom)-(?:left|right)-radius/;
 
 /**
  * Logical properties place things, but they cannot turn a gradient, a transform
@@ -119,10 +119,10 @@ const LOOPS = new Set([
   'slab-breathe',
 ]);
 
-function checkLoop(file, line, text) {
-  const m = /animation\s*:\s*([\w-]+)[^;]*\binfinite\b/.exec(text);
-  if (m && !LOOPS.has(m[1])) report(file, line, `unlisted infinite animation "${m[1]}" — name it in LOOPS in design-lint.mjs: ${text.trim()}`);
-}
+const ANIMATION_KEYWORDS = new Set([
+  'infinite', 'alternate', 'alternate-reverse', 'reverse', 'normal', 'forwards', 'backwards', 'both', 'none', 'running', 'paused',
+  'ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'step-start', 'step-end',
+]);
 
 /**
  * A colour literal is a colour with no name. Pure black or white at some alpha is
@@ -130,7 +130,7 @@ function checkLoop(file, line, text) {
  * glints and mask edges are written); anything else is named once, as a custom
  * property, and referenced. theme.css is where the names are made.
  */
-const COLOUR_LITERAL = /oklch\([^)]*\)|hsla?\([^)]*\)|rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}\b/g;
+const COLOUR_LITERAL = /\b(?:oklch|oklab|lab|lch|hwb|hsla?|rgba?|color)\([^)]*\)|#[0-9a-fA-F]{3,8}\b/g;
 const SHADE = /^(?:oklch\(\s*[01]\s+0\s+0(?:\s*\/\s*[\d.]+%?)?\s*\)|#(?:000|0000|fff|ffff|000000|ffffff))$/i;
 
 /**
@@ -165,7 +165,6 @@ cssCode.forEach((line, i) => {
   if (DIRECTION_BRANCH.test(line)) {
     report(rel, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
   }
-  checkLoop(rel, n, line);
   if (n <= tokenEndLine) return;
   checkSpacing(rel, n, line);
 
@@ -211,20 +210,260 @@ function rulesOf(text) {
 }
 
 /**
+ * Every declaration of a stylesheet (comments already blanked) as { prop, value, line, selector, rule },
+ * at-rules flattened. Rules that look at what a declaration says, rather than at the line it is on, use this:
+ * a value that runs over several lines, or a list of animations, is one declaration.
+ */
+function declarationsOf(text) {
+  const out = [];
+  const heads = [];
+  const ids = [];
+  let ruleCount = 0;
+  let start = 0;
+  let depth = 0;
+  let quote = '';
+  const lineAt = (index) => {
+    let i = index;
+    while (i < text.length && /\s/.test(text[i])) i += 1;
+    return text.slice(0, i).split('\n').length;
+  };
+  const take = (end) => {
+    const statement = text.slice(start, end);
+    const colon = statement.indexOf(':');
+    if (colon <= 0 || heads.length === 0) return;
+    const prop = statement.slice(0, colon).trim();
+    if (/\s/.test(prop)) return;
+    out.push({
+      prop: prop.startsWith('--') ? prop : prop.toLowerCase(),
+      value: statement.slice(colon + 1).trim(),
+      line: lineAt(start),
+      selector: heads[heads.length - 1],
+      rule: ids[ids.length - 1],
+    });
+  };
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === quote && text[i - 1] !== '\\') quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '(') depth += 1;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && ch === '{') {
+      heads.push(text.slice(start, i).trim().replace(/\s+/g, ' '));
+      ruleCount += 1;
+      ids.push(ruleCount);
+      start = i + 1;
+    } else if (depth === 0 && ch === ';') {
+      take(i);
+      start = i + 1;
+    } else if (depth === 0 && ch === '}') {
+      take(i);
+      heads.pop();
+      ids.pop();
+      start = i + 1;
+    }
+  }
+  return out;
+}
+
+/** A value split at its top-level `separator` (not inside parentheses or quotes). */
+function splitTop(value, separator) {
+  const parts = [];
+  let depth = 0;
+  let quote = '';
+  let current = '';
+  for (const ch of value) {
+    if (quote) {
+      if (ch === quote) quote = '';
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    if (depth === 0 && !quote && (separator === ' ' ? /\s/.test(ch) : ch === separator)) {
+      if (current.trim() !== '') parts.push(current.trim());
+      current = '';
+    } else current += ch;
+  }
+  if (current.trim() !== '') parts.push(current.trim());
+  return parts;
+}
+
+/** The arguments of every `name(...)` call in a value, each call as a list of its top-level arguments. */
+function callsOf(value, name) {
+  const calls = [];
+  const re = new RegExp(`(?<![\\w-])${name}\\(`, 'g');
+  for (let m = re.exec(value); m; m = re.exec(value)) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    const begin = i;
+    for (; i < value.length && depth > 0; i += 1) {
+      if (value[i] === '(') depth += 1;
+      else if (value[i] === ')') depth -= 1;
+    }
+    calls.push(splitTop(value.slice(begin, i - 1), ','));
+  }
+  return calls;
+}
+
+const NAMED_COLOURS = new Set(
+  (
+    'aliceblue antiquewhite aqua aquamarine azure beige bisque blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral ' +
+    'cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen ' +
+    'darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue ' +
+    'dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew ' +
+    'hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow ' +
+    'lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime ' +
+    'limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen ' +
+    'mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+    'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue ' +
+    'saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle ' +
+    'tomato turquoise violet wheat whitesmoke yellow yellowgreen'
+  ).split(' '),
+);
+const COLOUR_PROP =
+  /^(?:color|background(?:-color|-image)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?(?:-color)?|outline(?:-color)?|fill|stroke|caret-color|accent-color|text-decoration(?:-color)?|text-emphasis(?:-color)?|box-shadow|text-shadow|column-rule(?:-color)?|scrollbar-color|stop-color|flood-color|-webkit-text-fill-color|-webkit-text-stroke(?:-color)?)$/;
+const SPACING_PROP = /^(?:padding|margin|inset|scroll-margin|scroll-padding)(?:-[\w-]+)?$|^(?:gap|row-gap|column-gap)$/;
+const BOX_SHORTHAND = /^(?:margin|padding|inset|scroll-margin|scroll-padding|border-width|border-color|border-style)$/;
+const POSITIONED = /^(?:background|background-position|background-position-x|mask|-webkit-mask|mask-position|mask-position-x|object-position|transform-origin|perspective-origin)$/;
+const isZero = (v) => /^[-+]?0*\.?0+(?:px|%|em|rem)?$/.test(v.trim());
+
+/**
+ * What a declaration says, held to the rules the line-based checks cannot see: a value that wraps, a list
+ * of animations, a shorthand that names a side without saying so, an angle or a distance that points one
+ * way whichever way the page is read. `fromLine` skips the token block of index.css, where names are made.
+ */
+function checkDeclarations(short, raw, { fromLine = 0, isTheme = false } = {}) {
+  const rawLines = raw.split('\n');
+  const allowedHere = (line) => {
+    for (let i = Math.max(0, line - 3); i <= line - 1; i += 1) if (rawLines[i]?.includes('design-lint-allow')) return true;
+    return false;
+  };
+  const decls = declarationsOf(stripComments(raw)).filter((d) => d.line > fromLine && !allowedHere(d.line));
+  const say = (d, message) => report(short, d.line, `${message}: ${d.prop}: ${d.value.replace(/\s+/g, ' ').slice(0, 90)}`);
+  const rules = new Map();
+  for (const d of decls) {
+    if (!rules.has(d.rule)) rules.set(d.rule, []);
+    rules.get(d.rule).push(d);
+  }
+
+  for (const d of decls) {
+    if (SPACING_PROP.test(d.prop)) {
+      for (const m of d.value.matchAll(/(?<![\w.-])(-?\d*\.?\d+)(rem|em)\b/g)) {
+        if (m[2] === 'rem') {
+          const px = Number(m[1]) * 16;
+          if (px === 0 || SPACING_HALF_STEPS.has(`${px}px`) || onScale(`${px}px`)) continue;
+          say(d, `${m[0]} is ${px}px, off the 4px grid — use a multiple of four, a half step (2, 6, 10, 14) or a --sp-* token`);
+        } else if (Number(m[1]) !== 0) {
+          say(d, `${m[0]} is space in the glyph's own size, which is on no grid — use px on the grid or a --sp-* token (design-lint-allow if it really is attached to the glyph)`);
+        }
+      }
+    }
+
+    if (BOX_SHORTHAND.test(d.prop)) {
+      const sides = splitTop(d.value, ' ');
+      if (sides.length === 4 && sides[1] !== sides[3]) {
+        say(d, `a four-value shorthand names its right (${sides[1]}) and its left (${sides[3]}) — write the inline-start and inline-end longhands`);
+      }
+    }
+
+    if (d.prop === 'border-radius') {
+      const t = splitTop(d.value.split('/')[0], ' ');
+      const [tl, tr, br, bl] = t.length === 1 ? [t[0], t[0], t[0], t[0]] : t.length === 2 ? [t[0], t[1], t[0], t[1]] : t.length === 3 ? [t[0], t[1], t[2], t[1]] : t;
+      if (t.length > 1 && (tl !== tr || bl !== br)) {
+        say(d, 'corners that are not mirrored name a left and a right — use border-start-start-radius and its three siblings');
+      }
+    }
+
+    if (POSITIONED.test(d.prop) && /\b(?:left|right)\b/.test(d.value.replace(/url\([^)]*\)/g, ''))) {
+      say(d, 'a position that names left or right does not turn round with the page — multiply by var(--dir)');
+    }
+
+    for (const m of d.value.matchAll(/\b(?:repeating-)?(?:linear|conic)-gradient\(\s*(?:from\s+)?(-?\d*\.?\d+)(deg|turn|rad|grad)\b/g)) {
+      const unit = { deg: 1, turn: 360, rad: 180 / Math.PI, grad: 0.9 }[m[2]];
+      const degrees = Number(m[1]) * unit;
+      if (Math.abs(((degrees % 180) + 180) % 180) > 0.5) {
+        say(d, `a gradient at ${m[1]}${m[2]} points one way whichever way the page is read — write calc(${m[1]}${m[2]} * var(--dir)), or design-lint-allow why it is symmetric`);
+      }
+    }
+
+    if (/^(?:-webkit-)?transform$/.test(d.prop)) {
+      const along = [...callsOf(d.value, 'translateX'), ...callsOf(d.value, 'translate'), ...callsOf(d.value, 'translate3d')].map((args) => args[0] ?? '');
+      for (const x of along) {
+        if (!/var\(/.test(x) && !isZero(x)) say(d, `a horizontal move of ${x} goes the same way in both languages — multiply by var(--dir)`);
+      }
+    }
+    if (d.prop === 'translate') {
+      const x = splitTop(d.value, ' ')[0] ?? '';
+      if (!/var\(/.test(x) && !isZero(x) && x !== 'none') say(d, `a horizontal move of ${x} goes the same way in both languages — multiply by var(--dir)`);
+    }
+
+    if (COLOUR_PROP.test(d.prop) && !isTheme) {
+      const bare = d.value.replace(/url\([^)]*\)/g, '').replace(/(["'])(?:\\.|(?!\1).)*\1/g, '').replace(/var\(--[\w-]+\)/g, '');
+      for (const word of bare.matchAll(/(?<![\w-])[a-z]+(?![\w(-])/gi)) {
+        if (NAMED_COLOURS.has(word[0].toLowerCase())) say(d, `the colour "${word[0]}" has no name in the theme — use a token`);
+      }
+    }
+    if (!isTheme && d.prop.startsWith('--') && !d.value.includes('data:image')) {
+      for (const m of d.value.matchAll(COLOUR_LITERAL)) {
+        if (!SHADE.test(m[0])) say(d, `${m[0]} — colours are named in theme.css, not in a layer`);
+      }
+    }
+
+    if (d.prop === 'animation') {
+      for (const one of splitTop(d.value, ',')) {
+        const words = splitTop(one, ' ');
+        if (!words.includes('infinite')) continue;
+        const name = words.find((w) => /^[a-z_][\w-]*$/i.test(w) && !ANIMATION_KEYWORDS.has(w) && !/^\d/.test(w));
+        if (name && !LOOPS.has(name)) say(d, `unlisted infinite animation "${name}" — name it in LOOPS in design-lint.mjs`);
+      }
+    }
+  }
+
+  for (const group of rules.values()) {
+    const named = group.find((d) => d.prop === 'animation-name');
+    const count = group.find((d) => d.prop === 'animation-iteration-count');
+    if (count && /\binfinite\b/.test(count.value)) {
+      const names = named ? splitTop(named.value, ',') : [];
+      if (names.length === 0 || names.some((n) => !LOOPS.has(n))) {
+        say(count, `unlisted infinite animation${names.length ? ` "${names.filter((n) => !LOOPS.has(n)).join('", "')}"` : ' (no animation-name beside it)'} — name it in LOOPS in design-lint.mjs`);
+      }
+    }
+    const plain = group.find((d) => d.prop === 'unicode-bidi' && /^plaintext$/.test(d.value));
+    const aligned = group.find((d) => d.prop === 'text-align' && /^(?:start|end)$/.test(d.value));
+    if (plain && aligned) {
+      say(aligned, 'a block that takes the direction of its own text hangs from that text\'s edge, not the page\'s — text-align: var(--text-start) (theme.css)');
+    }
+  }
+}
+
+/**
  * Two surfaces keep their palette in both themes, the paper (cream) and the room
  * (the dark a card is photographed against). The theme's focus ring is drawn from
  * the theme's own foreground, so on either of them it can be the wrong way round
  * (a light ring on cream, a dark ring on the room). A rule that paints one says
  * which ring reads on it, or says why it needs none.
  */
-const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper|room[\w-]*)\)/;
+const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper(?:-bright)?|room(?:-(?:deep|raised|case|pool|glass))?)\)/;
 
-// The theme and motion layers sit outside the token-block rules above, but the
-// logical-properties rule, the direction rule, the colour rule and the
-// reduced-motion guarantee apply to them too.
-const LAYERS = ['theme.css', 'slab.css', 'components.css', 'landing.css', 'app.css', 'gallery.css', 'screens.css', 'motion.css'];
-for (const name of LAYERS) {
-  const file = join(webSrc, name);
+function cssIn(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir).sort()) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...cssIn(full));
+    else if (entry.endsWith('.css')) out.push(full);
+  }
+  return out;
+}
+
+// Every stylesheet but index.css (which is held to the rules above, past its token block) is a layer:
+// all of them, found rather than listed, so that a new file is held the same way the day it is added.
+// The logical-properties rule, the direction rule, the colour rule and the reduced-motion guarantee
+// apply to every one of them.
+checkDeclarations(rel, readFileSync(cssFile, 'utf8').split('\r\n').join('\n'), { fromLine: tokenEndLine });
+const LAYERS = cssIn(webSrc).filter((file) => file !== cssFile);
+for (const file of LAYERS) {
+  const name = basename(file);
   const short = relative(repoRoot, file).split(sep).join('/');
   const raw = readFileSync(file, 'utf8');
   const rawLines = raw.split('\n');
@@ -232,6 +471,7 @@ for (const name of LAYERS) {
     for (let i = Math.max(0, index - 2); i <= index; i += 1) if (rawLines[i]?.includes('design-lint-allow')) return true;
     return false;
   };
+  checkDeclarations(short, raw, { isTheme: name === 'theme.css' });
   stripComments(raw)
     .split('\n')
     .forEach((line, i) => {
@@ -242,7 +482,6 @@ for (const name of LAYERS) {
       if (name !== 'theme.css' && DIRECTION_BRANCH.test(line)) {
         report(short, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
       }
-      checkLoop(short, n, line);
       checkSpacing(short, n, line);
       if (name !== 'theme.css') checkRadius(short, n, line);
       if (name !== 'theme.css' && !line.includes('data:image')) {
@@ -440,7 +679,7 @@ function walk(dir) {
 }
 
 const PHYSICAL_CLASS = /\b(?:ml|mr|pl|pr)-\d|\btext-(?:left|right)\b/;
-const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|textAlign:\s*['"](?:left|right)['"])/;
+const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|border(?:Top|Bottom)(?:Left|Right)Radius|textAlign:\s*['"](?:left|right)['"]|float:\s*['"](?:left|right)['"])/;
 
 /**
  * A locale-formatted date is not a left-to-right island. Forced left to right, a Hebrew date
@@ -448,7 +687,7 @@ const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|tex
  * order its language gives it. Serials, codes and amounts are islands; dates are not.
  */
 const FORCED_LTR = /\bdir=(?:"ltr"|\{'ltr'\})/;
-const DATE_CALL = /\bformatDate(?:Time)?\(/;
+const DATE_CALL = /\b(?:formatDate(?:Time)?\(|toLocale(?:Date|Time)String\(|Intl\.DateTimeFormat\()/;
 
 for (const file of walk(webSrc)) {
   const short = relative(repoRoot, file).split(sep).join('/');
@@ -467,6 +706,10 @@ for (const file of walk(webSrc)) {
     }
     if (/behavior\s*:\s*['"]smooth['"]/.test(line)) {
       report(short, i + 1, `smooth scrolling that ignores prefers-reduced-motion — choose 'auto' when it is set: ${line.trim()}`);
+    }
+    // A timer that never stops is a loop, the same as an animation that never stops, and is named the same way.
+    if (/\bsetInterval\(/.test(line) && !lines.slice(Math.max(0, i - 2), i + 1).some((l) => l.includes('design-lint-allow'))) {
+      report(short, i + 1, `an interval that runs for as long as the page is open is a loop nobody listed — if it is not motion (polling, say), say so with design-lint-allow: ${line.trim()}`);
     }
   });
 }

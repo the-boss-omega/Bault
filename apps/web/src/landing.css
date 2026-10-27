@@ -219,6 +219,7 @@
   inset-inline: 2%;
   inset-block-end: 17.5%;
   height: 1px;
+  /* design-lint-allow: a symmetric sheen: the same mirrored */
   background: linear-gradient(90deg, transparent, oklch(1 0 0 / 38%) 20%, oklch(1 0 0 / 38%) 80%, transparent);
 }
 
@@ -453,6 +454,7 @@
   inset-inline: 24px;
   inset-block-end: 24px;
   height: 30%;
+  /* design-lint-allow: a barcode is read the same way whichever way the page is */
   background: repeating-linear-gradient(
     90deg,
     var(--paper-ink) 0 2px,
@@ -739,6 +741,7 @@
   inset-inline: 10%;
   inset-block-end: 17%;
   height: 1px;
+  /* design-lint-allow: a symmetric sheen: the same mirrored */
   background: linear-gradient(90deg, transparent, oklch(1 0 0 / 45%) 20%, oklch(1 0 0 / 45%) 80%, transparent);
   transform: scaleX(0);
   transition: transform 1000ms var(--ease-out-expo);
@@ -1035,6 +1038,7 @@
 
   .lp-js .lp-w {
     overflow: hidden;
+    /* design-lint-allow: room for the ascenders and descenders of the heading, which is set in the heading's own size */
     padding-block: 0.08em 0.16em;
     margin-block: -0.08em -0.16em;
     vertical-align: top;
@@ -1432,6 +1436,7 @@
   .lp-stub-bars {
     min-block-size: 0;
     block-size: 24px;
+    /* design-lint-allow: a barcode is read the same way whichever way the page is */
     background: repeating-linear-gradient(
       90deg,
       var(--muted-foreground) 0 2px,
@@ -1460,13 +1465,16 @@
   /* The bottom edge leaves room for the stamp, which sits in its own corner. */
   padding: 24px 24px 72px;
   border-radius: var(--r-xs);
+  --focus-color: var(--paper-ink);
   background: var(--paper-bright);
   color: var(--paper-ink);
   box-shadow: 0 22px 40px -22px var(--paper-shadow), inset 0 0 0 1px oklch(0 0 0 / 6%);
   transform: rotate(1.6deg);
   transition: transform 700ms var(--ease-out-expo);
+  /* design-lint-allow: a symmetric zigzag edge: the same mirrored */
   -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat,
     conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 7px repeat-x;
+  /* design-lint-allow: a symmetric zigzag edge: the same mirrored */
   mask: linear-gradient(#000 0 0) top / 100% calc(100% - 7px) no-repeat,
     conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 14px 7px repeat-x;
 }
