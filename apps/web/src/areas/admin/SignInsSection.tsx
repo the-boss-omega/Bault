@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
-import { formatDateTime } from '../../shared/money';
+import { formatDateTime, formatDayHeading, formatTime } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import { EmptyState, MetricCard, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
-import { IconAlert, IconShield, IconUser } from '../../shared/ui/icons';
+import { EmptyState, Panel, SkeletonTable, StatusBadge, type StatusTone } from '../../shared/ui/primitives';
+import { IconShield } from '../../shared/ui/icons';
 import {
+  attemptsByDay,
   describeDevice,
   displayIp,
   isLocalAddress,
@@ -30,8 +31,6 @@ const OUTCOME_LABEL: Record<SignInOutcome, MessageKey> = {
   mfa_failed: 'admin.signIns.outcome.mfa_failed',
 };
 
-const ROUTINE: ReadonlySet<SignInOutcome> = new Set(['success', 'mfa_challenged']);
-
 export function SignInsSection({ onError }: { onError: (m: string) => void }) {
   const { t, locale } = useI18n();
   const [log, setLog] = useState<SignInLog | null>(null);
@@ -51,29 +50,37 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
 
   return (
     <>
-      <div className="metric-grid">
-        <MetricCard
-          label={t('admin.signIns.metric.successes')}
-          value={log ? log.last24h.successes : '—'}
-          icon={<IconUser />}
-          tone="green"
-          footer={t('admin.signIns.metric.window')}
-        />
-        <MetricCard
-          label={t('admin.signIns.metric.failures')}
-          value={log ? log.last24h.failures : '—'}
-          icon={<IconAlert />}
-          tone="amber"
-          footer={t('admin.signIns.metric.addresses', { count: log?.last24h.failingAddresses ?? 0 })}
-        />
-        <MetricCard
-          label={t('admin.signIns.metric.suspicious')}
-          value={log ? log.suspicious.length : '—'}
-          icon={<IconShield />}
-          tone="violet"
-          footer={t('admin.signIns.metric.suspiciousNote')}
-        />
-      </div>
+      <section className="ledger-sheet" aria-label={t('admin.signIns.title')}>
+        <div className="ledger-cols ledger-cols--even">
+          <dl className="ledger-col">
+            <dt className="ledger-kicker">{t('admin.signIns.metric.successes')}</dt>
+            <dd className="ledger-figure">
+              <span className="amount" dir="ltr">
+                {log ? log.last24h.successes : '—'}
+              </span>
+            </dd>
+            <dd className="ledger-note">{t('admin.signIns.metric.window')}</dd>
+          </dl>
+          <dl className="ledger-col">
+            <dt className="ledger-kicker">{t('admin.signIns.metric.failures')}</dt>
+            <dd className="ledger-figure">
+              <span className="amount" dir="ltr">
+                {log ? log.last24h.failures : '—'}
+              </span>
+            </dd>
+            <dd className="ledger-note">{t('admin.signIns.metric.addresses', { count: log?.last24h.failingAddresses ?? 0 })}</dd>
+          </dl>
+          <dl className="ledger-col">
+            <dt className="ledger-kicker">{t('admin.signIns.metric.suspicious')}</dt>
+            <dd className="ledger-figure">
+              <span className="amount" dir="ltr">
+                {log ? log.suspicious.length : '—'}
+              </span>
+            </dd>
+            <dd className="ledger-note">{t('admin.signIns.metric.suspiciousNote')}</dd>
+          </dl>
+        </div>
+      </section>
 
       {log && log.suspicious.length > 0 && (
         <Panel title={t('admin.signIns.suspicious.title')} subtitle={t('admin.signIns.suspicious.subtitle')} flush>
@@ -120,45 +127,40 @@ export function SignInsSection({ onError }: { onError: (m: string) => void }) {
         ) : log.attempts.length === 0 ? (
           <EmptyState title={t('admin.signIns.empty')} icon={<IconShield />} />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('admin.signIns.col.when')}</th>
-                  <th scope="col">{t('admin.signIns.col.outcome')}</th>
-                  <th scope="col">{t('admin.signIns.col.account')}</th>
-                  <th scope="col">{t('admin.signIns.col.address')}</th>
-                  <th scope="col">{t('admin.signIns.col.device')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {log.attempts.map((a) => (
-                  <tr key={a.id} className={ROUTINE.has(a.outcome) ? undefined : 'is-attention'}>
-                    <td data-label={t('admin.signIns.col.when')}>
-                      <span className="date">{formatDateTime(a.occurredAt, locale)}</span>
-                    </td>
-                    <td data-label={t('admin.signIns.col.outcome')}>
-                      <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>
-                    </td>
-                    <td data-label={t('admin.signIns.col.account')}>
-                      <span className="ltr-run">{a.username ? `@${a.username}` : a.identifier}</span>
-                      {!a.userId && <span className="hint"> · {t('admin.signIns.noAccount')}</span>}
-                    </td>
-                    <td data-label={t('admin.signIns.col.address')}>
-                      <span className="code-inline" dir="ltr">
-                        {displayIp(a.ip)}
-                      </span>
-                      {isLocalAddress(a.ip) && <span className="hint"> · {t('admin.signIns.local')}</span>}
-                    </td>
-                    <td data-label={t('admin.signIns.col.device')}>
-                      <span className="ltr-run" title={a.userAgent ?? undefined}>
-                        {describeDevice(a.userAgent)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="register-days panel-body">
+            {attemptsByDay(log.attempts).map(({ key, items, first }) => (
+              <div key={key} className="register-day-group">
+                <h3 className="register-day" id={`signins-${key}`}>
+                  <span className="date">{formatDayHeading(first.occurredAt, locale)}</span>
+                </h3>
+                <ul className="timeline timeline--stamped timeline--log" aria-labelledby={`signins-${key}`}>
+                  {items.map((a) => (
+                    <li key={a.id}>
+                      <span className="hint date">{formatTime(a.occurredAt, locale)}</span>
+                      <div className="register-text">
+                        <span className="register-kind">
+                          <StatusBadge tone={OUTCOME_TONE[a.outcome]}>{t(OUTCOME_LABEL[a.outcome])}</StatusBadge>
+                        </span>
+                        <p className="register-entry">
+                          <span className="ltr-run">{a.username ? `@${a.username}` : a.identifier}</span>
+                          {!a.userId && <span className="hint"> · {t('admin.signIns.noAccount')}</span>}
+                        </p>
+                        <p className="register-meta">
+                          <span className="code-inline" dir="ltr">
+                            {displayIp(a.ip)}
+                          </span>
+                          {isLocalAddress(a.ip) && <span> · {t('admin.signIns.local')}</span>}
+                          {' · '}
+                          <span className="ltr-run" title={a.userAgent ?? undefined}>
+                            {describeDevice(a.userAgent)}
+                          </span>
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         )}
       </Panel>

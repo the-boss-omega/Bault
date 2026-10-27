@@ -21,6 +21,7 @@ const { AccountingSection } = await import('../../apps/web/src/areas/admin/Accou
 const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
 const { WalletRequestForm } = await import('../../apps/web/src/areas/customer/finance/WalletRequestForms');
 const { ShipmentComposer } = await import('../../apps/web/src/areas/customer/shipping/ShipmentComposer');
+const { SignInsSection } = await import('../../apps/web/src/areas/admin/SignInsSection');
 const { api } = await import('../../apps/web/src/shared/api');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -452,6 +453,51 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       }
     }
   });
+  describe('the sign-in log', () => {
+    const at = (day: number, hour: number) => new Date(Date.UTC(2026, 8, day, hour)).toISOString();
+    const log = {
+      since: at(17, 0),
+      last24h: { successes: 273, failures: 4, failingAddresses: 2 },
+      suspicious: [],
+      attempts: [
+        { id: '1', occurredAt: at(18, 12), outcome: 'success', identifier: 'eldar', userId: 'u1', ip: '::ffff:127.0.0.1', userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/120', username: 'eldar', email: 'e@x', role: 'admin' },
+        { id: '2', occurredAt: at(18, 11), outcome: 'bad_credentials', identifier: 'someone@example.com', userId: null, ip: '203.0.113.9', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17) Safari/605 Version/17', username: null, email: null, role: null },
+        { id: '3', occurredAt: at(17, 20), outcome: 'success', identifier: 'red', userId: 'u2', ip: '198.51.100.21', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari/605 Version/17', username: 'red', email: 'r@x', role: 'collector' },
+      ],
+    };
+
+    for (const locale of ['en', 'he'] as const) {
+      it(`has the three counts side by side and an attempt to a line on a wide window, one under another on a phone, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        vi.mocked(api.get).mockResolvedValue(log);
+        render(
+          <I18nProvider>
+            <SignInsSection onError={() => {}} />
+          </I18nProvider>,
+        );
+        await screen.findAllByText(/eldar/);
+        for (const width of [1440, 390]) {
+          const page = await inBrowser(width, locale);
+          const counts = await page.$$eval('.ledger-col', (els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+          const rows = await page.$$eval('.timeline--log > li', (els) => els.map((el) => el.getBoundingClientRect().height));
+          expect(counts).toHaveLength(3);
+          expect(rows).toHaveLength(3);
+          if (width >= 900) {
+            // Side by side, all the same height; and a line to an attempt.
+            expect(Math.abs(counts[0]!.top - counts[2]!.top)).toBeLessThan(2);
+            expect(Math.max(...rows)).toBeLessThan(60);
+          } else {
+            expect(counts[1]!.top).toBeGreaterThanOrEqual(counts[0]!.bottom - 1);
+            expect(counts[2]!.top).toBeGreaterThanOrEqual(counts[1]!.bottom - 1);
+            expect(Math.min(...rows)).toBeGreaterThan(70);
+          }
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+          await page.close();
+        }
+      });
+    }
+  });
+
   describe('a shipment with its slip', () => {
     const address = { id: 'a1', label: 'Home', recipient: 'Red Ashwood', line1: '12 Vine St', city: 'Trenton', region: 'NJ', country: 'US', postalCode: '08608', isDefault: true };
     const items = [{ id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: '2011 Pokémon Call of Legends' }];
