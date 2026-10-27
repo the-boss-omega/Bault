@@ -883,7 +883,6 @@ time,
   align-items: stretch;
   border: var(--border-w) solid var(--line-strong);
   border-radius: var(--radius);
-  overflow: hidden;
   background: var(--surface-input);
 }
 

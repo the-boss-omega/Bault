@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { useT } from './i18n';
+import { IconClose } from './ui/icons';
+import { inBody } from './ui/inBody';
 import { slabLeave, slabMove } from './ui/slabTilt';
 import { useExit } from './ui/useExit';
 import { useOverlay } from './ui/useOverlay';
@@ -227,9 +229,9 @@ function CardPhotoModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   useOverlay(dialogRef, requestClose);
 
-  return (
+  return inBody(
     <div
-      className={closing ? 'modal-backdrop is-closing' : 'modal-backdrop'}
+      className={`${closing ? 'modal-backdrop is-closing' : 'modal-backdrop'} lightbox`}
       role="presentation"
       onClick={requestClose}
     >
@@ -242,12 +244,9 @@ function CardPhotoModal({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="modal-head">
-          <h4>{title}</h4>
-          <button type="button" className="btn btn--ghost modal-close" aria-label={t('photo.close')} onClick={requestClose}>
-            ✕
-          </button>
-        </header>
+        <button type="button" className="lightbox-close" aria-label={t('photo.close')} onClick={requestClose}>
+          <IconClose />
+        </button>
         {photo.exhausted ? (
           <p className="hint modal-empty">{t('photo.missing')}</p>
         ) : (
@@ -255,10 +254,15 @@ function CardPhotoModal({
             <SlabFace serialNumber={serialNumber} title={title} photo={photo} noneLabel={t('photo.none')} />
           </div>
         )}
-        <code className="modal-serial" dir="ltr">
-          {serialNumber}
-        </code>
+        <div className="lightbox-plate">
+          <h4 className="lightbox-name">
+            <bdi dir="auto">{title}</bdi>
+          </h4>
+          <code className="modal-serial" dir="ltr">
+            {serialNumber}
+          </code>
+        </div>
       </div>
-    </div>
+    </div>,
   );
 }

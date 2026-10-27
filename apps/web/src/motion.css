@@ -90,17 +90,20 @@ textarea {
 
 /* Drawers, dialogs, sheets: enter with scale and fade. */
 
+/* Backwards, not both: once it has arrived the element is as its own rules draw it. Held on at the
+   end, a transform (even one that does nothing) would make it the containing block of anything fixed
+   inside it. */
 .drawer-backdrop,
 .modal-backdrop {
-  animation: fade-in var(--dur) var(--ease-out) both;
+  animation: fade-in var(--dur) var(--ease-out) backwards;
 }
 
 .drawer {
-  animation: drawer-in var(--dur-enter) var(--ease-out) both;
+  animation: drawer-in var(--dur-enter) var(--ease-out) backwards;
 }
 
 .modal {
-  animation: dialog-in var(--dur-enter) var(--ease-out) both;
+  animation: dialog-in var(--dur-enter) var(--ease-out) backwards;
 }
 
 @keyframes dialog-in {

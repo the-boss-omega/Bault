@@ -3,6 +3,7 @@ import { Button, IconButton } from './primitives';
 import { IconClose } from './icons';
 import { useT } from '../i18n';
 import { useExit } from './useExit';
+import { inBody } from './inBody';
 import { useOverlay } from './useOverlay';
 
 export function DetailDrawer({
@@ -32,7 +33,7 @@ export function DetailDrawer({
   const titleId = useId();
   useOverlay(panelRef, requestClose);
 
-  return (
+  return inBody(
     <>
       <div
         className={closing ? 'drawer-backdrop is-closing' : 'drawer-backdrop'}
@@ -64,7 +65,7 @@ export function DetailDrawer({
         <div className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>{children}</div>
         {footer && <footer className="drawer-foot">{footer}</footer>}
       </aside>
-    </>
+    </>,
   );
 }
 
@@ -92,7 +93,7 @@ export function ConfirmationModal({
   const titleId = useId();
   useOverlay(dialogRef, requestCancel);
 
-  return (
+  return inBody(
     <div
       className={closing ? 'modal-backdrop is-closing' : 'modal-backdrop'}
       role="presentation"
@@ -120,6 +121,6 @@ export function ConfirmationModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
   );
 }

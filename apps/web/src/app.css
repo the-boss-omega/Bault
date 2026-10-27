@@ -179,6 +179,34 @@ body::before {
   border-inline-start-color: var(--border);
 }
 
+/* The capsule does not clip, because a menu opens out of it; the two ends take its corners instead. */
+.ph-controls > :first-child,
+.ph-controls > :first-child > .icon-btn {
+  border-start-start-radius: inherit;
+  border-end-start-radius: inherit;
+}
+
+.ph-controls > :last-child,
+.ph-controls > :last-child > .icon-btn {
+  border-start-end-radius: inherit;
+  border-end-end-radius: inherit;
+}
+
+/* On a phone the header's controls are below the title, wherever the page has scrolled to, and a menu
+   opened out of one of them runs off the edge of the screen. There each drops from the top bar,
+   the width of the screen. */
+@media (max-width: 767px) {
+  .pop {
+    position: fixed;
+    inset-block-start: 64px;
+    inset-inline: var(--sp-4);
+    width: auto;
+    min-width: 0;
+    max-block-size: calc(100svh - 80px);
+    overflow-y: auto;
+  }
+}
+
 .avatar {
   background: linear-gradient(135deg, var(--secondary), var(--accent));
   color: var(--foreground);
