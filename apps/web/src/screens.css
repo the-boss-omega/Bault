@@ -1183,9 +1183,32 @@
   color: var(--paper-ink);
 }
 
+/* Words where the amount would be: what a person typed, read as the language it is in, hung from that language's edge. */
+.drawer-tag-title {
+  font: 500 clamp(24px, 3.2vw, 30px) / 1.2 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--paper-ink);
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+/* The card in its case, laid on the tag: the object the tag is about, a little larger than a list's thumbnail. */
+.drawer-tag-art {
+  display: grid;
+  justify-items: center;
+  margin-block-end: var(--sp-3);
+}
+
+.drawer-tag-art > * {
+  inline-size: 96px;
+}
+
 /* The figure is an amount (left to right, tabular), and an amount takes the theme's ink: on paper it is paper's. */
 .drawer-tag .amount,
-.ledger-sheet .amount {
+.ledger-sheet .amount,
+.drawer-tag .serial,
+.drawer-tag .code-inline {
   color: inherit;
 }
 

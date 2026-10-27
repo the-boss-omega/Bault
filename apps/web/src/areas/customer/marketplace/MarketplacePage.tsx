@@ -18,9 +18,11 @@ import {
   Field,
   Panel,
   SkeletonBlock,
+  StatusBadge,
   SuccessNote,
   TabPanel,
 } from '../../../shared/ui/primitives';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { ConfirmationModal, DetailDrawer } from '../../../shared/ui/DetailDrawer';
 import { IconSearch, IconTag } from '../../../shared/ui/icons';
 import { MyListingsPanel, OffersPanel, SwapsPanel } from './SellerPanels';
@@ -447,33 +449,35 @@ export function SellPanel({
     }
   }
 
+  const chosen = items.find((item) => item.id === itemId);
+
   return (
     <Panel title={t('market.sellLegend')} subtitle={t('market.sell.subtitle')}>
       {items.length === 0 ? (
         <EmptyState title={t('services.noItems')} text={t('market.sell.noItemsText')} icon={<IconTag />} />
       ) : (
-        <div className="stack stack--tight">
-          <fieldset className="field field--cards">
-            <legend className="field-label">{t('market.sell.itemLabel')}</legend>
-            <ul className="check-list">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <label className="check">
-                    <input
-                      type="radio"
-                      name="sell-item"
-                      value={item.id}
-                      checked={itemId === item.id}
-                      onChange={() => setItemId(item.id)}
-                    />
-                    <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </fieldset>
+        <div className="request-form">
+          <div className="stack stack--tight request-form-fields">
+            <fieldset className="field field--cards">
+              <legend className="field-label">{t('market.sell.itemLabel')}</legend>
+              <ul className="check-list">
+                {items.map((item) => (
+                  <li key={item.id}>
+                    <label className="check">
+                      <input
+                        type="radio"
+                        name="sell-item"
+                        value={item.id}
+                        checked={itemId === item.id}
+                        onChange={() => setItemId(item.id)}
+                      />
+                      <ItemPick serial={item.serialNumber} name={itemName(t, item)} />
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
 
-          <div className="stack stack--tight" style={{ maxWidth: 460 }}>
             <div className="field">
               <label className="field-label" htmlFor="ask-price">
                 {t('market.sell.priceLabel')}
@@ -493,7 +497,34 @@ export function SellPanel({
                 {cents === null ? t('market.sell.priceHint') : t('market.sell.willList', { amount: formatUsd(cents) })}
               </p>
             </div>
+          </div>
 
+          {/* The listing as it will stand in the marketplace: the card in its case, the price asked, what it is. */}
+          <aside className="request-slip">
+            <DrawerTag
+              kicker={t('market.sell.priceLabel')}
+              art={
+                chosen?.serialNumber ? (
+                  <CardPhotoThumb serialNumber={chosen.serialNumber} title={itemName(t, chosen)} decorative />
+                ) : undefined
+              }
+              amount={formatUsd(cents !== null && cents > 0 ? cents : 0)}
+              lines={
+                chosen
+                  ? [
+                      ...(chosen.serialNumber
+                        ? [{ label: t('vault.serial'), value: <Serial value={chosen.serialNumber} /> }]
+                        : []),
+                      // The card's name, not the whole catalogue line (the set, the artist and the collation follow it).
+                      { label: t('market.mine.col.item'), value: <span className="ltr-run">{itemName(t, chosen).split(' · ')[0]}</span> },
+                    ]
+                  : []
+              }
+              status={<StatusBadge tone="success">{t('market.listing.active')}</StatusBadge>}
+            />
+          </aside>
+
+          <div className="stack stack--tight request-form-actions">
             <Button variant="gold" block disabled={busy || !itemId || cents === null} onClick={sell}>
               {t('market.listForSale')}
             </Button>

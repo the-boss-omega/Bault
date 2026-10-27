@@ -11,6 +11,8 @@ import type { ReactNode } from 'react';
 export function DrawerTag({
   kicker,
   amount,
+  title,
+  art,
   status,
   note,
   lines,
@@ -19,6 +21,13 @@ export function DrawerTag({
   kicker: string;
   /** The amount as it is written, with its sign when it has one. A tag that is a set of lines (where to send a payment) has none. */
   amount?: string;
+  /**
+   * Words, in the display face, where what the tag is about is a name and not a sum: a person, what is in a
+   * parcel. Whatever a person typed is read as the language it is in.
+   */
+  title?: ReactNode;
+  /** What the tag hangs from: the card in its case. Decoration; the lines under it name it. */
+  art?: ReactNode;
   /** Where it stands: a status badge. */
   status?: ReactNode;
   /** Whatever goes with the amount: a fee, a currency. */
@@ -28,7 +37,9 @@ export function DrawerTag({
 }) {
   return (
     <section className="drawer-tag" aria-label={kicker}>
+      {art && <div className="drawer-tag-art">{art}</div>}
       <p className="drawer-tag-kicker">{kicker}</p>
+      {title !== undefined && <p className="drawer-tag-title">{title}</p>}
       {amount !== undefined && (
         <p className="drawer-tag-amount">
           <span className="amount" dir="ltr">
