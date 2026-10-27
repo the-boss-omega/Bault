@@ -1546,7 +1546,8 @@ li.is-clickable {
 }
 
 /* Code on paper is ink on paper: the chip the page draws around code is the page's, not the tag's. */
-.drawer-tag code {
+.drawer-tag code,
+.ledger-sheet code {
   padding: 0;
   border: 0;
   background: none;
@@ -1586,6 +1587,87 @@ li.is-clickable {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
+}
+
+/* ---- The rate card: every rule in force on one sheet, a group to each action and a line to each rule ---- */
+
+.rate-card {
+  margin-block-end: 0;
+  padding: var(--sp-6) var(--sp-6) var(--sp-2);
+}
+
+/* The groups run down the card in as many columns as it has room for, as a printed price list does. */
+.rate-columns {
+  columns: 340px;
+  column-gap: var(--sp-12);
+}
+
+.rate-group {
+  break-inside: avoid;
+  margin-block-end: var(--sp-6);
+}
+
+.rate-group-title {
+  margin: 0 0 var(--sp-1);
+  padding-block-end: var(--sp-1);
+  border-block-end: 1px solid var(--paper-rule);
+  font: 500 var(--fs-xl) / 1.2 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--paper-ink);
+}
+
+.rate-group-title {
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.rate-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rate-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-4);
+  align-items: baseline;
+  padding-block: var(--sp-2);
+  border-block-start: 1px dashed var(--paper-rule-soft);
+}
+
+.rate-line:first-child {
+  border-block-start: 0;
+}
+
+.rate-line-name,
+.rate-line-meta {
+  grid-column: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.rate-line-name {
+  color: var(--paper-ink);
+  font-size: var(--fs-base);
+  line-height: 1.4;
+}
+
+.rate-line-meta {
+  color: var(--paper-ink-3);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+.rate-line-value {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font: 500 var(--fs-lg) / 1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
 }
 
 /* ---- The month's statement: three figures on one sheet of paper ---- */
