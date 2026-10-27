@@ -93,6 +93,38 @@ describe('a table that scrolls sideways can be reached from the keyboard', () =>
     expect(wrap).not.toHaveAttribute('tabindex');
   });
 
+  it('measures when something changes in or around a table, and not for anything else', async () => {
+    const { getByTestId } = render(<Page />);
+    const wrap = getByTestId('wrap');
+    let reads = 0;
+    Object.defineProperty(wrap, 'scrollWidth', {
+      configurable: true,
+      get: () => {
+        reads += 1;
+        return 320;
+      },
+    });
+    Object.defineProperty(wrap, 'clientWidth', { configurable: true, value: 320 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const settled = reads;
+
+    // A figure counting up, somewhere else on the page.
+    const elsewhere = document.createElement('p');
+    const aside = document.createElement('aside');
+    aside.appendChild(elsewhere);
+    document.body.appendChild(aside);
+    elsewhere.textContent = '1';
+    elsewhere.textContent = '2';
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(reads).toBe(settled);
+
+    // A row arriving in the table.
+    wrap.querySelector('tbody')!.appendChild(document.createElement('tr'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(reads).toBeGreaterThan(settled);
+    aside.remove();
+  });
+
   it('does not take over a tab stop the table already has', async () => {
     const { getByTestId } = render(<Page />);
     const wrap = getByTestId('wrap');

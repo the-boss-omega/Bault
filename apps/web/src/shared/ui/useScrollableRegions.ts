@@ -49,7 +49,18 @@ export function useScrollableRegions(): void {
       if (!frame) frame = requestAnimationFrame(sync);
     };
 
-    const observer = new MutationObserver(schedule);
+    // A figure counting up, a toast, a drawer opening: none of them can change how wide a table is, so
+    // only a change inside a table, or the arrival of one, is worth a measurement (which is a layout).
+    const involvesATable = (record: MutationRecord) => {
+      if (record.target instanceof Element && record.target.closest(SELECTOR)) return true;
+      for (const node of record.addedNodes) {
+        if (node instanceof Element && (node.matches(SELECTOR) || node.querySelector(SELECTOR))) return true;
+      }
+      return false;
+    };
+    const observer = new MutationObserver((records) => {
+      if (records.some(involvesATable)) schedule();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', schedule);
     // Widths change when the fonts arrive.
