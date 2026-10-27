@@ -400,7 +400,6 @@ async function auditFocus(page, stops = 30) {
         b: top.b * top.a + under.b * (1 - top.a),
         a: 1,
       });
-      const cs = getComputedStyle(el);
       const name = `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/)[0] : ''}`;
       const label = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 30);
       // The element draws its own ring, or a wrapper does (a search box rings the
