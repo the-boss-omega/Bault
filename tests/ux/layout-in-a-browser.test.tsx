@@ -114,6 +114,28 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       }
     });
 
+    it('a drawer keeps its close button the size it is, however long what it is about is named', async () => {
+      render(
+        <I18nProvider>
+          <DetailDrawer
+            title="SN-CL10-0005"
+            subtitle="2011 Pokémon Call of Legends — Rayquaza #SL10/95 · Rare Holo (Shiny Legendary subset) · art by Noriko Hotta · col1-SL10"
+            onClose={() => {}}
+          >
+            <p>Body</p>
+          </DetailDrawer>
+        </I18nProvider>,
+      );
+      for (const width of [1440, 390]) {
+        const page = await inBrowser(width, 'en', 'dark', false);
+        const close = await page.$eval('.drawer-head .icon-btn', (el) => el.getBoundingClientRect().toJSON());
+        // WCAG 2.2, 2.5.8: a target is at least 24 by 24 CSS pixels (this one is 36).
+        expect(close.width).toBeGreaterThanOrEqual(36);
+        expect(close.height).toBeGreaterThanOrEqual(36);
+        await page.close();
+      }
+    });
+
     it('a drawer that scrolls keeps a control that is half in view, and its ring, off the edge it is scrolled to', async () => {
       render(
         <I18nProvider>

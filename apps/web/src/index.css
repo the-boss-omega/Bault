@@ -965,6 +965,8 @@ time,
   position: relative;
   display: inline-grid;
   place-items: center;
+  /* A control of a size keeps it: in a row with a long title it does not give its room up (it was 22px wide, under the 24 a target needs). */
+  flex: none;
   width: 36px;
   height: 36px;
   padding: 0;
