@@ -238,6 +238,38 @@ jobs:
           psql "$DIRECT_DATABASE_URL" -c "SELECT tgrelid::regclass AS table, tgname FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1, 2;"
           [ "$triggers" = "11" ] && [ "$operators" = "4" ]
 
+      - name: The migration wrote one platform custodian, and a second run adds none
+        run: |
+          count_platform() {
+            psql "$DIRECT_DATABASE_URL" -At -c "SELECT count(*) FROM user_account WHERE email = 'platform@bault.dev';"
+          }
+          first="$(count_platform)"
+          psql "$DIRECT_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+            -f apps/api/src/db/migrations/0038_every_database_has_its_platform_custodian.sql
+          again="$(count_platform)"
+          echo "platform custodians: ${first} after migrating, ${again} after 0038 again (expected 1 and 1)"
+          [ "$first" = "1" ] && [ "$again" = "1" ]
+
+      - name: The image creates the first administrator once, and refuses a second
+        run: |
+          password="$(openssl rand -base64 24)"
+          create_admin() {
+            printf '%s\n' "$password" | docker run --rm -i --network host \
+              -e DATABASE_URL -e DIRECT_DATABASE_URL -e NODE_ENV \
+              -e PAYMENT_PROVIDER -e STORAGE_PROVIDER -e STORAGE_ENDPOINT -e STORAGE_REGION \
+              -e STORAGE_BUCKET -e STORAGE_ACCESS_KEY -e STORAGE_SECRET_KEY \
+              bault-api:ci node dist/db/create-admin.js \
+              --email "$1@example.com" --username "$1" --first-name CI --last-name Admin
+          }
+          create_admin first
+          if create_admin second; then
+            echo "a second administrator was created"
+            exit 1
+          fi
+          admins="$(psql "$DIRECT_DATABASE_URL" -At -c "SELECT string_agg(username, ',') FROM user_account WHERE role = 'admin';")"
+          echo "administrators: ${admins} (expected first)"
+          [ "$admins" = "first" ]
+
   cloud-sql-privileges:
     runs-on: ubuntu-24.04
 

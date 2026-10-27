@@ -267,6 +267,13 @@
       "when": 1785075300000,
       "tag": "0037_an_address_names_its_state",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1785075400000,
+      "tag": "0038_every_database_has_its_platform_custodian",
+      "breakpoints": true
     }
   ]
 }

@@ -6,7 +6,7 @@ This section covers everything under `apps/api/src` that no domain module owns. 
 
 About 1 minute. It builds on T17.1 and T5.3.
 
-These two files decide what `nest build` puts in `dist`, which the production image runs. `nest-cli.json` compiles with `tsconfig.build.json`. It also copies the `.sql` files of `apps/api/src/db/sql` into `dist` as assets, so the compiled `migrate.js` finds them next to itself. `tsconfig.build.json` leaves out `src/db/seed.ts`, which truncates every table and creates administrators with a known password. The migrations are not an asset. `apps/api/Dockerfile` copies `src/db/migrations` as source, and `migrate.ts` reads that folder relative to the working directory.
+These two files decide what `nest build` puts in `dist`, which the production image runs. `nest-cli.json` compiles with `tsconfig.build.json`. It also copies the `.sql` files of `apps/api/src/db/sql` into `dist` as assets, so the compiled `migrate.js` finds them next to itself. `tsconfig.build.json` leaves out `src/db/seed.ts`, which truncates every table and creates administrators with a known password. Every other file in `src/db` ships, so `create-admin.ts` runs in production as `dist/db/create-admin.js`. The migrations are not an asset. `apps/api/Dockerfile` copies `src/db/migrations` as source, and `migrate.ts` reads that folder relative to the working directory.
 
 #### `apps/api/src/main.ts`
 
@@ -140,7 +140,9 @@ About 1.5 minutes. It builds on T5.3 and T17.2.
 
 These files change the database schema. Production runs `node dist/db/migrate.js` from the API image, as `bault_owner`, before a release serves. `main` connects on `DIRECT_DATABASE_URL`, because DDL needs a real session and PgBouncer does not give one. It runs Drizzle's `migrate` over `./src/db/migrations`, and then `0001_append_only.sql`, on every run. `drizzle.config.ts` points drizzle-kit at `schema/index.ts` and the same folder.
 
-The folder holds 38 migration files, `0000` to `0037`, and `meta/_journal.json` gives each a `tag` and a `when`. Drizzle records the applied files in its own `drizzle` schema. It applies a file only if its `when` is later than the newest one recorded, and it applies all pending files in one transaction. So a new file needs a journal entry with a larger `when`, or Drizzle skips it silently. The snapshots stop at `0003` and the later files are written by hand. So the API's `db:generate` would compare the schema with the old `0003` snapshot. An applied file never runs again, so never edit a file that has shipped, because no database that ran it would get the change.
+The folder holds 39 migration files, `0000` to `0038`, and `meta/_journal.json` gives each a `tag` and a `when`. Drizzle records the applied files in its own `drizzle` schema. It applies a file only if its `when` is later than the newest one recorded, and it applies all pending files in one transaction. So a new file needs a journal entry with a larger `when`, or Drizzle skips it silently. The snapshots stop at `0003` and the later files are written by hand. So the API's `db:generate` would compare the schema with the old `0003` snapshot. An applied file never runs again, so never edit a file that has shipped, because no database that ran it would get the change.
+
+Only `0038` writes a row. It inserts the platform custodian, `platform@bault.dev`, which the house store, donations, buyouts, consignments and the accounting summary find by that address. It inserts with `ON CONFLICT DO NOTHING` on the email, so a database that already has the account keeps it unchanged. The account is `closed` and a plain `user`, because nothing that uses it reads its role or status. Closed, it cannot sign in, is sent no reset link and is mailed no notification, which matters because Bault does not hold the `bault.dev` domain. Its password hash is a well-formed argon2id digest of zero bytes, so a sign-in attempt fails as a wrong password rather than an error.
 
 #### `apps/api/src/db/sql/0001_append_only.sql`
 
@@ -156,7 +158,13 @@ About 1.5 minutes. It builds on T18.3, T5.6 and T5.8.
 
 This file fills a development database with known data. It runs from source as the API's `db:seed` script. `refuseInProduction` refuses `NODE_ENV=production` unless `ALLOW_DESTRUCTIVE_SEED` is `yes-i-am-sure`. It checks before connecting and again after `loadEnv` reads `.env`, so a production setting found only in `.env` is still caught. The seed truncates every table, history and the pg-boss queue included. `tests/integration/seed-reset.test.ts` checks that list against the database.
 
-Then it inserts a consistent dataset. It holds the `bault.dev` personas with the password `11111111`, pricing, bins, items with custody history, wallet requests, tickets, parcels and an escrow deal. Every balance is its ledger sum. The rows go in directly, not through the services, so a new service rule needs matching seed data.
+Then it inserts a consistent dataset. It holds the `bault.dev` personas with the password `11111111`, pricing, bins, items with custody history, wallet requests, tickets, parcels and an escrow deal. Every balance is its ledger sum. The rows go in directly, not through the services, so a new service rule needs matching seed data. The platform custodian is the exact row `0038` writes, so a seeded database has the same house account as production.
+
+#### `apps/api/src/db/create-admin.ts`
+
+About 1 minute. It builds on T5.8 and T7.2.
+
+This command creates the first administrator of a new database. It ships as `dist/db/create-admin.js`, and production runs it once from the API image, after the first deploy. The email, username and names are arguments, and the password is the first line of standard input, so no password is in the repository, the shell history or the process list. It refuses a password typed at a terminal, which would show it. It hashes with argon2 as `AuthService.register` does, asks for at least 12 characters, and writes the account `active` with the role `admin`. Two-factor waits for the first sign-in, which production demands of an admin. It takes an advisory lock in its transaction, so two runs at once cannot both insert. It refuses, writes nothing and names the administrator when any administrator other than `platform@bault.dev` exists. Further administrators are made from the console. `tests/integration/bootstrap.test.ts` runs it against the seeded database, and CI's `migrate-image` job runs it twice from the image.
 
 #### `apps/api/src/app.controller.ts`, `apps/api/src/shared/shared.module.ts`, `apps/api/src/shared/fixtures.ts`, `apps/api/src/db/migrations/meta`
 

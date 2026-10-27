@@ -131,7 +131,22 @@ async function main(): Promise<void> {
       legacyDisplayName: 'Ana Maria van der Berg',
     },
   );
-  const platformAcc = await mkUser('platform@bault.dev', 'platform', 'admin', 'Platform', 'Custodian');
+  // The row migration 0038 writes, so a seeded database has production's platform custodian.
+  const platformAcc = one(
+    await db
+      .insert(userAccount)
+      .values({
+        email: 'platform@bault.dev',
+        username: 'platform',
+        passwordHash:
+          '$argon2id$v=19$m=65536,t=3,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        status: 'closed',
+        role: 'user',
+        firstName: 'Platform',
+        lastName: 'Custodian',
+      })
+      .returning({ id: userAccount.id, username: userAccount.username }),
+  );
 
   const eldar = eldarAcc.id;
   const hermon = hermonAcc.id;
