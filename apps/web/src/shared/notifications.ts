@@ -1,4 +1,6 @@
 import type { MessageKey, TranslateFn } from './i18n';
+import type { AppNotification } from './hooks';
+import { dayKey } from './money';
 
 export const EVENT_LABEL_KEY: Record<string, MessageKey> = {
   item_received: 'notifications.event.item_received',
@@ -90,4 +92,37 @@ export function renderContent(content: unknown, label: string): string {
       return `${readable}: ${String(value)}`;
     });
   return parts.length > 0 ? `${label} — ${parts.join(', ')}` : label;
+}
+
+/** The serial of the card a notification is about, when it says: the item events carry it as `barcode`. */
+export function notificationBarcode(content: unknown): string | null {
+  if (content == null || typeof content !== 'object') return null;
+  const barcode = (content as Record<string, unknown>).barcode;
+  return typeof barcode === 'string' && /^[A-Z]{2,4}-[A-Z0-9]+-\d{3,}$/.test(barcode) ? barcode : null;
+}
+
+export type NotificationGlyph = 'card' | 'market' | 'escrow' | 'wallet' | 'shipping' | 'inbox' | 'help' | 'bell';
+
+/** What kind of thing an event is about, for the mark in front of it: by the way its name starts. */
+export function notificationGlyph(eventType: string): NotificationGlyph {
+  if (/^(?:item|hold|arrival|commons|grading)_/.test(eventType)) return 'card';
+  if (/^(?:offer|swap|transfer|buyout)_/.test(eventType)) return 'market';
+  if (/^escrow_/.test(eventType)) return 'escrow';
+  if (/^(?:wallet|topup|payment)_/.test(eventType)) return 'wallet';
+  if (/^parcel_/.test(eventType)) return 'inbox';
+  if (/^(?:shipment|direct_ship|group_shipment|show_pickup|white_glove|handed_over)/.test(eventType)) return 'shipping';
+  if (/^(?:support|custom_request)_/.test(eventType)) return 'help';
+  return 'bell';
+}
+
+/** The feed, newest first, in runs of one calendar day. */
+export function byDay(items: readonly AppNotification[]) {
+  const days: Array<{ key: string; items: AppNotification[]; first: AppNotification }> = [];
+  for (const n of items) {
+    const key = dayKey(n.createdAt);
+    const last = days[days.length - 1];
+    if (last && last.key === key) last.items.push(n);
+    else days.push({ key, items: [n], first: n });
+  }
+  return days;
 }

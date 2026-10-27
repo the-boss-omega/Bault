@@ -1100,11 +1100,110 @@
   }
 }
 
-/* A register whose entries are stamped with the time as well as the day gives the stamp room. */
+/* A register whose entries are stamped with the time gives the stamp room; the day is a heading on the rule. */
 @media (min-width: 640px) {
   .timeline--stamped > li {
-    grid-template-columns: 14rem minmax(0, 1fr);
+    grid-template-columns: 7rem minmax(0, 1fr);
   }
+}
+
+/* ---- Notifications: a register in days ---- */
+
+.register-days {
+  display: grid;
+  gap: var(--sp-8);
+}
+
+.register-day {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  /* design-lint-allow: a small label in the mono face, as the breadcrumb is */
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.register-day::after {
+  content: '';
+  flex: 1 1 auto;
+  border-block-start: 1px dashed var(--border);
+}
+
+:lang(he) .register-day {
+  font: 500 13px/1.3 var(--font-ui);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* An entry that is about a card shows the card, in its case, beside what it says. */
+.register-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+.register-thumb {
+  flex: none;
+  inline-size: 44px;
+}
+
+/* An entry about no card in particular carries the kind of thing it is, in a tile the width of the card's case. */
+.register-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--muted-foreground);
+}
+
+.register-glyph svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
+/* The same register, small, in the bell's menu: each entry has its mark, its words, and when. */
+.register-day--pop {
+  padding: var(--sp-3) var(--sp-4) var(--sp-1);
+}
+
+.pop-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pop-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: var(--sp-3);
+  align-items: start;
+}
+
+.pop-row .register-thumb,
+.pop-row .register-glyph {
+  inline-size: 36px;
+}
+
+.pop-row .register-glyph {
+  block-size: 36px;
+}
+
+.pop-row-body {
+  min-inline-size: 0;
+}
+
+.register-text {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-inline-size: 0;
 }
 
 /* The departures keep one set of columns down the board, so the titles line up whatever the buttons say. */

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
-import { formatDateTime } from '../../../shared/money';
+import { formatDayHeading, formatTime } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
-import { EVENT_TYPES, channelLabel, eventLabel, renderContent } from '../../../shared/notifications';
+import { EVENT_TYPES, byDay, channelLabel, eventLabel, notificationBarcode, renderContent } from '../../../shared/notifications';
 import type { AppNotification, useNotificationFeed } from '../../../shared/hooks';
+import { NotificationMark } from '../../../shared/ui/NotificationMark';
+import { Serial } from '../../../shared/ui/Serial';
 import {
   Button,
   ContextTabs,
@@ -119,20 +121,37 @@ export function NotificationsPage({
             ) : feed.items.length === 0 ? (
               <EmptyState title={t('notifications.empty')} text={t('notifications.emptyText')} icon={<IconBell />} />
             ) : (
-              <ul className="timeline timeline--stamped" aria-label={t('notifications.mine', { n: feed.items.length })}>
-                {feed.items.map((n: AppNotification) => (
-                  <li key={n.id}>
-                    <span className="hint date">{formatDateTime(n.createdAt, locale)}</span>
-                    <div>
-                      <span className="register-kind">{eventLabel(t, n.eventType)}</span>
-                      {/* What the server wrote is usually English: an island of its own direction, so its full stop stays at its end. */}
-                      <p className="register-entry">
-                        <bdi dir="auto">{renderContent(n.content, eventLabel(t, n.eventType))}</bdi>
-                      </p>
-                    </div>
-                  </li>
+              <div className="register-days">
+                {byDay(feed.items).map(({ key, items, first }) => (
+                  <div key={key} className="register-day-group">
+                    <h3 className="register-day" id={`day-${key}`}>
+                      <span className="date">{formatDayHeading(first.createdAt, locale)}</span>
+                    </h3>
+                    <ul className="timeline timeline--stamped" aria-labelledby={`day-${key}`}>
+                      {items.map((n: AppNotification) => {
+                        const barcode = notificationBarcode(n.content);
+                        const kind = eventLabel(t, n.eventType);
+                        return (
+                          <li key={n.id}>
+                            <span className="hint date">{formatTime(n.createdAt, locale)}</span>
+                            <div className="register-body">
+                              <NotificationMark n={n} />
+                              <div className="register-text">
+                                <span className="register-kind">{kind}</span>
+                                {/* What the server wrote is usually English: an island of its own direction, so its full stop stays at its end. */}
+                                <p className="register-entry">
+                                  <bdi dir="auto">{renderContent(n.content, kind)}</bdi>
+                                </p>
+                                {barcode && <Serial value={barcode} quiet />}
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </Panel>
         </TabPanel>

@@ -73,3 +73,43 @@ export function formatDate(iso: string | null | undefined, locale: string): stri
     dateStyle: 'medium',
   }).format(date);
 }
+
+const intlLocale = (locale: string) => (locale === 'he' ? 'he-IL' : 'en-US');
+
+/** The time of day, and nothing else: "6:08 AM", "06:08". */
+export function formatTime(iso: string | null | undefined, locale: string): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(intlLocale(locale), { hour: 'numeric', minute: '2-digit' }).format(date);
+}
+
+/** The calendar day a moment falls on, in the visitor's own time zone: what entries are grouped by. */
+export function dayKey(iso: string | null | undefined): string {
+  const date = new Date(iso ?? '');
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * The heading of a day in a register: the day's own words where there are any ("today", "yesterday", in the
+ * language of the page, from the browser's own tables) and the date. Nothing here is a message of ours.
+ */
+export function formatDayHeading(iso: string, locale: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const lang = intlLocale(locale);
+  const full = new Intl.DateTimeFormat(lang, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  }).format(date);
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(date)) / 86_400_000);
+  if (days === 0 || days === 1) {
+    const word = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }).format(-days, 'day');
+    return `${word} · ${full}`;
+  }
+  return full;
+}

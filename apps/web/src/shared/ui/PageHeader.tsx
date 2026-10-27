@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n, useT, type Locale } from '../i18n';
-import { formatDate } from '../money';
+import { formatDayHeading, formatTime } from '../money';
+import { byDay } from '../notifications';
+import { NotificationMark } from './NotificationMark';
 import { useTheme } from '../theme';
 import type { AppNotification } from '../hooks';
 import { IconButton } from './primitives';
@@ -175,21 +177,31 @@ export function NotificationBell({
               {t('notifications.empty')}
             </p>
           ) : (
-            <ul className="pop-list">
-              {recent.map((n) => (
-                <li key={n.id}>
-                  <div className="pop-row">
-                    <p className="pop-row-title">{renderTitle(n)}</p>
-                    <p className="pop-row-text">
-                      <bdi dir="auto">{renderText(n)}</bdi>
-                    </p>
-                    <p className="pop-row-date">
-                      <span className="date">{formatDate(n.createdAt, locale)}</span>
-                    </p>
-                  </div>
-                </li>
+            <div className="pop-list">
+              {byDay(recent).map(({ key, items: day, first }) => (
+                <div key={key} className="register-day-group">
+                  <h3 className="register-day register-day--pop" id={`pop-day-${key}`}>
+                    <span className="date">{formatDayHeading(first.createdAt, locale)}</span>
+                  </h3>
+                  <ul aria-labelledby={`pop-day-${key}`}>
+                    {day.map((n) => (
+                      <li key={n.id}>
+                        <div className="pop-row">
+                          <NotificationMark n={n} />
+                          <div className="pop-row-body">
+                            <p className="pop-row-title">{renderTitle(n)}</p>
+                            <p className="pop-row-text">{renderText(n)}</p>
+                            <p className="pop-row-date">
+                              <span className="date">{formatTime(n.createdAt, locale)}</span>
+                            </p>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
           <div className="pop-foot">
             <button
