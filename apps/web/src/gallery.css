@@ -364,3 +364,18 @@
 .card-grid--listings > .card:nth-child(n + 7) {
   animation-delay: 300ms;
 }
+
+/* ---- Filters: the search takes the room it needs ---- */
+
+.filter-bar .search {
+  flex: 1 1 280px;
+  min-inline-size: 260px;
+}
+
+.filter-bar {
+  align-items: flex-end;
+}
+
+[role='tabpanel'] {
+  animation: rise 480ms var(--ease-out-expo) backwards;
+}

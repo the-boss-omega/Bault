@@ -80,12 +80,12 @@
   transform: rotateX(calc(var(--ty) * var(--tilt))) rotateY(calc(var(--tx) * var(--tilt)));
   transform-style: preserve-3d;
   transition: transform 560ms var(--ease-out-expo), box-shadow 360ms var(--ease-out-expo);
-  will-change: transform;
 }
 
 .slab-case[data-live] {
   transition-duration: 90ms, 360ms;
   animation: none;
+  will-change: transform;
 }
 
 .photo-thumb:hover .slab-case,

@@ -138,6 +138,27 @@ textarea:hover:not(:disabled) {
   border-color: color-mix(in oklab, var(--input) 60%, var(--foreground));
 }
 
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 34px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+}
+
+select:dir(rtl) {
+  background-position: 18px 50%, 13px 50%;
+}
+
+select option {
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+
 input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--foreground);
