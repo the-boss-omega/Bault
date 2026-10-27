@@ -1109,14 +1109,12 @@
 
 /* ---- A drawer's tag: the sum it is about, on paper ---- */
 
-.drawer-tag {
+.drawer-tag,
+.ledger-sheet {
   --focus-color: var(--paper-ink);
   position: relative;
   isolation: isolate;
-  display: grid;
-  gap: var(--sp-1);
   margin-block-end: var(--sp-6);
-  padding: var(--sp-5) var(--sp-5) var(--sp-4);
   border-radius: var(--r-xs);
   background: var(--paper);
   color: var(--paper-ink);
@@ -1126,7 +1124,14 @@
   overflow: clip;
 }
 
-.drawer-tag::before {
+.drawer-tag {
+  display: grid;
+  gap: var(--sp-1);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+}
+
+.drawer-tag::before,
+.ledger-sheet::before {
   content: '';
   position: absolute;
   inset-block-start: 0;
@@ -1136,7 +1141,8 @@
   background: var(--foil);
 }
 
-.drawer-tag::after {
+.drawer-tag::after,
+.ledger-sheet::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1147,13 +1153,15 @@
   background-image: var(--paper-grain);
 }
 
-.drawer-tag > * {
+.drawer-tag > *,
+.ledger-sheet > * {
   position: relative;
   z-index: 1;
   margin: 0;
 }
 
-.drawer-tag-kicker {
+.drawer-tag-kicker,
+.ledger-kicker {
   /* design-lint-allow: a small label in the mono face, as the statement's is */
   font: 500 11.5px/1.3 var(--font-mono);
   letter-spacing: 0.08em;
@@ -1161,7 +1169,8 @@
   color: var(--paper-ink-3);
 }
 
-:lang(he) .drawer-tag-kicker {
+:lang(he) .drawer-tag-kicker,
+:lang(he) .ledger-kicker {
   font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
@@ -1175,7 +1184,8 @@
 }
 
 /* The figure is an amount (left to right, tabular), and an amount takes the theme's ink: on paper it is paper's. */
-.drawer-tag .amount {
+.drawer-tag .amount,
+.ledger-sheet .amount {
   color: inherit;
 }
 
@@ -1200,6 +1210,118 @@
 
 .drawer-tag-note {
   color: var(--paper-ink-2);
+}
+
+/* ---- The month's statement: three figures on one sheet of paper ---- */
+
+/* The sheet is the container: how many figures sit side by side is the sheet's width, not the window's. */
+.ledger-sheet {
+  container: ledger / inline-size;
+}
+
+.ledger-cols {
+  --ledger-figure: clamp(30px, 9cqi, 44px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ledger-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-inline-size: 0;
+  padding: var(--sp-5);
+}
+
+.ledger-col + .ledger-col {
+  border-block-start: 1px dashed var(--paper-rule);
+}
+
+.ledger-col > * {
+  margin: 0;
+}
+
+.ledger-figure {
+  font: 500 var(--ledger-figure) / 1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper-ink);
+}
+
+/* What the figure is made of: a name, a leader of dots, an amount, as a menu or a receipt sets them. */
+.ledger-lines {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-block-start: var(--sp-2);
+}
+
+.ledger-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--paper-ink-2);
+}
+
+.ledger-line dt {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-inline-size: 0;
+}
+
+.ledger-line dt::after {
+  content: '';
+  flex: 1 1 var(--sp-4);
+  min-inline-size: var(--sp-4);
+  border-block-end: 1px dotted var(--paper-rule);
+}
+
+.ledger-line dd {
+  flex: none;
+  margin: 0;
+  color: var(--paper-ink);
+}
+
+.ledger-note,
+.ledger-foot {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--paper-ink-2);
+}
+
+.ledger-note {
+  margin-block-start: var(--sp-1);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px dashed var(--paper-rule);
+}
+
+.ledger-foot {
+  padding: var(--sp-3) var(--sp-5);
+  border-block-start: 1px dashed var(--paper-rule);
+}
+
+/* Wide enough, the revenue and its lines stand on one side, and what customers put in and what is held for them are stacked on the other. */
+@container ledger (min-width: 736px) {
+  .ledger-cols {
+    --ledger-figure: clamp(28px, 5cqi, 44px);
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+
+  .ledger-col:first-child {
+    grid-row: span 2;
+  }
+
+  .ledger-col + .ledger-col {
+    border-block-start: 0;
+    border-inline-start: 1px dashed var(--paper-rule);
+  }
+
+  .ledger-col:last-child {
+    border-block-start: 1px dashed var(--paper-rule);
+  }
 }
 
 /* The register inside a drawer, which is narrow whatever the window is: the date over what it says. */

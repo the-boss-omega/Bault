@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterAll } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,6 +17,8 @@ const { PageHeader, NotificationBell, LanguageSwitcher } = await import('../../a
 const { NavigationRail } = await import('../../apps/web/src/shared/ui/NavigationRail');
 const { ContextTabs } = await import('../../apps/web/src/shared/ui/primitives');
 const { StatementSlip } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
+const { AccountingSection } = await import('../../apps/web/src/areas/admin/AccountingSection');
+const { api } = await import('../../apps/web/src/shared/api');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
 };
@@ -279,6 +281,88 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
         // And nothing in it is wider than the phone.
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
         await page.close();
+      });
+    }
+  });
+  describe('the month’s statement', () => {
+    // Figures as wide as a marketplace's can get: the widest a figure will be is no excuse for one that is cut off.
+    const summary = {
+      month: '2026-10',
+      currency: 'USD',
+      byType: [],
+      revenue: {
+        totalMinor: 1_234_567_890,
+        lines: [
+          { key: 'service_charge', totalMinor: 1_200_000_000 },
+          { key: 'commission', totalMinor: 34_567_890 },
+          { key: 'cash_out_fee', totalMinor: 0 },
+        ],
+        refundsMinor: 2_000,
+        cashOutFeesReturnedMinor: 99,
+        carrierCostOnShippingChargesMinor: 5_000,
+      },
+      customerMoney: { inMinor: 9_876_543_210, outMinor: 100_000, payoutsReturnedMinor: 1_500, reversedMinor: 0, netMinor: 9_876_443_210 },
+      balancesHeld: {
+        asOf: '2026-10-27T15:30:00.000Z',
+        customerTotalMinor: 8_765_432_100,
+        owedToCustomersMinor: 8_765_432_100,
+        owedByCustomersMinor: 0,
+        accountsWithBalance: 3,
+        platformAccountMinor: 0,
+      },
+      note: '',
+    };
+
+    for (const locale of ['en', 'he'] as const) {
+      it(`has the revenue beside what is held for customers on a wide sheet and one under another on a phone, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        vi.mocked(api.get).mockResolvedValueOnce(summary);
+        const user = userEvent.setup();
+        render(
+          <I18nProvider>
+            <AccountingSection onError={() => {}} />
+          </I18nProvider>,
+        );
+        await user.click(screen.getByRole('button', { name: locale === 'he' ? 'הצגת הסיכום' : /show summary/i }));
+        await waitFor(() => expect(document.querySelector('.ledger-sheet')).not.toBeNull());
+
+        for (const width of [1440, 900, 390]) {
+          const page = await inBrowser(width, locale);
+          const sheet = await page.$eval('.ledger-sheet', (el) => el.getBoundingClientRect().toJSON());
+          const [revenue, moneyIn, held] = await page.$$eval('.ledger-col', (els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+
+          // Every block is inside the sheet.
+          for (const box of [revenue, moneyIn, held]) {
+            expect(box.left).toBeGreaterThanOrEqual(sheet.left - 1);
+            expect(box.right).toBeLessThanOrEqual(sheet.right + 1);
+          }
+          if (width >= 900) {
+            // The revenue stands on the side the page begins on, the other two are one above the other on the other side.
+            if (locale === 'en') expect(revenue.right).toBeLessThanOrEqual(moneyIn.left + 1);
+            else expect(revenue.left).toBeGreaterThanOrEqual(moneyIn.right - 1);
+            expect(Math.abs(moneyIn.left - held.left)).toBeLessThan(2);
+            expect(held.top).toBeGreaterThanOrEqual(moneyIn.bottom - 1);
+          } else {
+            // One under another, each the width of the sheet.
+            expect(moneyIn.top).toBeGreaterThanOrEqual(revenue.bottom - 1);
+            expect(held.top).toBeGreaterThanOrEqual(moneyIn.bottom - 1);
+            expect(Math.abs(revenue.width - sheet.width)).toBeLessThan(2);
+          }
+
+          // No figure runs out of its block, and a phone has nothing wider than itself.
+          const cut = await page.$$eval('.ledger-figure, .ledger-line', (els) =>
+            els
+              .filter((el) => {
+                const box = el.getBoundingClientRect();
+                const inner = el.querySelector('.amount, dd')?.getBoundingClientRect() ?? box;
+                return inner.right > box.right + 1 || inner.left < box.left - 1;
+              })
+              .map((el) => el.textContent),
+          );
+          expect(cut).toEqual([]);
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+          await page.close();
+        }
       });
     }
   });
