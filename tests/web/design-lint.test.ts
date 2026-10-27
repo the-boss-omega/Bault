@@ -207,6 +207,8 @@ describe('design-lint', () => {
             '.e { color: #123abc; }',
             '.f { font-family: var(--font-mono); }',
             '.g { animation: wobble 2s linear infinite; }',
+            '.h { font-size: 15px; }',
+            '.i { font: 500 17px/1.3 var(--font-display); }',
             '',
           ].join('\n'),
         ),
@@ -219,6 +221,19 @@ describe('design-lint', () => {
       expect(r.out).toContain('raw colour #123abc');
       expect(r.out).toContain('mono on a non-code selector');
       expect(r.out).toContain('unlisted infinite animation "wobble"');
+      expect(r.out).toContain('15px is not a step of the type scale');
+      expect(r.out).toContain('17px is not a step of the type scale');
+    });
+
+    it('lets the type scale, a token and a size relative to the text through in index.css, and the sizes of single objects in a layer', () => {
+      const r = withChange((d) => {
+        appendFileSync(
+          join(d, 'index.css'),
+          ['.a { font-size: 14px; }', '.b { font-size: var(--fs-sm); }', '.c { font-size: 0.95em; }', '.d { font: 500 13px/1.3 var(--font-mono); }', ''].join('\n'),
+        );
+        appendFileSync(join(d, 'screens.css'), '\n.e { font: 500 112px/1 var(--font-display); font-size: 11.5px; }\n');
+      });
+      expect(r.out).toContain('design-lint: clean');
     });
 
     it('a date forced left to right, which a Hebrew page draws the wrong way round', () => {

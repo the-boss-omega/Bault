@@ -333,7 +333,7 @@ const isZero = (v) => /^[-+]?0*\.?0+(?:px|%|em|rem)?$/.test(v.trim());
  * of animations, a shorthand that names a side without saying so, an angle or a distance that points one
  * way whichever way the page is read. `fromLine` skips the token block of index.css, where names are made.
  */
-function checkDeclarations(short, raw, { fromLine = 0, isTheme = false } = {}) {
+function checkDeclarations(short, raw, { fromLine = 0, isTheme = false, typeScale = false } = {}) {
   const rawLines = raw.split('\n');
   const allowedHere = (line) => {
     for (let i = Math.max(0, line - 3); i <= line - 1; i += 1) if (rawLines[i]?.includes('design-lint-allow')) return true;
@@ -357,6 +357,13 @@ function checkDeclarations(short, raw, { fromLine = 0, isTheme = false } = {}) {
         } else if (Number(m[1]) !== 0) {
           say(d, `${m[0]} is space in the glyph's own size, which is on no grid — use px on the grid or a --sp-* token (design-lint-allow if it really is attached to the glyph)`);
         }
+      }
+    }
+
+    if (typeScale && (d.prop === 'font-size' || d.prop === 'font')) {
+      const size = d.prop === 'font-size' ? /^(\d*\.?\d+)px$/.exec(d.value.trim()) : /(?:^|\s)(\d*\.?\d+)px(?=\/|\s|$)/.exec(d.value);
+      if (size && !TYPE_PX.has(`${Number(size[1])}px`)) {
+        say(d, `${size[1]}px is not a step of the type scale — use a --fs-* token, or em / % of the text it sits in (design-lint-allow if it is a glyph drawn at its own size)`);
       }
     }
 
@@ -456,11 +463,13 @@ function cssIn(dir) {
   return out;
 }
 
+// index.css is also held to the type scale (a size is a --fs-* token, or relative to the text it sits in);
+// the layers carry the sizes of single objects (a numeral on a ticket, a stamp) and are not.
 // Every stylesheet but index.css (which is held to the rules above, past its token block) is a layer:
 // all of them, found rather than listed, so that a new file is held the same way the day it is added.
 // The logical-properties rule, the direction rule, the colour rule and the reduced-motion guarantee
 // apply to every one of them.
-checkDeclarations(rel, readFileSync(cssFile, 'utf8').split('\r\n').join('\n'), { fromLine: tokenEndLine });
+checkDeclarations(rel, readFileSync(cssFile, 'utf8').split('\r\n').join('\n'), { fromLine: tokenEndLine, typeScale: true });
 const LAYERS = cssIn(webSrc).filter((file) => file !== cssFile);
 for (const file of LAYERS) {
   const name = basename(file);
