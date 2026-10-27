@@ -1,11 +1,26 @@
 /* ============================================================
-   App shell and shared surfaces
+   The signed-in product
 
-   The signed-in product in the dark showcase look: a faint aurora behind the
-   workspace, a lit brand mark, bordered metric cards that lift on hover,
-   single-border panels, and the sign-in stage matched to the landing hero.
-   Reads theme tokens only; loaded after components.css.
+   The shell and the shared surfaces, in the same hand as the public page: a
+   serif voice for titles and figures, hairlines for structure, a lit edge
+   where something is active, and a grain over everything so black is a
+   material and not a void. Reads theme tokens only; loaded after
+   components.css.
    ============================================================ */
+
+/* ---- The room: grain, and a ceiling light that is barely there ---- */
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
 
 .app-shell {
   position: relative;
@@ -15,134 +30,135 @@
 .app-shell::before {
   content: '';
   position: fixed;
-  inset-block-start: -240px;
-  inset-inline-start: 50%;
+  inset-block-start: 0;
+  inset-inline: 0;
   z-index: -1;
-  width: 900px;
-  height: 520px;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in oklab, var(--custody) 14%, transparent), transparent);
-  filter: blur(40px);
+  height: 360px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 5%, transparent), transparent);
   pointer-events: none;
 }
 
-/* Brand mark */
+/* ---- Brand mark: the paper label ---- */
 
 .rail-mark {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--paper);
+  color: var(--paper-ink);
   font-family: var(--font-display);
-  border-radius: var(--r-md);
-  box-shadow: 0 0 0 1px var(--border), 0 4px 18px -4px color-mix(in oklab, var(--custody) 45%, transparent);
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: inset 0 -3px 0 -1px oklch(0 0 0 / 14%), 0 0 0 1px oklch(1 0 0 / 10%);
 }
 
-/* Page title */
+/* ---- Navigation rail ---- */
 
-.page-title {
+.rail {
+  background: var(--background);
+  border-inline-end-color: var(--border);
+}
+
+.rail-word,
+.rail-word-mini {
   font-family: var(--font-display);
-  letter-spacing: -0.02em;
-  font-weight: var(--fw-medium);
 }
 
-/* Metric strip becomes separate cards. */
-
-.metric-grid {
-  gap: var(--sp-3);
-  border-block: 0;
+.rail-word-mini {
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  font-size: 10px;
 }
 
-.metric-card,
-.metric-card:first-child {
-  padding: var(--sp-5);
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
-}
-
-.metric-card:hover {
-  border-color: var(--input);
-  transform: translateY(-2px);
-}
-
-.metric-label {
-  font-family: var(--font-display);
-  font-size: var(--fs-caption);
-  letter-spacing: var(--track-label);
-}
-
-/* One border per surface: a table inside a panel does not draw its own frame. */
-
-.panel .dt-wrap {
-  border: 0;
+.rail-item {
+  border-inline-start: 0;
   border-radius: 0;
-  border-block-start: var(--border-w) solid var(--border);
+  color: var(--muted-foreground);
+  transition: color 200ms var(--ease-out-expo), background 200ms var(--ease-out-expo);
 }
 
-/* Sign-in stage matches the landing hero. */
+.rail-item:hover {
+  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+}
 
-.auth-stage {
-  position: relative;
-  isolation: isolate;
-  overflow: clip;
+.rail-item.is-active {
+  color: var(--foreground);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
+}
+
+[dir='rtl'] .rail-item.is-active {
+  background: linear-gradient(270deg, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
+}
+
+.rail-item.is-active::before {
+  content: '';
+  position: absolute;
+  inset-block: 9px;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  border-start-end-radius: 3px;
+  border-end-end-radius: 3px;
+  background: var(--foil);
+  background-size: 100% 300%;
+  animation: foil-rise 5s linear infinite;
+}
+
+.rail-item.is-active .rail-icon {
+  color: var(--foreground);
+  filter: none;
+}
+
+.rail-count {
+  border-color: var(--input);
   background: var(--background);
   color: var(--foreground);
 }
 
-.auth-stage::before {
-  content: '';
-  position: absolute;
-  inset-block-start: -20%;
-  inset-inline-start: 10%;
-  z-index: -1;
-  width: 640px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in oklab, var(--custody) 24%, transparent), transparent 72%);
-  filter: blur(40px);
-  animation: aurora-drift 14s var(--ease-in-out) infinite alternate;
+.rail-dot {
+  background: var(--custody);
+  box-shadow: 0 0 0 2px var(--background), 0 0 10px var(--custody);
 }
 
-.auth-headline {
-  color: var(--foreground);
-  letter-spacing: -0.02em;
+/* ---- Page head ---- */
+
+.page-header {
+  margin-block-end: var(--sp-8);
 }
 
-.auth-lede,
-.auth-caption,
-.auth-custody dt {
+.page-title {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 3.4vw, 48px);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+:lang(he) .page-title {
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.breadcrumb {
+  margin-block-start: 10px;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted-foreground);
 }
 
-.auth-custody dd,
-.auth-custody .serial {
-  color: var(--foreground);
+.breadcrumb-sep {
+  opacity: 0.5;
 }
 
-.auth-stage-photo .photo-thumb {
-  filter: drop-shadow(0 24px 40px color-mix(in oklab, #000 55%, transparent));
-  animation: float 6s var(--ease-in-out) infinite alternate;
+.ph-controls {
+  border-color: var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 
-.auth-card {
-  animation: dialog-in var(--dur-enter) var(--ease-out) both;
+.ph-controls > * {
+  border-inline-start-color: var(--border);
 }
-
-.auth-headline {
-  font-size: clamp(28px, 3.3vw, 46px);
-  line-height: 1.08;
-  max-width: 16ch;
-}
-
-@media (min-width: 900px) {
-  .auth-stage {
-    justify-content: center;
-    grid-template-columns: minmax(0, 240px) minmax(0, 480px);
-  }
-}
-
-/* Avatar: a quiet disc, not a white blob. */
 
 .avatar {
   background: linear-gradient(135deg, var(--secondary), var(--accent));
@@ -150,81 +166,242 @@
   border: var(--border-w) solid var(--border);
 }
 
-/* Navigation rail: the active destination is lit. */
+/* ---- Figures: money and counts are set in the display face ---- */
 
-.rail-item.is-active {
-  background: linear-gradient(90deg, color-mix(in oklab, var(--custody) 14%, transparent), transparent);
-}
-
-[dir='rtl'] .rail-item.is-active {
-  background: linear-gradient(270deg, color-mix(in oklab, var(--custody) 14%, transparent), transparent);
-}
-
-.rail-item.is-active .rail-icon {
-  filter: drop-shadow(0 0 8px color-mix(in oklab, var(--custody) 70%, transparent));
-}
-
-/* Panels carry a hairline highlight along the top edge. */
-
-.panel {
-  position: relative;
-}
-
-.panel::before {
-  content: '';
-  position: absolute;
-  inset-block-start: -1px;
-  inset-inline: var(--sp-6);
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--foreground) 22%, transparent), transparent);
-  pointer-events: none;
-}
-
-/* Table headers read as labels. */
-
-.data-table thead th,
-.table thead th {
+.amount--display,
+.hero-value {
   font-family: var(--font-display);
-  font-size: var(--fs-caption);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  font-size: clamp(56px, 7vw, 104px);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* Page sections arrive in sequence. */
-
-.page > * {
-  animation: rise 600ms var(--ease-out) both;
+.amount--lead {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-.page > :nth-child(2) {
-  animation-delay: 60ms;
+/* Statistics are columns divided by hairlines, not boxes. */
+
+.metric-grid {
+  gap: 0;
+  border-block: var(--border-w) solid var(--border);
 }
 
-.page > :nth-child(3) {
-  animation-delay: 120ms;
+.metric-card,
+.metric-card:first-child {
+  padding: var(--sp-5) var(--sp-6);
+  border: 0;
+  border-inline-start: var(--border-w) solid var(--border);
+  border-radius: 0;
+  background: none;
+  transition: background 300ms;
 }
 
-.page > :nth-child(4) {
-  animation-delay: 180ms;
+.metric-card:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
 }
 
-.page > :nth-child(n + 5) {
-  animation-delay: 240ms;
+.metric-card:hover {
+  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--foreground) 3%, transparent));
+  transform: none;
 }
 
-/* Surfaces the old theme painted with --ink (a dark band in light mode) take
-   the kit's own surfaces instead, so they read in both themes. */
+.metric-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+}
+
+.metric-value {
+  margin-block-start: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: clamp(34px, 3.2vw, 48px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.metric-foot {
+  margin-block-start: var(--sp-3);
+  color: var(--muted-foreground);
+}
+
+/* ---- Rows that are surfaces you can use: a lit mark, not a box ---- */
+
+.hint {
+  color: var(--muted-foreground);
+}
+
+/* ---- The mobile bar and parcel markers take the kit's surfaces ---- */
 
 .mobile-bar {
-  background: color-mix(in oklab, var(--background) 80%, transparent);
+  background: color-mix(in oklab, var(--background) 82%, transparent);
   color: var(--foreground);
   border-block-end: var(--border-w) solid var(--border);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 .parcel-row-index {
   background: var(--secondary);
   color: var(--foreground);
   border: var(--border-w) solid var(--border);
+}
+
+/* ---- Page sections arrive in sequence ---- */
+
+.page > :not(.drawer, .drawer-backdrop, .modal-backdrop) {
+  animation: rise 640ms var(--ease-out-expo) backwards;
+}
+
+.page > :nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.page > :nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.page > :nth-child(4) {
+  animation-delay: 210ms;
+}
+
+.page > :nth-child(n + 5) {
+  animation-delay: 280ms;
+}
+
+@keyframes foil-rise {
+  to {
+    background-position: 0 300%;
+  }
+}
+
+/* ---- Sign in, sign up, reset: the room on one side, the door on the other ---- */
+
+.auth-shell {
+  background: var(--background);
+}
+
+@media (min-width: 900px) {
+  .auth-shell:not(.auth-shell--bare) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(440px, 0.8fr);
+  }
+}
+
+.auth-stage {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
+  align-items: center;
+  align-content: center;
+  gap: clamp(24px, 3vw, 48px);
+  padding: clamp(40px, 5vw, 80px) clamp(24px, 4vw, 64px);
+  background:
+    radial-gradient(60% 50% at 30% 0%, color-mix(in oklab, var(--foreground) 7%, transparent), transparent 70%),
+    var(--card);
+  border-inline-end: var(--border-w) solid var(--border);
+  color: var(--foreground);
+  overflow: clip;
+}
+
+.auth-pitch {
+  display: grid;
+  gap: 24px;
+  max-width: 34rem;
+}
+
+.auth-headline {
+  margin: 0;
+  font: 500 clamp(32px, 3.5vw, 52px) / 1.04 var(--font-display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+:lang(he) .auth-headline {
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.auth-lede {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--muted-foreground);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+}
+
+.auth-fan {
+  width: min(100%, 440px);
+  margin-inline: auto;
+  aspect-ratio: 1 / 1.08;
+}
+
+.auth-fan .lp-shelf {
+  inset-inline: 4%;
+}
+
+.auth-box {
+  max-width: 480px;
+  padding-block: clamp(40px, 7vw, 96px);
+}
+
+.auth-brand-word {
+  font-weight: 600;
+  font-size: 26px;
+}
+
+.auth-card h2 {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3vw, 40px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+:lang(he) .auth-card h2 {
+  letter-spacing: 0;
+}
+
+@media (max-width: 899px) {
+  .auth-stage {
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 32px 28px;
+    border-inline-end: 0;
+    border-block-end: var(--border-w) solid var(--border);
+  }
+
+  .auth-fan {
+    display: none;
+  }
+
+  .auth-lede {
+    display: none;
+  }
+
+  .auth-box {
+    padding-block: 32px 48px;
+  }
+}
+
+.auth-stage {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.auth-fan .lp-shelf {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px 20px;
+  padding: 12px 16px 14px;
+}
+
+.auth-fan .lp-shelf > div:last-child {
+  grid-column: 1 / -1;
 }

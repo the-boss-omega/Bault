@@ -148,7 +148,9 @@ textarea {
 /* Page and section entrance. */
 
 .page {
-  animation: page-in var(--dur-enter) var(--ease-out) both;
+  /* backwards, not both: a forwards-filling transform would make this element the
+     containing block of every fixed-position drawer and dialog inside it. */
+  animation: page-in var(--dur-enter) var(--ease-out) backwards;
 }
 
 @keyframes page-in {

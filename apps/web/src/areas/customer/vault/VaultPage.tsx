@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { BarcodeLabel } from '../../../shared/Barcode';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { itemClassLabel, itemName } from '../../../shared/itemClasses';
@@ -503,6 +504,8 @@ function CardTile({
       ]
         .filter(Boolean)
         .join(' ')}
+      onPointerMove={slabMove}
+      onPointerLeave={slabLeave}
     >
       <button type="button" className="card-hit" onClick={onOpen}>
         <span className="sr-only">{t('vault.openCard', { name })}</span>

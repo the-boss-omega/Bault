@@ -1,0 +1,252 @@
+/* ============================================================
+   The gallery
+
+   The vault and the marketplace show what they hold the way a collector
+   would lay it out: each card in its case, on the table, with its serial and
+   what is true of it underneath. It is the same list the register used to
+   be, the same markup and the same buttons, shown as objects instead of rows.
+   ============================================================ */
+
+.panel:has(.card-grid--register),
+.panel:has(.card-grid--listings) {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.panel:has(.card-grid--register)::before,
+.panel:has(.card-grid--listings)::before {
+  content: none;
+}
+
+.card-grid--register,
+.card-grid--listings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 52px 32px;
+  padding: var(--sp-4) 0 var(--sp-8);
+}
+
+.card-grid--register .register-head,
+.card-grid--listings .register-head {
+  display: none;
+}
+
+.card-grid--register .card,
+.card-grid--listings .card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+}
+
+.card-grid--register .card--interactive:hover,
+.card-grid--listings .card--interactive:hover {
+  background: none;
+}
+
+/* The case. */
+
+.card-art {
+  position: relative;
+  width: min(100%, 248px);
+  margin-inline: auto;
+  aspect-ratio: auto;
+  overflow: visible;
+  background: none;
+  border-radius: 0;
+  transition: transform 600ms var(--ease-out-expo);
+}
+
+.card-art .photo-thumb {
+  pointer-events: none;
+}
+
+.card--interactive:hover .card-art {
+  transform: translateY(-8px);
+}
+
+.card--interactive:hover .slab-glare {
+  opacity: 0.9;
+}
+
+.card--interactive:hover .slab-case {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 28%),
+    inset 0 1px 0 oklch(1 0 0 / 40%),
+    0 2px 4px oklch(0 0 0 / 50%),
+    0 34px 50px -14px oklch(0 0 0 / 85%);
+}
+
+/* What is true of it, under it. */
+
+.card-id {
+  display: grid;
+  gap: 6px;
+  padding-inline: 2px;
+}
+
+.card-title {
+  margin: 0;
+}
+
+.card-title .serial {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.card-desc {
+  margin: 0;
+  -webkit-line-clamp: 2;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.card-state {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding-inline: 2px;
+}
+
+.card-where {
+  padding-inline: 2px;
+  color: var(--muted-foreground);
+}
+
+.card-where .code-inline {
+  font-size: 12px;
+}
+
+.card .watch {
+  align-items: stretch;
+  padding-inline: 2px;
+}
+
+.card .watch-line {
+  justify-content: space-between;
+}
+
+.card .watch-amount {
+  color: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.card .proportion {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--input);
+}
+
+.card .proportion > span {
+  border-radius: 3px;
+  background: var(--foil);
+}
+
+/* States are on the object: frozen has a frost halo, departed loses its colour. */
+
+.card--frozen {
+  border-inline-start: 0;
+}
+
+.card--frozen .slab-case {
+  box-shadow:
+    inset 0 0 0 1px var(--frost),
+    0 0 0 4px color-mix(in oklab, var(--frost) 22%, transparent),
+    0 18px 34px -14px oklch(0 0 0 / 75%);
+}
+
+.card--historical .slab-case {
+  filter: grayscale(0.9) brightness(0.8);
+}
+
+.card-archive-mark {
+  inset-block-end: 14%;
+  inset-inline: 10%;
+  border-radius: 4px;
+}
+
+/* Listings: the price is the headline. */
+
+.card--listing .price {
+  margin: 0;
+}
+
+.card--listing .price .amount {
+  font: 500 30px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.card--listing .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.card--listing .card-art {
+  width: min(100%, 248px);
+}
+
+@media (max-width: 640px) {
+  .card-grid--register,
+  .card-grid--listings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 40px 16px;
+  }
+
+  .card--listing .actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ---- The item drawer: the case on the table, then the record ---- */
+
+.drawer .stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 44px 24px 64px;
+  background:
+    radial-gradient(58% 90% at 50% 0%, oklch(0.27 0.006 260), transparent 72%),
+    oklch(0.145 0.004 260);
+  border-block-end: var(--border-w) solid var(--border);
+  overflow: clip;
+}
+
+.drawer .stage::after {
+  content: '';
+  position: absolute;
+  inset-inline: 30%;
+  inset-block-end: 26px;
+  height: 22px;
+  background: radial-gradient(closest-side, oklch(0 0 0 / 70%), transparent);
+  filter: blur(8px);
+}
+
+.drawer .stage .photo-thumb {
+  --tilt: 11deg;
+  width: min(300px, 62vw);
+  z-index: 1;
+}
+
+.stage--departed .slab-case {
+  filter: grayscale(0.9) brightness(0.8);
+}
+
+.drawer-head .identity-serial {
+  font-size: 15px;
+}

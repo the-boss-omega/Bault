@@ -10,6 +10,7 @@ import './slab.css';
 import './components.css';
 import './landing.css';
 import './app.css';
+import './gallery.css';
 import './motion.css';
 
 try {

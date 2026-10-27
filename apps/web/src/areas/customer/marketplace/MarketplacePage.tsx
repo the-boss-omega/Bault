@@ -4,6 +4,7 @@ import { useVaultItems } from '../../../shared/useVaultItems';
 import { ITEM_CLASSES, itemClassLabel, itemName, itemPickText } from '../../../shared/itemClasses';
 import { EscrowTab } from './EscrowTab';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { storefrontHref } from '../../../shared/market';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
@@ -249,7 +250,12 @@ export function MarketplacePage() {
                   <span />
                 </li>
                 {listings.map((listing) => (
-                  <li key={listing.id} className="card card--interactive card--listing">
+                  <li
+                    key={listing.id}
+                    className="card card--interactive card--listing"
+                    onPointerMove={slabMove}
+                    onPointerLeave={slabLeave}
+                  >
                     <div className="card-art">
                       <CardPhotoThumb
                         serialNumber={listing.serialNumber}
