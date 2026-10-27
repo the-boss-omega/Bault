@@ -1,6 +1,6 @@
 ## 2.10 Infrastructure, CI and tests
 
-This section covers how the code becomes images, runs locally and in production, is backed up, is checked by CI and is tested. Read the Dockerfiles, then the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts and last the tests. The section takes about 36 minutes.
+This section covers how the code becomes images, runs locally and in production, is backed up, is checked by CI and is tested. Read the Dockerfiles, then the local stack, `infra/production`, `infra/ops`, the workflows, the operations scripts and last the tests. The section takes about 38 minutes.
 
 #### `apps/api/Dockerfile`, `apps/worker/Dockerfile`
 
@@ -50,7 +50,7 @@ This script prepares a fresh Ubuntu server, and the runbook names 24.04. It inst
 
 About 2 minutes. It builds on T17.2.
 
-This script releases one tag to the server. `deploy.sh <tag>` pulls the images and takes a backup with `backup.sh dump`. It then migrates, runs `roles.sql` and starts the stack with `compose up --wait`. It probes `/api/v1/readyz` through Caddy, then waits until `/api/v1/readyz/worker` shows an outbox dispatch by the new worker, which proves the new worker runs jobs. Last, it runs `roles.sql` again, now that the worker has started. On success it records `CURRENT_TAG` and `PREVIOUS_TAG`, and it prints the rollback steps either way. It warns when the checkout is not at the tag, because the compose file, the Caddyfile and `roles.sql` come from the checkout. Migrations run while the old release still serves, and a rollback does not undo them, so every migration must also suit the previous release's code.
+This script releases one tag to the server. `deploy.sh <tag>` pulls the images and takes a backup with `backup.sh dump`. It then migrates, runs `roles.sql` and starts the stack with `compose up --wait`. It probes `/api/v1/readyz` through Caddy, then waits until `/api/v1/readyz/worker` shows an outbox dispatch by the new worker, which proves the new worker runs jobs. Last, it runs `roles.sql` again, now that the worker has started. On success it records `CURRENT_TAG` and `PREVIOUS_TAG`, and it prints the rollback steps either way. It warns when the checkout is not at the tag, because the compose file, the Caddyfile and `roles.sql` come from the checkout. It holds `.deploy.lock` in the checkout while it runs, so the watchdog restarts nothing in the middle of a deploy. Migrations run while the old release still serves, and a rollback does not undo them, so every migration must also suit the previous release's code.
 
 Three settings let `deploy.sh` run on Google Cloud, and they are empty everywhere else. `BAULT_COMPOSE_EXTRA` adds compose files. `BAULT_DB_SIDECAR` names a service that starts first, and the script waits until `pg_isready` answers through it. `HOST_DIRECT_DATABASE_URL`, in `migrate.env`, is the owner's URL as seen from the host. It is for when the containers use a name the host cannot resolve.
 
@@ -78,19 +78,23 @@ These are the launch plan's Day 6 checks, run from outside. `ops:load-test` send
 
 `ops:security-check` tests the redirect to HTTPS, the certificate, the refusal of TLS 1.0 and 1.1, and the SSL Labs grade. It runs `gradeHeaders` on the page, a script and the API. `docsVerdict` checks that the API documentation is not public. It scans the open ports with nmap, or, without nmap, with a connect scan of `COMMON_PORTS`. Last, `adminNeedsCode` checks that an administrator's password alone opens no session.
 
-#### `infra/gcp/provision.sh`, `infra/gcp/compose.gcp.yml`, `infra/gcp/claim-database.sql`, `infra/gcp/README.md`
+#### `infra/gcp/provision.sh`, `infra/gcp/configure.sh`, `infra/gcp/compose.gcp.yml`, `infra/gcp/claim-database.sql`, `infra/gcp/README.md`
 
-About 2 minutes. It builds on T17.2, T17.3 and T5.7.
+About 3 minutes. It builds on T17.2, T17.3 and T5.7.
 
 These files set Bault up on Google Cloud. `provision.sh` creates the Google Cloud side of T17.2 from your own `gcloud` login. It makes a network with an SSH rule that admits only `ADMIN_IP`. Given Google's IAP range as `ADMIN_IP`, port 22 never faces the internet, and the README shows how to connect through the tunnel. It makes Cloud SQL with a private IP only, `ENCRYPTED_ONLY` connections, point-in-time recovery and `--edition=ENTERPRISE`. It makes two buckets. The backups bucket lives in a second project with a 30-day retention policy, so no backup can be deleted sooner. It makes three service accounts with one job each, HMAC keys for the two bucket accounts, and the VM. It skips whatever already exists, and `--dry-run` prints every command without running it. It writes the settings to a local file at mode 600, and its output masks the secrets.
 
 `compose.gcp.yml` adds `cloudsql`, the Cloud SQL Auth Proxy, pinned by digest. The api, the worker and migrate reach the database through it as `cloudsql`, and the host reaches it on `127.0.0.1`, both on port 5432. `claim-database.sql` makes `bault_owner` the owner of the database that Cloud SQL created, so `roles.sql` can grant rights on it. Cloud SQL has no superuser, so anything new in a migration or in `roles.sql` that needs one breaks on Google Cloud first, and the CI job `cloud-sql-privileges` catches it.
 
-#### `infra/ops/backup.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md`
+`configure.sh` runs on the server as `deploy`, from the release checkout. It turns the file `provision.sh` wrote and the templates in `infra/production` into the five files under `/etc/bault`, at mode 600, and copies the system CA bundle to `db-ca.crt`, which compose mounts although the proxy needs none. It generates `MFA_ENCRYPTION_KEY`, and asks only for what nobody else knows, the host name, PayPal, EasyPost, SMTP, the bank details and the age public key. It reads secrets without echo, and nothing it prints holds one. It sets the providers production accepts, so it never writes `sandbox`, `console` or `loopback`, and it quotes a value that compose or the shell would otherwise change. Run again, it keeps every value already set and asks only for one that is missing or named with `--change`. It ends with a check of every value production needs, and deletes the provision file only when told yes. `tests/config/gcp-deploy-kit.test.ts` feeds it answers and passes what it wrote to `loadEnv`, so the files it writes are ones the API accepts in production.
 
-About 2 minutes. It builds on T17.4.
+#### `infra/ops/backup.sh`, `infra/ops/watchdog.sh`, `infra/ops/crontab.example`, `infra/ops/RESTORE.md`
+
+About 3 minutes. It builds on T17.4.
 
 These files run the nightly backup and describe the restore. `backup.sh dump` runs `pg_dump` as the owner and checks that the dump reads back. It encrypts the dump with age, with only the public key on the host, so whoever takes the host cannot read the backups. It writes a checksum and uploads both files off the host. It refuses to upload a dump that is not encrypted. `verify` restores a dump into a scratch database and fails on orphaned rows or a missing guard trigger. `restore` needs an explicit target and the database name typed back. After a restore, run the migrations and `roles.sql`, because the dump carries no grants. The crontab runs the dump at `01:17` UTC, before the money jobs at `02:00` and `03:00` touch the day's state. `RESTORE.md` is the monthly drill, for the provider's point-in-time recovery and for the dump. A nightly dump alone can lose a day, so turn on point-in-time recovery at the provider.
+
+`watchdog.sh` runs from the same crontab every two minutes. Compose's `restart: unless-stopped` restarts a container that exits, never one that hangs. So the watchdog restarts `api` or `web` when Docker reports them unhealthy, and `worker` when the API answers but `/api/v1/readyz/worker` reports no outbox dispatch for five minutes. It asks the API from inside the API's container, so neither Caddy nor TLS stands in the way. It leaves alone a container younger than ten minutes, waits 15 minutes between two restarts of one service, and stops after three in six hours, writing that a person is needed. It skips its run while `deploy.sh` holds `.deploy.lock`, and it logs only what it does.
 
 #### `.github/workflows/ci.yml`
 

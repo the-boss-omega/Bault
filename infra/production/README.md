@@ -172,7 +172,10 @@ sudo -u deploy crontab /opt/bault/infra/ops/crontab.example   # replaces deploy'
 ```
 
 Settings in `/etc/bault/backup.env` (mode 600) as that file describes; the
-restore drill is `infra/ops/RESTORE.md`.
+restore drill is `infra/ops/RESTORE.md`. The same crontab runs
+`infra/ops/watchdog.sh` every two minutes, which restarts a container that
+hangs (compose restarts only one that exits), and logs what it does to
+`/var/log/bault/watchdog.log`.
 
 ## 7. Prices (the first deploy, and whenever a price changes)
 
