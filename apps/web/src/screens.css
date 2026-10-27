@@ -1715,20 +1715,25 @@
   gap: 10px;
 }
 
+/* The zone is an aisle sign: a strip of paper with the zone's letter on it and what stands in it. */
 .shelf-zone-head {
+  --focus-color: var(--paper-ink);
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-block-end: 8px;
-  border-block-end: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow: 0 0 0 1px var(--paper-line);
 }
 
 .shelf-zone-name {
   font: 500 11.5px/1.3 var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted-foreground);
+  color: var(--paper-ink-3);
 }
 
 :lang(he) .shelf-zone-name {
@@ -1739,29 +1744,27 @@
 
 .shelf-zone-name b {
   margin-inline-start: 4px;
-  font: 500 22px/1 var(--font-display);
+  font: 500 28px/1 var(--font-display);
   letter-spacing: 0;
   text-transform: none;
-  color: var(--foreground);
+  color: var(--paper-ink);
 }
 
 .shelf-zone-total {
-  font: 500 20px/1 var(--font-display);
+  font: 500 22px/1 var(--font-display);
   font-variant-numeric: lining-nums tabular-nums;
-  color: var(--foreground);
+  color: var(--paper-ink);
 }
 
-/* A rack is as wide as its shelves: it has no capacity to show, only what stands on it. */
+/* The rack runs the width of the panel and its shelves share it out; a shelf is never narrower than its barcode and its count. */
 
 .shelf-rack {
   list-style: none;
   margin: 0;
   padding: 10px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 10px;
-  inline-size: fit-content;
-  max-inline-size: 100%;
   border-radius: var(--r-md);
   background: var(--muted);
   box-shadow: inset 0 -4px 0 -1px var(--border);
@@ -1772,7 +1775,6 @@
   display: grid;
   align-content: space-between;
   gap: 12px;
-  flex: 0 0 168px;
   min-block-size: 108px;
   padding: 12px 16px;
   border: 1px solid var(--control-border);
@@ -1780,9 +1782,9 @@
   background: var(--card);
 }
 
+/* An oversized shelf takes two places in the rack. */
 .shelf-slot[data-wide='true'] {
-  flex-basis: 346px;
-  max-inline-size: 100%;
+  grid-column: span 2;
 }
 
 .shelf-slot[data-state='empty'] {
@@ -1802,7 +1804,6 @@
 }
 
 .shelf-slot[data-state='tray'] {
-  flex-basis: 168px;
   min-block-size: 56px;
   border-style: dashed;
   border-color: var(--amber);
