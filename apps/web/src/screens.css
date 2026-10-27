@@ -1312,6 +1312,50 @@
   }
 }
 
+/* ---- A trade as it is composed: the two sides on the tag, one above the other, and the way the cards travel between them ---- */
+
+.trade-slip {
+  display: grid;
+  gap: var(--sp-3);
+  padding-block: var(--sp-3) var(--sp-2);
+}
+
+.trade-slip .trade-side,
+.trade-slip .trade-swap {
+  grid-area: auto;
+}
+
+/* The glyph sits under the thumbnails, turned a quarter: the cards go down (a swap, both ways) or up (a gift to them). */
+.trade-slip .trade-swap {
+  justify-self: start;
+  inline-size: 48px;
+  block-size: 24px;
+  transform: none;
+}
+
+.trade-slip .trade-swap svg {
+  transform: rotate(90deg);
+}
+
+.trade-slip .trade-swap--back svg {
+  transform: rotate(-90deg);
+}
+
+/* What the row of a trade draws in the theme's greys is drawn in the paper's inks when it is on a tag. */
+.drawer-tag .slip-label,
+.drawer-tag .trade-swap {
+  color: var(--paper-ink-3);
+}
+
+.drawer-tag .slip-desc,
+.drawer-tag .trade-nothing {
+  color: var(--paper-ink-2);
+}
+
+.drawer-tag .slip-thumb {
+  inline-size: 48px;
+}
+
 /* ---- The month's statement: three figures on one sheet of paper ---- */
 
 /* The sheet is the container: how many figures sit side by side is the sheet's width, not the window's. */

@@ -16,6 +16,7 @@ export function DrawerTag({
   status,
   note,
   lines,
+  children,
 }: {
   /** What the amount is: "Agreed price", "Cash in", "Amount". */
   kicker: string;
@@ -34,6 +35,8 @@ export function DrawerTag({
   note?: ReactNode;
   /** What it is made of or goes with, a name and its value to a line: a destination, a reference. */
   lines?: { label: ReactNode; value: ReactNode }[];
+  /** Whatever the tag has to show that is neither a sum nor a line: the two sides of a trade. */
+  children?: ReactNode;
 }) {
   return (
     <section className="drawer-tag" aria-label={kicker}>
@@ -47,6 +50,7 @@ export function DrawerTag({
           </span>
         </p>
       )}
+      {children}
       {lines && lines.length > 0 && (
         <dl className="ledger-lines drawer-tag-lines">
           {lines.map((line, i) => (
