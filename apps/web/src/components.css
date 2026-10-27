@@ -166,15 +166,22 @@ select {
     linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
-  /* 18px and 13px from the end edge: 100% - 18px going left to right, 18px going right to left. */
+  /* The arrow is two half triangles, the first 18px and the second 13px from the end edge. Read
+     from the other side the two change places, or the halves would swap and it would be a
+     notch instead of an arrow. */
+  --arrow-first: calc(15.5px + 2.5px * var(--dir));
+  --arrow-second: calc(15.5px - 2.5px * var(--dir));
   background-position:
-    calc(50% + var(--dir) * (50% - 18px)) 50%,
-    calc(50% + var(--dir) * (50% - 13px)) 50%;
+    calc(50% + var(--dir) * (50% - var(--arrow-first))) 50%,
+    calc(50% + var(--dir) * (50% - var(--arrow-second))) 50%;
 }
 
 select option {
   background: var(--popover);
   color: var(--popover-foreground);
+  /* A select shows the chosen option the way that option reads: an English address on a
+     Hebrew page starts at its beginning, where it would otherwise be cut off at it. */
+  unicode-bidi: plaintext;
 }
 
 input[type='checkbox'],
