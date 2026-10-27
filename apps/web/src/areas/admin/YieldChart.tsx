@@ -11,8 +11,10 @@ export interface YieldBar {
 }
 
 export function YieldChart({ rows, title, subtitle }: { rows: readonly YieldBar[]; title: string; subtitle: string }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const captionId = useId();
+  // The bars grow from the end the axis starts at ($0), which is the right-hand end when read from the right.
+  const fromRight = locale === 'he';
 
   const perSlot = rows.some((r) => r.perSlotMonthMinor !== null);
   const measure = (row: YieldBar) => (perSlot ? (row.perSlotMonthMinor ?? 0) : row.revenueMinor);
@@ -41,21 +43,23 @@ export function YieldChart({ rows, title, subtitle }: { rows: readonly YieldBar[
         aria-hidden="true"
         focusable="false"
       >
-        {rows.map((row, index) => {
-          const value = measure(row);
-          const width = (value / max) * 100;
-          const y = index * rowHeight + (rowHeight - 12) / 2;
-          return (
-            <rect
-              key={row.label}
-              x={0}
-              y={y}
-              width={Math.max(width, value > 0 ? 0.6 : 0)}
-              height={12}
-              className={row.label === worst?.label ? 'chart-bar chart-bar--mark' : 'chart-bar'}
-            />
-          );
-        })}
+        <g transform={fromRight ? 'translate(100 0) scale(-1 1)' : undefined} data-from={fromRight ? 'end' : 'start'}>
+          {rows.map((row, index) => {
+            const value = measure(row);
+            const width = (value / max) * 100;
+            const y = index * rowHeight + (rowHeight - 12) / 2;
+            return (
+              <rect
+                key={row.label}
+                x={0}
+                y={y}
+                width={Math.max(width, value > 0 ? 0.6 : 0)}
+                height={12}
+                className={row.label === worst?.label ? 'chart-bar chart-bar--mark' : 'chart-bar'}
+              />
+            );
+          })}
+        </g>
       </svg>
 
       <div className="chart-rows" style={{ '--chart-label': `${labelWidth}px`, '--chart-value': `${valueWidth}px` } as React.CSSProperties}>
