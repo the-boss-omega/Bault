@@ -63,7 +63,7 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background:
     var(--foil) bottom / 100% 3px no-repeat,
     var(--paper);
@@ -90,7 +90,7 @@
   display: block;
   width: 72px;
   height: 3px;
-  border-radius: 3px;
+  border-radius: var(--r-bar);
   background: var(--foil);
   background-size: 300% 100%;
 }
@@ -197,7 +197,7 @@
   min-height: 46px;
   padding-inline: 24px;
   font-size: 16px;
-  border-radius: 999px;
+  border-radius: var(--r-capsule);
 }
 
 /* ---- The shelf: a fan of real cards in their cases ---- */
@@ -322,7 +322,7 @@
   gap: 14px 28px;
   margin: 0;
   padding: 14px 22px 16px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background:
     var(--foil) top / 100% 3px no-repeat,
     var(--paper);
@@ -415,7 +415,7 @@
   width: min(100%, 400px);
   aspect-ratio: 3.1 / 1;
   padding: 20px 24px 0;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background:
     var(--foil) bottom / 100% 7px no-repeat,
     var(--paper);
@@ -475,7 +475,7 @@
   padding: 10px 24px 10px 24px;
   list-style: none;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   background: var(--card);
   font: 400 13px/1.3 var(--font-mono);
 }
@@ -673,7 +673,7 @@
   height: 100%;
   overflow: clip;
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: calc(var(--r-xl) + 6px);
   background:
     radial-gradient(70% 55% at 50% 0%, var(--room-pool), transparent 70%),
     var(--lp-room);
@@ -747,7 +747,7 @@
   inset-inline-start: 14%;
   inset-block-end: 8.5%;
   padding: 7px 12px 8px;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   background:
     var(--foil) top / 100% 2px no-repeat,
     var(--paper);
@@ -782,7 +782,7 @@
 .lp-exits li {
   padding: 7px 14px;
   border: 1px solid oklch(1 0 0 / 22%);
-  border-radius: 999px;
+  border-radius: var(--r-capsule);
   background: var(--room-glass);
   color: oklch(1 0 0 / 88%);
   font-size: 13px;
@@ -860,7 +860,7 @@
   inset-inline-start: -2px;
   width: 3px;
   height: var(--prog);
-  border-radius: 3px;
+  border-radius: var(--r-bar);
   background: var(--foil);
   transition: height 900ms var(--ease-out-expo);
 }
@@ -1165,7 +1165,7 @@
   display: grid;
   gap: 22px;
   padding: 26px 30px 30px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   background:
     var(--foil) bottom / 100% 6px no-repeat,
     var(--paper);
@@ -1263,7 +1263,7 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(96px, 12vw, 148px);
-  border-radius: 18px;
+  border-radius: var(--r-xl);
   background: var(--card);
   box-shadow: inset 0 0 0 1px var(--border);
   transform: rotateX(calc(var(--ty) * var(--tilt))) rotateY(calc(var(--tx) * var(--tilt)));
@@ -1444,7 +1444,7 @@
   inline-size: min(100%, 360px);
   /* The bottom edge leaves room for the stamp, which sits in its own corner. */
   padding: 24px 24px 70px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: var(--paper-bright);
   color: var(--paper-ink);
   box-shadow: 0 22px 40px -22px var(--paper-shadow), inset 0 0 0 1px oklch(0 0 0 / 6%);
@@ -1470,7 +1470,7 @@
 .lp-charge-line i {
   display: block;
   block-size: 9px;
-  border-radius: 2px;
+  border-radius: var(--r-bar);
   background: var(--paper-ink);
   opacity: 0.86;
 }

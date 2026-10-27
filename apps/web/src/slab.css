@@ -56,7 +56,7 @@
 .photo-thumb:focus-visible {
   outline: var(--focus-width) solid var(--focus-color);
   outline-offset: 6px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   box-shadow: none;
 }
 

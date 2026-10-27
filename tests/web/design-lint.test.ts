@@ -93,6 +93,21 @@ describe('design-lint', () => {
       expect(r.out.match(/physical keyword/g)?.length).toBeGreaterThanOrEqual(2);
     });
 
+    it('a border radius that is not from the family', () => {
+      const r = withChange((d) => appendFileSync(join(d, 'screens.css'), '\n.x { border-radius: 7px; }\n'));
+      expect(r.out).toContain('hardcoded radius 7px');
+    });
+
+    it('lets the radius tokens, a circle, none and container-relative corners through', () => {
+      const r = withChange((d) =>
+        appendFileSync(
+          join(d, 'screens.css'),
+          '\n.a { border-radius: var(--r-lg); }\n.b { border-radius: calc(var(--r-xl) + 6px); }\n.c { border-radius: 50%; }\n.d { border-radius: 0; }\n.e { border-radius: 3cqw; }\n.f { border-start-end-radius: var(--r-bar); }\n',
+        ),
+      );
+      expect(r.out).toContain('design-lint: clean');
+    });
+
     it('a colour with no name', () => {
       const r = withChange((d) => appendFileSync(join(d, 'gallery.css'), '\n.x { color: oklch(0.5 0.2 30); }\n.y { color: #123abc; }\n'));
       expect(r.out).toContain('raw colour oklch(0.5 0.2 30)');

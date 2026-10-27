@@ -219,6 +219,14 @@ for (const name of LAYERS) {
         report(short, n, `direction branch — read var(--dir) (theme.css) instead: ${line.trim()}`);
       }
       checkLoop(short, n, line);
+      if (name !== 'theme.css') {
+        const radius = /border(?:-(?:start|end)-(?:start|end))?-radius\s*:\s*([^;]+);/.exec(line)?.[1];
+        // One radius family: the kit's tokens (or a calc of them), a circle, nothing, or a
+        // size relative to its container (the slab's corners scale with the slab).
+        if (radius && !/var\(--(?:r-[\w-]+|radius)\)|cqw/.test(radius) && !/^(?:0|50%|inherit|initial|unset)(?:\s+(?:0|50%))*$/.test(radius.trim())) {
+          report(short, n, `hardcoded radius ${radius.trim()} — use a --r-* token (there is one family): ${line.trim()}`);
+        }
+      }
       if (name !== 'theme.css' && !line.includes('data:image')) {
         for (const m of line.matchAll(COLOUR_LITERAL)) {
           // A colour that is the value of a custom property is being named, which is the point.

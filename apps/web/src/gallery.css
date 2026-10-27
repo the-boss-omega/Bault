@@ -142,12 +142,12 @@
 
 .card .proportion {
   height: 3px;
-  border-radius: 3px;
+  border-radius: var(--r-bar);
   background: var(--input);
 }
 
 .card .proportion > span {
-  border-radius: 3px;
+  border-radius: var(--r-bar);
   background: var(--foreground);
 }
 
@@ -171,7 +171,7 @@
 .card-archive-mark {
   inset-block-end: 14%;
   inset-inline: 10%;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 
 /* Listings: the price is the headline. */
@@ -272,7 +272,7 @@
 .card-grid > li > .skel-metric {
   height: auto;
   aspect-ratio: 5 / 8;
-  border-radius: 18px;
+  border-radius: var(--r-xl);
 }
 
 /* ---- Nothing here: an empty case, not an apology ---- */
@@ -292,7 +292,7 @@
   block-size: 112px;
   margin-block-end: var(--sp-2);
   border: 1px dashed var(--input);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   color: var(--muted-foreground);
   background: linear-gradient(160deg, color-mix(in oklab, var(--foreground) 5%, transparent), transparent 60%);
 }

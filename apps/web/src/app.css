@@ -61,7 +61,7 @@ body::before {
   color: var(--paper-ink);
   font-family: var(--font-display);
   font-weight: 700;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   box-shadow: inset 0 -3px 0 -1px oklch(0 0 0 / 14%), 0 0 0 1px oklch(1 0 0 / 10%);
 }
 
@@ -106,8 +106,8 @@ body::before {
   inset-block: 9px;
   inset-inline-start: 0;
   inline-size: 3px;
-  border-start-end-radius: 3px;
-  border-end-end-radius: 3px;
+  border-start-end-radius: var(--r-bar);
+  border-end-end-radius: var(--r-bar);
   background: var(--foil);
   background-size: 100% 300%;
   animation: foil-rise 5s linear infinite;
@@ -171,7 +171,7 @@ body::before {
 
 .ph-controls {
   border-color: var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-capsule);
   background: color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 
@@ -449,7 +449,7 @@ body::before {
 .boot .rail-mark {
   width: 60px;
   height: 60px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   font-size: 38px;
   animation: boot-breathe 1.8s var(--ease-in-out-quart) infinite alternate;
 }

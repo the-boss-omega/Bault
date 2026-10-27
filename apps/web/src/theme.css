@@ -120,6 +120,12 @@
   --r-md: var(--radius);
   --r-lg: calc(var(--radius) + 4px);
   --r-pill: var(--radius);
+  /* The two sizes the kit has no name for: a ticket's corner, and the end of a bar
+     only a few pixels thick. The capsule is the product's one pill, used on
+     purpose: the header's controls, the landing's buttons and the journey's chips. */
+  --r-xl: calc(var(--radius) + 8px);
+  --r-bar: 3px;
+  --r-capsule: 999px;
 
   --shadow-xs: 0 1px 2px oklch(0 0 0 / 5%);
   --shadow-overlay: 0 4px 6px -1px oklch(0 0 0 / 10%), 0 12px 32px oklch(0 0 0 / 14%);
