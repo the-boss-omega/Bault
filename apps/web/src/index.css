@@ -2851,6 +2851,10 @@ input[type='search'] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A line that ellipsises hides its overflow, and a focus ring (a link in it has one) is drawn outside: the
+     room for it is padding, taken back from the margin. */
+  padding: var(--sp-1);
+  margin: calc(-1 * var(--sp-1));
 }
 
 .card-meta {

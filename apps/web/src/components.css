@@ -256,6 +256,12 @@ input[type='radio'] {
 .panel .dt-wrap {
   border: 0;
   border-radius: 0;
+  /* The cells at the two ends of a table in a panel start and end on its edges, and a focus ring is drawn
+     outside what it rings: the room for it is padding on the box that scrolls, taken back from the margin
+     (and added to the width) so that nothing moves. */
+  padding-inline: var(--sp-1);
+  margin-inline: calc(-1 * var(--sp-1));
+  inline-size: calc(100% + 2 * var(--sp-1));
 }
 
 /* ---- Status: an LED and a word. State is a light, not a chip. ---- */
