@@ -1497,6 +1497,49 @@ li.is-clickable {
   text-align: var(--text-start);
 }
 
+/* ---- The storage sweep's runs: a statement, a line to each run ---- */
+
+.fee-sheet {
+  max-inline-size: 720px;
+  margin-block-end: 0;
+  padding: var(--sp-2) var(--sp-6);
+}
+
+.fee-runs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fee-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-4);
+  align-items: baseline;
+  padding-block: var(--sp-4);
+  border-block-start: 1px dashed var(--paper-rule-soft);
+}
+
+.fee-run:first-child {
+  border-block-start: 0;
+}
+
+.fee-run-date {
+  font: 500 var(--fs-xl) / 1.2 var(--font-display);
+  color: var(--paper-ink);
+}
+
+.fee-run-total {
+  font: 500 var(--fs-2xl) / 1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.fee-run-meta {
+  grid-column: 1 / -1;
+  color: var(--paper-ink-3);
+  font-size: var(--fs-caption);
+}
+
 /* ---- A dispute as a case file: the ruling, the transaction, the note, and under it the controls that move it on ---- */
 
 /* What was written on the file is quoted, in the paper's second ink, hung from the edge of the language it is in. */
@@ -1820,6 +1863,25 @@ li.is-clickable {
   .ledger-cols--even .ledger-col:last-child {
     border-block-start: 0;
   }
+}
+
+/* An entry that has a button of its own (a parked message, to be requeued) gives it a column at the end of the line. */
+@media (min-width: 640px) {
+  .timeline--stamped.timeline--actions > li {
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+
+/* What needs attention is marked at its node, in the amber, and what went wrong is said in its own ink. */
+.timeline > li.is-attention::before {
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+.register-error .code-inline {
+  color: var(--error-strong);
+  font-size: var(--fs-caption);
 }
 
 /* The register inside a drawer, which is narrow whatever the window is: the date over what it says. */

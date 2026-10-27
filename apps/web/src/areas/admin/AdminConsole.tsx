@@ -3,7 +3,6 @@ import { api } from '../../shared/api';
 import { ShelfYieldPanel } from './ShelfYieldPanel';
 import { CardPhotoButton } from '../../shared/CardPhoto';
 import { BarcodePrintButton } from '../../shared/Barcode';
-import { formatDate, formatUsd } from '../../shared/money';
 import { useI18n } from '../../shared/i18n';
 import type { MessageKey } from '../../shared/i18n';
 import { stateLabel } from '../../shared/itemTimeline';
@@ -21,13 +20,14 @@ import {
   TabPanel,
   type StatusTone,
 } from '../../shared/ui/primitives';
-import { IconBox, IconReceipt, IconUsers } from '../../shared/ui/icons';
+import { IconBox, IconUsers } from '../../shared/ui/icons';
 import { WalletRequestsSection } from './WalletRequestsSection';
 import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
 import { AccountingSection } from './AccountingSection';
 import { PricingSection } from './PricingSection';
 import { DisputesSection } from './DisputesSection';
+import { StorageFeesSection } from './StorageFeesSection';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
 import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 
@@ -623,83 +623,5 @@ function ItemRow({
         </Button>
       </td>
     </tr>
-  );
-}
-
-interface FeeRun {
-  id: string;
-  thresholdDays: number;
-  runAt: string;
-  chargedItemIds: string[];
-  totalAmount: number;
-  currency: string;
-}
-
-function StorageFeesSection({ onError }: { onError: (m: string) => void }) {
-  const { t, locale } = useI18n();
-  const [runs, setRuns] = useState<FeeRun[] | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setRuns(await api.get<FeeRun[]>('/admin/storage-fee-runs'));
-    } catch (e) {
-      onError((e as Error).message);
-      setRuns([]);
-    }
-  }, [onError]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <>
-      <p className="infobox">{t('admin.storage.autoNotice')}</p>
-
-      <Panel title={t('admin.storage.previousRuns', { count: runs?.length ?? 0 })} flush>
-        {runs === null ? (
-          <SkeletonTable rows={3} columns={4} />
-        ) : runs.length === 0 ? (
-          <EmptyState title={t('admin.storage.empty')} icon={<IconReceipt />} />
-        ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('admin.storage.col.date')}</th>
-                  <th scope="col" className="td-end">
-                    {t('admin.storage.col.thresholdDays')}
-                  </th>
-                  <th scope="col" className="td-end">
-                    {t('admin.storage.col.chargedItems')}
-                  </th>
-                  <th scope="col" className="td-end">
-                    {t('admin.storage.col.total')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id}>
-                    <td data-label={t('admin.storage.col.date')}>
-                      <span className="date">{formatDate(run.runAt, locale)}</span>
-                    </td>
-                    <td data-label={t('admin.storage.col.thresholdDays')} className="td-end num">
-                      {run.thresholdDays}
-                    </td>
-                    <td data-label={t('admin.storage.col.chargedItems')} className="td-end num">
-                      {Array.isArray(run.chargedItemIds) ? run.chargedItemIds.length : 0}
-                    </td>
-                    <td data-label={t('admin.storage.col.total')} className="td-end num">
-                      <span dir="ltr">{formatUsd(run.totalAmount)}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-    </>
   );
 }

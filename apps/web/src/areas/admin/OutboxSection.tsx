@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '../../shared/api';
-import { formatDateTime } from '../../shared/money';
+import { formatDateTime, formatDayHeading, formatTime } from '../../shared/money';
+import { inDays } from '../../shared/days';
 import { useI18n } from '../../shared/i18n';
 import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { IconInbox } from '../../shared/ui/icons';
@@ -57,55 +58,57 @@ export function OutboxSection({
     }
   }
 
+  const days = useMemo(
+    () =>
+      inDays(
+        [...(rows ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        (m) => m.createdAt,
+      ),
+    [rows],
+  );
+
   return (
     <Panel
       title={t('admin.outbox.title', { count: rows?.length ?? 0 })}
       subtitle={t('admin.outbox.subtitle')}
-      flush
     >
       {rows === null ? (
         <SkeletonTable rows={3} columns={5} />
       ) : rows.length === 0 ? (
         <EmptyState title={t('admin.outbox.empty')} icon={<IconInbox />} />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">{t('admin.outbox.col.event')}</th>
-                <th scope="col" className="td-end">
-                  {t('admin.outbox.col.attempts')}
-                </th>
-                <th scope="col">{t('admin.outbox.col.error')}</th>
-                <th scope="col">{t('admin.outbox.col.created')}</th>
-                <th scope="col">{t('admin.outbox.col.lastAttempt')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((m) => (
-                <tr key={m.id} className="is-attention">
-                  <td data-label={t('admin.outbox.col.event')}>
-                    <code className="code-inline">{m.eventType}</code>
-                    <span className="dt-sub" dir="ltr" title={t('admin.outbox.col.fields')}>
-                      {[m.aggregateType, ...m.payloadKeys].join(' · ')}
-                    </span>
-                  </td>
-                  <td data-label={t('admin.outbox.col.attempts')} className="td-end num">
-                    {m.attempts}
-                  </td>
-                  <td data-label={t('admin.outbox.col.error')}>
-                    <span className="code-inline" dir="ltr">
-                      {m.lastError ?? '—'}
-                    </span>
-                  </td>
-                  <td data-label={t('admin.outbox.col.created')}>
-                    <span className="date">{formatDateTime(m.createdAt, locale)}</span>
-                  </td>
-                  <td data-label={t('admin.outbox.col.lastAttempt')}>
-                    <span className="date">{m.lastAttemptAt ? formatDateTime(m.lastAttemptAt, locale) : '—'}</span>
-                  </td>
-                  <td className="td-tight">
+        <div className="register-days">
+          {days.map(({ key, items, first }) => (
+            <div key={key} className="register-day-group">
+              <h3 className="register-day" id={`parked-${key}`}>
+                <span className="date">{formatDayHeading(first.createdAt, locale)}</span>
+              </h3>
+              <ul
+                className="timeline timeline--stamped timeline--actions"
+                aria-labelledby={`parked-${key}`}
+              >
+                {items.map((m) => (
+                  <li key={m.id} className="is-attention">
+                    <span className="hint date">{formatTime(m.createdAt, locale)}</span>
+                    <div className="register-text">
+                      <span className="register-kind">
+                        <code className="code-inline">{m.eventType}</code>
+                      </span>
+                      <p className="register-entry register-error">
+                        <span className="code-inline" dir="ltr">
+                          {m.lastError ?? '—'}
+                        </span>
+                      </p>
+                      <p className="register-meta">
+                        <span dir="ltr" title={t('admin.outbox.col.fields')}>
+                          {[m.aggregateType, ...m.payloadKeys].join(' · ')}
+                        </span>
+                        {' · '}
+                        {t('admin.outbox.col.attempts')} {m.attempts}
+                        {m.lastAttemptAt &&
+                          ` · ${t('admin.outbox.col.lastAttempt')} ${formatDateTime(m.lastAttemptAt, locale)}`}
+                      </p>
+                    </div>
                     <Button
                       size="sm"
                       loading={busy === m.id}
@@ -115,11 +118,11 @@ export function OutboxSection({
                     >
                       {t('admin.outbox.requeue')}
                     </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
     </Panel>
