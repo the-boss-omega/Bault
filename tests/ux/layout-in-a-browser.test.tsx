@@ -540,6 +540,8 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
           </I18nProvider>,
         );
         await screen.findByRole('region', { name: /./ });
+        // The addresses arrive after the first frame: wait for them, so no update lands outside the test's own act.
+        await screen.findAllByText(/Trenton/);
         for (const width of [1440, 390]) {
           const page = await inBrowser(width, locale);
           const boxes = await page.$$eval('.composer > .panel, .composer > .composer-slip', (els) =>
