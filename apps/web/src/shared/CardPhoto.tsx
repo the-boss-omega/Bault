@@ -2,18 +2,30 @@ import { useEffect, useState } from 'react';
 import { useT } from './i18n';
 import { slabLeave, slabMove } from './ui/slabTilt';
 
-const PHOTO_EXTENSIONS = ['png', 'jpg'] as const;
+/**
+ * Where a photograph is looked for, in order. The first is a 640 px WebP made by
+ * scripts/make-photo-derivatives.mjs (a tenth of the size of the original); the
+ * others are the original, so a photograph with no derivative still shows.
+ */
+const PHOTO_SOURCES = [
+  (serial: string) => `/images/w640/${serial}.webp`,
+  (serial: string) => `/images/${serial}.png`,
+  (serial: string) => `/images/${serial}.jpg`,
+] as const;
 
-export function cardPhotoUrl(serialNumber: string, attempt = 0): string {
-  const ext = PHOTO_EXTENSIONS[Math.min(attempt, PHOTO_EXTENSIONS.length - 1)];
-  return `/images/${encodeURIComponent(serialNumber)}.${ext}`;
+const FULL_SOURCES = PHOTO_SOURCES.slice(1);
+
+export function cardPhotoUrl(serialNumber: string, attempt = 0, full = false): string {
+  const sources = full ? FULL_SOURCES : PHOTO_SOURCES;
+  const make = sources[Math.min(attempt, sources.length - 1)] ?? PHOTO_SOURCES[1];
+  return make(encodeURIComponent(serialNumber));
 }
 
-function useCardPhotoSource(serialNumber: string) {
+function useCardPhotoSource(serialNumber: string, full = false) {
   const [attempt, setAttempt] = useState(0);
-  const exhausted = attempt >= PHOTO_EXTENSIONS.length;
+  const exhausted = attempt >= (full ? FULL_SOURCES : PHOTO_SOURCES).length;
   return {
-    src: cardPhotoUrl(serialNumber, attempt),
+    src: cardPhotoUrl(serialNumber, attempt, full),
     exhausted,
     onError: () => setAttempt((a) => a + 1),
   };
@@ -57,12 +69,14 @@ function SlabFace({
   photo,
   noneLabel,
   labelSerial,
+  priority,
 }: {
   serialNumber: string;
   title: string;
   photo: ReturnType<typeof useCardPhotoSource>;
   noneLabel: string;
   labelSerial?: string;
+  priority?: boolean;
 }) {
   return (
     <span className="slab-case">
@@ -80,7 +94,9 @@ function SlabFace({
             className="photo-thumb-img"
             src={photo.src}
             alt={title}
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            {...(priority ? { fetchPriority: 'high' as const } : {})}
             onError={photo.onError}
           />
         )}
@@ -101,11 +117,14 @@ export function CardSlab({
   title,
   className = '',
   labelSerial,
+  priority,
 }: {
   serialNumber: string;
   title: string;
   className?: string;
   labelSerial?: string;
+  /** The first thing on the page: load it now, not when it scrolls near. */
+  priority?: boolean;
 }) {
   const photo = useCardPhotoSource(serialNumber);
   return (
@@ -115,7 +134,14 @@ export function CardSlab({
       onPointerMove={slabMove}
       onPointerLeave={slabLeave}
     >
-      <SlabFace serialNumber={serialNumber} title={title} photo={photo} noneLabel="" labelSerial={labelSerial} />
+      <SlabFace
+        serialNumber={serialNumber}
+        title={title}
+        photo={photo}
+        noneLabel=""
+        labelSerial={labelSerial}
+        priority={priority}
+      />
     </div>
   );
 }
@@ -155,7 +181,7 @@ function CardPhotoModal({
   onClose: () => void;
 }) {
   const t = useT();
-  const photo = useCardPhotoSource(serialNumber);
+  const photo = useCardPhotoSource(serialNumber, true);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

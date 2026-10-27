@@ -57,7 +57,7 @@ export function AuthShell({ children, bare }: { children: ReactNode; bare?: bool
                 key={card.serial}
                 style={{ '--d': i } as CSSProperties}
               >
-                <CardSlab serialNumber={card.serial} title={card.title} />
+                <CardSlab serialNumber={card.serial} title={card.title} priority />
               </div>
             ))}
 

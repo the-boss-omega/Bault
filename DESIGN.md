@@ -362,6 +362,9 @@ Loaded in that order after `index.css` (`main.tsx`). Components: `shared/CardPho
 `shared/ui/slabTilt.ts` (pointer tilt), `shared/ui/useLandingMotion.ts` (scroll reveal, journey,
 parallax), `shared/ui/SplitWords.tsx`, `shared/ui/CountUp.tsx`, `areas/customer/marketing/LandingArt.tsx`.
 
+`scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px WebP first and
+falls back to the original; 7.8 MB of photographs became 1.2 MB). Re-run it when a photograph is added.
+
 `scripts/design-lint.mjs` keeps the logical-properties rule and applies it to all of the layers
 above, and requires the reduced-motion block in `motion.css`.
 

@@ -222,7 +222,7 @@ export function LandingPage() {
               key={card.serial}
               style={{ '--d': i } as CSSProperties}
             >
-              <CardSlab serialNumber={card.serial} title={card.title} />
+              <CardSlab serialNumber={card.serial} title={card.title} priority={i < 3} />
             </div>
           ))}
 
