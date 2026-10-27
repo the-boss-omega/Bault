@@ -3,7 +3,8 @@ import { ApiError, api } from '../../../shared/api';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { Button, EmptyState, MoneyField, Panel, StatusBadge } from '../../../shared/ui/primitives';
-import { IconAlert, IconReceipt, IconWallet } from '../../../shared/ui/icons';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { IconAlert, IconWallet } from '../../../shared/ui/icons';
 
 interface BankInstructions {
   accountName: string | null;
@@ -107,35 +108,44 @@ export function TopUpPanel({
     }
   }
 
+  const instructionLines =
+    chosen?.available && chosen.instructions
+      ? 'handle' in chosen.instructions
+        ? [{ label: t('money.paypalHandle'), value: <bdi dir="ltr">{chosen.instructions.handle}</bdi> }]
+        : Object.entries(chosen.instructions)
+            .filter(([, v]) => v !== null)
+            .map(([k, v]) => ({ label: t(`money.bank.${k}` as MessageKey), value: <bdi dir="ltr">{v}</bdi> }))
+      : [];
+
   return (
     <Panel title={t('money.topUp')} subtitle={t('money.topUpSubtitle')}>
       {catalogue === null ? (
         <p className="hint">{t('grp.loading')}</p>
       ) : (
-        <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-          <label className="field">
-            <span className="field-label">{t('money.how')}</span>
-            <select value={route} onChange={(e) => setRoute(e.target.value)}>
-              {catalogue.routes.map((r) => (
-                <option key={r.key} value={r.key} disabled={!r.available}>
-                  {t(`money.route.${r.key}` as MessageKey)}
-                  {r.available ? '' : ` — ${t('money.notAvailable')}`}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="request-form">
+          <div className="stack stack--tight request-form-fields">
+            <label className="field">
+              <span className="field-label">{t('money.how')}</span>
+              <select value={route} onChange={(e) => setRoute(e.target.value)}>
+                {catalogue.routes.map((r) => (
+                  <option key={r.key} value={r.key} disabled={!r.available}>
+                    {t(`money.route.${r.key}` as MessageKey)}
+                    {r.available ? '' : ` — ${t('money.notAvailable')}`}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          {chosen && (
-            <p className="field-hint">
-              <StatusBadge tone={chosen.instant ? 'success' : 'warning'} plain>
-                {chosen.instant ? t('money.instant') : t('money.reviewed')}
-              </StatusBadge>{' '}
-              {t(`money.routeDesc.${chosen.key}` as MessageKey)}
-            </p>
-          )}
+            {chosen && (
+              <p className="field-hint">
+                <StatusBadge tone={chosen.instant ? 'success' : 'warning'} plain>
+                  {chosen.instant ? t('money.instant') : t('money.reviewed')}
+                </StatusBadge>{' '}
+                {t(`money.routeDesc.${chosen.key}` as MessageKey)}
+              </p>
+            )}
 
-          {chosen?.instant && chosen.available ? (
-            <>
+            {chosen?.instant && chosen.available ? (
               <MoneyField
                 label={t('money.amount')}
                 value={amount}
@@ -145,45 +155,49 @@ export function TopUpPanel({
                   max: formatUsd(catalogue.limits.maxMinor),
                 })}
               />
-              <div className="row">
-                <Button variant="gold" icon={<IconWallet />} disabled={busy || !withinLimits} onClick={() => void pay()}>
-                  {t('money.payNow')}
-                </Button>
-                <span className="field-hint">{t('money.instantHint')}</span>
+            ) : chosen?.available && chosen.instructions ? (
+              <>
+                <p className="drawer-note drawer-note--hold">
+                  <IconAlert />
+                  <span>{t('money.referenceNote')}</span>
+                </p>
+                <p className="field-hint">{t('money.thenRaise')}</p>
+              </>
+            ) : (
+              <EmptyState title={t('money.routeUnavailable')} text={t('money.routeUnavailableText')} icon={<IconAlert />} />
+            )}
+          </div>
+
+          {chosen?.instant && chosen.available ? (
+            <>
+              <aside className="request-slip">
+                <DrawerTag
+                  kicker={t('money.topUp')}
+                  amount={formatUsd(cents !== null && cents > 0 ? cents : 0)}
+                  lines={[{ label: t('money.how'), value: t(`money.route.${chosen.key}` as MessageKey) }]}
+                  status={
+                    <StatusBadge tone="success" plain>
+                      {t('money.instant')}
+                    </StatusBadge>
+                  }
+                />
+              </aside>
+              <div className="stack stack--tight request-form-actions">
+                <div className="row">
+                  <Button variant="gold" icon={<IconWallet />} disabled={busy || !withinLimits} onClick={() => void pay()}>
+                    {t('money.payNow')}
+                  </Button>
+                  <span className="field-hint">{t('money.instantHint')}</span>
+                </div>
               </div>
             </>
-          ) : chosen?.available && chosen.instructions ? (
-            <>
-              <h3 className="drawer-heading">{t('money.sendTo')}</h3>
-              <dl className="detail-list">
-                {'handle' in chosen.instructions ? (
-                  <div className="detail-row">
-                    <dt className="detail-label">{t('money.paypalHandle')}</dt>
-                    <dd className="detail-value" dir="ltr">
-                      {chosen.instructions.handle}
-                    </dd>
-                  </div>
-                ) : (
-                  Object.entries(chosen.instructions)
-                    .filter(([, v]) => v !== null)
-                    .map(([k, v]) => (
-                      <div className="detail-row" key={k}>
-                        <dt className="detail-label">{t(`money.bank.${k}` as MessageKey)}</dt>
-                        <dd className="detail-value" dir="ltr">
-                          {v}
-                        </dd>
-                      </div>
-                    ))
-                )}
-              </dl>
-              <p className="drawer-note drawer-note--hold">
-                <IconAlert />
-                <span>{t('money.referenceNote')}</span>
-              </p>
-              <p className="field-hint">{t('money.thenRaise')}</p>
-            </>
           ) : (
-            <EmptyState title={t('money.routeUnavailable')} text={t('money.routeUnavailableText')} icon={<IconAlert />} />
+            chosen?.available &&
+            chosen.instructions && (
+              <aside className="request-slip">
+                <DrawerTag kicker={t('money.sendTo')} lines={instructionLines} />
+              </aside>
+            )
           )}
         </div>
       )}
@@ -204,8 +218,8 @@ interface CashOutQuote {
   };
 }
 
-export function CashOutQuotePanel({ amount }: { amount: string }) {
-  const { t } = useI18n();
+/** What the server says would land for the amount typed so far, asked for once the typing has paused. */
+export function useCashOutQuote(amount: string): CashOutQuote | null {
   const [quote, setQuote] = useState<CashOutQuote | null>(null);
   const cents = dollarsToCents(amount);
 
@@ -223,6 +237,12 @@ export function CashOutQuotePanel({ amount }: { amount: string }) {
     return () => clearTimeout(handle);
   }, [cents]);
 
+  return quote;
+}
+
+/** The fee schedule, in a sentence. What the amount typed comes to is on the slip beside the form. */
+export function CashOutQuotePanel({ quote }: { quote: CashOutQuote | null }) {
+  const { t } = useI18n();
   return (
     <div className="stack stack--tight">
       <p className="field-hint">
@@ -236,18 +256,6 @@ export function CashOutQuotePanel({ amount }: { amount: string }) {
             })
           : t('money.feeScheduleShort')}
       </p>
-      {quote && quote.amountMinor > 0 && (
-        <p className="drawer-note drawer-note--archive">
-          <IconReceipt />
-          <span>
-            {t('money.youReceive', {
-              gross: formatUsd(quote.amountMinor),
-              fee: formatUsd(quote.feeMinor),
-              net: formatUsd(quote.netMinor),
-            })}
-          </span>
-        </p>
-      )}
     </div>
   );
 }

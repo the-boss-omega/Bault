@@ -1212,6 +1212,52 @@
   color: var(--paper-ink-2);
 }
 
+/* ---- A form with its slip: the request as it will be read, written while it is typed ---- */
+
+.request-form {
+  display: grid;
+  gap: var(--sp-6);
+  max-inline-size: 560px;
+}
+
+.request-form-fields,
+.request-form-actions {
+  min-inline-size: 0;
+}
+
+.request-slip .drawer-tag {
+  margin-block-end: 0;
+}
+
+/* A line of the slip is a name and what was typed against it; a long value takes the room of the leader. */
+.drawer-tag-lines .ledger-line dd {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+@media (min-width: 1100px) {
+  .request-form {
+    grid-template-columns: minmax(0, 560px) minmax(280px, 380px);
+    column-gap: var(--sp-12);
+    max-inline-size: none;
+    align-items: start;
+  }
+
+  .request-form-fields,
+  .request-form-actions {
+    grid-column: 1;
+  }
+
+  .request-slip {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    inset-block-start: var(--sp-6);
+  }
+}
+
 /* ---- The month's statement: three figures on one sheet of paper ---- */
 
 /* The sheet is the container: how many figures sit side by side is the sheet's width, not the window's. */

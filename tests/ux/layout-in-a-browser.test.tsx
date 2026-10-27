@@ -19,6 +19,7 @@ const { ContextTabs } = await import('../../apps/web/src/shared/ui/primitives');
 const { StatementSlip } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
 const { AccountingSection } = await import('../../apps/web/src/areas/admin/AccountingSection');
 const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
+const { WalletRequestForm } = await import('../../apps/web/src/areas/customer/finance/WalletRequestForms');
 const { api } = await import('../../apps/web/src/shared/api');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -448,6 +449,37 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
           await page.close();
         });
       }
+    }
+  });
+  describe('a form with its slip', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`has the slip beside the fields on a wide window and between the fields and the button on a phone, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        render(
+          <I18nProvider>
+            <WalletRequestForm type="cash_out" availableMinor={970000} existingRequests={[]} onSubmitted={() => {}} />
+          </I18nProvider>,
+        );
+        for (const width of [1440, 390]) {
+          const page = await inBrowser(width, locale);
+          const [fields, slip, actions] = await Promise.all(
+            ['.request-form-fields', '.request-slip', '.request-form-actions'].map((selector) => page.$eval(selector, (el) => el.getBoundingClientRect().toJSON())),
+          );
+          if (width >= 1100) {
+            // Beside: on the side the page ends on, and starting where the fields start.
+            if (locale === 'en') expect(slip.left).toBeGreaterThanOrEqual(fields.right - 1);
+            else expect(slip.right).toBeLessThanOrEqual(fields.left + 1);
+            expect(Math.abs(slip.top - fields.top)).toBeLessThan(2);
+          } else {
+            // Between: the fields, then the slip, then the button that sends it.
+            expect(slip.top).toBeGreaterThanOrEqual(fields.bottom - 1);
+            expect(actions.top).toBeGreaterThanOrEqual(slip.bottom - 1);
+            expect(Math.abs(slip.width - fields.width)).toBeLessThan(2);
+          }
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+          await page.close();
+        }
+      });
     }
   });
 });

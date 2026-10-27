@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { api } from '../../../shared/api';
-import { CashOutQuotePanel } from './MoneyPanels';
+import { CashOutQuotePanel, useCashOutQuote } from './MoneyPanels';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n, type MessageKey } from '../../../shared/i18n';
 import {
@@ -14,6 +14,7 @@ import {
   type WalletRequestType,
 } from '../../../shared/walletRequests';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconArrowDown, IconUpload } from '../../../shared/ui/icons';
 
 export function WalletRequestForm({
@@ -42,6 +43,7 @@ export function WalletRequestForm({
 
   const cents = dollarsToCents(amount);
   const limits = WALLET_REQUEST_LIMITS[type];
+  const quote = useCashOutQuote(type === 'cash_out' ? amount : '');
 
   const problems = useMemo(
     () =>
@@ -100,123 +102,162 @@ export function WalletRequestForm({
 
   const amountProblem = showProblem('amount');
 
-  return (
-    <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-      <p className="infobox">{t('wallet.request.noBalanceChange')}</p>
+  // The slip is the request as it will be read, written while it is typed: what is not yet typed is a dash.
+  const typed = (value: string, ltr = false) =>
+    value.trim() ? <bdi dir={ltr ? 'ltr' : 'auto'}>{value.trim()}</bdi> : '—';
+  const slipLines =
+    type === 'cash_out'
+      ? [
+          { label: t('wallet.request.destination'), value: typed(destinationAccount, true) },
+          { label: t('wallet.request.beneficiary'), value: typed(beneficiaryName) },
+          { label: t('wallet.request.reference'), value: typed(reference) },
+        ]
+      : [
+          { label: t('wallet.request.fundingSource'), value: t(`wallet.request.funding.${fundingSource}` as MessageKey) },
+          { label: t('wallet.request.reference'), value: typed(reference) },
+        ];
+  const slipNote =
+    type === 'cash_out'
+      ? quote && quote.amountMinor > 0
+        ? t('money.youReceive', {
+            gross: formatUsd(quote.amountMinor),
+            fee: formatUsd(quote.feeMinor),
+            net: formatUsd(quote.netMinor),
+          })
+        : t('money.feeScheduleShort')
+      : `$${(limits.minMinor / 100).toFixed(2)} – $${(limits.maxMinor / 100).toFixed(2)}`;
 
-      <div className="field">
-        <label className="field-label" htmlFor={`wr-amount-${type}`}>
-          {t('wallet.request.amountLabel')}
-        </label>
-        <div className="money-input">
-          <span aria-hidden="true">$</span>
-          <input
-            id={`wr-amount-${type}`}
-            inputMode="decimal"
-            dir="ltr"
-            placeholder="0.00"
-            value={amount}
-            aria-invalid={Boolean(amountProblem)}
-            aria-describedby={`wr-amount-hint-${type}`}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              setError(null);
-              setDone(null);
-            }}
-          />
+  return (
+    <div className="request-form">
+      <div className="stack stack--tight request-form-fields">
+        <p className="infobox">{t('wallet.request.noBalanceChange')}</p>
+
+        <div className="field">
+          <label className="field-label" htmlFor={`wr-amount-${type}`}>
+            {t('wallet.request.amountLabel')}
+          </label>
+          <div className="money-input">
+            <span aria-hidden="true">$</span>
+            <input
+              id={`wr-amount-${type}`}
+              inputMode="decimal"
+              dir="ltr"
+              placeholder="0.00"
+              value={amount}
+              aria-invalid={Boolean(amountProblem)}
+              aria-describedby={`wr-amount-hint-${type}`}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setError(null);
+                setDone(null);
+              }}
+            />
+          </div>
+          <p className={amountProblem ? 'field-error' : 'field-hint'} id={`wr-amount-hint-${type}`}>
+            {amountProblem
+              ? t(amountProblem.messageKey, amountProblem.vars)
+              : type === 'cash_out'
+                ? t('wallet.request.availableNote', { amount: formatUsd(availableMinor) })
+                : `$${(limits.minMinor / 100).toFixed(2)} – $${(limits.maxMinor / 100).toFixed(2)}`}
+          </p>
         </div>
-        <p className={amountProblem ? 'field-error' : 'field-hint'} id={`wr-amount-hint-${type}`}>
-          {amountProblem
-            ? t(amountProblem.messageKey, amountProblem.vars)
-            : type === 'cash_out'
-              ? t('wallet.request.availableNote', { amount: formatUsd(availableMinor) })
-              : `$${(limits.minMinor / 100).toFixed(2)} – $${(limits.maxMinor / 100).toFixed(2)}`}
-        </p>
+
+        {type === 'cash_out' && <CashOutQuotePanel quote={quote} />}
+
+        {type === 'cash_in' ? (
+          <Field
+            label={t('wallet.request.fundingSource')}
+            error={showProblem('fundingSource') ? t('wallet.request.error.fundingRequired') : undefined}
+          >
+            <select value={fundingSource} onChange={(e) => setFundingSource(e.target.value)}>
+              {FUNDING_SOURCES.map((source) => (
+                <option key={source} value={source}>
+                  {t(`wallet.request.funding.${source}` as MessageKey)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <>
+            <Field
+              label={t('wallet.request.destination')}
+              hint={t('wallet.request.destinationHint')}
+              error={showProblem('destinationAccount') ? t('wallet.request.error.destinationRequired') : undefined}
+            >
+              <input
+                dir="ltr"
+                placeholder="IL00 0000 0000 0000"
+                value={destinationAccount}
+                aria-invalid={Boolean(showProblem('destinationAccount'))}
+                onChange={(e) => setDestinationAccount(e.target.value)}
+              />
+            </Field>
+
+            <Field
+              label={t('wallet.request.beneficiary')}
+              error={
+                showProblem('beneficiaryName') ? t('wallet.request.error.beneficiaryRequired') : undefined
+              }
+            >
+              <input
+                value={beneficiaryName}
+                aria-invalid={Boolean(showProblem('beneficiaryName'))}
+                onChange={(e) => setBeneficiaryName(e.target.value)}
+              />
+            </Field>
+          </>
+        )}
+
+        <Field label={t('wallet.request.reference')} hint={t('wallet.request.referenceHint')}>
+          <input
+            value={reference}
+            maxLength={MAX_REFERENCE_LENGTH}
+            onChange={(e) => setReference(e.target.value)}
+          />
+        </Field>
+
+        <Field label={t('wallet.request.document')} hint={t('wallet.request.documentHint')}>
+          <input dir="ltr" value={documentKey} onChange={(e) => setDocumentKey(e.target.value)} />
+        </Field>
+
+        <Field
+          label={t('wallet.request.notes')}
+          error={showProblem('notes') ? t('wallet.request.error.notesTooLong') : undefined}
+        >
+          <textarea
+            rows={3}
+            value={notes}
+            maxLength={MAX_NOTE_LENGTH}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </Field>
+
       </div>
 
-      {type === 'cash_out' && <CashOutQuotePanel amount={amount} />}
+      <aside className="request-slip">
+        <DrawerTag
+          kicker={t(type === 'cash_in' ? 'wallet.cashIn.title' : 'wallet.cashOut.title')}
+          amount={formatUsd(cents !== null && cents > 0 ? cents : 0)}
+          lines={slipLines}
+          note={slipNote}
+        />
+      </aside>
 
-      {type === 'cash_in' ? (
-        <Field
-          label={t('wallet.request.fundingSource')}
-          error={showProblem('fundingSource') ? t('wallet.request.error.fundingRequired') : undefined}
+      <div className="stack stack--tight request-form-actions">
+        {duplicate && <ErrorState message={t('wallet.request.error.duplicate', { code: duplicate.code })} />}
+        {error && <ErrorState message={error} />}
+        {done && <SuccessNote>{done}</SuccessNote>}
+
+        <Button
+          variant="gold"
+          block
+          icon={type === 'cash_in' ? <IconArrowDown /> : <IconUpload />}
+          disabled={busy || Boolean(duplicate)}
+          onClick={submit}
         >
-          <select value={fundingSource} onChange={(e) => setFundingSource(e.target.value)}>
-            {FUNDING_SOURCES.map((source) => (
-              <option key={source} value={source}>
-                {t(`wallet.request.funding.${source}` as MessageKey)}
-              </option>
-            ))}
-          </select>
-        </Field>
-      ) : (
-        <>
-          <Field
-            label={t('wallet.request.destination')}
-            hint={t('wallet.request.destinationHint')}
-            error={showProblem('destinationAccount') ? t('wallet.request.error.destinationRequired') : undefined}
-          >
-            <input
-              dir="ltr"
-              placeholder="IL00 0000 0000 0000"
-              value={destinationAccount}
-              aria-invalid={Boolean(showProblem('destinationAccount'))}
-              onChange={(e) => setDestinationAccount(e.target.value)}
-            />
-          </Field>
-
-          <Field
-            label={t('wallet.request.beneficiary')}
-            error={
-              showProblem('beneficiaryName') ? t('wallet.request.error.beneficiaryRequired') : undefined
-            }
-          >
-            <input
-              value={beneficiaryName}
-              aria-invalid={Boolean(showProblem('beneficiaryName'))}
-              onChange={(e) => setBeneficiaryName(e.target.value)}
-            />
-          </Field>
-        </>
-      )}
-
-      <Field label={t('wallet.request.reference')} hint={t('wallet.request.referenceHint')}>
-        <input
-          value={reference}
-          maxLength={MAX_REFERENCE_LENGTH}
-          onChange={(e) => setReference(e.target.value)}
-        />
-      </Field>
-
-      <Field label={t('wallet.request.document')} hint={t('wallet.request.documentHint')}>
-        <input dir="ltr" value={documentKey} onChange={(e) => setDocumentKey(e.target.value)} />
-      </Field>
-
-      <Field
-        label={t('wallet.request.notes')}
-        error={showProblem('notes') ? t('wallet.request.error.notesTooLong') : undefined}
-      >
-        <textarea
-          rows={3}
-          value={notes}
-          maxLength={MAX_NOTE_LENGTH}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-      </Field>
-
-      {duplicate && <ErrorState message={t('wallet.request.error.duplicate', { code: duplicate.code })} />}
-      {error && <ErrorState message={error} />}
-      {done && <SuccessNote>{done}</SuccessNote>}
-
-      <Button
-        variant="gold"
-        block
-        icon={type === 'cash_in' ? <IconArrowDown /> : <IconUpload />}
-        disabled={busy || Boolean(duplicate)}
-        onClick={submit}
-      >
-        {busy ? t('wallet.request.submitting') : t('wallet.request.submit')}
-      </Button>
+          {busy ? t('wallet.request.submitting') : t('wallet.request.submit')}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -13,24 +13,39 @@ export function DrawerTag({
   amount,
   status,
   note,
+  lines,
 }: {
   /** What the amount is: "Agreed price", "Cash in", "Amount". */
   kicker: string;
-  /** The amount as it is written, with its sign when it has one. */
-  amount: string;
+  /** The amount as it is written, with its sign when it has one. A tag that is a set of lines (where to send a payment) has none. */
+  amount?: string;
   /** Where it stands: a status badge. */
   status?: ReactNode;
   /** Whatever goes with the amount: a fee, a currency. */
   note?: ReactNode;
+  /** What it is made of or goes with, a name and its value to a line: a destination, a reference. */
+  lines?: { label: ReactNode; value: ReactNode }[];
 }) {
   return (
     <section className="drawer-tag" aria-label={kicker}>
       <p className="drawer-tag-kicker">{kicker}</p>
-      <p className="drawer-tag-amount">
-        <span className="amount" dir="ltr">
-          {amount}
-        </span>
-      </p>
+      {amount !== undefined && (
+        <p className="drawer-tag-amount">
+          <span className="amount" dir="ltr">
+            {amount}
+          </span>
+        </p>
+      )}
+      {lines && lines.length > 0 && (
+        <dl className="ledger-lines drawer-tag-lines">
+          {lines.map((line, i) => (
+            <div className="ledger-line" key={i}>
+              <dt>{line.label}</dt>
+              <dd>{line.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {(status || note) && (
         <div className="drawer-tag-foot">
           {status}
