@@ -253,7 +253,7 @@ export function ProfilePage() {
                 icon={<IconLocation />}
               />
             ) : (
-              <ul className="address-labels">
+              <ul className="tag-grid">
                 {addresses.map((address) => (
                   <AddressCard
                     key={address.id}
@@ -447,7 +447,7 @@ function AddressCard({
 
   if (!editing) {
     return (
-      <li className="address-item">
+      <li className="tag-item">
         <AddressLabel address={address} kicker={address.label} />
         <div className="actions">
           <Button
@@ -469,7 +469,7 @@ function AddressCard({
   }
 
   return (
-    <li className="address-item is-editing">
+    <li className="tag-item is-editing">
       <div className="request-form">
         <div className="request-form-fields">
           <AddressFields draft={draft} onChange={(next) => setDraft({ ...draft, ...next })} />

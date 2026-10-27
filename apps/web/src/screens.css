@@ -1454,7 +1454,7 @@ li.is-clickable {
   line-height: 1.5;
 }
 
-.address-labels {
+.tag-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 340px));
   gap: var(--sp-8) var(--sp-6);
@@ -1463,20 +1463,20 @@ li.is-clickable {
   list-style: none;
 }
 
-.address-item {
+.tag-item {
   min-inline-size: 0;
 }
 
-/* An address being edited is the form beside the label it makes: it takes the row it is on. */
-.address-item.is-editing {
+/* A tag being edited is the form beside the tag it makes: it takes the row it is on. */
+.tag-item.is-editing {
   grid-column: 1 / -1;
 }
 
-.address-item > .drawer-tag {
+.tag-item > .drawer-tag {
   margin-block-end: 0;
 }
 
-.address-item > .actions {
+.tag-item > .actions {
   margin-block-start: var(--sp-3);
 }
 
@@ -1495,6 +1495,32 @@ li.is-clickable {
   overflow-wrap: anywhere;
   unicode-bidi: plaintext;
   text-align: var(--text-start);
+}
+
+/* ---- A dispute as a case file: the ruling, the transaction, the note, and under it the controls that move it on ---- */
+
+/* What was written on the file is quoted, in the paper's second ink, hung from the edge of the language it is in. */
+.case-note {
+  margin: var(--sp-2) 0 var(--sp-1);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--paper-rule);
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.case-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-3);
+}
+
+.case-controls input {
+  grid-column: 1 / -1;
 }
 
 /* ---- Two-factor sign-in: where it stands on a card, the key to scan on a card, the codes to keep on a sheet ---- */

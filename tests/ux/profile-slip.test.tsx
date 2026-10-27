@@ -250,7 +250,7 @@ describe('the addresses, a label for each place', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
 
-    const item = document.querySelector('.address-item.is-editing') as HTMLElement;
+    const item = document.querySelector('.tag-item.is-editing') as HTMLElement;
     expect(item).not.toBeNull();
     const label = item.querySelector('.drawer-tag') as HTMLElement;
     expect(label).toHaveAccessibleName('Home');
