@@ -12,6 +12,7 @@ export function DrawerTag({
   kicker,
   amount,
   title,
+  titleAs,
   art,
   status,
   note,
@@ -27,22 +28,28 @@ export function DrawerTag({
    * parcel. Whatever a person typed is read as the language it is in.
    */
   title?: ReactNode;
+  /** Where the title is a heading in the page's outline (a sheet's own name), the level it is. Otherwise it is only words. */
+  titleAs?: 'h3' | 'h4';
   /** What the tag hangs from: the card in its case. Decoration; the lines under it name it. */
   art?: ReactNode;
   /** Where it stands: a status badge. */
   status?: ReactNode;
   /** Whatever goes with the amount: a fee, a currency. */
   note?: ReactNode;
-  /** What it is made of or goes with, a name and its value to a line: a destination, a reference. */
+  /**
+   * What it is made of or goes with, a name and its value to a line: a destination, a reference. A name
+   * written for a list ends in a colon; on a tag the leader between the two says it, so the colon is dropped.
+   */
   lines?: { label: ReactNode; value: ReactNode }[];
   /** Whatever the tag has to show that is neither a sum nor a line: the two sides of a trade. */
   children?: ReactNode;
 }) {
+  const Title = titleAs ?? 'p';
   return (
     <section className="drawer-tag" aria-label={kicker}>
       {art && <div className="drawer-tag-art">{art}</div>}
       <p className="drawer-tag-kicker">{kicker}</p>
-      {title !== undefined && <p className="drawer-tag-title">{title}</p>}
+      {title !== undefined && <Title className="drawer-tag-title">{title}</Title>}
       {amount !== undefined && (
         <p className="drawer-tag-amount">
           <span className="amount" dir="ltr">
@@ -55,7 +62,11 @@ export function DrawerTag({
         <dl className="ledger-lines drawer-tag-lines">
           {lines.map((line, i) => (
             <div className="ledger-line" key={i}>
-              <dt>{line.label}</dt>
+              <dt>
+                {typeof line.label === 'string'
+                  ? line.label.replace(/\s*[:：]\s*$/, '')
+                  : line.label}
+              </dt>
               <dd>{line.value}</dd>
             </div>
           ))}

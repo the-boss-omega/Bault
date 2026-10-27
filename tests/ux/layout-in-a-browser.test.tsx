@@ -25,6 +25,11 @@ const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConso
 const { WalletRequestForm } = await import('../../apps/web/src/areas/customer/finance/WalletRequestForms');
 const { ShipmentComposer } = await import('../../apps/web/src/areas/customer/shipping/ShipmentComposer');
 const { SignInsSection } = await import('../../apps/web/src/areas/admin/SignInsSection');
+const { SellPanel } = await import('../../apps/web/src/areas/customer/marketplace/MarketplacePage');
+const { ProposeTradePanel } = await import('../../apps/web/src/areas/customer/marketplace/ProposeTradePanel');
+const { RegisterParcelForm } = await import('../../apps/web/src/areas/customer/inbound/InboundPage');
+const { SupportPage } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+const { ProfilePage } = await import('../../apps/web/src/areas/customer/profile/ProfilePage');
 const { api } = await import('../../apps/web/src/shared/api');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
@@ -598,6 +603,103 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
             expect(actions.top).toBeGreaterThanOrEqual(slip.bottom - 1);
             expect(Math.abs(slip.width - fields.width)).toBeLessThan(2);
           }
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+          await page.close();
+        }
+      });
+    }
+  });
+
+  describe('every other form that has one', () => {
+    const PROFILE = {
+      id: 'u1', email: 'red@bault.dev', username: 'red', role: 'user', status: 'active',
+      firstName: 'Red', lastName: 'Ashwood', fullName: 'Red Ashwood', nameReviewRequired: false,
+    };
+    const answers = (more: Record<string, unknown> = {}) =>
+      vi.mocked(api.get).mockImplementation(((path: string) =>
+        Promise.resolve(
+          path in more ? more[path] : path === '/me/profile' ? PROFILE : [],
+        )) as never);
+
+    function Sell() {
+      const t = useT();
+      const items = [{ id: 'i1', serialNumber: 'SN-CL10-0005', typeClass: 'trading_card', description: '2011 Pokémon Call of Legends — Rayquaza' }];
+      return <SellPanel items={items} t={t} onListed={async () => {}} onError={() => {}} />;
+    }
+
+    const forms: { name: string; ui: () => React.ReactElement; hash?: string }[] = [
+      { name: 'selling an item', ui: () => <Sell /> },
+      { name: 'proposing a trade', ui: () => <ProposeTradePanel onProposed={async () => {}} onError={() => {}} /> },
+      { name: 'registering a parcel', ui: () => <RegisterParcelForm onRegistered={async () => {}} onError={() => {}} /> },
+      { name: 'a new ticket', ui: () => <SupportPage />, hash: '#/support/new' },
+      { name: 'the name on the account', ui: () => <ProfilePage />, hash: '#/profile/details' },
+      { name: 'an address being added', ui: () => <ProfilePage />, hash: '#/profile/addresses' },
+    ];
+
+    for (const form of forms) {
+      for (const locale of ['en', 'he'] as const) {
+        it(`${form.name}: the slip is beside the fields on a wide window, between the fields and the button on a phone, in ${locale}`, async () => {
+          localStorage.setItem('bault.locale', locale);
+          answers();
+          window.location.hash = form.hash ?? '';
+          render(<I18nProvider>{form.ui()}</I18nProvider>);
+          // The slip is there once the form is: in whatever language the page is.
+          await waitFor(() => expect(document.querySelector('.request-slip')).not.toBeNull());
+          for (const width of [1440, 390]) {
+            const page = await inBrowser(width, locale);
+            const [fields, slip, actions] = await Promise.all(
+              ['.request-form-fields', '.request-slip', '.request-form-actions'].map((selector) =>
+                page.$eval(selector, (el) => el.getBoundingClientRect().toJSON()),
+              ),
+            );
+            if (width >= 1100) {
+              if (locale === 'en') expect(slip.left).toBeGreaterThanOrEqual(fields.right - 1);
+              else expect(slip.right).toBeLessThanOrEqual(fields.left + 1);
+              expect(Math.abs(slip.top - fields.top)).toBeLessThan(2);
+              // The button is under the fields, not left at the foot of a slip that is taller than they are.
+              expect(actions.top - fields.bottom).toBeLessThan(40);
+            } else {
+              expect(slip.top).toBeGreaterThanOrEqual(fields.bottom - 1);
+              expect(actions.top).toBeGreaterThanOrEqual(slip.bottom - 1);
+              expect(Math.abs(slip.width - fields.width)).toBeLessThan(2);
+            }
+            expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+            await page.close();
+          }
+        });
+      }
+    }
+
+    for (const locale of ['en', 'he'] as const) {
+      it(`the security tab is the password beside the second factor on a wide window and one under the other on a phone, with the second factor's card above what it offers, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        answers({ '/auth/mfa': { enabled: true, pending: false, required: false, recoveryCodesRemaining: 8 } });
+        window.location.hash = '#/profile/security';
+        render(
+          <I18nProvider>
+            <ProfilePage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.security-grid .request-slip')).not.toBeNull());
+        for (const width of [1440, 390]) {
+          const page = await inBrowser(width, locale);
+          const [password, factor] = await Promise.all(
+            ['.security-grid > :nth-child(1)', '.security-grid > :nth-child(2)'].map((selector) =>
+              page.$eval(selector, (el) => el.getBoundingClientRect().toJSON()),
+            ),
+          );
+          if (width >= 1100) {
+            if (locale === 'en') expect(factor.left).toBeGreaterThanOrEqual(password.right - 1);
+            else expect(factor.right).toBeLessThanOrEqual(password.left + 1);
+            expect(Math.abs(factor.top - password.top)).toBeLessThan(2);
+          } else {
+            expect(factor.top).toBeGreaterThanOrEqual(password.bottom - 1);
+          }
+          // Half a page is too narrow for a form and its card side by side: the card is above what it is about, and is a card's width.
+          const card = await page.$eval('.security-grid .request-slip', (el) => el.getBoundingClientRect().toJSON());
+          const buttons = await page.$eval('.security-grid .request-form-actions', (el) => el.getBoundingClientRect().toJSON());
+          expect(buttons.top).toBeGreaterThanOrEqual(card.bottom - 1);
+          expect(card.width).toBeLessThanOrEqual(381);
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
           await page.close();
         }

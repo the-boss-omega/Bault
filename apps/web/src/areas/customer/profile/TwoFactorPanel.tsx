@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { Button, ErrorState, Field, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { typedCode as digits } from '../../../shared/twoFactor';
 
 interface MfaStatus {
@@ -97,7 +98,7 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
 
   return (
     <Panel title={t('mfa.title')} subtitle={t('mfa.panel.subtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 560 }}>
+      <div className="stack stack--tight">
         {note && <SuccessNote>{note}</SuccessNote>}
         {loadError && <ErrorState message={loadError} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
         {error && <ErrorState message={error} />}
@@ -105,25 +106,39 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
         {mode.kind === 'codes' ? (
           <RecoveryCodes codes={mode.codes} onDone={() => void codesSaved()} />
         ) : status === null ? null : status.enabled ? (
-          <>
-            <p>
-              <StatusBadge tone="success">{t('mfa.status.on')}</StatusBadge> {t('mfa.enabledNote')}
-            </p>
-            <p className="hint">{t('mfa.recovery.left', { count: status.recoveryCodesRemaining })}</p>
-            {status.required && <p className="hint">{t('mfa.required.note')}</p>}
+          <div className="request-form request-form--stacked">
+            {/* Where it stands, on a card: what it asks for at every sign-in, and what is left of the way back in. */}
+            <aside className="request-slip">
+              <DrawerTag
+                kicker={t('mfa.title')}
+                status={<StatusBadge tone="success">{t('mfa.status.on')}</StatusBadge>}
+                note={t('mfa.recovery.left', { count: status.recoveryCodesRemaining })}
+              >
+                <p className="drawer-tag-text">{t('mfa.enabledNote')}</p>
+                {status.required && <p className="drawer-tag-text">{t('mfa.required.note')}</p>}
+              </DrawerTag>
+            </aside>
 
             {mode.kind === 'regenerate' ? (
-              <CodeForm
-                hint={t('mfa.recovery.newHint')}
-                submitLabel={t('mfa.recovery.make')}
-                busy={busy}
-                onSubmit={regenerate}
-                onCancel={() => setMode({ kind: 'idle' })}
-              />
+              <div className="request-form-fields">
+                <CodeForm
+                  hint={t('mfa.recovery.newHint')}
+                  submitLabel={t('mfa.recovery.make')}
+                  busy={busy}
+                  onSubmit={regenerate}
+                  onCancel={() => setMode({ kind: 'idle' })}
+                />
+              </div>
             ) : mode.kind === 'disable' ? (
-              <DisableForm busy={busy} onSubmit={disable} onCancel={() => setMode({ kind: 'idle' })} />
+              <div className="request-form-fields">
+                <DisableForm
+                  busy={busy}
+                  onSubmit={disable}
+                  onCancel={() => setMode({ kind: 'idle' })}
+                />
+              </div>
             ) : (
-              <div className="row">
+              <div className="row request-form-actions">
                 <Button onClick={() => setMode({ kind: 'regenerate' })}>{t('mfa.recovery.new')}</Button>
                 {!status.required && (
                   <Button variant="ghost" onClick={() => setMode({ kind: 'disable' })}>
@@ -132,37 +147,55 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
                 )}
               </div>
             )}
-          </>
+          </div>
         ) : mode.kind === 'setup' ? (
-          <>
-            <p>{t('mfa.setup.scan')}</p>
-            <img src={mode.setup.qrCode} alt={t('mfa.setup.qrAlt')} width={200} height={200} />
-            <div>
-              <span className="field-label">{t('mfa.setup.key')}</span>{' '}
-              <code className="code-inline" dir="ltr">
-                {mode.setup.secret}
-              </code>
+          <div className="request-form request-form--stacked">
+            {/* The key, on a card: to be scanned, or typed by hand. It is read first, so it comes first on a phone. */}
+            <aside className="request-slip">
+              <DrawerTag kicker={t('mfa.setup')}>
+                <p className="drawer-tag-text">{t('mfa.setup.scan')}</p>
+                <span className="barcode mfa-qr">
+                  <img
+                    src={mode.setup.qrCode}
+                    alt={t('mfa.setup.qrAlt')}
+                    width={200}
+                    height={200}
+                  />
+                </span>
+                <div className="mfa-key">
+                  <span className="slip-label">{t('mfa.setup.key')}</span>
+                  <code className="code-inline" dir="ltr">
+                    {mode.setup.secret}
+                  </code>
+                </div>
+              </DrawerTag>
+            </aside>
+            <div className="request-form-fields">
+              <CodeForm
+                hint={t('mfa.setup.confirmHint')}
+                submitLabel={t('mfa.setup.turnOn')}
+                busy={busy}
+                withPassword
+                onSubmit={confirm}
+              />
             </div>
-            <CodeForm
-              hint={t('mfa.setup.confirmHint')}
-              submitLabel={t('mfa.setup.turnOn')}
-              busy={busy}
-              withPassword
-              onSubmit={confirm}
-            />
-          </>
+          </div>
         ) : (
-          <>
-            <p>
-              <StatusBadge>{t('mfa.status.off')}</StatusBadge>
-            </p>
-            {status.required && <p className="hint">{t('mfa.required.note')}</p>}
-            <div className="row">
+          <div className="request-form request-form--stacked">
+            <aside className="request-slip">
+              <DrawerTag
+                kicker={t('mfa.title')}
+                status={<StatusBadge>{t('mfa.status.off')}</StatusBadge>}
+              >
+                {status.required && <p className="drawer-tag-text">{t('mfa.required.note')}</p>}
+              </DrawerTag>
+            </aside>
+            <div className="row request-form-actions">
               <Button variant="gold" loading={busy} onClick={() => void begin()}>
                 {t('mfa.setup')}
               </Button>
             </div>
-          </>
+          </div>
         )}
       </div>
     </Panel>
@@ -287,16 +320,18 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
   const { t } = useI18n();
   const [saved, setSaved] = useState(false);
   return (
-    <div className="stack stack--tight">
-      <h3>{t('mfa.recovery.title')}</h3>
-      <p>{t('mfa.recovery.body')}</p>
-      <ol className="recovery-codes" dir="ltr">
-        {codes.map((code) => (
-          <li key={code}>
-            <code className="code-inline">{code}</code>
-          </li>
-        ))}
-      </ol>
+    <div className="stack stack--tight mfa-codes">
+      {/* The codes are a sheet to keep: they are shown once, and the sheet is what is printed or saved. */}
+      <DrawerTag kicker={t('mfa.title')} title={t('mfa.recovery.title')} titleAs="h3">
+        <p className="drawer-tag-text">{t('mfa.recovery.body')}</p>
+        <ol className="recovery-codes" dir="ltr">
+          {codes.map((code) => (
+            <li key={code}>
+              <code className="code-inline">{code}</code>
+            </li>
+          ))}
+        </ol>
+      </DrawerTag>
       <label className="check">
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
         {t('mfa.recovery.saved')}

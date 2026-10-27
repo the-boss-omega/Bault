@@ -1294,6 +1294,8 @@
 @media (min-width: 1100px) {
   .request-form {
     grid-template-columns: minmax(0, 560px) minmax(280px, 380px);
+    /* Where the slip is taller than the fields, the room is below the button, not between it and the fields. */
+    grid-template-rows: auto minmax(0, 1fr);
     column-gap: var(--sp-12);
     max-inline-size: none;
     align-items: start;
@@ -1432,6 +1434,158 @@ li.is-clickable {
 
 .drawer-tag .slip-thumb {
   inline-size: 48px;
+}
+
+/* ---- The account, and where it ships: a card for who it is, a label for each place ---- */
+
+/* What the card says of one of its lines, a size down: the username is permanent. */
+.drawer-tag-sub {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--paper-ink-3);
+  font-size: var(--fs-caption);
+  font-weight: 400;
+}
+
+/* Plain words on paper: what a tag says about itself, in the paper's second ink. */
+.drawer-tag-text {
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.address-labels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 340px));
+  gap: var(--sp-8) var(--sp-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.address-item {
+  min-inline-size: 0;
+}
+
+/* An address being edited is the form beside the label it makes: it takes the row it is on. */
+.address-item.is-editing {
+  grid-column: 1 / -1;
+}
+
+.address-item > .drawer-tag {
+  margin-block-end: 0;
+}
+
+.address-item > .actions {
+  margin-block-start: var(--sp-3);
+}
+
+.address-lines {
+  display: grid;
+  gap: 2px;
+  margin-block: var(--sp-2) var(--sp-1);
+  color: var(--paper-ink-2);
+  font-style: normal;
+  font-size: var(--fs-base);
+  line-height: 1.45;
+}
+
+/* A line is what a person typed: read as the language it is in, hung from that language's edge. */
+.address-lines > span {
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+/* ---- Two-factor sign-in: where it stands on a card, the key to scan on a card, the codes to keep on a sheet ---- */
+
+.mfa-qr {
+  justify-self: center;
+  margin-block: var(--sp-2);
+}
+
+.barcode img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.mfa-key {
+  display: grid;
+  gap: var(--sp-1);
+  margin-block-end: var(--sp-1);
+}
+
+.mfa-key .code-inline {
+  font-size: var(--fs-md);
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+/* The sheet of codes is as wide as a sheet is: the codes are read down it, two to a line where there is room. */
+.mfa-codes {
+  max-inline-size: 460px;
+}
+
+.drawer-tag .recovery-codes {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--sp-2) var(--sp-6);
+  margin-block: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-color: var(--paper-rule);
+  color: var(--paper-ink);
+}
+
+.drawer-tag .recovery-codes li::marker {
+  color: var(--paper-ink-3);
+  font-family: var(--font-mono);
+}
+
+.drawer-tag .recovery-codes .code-inline {
+  color: inherit;
+}
+
+/* Code on paper is ink on paper: the chip the page draws around code is the page's, not the tag's. */
+.drawer-tag code {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/*
+ * A form with its slip where there is not the room for them side by side (half a page, a column of 600px,
+ * whatever the window): the slip goes above what it is about, and keeps the shape of a slip.
+ */
+.request-form.request-form--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  max-inline-size: none;
+}
+
+.request-form--stacked > .request-slip {
+  grid-column: 1;
+  grid-row: auto;
+  position: static;
+  max-inline-size: 380px;
+}
+
+.request-form--stacked > .request-form-fields,
+.request-form--stacked > .request-form-actions {
+  grid-column: 1;
+}
+
+/* The security tab: the password and the second factor, a half of the page each where the page is wide. */
+.security-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-8) var(--sp-12);
+}
+
+@media (min-width: 1100px) {
+  .security-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
 }
 
 /* ---- The month's statement: three figures on one sheet of paper ---- */
