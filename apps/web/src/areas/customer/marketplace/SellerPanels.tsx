@@ -420,7 +420,7 @@ function OfferActions({
         <Button size="sm" variant="secondary" disabled={busy} onClick={onCounterStart}>
           {t('market.offers.change')}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => onRespond('reject')}>
+        <Button size="sm" variant="danger" disabled={busy} onClick={() => onRespond('reject')}>
           {t('market.offers.withdraw')}
         </Button>
       </div>

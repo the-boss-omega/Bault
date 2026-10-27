@@ -444,8 +444,8 @@
   background: var(--card);
   overflow: clip;
   transition:
-    border-color 300ms,
-    transform 500ms var(--ease-out-expo);
+    border-color var(--dur-slow),
+    transform var(--dur-surface) var(--ease-out-expo);
 }
 
 .mem-offers .offer:hover {
@@ -1123,8 +1123,8 @@
   overflow: clip;
   cursor: pointer;
   transition:
-    border-color 300ms,
-    transform 500ms var(--ease-out-expo);
+    border-color var(--dur-slow),
+    transform var(--dur-surface) var(--ease-out-expo);
 }
 
 .label-card:hover,

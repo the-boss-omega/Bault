@@ -120,6 +120,17 @@ describe('the offers, one bid slip each', () => {
     expect(within(made).getByText('Waiting on the seller')).toBeInTheDocument();
   });
 
+  it('sets the answer that cannot be taken back apart, whichever side gives it', async () => {
+    answerOffers();
+    renderOffers();
+
+    const slips = within(await screen.findByRole('list', { name: 'Offers' })).getAllByRole('listitem');
+    // The maker withdraws; the one it was made to rejects: the same kind of answer, so the same treatment.
+    expect(within(slips[0]!).getByRole('button', { name: 'Withdraw' })).toHaveClass('btn--danger');
+    expect(within(slips[1]!).getByRole('button', { name: 'Reject' })).toHaveClass('btn--danger');
+    expect(within(slips[0]!).getByRole('button', { name: 'Change offer' })).not.toHaveClass('btn--danger');
+  });
+
   it('offers the person it was made to accept, counter and reject', async () => {
     answerOffers();
     renderOffers();
@@ -321,9 +332,10 @@ describe('the listings, one slip each', () => {
 
   it('reprices in place, from the price it has', async () => {
     const user = userEvent.setup();
-    const { onChanged } = renderListings([LISTING]);
+    // Before the panel is on screen: a pause after it renders lets its first load land outside act().
     const patch = (await import('../../apps/web/src/shared/api')).api.patch as ReturnType<typeof vi.fn>;
     patch.mockResolvedValue({});
+    const { onChanged } = renderListings([LISTING]);
 
     const [slip] = await listingSlips();
     await user.click(within(slip!).getByRole('button', { name: 'Reprice' }));
@@ -332,12 +344,12 @@ describe('the listings, one slip each', () => {
 
     await user.clear(input);
     await user.type(input, '3100');
-    await act(async () => {
-      within(slip!).getByRole('button', { name: 'Save' }).click();
-      await vi.waitFor(() => expect(onChanged).toHaveBeenCalledWith('Price updated to $3,100.00'));
-    });
+    await user.click(within(slip!).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith('Price updated to $3,100.00'));
 
     expect(patch).toHaveBeenCalledWith('/marketplace/listings/l1', { askingPrice: 310_000 });
+    // The panel finishes (it is no longer busy) before the test does.
+    await waitFor(() => expect(within(slip!).getByRole('button', { name: 'Reprice' })).toBeEnabled());
   });
 
   it('asks before it takes a listing down', async () => {
@@ -435,10 +447,16 @@ describe('the parcels, one label each', () => {
   });
 
   it('opens the parcel from its button, and from the label itself for the pointer', async () => {
+    const user = userEvent.setup();
     renderParcels([PARCEL]);
 
     const label = await firstLabel();
-    within(label).getByRole('button', { name: 'Shipment details' }).click();
+    await user.click(within(label).getByRole('button', { name: 'Shipment details' }));
+    await waitFor(() => expect(window.location.hash).toContain('parcel=p1'));
+
+    window.location.hash = '#/inbound/parcels';
+    await waitFor(() => expect(window.location.hash).not.toContain('parcel=p1'));
+    await user.click(within(label).getByText('Two raw Rayquaza singles'));
     await waitFor(() => expect(window.location.hash).toContain('parcel=p1'));
   });
 });
