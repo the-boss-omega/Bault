@@ -710,9 +710,6 @@ like.
   second factor, the warehouse's benches, the Bault store's listing, grading, consignment, an
   inspection, raising an escrow deal and a shared parcel's group.
 - The transactional emails come from `packages/`, outside this change, and keep the first edition's look.
-- Two strings in `shared/i18n.tsx`, which the design did not touch, still describe the bundled
-  fonts as "IBM Plex and Frank Ruhl Libre" (`legal.provenance.ofl`, Hebrew and English). The licence
-  page's own text (`legalContent.ts`) and `assets/fonts/OFL.txt` list all four families.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 
