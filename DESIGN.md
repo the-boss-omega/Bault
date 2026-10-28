@@ -431,6 +431,54 @@ pieces. Each keeps the old markup's contracts and message keys.
   put in and what is held for them stacked beside it, each with the sentence that says what the figure
   leaves out, and the shipping and platform-account sentence as the sheet's foot. How many sit side by
   side is the sheet's own width, not the window's. The ledger by type is the table under it.
+- **Forms with a slip — every form that makes something.** Selling an item (the card in its case, its
+  serial, the price asked, that it will be active), proposing a trade (the two sides stacked, the glyph
+  turned a quarter, a gift as one way), registering a parcel (what is in it, where it goes, and its
+  number as a real Code 128 barcode once there is one), a new support ticket (its subject in the display
+  face, how its message begins, its kind and where it will stand), the name on the account (the account
+  as a card: the name as it is typed, the email, the permanent username, the role), an address being
+  added or edited (a label as it is written on a parcel), a pricing rule (what it is called, what it
+  charges, for what) and a dispute being opened (the transaction, its sum and kind, the note). One layout
+  (`.request-form`: the fields, the slip, the button): beside the fields from 1100 px, the slip sticky and
+  the button under the fields, not at the foot of a slip taller than they are; below that, the slip
+  between the last field and the button. Where the form has less than a page (half of one, a column of
+  600 px) it is stacked, with the slip above what it is about (`.request-form--stacked`). What has not
+  been written is asked for in the quieter ink, as the name of the field, never as a value made up; a
+  label written for a list (`Email:`) loses its colon on a tag, which has a leader. Whatever a person
+  types as free text (a name, a subject, a message, an address) takes the direction of what is typed
+  (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
+- **Support — a register in days, a ticket's stub.** The tickets are the notifications' register: a
+  heading per day, an entry for each with its time, whose turn it is, its subject (the control that
+  opens it), its number and its kind.
+- **Addresses — a label each.** A saved address is a label on paper (whose it is, where it goes, its
+  default and what carriers lack marked); Edit and Delete are under it, on the page. A grid of tags
+  (`.tag-grid`) is the same grid for the disputes.
+- **Security — cards and a sheet.** The password and the second factor are a half of the page each. The
+  second factor says where it stands on a card (on, what it asks for, what is left of the way back in);
+  the key to scan is a card, the QR in its own white label (printed black on white, whichever way the
+  page is) and the key to type; the recovery codes are a sheet of paper that is a heading of its own,
+  the codes ink on it. The acknowledgement and *Done* are under the sheet, not on it.
+- **Pricing — a rate card.** The rules in force are one printed card: a group to each action, in the
+  order of the price list, a line to each rule (what it is, what it is for, when it began) and its
+  charge in the display face, in as many columns as the card has room for. A rule is added, and takes
+  effect; it is not changed, so the card has no controls.
+- **Disputes — case files.** Each is a file on paper: its number, the ruling (or that there is none),
+  the transaction it is about with its kind and price, the note that was made, and where it stands.
+  What moves it on is under the file, in the page's own controls.
+- **Parked messages — a register in days.** An entry for each: when, what it was, why it failed (in its
+  own ink, left to right), what it carried, how many times and when last, and *Requeue* at the end of
+  the line. What needs attention is marked at its node in the amber.
+- **Storage fees — a statement.** The sweep's runs on paper, a line to each: its date, what it charged
+  in all, and under that the threshold and how many items.
+- **Accounts and items — rolls, opened in a drawer.** Nothing in a line is a field. An account is
+  its initials, its name, its username and email, what it may do and where it stands; an item is its
+  name, its number, whose it is and where it stands (a hold in red). The name is the control (and the
+  line says so to a pointer), and the link that names a record opens it. The drawer is the record as a
+  card that is written as it is changed (the name as typed, the role, the status, the owner; for an item
+  its card in its case and its barcode as a printed label), then the sweep's suspension and what is
+  offered about it, and the fields. *Save* sends only what was changed; what was saved is in the roll
+  at once. Resetting somebody else's second factor is in the drawer of another enrolled account, and
+  asked about first.
 
 ### Choosing cards (`ItemPick`; `components.css`)
 Wherever the list is of cards to choose among (the items to ship, to offer in a trade, to hand over
@@ -461,8 +509,11 @@ A rule down the leading edge, a node per entry, the newest node lit.
 ### Paper pieces
 The **shelf plate** (serial · state · where, on paper, under the fan of cards), the **label** (the
 serial drawn as a barcode label), the **colophon** (the front page's footer), the **record
-section**, the **statement slip**, the **clauses**, the **drawer tag** and the **month's statement**.
-All use `--paper`, `--paper-ink` and a foil strip.
+section**, the **statement slip**, the **clauses**, the **drawer tag** (which is also the slip of a
+form, an address label, a case file, a key card and a recovery sheet), the **month's statement**, the
+**rate card** and the **fee statement**. All use `--paper`, `--paper-ink` and a foil strip, and what is
+drawn on them is drawn in the paper's inks (`--paper-ink`, `-2`, `-3`) or in the colour it is on, never
+a colour of the theme's, which is light on cream in the dark theme (the lint says so).
 
 ### Overlays (`useOverlay`, `useExit`)
 Drawers, confirmation dialogs and the photo lightbox share one behaviour: while it is the topmost it
@@ -583,11 +634,15 @@ like.
 
 ## 13. Not in this edition
 
-- Most of the management consoles (users, pricing, disputes, the outbox) are restyled to the kit and
-  the statement language, not redesigned. Three are: the accounting summary (a statement on paper),
-  the sign-in log (a statement and a register) and the shelf map (aisle signs over racks).
-- Of the forms, cash in, cash out and the shipment have their slip. Selling, trading, registering a
-  parcel, a support ticket and the security settings are the kit's fields in a column.
+- Some of the management consoles are restyled to the kit and the statement language, not redesigned:
+  the wallet requests, the Bault store and the shelf yield chart, and the pricing coverage check, which
+  is a table because it is a check. The rest are made of the system's pieces: the accounting summary (a
+  statement on paper), the sign-in log (a statement and a register), the shelf map (aisle signs over
+  racks), pricing (a rate card), the disputes (case files), the parked messages (a register), the
+  storage fees (a statement) and the accounts and items (rolls opened in a drawer).
+- Of the forms, those that make something have their slip (section 8). The ones that do not are the
+  kit's fields in a column: signing in and up, changing the password, the code of the second factor,
+  and the warehouse's benches.
 - The transactional emails come from `packages/`, outside this change, and keep the first edition's look.
 - Two strings in `shared/i18n.tsx`, which the design did not touch, still describe the bundled
   fonts as "IBM Plex and Frank Ruhl Libre" (`legal.provenance.ofl`, Hebrew and English). The licence
@@ -607,11 +662,11 @@ like.
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
 | Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid, with no `em` that is not declared (section 6); a font size in `index.css` is a step of the scale or relative (section 3) | `design-lint` | same |
 | In a component: no physical utility class or inline style, no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
-| A rule that paints the paper or the room names its focus ring | `design-lint` | same |
+| A rule that paints the paper or the room names its focus ring; a rule for what is drawn on paper uses a paper ink, not a colour of the theme's | `design-lint` | same |
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first; the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
-| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls; the month's statement, a form and its slip, the shipment and the sign-in log are where they should be at their widths; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account and an item in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls; the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages), the security tab, the shipment and the sign-in log are where they should be at their widths; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
@@ -629,7 +684,7 @@ like.
 | `landing.css` | The public page |
 | `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
 | `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |
-| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag, the month's statement |
+| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag and the form that has one, address labels, the key card and the recovery sheet, case files, the rate card, the fee statement, the month's statement, the rolls |
 | `motion.css` | Transitions and keyframes shared by all of the above, the reduced-motion switch, and what forced colours draw in place of the foil |
 
 Loaded in that order after `index.css` (`main.tsx`). Components and hooks: `shared/CardPhoto.tsx`

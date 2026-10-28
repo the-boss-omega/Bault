@@ -453,6 +453,15 @@ function checkDeclarations(short, raw, { fromLine = 0, isTheme = false, typeScal
  */
 const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper(?:-bright)?|room(?:-(?:deep|raised|case|pool|glass))?)\)/;
 
+/**
+ * What is set on paper is read in the paper's inks. The theme's own text colours (--foreground, --ink,
+ * --muted-foreground...) are light in the dark theme, and a serial, a name or a figure drawn in one of them
+ * on cream is not there. A rule for something that sits on a tag or a sheet names a paper ink, or inherits the
+ * one it is on. A new thing that is drawn on paper adds its class to the list.
+ */
+const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|ledger-|rate-|fee-|case-|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-)/;
+const THEME_INK = /(?:^|[;\s])color\s*:\s*var\(--(?:foreground|muted-foreground|ink(?:-[\w-]+)?|text(?:-[\w-]+)?|body|secondary-foreground|card-foreground)\)/;
+
 function cssIn(dir) {
   const out = [];
   for (const entry of readdirSync(dir).sort()) {
@@ -503,6 +512,9 @@ for (const file of LAYERS) {
     });
   if (name !== 'theme.css') {
     for (const rule of rulesOf(stripComments(raw))) {
+      if (ON_PAPER.test(rule.selector) && THEME_INK.test(rule.body) && !allowedHere(rule.line - 1)) {
+        report(short, rule.line, `${rule.selector} is drawn on paper in a colour of the theme's; use a --paper-ink (or inherit): it is light on cream in the dark theme`);
+      }
       if (!FIXED_SURFACE.test(rule.body) || /--focus-color\s*:/.test(rule.body)) continue;
       if (allowedHere(rule.line - 1)) continue;
       report(short, rule.line, `${rule.selector} paints a fixed-palette surface; set --focus-color to the ring that reads on it (or design-lint-allow why none can be focused there)`);

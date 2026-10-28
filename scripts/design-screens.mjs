@@ -506,6 +506,24 @@ async function visitItems(state, page, ctx) {
   }
 }
 
+/**
+ * What the management console opens: an account and an item, each in the drawer it is changed in (by the link
+ * that names it, as the roll's own names are), so that what is drawn there is held to what the pages are.
+ */
+async function visitAdminRecords(state, page, ctx) {
+  const users = await apiCall(page, 'GET', '/admin/users');
+  const items = await apiCall(page, 'GET', '/admin/items');
+  const records = [
+    ['users', 'user', Array.isArray(users.json) ? (users.json.find((u) => u.mfaEnabled) ?? users.json[0]) : null],
+    ['items', 'item', Array.isArray(items.json) ? items.json[0] : null],
+  ];
+  for (const [tab, param, record] of records) {
+    if (!record) continue;
+    await page.goto(`${state.baseUrl}/#/admin/${tab}?${param}=${encodeURIComponent(record.id)}`);
+    await capture(state, page, `${ctx.persona}-${tab}-drawer`, ctx);
+  }
+}
+
 async function runPersona(state, browser, persona, locale, width) {
   const mobile = width < 800;
   const context = await browser.newContext({
@@ -585,6 +603,7 @@ async function runPersona(state, browser, persona, locale, width) {
     await settle(page);
     for (const section of spec.sections ?? SECTIONS) await visitSection(state, page, section, ctx);
     if (persona === 'collector') await visitItems(state, page, ctx);
+    if (persona === 'admin') await visitAdminRecords(state, page, ctx);
   } finally {
     await context.close();
   }

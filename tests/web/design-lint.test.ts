@@ -322,6 +322,9 @@ describe('design-lint', () => {
       ['a colour named in a layer, as a custom property', 'components.css', ':root { --mine: #ff8800; }', /colours are named in theme.css, not in a layer/],
       ['the paper, brighter, with no ring', 'app.css', '.x {\n  background: var(--paper-bright);\n}', /paints a fixed-palette surface/],
       ['a block that takes its own text\'s direction and aligns to it', 'app.css', '.x { unicode-bidi: plaintext; text-align: start; }', /hangs from that text's edge/],
+      ['the theme\'s ink on a tag', 'screens.css', '.drawer-tag .serial { color: var(--foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['the theme\'s muted ink on a sheet', 'screens.css', '.ledger-sheet .hint { color: var(--muted-foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['the theme\'s ink on a rate card', 'screens.css', '.rate-line-name { color: var(--ink-2); }', /is drawn on paper in a colour of the theme's/],
     ];
 
     for (const [name, file, css, expected] of cases) {
@@ -331,6 +334,11 @@ describe('design-lint', () => {
         expect(r.out).toMatch(expected);
       });
     }
+
+    it('lets paper be drawn in the paper\'s own inks, or in the colour it is on', () => {
+      const r = planted('screens.css', '\n.drawer-tag .serial { color: inherit; }\n.rate-line-name { color: var(--paper-ink); }\n.case-note { color: var(--paper-ink-2); }\n');
+      expect(r.out).not.toContain('is drawn on paper');
+    });
 
     it('a stylesheet nobody listed, which is held the same way the day it is added', () => {
       const r = planted('brand-new.css', '.x { margin-left: 4px; color: #123abc; animation: wobble 2s linear infinite; }\n');
