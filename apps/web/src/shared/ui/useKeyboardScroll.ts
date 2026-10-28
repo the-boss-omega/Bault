@@ -22,6 +22,7 @@ export function useKeyboardScroll(ref: RefObject<HTMLElement | null>, labelledBy
     const found = ref.current;
     if (!found || typeof MutationObserver === 'undefined') return;
     const box: HTMLElement = found;
+    let live = true;
     let frame = 0;
     const watched = new Set<Element>();
     const sizes =
@@ -29,6 +30,7 @@ export function useKeyboardScroll(ref: RefObject<HTMLElement | null>, labelledBy
 
     const sync = () => {
       frame = 0;
+      if (!live) return;
       // The box is as tall as what is in it, so what is in it is what is watched for a change of size.
       for (const el of watched) {
         if (!el.isConnected) {
@@ -74,6 +76,7 @@ export function useKeyboardScroll(ref: RefObject<HTMLElement | null>, labelledBy
     schedule();
 
     return () => {
+      live = false;
       changes.disconnect();
       sizes?.disconnect();
       watched.clear();
