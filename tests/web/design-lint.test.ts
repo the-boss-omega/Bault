@@ -259,6 +259,32 @@ describe('design-lint', () => {
       expect(r.out).toContain('design-lint: clean');
     });
 
+    it('a colour written into a component, which no theme can change (a glyph made white on a bar that is light in one of them)', () => {
+      const write = (lines: string[]) =>
+        withChange((d) =>
+          writeFileSync(
+            join(d, 'probe.tsx'),
+            lines.map((l, i) => `export const A${i} = () => <b style={{ ${l} }} />;`).join('\n') + '\n',
+          ),
+        );
+      // Each way of writing a colour is a finding of its own.
+      const bad = write([
+        "color: '#fff'",
+        "background: 'rgba(0, 0, 0, .5)'",
+        "fill: 'white'",
+        "borderColor: 'oklch(0.7 0.1 200)'",
+      ]);
+      expect(bad.status).toBe(1);
+      expect(bad.out.match(/a colour written into a component/g)).toHaveLength(4);
+      // A token, an inherited colour, and a colour with its reason are let through.
+      const fine = write([
+        "color: 'var(--ink)'",
+        "color: 'inherit', fill: 'currentColor'",
+        "color: '#fff' }} /> /* design-lint-allow: a print label, always on white */ <b style={{ }",
+      ]);
+      expect(fine.out).toContain('design-lint: clean');
+    });
+
     it('a physical utility class or inline style in a component', () => {
       const r = withChange((d) => writeFileSync(join(d, 'probe.tsx'), 'export const A = () => <div className="ml-4 text-left" style={{ marginLeft: 4 }} />;\n'));
       expect(r.out).toContain('physical utility class');

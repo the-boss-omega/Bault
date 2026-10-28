@@ -782,6 +782,12 @@ const PHYSICAL_CLASS = /\b(?:ml|mr|pl|pr)-\d|\btext-(?:left|right)\b/;
 const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|border(?:Top|Bottom)(?:Left|Right)Radius|textAlign:\s*['"](?:left|right)['"]|float:\s*['"](?:left|right)['"])/;
 
 /**
+ * A colour written into a component is one that no theme can change. A glyph made white, for a bar that was dark,
+ * is gone on the bar that is light: the stylesheets name every colour, and a component names a token or inherits.
+ */
+const LITERAL_COLOUR_STYLE = /\b(?:color|background|backgroundColor|borderColor|outlineColor|fill|stroke)\s*:\s*['"](?:#[0-9a-f]{3,8}\b|(?:rgba?|hsla?|oklch|oklab|color-mix)\(|(?:white|black)['"])/i;
+
+/**
  * A locale-formatted date is not a left-to-right island. Forced left to right, a Hebrew date
  * (day, month, year) is drawn the other way round; read in the page's direction it keeps the
  * order its language gives it. Serials, codes and amounts are islands; dates are not.
@@ -803,6 +809,9 @@ for (const file of walk(webSrc)) {
     if (PHYSICAL_CLASS.test(line)) report(short, i + 1, `physical utility class: ${line.trim()}`);
     if (PHYSICAL_STYLE.test(line)) {
       report(short, i + 1, `physical inline style — use marginInlineStart / textAlign: 'start': ${line.trim()}`);
+    }
+    if (LITERAL_COLOUR_STYLE.test(line) && !line.includes('design-lint-allow')) {
+      report(short, i + 1, `a colour written into a component is one no theme can change — name a token (var(--ink)) or let it inherit: ${line.trim()}`);
     }
     if (/behavior\s*:\s*['"]smooth['"]/.test(line)) {
       report(short, i + 1, `smooth scrolling that ignores prefers-reduced-motion — choose 'auto' when it is set: ${line.trim()}`);
