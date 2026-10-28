@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 import { useExit } from './useExit';
 import { inBody } from './inBody';
 import { useOverlay } from './useOverlay';
+import { useKeyboardScroll } from './useKeyboardScroll';
 
 export function DetailDrawer({
   title,
@@ -37,8 +38,11 @@ export function DetailDrawer({
   const t = useT();
   const { closing, requestClose } = useExit(onClose);
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useOverlay(panelRef, requestClose);
+  // A body that scrolls and has nothing in it to stop on (a request that is settled) is a stop itself.
+  useKeyboardScroll(bodyRef, titleId);
 
   return inBody(
     <>
@@ -69,7 +73,9 @@ export function DetailDrawer({
             <IconClose />
           </IconButton>
         </header>
-        <div className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>{children}</div>
+        <div ref={bodyRef} className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>
+          {children}
+        </div>
         {(footer || notice) && (
           <footer className="drawer-foot">
             {notice && <div className="drawer-notice">{notice}</div>}

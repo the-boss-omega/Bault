@@ -367,6 +367,12 @@ input[type='radio'] {
   border-inline-start-color: var(--border);
 }
 
+/* A body that scrolls and has nothing in it to stop on is a stop itself (useKeyboardScroll): its ring is drawn inside
+   its edge, where the head above it and the foot below it do not cover it. */
+.drawer-body[data-scrollable='true']:focus-visible {
+  outline-offset: calc(-1 * var(--focus-width));
+}
+
 .modal {
   background: var(--popover);
   color: var(--popover-foreground);

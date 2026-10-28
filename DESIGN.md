@@ -747,6 +747,12 @@ it). The photograph opens in the room: the dark a card is photographed against, 
 case with a plate that names it. On a phone the rail is one too: it takes focus when it opens, on the
 page you are on, Escape closes it, and while it is closed it is out of the keyboard's way.
 
+A drawer whose body scrolls and has nothing in it to stop on (a request that has been settled, a closed
+case) is a stop itself, named for the drawer, for as long as it overflows and has no control of its own
+(`useKeyboardScroll`: a keyboard cannot scroll a box it cannot stop on). Where there is a control in it, the
+controls are the way, and the body is left out of the tab order; its ring is drawn inside its edge, where the
+head and the foot do not cover it.
+
 A strip of tabs that scrolls brings the selected tab into view and moves focus with the arrow keys; it
 keeps room for the ring of the tab at either end.
 
@@ -918,7 +924,8 @@ scroll reveal, journey, parallax, progress), `shared/ui/useOverlay.ts` and `useE
 `shared/ui/motionPreference.ts` (`prefersReducedMotion`, `scrollBehavior`), `shared/ui/SplitWords.tsx`,
 `shared/ui/CountUp.tsx`, `shared/ui/useScrollableRegions.ts` (a table wider than its room scrolls
 sideways, and while it does it is in the tab order, with a name, so a keyboard can reach its far
-columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
+columns), `shared/ui/useKeyboardScroll.ts` (the same for a drawer's body that scrolls and has no control
+in it), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
 `areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`, `shared/ui/DrawerTag.tsx`,
 `shared/ui/Docket.tsx`, `areas/warehouse/Benches.tsx`, `areas/admin/WalletRequestsSection.tsx`,
 `areas/admin/HouseStoreSection.tsx`, `areas/admin/YieldChart.tsx`, `areas/admin/PricingCoveragePanel.tsx`, `shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
