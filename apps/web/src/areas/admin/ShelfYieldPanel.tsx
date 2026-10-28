@@ -216,7 +216,7 @@ export function ShelfYieldPanel() {
 
       <Panel title={t('yield.zones.title')} subtitle={t('yield.zones.subtitle')} flush>
         {zones !== null && zones.length > 0 && (
-          <div className="panel-note">
+          <div className="chart-wrap">
             <YieldChart
               title={t('yield.chart.title')}
               subtitle={t('yield.chart.subtitle')}

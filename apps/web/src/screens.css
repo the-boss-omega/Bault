@@ -3488,3 +3488,201 @@ code.ask-words {
   grid-column: 1 / -1;
   justify-self: start;
 }
+
+/* ---- The yield chart: bars from a zero they all begin at, each with its value at its end ---- */
+
+.chart {
+  --chart-label: 168px;
+  /* Beyond the longest bar's end: room for its value, which is written there. */
+  --chart-value: 88px;
+  display: grid;
+  gap: var(--sp-3);
+  max-inline-size: 880px;
+  margin: 0;
+  padding-block: var(--sp-2) var(--sp-4);
+}
+
+.chart-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chart-title {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.chart-sub {
+  max-inline-size: var(--measure);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+}
+
+.chart-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The rows touch, so the hairlines of the scale run through them as one line each. */
+.chart-row {
+  display: grid;
+  grid-template-columns: var(--chart-label) minmax(0, 1fr) var(--chart-value);
+  column-gap: var(--sp-3);
+  min-block-size: 44px;
+  border-radius: var(--r-xs);
+}
+
+.chart-row:hover {
+  background: var(--surface-sunken);
+}
+
+.chart-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-inline-size: 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.chart-note {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+}
+
+/* The scale is a hairline at every step of the axis, the first at the zero the bars begin at. The hairline at the
+   far end of it is the track's own edge. */
+.chart-track {
+  position: relative;
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  border-inline-end: var(--border-w) solid var(--line);
+  background-image: repeating-linear-gradient(
+    calc(90deg * var(--dir)),
+    var(--line) 0 var(--border-w),
+    transparent var(--border-w) calc(100% / var(--steps))
+  );
+}
+
+.chart-bar {
+  inline-size: calc(var(--ratio) * 100%);
+  block-size: 16px;
+  border-start-end-radius: var(--r-xs);
+  border-end-end-radius: var(--r-xs);
+  background: var(--ink-2);
+  transition: inline-size var(--dur) var(--ease);
+}
+
+.chart-bar--mark {
+  background: var(--amber-mark);
+}
+
+/* The value is written at the end of its bar: at the bar's own end, whichever end the zero is at. */
+.chart-value {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--ratio) * 100%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: var(--sp-2);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+/* The mark is a colour and a word: the amber is the key to the word, which is in the text's own ink. */
+.chart-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+}
+
+.chart-flag-key {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--amber-mark);
+}
+
+.chart-axis {
+  display: grid;
+  grid-template-columns: var(--chart-label) minmax(0, 1fr) var(--chart-value);
+  column-gap: var(--sp-3);
+}
+
+.chart-ticks {
+  position: relative;
+  grid-column: 2;
+  block-size: 16px;
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tick {
+  position: absolute;
+  inset-inline-start: calc(var(--at) * 100%);
+  transform: translateX(calc(-50% * var(--dir)));
+  white-space: nowrap;
+}
+
+.chart-axis-label {
+  margin: 0;
+  padding-inline-start: calc(var(--chart-label) + var(--sp-3));
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+/* On a phone the name goes above its bar, so the bar has the width: the values are written beside the bars, which is
+   all the scale a phone has room for. */
+@media (max-width: 520px) {
+  .chart-row {
+    grid-template-columns: minmax(0, 1fr) var(--chart-value);
+    row-gap: var(--sp-1);
+    padding-block: var(--sp-2);
+  }
+
+  .chart-label {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: var(--sp-2);
+  }
+
+  .chart-track {
+    grid-column: 1;
+    min-block-size: 24px;
+    border-inline-end: 0;
+    border-inline-start: var(--border-w) solid var(--line-strong);
+    background-image: none;
+  }
+
+  .chart-axis {
+    display: none;
+  }
+
+  .chart-axis-label {
+    padding-inline-start: 0;
+  }
+}
+
+
+/* The chart sits level with the tables it is above and below it, not in from their edge. */
+.chart-wrap {
+  margin-block-end: var(--sp-4);
+}
