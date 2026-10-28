@@ -3474,3 +3474,17 @@ code.ask-words {
   display: block;
   overflow: visible;
 }
+
+/* ---- The store's products: each as the tag buyers see, and under it what the store does with it ---- */
+
+.product-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.product-controls > .btn:last-child {
+  grid-column: 1 / -1;
+  justify-self: start;
+}

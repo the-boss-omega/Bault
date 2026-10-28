@@ -15,6 +15,7 @@ export function DrawerTag({
   titleAs,
   art,
   item,
+  label,
   status,
   note,
   lines,
@@ -39,6 +40,11 @@ export function DrawerTag({
    * an article, named the same way, and not a landmark.
    */
   item?: boolean;
+  /**
+   * What the tag is called, where the kicker is the same on every tag of the list (the price, on each product
+   * of a store) and would leave a screen reader a list of articles with one name: the product's own.
+   */
+  label?: string;
   /** Where it stands: a status badge. */
   status?: ReactNode;
   /** Whatever goes with the amount: a fee, a currency. */
@@ -57,7 +63,11 @@ export function DrawerTag({
   return (
     <Root
       className="drawer-tag"
-      {...(item ? { 'aria-labelledby': kickerId } : { 'aria-label': kicker })}
+      {...(label
+        ? { 'aria-label': label }
+        : item
+          ? { 'aria-labelledby': kickerId }
+          : { 'aria-label': kicker })}
     >
       {art && <div className="drawer-tag-art">{art}</div>}
       <p className="drawer-tag-kicker" id={item ? kickerId : undefined}>

@@ -592,6 +592,17 @@ pieces. Each keeps the old markup's contracts and message keys.
   the danger's red; a request that was raised by the person at the desk is offered to no one but another
   administrator, and says so. What a step came to (done, or why it was refused) is said in the drawer,
   where a phone shows it and a screen reader reads it out; the page keeps its line of what was done.
+- **The Bault store — the product as buyers see it.** A new product is written on a slip beside its fields
+  (the card in its case, its name in the display face as it is typed, the price, its code — which is the
+  store's to give, and says so — its condition, its class, how many copies and that it will be on sale),
+  and the button is under the slip on a phone. The photograph is looked for by the name of the file once
+  the name has stopped changing, not for each letter of it, and a card with no name asks for none. The
+  products in the store are that tag, a card each in a `tag-grid`, each named by its own name for a screen
+  reader (`label` on `DrawerTag`: forty products are not forty articles called *Store product*), with where
+  it stands in its foot (on sale, sold out, taken off sale, and what is left). Under each is what the store
+  does with it: how many copies there are, which is changed and then saved (a button, or Enter; not by
+  leaving the field, and not when it is the same or is not a count), and whether it is on sale. A save that
+  was refused because the stock had changed shows what it now is.
 
 ### Buttons (`Button`, `ButtonLink`, `IconButton`; `buttons.css`)
 One family, in one file. A button is a piece of the paper put to work, and it stands on its lower edge the
@@ -819,14 +830,14 @@ like.
 ## 13. Not in this edition
 
 - Some of the management consoles are restyled to the kit and the statement language, not redesigned:
-  the Bault store and the shelf yield chart, and the pricing coverage check, which is a table because it
-  is a check. The rest are made of the system's pieces: the accounting summary (a statement on paper),
-  the sign-in log (a statement and a register), the shelf map (aisle signs over racks), pricing (a rate
-  card), the disputes (case files), the parked messages (a register), the storage fees (a statement),
-  the accounts and items (rolls opened in a drawer) and the wallet requests (a desk).
+  the shelf yield chart, and the pricing coverage check, which is a table because it is a check. The rest
+  are made of the system's pieces: the accounting summary (a statement on paper), the sign-in log (a
+  statement and a register), the shelf map (aisle signs over racks), pricing (a rate card), the disputes
+  (case files), the parked messages (a register), the storage fees (a statement), the accounts and items
+  (rolls opened in a drawer), the wallet requests (a desk) and the Bault store (the product as buyers see
+  it).
 - Of the forms, those that make a request or a record have their slip (section 8), and the doors are
-  slips with a stub, and the warehouse's benches have their docket. The one that does not is the Bault
-  store's listing, which is the kit's fields in a column.
+  slips with a stub, and the warehouse's benches have their docket. None is the kit's fields in a column.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 
@@ -851,6 +862,7 @@ like.
 | An escrow deal and a shared parcel as slips (each fact written as it is typed, a dash for what is not known, the parcel as a tag with a line for each collector), and the question put to the assistant (a slip each way, the answer printed on its paper, the composer as paper in both themes) | `tests/ux/more-slips.test.tsx` | `pnpm test:ux` |
 | The warehouse's benches: the docket writes what is scanned and typed (the shelf read back, the pick list ticked), an Enter from a scanner goes on and then does it, the outcome is said on the docket and cleared by the next scan, a refused parcel keeps what was typed, the docket is paper in both themes, the foot does not change the docket's height, the fields have their room beside it | `tests/ux/benches.test.tsx` | `pnpm test:ux` |
 | The wallet-requests desk: the groups and their order, the money in each, a line's marks and age, a desk with nothing to decide, the named filters and what they ask the server, a request opened by its address and everything on its tag, what the next step does said for every status, the steps in the foot (the way on first, the danger last), what a step came to said in the drawer and not behind it, the keyboard kept in the dialog when the button that was pressed is removed and returned to the line that was opened (in another group by now), the roll and the drawer without a flag in both themes and both languages, a request a card on a phone, a long account number whole under its name | `tests/ux/wallet-desk.test.tsx` | `pnpm test:ux` |
+| The Bault store: the slip a product is written on (what is typed, a blank where nothing is, a code said not to be known yet, copies that are not a count refused and said so, the photograph looked for only once the name has stopped changing), what was refused kept, a tag each named by its own name, the stock saved by a button or Enter and not by leaving the field or when it is the same or not a count, what the stock now is where a save was refused, on and off sale, in Hebrew; paper in both themes and languages, the slip beside the fields or between them and the button, three tags to a row and one to a phone | `tests/ux/store-listing.test.tsx` | `pnpm test:ux` |
 | What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
@@ -882,7 +894,7 @@ sideways, and while it does it is in the tab order, with a name, so a keyboard c
 columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
 `areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`, `shared/ui/DrawerTag.tsx`,
 `shared/ui/Docket.tsx`, `areas/warehouse/Benches.tsx`, `areas/admin/WalletRequestsSection.tsx`,
-`shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
+`areas/admin/HouseStoreSection.tsx`, `shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
 script that walks the app (`scripts/design-screens.mjs`), so that the tests can show them a planted mistake.
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px

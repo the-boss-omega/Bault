@@ -42,7 +42,8 @@ function useCardPhotoSource(serialNumber: string, full = false) {
     setForKey(key);
     setAttempt(settled.get(key) ?? 0);
   }
-  const exhausted = attempt >= (full ? FULL_SOURCES : PHOTO_SOURCES).length;
+  // No name, no photograph: nothing is asked for (a card with none was asked for at ".webp", ".png" and ".jpg").
+  const exhausted = !serialNumber || attempt >= (full ? FULL_SOURCES : PHOTO_SOURCES).length;
   return {
     src: cardPhotoUrl(serialNumber, attempt, full),
     exhausted,

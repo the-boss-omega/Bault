@@ -21,6 +21,19 @@ export function usePrefersReducedMotion(): boolean {
   return useMediaQuery('(prefers-reduced-motion: reduce)');
 }
 
+/**
+ * A value that follows another once that has held still for `ms`: what is being typed, for what a request is
+ * made of (a photograph is looked for by its name, and "SN-C", "SN-CL" and "SN-CL1" are not names).
+ */
+export function useDebounced<T>(value: T, ms = 400): T {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setHeld(value), ms);
+    return () => window.clearTimeout(timer);
+  }, [value, ms]);
+  return held;
+}
+
 export interface AppNotification {
   id: string;
   eventType: string;
