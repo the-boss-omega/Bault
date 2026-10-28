@@ -240,4 +240,27 @@ textarea {
   .label-track li[data-reached='true']:has(+ li[data-reached='true'])::after {
     background: Highlight;
   }
+
+  /* A bar is a background, and a background is gone: the bars are drawn in the system's text, the weakest in its highlight. */
+  .chart-bar {
+    background: CanvasText;
+  }
+
+  .chart-bar--mark,
+  .chart-flag-key {
+    background: Highlight;
+  }
+
+  /* On a phone a request and an action are cards, and the edge of a card says what the edge of a line does. */
+  .data-table--desk tr.roll-line,
+  .data-table--coverage tbody tr {
+    border-inline-start-color: Canvas;
+  }
+
+  .data-table--desk tr.roll-line.is-attention,
+  .data-table--desk tr.roll-line.is-alert,
+  .data-table--coverage tbody tr.is-attention,
+  .data-table--coverage tbody tr.is-alert {
+    border-inline-start-color: Highlight;
+  }
 }

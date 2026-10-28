@@ -398,6 +398,37 @@ describe.skipIf(!browser)('the chart, in a browser', () => {
     }
   });
 
+  it('draws the bars in the system’s own colours where the page is drawn in them, and the weakest in its highlight', async () => {
+    chart('en');
+    const html = document.body.innerHTML;
+    const context = await browser!.newContext({
+      viewport: { width: 1280, height: 900 },
+      forcedColors: 'active',
+      colorScheme: 'dark',
+    });
+    const page = await context.newPage();
+    await page.setContent(
+      `<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8"><title>Bault</title><style>${CSS}</style></head><body>${html}</body></html>`,
+    );
+    const drawn = await page.evaluate(() => {
+      const colour = (el: Element) => getComputedStyle(el).backgroundColor;
+      const canvas = colour(document.body);
+      return {
+        canvas,
+        plain: colour(document.querySelector('.chart-bar:not(.chart-bar--mark)')!),
+        marked: colour(document.querySelector('.chart-bar--mark')!),
+        key: colour(document.querySelector('.chart-flag-key')!),
+      };
+    });
+    // A background the system does not draw is the canvas: the bars would be gone. They are not.
+    expect(drawn.plain).not.toBe(drawn.canvas);
+    expect(drawn.marked).not.toBe(drawn.canvas);
+    // And the weakest is told from the rest, as it is by colour without them.
+    expect(drawn.marked).not.toBe(drawn.plain);
+    expect(drawn.key).toBe(drawn.marked);
+    await context.close();
+  });
+
   it('puts the name above the bar on a phone, which has the width, and leaves the scale to the values written at the bars', async () => {
     chart('en');
     const page = await inBrowser(390, 'en', 'dark');
