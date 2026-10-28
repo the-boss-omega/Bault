@@ -406,7 +406,8 @@ async function auditFocus(page, stops = 40) {
  * where it is filled, its line where it is outlined) against what it stands on, and its size as a target. The
  * colours of a button come from tokens that the surface it is on may change (the paper and the room have their
  * own), so what is measured is what is drawn, where it is drawn. A button with no face and no line (a ghost)
- * has the page for a face; a link set in a sentence is text and is held to the text's rules, not these.
+ * has the page for a face; a text button (a link set in a sentence) is asked only for its size, and its colours are
+ * the text's, which axe measures.
  */
 async function auditButtons(page) {
   return page.evaluate(() => {
@@ -451,7 +452,7 @@ async function auditButtons(page) {
     const coarse = matchMedia('(pointer: coarse)').matches;
     const flags = [];
     const seen = new Set();
-    for (const el of document.querySelectorAll('.btn:not(.btn--link), .icon-btn')) {
+    for (const el of document.querySelectorAll('.btn, .icon-btn')) {
       if (!el.checkVisibility?.({ checkVisibilityCSS: true })) continue;
       const box = el.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) continue;
@@ -481,7 +482,8 @@ async function auditButtons(page) {
         );
       }
       if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
-      if (!stand) continue;
+      // Text set in a sentence is held to the text's rules (axe), not to a button's: only its size, above, is asked of it.
+      if (!stand || el.classList.contains('btn--link')) continue;
       const own = rgba(style.backgroundColor);
       const face = own.a > 0 ? over(own, stand) : stand;
       const label = over(rgba(style.color), face);
@@ -507,6 +509,17 @@ async function auditButtons(page) {
           say(`its edge is ${edge.toFixed(2)}:1 against what it stands on, which needs 3:1`);
         }
       }
+    }
+    // Every other button (a crumb, a tab, a card that opens): not the family's, but a target all the same.
+    for (const el of document.querySelectorAll('button:not(.btn, .icon-btn), [role="button"]:not(.btn, .icon-btn)')) {
+      if (!el.checkVisibility?.({ checkVisibilityCSS: true }) || el.disabled) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0 || (box.width >= 24 && box.height >= 24)) continue;
+      const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 28);
+      const key = `target|${el.tagName}|${el.className}|${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      flags.push(`target "${name}" (${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''}): ${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
     }
     return flags;
   });

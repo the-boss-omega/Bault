@@ -160,7 +160,8 @@
 /* ---- Text: an action inside a sentence, set as the words around it ---- */
 
 .btn--link {
-  min-block-size: 0;
+  /* Words in a sentence are not a target of their own (WCAG 2.5.8), but one that stands on its own line is. */
+  min-block-size: 24px;
   padding: 0;
   border: 0;
   border-radius: var(--r-xs);
@@ -211,6 +212,26 @@
   inline-size: 100%;
   white-space: normal;
   text-wrap: balance;
+}
+
+/* ---- A crumb: a button set as small text, with the room of a target ----
+   17px of text is not a target. A crumb is 24px tall at least (WCAG 2.5.8), and where the pointer is a finger
+   it reaches 10px above and below itself without moving anything. */
+
+.breadcrumb button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 24px;
+}
+
+@media (pointer: coarse) {
+  .breadcrumb button::after {
+    content: '';
+    position: absolute;
+    inset-block: -10px;
+    inset-inline: -6px;
+  }
 }
 
 /* ---- A button that is a switch: the state it is in is the state of its edge ---- */
