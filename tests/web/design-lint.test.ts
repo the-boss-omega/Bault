@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,6 +16,11 @@ function lint(src?: string): { status: number | null; out: string } {
   });
   return { status: run.status, out: `${run.stdout}${run.stderr}` };
 }
+
+// Each test copies the source and runs the lint to its end, synchronously. Back to back they hold the worker for more
+// than a minute, and the runner's report of them to the process that started it times out ("Timeout calling
+// onTaskUpdate") with every test passed. One turn of the event loop between them lets the report through.
+beforeEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
 describe('design-lint', () => {
   it('passes on the real stylesheets and sources', () => {

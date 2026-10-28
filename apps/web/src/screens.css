@@ -3424,6 +3424,7 @@ code.ask-words {
 
   .dt-wrap--stack .data-table--desk .roll-cell--amount {
     grid-area: amount;
+    align-self: start;
     color: var(--ink);
     font-weight: var(--fw-medium);
   }
