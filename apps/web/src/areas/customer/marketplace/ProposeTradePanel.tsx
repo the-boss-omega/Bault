@@ -246,9 +246,9 @@ export function ProposeTradePanel({
             ]}
           >
             <div className="trade-slip">
-              <TradeSide label={t('market.swaps.col.theyGet')} items={items.filter((item) => offered[item.id])} area="give" t={t} />
+              <TradeSide decorative label={t('market.swaps.col.theyGet')} items={items.filter((item) => offered[item.id])} area="give" t={t} />
               <SwapGlyph oneWay={gift} towardStart />
-              <TradeSide label={t('market.swaps.col.youGet')} items={gift ? [] : wanted} area="get" t={t} />
+              <TradeSide decorative label={t('market.swaps.col.youGet')} items={gift ? [] : wanted} area="get" t={t} />
             </div>
           </DrawerTag>
         </aside>

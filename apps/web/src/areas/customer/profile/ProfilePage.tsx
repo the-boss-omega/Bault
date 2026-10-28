@@ -448,7 +448,7 @@ function AddressCard({
   if (!editing) {
     return (
       <li className="tag-item">
-        <AddressLabel address={address} kicker={address.label} />
+        <AddressLabel item address={address} kicker={address.label} />
         <div className="actions">
           <Button
             size="sm"
@@ -494,7 +494,15 @@ function AddressCard({
  * An address as it is written on a parcel: whose it is, and where it goes. What has not been written yet is
  * asked for in the quieter ink, so a label being filled in reads as one, and a saved one as it will be sent.
  */
-function AddressLabel({ address, kicker }: { address: AddressDraft; kicker: string }) {
+function AddressLabel({
+  address,
+  kicker,
+  item,
+}: {
+  address: AddressDraft;
+  kicker: string;
+  item?: boolean;
+}) {
   const { t } = useI18n();
   const countries = useShippingCountries();
   const quiet = (text: string) => <span className="drawer-tag-quiet">{text}</span>;
@@ -504,6 +512,7 @@ function AddressLabel({ address, kicker }: { address: AddressDraft; kicker: stri
   return (
     <DrawerTag
       kicker={kicker}
+      item={item}
       title={address.recipient.trim() || quiet(t('profile.addressForm.recipient'))}
       status={
         (address.isDefault || lacksRegion(address, countries)) && (

@@ -572,6 +572,184 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       }
     }
   });
+  describe('registers, case files and labels, where what was typed is long and the page reads right to left', () => {
+    const ticket = (id: string, subject: string, at: string) => ({
+      id,
+      code: `TKT-${id}`,
+      subject,
+      status: 'open',
+      category: 'parcel',
+      relatedType: null,
+      relatedId: null,
+      lastMessageAt: at,
+      createdAt: at,
+    });
+    const profile = {
+      id: 'u1',
+      email: 'red@bault.dev',
+      username: 'red',
+      role: 'user',
+      status: 'active',
+      firstName: 'Red',
+      lastName: 'Ashwood',
+      fullName: 'Red Ashwood',
+      nameReviewRequired: false,
+    };
+
+    for (const locale of ['en', 'he'] as const) {
+      for (const width of [1440, 390]) {
+        it(`hangs the time of an entry from the edge the page starts at, ${locale}, ${width}px`, async () => {
+          localStorage.setItem('bault.locale', locale);
+          window.location.hash = '#/support';
+          vi.mocked(api.get).mockImplementation(async (path: string) =>
+            path === '/support/tickets'
+              ? [ticket('A1', 'Where is my parcel', '2026-10-27T09:08:00.000Z')]
+              : [],
+          );
+          render(
+            <I18nProvider>
+              <SupportPage />
+            </I18nProvider>,
+          );
+          await screen.findByRole('button', { name: 'Where is my parcel' });
+          const page = await inBrowser(width, locale);
+          // A time has no letters to say which way it reads: its digits must start at the edge of its box that
+          // the page starts at (the left in English, the right in Hebrew), not at the left in both.
+          const { box, text } = await page.evaluate(() => {
+            const el = document.querySelector('.timeline--stamped > li > .date') as HTMLElement;
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const b = el.getBoundingClientRect();
+            const t = range.getBoundingClientRect();
+            return { box: { left: b.left, right: b.right }, text: { left: t.left, right: t.right } };
+          });
+          if (locale === 'en') expect(text.left - box.left).toBeLessThan(2);
+          else expect(box.right - text.right).toBeLessThan(2);
+          await page.close();
+        });
+      }
+    }
+
+    it('keeps a case file the size of its neighbours however long its ruling is', async () => {
+      localStorage.setItem('bault.locale', 'en');
+      window.location.hash = '#/admin/disputes';
+      const long =
+        'The buyer is to be refunded in full, and the seller is to be reminded of the condition grades. '.repeat(8);
+      vi.mocked(api.get).mockImplementation(async (path: string) =>
+        path === '/admin/disputes'
+          ? [
+              {
+                id: '41ea85e9-0000-4000-8000-000000000001',
+                transactionId: 'c5013f0a-0000-4000-8000-000000000001',
+                status: 'ruled',
+                ruling: long,
+                note: null,
+                createdAt: '2026-10-27T13:00:00.000Z',
+              },
+            ]
+          : [],
+      );
+      render(
+        <I18nProvider>
+          <AdminConsole currentUserId="me" />
+        </I18nProvider>,
+      );
+      await waitFor(() => expect(document.querySelector('.tag-item .drawer-tag-title')).not.toBeNull());
+      for (const width of [1440, 390]) {
+        const page = await inBrowser(width, 'en');
+        const { height, line } = await page.evaluate(() => {
+          const el = document.querySelector('.tag-item .drawer-tag-title') as HTMLElement;
+          return { height: el.getBoundingClientRect().height, line: parseFloat(getComputedStyle(el).lineHeight) };
+        });
+        // Three lines, and no more: the rest is under the file, in the field that is changed.
+        expect(height).toBeLessThanOrEqual(line * 3 + 1);
+        expect(height).toBeGreaterThan(line * 2);
+        await page.close();
+      }
+    });
+
+    const address = (id: string, label: string) => ({
+      id,
+      label,
+      recipient: 'Red Ashwood',
+      line1: '1200 Market St',
+      city: 'San Francisco',
+      region: 'CA',
+      country: 'US',
+      postalCode: '94102',
+      isDefault: id === 'a1',
+    });
+    for (const locale of ['en', 'he'] as const) {
+      for (const width of [1440, 1180, 390]) {
+        it(`gives an address that is being edited room for its fields beside its label, or puts the label below them, ${locale}, ${width}px`, async () => {
+          localStorage.setItem('bault.locale', locale);
+          window.location.hash = '#/profile/addresses';
+          vi.mocked(api.get).mockImplementation(async (path: string) =>
+            path === '/me/addresses'
+              ? [address('a1', 'Home'), address('a2', 'Office')]
+              : path === '/me/profile'
+                ? profile
+                : path === '/shipping/countries'
+                  ? [{ code: 'US', name: 'United States', domestic: true, regionRequired: false }]
+                  : [],
+          );
+          const user = userEvent.setup();
+          render(
+            <I18nProvider>
+              <ProfilePage />
+            </I18nProvider>,
+          );
+          // The first of the labels' two buttons is Edit, in whatever language the page is.
+          const edit = await waitFor(() => {
+            const button = document.querySelector<HTMLElement>('.tag-item .actions button');
+            if (!button) throw new Error('the addresses have not arrived');
+            return button;
+          });
+          await user.click(edit);
+          await waitFor(() => expect(document.querySelector('.tag-item.is-editing .request-form')).not.toBeNull());
+          const page = await inBrowser(width, locale);
+          const [fields, slip] = await Promise.all(
+            ['.tag-item.is-editing .request-form-fields', '.tag-item.is-editing .request-slip'].map((selector) =>
+              page.$eval(selector, (el) => el.getBoundingClientRect().toJSON()),
+            ),
+          );
+          // Side by side only where the fields have the room of a form; otherwise the label is between the fields
+          // and the buttons, as it is on a phone.
+          if (Math.abs(slip.top - fields.top) < 2) expect(fields.width).toBeGreaterThanOrEqual(440);
+          else expect(slip.top).toBeGreaterThanOrEqual(fields.bottom - 1);
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+          await page.close();
+        });
+      }
+    }
+
+    it('is no wider in its fields than the password form it sits under, on a window too narrow to put them side by side', async () => {
+      localStorage.setItem('bault.locale', 'en');
+      window.location.hash = '#/profile/security';
+      vi.mocked(api.get).mockImplementation(async (path: string) =>
+        path === '/me/profile'
+          ? profile
+          : path === '/auth/mfa'
+            ? { enabled: true, pending: false, required: false, recoveryCodesRemaining: 8 }
+            : [],
+      );
+      render(
+        <I18nProvider>
+          <ProfilePage />
+        </I18nProvider>,
+      );
+      const user = userEvent.setup();
+      // Turning it off asks for the password and a code, in fields of its own: the last of the card's two buttons.
+      await waitFor(() => expect(document.querySelector('.security-grid .request-form-actions button:last-child')).not.toBeNull());
+      await user.click(document.querySelector('.security-grid .request-form-actions button:last-child')!);
+      await waitFor(() => expect(document.querySelector('.security-grid .request-form-fields')).not.toBeNull());
+      const page = await inBrowser(1024, 'en');
+      const fields = await page.$eval('.security-grid .request-form-fields', (el) => el.getBoundingClientRect().width);
+      expect(fields).toBeLessThanOrEqual(461);
+      await page.close();
+    });
+  });
+
   describe('the sign-in log', () => {
     const at = (day: number, hour: number) => new Date(Date.UTC(2026, 8, day, hour)).toISOString();
     const log = {

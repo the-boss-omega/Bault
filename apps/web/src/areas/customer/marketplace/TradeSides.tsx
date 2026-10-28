@@ -4,21 +4,32 @@ import { itemName } from '../../../shared/itemClasses';
 import type { SwapItemRef } from '../../../shared/market';
 import { Serial } from '../../../shared/ui/Serial';
 
-/** One side of a trade: what that person receives, each card in its case beside its serial. */
+/**
+ * One side of a trade: what that person receives, each card in its case beside its serial.
+ *
+ * `decorative` is for a slip that is written beside the fields that choose what is on it: it only shows what the
+ * fields say, so its cards are not controls (a button each, between the fields and the one that sends) and its
+ * sides are not groups of their own, named as the fields' are. The label is then read as the words it is.
+ */
 export function TradeSide({
   label,
   items,
   area,
   t,
+  decorative,
 }: {
   label: string;
   items: readonly SwapItemRef[];
   area: 'give' | 'get';
   t: TranslateFn;
+  decorative?: boolean;
 }) {
   return (
-    <div className={`trade-side trade-side--${area}`} role="group" aria-label={label}>
-      <span className="slip-label" aria-hidden="true">
+    <div
+      className={`trade-side trade-side--${area}`}
+      {...(decorative ? {} : { role: 'group', 'aria-label': label })}
+    >
+      <span className="slip-label" aria-hidden={decorative ? undefined : true}>
         {label}
       </span>
       {items.length === 0 ? (
@@ -29,7 +40,11 @@ export function TradeSide({
             <li key={item.id}>
               {item.serialNumber && (
                 <span className="slip-thumb">
-                  <CardPhotoThumb serialNumber={item.serialNumber} title={swapItemName(t, item)} />
+                  <CardPhotoThumb
+                    serialNumber={item.serialNumber}
+                    title={swapItemName(t, item)}
+                    decorative={decorative}
+                  />
                 </span>
               )}
               <span className="slip-name">

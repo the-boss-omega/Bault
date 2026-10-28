@@ -60,8 +60,11 @@ function FeeStatement({ runs, locale }: { runs: FeeRun[]; locale: string }) {
         {runs.map((run) => (
           <li key={run.id} className="fee-run">
             <span className="fee-run-date date">{formatDate(run.runAt, locale)}</span>
-            <span className="fee-run-total amount" dir="ltr">
-              {formatUsd(run.totalAmount)}
+            <span className="fee-run-sum">
+              <span className="money-label">{t('admin.storage.col.total')}</span>
+              <span className="fee-run-total amount" dir="ltr">
+                {formatUsd(run.totalAmount)}
+              </span>
             </span>
             <span className="fee-run-meta">
               {t('admin.storage.col.thresholdDays')} {run.thresholdDays} ·{' '}

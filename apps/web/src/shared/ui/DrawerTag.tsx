@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 /**
  * What a drawer is about, as a tag on paper: the amount, named, in the display face, with where it stands
@@ -14,6 +14,7 @@ export function DrawerTag({
   title,
   titleAs,
   art,
+  item,
   status,
   note,
   lines,
@@ -32,6 +33,12 @@ export function DrawerTag({
   titleAs?: 'h3' | 'h4';
   /** What the tag hangs from: the card in its case. Decoration; the lines under it name it. */
   art?: ReactNode;
+  /**
+   * One of a list of tags (each dispute, each address). A tag on its own is a region of the page, named by its
+   * kicker, which is what a screen reader jumps to; forty of them would be forty regions, so a tag in a list is
+   * an article, named the same way, and not a landmark.
+   */
+  item?: boolean;
   /** Where it stands: a status badge. */
   status?: ReactNode;
   /** Whatever goes with the amount: a fee, a currency. */
@@ -45,10 +52,17 @@ export function DrawerTag({
   children?: ReactNode;
 }) {
   const Title = titleAs ?? 'p';
+  const kickerId = useId();
+  const Root = item ? 'article' : 'section';
   return (
-    <section className="drawer-tag" aria-label={kicker}>
+    <Root
+      className="drawer-tag"
+      {...(item ? { 'aria-labelledby': kickerId } : { 'aria-label': kicker })}
+    >
       {art && <div className="drawer-tag-art">{art}</div>}
-      <p className="drawer-tag-kicker">{kicker}</p>
+      <p className="drawer-tag-kicker" id={item ? kickerId : undefined}>
+        {kicker}
+      </p>
       {title !== undefined && <Title className="drawer-tag-title">{title}</Title>}
       {amount !== undefined && (
         <p className="drawer-tag-amount">
@@ -78,6 +92,6 @@ export function DrawerTag({
           {note && <span className="drawer-tag-note">{note}</span>}
         </div>
       )}
-    </section>
+    </Root>
   );
 }

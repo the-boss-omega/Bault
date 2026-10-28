@@ -47,12 +47,9 @@ async function renderPanel() {
       <ProposeTradePanel onProposed={onProposed} onError={() => {}} />
     </I18nProvider>,
   );
-  // The picker and the slip beside it are both a group called "They get": the picker is the one with the cards to tick in it.
-  const offered = await waitFor(() => {
-    const picker = screen.getAllByRole('group', { name: 'They get' }).find((group) => group.querySelector('input'));
-    if (!picker) throw new Error('the cards have not arrived');
-    return picker;
-  });
+  // The picker is the only group called "They get": the slip beside it shows what is chosen and is not a group of its own.
+  const offered = await screen.findByRole('group', { name: 'They get' });
+  await waitFor(() => expect(offered.querySelector('input')).not.toBeNull());
   return { onProposed, offered };
 }
 

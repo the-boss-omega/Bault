@@ -13,6 +13,30 @@ const { EscrowTab } = await import('../../apps/web/src/areas/customer/marketplac
 const { escrowEventLabel } = await import('../../apps/web/src/shared/escrow');
 const { I18nProvider, useT } = await import('../../apps/web/src/shared/i18n');
 
+describe('a tag on its own, and a tag in a list', () => {
+  it('is a region of the page, named by its kicker, on its own; and an article, named the same way, in a list', () => {
+    render(
+      <I18nProvider>
+        <DrawerTag kicker="On its own" title="One" />
+        <ul>
+          <li>
+            <DrawerTag item kicker="First" title="One" />
+          </li>
+          <li>
+            <DrawerTag item kicker="Second" title="Two" />
+          </li>
+        </ul>
+      </I18nProvider>,
+    );
+    expect(screen.getByRole('region', { name: 'On its own' })).toBeInTheDocument();
+    // A list of forty is not forty landmarks: none of these is one.
+    expect(screen.getByRole('article', { name: 'First' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Second' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'First' })).toBeNull();
+    expect(screen.queryAllByRole('region')).toHaveLength(1);
+  });
+});
+
 const DEAL = {
   id: 'd1',
   code: 'ESC-H8RAZJYW',

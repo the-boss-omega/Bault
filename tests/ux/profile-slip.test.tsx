@@ -154,7 +154,9 @@ describe('the addresses, a label for each place', () => {
   it('writes a saved address as it is written on a parcel, and keeps its actions off the paper', async () => {
     answer();
     await profile('addresses');
-    const label = await screen.findByRole('region', { name: 'Home' });
+    // Each saved address is one of a list: an article named by its label, not a landmark of its own.
+    const label = await screen.findByRole('article', { name: 'Home' });
+    expect(screen.queryByRole('region', { name: 'Home' })).toBeNull();
     expect(label.querySelector('.drawer-tag-title')).toHaveTextContent('Red Ashwood');
     expect(lines(label)).toEqual(['1200 Market St', 'San Francisco, CA 94102', 'United States']);
     expect(within(label).getByText('Default')).toBeInTheDocument();
@@ -167,7 +169,7 @@ describe('the addresses, a label for each place', () => {
   it('marks a label that is missing what carriers need, so it can be fixed before it is used', async () => {
     answer([HOME, OLD]);
     await profile('addresses');
-    const label = await screen.findByRole('region', { name: 'Old flat' });
+    const label = await screen.findByRole('article', { name: 'Old flat' });
     expect(within(label).getByText('State or province missing')).toBeInTheDocument();
     expect(within(label).queryByText('Default')).toBeNull();
   });

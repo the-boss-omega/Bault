@@ -155,7 +155,7 @@ export function DisputesSection({
               >
                 {note.trim() && (
                   <div className="ticket-note">
-                    <span className="slip-label">{t('admin.disputes.notePlaceholder')}</span>
+                    <span className="slip-label">{t('admin.coverage.col.note')}</span>
                     <p>{note.trim()}</p>
                   </div>
                 )}
@@ -227,6 +227,7 @@ function DisputeCase({
 
   const label = DISPUTE_LABEL[dispute.status];
   const lines = [
+    { label: t('admin.disputes.col.id'), value: <Code value={dispute.id.slice(0, 8)} /> },
     {
       label: t('admin.disputes.col.transaction'),
       value: <Code value={dispute.transactionId.slice(0, 8)} />,
@@ -245,14 +246,12 @@ function DisputeCase({
 
   return (
     <li className="tag-item">
+      {/* The headline is the ruling, and says that it is: a case with none has a dash, not the word standing as if it were one. */}
       <DrawerTag
-        kicker={dispute.id.slice(0, 8)}
+        item
+        kicker={t('admin.disputes.col.ruling')}
         title={
-          dispute.ruling?.trim() ? (
-            dispute.ruling
-          ) : (
-            <span className="drawer-tag-quiet">{t('admin.disputes.col.ruling')}</span>
-          )
+          dispute.ruling?.trim() ? dispute.ruling : <span className="drawer-tag-quiet">—</span>
         }
         lines={lines}
         status={

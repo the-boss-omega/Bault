@@ -160,18 +160,33 @@ describe('the disputes, a case file each', () => {
   it('are the newest first, each with its number, its ruling (or that there is none) and where it stands', async () => {
     api();
     await disputes();
-    expect(files().map((f) => f.getAttribute('aria-label'))).toEqual([
+    expect(files().map((f) => within(f).getByText('ID').nextElementSibling?.textContent)).toEqual([
       '41ea05e9',
       '2f66a3c4',
       '9b0c77d1',
     ]);
 
     const [newest, , ruled] = files() as [HTMLElement, HTMLElement, HTMLElement];
-    expect(newest.querySelector('.drawer-tag-title .drawer-tag-quiet')).toHaveTextContent('Ruling');
+    // The headline is the ruling, and its kicker says so: with none made there is a dash, not the word
+    // "Ruling" standing where a ruling would be.
+    expect(newest).toHaveAccessibleName('Ruling');
+    expect(newest.querySelector('.drawer-tag-title .drawer-tag-quiet')?.textContent).toBe('—');
     expect(within(newest).getByText('Investigating')).toBeInTheDocument();
     expect(ruled.querySelector('.drawer-tag-title')).toHaveTextContent('Refund the buyer in full');
     expect(ruled.querySelector('.drawer-tag-title .drawer-tag-quiet')).toBeNull();
     expect(within(ruled).getByText('Ruled')).toBeInTheDocument();
+  });
+
+  it('are articles in a list, not a landmark each: forty disputes are not forty regions of the page', async () => {
+    api();
+    await disputes();
+    for (const file of files()) {
+      expect(file.tagName).toBe('ARTICLE');
+      expect(file).toHaveAccessibleName('Ruling');
+    }
+    // The only region the page has for a dispute is the slip a new one is written on.
+    const regions = screen.queryAllByRole('region').map((r) => r.getAttribute('aria-label'));
+    expect(regions).not.toContain('Ruling');
   });
 
   it('carry the transaction they are about, with its kind and sum where it is known, and the note that was made', async () => {

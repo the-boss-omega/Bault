@@ -41,12 +41,15 @@ function proposal() {
   );
 }
 
+/** One side of the slip: what the other person gets ('give') or what you get ('get'). */
+const side = (slip: HTMLElement, area: 'give' | 'get') => slip.querySelector(`.trade-side--${area}`) as HTMLElement;
+
 describe('a trade, written on a slip as it is composed', () => {
   it('has the two sides of it, empty, before anything is chosen', async () => {
     proposal();
     const slip = await screen.findByRole('region', { name: 'Propose a trade' });
-    expect(within(slip).getByRole('group', { name: 'They get' })).toHaveTextContent('—');
-    expect(within(slip).getByRole('group', { name: 'You get' })).toHaveTextContent('—');
+    expect(side(slip, 'give')).toHaveTextContent('—');
+    expect(side(slip, 'get')).toHaveTextContent('—');
     expect(within(slip).getByText('With').nextElementSibling).toHaveTextContent('—');
     expect(slip).toHaveTextContent('Swap');
     expect(slip).toHaveTextContent('Both sides must approve before ownership moves.');
@@ -58,7 +61,7 @@ describe('a trade, written on a slip as it is composed', () => {
     const slip = await screen.findByRole('region', { name: 'Propose a trade' });
 
     await user.click(await screen.findByRole('checkbox', { name: /SN-CL10-0005/ }));
-    expect(within(slip).getByRole('group', { name: 'They get' })).toHaveTextContent('SN-CL10-0005');
+    expect(side(slip, 'give')).toHaveTextContent('SN-CL10-0005');
 
     await user.type(screen.getByRole('textbox', { name: 'Username' }), 'golden');
     await user.click(screen.getByRole('button', { name: 'Find' }));
@@ -66,7 +69,7 @@ describe('a trade, written on a slip as it is composed', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'Serial of the item you want' }), 'SN-DX102-0002');
     await user.click(screen.getByRole('button', { name: 'Add' }));
-    await waitFor(() => expect(within(slip).getByRole('group', { name: 'You get' })).toHaveTextContent('SN-DX102-0002'));
+    await waitFor(() => expect(side(slip, 'get')).toHaveTextContent('SN-DX102-0002'));
 
     await user.click(screen.getByRole('button', { name: 'Send proposal' }));
     expect(post).toHaveBeenCalledWith('/marketplace/swaps', {
@@ -85,9 +88,24 @@ describe('a trade, written on a slip as it is composed', () => {
 
     expect(slip).toHaveTextContent('Gift');
     expect(slip).toHaveTextContent('A gift moves one item.');
-    expect(within(slip).getByRole('group', { name: 'They get' })).toHaveTextContent('SN-CL10-0005');
-    expect(within(slip).getByRole('group', { name: 'You get' })).toHaveTextContent('—');
+    expect(side(slip, 'give')).toHaveTextContent('SN-CL10-0005');
+    expect(side(slip, 'get')).toHaveTextContent('—');
     // One way, toward the side that receives: the glyph says so by its class, and the two groups say it in words.
     expect(slip.querySelector('.trade-swap--one')).not.toBeNull();
+  });
+
+  it('takes no part in the keyboard: the cards on it are not buttons, and its sides are not groups called what the fields are', async () => {
+    proposal();
+    const user = userEvent.setup();
+    const slip = await screen.findByRole('region', { name: 'Propose a trade' });
+    await user.click(await screen.findByRole('checkbox', { name: /SN-CL10-0005/ }));
+    await user.click(await screen.findByRole('checkbox', { name: /SN-DR97-0001/ }));
+    // Two cards are chosen, and the slip has no control in it: Tab goes from the fields to the button that sends.
+    expect(within(slip).queryAllByRole('button')).toHaveLength(0);
+    expect(slip.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')).toHaveLength(0);
+    // The picker is the one group called "They get"; the slip says it in words beside it.
+    expect(screen.getAllByRole('group', { name: 'They get' })).toHaveLength(1);
+    expect(side(slip, 'give')).toHaveTextContent('They get');
+    expect(side(slip, 'give')).toHaveTextContent('SN-CL10-0005');
   });
 });

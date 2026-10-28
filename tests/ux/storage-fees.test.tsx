@@ -68,6 +68,18 @@ describe('the storage sweep, a statement', () => {
     expect(lines[1]).toHaveTextContent('Day threshold 180 · Items charged 0');
   });
 
+  it('names what each run charged: a figure on paper does not travel without its name', async () => {
+    await storage(RUNS);
+    const sums = Array.from(document.querySelectorAll('.fee-run-sum')) as HTMLElement[];
+    expect(sums).toHaveLength(2);
+    for (const sum of sums) {
+      expect(sum.querySelector('.money-label')).toHaveTextContent('Total');
+      // The name comes first, and the figure it names is in the same box, so a card layout cannot part them.
+      expect(sum.firstElementChild).toHaveClass('money-label');
+      expect(sum.querySelector('.fee-run-total')).not.toBeNull();
+    }
+  });
+
   it('reads each figure as a figure, left to right', async () => {
     await storage(RUNS);
     for (const total of document.querySelectorAll('.fee-run-total'))

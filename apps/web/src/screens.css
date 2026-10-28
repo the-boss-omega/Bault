@@ -1107,6 +1107,12 @@
   }
 }
 
+/* A time has no letters to say which way it reads, so it was set from the left whatever the page reads and, in
+   Hebrew, sat at the far side of its column. It hangs from the edge the page starts at. */
+.timeline--stamped > li > .date {
+  text-align: var(--text-start);
+}
+
 /* ---- A drawer's tag: the sum it is about, on paper ---- */
 
 .drawer-tag,
@@ -1191,6 +1197,15 @@
   overflow-wrap: anywhere;
   unicode-bidi: plaintext;
   text-align: var(--text-start);
+}
+
+/* A tag in a list stays the size of its neighbours whatever was typed on it: the words are cut at three lines. */
+.tag-item .drawer-tag-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 /* The card in its case, laid on the tag: the object the tag is about, a little larger than a list's thumbnail. */
@@ -1343,6 +1358,14 @@
   text-transform: uppercase;
 }
 
+/* Hebrew has no capitals and the mono face has no Hebrew: the words are in the UI face, not spaced out. */
+:lang(he) .parcel-stub-empty {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 /* ---- A ticket as it is written: its subject in the display face, its kind, and how its message begins ---- */
 
 .ticket-note {
@@ -1456,8 +1479,8 @@ li.is-clickable {
 }
 
 .tag-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 340px));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-8) var(--sp-6);
   margin: 0;
   padding: 0;
@@ -1465,12 +1488,14 @@ li.is-clickable {
 }
 
 .tag-item {
+  flex: 0 1 340px;
   min-inline-size: 0;
 }
 
-/* A tag being edited is the form beside the tag it makes: it takes the row it is on. */
+/* A tag being edited is the form beside the tag it makes: it takes the whole row, not the width of the tags it
+   was among (three to a row are two to a row at 1180, and two columns of tags are too narrow for a form). */
 .tag-item.is-editing {
-  grid-column: 1 / -1;
+  flex: 1 0 100%;
 }
 
 .tag-item > .drawer-tag {
@@ -1578,7 +1603,7 @@ li.is-clickable {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: var(--sp-4);
-  align-items: baseline;
+  align-items: last baseline;
   padding-block: var(--sp-4);
   border-block-start: 1px dashed var(--paper-rule-soft);
 }
@@ -1590,6 +1615,17 @@ li.is-clickable {
 .fee-run-date {
   font: 500 var(--fs-xl) / 1.2 var(--font-display);
   color: var(--paper-ink);
+}
+
+/* What a run charged, named: a figure on paper does not travel without its name. */
+.fee-run-sum {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.ledger-sheet .money-label {
+  color: var(--paper-ink-3);
 }
 
 .fee-run-total {
@@ -1705,6 +1741,7 @@ li.is-clickable {
 .request-form--stacked > .request-form-fields,
 .request-form--stacked > .request-form-actions {
   grid-column: 1;
+  max-inline-size: 460px;
 }
 
 /* The security tab: the password and the second factor, a half of the page each where the page is wide. */
