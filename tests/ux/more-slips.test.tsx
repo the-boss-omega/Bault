@@ -27,6 +27,7 @@ const { FaqLegalPage } = await import('../../apps/web/src/areas/customer/help/Fa
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   audit: (page: Page, options?: { forced?: boolean }) => Promise<string[]>;
   auditButtons: (page: Page) => Promise<string[]>;
+  inspect: (page: Page, locale: string, width: number) => Promise<{ flags: string[] }>;
 };
 
 /**
@@ -319,11 +320,50 @@ describe('a shared parcel, opened, joined and kept', () => {
     expect(within(members[0]!).getByText('Payer')).toBeInTheDocument();
     expect(members[1]).toHaveTextContent('Golden Marsh');
     expect(members[1]).toHaveTextContent('SHP-4ZFYRWGF');
-    expect(within(tag).getByText('2 collectors · 2 items · 10 g')).toBeInTheDocument();
+    expect(tag).toHaveTextContent(/2 collectors · 2 items · [\u2066]?10 g[\u2069]?/);
     // Its two ways on are under it, not on it.
     expect(within(tag).queryByRole('button')).toBeNull();
     expect(screen.getByRole('button', { name: 'Close to new members' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Cancel the parcel' })).toHaveClass('btn--danger');
+  });
+});
+
+describe.skipIf(!browser)('a figure with its unit, set into a Hebrew sentence', () => {
+  it('is drawn as it is typed, "10 g", and not with its unit first: the parcel\'s total, the quote and the size of a box', async () => {
+    localStorage.setItem('bault.locale', 'he');
+    get.mockImplementation((path: string) => {
+      if (path === '/shipping/groups')
+        return Promise.resolve([
+          {
+            id: 'g1',
+            code: 'GRP-7P6YKNHS',
+            status: 'forming',
+            destinationAddress: 'Dana Levi, 12 Vine St, Trenton, NJ 08608, US',
+            recipientName: 'Dana Levi',
+            notes: null,
+            memberCount: 2,
+            totalItems: 2,
+            totalWeightGrams: 10,
+            members: [],
+          },
+        ]);
+      return Promise.resolve([]);
+    });
+    render(
+      <I18nProvider>
+        <SharedParcelsTab
+          reloadToken={0}
+          onChanged={vi.fn()}
+          onError={vi.fn()}
+          onStatus={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    await screen.findByText('GRP-7P6YKNHS');
+    const page = await inBrowser(1440, 'he', 'dark');
+    const { flags } = await audit.inspect(page, 'he', 1440);
+    expect(flags.filter((f) => f.includes('drawn out of order'))).toEqual([]);
+    await page.context().close();
   });
 });
 
