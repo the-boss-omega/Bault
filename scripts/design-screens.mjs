@@ -513,8 +513,12 @@ async function visitItems(state, page, ctx) {
 async function visitAdminRecords(state, page, ctx) {
   const users = await apiCall(page, 'GET', '/admin/users');
   const items = await apiCall(page, 'GET', '/admin/items');
+  const me = await apiCall(page, 'GET', '/me/profile');
+  // An enrolled account that is not the one signed in: the drawer of one's own account has no reset button, and
+  // the reset (its button, its confirmation, where focus goes after) is what an administrator's drawer is for.
+  const others = Array.isArray(users.json) ? users.json.filter((u) => u.id !== me.json?.id) : [];
   const records = [
-    ['users', 'user', Array.isArray(users.json) ? (users.json.find((u) => u.mfaEnabled) ?? users.json[0]) : null],
+    ['users', 'user', others.find((u) => u.mfaEnabled) ?? others[0] ?? null],
     ['items', 'item', Array.isArray(items.json) ? items.json[0] : null],
   ];
   for (const [tab, param, record] of records) {

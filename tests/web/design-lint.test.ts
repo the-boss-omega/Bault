@@ -325,6 +325,15 @@ describe('design-lint', () => {
       ['the theme\'s ink on a tag', 'screens.css', '.drawer-tag .serial { color: var(--foreground); }', /is drawn on paper in a colour of the theme's/],
       ['the theme\'s muted ink on a sheet', 'screens.css', '.ledger-sheet .hint { color: var(--muted-foreground); }', /is drawn on paper in a colour of the theme's/],
       ['the theme\'s ink on a rate card', 'screens.css', '.rate-line-name { color: var(--ink-2); }', /is drawn on paper in a colour of the theme's/],
+      ['a theme foreground the first list did not have', 'screens.css', '.drawer-tag .x { color: var(--accent-foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['the theme\'s primary on a tag', 'screens.css', '.drawer-tag .x { color: var(--primary); }', /is drawn on paper in a colour of the theme's/],
+      ['the theme\'s popover text on a tag', 'screens.css', '.drawer-tag .x { color: var(--popover-foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['a border in the theme\'s ink', 'screens.css', '.drawer-tag .x { border-color: var(--foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['a whole border in the theme\'s ink', 'screens.css', '.ledger-sheet .x { border-block-start: 1px solid var(--foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['a glyph filled in the theme\'s ink', 'screens.css', '.drawer-tag svg { fill: var(--foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['a glyph stroked in the theme\'s ink', 'screens.css', '.rate-card svg { stroke: var(--muted-foreground); }', /is drawn on paper in a colour of the theme's/],
+      ['a colour mixed from the theme\'s ink', 'screens.css', '.drawer-tag .x { color: color-mix(in srgb, var(--foreground) 60%, transparent); }', /is drawn on paper in a colour of the theme's/],
+      ['the slip a tag is written on', 'screens.css', '.request-slip p { color: var(--foreground); }', /is drawn on paper in a colour of the theme's/],
     ];
 
     for (const [name, file, css, expected] of cases) {
@@ -337,6 +346,11 @@ describe('design-lint', () => {
 
     it('lets paper be drawn in the paper\'s own inks, or in the colour it is on', () => {
       const r = planted('screens.css', '\n.drawer-tag .serial { color: inherit; }\n.rate-line-name { color: var(--paper-ink); }\n.case-note { color: var(--paper-ink-2); }\n');
+      expect(r.out).not.toContain('is drawn on paper');
+    });
+
+    it('does not hold what stands beside the paper to the paper\'s inks: the controls under a case file, the codes\' page', () => {
+      const r = planted('screens.css', '\n.case-controls input { color: var(--foreground); }\n.mfa-codes { color: var(--muted-foreground); }\n.drawer-tag .x { border-color: var(--paper-rule); fill: var(--paper-ink-2); }\n');
       expect(r.out).not.toContain('is drawn on paper');
     });
 

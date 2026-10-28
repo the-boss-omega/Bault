@@ -454,13 +454,19 @@ function checkDeclarations(short, raw, { fromLine = 0, isTheme = false, typeScal
 const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper(?:-bright)?|room(?:-(?:deep|raised|case|pool|glass))?)\)/;
 
 /**
- * What is set on paper is read in the paper's inks. The theme's own text colours (--foreground, --ink,
- * --muted-foreground...) are light in the dark theme, and a serial, a name or a figure drawn in one of them
- * on cream is not there. A rule for something that sits on a tag or a sheet names a paper ink, or inherits the
- * one it is on. A new thing that is drawn on paper adds its class to the list.
+ * What is set on paper is read in the paper's inks. The theme's own text colours (--foreground, --muted-foreground,
+ * --accent-foreground, --primary, --link...) are light in the dark theme, and a serial, a name, a figure, a rule or
+ * a glyph drawn in one of them on cream is not there. A rule for something that sits on a tag or a sheet names a
+ * paper ink (or inherits the one it is on): in `color`, in any colour of a border, an outline or a decoration, in
+ * `fill` and `stroke`, and inside a colour that is mixed from one of them. A new thing that is drawn on paper adds
+ * its class to the list; what stands beside the paper on the page (the controls under a case file, the codes' own
+ * page) is not on it and is not in the list.
  */
-const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|ledger-|rate-|fee-|case-|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-)/;
-const THEME_INK = /(?:^|[;\s])color\s*:\s*var\(--(?:foreground|muted-foreground|ink(?:-[\w-]+)?|text(?:-[\w-]+)?|body|secondary-foreground|card-foreground)\)/;
+const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|request-slip|ledger-|rate-|fee-|case-note|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-key|mfa-qr)/;
+const THEME_INKS = 'foreground|muted-foreground|card-foreground|popover-foreground|secondary-foreground|accent-foreground|primary|ink(?:-[\\w-]+)?|text(?:-[\\w-]+)?|body|link';
+const THEME_INK = new RegExp(
+  `(?:^|[;\\s{])(?:color|(?:border|outline|text-decoration|caret|column-rule)(?:-[a-z]+)*|fill|stroke)\\s*:[^;{}]*var\\(--(?:${THEME_INKS})\\)`,
+);
 
 function cssIn(dir) {
   const out = [];
