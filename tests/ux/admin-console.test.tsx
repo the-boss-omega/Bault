@@ -294,12 +294,17 @@ const LISTED_CARD = {
 };
 const BUYER = { ...DEBTOR, id: 'u2', email: 'buyer@bault.dev', username: 'buyer', status: 'active', autoSuspended: false };
 
-describe('saving an item row', () => {
-  it('sends only the new owner, not the `listed` state the row was showing', async () => {
+describe('saving an item', () => {
+  /** An item is opened to be corrected: by its name in the roll, or by a link that names it. */
+  const openItem = (id: string) => {
+    window.location.hash = `#/admin/items?item=${id}`;
+  };
+
+  it('sends only the new owner, not the `listed` state the item was showing', async () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR, BUYER], '/admin/items': [LISTED_CARD] });
     patch.mockResolvedValue({});
-    window.location.hash = '#/admin/items';
+    openItem('i1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Owner' }), 'u2');
@@ -313,7 +318,7 @@ describe('saving an item row', () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR, BUYER], '/admin/items': [LISTED_CARD] });
     patch.mockResolvedValue({});
-    window.location.hash = '#/admin/items';
+    openItem('i1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Lifecycle' }), 'on-hold');

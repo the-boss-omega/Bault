@@ -1,23 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../shared/api';
 import { ShelfYieldPanel } from './ShelfYieldPanel';
-import { CardPhotoButton } from '../../shared/CardPhoto';
-import { BarcodePrintButton } from '../../shared/Barcode';
 import { useI18n } from '../../shared/i18n';
 import type { MessageKey } from '../../shared/i18n';
-import { stateLabel } from '../../shared/itemTimeline';
 import { useNavigation, useRoute } from '../../shared/routing';
-import {
-  Button,
-  ContextTabs,
-  EmptyState,
-  ErrorState,
-  Panel,
-  SkeletonTable,
-  SuccessNote,
-  TabPanel,
-} from '../../shared/ui/primitives';
-import { IconBox } from '../../shared/ui/icons';
+import { ContextTabs, ErrorState, SuccessNote, TabPanel } from '../../shared/ui/primitives';
 import { WalletRequestsSection } from './WalletRequestsSection';
 import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
@@ -25,25 +12,10 @@ import { AccountingSection } from './AccountingSection';
 import { PricingSection } from './PricingSection';
 import { DisputesSection } from './DisputesSection';
 import { UsersSection, type AdminUser } from './UsersSection';
+import { ItemsSection, type AdminItem } from './ItemsSection';
 import { StorageFeesSection } from './StorageFeesSection';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
 import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
-
-interface AdminItem {
-  id: string;
-  serialNumber: string;
-  barcode: string;
-  typeClass: string;
-  description: string;
-  conditionGrade: string | null;
-  lifecycleState: string;
-  holdFlag: boolean;
-  binId: string | null;
-  ownerId: string;
-  ownerEmail: string | null;
-}
-
-const STATES = ['received', 'stored', 'listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned'];
 
 const TABS = [
   'yield',
@@ -210,46 +182,13 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 
       {section === 'items' && (
         <TabPanel tab="items">
-          <Panel
-            title={t('admin.items.heading', { count: items?.length ?? 0 })}
-            subtitle={t('admin.items.subtitle')}
-            flush
-          >
-            {items === null ? (
-              <SkeletonTable rows={5} columns={6} />
-            ) : items.length === 0 ? (
-              <EmptyState title={t('admin.items.empty')} icon={<IconBox />} />
-            ) : (
-              <div className="dt-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('admin.items.col.barcode')}</th>
-                      <th scope="col">{t('admin.items.col.description')}</th>
-                      <th scope="col">{t('admin.items.col.type')}</th>
-                      <th scope="col">{t('admin.items.col.condition')}</th>
-                      <th scope="col">{t('admin.items.col.owner')}</th>
-                      <th scope="col">{t('admin.items.col.lifecycle')}</th>
-                      <th scope="col">{t('admin.items.col.hold')}</th>
-                      <th scope="col">{t('admin.items.col.photo')}</th>
-                      <th scope="col" className="td-tight" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it) => (
-                      <ItemRow
-                        key={it.id}
-                        item={it}
-                        users={users ?? []}
-                        onSaved={setMessage}
-                        onError={setError}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
+          <ItemsSection
+            items={items}
+            users={users ?? []}
+            onChanged={(saved) => setItems((list) => list?.map((i) => (i.id === saved.id ? saved : i)) ?? list)}
+            onSaved={setMessage}
+            onError={setError}
+          />
         </TabPanel>
       )}
 
@@ -277,129 +216,5 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
         </TabPanel>
       )}
     </>
-  );
-}
-
-function ItemRow({
-  item,
-  users,
-  onSaved,
-  onError,
-}: {
-  item: AdminItem;
-  users: AdminUser[];
-  onSaved: (m: string) => void;
-  onError: (m: string) => void;
-}) {
-  const { t } = useI18n();
-  const [description, setDescription] = useState(item.description);
-  const [typeClass, setTypeClass] = useState(item.typeClass);
-  const [conditionGrade, setConditionGrade] = useState(item.conditionGrade ?? '');
-  const [ownerId, setOwnerId] = useState(item.ownerId);
-  const [lifecycleState, setLifecycleState] = useState(item.lifecycleState);
-  const [holdFlag, setHoldFlag] = useState(item.holdFlag);
-  const [saved, setSaved] = useState({
-    description: item.description,
-    typeClass: item.typeClass,
-    conditionGrade: item.conditionGrade ?? '',
-    ownerId: item.ownerId,
-    lifecycleState: item.lifecycleState,
-    holdFlag: item.holdFlag,
-  });
-
-  const current = { description, typeClass, conditionGrade, ownerId, lifecycleState, holdFlag };
-  const changes: Partial<typeof current> = {};
-  for (const f of Object.keys(current) as (keyof typeof current)[]) {
-    if (current[f] !== saved[f]) Object.assign(changes, { [f]: current[f] });
-  }
-  const dirty = Object.keys(changes).length > 0;
-
-  async function save() {
-    if (!dirty) return;
-    const sent = { ...changes };
-    try {
-      const updated = await api.patch<{ lifecycleState?: string } | null>(`/admin/items/${item.id}`, sent);
-      const state = updated?.lifecycleState ?? sent.lifecycleState ?? saved.lifecycleState;
-      setLifecycleState(state);
-      setSaved((s) => ({ ...s, ...sent, lifecycleState: state }));
-      onSaved(t('admin.items.saved', { barcode: item.barcode }));
-    } catch (e) {
-      onError((e as Error).message);
-    }
-  }
-
-  return (
-    <tr>
-      <td>
-        <div className="barcode-label" dir="ltr">
-          <code>{item.barcode}</code>
-          <BarcodePrintButton value={item.barcode} caption={item.description || item.typeClass} />
-        </div>
-      </td>
-      <td>
-        <input
-          value={description}
-          aria-label={t('admin.items.col.description')}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </td>
-      <td>
-        <input
-          value={typeClass}
-          aria-label={t('admin.items.col.type')}
-          onChange={(e) => setTypeClass(e.target.value)}
-        />
-      </td>
-      <td>
-        <input
-          value={conditionGrade}
-          aria-label={t('admin.items.col.condition')}
-          onChange={(e) => setConditionGrade(e.target.value)}
-          style={{ width: '5rem' }}
-        />
-      </td>
-      <td>
-        <select
-          value={ownerId}
-          aria-label={t('admin.items.col.owner')}
-          onChange={(e) => setOwnerId(e.target.value)}
-        >
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.email}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <select
-          value={lifecycleState}
-          aria-label={t('admin.items.col.lifecycle')}
-          onChange={(e) => setLifecycleState(e.target.value)}
-        >
-          {STATES.map((s) => (
-            <option key={s} value={s}>
-              {stateLabel(t, s)}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <input
-          type="checkbox"
-          checked={holdFlag}
-          aria-label={t('admin.items.col.hold')}
-          onChange={(e) => setHoldFlag(e.target.checked)}
-        />
-      </td>
-      <td>
-        <CardPhotoButton serialNumber={item.serialNumber} title={item.description || item.typeClass} />
-      </td>
-      <td className="td-tight">
-        <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!dirty} onClick={save}>
-          {t('admin.action.save')}
-        </Button>
-      </td>
-    </tr>
   );
 }

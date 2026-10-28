@@ -1541,6 +1541,24 @@ li.is-clickable {
   margin-block-start: var(--sp-5);
 }
 
+/* In a drawer, which is narrow, a tag's words are a size down: a catalogue name is a line or two, not four. */
+.drawer .drawer-tag-title {
+  font-size: clamp(22px, 2.4vw, 26px);
+}
+
+/* What is done with an item besides changing it: print its barcode, look at its photograph. Under the card, on the page. */
+.item-tools {
+  align-items: center;
+  gap: var(--sp-4);
+  margin-block: calc(var(--sp-2) * -1) 0;
+}
+
+.item-photo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 /* ---- The storage sweep's runs: a statement, a line to each run ---- */
 
 .fee-sheet {

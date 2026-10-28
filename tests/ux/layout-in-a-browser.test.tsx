@@ -459,7 +459,7 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       ownerEmail: 'eldar@bault.dev',
     });
 
-    // The accounts are a roll of links; the items are a grid of fields. Each has controls at the edge of a table that scrolls.
+    // The accounts and the items are each a roll of links. Each has controls at the edge of a table that scrolls.
     for (const tab of ['users', 'items'] as const) {
     for (const locale of ['en', 'he'] as const) {
       for (const width of [1440, 390]) {
@@ -479,7 +479,7 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
             </I18nProvider>,
           );
           if (tab === 'users') await screen.findByRole('button', { name: 'Eldar Cohen' });
-          else await screen.findByDisplayValue('2021 Evolving Skies Rayquaza VMAX i1');
+          else await screen.findByRole('button', { name: '2021 Evolving Skies Rayquaza VMAX i1' });
           const page = await inBrowser(width, locale);
           // What the page does when a control takes focus (the scrollable-regions hook asks for it to be shown
           // whole), and then: is its ring, which is drawn outside it, in the table's room?
