@@ -589,6 +589,7 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<BenchOutcome | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function load() {
     try {
@@ -653,7 +654,10 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
   }
 
   async function completeShipment() {
-    if (!detail || !complete) return;
+    // A second press (or a second Enter from a scanner) while the first is on its way would send it twice, and the
+    // refusal of the second would replace the docket's word that the first went.
+    if (!detail || !complete || busy) return;
+    setBusy(true);
     try {
       const res = await api.post<{ trackingNumber: string }>(
         `/shipping/shipments/${detail.id}/dispatch`,
@@ -680,6 +684,8 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
       setError(message);
       onLog(t('warehouse.log.dispatchError', { message }));
       setOutcome({ tone: 'error', label: t('bench.notDone'), detail: message });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -840,7 +846,12 @@ export function FulfillmentBench({ onLog }: { onLog: (line: string) => void }) {
 
       <div className="row request-form-actions">
         {detail && (
-          <Button variant="primary" disabled={!complete} onClick={() => void completeShipment()}>
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={!complete}
+            onClick={() => void completeShipment()}
+          >
             {t('warehouse.complete')}
           </Button>
         )}

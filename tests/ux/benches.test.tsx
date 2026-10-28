@@ -385,6 +385,49 @@ describe('packing a shipment from its pick list', () => {
   });
 });
 
+describe('sending a shipment twice', () => {
+  it('is not done: a second press while the first is on its way sends nothing, and the docket keeps its word that it went', async () => {
+    const DETAIL = {
+      id: 'shp-1',
+      code: 'SHP-PACK0001',
+      status: 'rates_selected',
+      carrier: 'USPS',
+      serviceKey: 'usps_ground',
+      itemIds: ['i1'],
+      items: [
+        { id: 'i1', serialNumber: 'SN-ONE-0001', barcode: 'SN-ONE-0001', description: 'Card one' },
+      ],
+      directParcel: null,
+      destinationAddress: 'Red Ashwood, 12 Vine St, Trenton, 08608, US',
+      boxSize: null,
+    };
+    get.mockImplementation((path: string) =>
+      path === '/shipping/shipments/shp-1' ? Promise.resolve(DETAIL) : Promise.resolve([]),
+    );
+    // The dispatch is slow, and the second one, if it were sent, would be refused: it has gone already.
+    let finish: (value: { trackingNumber: string }) => void = () => {};
+    post
+      .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+      .mockRejectedValue(new Error('That shipment has been dispatched already.'));
+    const user = userEvent.setup();
+    const view = render(wrap(<FulfillmentBench onLog={vi.fn()} />));
+    const docket = docketOf(view.container);
+    await user.type(screen.getByLabelText('Shipment ID'), 'shp-1{Enter}');
+    await user.type(await screen.findByLabelText(/scan each item/i), 'SN-ONE-0001{Enter}');
+    await user.type(screen.getByLabelText('Notes'), 'Rigid mailer.');
+
+    const send = screen.getByRole('button', { name: 'Complete' });
+    await user.click(send);
+    await user.click(send);
+    expect(post).toHaveBeenCalledTimes(1);
+
+    finish({ trackingNumber: 'SBX-1' });
+    await waitFor(() => expect(outcomeOf(docket)).toHaveTextContent('Dispatched'));
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(outcomeOf(docket)).not.toHaveTextContent('Not done');
+  });
+});
+
 describe('receiving an arrival', () => {
   it('is the parcel as it will be recorded: the name as it was written on it, who brought it, how it is traced, and how many photographs', async () => {
     const user = userEvent.setup();
