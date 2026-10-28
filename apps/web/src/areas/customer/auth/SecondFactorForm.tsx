@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { typedCode } from '../../../shared/twoFactor';
 import { Button, ErrorState, Field } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
+import { AuthCard } from './AuthCard';
 
 export function SecondFactorForm({
   challengeToken,
@@ -42,8 +43,31 @@ export function SecondFactorForm({
   }
 
   return (
-    <form className="auth-card" onSubmit={submit}>
-      <h2>{t('mfa.title')}</h2>
+    <AuthCard
+      kicker={t('auth.kicker.mfa')}
+      title={t('mfa.title')}
+      onSubmit={submit}
+      stub={
+        <>
+          <p className="auth-switch">
+            <Button
+              variant="link"
+              onClick={() => {
+                setUseRecovery(!useRecovery);
+                setError(null);
+              }}
+            >
+              {useRecovery ? t('mfa.useApp') : t('mfa.useRecovery')}
+            </Button>
+          </p>
+          <p className="auth-switch">
+            <Button variant="link" onClick={() => onRestart(null)}>
+              {t('auth.backToSignIn')}
+            </Button>
+          </p>
+        </>
+      }
+    >
       <p className="hint">{t('mfa.challenge.intro')}</p>
 
       {useRecovery ? (
@@ -77,23 +101,6 @@ export function SecondFactorForm({
       <Button variant="primary" type="submit" block loading={busy}>
         {t('mfa.verify')}
       </Button>
-
-      <p className="auth-switch">
-        <Button
-          variant="link"
-          onClick={() => {
-            setUseRecovery(!useRecovery);
-            setError(null);
-          }}
-        >
-          {useRecovery ? t('mfa.useApp') : t('mfa.useRecovery')}
-        </Button>
-      </p>
-      <p className="auth-switch">
-        <Button variant="link" onClick={() => onRestart(null)}>
-          {t('auth.backToSignIn')}
-        </Button>
-      </p>
-    </form>
+    </AuthCard>
   );
 }

@@ -191,8 +191,9 @@
   --paper-rule-soft: oklch(0.5 0.01 80 / 40%);
   --paper-shadow: oklch(0.2 0.02 80 / 55%);
   --paper-amber: oklch(0.62 0.15 60);
-  /* The red of a thing that cannot be taken back, printed on the paper. */
+  /* The red of a thing that cannot be taken back, and the green of one that went right, printed on the paper. */
   --paper-oxblood: oklch(0.42 0.14 28);
+  --paper-custody: oklch(0.4 0.08 165);
   /* The fibre of the paper: fractal noise, laid over it with multiply. */
   --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .46 0 0 0 0 .38 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
+import { AuthCard } from './AuthCard';
 
 export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const t = useT();
@@ -26,20 +27,29 @@ export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void 
 
   if (sent) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.forgotTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.forgot')} title={t('auth.forgotTitle')}>
         <SuccessNote>{t('auth.forgotSent', { email: email.trim() })}</SuccessNote>
         <p className="field-hint">{t('auth.forgotSentHint')}</p>
         <Button variant="primary" block onClick={onGoToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   return (
-    <form className="auth-card" onSubmit={submit}>
-      <h2>{t('auth.forgotTitle')}</h2>
+    <AuthCard
+      kicker={t('auth.kicker.forgot')}
+      title={t('auth.forgotTitle')}
+      onSubmit={submit}
+      stub={
+        <p className="auth-switch">
+          <Button variant="link" onClick={onGoToSignIn}>
+            {t('auth.backToSignIn')}
+          </Button>
+        </p>
+      }
+    >
       <p className="field-hint">{t('auth.forgotIntro')}</p>
 
       <label className="field">
@@ -59,12 +69,6 @@ export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void 
       <Button variant="primary" type="submit" block disabled={busy || !email.trim()}>
         {t('auth.forgotSubmit')}
       </Button>
-
-      <p className="auth-switch">
-        <Button variant="link" onClick={onGoToSignIn}>
-          {t('auth.backToSignIn')}
-        </Button>
-      </p>
-    </form>
+    </AuthCard>
   );
 }

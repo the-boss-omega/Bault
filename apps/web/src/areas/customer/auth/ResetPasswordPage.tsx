@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { PASSWORD_MIN } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { AuthCard } from './AuthCard';
 
 export function ResetPasswordPage({ token }: { token: string | null }) {
   const t = useT();
@@ -39,31 +40,39 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
 
   if (!token) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.resetTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.reset')} title={t('auth.resetTitle')}>
         <ErrorState message={t('auth.resetNoToken')} />
         <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   if (done) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.resetTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.reset')} title={t('auth.resetTitle')}>
         <SuccessNote>{t('auth.resetDone')}</SuccessNote>
         <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   return (
-    <form className="auth-card" onSubmit={submit}>
-      <h2>{t('auth.resetTitle')}</h2>
+    <AuthCard
+      kicker={t('auth.kicker.reset')}
+      title={t('auth.resetTitle')}
+      onSubmit={submit}
+      stub={
+        <p className="auth-switch">
+          <Button variant="link" onClick={goToSignIn}>
+            {t('auth.backToSignIn')}
+          </Button>
+        </p>
+      }
+    >
       <p className="field-hint">{t('auth.resetIntro')}</p>
 
       <Field
@@ -101,12 +110,6 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       <Button variant="primary" type="submit" block disabled={busy || !ready}>
         {t('auth.resetSubmit')}
       </Button>
-
-      <p className="auth-switch">
-        <Button variant="link" onClick={goToSignIn}>
-          {t('auth.backToSignIn')}
-        </Button>
-      </p>
-    </form>
+    </AuthCard>
   );
 }

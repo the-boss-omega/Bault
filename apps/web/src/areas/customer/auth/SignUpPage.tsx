@@ -10,6 +10,7 @@ import {
   normalizeUsername,
 } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { AuthCard } from './AuthCard';
 import { TERMS_VERSION } from '../help/legalContent';
 import { TermsReader } from '../help/LegalDocumentView';
 
@@ -79,8 +80,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
 
   if (registered) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.signUpTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.signUp')} title={t('auth.signUpTitle')}>
         <SuccessNote>{registered}</SuccessNote>
         <p className="field-hint">{t('auth.verifySentHint')}</p>
 
@@ -97,14 +97,24 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
         <Button variant="primary" block onClick={onGoToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   return (
-    <form className="auth-card" onSubmit={register}>
-      <h2>{t('auth.signUpTitle')}</h2>
-
+    <AuthCard
+      kicker={t('auth.kicker.signUp')}
+      title={t('auth.signUpTitle')}
+      onSubmit={register}
+      stub={
+        <p className="auth-switch">
+          {t('auth.haveAccount')}{' '}
+          <Button variant="link" onClick={onGoToSignIn}>
+            {t('auth.signIn')}
+          </Button>
+        </p>
+      }
+    >
       <Field
         label={t('auth.email')}
         htmlFor="signup-email"
@@ -223,13 +233,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       >
         {t('auth.signUp')}
       </Button>
-
-      <p className="auth-switch">
-        {t('auth.haveAccount')}{' '}
-        <Button variant="link" onClick={onGoToSignIn}>
-          {t('auth.signIn')}
-        </Button>
-      </p>
-    </form>
+    </AuthCard>
   );
 }

@@ -462,7 +462,7 @@ const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper(?:-bright)?
  * its class to the list; what stands beside the paper on the page (the controls under a case file, the codes' own
  * page) is not on it and is not in the list.
  */
-const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|request-slip|ledger-|rate-|fee-|case-note|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-key|mfa-qr)/;
+const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|request-slip|ledger-|rate-|fee-|case-note|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-key|mfa-qr|auth-card|auth-slip|auth-stub|auth-kicker|auth-switch|auth-demo)/;
 const THEME_INKS = 'foreground|muted-foreground|card-foreground|popover-foreground|secondary-foreground|accent-foreground|primary|ink(?:-[\\w-]+)?|text(?:-[\\w-]+)?|body|link';
 const THEME_INK = new RegExp(
   `(?:^|[;\\s{])(?:color|(?:border|outline|text-decoration|caret|column-rule)(?:-[a-z]+)*|fill|stroke)\\s*:[^;{}]*var\\(--(?:${THEME_INKS})\\)`,
@@ -709,7 +709,8 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
       'the label of a primary button on the paper, reached for',
       theme,
     );
-    measure('--paper-oxblood', PAPER, TEXT, 'the label of a danger button on the paper', theme);
+    measure('--paper-oxblood', PAPER, TEXT, 'the label of a danger button, and an error, on the paper', theme);
+    measure('--paper-custody', PAPER, TEXT, 'a note that something went right, on the paper', theme);
     measure(
       '--paper-ink',
       ['--paper-bright'],

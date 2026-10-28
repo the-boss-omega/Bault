@@ -451,11 +451,24 @@ pieces. Each keeps the old markup's contracts and message keys.
   not been written is asked for in the quieter ink, as the name of the field, and a sum not yet typed is a
   dash, never a zero or any other value made up (a listing for no price is not "$0.00 · Active"); a label
   written for a list (`Email:`) loses its colon on a tag, which has a leader. The forms that have no slip
-  are the doors (signing in and up, the password, the code), the ones in the warehouse's benches, and a
-  few that are still the kit's fields in a column: grading, consignment, an inspection, the Bault store's
-  listing, raising an escrow deal and a shared parcel's group. Whatever a person
+  are the ones in the warehouse's benches, and a few that are still the kit's fields in a column:
+  grading, consignment, an inspection, the Bault store's listing, raising an escrow deal and a shared
+  parcel's group. Whatever a person
   types as free text (a name, a subject, a message, an address) takes the direction of what is typed
   (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
+- **The doors — a slip with a stub.** Signing in and up, asking for a new password and setting it, the
+  second factor's code, the link that was sent to confirm an address: each is a slip of paper in both
+  themes (`AuthCard`). Foil runs along its top edge; over the heading is a kicker that says what the slip
+  is (*Members’ entrance*, *New account*, *Getting back in*, *New password*, *Second factor*, *Address
+  confirmation*); then the fields and the one button, which is the ink with foil at its foot in either
+  theme. Under a perforation (a dashed rule with a notch cut out at each end of it) is the stub, where
+  what else one may do is: sign up instead, ask for a new password, go back to signing in. It comes after
+  the button in the tab order too. The fields, their labels and notes, a mistake (in the paper's
+  oxblood, the field it is about in a line of the same red) and a confirmation (in the paper's green) are
+  the paper's own; the code that is typed from a phone is set large, in the code's face, spaced as
+  digits are read. A page that has said what it came for (the link was sent) is the same slip with its
+  sentence on it, named by its heading. A person who signs in on a phone is held to the same targets
+  as everywhere: the button 44 px, the text buttons on the stub 24.
 - **Support — a register in days, a ticket's stub.** The tickets are the notifications' register: a
   heading per day, an entry for each with its time, whose turn it is, its subject (the control that
   opens it), its number and its kind.
@@ -720,10 +733,10 @@ like.
   statement on paper), the sign-in log (a statement and a register), the shelf map (aisle signs over
   racks), pricing (a rate card), the disputes (case files), the parked messages (a register), the
   storage fees (a statement) and the accounts and items (rolls opened in a drawer).
-- Of the forms, those that make a request or a record have their slip (section 8). The ones that do
-  not are the kit's fields in a column: signing in and up, changing the password, the code of the
-  second factor, the warehouse's benches, the Bault store's listing, grading, consignment, an
-  inspection, raising an escrow deal and a shared parcel's group.
+- Of the forms, those that make a request or a record have their slip (section 8), and the doors are
+  slips with a stub. The ones that do not are the kit's fields in a column: changing the password, the
+  warehouse's benches, the Bault store's listing, grading, consignment, an inspection, raising an
+  escrow deal and a shared parcel's group.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 

@@ -475,6 +475,8 @@ async function auditButtons(page) {
         !el.disabled &&
         coarse &&
         (box.width < 44 || box.height < 44) &&
+        // A text button set in a sentence or under a form has the 24px of a target; it is not a block to press.
+        !el.classList.contains('btn--link') &&
         !el.closest('.ph-controls')
       ) {
         say(

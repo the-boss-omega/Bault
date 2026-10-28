@@ -2773,3 +2773,199 @@ button.shelf-slot {
   font-size: 12px;
   line-height: 1.35;
 }
+
+/* ---- The doors: a form on a slip of paper ----
+   Sign in, sign up, the second factor's code, the link that was sent: the form is a slip, foil along its top and
+   one button on it, and under a perforation the stub, where what else one may do is (sign up instead, ask for a
+   new password). It is paper in both themes, so what is on it is in the paper's inks and its fields are the paper's. */
+
+.auth-card {
+  --focus-color: var(--paper-ink);
+  /* Paper is light in both themes, so the browser's own controls on it (a checkbox, a scrollbar) are drawn for light. */
+  color-scheme: light;
+  position: relative;
+  isolation: isolate;
+  display: block;
+  padding: 0;
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    0 0 0 1px var(--paper-line),
+    0 24px 40px -28px oklch(0 0 0 / 70%);
+  overflow: clip;
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 2;
+  block-size: 3px;
+  background: var(--foil);
+}
+
+.auth-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: var(--paper-grain);
+}
+
+.auth-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-slip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-group);
+  padding: var(--sp-8) var(--sp-8) var(--sp-6);
+}
+
+.auth-kicker {
+  margin: 0;
+  /* design-lint-allow: a small label in the mono face, as every kicker is */
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .auth-kicker {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.auth-card h2 {
+  margin: 0;
+  color: var(--paper-ink);
+}
+
+/* What else one may do: under the perforation, with a notch cut out at each end of it. */
+.auth-stub {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-5) var(--sp-8) var(--sp-6);
+  border-block-start: var(--border-w) dashed var(--paper-edge);
+}
+
+.auth-stub::before,
+.auth-stub::after {
+  content: '';
+  position: absolute;
+  inset-block-start: -10px;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 50%;
+  background: var(--background);
+}
+
+.auth-stub::before {
+  inset-inline-start: -10px;
+}
+
+.auth-stub::after {
+  inset-inline-end: -10px;
+}
+
+.auth-switch {
+  margin: 0;
+  color: var(--paper-ink-2);
+}
+
+.auth-demo {
+  margin: 0;
+  padding-block-start: var(--sp-3);
+  border-block-start: var(--border-w) dashed var(--paper-edge);
+  color: var(--paper-ink-3);
+}
+
+/* The fields, labels and notes of a slip are the paper's. */
+.auth-card .field-label,
+.auth-card .hint,
+.auth-card .check {
+  color: var(--paper-ink-2);
+}
+
+.auth-card .field-hint {
+  color: var(--paper-ink-3);
+}
+
+.auth-card .field-error {
+  color: var(--paper-oxblood);
+}
+
+.auth-card :is(input, select, textarea) {
+  --focus-color: var(--paper-ink);
+  border-color: var(--paper-edge);
+  border-radius: var(--r-sm);
+  background: var(--paper-bright);
+  color: var(--paper-ink);
+  box-shadow: none;
+}
+
+.auth-card :is(input, select, textarea)::placeholder {
+  color: var(--paper-ink-3);
+}
+
+.auth-card :is(input, select, textarea):hover:not(:disabled),
+.auth-card :is(input, select, textarea):focus-visible {
+  border-color: var(--paper-ink);
+}
+
+.auth-card :is(input, select, textarea)[aria-invalid='true'],
+.auth-card .field:has(.field-error) :is(input, select, textarea) {
+  border-color: var(--paper-oxblood);
+}
+
+.auth-card input[type='checkbox'] {
+  accent-color: var(--paper-ink);
+}
+
+/* The code that is typed from a phone: set large, in the code's face, spaced as digits are read. */
+.auth-card input[autocomplete='one-time-code'] {
+  min-block-size: 56px;
+  font: 500 24px/1 var(--font-mono);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.auth-card .errorbox {
+  --focus-color: var(--paper-ink);
+  border-color: color-mix(in oklab, var(--paper-oxblood) 55%, transparent);
+  background: var(--paper-bright);
+  color: var(--paper-ink);
+}
+
+.auth-card .errorbox svg {
+  color: var(--paper-oxblood);
+}
+
+.auth-card .okbox {
+  --focus-color: var(--paper-ink);
+  border-color: color-mix(in oklab, var(--paper-custody) 55%, transparent);
+  background: var(--paper-bright);
+  color: var(--paper-ink);
+}
+
+.auth-card .okbox svg {
+  color: var(--paper-custody);
+}
+
+@media (max-width: 480px) {
+  .auth-slip {
+    padding: var(--sp-6) var(--sp-5) var(--sp-5);
+  }
+
+  .auth-stub {
+    padding: var(--sp-4) var(--sp-5) var(--sp-5);
+  }
+}

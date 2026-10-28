@@ -495,7 +495,8 @@
   .shelf-zone-head,
   .lightbox-plate,
   .lp-colophon,
-  .lp-paper
+  .lp-paper,
+  .auth-card
 ) {
   --btn-primary: var(--paper-ink);
   --btn-primary-ink: var(--paper-bright);
