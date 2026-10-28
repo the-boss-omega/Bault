@@ -92,6 +92,22 @@ export function dayKey(iso: string | null | undefined): string {
 }
 
 /**
+ * How long ago a moment was, in the words of the page's language from the browser's own tables ("today",
+ * "3 days ago", "2 weeks ago"). Nothing here is a message of ours, so there is no plural to get wrong: a count
+ * of days in Hebrew is "לפני יומיים" and "לפני 3 ימים", and ours would have said "3 day".
+ */
+export function formatAge(iso: string, locale: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.max(0, Math.round((startOf(now) - startOf(date)) / 86_400_000));
+  const words = new Intl.RelativeTimeFormat(intlLocale(locale), { numeric: 'auto' });
+  if (days < 14) return words.format(-days, 'day');
+  if (days < 70) return words.format(-Math.round(days / 7), 'week');
+  return words.format(-Math.round(days / 30), 'month');
+}
+
+/**
  * The heading of a day in a register: the day's own words where there are any ("today", "yesterday", in the
  * language of the page, from the browser's own tables) and the date. Nothing here is a message of ours.
  */

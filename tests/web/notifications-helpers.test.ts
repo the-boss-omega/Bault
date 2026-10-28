@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { byDay, notificationBarcode, notificationGlyph } from '../../apps/web/src/shared/notifications';
-import { dayKey, formatDayHeading, formatTime } from '../../apps/web/src/shared/money';
+import { dayKey, formatAge, formatDayHeading, formatTime } from '../../apps/web/src/shared/money';
 
 const n = (id: string, createdAt: string) => ({ id, eventType: 'item_received', content: {}, channel: 'in_app', status: 'sent', createdAt });
 
@@ -73,3 +73,38 @@ describe('the words for a day and a time', () => {
     expect(formatTime('not a date', 'en')).toBe('not a date');
   });
 });
+
+describe('how long ago a moment was', () => {
+  const now = new Date(2026, 9, 27, 15, 0, 0);
+  const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).toISOString();
+
+  it('uses the day’s own words in the page’s language, then counts the days, with no plural of ours to get wrong', () => {
+    expect(formatAge(noon(2026, 10, 27), 'en', now)).toBe('today');
+    expect(formatAge(noon(2026, 10, 26), 'en', now)).toBe('yesterday');
+    expect(formatAge(noon(2026, 10, 24), 'en', now)).toBe('3 days ago');
+    expect(formatAge(noon(2026, 10, 27), 'he', now)).toBe('היום');
+    expect(formatAge(noon(2026, 10, 26), 'he', now)).toBe('אתמול');
+    // Hebrew has a word of its own for two days and a plural for the rest: both are the browser's.
+    expect(formatAge(noon(2026, 10, 25), 'he', now)).toBe('שלשום');
+    expect(formatAge(noon(2026, 10, 24), 'he', now)).toBe('לפני 3 ימים');
+  });
+
+  it('counts in weeks and then in months as the count grows, so a stale request is not “97 days ago”', () => {
+    expect(formatAge(noon(2026, 10, 14), 'en', now)).toBe('13 days ago');
+    expect(formatAge(noon(2026, 10, 13), 'en', now)).toBe('2 weeks ago');
+    expect(formatAge(noon(2026, 10, 6), 'en', now)).toBe('3 weeks ago');
+    expect(formatAge(noon(2026, 8, 1), 'en', now)).toBe('3 months ago');
+    expect(formatAge(noon(2026, 8, 1), 'he', now)).toMatch(/^לפני /);
+  });
+
+  it('counts calendar days, not hours, and is never in the future', () => {
+    expect(formatAge(new Date(2026, 9, 26, 23, 59).toISOString(), 'en', now)).toBe('yesterday');
+    expect(formatAge(new Date(2026, 9, 27, 0, 1).toISOString(), 'en', now)).toBe('today');
+    expect(formatAge(noon(2026, 10, 29), 'en', now)).toBe('today');
+  });
+
+  it('is nothing for what is not a moment', () => {
+    expect(formatAge('not a date', 'en', now)).toBe('');
+  });
+});
+

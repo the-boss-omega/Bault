@@ -1268,10 +1268,18 @@
   margin-block-end: 0;
 }
 
-/* A line of the slip is a name and what was typed against it; a long value takes the room of the leader. */
+/* A line of the slip is a name and what was typed against it; a long value takes the room of the leader. A value
+   that cannot sit beside its name (an account number, on a phone) goes under it, whole, at the line's end, rather
+   than breaking in the middle of its digits and squeezing the name into two lines. */
+.drawer-tag-lines .ledger-line {
+  flex-wrap: wrap;
+}
+
 .drawer-tag-lines .ledger-line dd {
   flex: 0 1 auto;
   min-inline-size: 0;
+  max-inline-size: 100%;
+  margin-inline-start: auto;
   overflow-wrap: anywhere;
   text-align: end;
 }
@@ -1391,6 +1399,10 @@
 
 /* A register's entry that opens something: the words are the control, and they read as what they are until pointed at. */
 .register-link {
+  display: inline-flex;
+  align-items: center;
+  /* Its text is 21px tall; a link on a line of its own is a target, and a target is 24px (WCAG 2.5.8). */
+  min-block-size: 24px;
   padding: 0;
   border: 0;
   background: none;
@@ -3273,3 +3285,192 @@ code.ask-words {
   }
 }
 
+
+/* ---- The wallet-requests desk: a roll grouped by what each request needs of the person at it ---- */
+
+/* Each group opens with a rule: its name, how many it holds, and the money in them, the sum a desk weighs first. */
+.data-table--desk .roll-group-head th {
+  padding: var(--sp-5) var(--sp-4) var(--sp-2);
+  border-block-end: var(--border-w) solid var(--line-strong);
+  font-weight: var(--fw-regular);
+  text-align: start;
+}
+
+.roll-group-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+.roll-group-name {
+  color: var(--ink);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.roll-group-count {
+  min-inline-size: 24px;
+  padding-inline: var(--sp-2);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.roll-group-sums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  margin-inline-start: auto;
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
+.roll-group-sums .num {
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table--desk .roll-group-none td {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A request's line leads with the way its money goes: a mark, the number as the link, and what it is for. */
+.roll-request {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+.roll-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--ink-2);
+}
+
+.roll-glyph svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+/* The date, and under it how long ago: a request that is waiting is read by its age. */
+.roll-when {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+@media (max-width: 767px) {
+  .dt-wrap--stack .data-table--desk .roll-group-head th,
+  .dt-wrap--stack .data-table--desk .roll-group-none td {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-group-head {
+    padding: 0;
+    border-block-end: 0;
+  }
+
+  /* On a phone a request is a card, not a stack of five labelled rows: its number and its sum on the first line,
+     whose it is and where it stands on the second, and when. What each value is, is plain from the value. */
+  .dt-wrap--stack .data-table--desk tr.roll-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'request amount'
+      'customer status'
+      'created created';
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-inline-start: 3px solid transparent;
+  }
+
+  .dt-wrap--stack .data-table--desk tr.roll-line.is-attention {
+    border-inline-start-color: var(--amber-mark);
+  }
+
+  .dt-wrap--stack .data-table--desk tr.roll-line.is-alert {
+    border-inline-start-color: var(--oxblood-mark);
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-line > td {
+    display: block;
+    inline-size: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-line > td::before {
+    display: none;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-cell--request {
+    grid-area: request;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-cell--amount {
+    grid-area: amount;
+    color: var(--ink);
+    font-weight: var(--fw-medium);
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-cell--customer {
+    grid-area: customer;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-cell--status {
+    grid-area: status;
+    justify-self: end;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-cell--created {
+    grid-area: created;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-when {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-caption);
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-when .dt-sub {
+    margin: 0;
+  }
+
+  .dt-wrap--stack .data-table--desk .roll-when .dt-sub::before {
+    content: '·';
+    margin-inline-end: var(--sp-2);
+  }
+}
+
+/* What the next step will do, said before it is pressed: the money is the one thing that cannot be taken back. */
+.desk-next {
+  max-inline-size: var(--measure);
+  margin-block: var(--sp-4) var(--sp-5);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--line-strong);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+/* In a drawer for deciding, what the customer wrote is read whole, not to its sixth line. */
+.ticket-note--whole p {
+  display: block;
+  overflow: visible;
+}

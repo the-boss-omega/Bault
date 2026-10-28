@@ -65,6 +65,15 @@ export function useOverlay(ref: RefObject<HTMLElement | null>, onEscape: () => v
     }
     panel?.addEventListener('focusin', reveal);
 
+    // A control the dialog removes takes focus with it, to the page behind the backdrop: the button that was
+    // just pressed, whose answer replaces it (Approve, once approved). The dialog takes focus back, or Tab
+    // would walk the page under it.
+    const keepFocus = new MutationObserver(() => {
+      const active = document.activeElement;
+      if (panel && isTopOverlay(token) && (!active || active === document.body)) panel.focus();
+    });
+    if (panel) keepFocus.observe(panel, { childList: true, subtree: true });
+
     function onKeyDown(event: KeyboardEvent) {
       if (!isTopOverlay(token)) return;
       if (event.key === 'Escape') {
@@ -82,6 +91,7 @@ export function useOverlay(ref: RefObject<HTMLElement | null>, onEscape: () => v
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
       panel?.removeEventListener('focusin', reveal);
+      keepFocus.disconnect();
       document.body.style.overflow = previousOverflow;
       popOverlay();
       if (opener?.isConnected) opener.focus?.();

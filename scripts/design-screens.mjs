@@ -536,12 +536,14 @@ async function visitItems(state, page, ctx) {
 }
 
 /**
- * What the management console opens: an account and an item, each in the drawer it is changed in (by the link
- * that names it, as the roll's own names are), so that what is drawn there is held to what the pages are.
+ * What the management console opens: an account, an item and a wallet request, each in the drawer it is
+ * changed in (by the link that names it, as the roll's own names are), so that what is drawn there is held to
+ * what the pages are.
  */
 async function visitAdminRecords(state, page, ctx) {
   const users = await apiCall(page, 'GET', '/admin/users');
   const items = await apiCall(page, 'GET', '/admin/items');
+  const requests = await apiCall(page, 'GET', '/admin/wallet-requests');
   const me = await apiCall(page, 'GET', '/me/profile');
   // An enrolled account that is not the one signed in: the drawer of one's own account has no reset button, and
   // the reset (its button, its confirmation, where focus goes after) is what an administrator's drawer is for.
@@ -549,6 +551,16 @@ async function visitAdminRecords(state, page, ctx) {
   const records = [
     ['users', 'user', others.find((u) => u.mfaEnabled) ?? others[0] ?? null],
     ['items', 'item', Array.isArray(items.json) ? items.json[0] : null],
+    // A request that waits for a decision, where there is one: its drawer has the steps (approve, reject) that a closed one has not.
+    [
+      'requests',
+      'request',
+      Array.isArray(requests.json)
+        ? (requests.json.find((r) => r.status === 'submitted' || r.status === 'pending_review') ??
+          requests.json[0] ??
+          null)
+        : null,
+    ],
   ];
   for (const [tab, param, record] of records) {
     if (!record) continue;

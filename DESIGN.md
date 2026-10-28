@@ -567,6 +567,31 @@ pieces. Each keeps the old markup's contracts and message keys.
   in the drawer of another enrolled account, and asked about first; when it is done, focus is in the
   drawer, not on the page behind. A name an account is flagged for is confirmed by sending it as it is,
   which is not an edit to be guarded: the backdrop still shuts the drawer.
+- **Wallet requests — a desk.** The roll is grouped by what each request needs of the person at it:
+  *Needs a decision*, *In progress*, *Closed*, in that order, one table whose column heads they share
+  (the group heads are `rowgroup` headers). Each head has its count and, for the two in hand, the money
+  in it by the kind of money (*Cash in $1,200.00*, *Cash out $500.00*): the sum a desk weighs first. What
+  is waiting is in the order it came (the longest first, as a queue is served); what is closed is the
+  latest first. A desk with nothing to decide says so, which is an answer, unless the list is filtered (a
+  group that is empty and has nothing to say is not shown), and a status the page has not heard of is
+  work in hand, not filed with what is closed. A line leads with a mark for the way the money goes (down
+  into the wallet for cash in, up and out of it for cash out; decoration, the words say it), the number
+  as the link that opens it, what it is for (the funding source, or who is to be paid), whose it is,
+  the sum, the date with how long ago while it waits (the browser's own words for it, so Hebrew has its
+  *שלשום*), and where it stands; what needs a decision has the amber on its edge, a payout that failed
+  the red. The filters are named in the open and cleared by a button that is there only when something
+  is set; a filter that leaves nothing says so and offers to clear it, and a desk that has no requests
+  says that. On a phone a request is a card (its number and its sum, whose it is and where it stands,
+  and when), not five labelled rows.
+  A request is opened by its address (`?request=`), so the way back closes it, and the keyboard goes
+  back to its line, wherever the line has moved to. The drawer is the request as a tag (the kind as its
+  kicker, whose it is as its title, the sum, everything it was written with, the customer's note and the
+  reason for a refusal read whole, where it stands and the currency in its foot), then what the next step
+  does to the money, said before it is pressed (for each status, and for no status that is unknown), and
+  the register. The steps are in the foot, the way on first and in the foil, to turn a request down in
+  the danger's red; a request that was raised by the person at the desk is offered to no one but another
+  administrator, and says so. What a step came to (done, or why it was refused) is said in the drawer,
+  where a phone shows it and a screen reader reads it out; the page keeps its line of what was done.
 
 ### Buttons (`Button`, `ButtonLink`, `IconButton`; `buttons.css`)
 One family, in one file. A button is a piece of the paper put to work, and it stands on its lower edge the
@@ -673,9 +698,11 @@ ink; what stands beside the paper on the page (the controls under a case file) i
 Drawers, confirmation dialogs and the photo lightbox share one behaviour: while it is the topmost it
 is all the keyboard reaches (Tab stays inside, Escape closes it and nothing under it), the page
 behind does not scroll, focus goes back to what opened it (or, if that is gone because the answer
-removed it, to the dialog it was opened over, so the keyboard is not left on the page behind), a field
-that takes focus is shown whole with room for its ring (the browser reveals only a text field's
-caret), and it plays its exit before it closes.
+removed it, to the dialog it was opened over, so the keyboard is not left on the page behind), a
+control that the dialog itself removes (the button that was pressed, whose answer replaces it) does not
+leave focus on the page behind it: the dialog takes it back, a field that takes focus is shown whole
+with room for its ring (the browser reveals only a text field's caret), and it plays its exit before it
+closes.
 They are drawn into `<body>`, so a transform or a clip on an ancestor can neither trap a fixed overlay
 nor cut it off, and an open one covers the window (`tests/ux/layout-in-a-browser.test.tsx` measures
 it). The photograph opens in the room: the dark a card is photographed against, the card large in its
@@ -792,11 +819,11 @@ like.
 ## 13. Not in this edition
 
 - Some of the management consoles are restyled to the kit and the statement language, not redesigned:
-  the wallet requests, the Bault store and the shelf yield chart, and the pricing coverage check, which
-  is a table because it is a check. The rest are made of the system's pieces: the accounting summary (a
-  statement on paper), the sign-in log (a statement and a register), the shelf map (aisle signs over
-  racks), pricing (a rate card), the disputes (case files), the parked messages (a register), the
-  storage fees (a statement) and the accounts and items (rolls opened in a drawer).
+  the Bault store and the shelf yield chart, and the pricing coverage check, which is a table because it
+  is a check. The rest are made of the system's pieces: the accounting summary (a statement on paper),
+  the sign-in log (a statement and a register), the shelf map (aisle signs over racks), pricing (a rate
+  card), the disputes (case files), the parked messages (a register), the storage fees (a statement),
+  the accounts and items (rolls opened in a drawer) and the wallet requests (a desk).
 - Of the forms, those that make a request or a record have their slip (section 8), and the doors are
   slips with a stub, and the warehouse's benches have their docket. The one that does not is the Bault
   store's listing, which is the kit's fields in a column.
@@ -818,11 +845,12 @@ like.
 | A rule that paints the paper or the room names its focus ring; a rule for what is drawn on paper uses a paper ink, not a colour of the theme's | `design-lint` | same |
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account and an item in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account, an item and a wallet request in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
 | The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
 | The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
 | An escrow deal and a shared parcel as slips (each fact written as it is typed, a dash for what is not known, the parcel as a tag with a line for each collector), and the question put to the assistant (a slip each way, the answer printed on its paper, the composer as paper in both themes) | `tests/ux/more-slips.test.tsx` | `pnpm test:ux` |
 | The warehouse's benches: the docket writes what is scanned and typed (the shelf read back, the pick list ticked), an Enter from a scanner goes on and then does it, the outcome is said on the docket and cleared by the next scan, a refused parcel keeps what was typed, the docket is paper in both themes, the foot does not change the docket's height, the fields have their room beside it | `tests/ux/benches.test.tsx` | `pnpm test:ux` |
+| The wallet-requests desk: the groups and their order, the money in each, a line's marks and age, a desk with nothing to decide, the named filters and what they ask the server, a request opened by its address and everything on its tag, what the next step does said for every status, the steps in the foot (the way on first, the danger last), what a step came to said in the drawer and not behind it, the keyboard kept in the dialog when the button that was pressed is removed and returned to the line that was opened (in another group by now), the roll and the drawer without a flag in both themes and both languages, a request a card on a phone, a long account number whole under its name | `tests/ux/wallet-desk.test.tsx` | `pnpm test:ux` |
 | What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
@@ -853,7 +881,8 @@ scroll reveal, journey, parallax, progress), `shared/ui/useOverlay.ts` and `useE
 sideways, and while it does it is in the tab order, with a name, so a keyboard can reach its far
 columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
 `areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`, `shared/ui/DrawerTag.tsx`,
-`shared/ui/Docket.tsx`, `areas/warehouse/Benches.tsx`, `shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
+`shared/ui/Docket.tsx`, `areas/warehouse/Benches.tsx`, `areas/admin/WalletRequestsSection.tsx`,
+`shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
 script that walks the app (`scripts/design-screens.mjs`), so that the tests can show them a planted mistake.
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px
