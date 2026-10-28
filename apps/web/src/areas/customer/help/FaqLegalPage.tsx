@@ -144,11 +144,6 @@ function AskPanel() {
 
   return (
     <Panel title={t('faq.ask.title')} subtitle={t('faq.ask.subtitle')}>
-      <p className="ask-notice" role="note">
-        <IconAsk />
-        <span>{t('faq.ask.notConnected')}</span>
-      </p>
-
       <div className="ask-log" ref={logRef} role="log" aria-live="polite" aria-label={t('faq.ask.logLabel')}>
         {turns.length === 0 ? (
           <EmptyState title={t('faq.ask.emptyTitle')} text={t('faq.ask.emptyText')} icon={<IconAsk />} />
@@ -156,16 +151,20 @@ function AskPanel() {
           <ul className="ask-turns">
             {turns.map((turn) => (
               <li key={turn.id} className="ask-turn">
-                <p className="ask-bubble ask-bubble--you">
+                <p className="ask-slip ask-slip--you">
                   <span className="ask-who">{t('faq.ask.you')}</span>
-                  {turn.question}
+                  <span className="ask-words" dir="auto">
+                    {turn.question}
+                  </span>
                 </p>
-                <p className="ask-bubble ask-bubble--bot">
+                <p className="ask-slip ask-slip--bot">
                   <span className="ask-who">{t('faq.ask.assistant')}</span>
                   {turn.answer === null ? (
-                    <span className="hint">{t('faq.ask.thinking')}</span>
+                    <span className="ask-words">{t('faq.ask.thinking')}</span>
                   ) : (
-                    <code dir="ltr">{turn.answer}</code>
+                    <code className="ask-words" dir="ltr">
+                      {turn.answer}
+                    </code>
                   )}
                 </p>
               </li>
@@ -174,20 +173,30 @@ function AskPanel() {
         )}
       </div>
 
-      <form className="ask-form" onSubmit={submit}>
-        <label className="field">
-          <span className="sr-only">{t('faq.ask.inputLabel')}</span>
+      {/* The question is written on a slip of its own, and the slip says what an answer is worth before it is sent. */}
+      <form className="ask-composer" onSubmit={submit}>
+        <label className="ask-composer-label" htmlFor="ask-question">
+          {t('faq.ask.inputLabel')}
+        </label>
+        <div className="ask-composer-row">
           <input
+            id="ask-question"
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={t('faq.ask.placeholder')}
-            aria-label={t('faq.ask.inputLabel')}
+            dir="auto"
+            autoComplete="off"
+            aria-describedby="ask-question-note"
           />
-        </label>
-        <Button type="submit" variant="primary" disabled={!draft.trim() || busy}>
-          {t('faq.ask.send')}
-        </Button>
+          <Button type="submit" variant="primary" disabled={!draft.trim() || busy}>
+            {t('faq.ask.send')}
+          </Button>
+        </div>
+        <p className="ask-composer-note" id="ask-question-note">
+          <IconAsk />
+          <span>{t('faq.ask.notConnected')}</span>
+        </p>
       </form>
     </Panel>
   );

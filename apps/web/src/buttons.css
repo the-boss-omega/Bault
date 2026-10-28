@@ -571,7 +571,8 @@
   .lightbox-plate,
   .lp-colophon,
   .lp-paper,
-  .auth-card
+  .auth-card,
+  .ask-composer
 ) {
   --btn-primary: var(--paper-ink);
   --btn-primary-ink: var(--paper-bright);

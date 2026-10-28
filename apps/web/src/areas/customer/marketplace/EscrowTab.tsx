@@ -83,6 +83,23 @@ export function EscrowTab({ meId }: { meId: string | null }) {
     !belowFloor &&
     (external ? outsideName.trim() !== '' && outsideEmail.trim() !== '' : username.trim() !== '');
 
+  // What has not been typed yet is a dash, never a value made up.
+  const quiet = <span className="drawer-tag-quiet">—</span>;
+  const otherSide = external ? (
+    outsideName.trim() || outsideEmail.trim() ? (
+      <>
+        {outsideName.trim() && <bdi dir="auto">{outsideName.trim()}</bdi>}{' '}
+        {outsideEmail.trim() && <bdi dir="ltr">({outsideEmail.trim()})</bdi>}
+      </>
+    ) : (
+      quiet
+    )
+  ) : username.trim() ? (
+    <bdi dir="ltr">@{username.trim().replace(/^@/, '')}</bdi>
+  ) : (
+    quiet
+  );
+
   async function raise() {
     setBusy(true);
     try {
@@ -132,65 +149,114 @@ export function EscrowTab({ meId }: { meId: string | null }) {
       </Panel>
 
       <Panel title={t('esc.raise')} subtitle={t('esc.raiseSubtitle')}>
-        <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-          <label className="field">
-            <span className="field-label">{t('esc.yourSide')}</span>
-            <select value={role} onChange={(e) => setRole(e.target.value as 'buyer' | 'seller')}>
-              <option value="seller">{t('esc.side.seller')}</option>
-              <option value="buyer">{t('esc.side.buyer')}</option>
-            </select>
-          </label>
-
-          <label className="check">
-            <input type="checkbox" checked={external} onChange={(e) => setExternal(e.target.checked)} />
-            {t('esc.otherIsExternal')}
-          </label>
-
-          {external ? (
-            <>
-              <label className="field">
-                <span className="field-label">{t('esc.theirName')}</span>
-                <input value={outsideName} onChange={(e) => setOutsideName(e.target.value)} />
-              </label>
-              <Field label={t('esc.theirEmail')} hint={t('esc.externalHint')}>
-                <input value={outsideEmail} dir="ltr" onChange={(e) => setOutsideEmail(e.target.value)} />
-              </Field>
-            </>
-          ) : (
+        <div className="request-form">
+          <div className="stack stack--tight request-form-fields">
             <label className="field">
-              <span className="field-label">{t('esc.theirUsername')}</span>
-              <input value={username} dir="ltr" onChange={(e) => setUsername(e.target.value)} />
+              <span className="field-label">{t('esc.yourSide')}</span>
+              <select value={role} onChange={(e) => setRole(e.target.value as 'buyer' | 'seller')}>
+                <option value="seller">{t('esc.side.seller')}</option>
+                <option value="buyer">{t('esc.side.buyer')}</option>
+              </select>
             </label>
-          )}
 
-          <Field label={t('esc.what')} hint={t('esc.whatHint')}>
-            <input value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
-          </Field>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={external}
+                onChange={(e) => setExternal(e.target.checked)}
+              />
+              {t('esc.otherIsExternal')}
+            </label>
 
-          <MoneyField
-            label={t('esc.value')}
-            value={value}
-            onChange={setValue}
-            hint={
-              belowFloor && terms
-                ? t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })
-                : feePreview !== null
-                  ? t('esc.feePreview', { amount: formatUsd(feePreview) })
-                  : undefined
-            }
-          />
+            {external ? (
+              <>
+                <label className="field">
+                  <span className="field-label">{t('esc.theirName')}</span>
+                  <input
+                    value={outsideName}
+                    dir="auto"
+                    onChange={(e) => setOutsideName(e.target.value)}
+                  />
+                </label>
+                <Field label={t('esc.theirEmail')} hint={t('esc.externalHint')}>
+                  <input
+                    value={outsideEmail}
+                    dir="ltr"
+                    onChange={(e) => setOutsideEmail(e.target.value)}
+                  />
+                </Field>
+              </>
+            ) : (
+              <label className="field">
+                <span className="field-label">{t('esc.theirUsername')}</span>
+                <input value={username} dir="ltr" onChange={(e) => setUsername(e.target.value)} />
+              </label>
+            )}
 
-          <Field label={t('esc.settlement')} hint={t('esc.settlementHint')}>
-            <select
-              value={settlement}
-              onChange={(e) => setSettlement(e.target.value as 'buyer_vault' | 'ship_to_buyer')}
-            >
-              <option value="buyer_vault">{t('esc.settlement.vault')}</option>
-              <option value="ship_to_buyer">{t('esc.settlement.ship')}</option>
-            </select>
-          </Field>
+            <Field label={t('esc.what')} hint={t('esc.whatHint')}>
+              <input
+                value={description}
+                maxLength={500}
+                dir="auto"
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </Field>
 
-          <div className="row">
+            <MoneyField
+              label={t('esc.value')}
+              value={value}
+              onChange={setValue}
+              hint={
+                belowFloor && terms
+                  ? t('esc.belowFloor', { floor: formatUsd(terms.minimumValueMinor) })
+                  : feePreview !== null
+                    ? t('esc.feePreview', { amount: formatUsd(feePreview) })
+                    : undefined
+              }
+            />
+
+            <Field label={t('esc.settlement')} hint={t('esc.settlementHint')}>
+              <select
+                value={settlement}
+                onChange={(e) => setSettlement(e.target.value as 'buyer_vault' | 'ship_to_buyer')}
+              >
+                <option value="buyer_vault">{t('esc.settlement.vault')}</option>
+                <option value="ship_to_buyer">{t('esc.settlement.ship')}</option>
+              </select>
+            </Field>
+          </div>
+
+          {/* The deal as the other side will read it: the price, who is who, what it is for, what it costs and how it ends. */}
+          <aside className="request-slip">
+            <DrawerTag
+              kicker={t('esc.value')}
+              amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
+              lines={[
+                {
+                  label: t('esc.yourSide'),
+                  value: t(role === 'seller' ? 'esc.side.seller' : 'esc.side.buyer'),
+                },
+                { label: t('esc.otherSide'), value: otherSide },
+                {
+                  label: t('esc.what'),
+                  value: description.trim() ? <bdi dir="auto">{description.trim()}</bdi> : quiet,
+                },
+                {
+                  label: t('esc.slip.fee'),
+                  value: feePreview !== null ? formatUsd(feePreview) : quiet,
+                },
+                {
+                  label: t('esc.slip.settlement'),
+                  value: t(
+                    settlement === 'buyer_vault' ? 'esc.settlement.vault' : 'esc.settlement.ship',
+                  ),
+                },
+              ]}
+              note={t('esc.feeOnYou')}
+            />
+          </aside>
+
+          <div className="row request-form-actions">
             <Button
               variant="primary"
               icon={<IconUsers />}
@@ -199,7 +265,6 @@ export function EscrowTab({ meId }: { meId: string | null }) {
             >
               {t('esc.raiseAction')}
             </Button>
-            <span className="field-hint">{t('esc.feeOnYou')}</span>
           </div>
         </div>
       </Panel>

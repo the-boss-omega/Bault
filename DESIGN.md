@@ -451,8 +451,8 @@ pieces. Each keeps the old markup's contracts and message keys.
   not been written is asked for in the quieter ink, as the name of the field, and a sum not yet typed is a
   dash, never a zero or any other value made up (a listing for no price is not "$0.00 · Active"); a label
   written for a list (`Email:`) loses its colon on a tag, which has a leader. The forms that have no slip
-  are the ones in the warehouse's benches, and a few that are still the kit's fields in a column:
-  the Bault store's listing, raising an escrow deal and a shared parcel's group. Whatever a person
+  are the ones in the warehouse's benches and the Bault store's listing, which are still the kit's
+  fields in a column. Whatever a person
   types as free text (a name, a subject, a message, an address) takes the direction of what is typed
   (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
 - **What can be asked for on a card — a menu and a slip.** The item's drawer lists what the warehouse can
@@ -469,6 +469,24 @@ pieces. Each keeps the old markup's contracts and message keys.
   is wanted as the slip's title (in the quieter ink until it is written), how it is put and that asking is
   free. The areas of an inspection are tiles (`choice-tiles`), the checkbox still the control: a chosen
   one has the edge of a button that is down, and the ring goes round the tile.
+- **An escrow deal being opened, a shared parcel being opened or joined — the deal and the parcel as they
+  will be read.** The deal is its agreed price (a dash until it is typed), and under it your side, who
+  the other side is (an account by its username, or a person by name and address), what is being sold, what
+  the fee will be, how it ends, and under a dashed rule that the fee is charged to whoever opens it. A parcel
+  being opened is the address it goes to as the slip's title, the request that starts it, the notes, that
+  the person opening it pays, and that it will stand as *Forming*; one being joined is the code as it is
+  typed, the request that would be brought and where it goes. The parcels a collector is in are tags in a
+  row (`tag-grid`, a `DrawerTag` each, an article and not a landmark): its number, who it is for, where it
+  goes, a line for each collector in it (their name, whether they pay, where their request stands, its
+  number, items and weight), and where the parcel stands; what can be done to it (close it to new members,
+  cancel it) is under the tag, not on it.
+- **The question put to the assistant — a slip for what was asked, a slip for what came back.** The log
+  (still a `role="log"`) is a slip for each question, set at the end of the line, and for each answer a
+  slip with foil along its top, set at the start (it comes from the house); the answer is printed on the
+  paper, not in the pill a code is elsewhere. The question is written on the doors' slip (paper in both
+  themes, the paper's field, the one button, with the person's own direction), and under a dashed rule
+  it says what an answer is worth (the assistant is not connected, and every answer is a placeholder),
+  which the field is described by.
 - **The doors — a slip with a stub.** Signing in and up, asking for a new password and setting it, the
   second factor's code, the link that was sent to confirm an address: each is a slip of paper in both
   themes (`AuthCard`). Foil runs along its top edge; over the heading is a kicker that says what the slip
@@ -491,6 +509,9 @@ pieces. Each keeps the old markup's contracts and message keys.
   room of a form. A tag that is one of a list is an article, named by its kicker, not a landmark (`item`
   on `DrawerTag`): forty disputes are not forty regions of the page. A tag on its own is a region.
 - **Security — cards and a sheet.** The password and the second factor are a half of the page each. The
+  password is a slip over its fields that checks what is typed against the three things a new one has
+  to be (long enough, not the current one, the same as its confirmation), each *Met* or *Not yet*, and
+  says when it is ready; nothing that is typed is ever written on it. The
   second factor says where it stands on a card (on, what it asks for, what is left of the way back in);
   the key to scan is a card, the QR in its own white label (printed black on white, whichever way the
   page is) and the key to type; the recovery codes are a sheet of paper that is a heading of its own,
@@ -756,8 +777,8 @@ like.
   racks), pricing (a rate card), the disputes (case files), the parked messages (a register), the
   storage fees (a statement) and the accounts and items (rolls opened in a drawer).
 - Of the forms, those that make a request or a record have their slip (section 8), and the doors are
-  slips with a stub. The ones that do not are the kit's fields in a column: changing the password, the
-  warehouse's benches, the Bault store's listing, raising an escrow deal and a shared parcel's group.
+  slips with a stub. The ones that do not are the kit's fields in a column: the warehouse's benches and
+  the Bault store's listing.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 
@@ -779,6 +800,7 @@ like.
 | WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account and an item in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
 | The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
 | The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
+| An escrow deal and a shared parcel as slips (each fact written as it is typed, a dash for what is not known, the parcel as a tag with a line for each collector), and the question put to the assistant (a slip each way, the answer printed on its paper, the composer as paper in both themes) | `tests/ux/more-slips.test.tsx` | `pnpm test:ux` |
 | What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
