@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -314,7 +314,8 @@ export class InventoryService {
         holdFlag: item.holdFlag,
       })
       .from(item)
-      .where(eq(item.binId, binId))
+      // A lot that has been split is not on the shelf any more (its pieces are): the count leaves it out, and so does this.
+      .where(and(eq(item.binId, binId), eq(item.lotBroken, false)))
       .orderBy(item.serialNumber);
     return { bin: shelf, items };
   }

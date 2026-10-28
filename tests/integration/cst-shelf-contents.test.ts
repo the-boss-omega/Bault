@@ -77,6 +77,34 @@ describe('CST what is on a shelf, read only', () => {
     );
   });
 
+  it('leaves out a lot that has been split, as the count does: its pieces are on the shelf, it is not', async () => {
+    const lot = await intakeFor(operator, SEED.collector, {
+      typeClass: 'sealed_box',
+      isLot: true,
+      lotSize: 3,
+      description: 'Shelf contents lot',
+    });
+    const countOf = async () =>
+      ((await operator.get('/custody/bins')).body as { id: string; itemCount: number }[]).find(
+        (b) => b.id === lot.binId,
+      )!.itemCount;
+    const listOf = async () =>
+      ((await operator.get(`/custody/bins/${lot.binId}/items`)).body as Shelf).items;
+
+    const before = await listOf();
+    expect(before.some((i) => i.id === lot.id)).toBe(true);
+    expect(before.length).toBe(await countOf());
+
+    const broken = await operator.post(`/intake/items/${lot.id}/break-lot`);
+    expect(broken.status).toBeLessThan(300);
+
+    const after = await listOf();
+    // Three pieces came on to the shelf and the lot went off it, in the list as in the count.
+    expect(after.some((i) => i.id === lot.id)).toBe(false);
+    expect(after.length).toBe(before.length - 1 + 3);
+    expect(after.length).toBe(await countOf());
+  });
+
   it('lists nothing for a shelf with nothing on it, and says whose shelf it is', async () => {
     const bins = (await operator.get('/custody/bins')).body as { id: string; itemCount: number }[];
     const empty = bins.find((b) => b.itemCount === 0);
