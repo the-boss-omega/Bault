@@ -6,7 +6,6 @@ import { BarcodePrintButton } from '../../shared/Barcode';
 import { useI18n } from '../../shared/i18n';
 import type { MessageKey } from '../../shared/i18n';
 import { stateLabel } from '../../shared/itemTimeline';
-import { NAME_PART_MAX, isValidNamePart, normalizeNamePart } from '../../shared/names';
 import { useNavigation, useRoute } from '../../shared/routing';
 import {
   Button,
@@ -15,35 +14,20 @@ import {
   ErrorState,
   Panel,
   SkeletonTable,
-  StatusBadge,
   SuccessNote,
   TabPanel,
-  type StatusTone,
 } from '../../shared/ui/primitives';
-import { IconBox, IconUsers } from '../../shared/ui/icons';
+import { IconBox } from '../../shared/ui/icons';
 import { WalletRequestsSection } from './WalletRequestsSection';
 import { HouseStoreSection } from './HouseStoreSection';
 import { SignInsSection } from './SignInsSection';
 import { AccountingSection } from './AccountingSection';
 import { PricingSection } from './PricingSection';
 import { DisputesSection } from './DisputesSection';
+import { UsersSection, type AdminUser } from './UsersSection';
 import { StorageFeesSection } from './StorageFeesSection';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
 import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
-
-interface AdminUser {
-  id: string;
-  email: string;
-  username: string;
-  firstName: string | null;
-  lastName: string | null;
-  nameReviewRequired: boolean;
-  role: string;
-  status: string;
-  autoSuspended: boolean;
-  intakeId: string | null;
-  mfaEnabled: boolean;
-}
 
 interface AdminItem {
   id: string;
@@ -59,16 +43,7 @@ interface AdminItem {
   ownerEmail: string | null;
 }
 
-const ROLES = ['user', 'warehouse_operator', 'admin'];
-const STATUSES = ['pending', 'active', 'suspended', 'closed'];
 const STATES = ['received', 'stored', 'listed', 'on-hold', 'sold', 'shipped', 'donated', 'consigned'];
-
-const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
-  active: 'success',
-  pending: 'warning',
-  suspended: 'error',
-  closed: 'neutral',
-};
 
 const TABS = [
   'yield',
@@ -181,43 +156,14 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
 
       {section === 'users' && (
         <TabPanel tab="users">
-          <Panel
-            title={t('admin.users.heading', { count: users?.length ?? 0 })}
-            subtitle={t('admin.users.subtitle')}
-            flush
-          >
-            {users === null ? (
-              <SkeletonTable rows={5} columns={5} />
-            ) : users.length === 0 ? (
-              <EmptyState title={t('admin.users.empty')} icon={<IconUsers />} />
-            ) : (
-              <div className="dt-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('admin.users.col.email')}</th>
-                      <th scope="col">{t('admin.users.col.username')}</th>
-                      <th scope="col">{t('admin.users.col.name')}</th>
-                      <th scope="col">{t('admin.users.col.role')}</th>
-                      <th scope="col">{t('admin.col.status')}</th>
-                      <th scope="col" className="td-tight" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <UserRow
-                        key={u.id}
-                        user={u}
-                        onSaved={setMessage}
-                        onError={setError}
-                        onResetMfa={u.mfaEnabled && u.id !== currentUserId ? () => setResetting(u) : undefined}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
+          <UsersSection
+            users={users}
+            currentUserId={currentUserId}
+            onChanged={(saved) => setUsers((list) => list?.map((u) => (u.id === saved.id ? saved : u)) ?? list)}
+            onSaved={setMessage}
+            onError={setError}
+            onResetMfa={setResetting}
+          />
         </TabPanel>
       )}
 
@@ -331,174 +277,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
         </TabPanel>
       )}
     </>
-  );
-}
-
-function UserRow({
-  user,
-  onSaved,
-  onError,
-  onResetMfa,
-}: {
-  user: AdminUser;
-  onSaved: (m: string) => void;
-  onError: (m: string) => void;
-  onResetMfa?: () => void;
-}) {
-  const { t } = useI18n();
-  const [firstName, setFirstName] = useState(user.firstName ?? '');
-  const [lastName, setLastName] = useState(user.lastName ?? '');
-  const [role, setRole] = useState(user.role);
-  const [status, setStatus] = useState(user.status);
-  const [saved, setSaved] = useState({
-    firstName: user.firstName ?? '',
-    lastName: user.lastName ?? '',
-    role: user.role,
-    status: user.status,
-    autoSuspended: user.autoSuspended,
-    nameReviewRequired: user.nameReviewRequired,
-  });
-
-  const namesOk =
-    isValidNamePart(normalizeNamePart(firstName)) &&
-    (lastName.trim() === '' || isValidNamePart(normalizeNamePart(lastName)));
-
-  const changes: Partial<Record<'firstName' | 'lastName' | 'role' | 'status', string>> = {};
-  const confirmName = saved.nameReviewRequired && namesOk;
-  if (confirmName || normalizeNamePart(firstName) !== saved.firstName) changes.firstName = normalizeNamePart(firstName);
-  if (lastName.trim() && (confirmName || normalizeNamePart(lastName) !== saved.lastName))
-    changes.lastName = normalizeNamePart(lastName);
-  if (role !== saved.role) changes.role = role;
-  if (status !== saved.status) changes.status = status;
-  const dirty = Object.keys(changes).length > 0;
-
-  async function send(sent: typeof changes) {
-    try {
-      const updated = await api.patch<Partial<AdminUser> | null>(`/admin/users/${user.id}`, sent);
-      setSaved((s) => ({
-        ...s,
-        ...sent,
-        autoSuspended:
-          typeof updated?.autoSuspended === 'boolean' ? updated.autoSuspended : sent.status ? false : s.autoSuspended,
-        nameReviewRequired:
-          typeof updated?.nameReviewRequired === 'boolean'
-            ? updated.nameReviewRequired
-            : sent.firstName !== undefined || sent.lastName !== undefined
-              ? false
-              : s.nameReviewRequired,
-      }));
-      onSaved(t('admin.users.saved', { email: user.email }));
-    } catch (e) {
-      onError((e as Error).message);
-    }
-  }
-
-  async function save() {
-    if (dirty) await send({ ...changes });
-  }
-
-  async function keepSuspended() {
-    setStatus('suspended');
-    await send({ status: 'suspended' });
-  }
-
-  return (
-    <tr>
-      <td className="dt-primary">
-        <bdi dir="ltr">{user.email}</bdi>
-        {user.intakeId && (
-          <span className="dt-sub" dir="ltr" title={t('admin.users.legacyIntakeIdTitle')}>
-            {user.intakeId}
-          </span>
-        )}
-      </td>
-      <td>
-        <code dir="ltr">{user.username}</code>
-      </td>
-      <td>
-        <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <input
-            value={firstName}
-            aria-label={t('auth.firstName')}
-            placeholder={t('auth.firstName')}
-            maxLength={NAME_PART_MAX}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
-          <input
-            value={lastName}
-            aria-label={t('auth.lastName')}
-            placeholder={t('auth.lastName')}
-            maxLength={NAME_PART_MAX}
-            onChange={(e) => setLastName(e.target.value)}
-          />
-        </div>
-        {saved.nameReviewRequired && (
-          <span className="dt-sub">{t('admin.users.nameReviewRequired')}</span>
-        )}
-      </td>
-      <td>
-        <select value={role} aria-label={t('admin.users.col.role')} onChange={(e) => setRole(e.target.value)}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {t(`role.${r}` as MessageKey)}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <StatusBadge tone={ACCOUNT_STATUS_TONE[saved.status] ?? 'neutral'}>
-            {t(`account.status.${saved.status}` as MessageKey)}
-          </StatusBadge>
-          {user.mfaEnabled && (
-            <span title={t('admin.users.mfaOnTitle')}>
-              <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
-            </span>
-          )}
-          <select
-            value={status}
-            aria-label={t('admin.col.status')}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t(`account.status.${s}` as MessageKey)}
-              </option>
-            ))}
-          </select>
-        </div>
-        {saved.status === 'suspended' && saved.autoSuspended && (
-          <>
-            <span className="dt-sub">{t('admin.users.autoSuspended')}</span>
-            <Button
-              size="sm"
-              variant="secondary"
-              aria-label={t('admin.users.keepSuspendedLabel', { email: user.email })}
-              onClick={() => void keepSuspended()}
-            >
-              {t('admin.users.keepSuspended')}
-            </Button>
-          </>
-        )}
-      </td>
-      <td className="td-tight">
-        <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'nowrap' }}>
-          <Button size="sm" variant={dirty ? 'gold' : 'secondary'} disabled={!namesOk || !dirty} onClick={save}>
-            {t('admin.action.save')}
-          </Button>
-          {onResetMfa && (
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label={t('admin.users.mfaResetLabel', { email: user.email })}
-              onClick={onResetMfa}
-            >
-              {t('admin.users.mfaReset')}
-            </Button>
-          )}
-        </div>
-      </td>
-    </tr>
   );
 }
 

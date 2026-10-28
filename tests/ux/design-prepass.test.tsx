@@ -270,7 +270,7 @@ describe('the console names roles, account states and item states in words', () 
     window.location.hash = '#/admin/users';
     get.mockImplementation(async (path: string) => (path === '/admin/users' ? USERS : []));
     renderIn(<AdminConsole currentUserId="me" />);
-    await screen.findByDisplayValue('Hermon');
+    await screen.findByRole('button', { name: 'Hermon B' });
     const text = document.body.textContent ?? '';
     expect(text).not.toMatch(/warehouse_operator|suspended|pending|closed\b/);
   });

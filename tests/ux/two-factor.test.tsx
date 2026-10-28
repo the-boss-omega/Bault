@@ -253,24 +253,39 @@ function adminApi(parked: unknown[] = []) {
 }
 
 describe("resetting somebody else's second factor", () => {
-  it('is offered for another enrolled account, never for your own, and asks first', async () => {
-    const user = userEvent.setup();
+  /** An account is opened by a link that names it, as the roll's names do. */
+  async function openAccount(id: string) {
     adminApi();
-    window.location.hash = '#/admin/users';
+    window.location.hash = `#/admin/users?user=${id}`;
     renderIn(<AdminConsole currentUserId="me" />);
+    return screen.findByRole('dialog');
+  }
 
-    const buttons = await screen.findAllByRole('button', { name: /reset two-factor/i });
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0]!.closest('tr')).toHaveTextContent('hermon@bault.dev');
+  it('is offered for another enrolled account, and asks first', async () => {
+    const user = userEvent.setup();
+    const drawer = await openAccount('u2');
+    expect(drawer).toHaveTextContent('hermon@bault.dev');
 
     post.mockResolvedValueOnce({ status: 'mfa_reset', sessionsEnded: 2 });
-    await user.click(buttons[0]!);
-    const dialog = await screen.findByRole('dialog');
+    await user.click(within(drawer).getByRole('button', { name: /reset two-factor/i }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset two-factor sign-in' });
     expect(dialog).toHaveTextContent(/hermon@bault\.dev/);
     expect(post).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole('button', { name: /^reset$/i }));
     expect(post).toHaveBeenCalledWith('/admin/users/u2/mfa/reset');
     expect(await screen.findByText(/sessions ended: 2/i)).toBeInTheDocument();
+  });
+
+  it('is never offered for your own account', async () => {
+    const drawer = await openAccount('me');
+    expect(drawer).toHaveTextContent('eldar@bault.dev');
+    expect(within(drawer).queryByRole('button', { name: /reset two-factor/i })).toBeNull();
+  });
+
+  it('is not offered for an account that has no second factor to reset', async () => {
+    const drawer = await openAccount('u3');
+    expect(drawer).toHaveTextContent('red@bault.dev');
+    expect(within(drawer).queryByRole('button', { name: /reset two-factor/i })).toBeNull();
   });
 });
 

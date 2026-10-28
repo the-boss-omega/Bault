@@ -445,20 +445,41 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       mfaEnabled,
     });
 
+    const item = (id: string) => ({
+      id,
+      serialNumber: `SN-${id}`,
+      barcode: `BLT-${id}`,
+      typeClass: 'trading_card',
+      description: `2021 Evolving Skies Rayquaza VMAX ${id}`,
+      conditionGrade: null,
+      lifecycleState: 'stored',
+      holdFlag: false,
+      binId: null,
+      ownerId: 'u1',
+      ownerEmail: 'eldar@bault.dev',
+    });
+
+    // The accounts are a roll of links; the items are a grid of fields. Each has controls at the edge of a table that scrolls.
+    for (const tab of ['users', 'items'] as const) {
     for (const locale of ['en', 'he'] as const) {
       for (const width of [1440, 390]) {
-        it(`shows a control whole with its ring wherever the table has scrolled to, ${locale}, ${width}px`, async () => {
+        it(`shows a control whole with its ring wherever the ${tab} table has scrolled to, ${locale}, ${width}px`, async () => {
           localStorage.setItem('bault.locale', locale);
-          window.location.hash = '#/admin/users';
+          window.location.hash = `#/admin/${tab}`;
           vi.mocked(api.get).mockImplementation(async (path: string) =>
-            path === '/admin/users' ? [user('u1', 'eldar', true), user('u2', 'hermon', true), user('u3', 'red', false)] : [],
+            path === '/admin/users'
+              ? [user('u1', 'eldar', true), user('u2', 'hermon', true), user('u3', 'red', false)]
+              : path === '/admin/items'
+                ? [item('i1'), item('i2')]
+                : [],
           );
           render(
             <I18nProvider>
               <AdminConsole currentUserId="me" />
             </I18nProvider>,
           );
-          await screen.findByDisplayValue('Eldar');
+          if (tab === 'users') await screen.findByRole('button', { name: 'Eldar Cohen' });
+          else await screen.findByDisplayValue('2021 Evolving Skies Rayquaza VMAX i1');
           const page = await inBrowser(width, locale);
           // What the page does when a control takes focus (the scrollable-regions hook asks for it to be shown
           // whole), and then: is its ring, which is drawn outside it, in the table's room?
@@ -481,6 +502,7 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
           await page.close();
         });
       }
+    }
     }
   });
   describe('the sign-in log', () => {

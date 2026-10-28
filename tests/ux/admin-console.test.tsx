@@ -172,12 +172,17 @@ const DEBTOR = {
   mfaEnabled: false,
 };
 
-describe('saving a user row', () => {
-  it('sends only the name when only the name changed, not the status the row was showing', async () => {
+describe('saving an account', () => {
+  /** An account is opened to be changed: by its name in the roll, or by a link that names it. */
+  const openAccount = (id: string) => {
+    window.location.hash = `#/admin/users?user=${id}`;
+  };
+
+  it('sends only the name when only the name changed, not the status the account was showing', async () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR] });
     patch.mockResolvedValue({ ...DEBTOR, firstName: 'Dana' });
-    window.location.hash = '#/admin/users';
+    openAccount('u1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     const first = await screen.findByRole('textbox', { name: 'First name' });
@@ -193,7 +198,7 @@ describe('saving a user row', () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR] });
     patch.mockResolvedValue({ ...DEBTOR, status: 'active' });
-    window.location.hash = '#/admin/users';
+    openAccount('u1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Status' }), 'active');
@@ -207,7 +212,7 @@ describe('saving a user row', () => {
     const user = userEvent.setup();
     consoleApi({ '/admin/users': [DEBTOR] });
     patch.mockResolvedValue({ ...DEBTOR, autoSuspended: false });
-    window.location.hash = '#/admin/users';
+    openAccount('u1');
     renderIn(<AdminConsole currentUserId="me" />);
 
     expect(await screen.findByText(/suspended by the debt sweep/i)).toBeInTheDocument();
@@ -234,10 +239,11 @@ describe('saving a user row', () => {
     };
     consoleApi({ '/admin/users': [flagged] });
     patch.mockResolvedValue({ ...flagged, nameReviewRequired: false });
-    window.location.hash = '#/admin/users';
+    openAccount('u5');
     renderIn(<AdminConsole currentUserId="me" />);
 
-    expect(await screen.findByText(/needs review/i)).toBeInTheDocument();
+    // It is said in the roll, and again where the name is.
+    expect((await screen.findAllByText(/needs review/i)).length).toBeGreaterThanOrEqual(2);
     const save = screen.getByRole('button', { name: 'Save' });
     expect(save).toBeEnabled();
     await user.click(save);
@@ -247,13 +253,12 @@ describe('saving a user row', () => {
     await waitFor(() => expect(screen.queryByText(/needs review/i)).not.toBeInTheDocument());
   });
 
-  it('keeps Save disabled on a row that is not flagged and has nothing changed', async () => {
+  it('keeps Save disabled on an account that is not flagged and has nothing changed', async () => {
     consoleApi({ '/admin/users': [{ ...DEBTOR, id: 'u6', status: 'active', autoSuspended: false }] });
-    window.location.hash = '#/admin/users';
+    openAccount('u6');
     renderIn(<AdminConsole currentUserId="me" />);
 
-    await screen.findByText('debtor@bault.dev');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it("offers it only for the sweep's suspension, not an administrator's or an active account", async () => {
@@ -263,12 +268,14 @@ describe('saving a user row', () => {
         { ...DEBTOR, id: 'u4', email: 'fine@bault.dev', username: 'fine', status: 'active', autoSuspended: false },
       ],
     });
-    window.location.hash = '#/admin/users';
-    renderIn(<AdminConsole currentUserId="me" />);
-
-    await screen.findByText('held@bault.dev');
-    expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
+    for (const id of ['u3', 'u4']) {
+      openAccount(id);
+      const { unmount } = renderIn(<AdminConsole currentUserId="me" />);
+      await screen.findByRole('button', { name: 'Save' });
+      expect(screen.queryByText(/suspended by the debt sweep/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /keep .* suspended/i })).not.toBeInTheDocument();
+      unmount();
+    }
   });
 });
 
