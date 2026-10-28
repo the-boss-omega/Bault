@@ -789,8 +789,10 @@ stands on in the drawer; `.offer` is a membership tier's card.
   edge). What a sender wrote (a parcel's contents) sets its own direction (`unicode-bidi: plaintext`).
 - **A date is not an island.** A locale-formatted date reads in the page's direction (`.date`, which
   is `unicode-bidi: plaintext`), so its day, month and year keep the order the language gives them; a
-  `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month")
-  is isolated where it stands (`isolateLtr()` in `money.ts`), so the phrase keeps its own order. A
+  `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month", a
+  weight, `10 g`, in the total of a parcel) is isolated where it stands (`isolateLtr()` in `money.ts`), so
+  the phrase keeps its own order: in a right-to-left line the space between a figure and its unit takes
+  the line's direction, and "10 g" is drawn "g 10". A
   cell that holds only a pill, a date or a code is set `unicode-bidi: normal`, or it would fall back
   to left to right and hang from the wrong edge. A select shows the chosen option the way that option
   reads (`option { unicode-bidi: plaintext }`), so an English address on a Hebrew page starts at its
@@ -884,7 +886,7 @@ like.
 | Physical properties (including `float`, `clear`, four-value shorthands that name a side, corners that are not mirrored); `left`/`right` keywords, angles and horizontal moves that point one way in both languages; any `[dir]` / `:dir()` outside `theme.css`; a block that takes its own text's direction and is aligned to `start` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
 | Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid, with no `em` that is not declared (section 6); a font size in `index.css` is a step of the scale or relative (section 3) | `design-lint` | same |
-| In a component: no physical utility class or inline style, no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
+| In a component: no physical utility class or inline style, no colour written into a style (the stylesheets name every colour; a glyph made white for a bar that was dark was gone on the light one), no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring; a rule for what is drawn on paper uses a paper ink, not a colour of the theme's | `design-lint` | same |
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
