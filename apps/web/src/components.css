@@ -435,6 +435,34 @@ input[type='radio'] {
   text-transform: none;
 }
 
+/* ---- A field a scanner fills ----
+   A serial or a shelf is a code, read left to right in the code's face; the glyph at its start says what fills it. */
+
+.scan-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  direction: ltr;
+}
+
+.scan-input svg {
+  position: absolute;
+  inset-inline-start: 12px;
+  inline-size: 18px;
+  block-size: 18px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.scan-input input {
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding-inline-start: 40px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  letter-spacing: 0.04em;
+}
+
 /* ---- Choosing cards ----
    A list of cards to choose among is the cards: each in its case with its serial
    and name under it, and choosing one is pulling it from the shelf, so it gets a

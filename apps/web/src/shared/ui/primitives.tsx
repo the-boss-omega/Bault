@@ -5,9 +5,10 @@ import type {
   InputHTMLAttributes,
   ReactElement,
   ReactNode,
+  Ref,
 } from 'react';
 import { CountUp } from './CountUp';
-import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
+import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox, IconScan } from './icons';
 import { scrollBehavior } from './motionPreference';
 
 /**
@@ -184,6 +185,76 @@ export function MoneyField({
           aria-invalid={error ? true : undefined}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+      {error ? (
+        <span className="field-error" id={`${controlId}-error`} role="alert">
+          <bdi dir="auto">{error}</bdi>
+        </span>
+      ) : hint ? (
+        <span className="field-hint" id={`${controlId}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A field that a scanner fills: a serial, a shelf, a parcel. What is read is a code, so it is set in the code's face,
+ * left to right, with the glyph of what reads it at its start. A scanner ends what it reads with Enter, and `onScan`
+ * is what that does (go to the next field; do the job): without it, Enter is left to the form.
+ */
+export function ScanField({
+  label,
+  hint,
+  error,
+  value,
+  onChange,
+  onScan,
+  inputRef,
+  id,
+  ...rest
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  onScan?: () => void;
+  inputRef?: Ref<HTMLInputElement>;
+  id?: string;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'id' | 'ref'>) {
+  const generated = useId();
+  const controlId = id ?? generated;
+  const describedBy = error ? `${controlId}-error` : hint ? `${controlId}-hint` : undefined;
+
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={controlId}>
+        {label}
+      </label>
+      <div className="scan-input">
+        <IconScan />
+        <input
+          {...rest}
+          ref={inputRef}
+          id={controlId}
+          dir="ltr"
+          autoComplete="off"
+          spellCheck={false}
+          enterKeyHint={onScan ? 'next' : undefined}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            rest.onKeyDown?.(e);
+            if (e.key === 'Enter' && onScan && !e.defaultPrevented) {
+              e.preventDefault();
+              onScan();
+            }
+          }}
         />
       </div>
       {error ? (

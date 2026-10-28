@@ -451,8 +451,7 @@ pieces. Each keeps the old markup's contracts and message keys.
   not been written is asked for in the quieter ink, as the name of the field, and a sum not yet typed is a
   dash, never a zero or any other value made up (a listing for no price is not "$0.00 · Active"); a label
   written for a list (`Email:`) loses its colon on a tag, which has a leader. The forms that have no slip
-  are the ones in the warehouse's benches and the Bault store's listing, which are still the kit's
-  fields in a column. Whatever a person
+  is the Bault store's listing, which is still the kit's fields in a column. Whatever a person
   types as free text (a name, a subject, a message, an address) takes the direction of what is typed
   (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
 - **What can be asked for on a card — a menu and a slip.** The item's drawer lists what the warehouse can
@@ -487,6 +486,28 @@ pieces. Each keeps the old markup's contracts and message keys.
   themes, the paper's field, the one button, with the person's own direction), and under a dashed rule
   it says what an answer is worth (the assistant is not connected, and every answer is a placeholder),
   which the field is described by.
+- **The warehouse's benches — the fields, and a docket.** Every form in the warehouse is what the operator
+  does with a scanner in the other hand, so each is its fields and, beside them (above the button on a
+  phone), a *docket*: the job in hand, written on paper as it is scanned or typed (`Docket`, a `DrawerTag`
+  with a live foot). Moving an item is the item as the title and, once a shelf is scanned, the shelf read
+  back (its zone, its kind, what is on it, whether it is out of service) before anything is moved; a hold
+  is the item; a refusal to accept an arrival is the record as it will be kept, line by line; a new shelf is
+  its zone, its kind and where it stands, with its serial said to be minted; a shipment being packed is its
+  pick list, a line for each card to be scanned, ticked as it is, anything scanned that is not in the
+  shipment shown as wrong with the way to take it back, and how many are done of how many as the figure;
+  an arrival is the name as it was written on the parcel (the only clue there is), who brought it, how it
+  is traced and how many photographs; an intake is how many units, whose, from which box, to which shelf
+  (and where that shelf stands, under the rule), and a line for each unit described. A sale from the store
+  is a tag (an article, in a `tag-grid`): its number, the card in its case, its serial, who bought it, from
+  which listing and when, and under it the label to stick on, the shelf to scan, the photographs and the one
+  button.
+  A scan field (`ScanField`) is read in the code's face, left to right, with the glyph of what fills it at
+  its start; a scanner ends with Enter, which goes on to the next field, and from the last does the job; once
+  it is done the first field is ready for the next. The foot of the docket is a live region that is always
+  there (so nothing under it moves when it speaks): it says how the last press came out (*Moved*, *On hold*,
+  *Recorded*, *Booked in*, *Dispatched*, or *Not done* and why) with the time, where the hands are, not in a
+  log on another tab; the bench keeps what was typed when it was refused. The fields have more room than a
+  request's (`request-form--bench`).
 - **The doors — a slip with a stub.** Signing in and up, asking for a new password and setting it, the
   second factor's code, the link that was sent to confirm an address: each is a slip of paper in both
   themes (`AuthCard`). Foil runs along its top edge; over the heading is a kicker that says what the slip
@@ -777,8 +798,8 @@ like.
   racks), pricing (a rate card), the disputes (case files), the parked messages (a register), the
   storage fees (a statement) and the accounts and items (rolls opened in a drawer).
 - Of the forms, those that make a request or a record have their slip (section 8), and the doors are
-  slips with a stub. The ones that do not are the kit's fields in a column: the warehouse's benches and
-  the Bault store's listing.
+  slips with a stub, and the warehouse's benches have their docket. The one that does not is the Bault
+  store's listing, which is the kit's fields in a column.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 
@@ -801,6 +822,7 @@ like.
 | The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
 | The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
 | An escrow deal and a shared parcel as slips (each fact written as it is typed, a dash for what is not known, the parcel as a tag with a line for each collector), and the question put to the assistant (a slip each way, the answer printed on its paper, the composer as paper in both themes) | `tests/ux/more-slips.test.tsx` | `pnpm test:ux` |
+| The warehouse's benches: the docket writes what is scanned and typed (the shelf read back, the pick list ticked), an Enter from a scanner goes on and then does it, the outcome is said on the docket and cleared by the next scan, a refused parcel keeps what was typed, the docket is paper in both themes, the foot does not change the docket's height, the fields have their room beside it | `tests/ux/benches.test.tsx` | `pnpm test:ux` |
 | What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
@@ -815,7 +837,7 @@ like.
 | `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--dir` and `--text-start`, and Bault's own: foil, paper, the room, easing |
 | `fonts.css` | Generated by `scripts/fetch-fonts.mjs`: one `@font-face` per variable subset |
 | `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
-| `components.css` | Focus, fields, selects, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
+| `components.css` | Focus, fields, selects, the scan field, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
 | `buttons.css` | Every button: `.btn` and its variants, the row of a menu, `.icon-btn`, the header's capsule of them, the spinner, the paper's and the room's own, what forced colours draw |
 | `landing.css` | The public page |
 | `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
@@ -831,7 +853,7 @@ scroll reveal, journey, parallax, progress), `shared/ui/useOverlay.ts` and `useE
 sideways, and while it does it is in the tab order, with a name, so a keyboard can reach its far
 columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
 `areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`, `shared/ui/DrawerTag.tsx`,
-`shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
+`shared/ui/Docket.tsx`, `areas/warehouse/Benches.tsx`, `shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
 script that walks the app (`scripts/design-screens.mjs`), so that the tests can show them a planted mistake.
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px

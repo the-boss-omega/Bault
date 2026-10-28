@@ -3233,3 +3233,43 @@ code.ask-words {
   }
 }
 
+/* ---- A bench's docket: the job in hand, and how the last press of the button came out ---- */
+
+/* The foot is always there (it is a live region), so the docket does not change height when an outcome comes. */
+.docket-outcome {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  min-block-size: 24px;
+}
+
+.docket-detail {
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* What a line of a pick list is, said under its code: quieter, and where it is wanted it wraps. */
+.docket-sub {
+  color: var(--paper-ink-3);
+  font-size: var(--fs-sm);
+}
+
+/* A store sale to be labelled and shelved: its tag, and under it what is done to it. */
+.tag-item--order {
+  flex-basis: 380px;
+}
+
+.tag-bench {
+  margin-block-start: var(--sp-4);
+}
+
+/* A bench has more fields than a request has, and they are in rows: it gives them the room that a slip's neighbour can spare. */
+@media (min-width: 1100px) {
+  .request-form--bench {
+    grid-template-columns: minmax(0, 760px) minmax(280px, 380px);
+  }
+}
+
