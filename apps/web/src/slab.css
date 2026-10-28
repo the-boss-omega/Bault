@@ -1,0 +1,377 @@
+/* ============================================================
+   The slab
+
+   Bault's signature object: a collector's card in a graded case. Every card
+   photograph in the product is shown this way (CardPhotoThumb), so the thing
+   the platform exists to hold looks like the thing it holds. The case is
+   smoked acrylic, the label is paper, and a foil strip runs under it.
+
+   Everything is sized in container units, so one slab scales from a 44px
+   table thumbnail to a 400px hero without a second set of rules. The label
+   text is drawn from data attributes, so a serial is in the document once.
+   ============================================================ */
+
+@property --px {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.5;
+}
+
+@property --py {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.5;
+}
+
+@property --tx {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --ty {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.photo-thumb {
+  --tilt: 9deg;
+  --slab-edge: oklch(1 0 0 / 16%);
+  container-type: inline-size;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 8;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+  cursor: pointer;
+  perspective: 900px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.photo-thumb:focus-visible {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: 6px;
+  border-radius: var(--r-lg);
+  box-shadow: none;
+}
+
+/* design-lint-allow: the ring of a slab is drawn on its button, outside it, on the page. */
+.slab-case {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3cqw;
+  width: 100%;
+  height: 100%;
+  padding: 4.5cqw;
+  border-radius: clamp(8px, 7cqw, 20px);
+  /* design-lint-allow: light falls on the case from the same side whichever way the page is read */
+  background:
+    linear-gradient(155deg, oklch(1 0 0 / 15%), oklch(1 0 0 / 3%) 36%, oklch(1 0 0 / 0%) 58%, oklch(1 0 0 / 9%)),
+    var(--room-case);
+  box-shadow:
+    inset 0 0 0 1px var(--slab-edge),
+    inset 0 1px 0 oklch(1 0 0 / 30%),
+    0 1px 2px oklch(0 0 0 / 50%),
+    0 18px 34px -14px oklch(0 0 0 / 75%);
+  transform: rotateX(calc(var(--ty) * var(--tilt))) rotateY(calc(var(--tx) * var(--tilt)));
+  transform-style: preserve-3d;
+  transition: transform 560ms var(--ease-out-expo), box-shadow 360ms var(--ease-out-expo);
+}
+
+.slab-case[data-live] {
+  transition-duration: 90ms, 360ms;
+  animation: none;
+  will-change: transform;
+}
+
+.photo-thumb:hover .slab-case,
+.photo-thumb:focus-visible .slab-case {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 28%),
+    inset 0 1px 0 oklch(1 0 0 / 40%),
+    0 2px 4px oklch(0 0 0 / 50%),
+    0 28px 48px -14px oklch(0 0 0 / 85%);
+}
+
+/* The label: paper, a line of name, the serial, and a foil strip under it. */
+
+/* design-lint-allow: a painted label; nothing in it can be focused. */
+.slab-band {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 2.5cqw;
+  height: 16cqw;
+  padding-inline: 3.2cqw;
+  padding-block-end: 1.2cqw;
+  border-radius: 2.4cqw;
+  background:
+    var(--foil) bottom / 100% 1.2cqw no-repeat,
+    var(--paper);
+  color: var(--paper-ink);
+  direction: ltr;
+  overflow: hidden;
+}
+
+.slab-band::before {
+  content: attr(data-title);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font: 600 4.1cqw/1.18 var(--font-ui);
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+}
+
+.slab-band::after {
+  content: attr(data-serial);
+  font: 500 3.5cqw/1 var(--font-mono);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+/* The window: the card on the photography mat. */
+
+/* design-lint-allow: a photograph window; nothing in it can be focused. */
+.slab-window {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 4cqw;
+  border-radius: 3cqw;
+  background:
+    radial-gradient(120% 80% at 50% 0%, var(--room-pool), var(--room-deep));
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 8%),
+    inset 0 10px 26px oklch(0 0 0 / 55%);
+  overflow: hidden;
+}
+
+.photo-thumb-img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 2.2cqw;
+  filter: drop-shadow(0 6px 10px oklch(0 0 0 / 55%));
+  transform: translate(calc(var(--tx) * -1.4cqw), calc(var(--ty) * 1.4cqw));
+  transition: transform 560ms var(--ease-out-expo);
+}
+
+.slab-case[data-live] .photo-thumb-img {
+  transition-duration: 90ms;
+}
+
+.photo-thumb-empty {
+  display: grid;
+  place-items: center;
+  padding: 4cqw;
+  color: var(--ink-on-dark-2);
+  font-size: clamp(10px, 4.4cqw, 13px);
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* The sheen: a spot of light plus a holographic spectrum that slides with the pointer. */
+
+.slab-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: overlay;
+  background:
+    radial-gradient(circle at calc(var(--px) * 100%) calc(var(--py) * 100%), oklch(1 0 0 / 70%), oklch(1 0 0 / 0%) 46%),
+    linear-gradient(
+      calc(100deg + var(--tx) * 30deg),
+      transparent 16%,
+      var(--foil-a) 28%,
+      var(--foil-b) 37%,
+      var(--foil-c) 46%,
+      var(--foil-d) 55%,
+      var(--foil-e) 64%,
+      transparent 76%
+    );
+  background-size: 100% 100%, 240% 240%;
+  background-position: 0 0, calc(var(--px) * 100%) calc(var(--py) * 100%);
+  transition: opacity 360ms var(--ease-out-expo);
+}
+
+.photo-thumb:hover .slab-glare,
+.photo-thumb:focus-visible .slab-glare,
+.slab-case[data-live] .slab-glare {
+  opacity: 0.9;
+}
+
+/* Idle: hero slabs breathe, so a still page still has a pulse. */
+
+.slab-idle .slab-case:not([data-live]) {
+  animation: slab-breathe 7s var(--ease-in-out-quart) infinite alternate;
+}
+
+/* The landing hook marks a hero that has scrolled away; nothing there needs a pulse. */
+.is-offscreen .slab-idle .slab-case:not([data-live]) {
+  animation-play-state: paused;
+}
+
+.slab-idle .slab-glare {
+  opacity: 0.55;
+}
+
+@keyframes slab-breathe {
+  from {
+    --tx: -0.32;
+    --ty: 0.18;
+    --px: 0.28;
+    --py: 0.3;
+  }
+  to {
+    --tx: 0.32;
+    --ty: -0.14;
+    --px: 0.72;
+    --py: 0.62;
+  }
+}
+
+/* Small slabs (table cells, dense lists) drop the label text and thin the band. */
+
+@container (max-width: 140px) {
+  .slab-band {
+    height: 9cqw;
+  }
+
+  .slab-band::before,
+  .slab-band::after {
+    content: none;
+  }
+
+  .slab-case {
+    padding: 5cqw;
+    gap: 4cqw;
+  }
+}
+
+.data-table .photo-thumb,
+.table .photo-thumb {
+  width: 44px;
+  flex: 0 0 auto;
+}
+
+/* Lightbox: a viewing room. The card, large, in the dark it was photographed against, and its name
+   and serial on a paper plate under it. The room is dark in both themes, so the ring on it is the
+   room's, and the plate's is the paper's. */
+
+.lightbox {
+  --focus-color: var(--room-ink);
+  flex-direction: column;
+  background:
+    radial-gradient(60% 50% at 50% 38%, var(--room-pool), transparent 72%),
+    color-mix(in oklab, var(--room-deep) 94%, transparent);
+}
+
+.lightbox .modal {
+  align-items: center;
+  width: min(92vw, 560px);
+  max-height: none;
+  gap: var(--sp-5);
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.lightbox-close {
+  --focus-color: var(--room-ink);
+  position: absolute;
+  inset-block-start: var(--sp-4);
+  inset-inline-end: var(--sp-4);
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border: 1px solid color-mix(in oklab, var(--room-ink) 22%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--room-ink) 10%, transparent);
+  color: var(--room-ink);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.lightbox-close:hover {
+  --focus-color: var(--room-ink);
+  border-color: color-mix(in oklab, var(--room-ink) 40%, transparent);
+  background: color-mix(in oklab, var(--room-ink) 18%, transparent);
+}
+
+.lightbox-close svg {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+.modal-slab {
+  --tilt: 11deg;
+  width: min(86vw, calc((100svh - 220px) * 0.62), 520px);
+  margin-inline: auto;
+  cursor: default;
+}
+
+.lightbox-plate {
+  --focus-color: var(--paper-ink);
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-1);
+  inline-size: min(100%, 420px);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  box-shadow: var(--shadow-overlay);
+  color: var(--paper-ink);
+  text-align: center;
+}
+
+.lightbox-plate::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 3px;
+  border-start-start-radius: var(--r-xs);
+  border-start-end-radius: var(--r-xs);
+  background: var(--foil);
+}
+
+.lightbox-name {
+  color: var(--paper-ink);
+  font: 500 15px/1.35 var(--font-ui);
+  text-wrap: balance;
+}
+
+.lightbox .modal-serial {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--paper-ink-2);
+  font: 500 13px/1.2 var(--font-mono);
+  letter-spacing: 0.06em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slab-idle .slab-case:not([data-live]) {
+    animation: none;
+  }
+}

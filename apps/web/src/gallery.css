@@ -1,0 +1,387 @@
+/* ============================================================
+   The gallery
+
+   The vault and the marketplace show what they hold the way a collector
+   would lay it out: each card in its case, on the table, with its serial and
+   what is true of it underneath. It is the same list the register used to
+   be, the same markup and the same buttons, shown as objects instead of rows.
+   ============================================================ */
+
+.panel:has(.card-grid--register),
+.panel:has(.card-grid--listings) {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.panel:has(.card-grid--register)::before,
+.panel:has(.card-grid--listings)::before {
+  content: none;
+}
+
+.card-grid--register,
+.card-grid--listings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 52px 32px;
+  padding: var(--sp-4) 0 var(--sp-8);
+}
+
+.card-grid--register .card,
+.card-grid--listings .card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+}
+
+.card-grid--register .card--interactive:hover,
+.card-grid--listings .card--interactive:hover {
+  background: none;
+}
+
+/* The case. */
+
+.card-art {
+  position: relative;
+  width: min(100%, 248px);
+  margin-inline: auto;
+  aspect-ratio: auto;
+  overflow: visible;
+  background: none;
+  border-radius: 0;
+  transition: transform var(--dur-colour) var(--ease-out-expo);
+}
+
+.card--interactive:hover .card-art {
+  transform: translateY(-8px);
+}
+
+.card--interactive:hover .slab-glare {
+  opacity: 0.9;
+}
+
+.card--interactive:hover .slab-case {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 28%),
+    inset 0 1px 0 oklch(1 0 0 / 40%),
+    0 2px 4px oklch(0 0 0 / 50%),
+    0 34px 50px -14px oklch(0 0 0 / 85%);
+}
+
+/* What is true of it, under it. */
+
+.card-id {
+  display: grid;
+  gap: 6px;
+  padding-inline: 2px;
+}
+
+.card-title {
+  margin: 0;
+}
+
+.card-title .serial {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.card-desc {
+  margin: 0;
+  -webkit-line-clamp: 2;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.card-state {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding-inline: 2px;
+}
+
+.card-where {
+  padding-inline: 2px;
+  color: var(--muted-foreground);
+}
+
+.card-where .code-inline {
+  font-size: 12px;
+}
+
+.card .watch {
+  align-items: stretch;
+  padding-inline: 2px;
+}
+
+.card .watch-line {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.card .watch-amount {
+  color: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.card .proportion {
+  height: 3px;
+  border-radius: var(--r-bar);
+  background: var(--input);
+}
+
+.card .proportion > span {
+  border-radius: var(--r-bar);
+  background: var(--foreground);
+}
+
+/* States are on the object: frozen has a frost halo, departed loses its colour. */
+
+.card--frozen {
+  border-inline-start: 0;
+}
+
+.card--frozen .slab-case {
+  box-shadow:
+    inset 0 0 0 1px var(--frost),
+    0 0 0 4px color-mix(in oklab, var(--frost) 22%, transparent),
+    0 18px 34px -14px oklch(0 0 0 / 75%);
+}
+
+.card--historical .slab-case {
+  filter: grayscale(0.9) brightness(0.8);
+}
+
+.card-archive-mark {
+  inset-block-end: 14%;
+  inset-inline: 10%;
+  border-radius: var(--r-xs);
+}
+
+/* Listings: the price is the headline. */
+
+.card--listing .price {
+  margin: 0;
+}
+
+.card--listing .price .amount {
+  font: 500 30px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.card--listing .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.card--listing .card-art {
+  width: min(100%, 248px);
+}
+
+@media (max-width: 640px) {
+  .card-grid--register,
+  .card-grid--listings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 40px 16px;
+  }
+
+  .card--listing .actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ---- The item drawer: the case on the table, then the record ---- */
+
+/* The stage is dark in both themes, so its ring is the light one. */
+.drawer .stage {
+  --focus-color: var(--room-ink);
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 44px 24px 64px;
+  background:
+    radial-gradient(58% 90% at 50% 0%, var(--room-pool), transparent 72%),
+    var(--room);
+  border-block-end: var(--border-w) solid var(--border);
+  overflow: clip;
+}
+
+.drawer .stage::after {
+  content: '';
+  position: absolute;
+  inset-inline: 30%;
+  inset-block-end: 28px;
+  height: 22px;
+  background: radial-gradient(closest-side, oklch(0 0 0 / 70%), transparent);
+  filter: blur(8px);
+}
+
+.drawer .stage .photo-thumb {
+  --tilt: 11deg;
+  width: min(300px, 62vw);
+  z-index: 1;
+}
+
+.stage--departed .slab-case {
+  filter: grayscale(0.9) brightness(0.8);
+}
+
+.drawer-head .identity-serial {
+  font-size: 15px;
+}
+
+/* The catalogue name sits inside the title's heading, so it would inherit the
+   display serif at body size; a long line of small serif reads badly. */
+.drawer-head .identity-name {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+/* ---- Loading: empty cases, in the shape of what is coming ---- */
+
+.card-grid:has(> li > .skel-metric) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 44px 32px;
+  padding: var(--sp-4) 0 var(--sp-8);
+}
+
+.card-grid > li > .skel-metric {
+  height: auto;
+  aspect-ratio: 5 / 8;
+  border-radius: var(--r-xl);
+}
+
+/* ---- Nothing here: an empty case, not an apology ---- */
+
+.empty {
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-16) var(--sp-4);
+  text-align: center;
+  border-block-start: 0;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 76px;
+  block-size: 112px;
+  margin-block-end: var(--sp-2);
+  border: 1px dashed var(--input);
+  border-radius: var(--r-lg);
+  color: var(--muted-foreground);
+  background: linear-gradient(calc(160deg * var(--dir)), color-mix(in oklab, var(--foreground) 5%, transparent), transparent 60%);
+}
+
+.empty-icon svg {
+  inline-size: 26px;
+  block-size: 26px;
+}
+
+.empty-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.empty-text {
+  color: var(--muted-foreground);
+  font-size: var(--fs-base);
+}
+
+/* ---- The register: a rule down the leading edge, a node for each entry ---- */
+
+.timeline {
+  --node: 9px;
+  --rule: 1px;
+  margin-inline-start: calc(var(--node) / 2);
+  border-inline-start: var(--rule) solid var(--input);
+}
+
+.timeline > li {
+  padding-inline-start: 24px;
+  border-block-end: 0;
+}
+
+.timeline > li::before {
+  inset-block-start: calc(var(--sp-3) + 6px);
+  inset-inline-start: calc((var(--node) + var(--rule)) / -2);
+  width: var(--node);
+  height: var(--node);
+  border-radius: 50%;
+  background: var(--background);
+  border: 1.5px solid var(--input);
+}
+
+.timeline > li:first-child::before {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+/* Cards arrive one after another. */
+
+.card-grid--register > .card,
+.card-grid--listings > .card {
+  animation: rise 700ms var(--ease-out-expo) backwards;
+}
+
+.card-grid--register > .card:nth-child(3),
+.card-grid--listings > .card:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.card-grid--register > .card:nth-child(4),
+.card-grid--listings > .card:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.card-grid--register > .card:nth-child(5),
+.card-grid--listings > .card:nth-child(5) {
+  animation-delay: 180ms;
+}
+
+.card-grid--register > .card:nth-child(6),
+.card-grid--listings > .card:nth-child(6) {
+  animation-delay: 240ms;
+}
+
+.card-grid--register > .card:nth-child(n + 7),
+.card-grid--listings > .card:nth-child(n + 7) {
+  animation-delay: 300ms;
+}
+
+/* ---- Filters: the search takes the room it needs ---- */
+
+.filter-bar .search {
+  flex: 1 1 280px;
+  min-inline-size: 260px;
+}
+
+.filter-bar {
+  align-items: flex-end;
+}
+
+[role='tabpanel'] {
+  animation: rise 480ms var(--ease-out-expo) backwards;
+}

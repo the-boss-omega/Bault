@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
-import { formatDateTime } from '../../../shared/money';
+import { formatDateTime, formatDayHeading, formatTime } from '../../../shared/money';
+import { inDays } from '../../../shared/days';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
@@ -24,6 +25,7 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { IconAsk, IconPlus } from '../../../shared/ui/icons';
 
 const TABS = ['tickets', 'new'] as const;
@@ -131,65 +133,54 @@ function TicketList({
       ) : tickets.length === 0 ? (
         <EmptyState title={t('support.empty')} text={t('support.emptyText')} icon={<IconAsk />} />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <caption>{t('support.list.title')}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t('support.col.subject')}</th>
-                <th scope="col">{t('support.col.category')}</th>
-                <th scope="col">{t('support.col.status')}</th>
-                <th scope="col">{t('support.col.activity')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((ticket) => (
-                <tr
-                  key={ticket.id}
-                  className={'is-clickable' + (ticket.id === openId ? ' is-selected' : '')}
-                  tabIndex={0}
-                  onClick={() => onOpen(ticket.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onOpen(ticket.id);
-                    }
-                  }}
-                >
-                  <td data-label={t('support.col.subject')} className="dt-primary">
-                    {ticket.subject}
-                    <span className="dt-sub" dir="ltr">
-                      {ticket.code}
-                    </span>
-                  </td>
-                  <td data-label={t('support.col.category')}>
-                    {ticketCategoryLabel(t, ticket.category)}
-                  </td>
-                  <td data-label={t('support.col.status')}>
-                    <StatusBadge tone={TICKET_TONE[ticket.status] ?? 'neutral'}>
-                      {ticketStatusLabel(t, ticket.status)}
-                    </StatusBadge>
-                  </td>
-                  <td data-label={t('support.col.activity')}>
-                    {formatDateTime(ticket.lastMessageAt, locale)}
-                  </td>
-                  <td className="td-tight">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpen(ticket.id);
-                      }}
-                    >
-                      {t('support.open')}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="register-days panel-body">
+          {inDays(
+            [...tickets].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
+            (ticket) => ticket.lastMessageAt,
+          ).map(({ key, items, first }) => (
+            <div key={key} className="register-day-group">
+              <h3 className="register-day" id={`tickets-${key}`}>
+                <span className="date">{formatDayHeading(first.lastMessageAt, locale)}</span>
+              </h3>
+              <ul className="timeline timeline--stamped" aria-labelledby={`tickets-${key}`}>
+                {items.map((ticket) => (
+                  <li
+                    key={ticket.id}
+                    className={'is-clickable' + (ticket.id === openId ? ' is-selected' : '')}
+                    onClick={() => onOpen(ticket.id)}
+                  >
+                    <span className="hint date">{formatTime(ticket.lastMessageAt, locale)}</span>
+                    <div className="register-text">
+                      <span className="register-kind">
+                        <StatusBadge tone={TICKET_TONE[ticket.status] ?? 'neutral'}>
+                          {ticketStatusLabel(t, ticket.status)}
+                        </StatusBadge>
+                      </span>
+                      <p className="register-entry">
+                        <button
+                          type="button"
+                          className="register-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpen(ticket.id);
+                          }}
+                        >
+                          {ticket.subject}
+                        </button>
+                      </p>
+                      <p className="register-meta">
+                        <span className="code-inline" dir="ltr">
+                          {ticket.code}
+                        </span>
+                        {' · '}
+                        {ticketCategoryLabel(t, ticket.category)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
     </Panel>
@@ -231,33 +222,62 @@ function NewTicketForm({
 
   return (
     <Panel title={t('support.newTitle')} subtitle={t('support.newSubtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 620 }}>
-        <label className="field">
-          <span className="field-label">{t('support.col.category')}</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            {TICKET_CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {t(c.labelKey)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="request-form">
+        <div className="stack stack--tight request-form-fields">
+          <label className="field">
+            <span className="field-label">{t('support.col.category')}</span>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {TICKET_CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {t(c.labelKey)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="field">
-          <span className="field-label">{t('support.col.subject')}</span>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />
-        </label>
+          <label className="field">
+            <span className="field-label">{t('support.col.subject')}</span>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              maxLength={200}
+              dir="auto"
+            />
+          </label>
 
-        <Field label={t('support.message')} hint={t('support.messageHint')}>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={7}
-            maxLength={5000}
-          />
-        </Field>
+          <Field label={t('support.message')} hint={t('support.messageHint')}>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={7}
+              maxLength={5000}
+              dir="auto"
+            />
+          </Field>
+        </div>
 
-        <div className="row">
+        {/* The ticket as it will be filed: its subject, its kind, how it begins, where it will stand. */}
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('support.newTitle')}
+            title={
+              subject.trim() || <span className="drawer-tag-quiet">{t('support.col.subject')}</span>
+            }
+            status={
+              <StatusBadge tone={TICKET_TONE.open ?? 'neutral'}>
+                {ticketStatusLabel(t, 'open')}
+              </StatusBadge>
+            }
+            lines={[{ label: t('support.col.category'), value: ticketCategoryLabel(t, category) }]}
+          >
+            <div className="ticket-note">
+              <span className="slip-label">{t('support.message')}</span>
+              <p>{body.trim() || '—'}</p>
+            </div>
+          </DrawerTag>
+        </aside>
+
+        <div className="row request-form-actions">
           <Button variant="gold" disabled={busy || !ready} onClick={() => void submit()}>
             {t('support.submit')}
           </Button>
@@ -375,11 +395,11 @@ export function ThreadDrawer({
                   <StatusBadge tone={m.authorRole === 'staff' ? 'gold' : 'info'} plain>
                     {m.authorRole === 'staff' ? t('support.fromStaff') : t('support.fromYou')}
                   </StatusBadge>
-                  <span className="hint" dir="ltr">
-                    {formatDateTime(m.createdAt, locale)}
-                  </span>
+                  <span className="hint date">{formatDateTime(m.createdAt, locale)}</span>
                 </div>
-                <p style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>{m.body}</p>
+                <p className="bidi" style={{ marginBlockStart: 4, fontSize: 13.5, whiteSpace: 'pre-wrap' }}>
+                  {m.body}
+                </p>
               </li>
             ))}
           </ul>
@@ -388,7 +408,13 @@ export function ThreadDrawer({
 
           <label className="field" style={{ marginBlockStart: 'var(--sp-5)' }}>
             <span className="field-label">{t('support.reply')}</span>
-            <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={5} maxLength={5000} />
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              rows={5}
+              maxLength={5000}
+              dir="auto"
+            />
           </label>
         </>
       )}

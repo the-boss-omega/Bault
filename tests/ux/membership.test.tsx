@@ -55,8 +55,10 @@ describe('the membership screen', () => {
     expect(within(table).getByText('Folio')).toBeInTheDocument();
     expect(within(table).getByText('Registry')).toBeInTheDocument();
     expect(within(table).getByText('Trust')).toBeInTheDocument();
-    expect(within(table).getAllByText('$39.00 a month').length).toBeGreaterThan(0);
-    expect(within(table).getAllByText('$699.00 a month').length).toBeGreaterThan(0);
+    // The figure is a left-to-right isolate inside the phrase, so it keeps its place when the phrase reads right to left.
+    const phrase = (text: string) => (content: string) => content.replace(/[\u2066-\u2069]/g, '') === text;
+    expect(within(table).getAllByText(phrase('$39.00 a month')).length).toBeGreaterThan(0);
+    expect(within(table).getAllByText(phrase('$699.00 a month')).length).toBeGreaterThan(0);
 
     expect(within(table).getByText('Items in storage')).toBeInTheDocument();
     expect(within(table).getByText('Items booked in (a month)')).toBeInTheDocument();
@@ -71,8 +73,20 @@ describe('the membership screen', () => {
     for (const button of joins) {
       const offer = button.closest('.offer');
       expect(offer).toBeTruthy();
-      expect(offer!.querySelector('.amount')?.textContent).toMatch(/\$\d/);
+      expect(offer!.querySelector('.offer-price')?.textContent).toMatch(/\$\d/);
     }
+  });
+
+  it('sets the price phrase so that the figure keeps its direction inside a sentence that may read the other way', async () => {
+    answer();
+    renderPage();
+
+    const joins = await screen.findAllByRole('button', { name: /^join$/i });
+    const price = joins[0]!.closest('.offer')!.querySelector('.offer-price')!;
+    // Not one left-to-right block (that would put the amount on the wrong side of "per month" in Hebrew): the
+    // phrase follows the page, and the amount alone is isolated, by a left-to-right isolate and its terminator.
+    expect(price.classList.contains('amount')).toBe(false);
+    expect(price.textContent).toBe('\u2066$39.00\u2069 a month');
   });
 
   it('confirms before charging, and says what recurring means', async () => {
@@ -124,6 +138,42 @@ describe('the membership screen', () => {
     expect(await screen.findByText(/carrier postage beyond the monthly credit/i)).toBeInTheDocument();
     expect(screen.getByText(/the graders’ own fees/i)).toBeInTheDocument();
     expect(screen.getByText(/hand delivery/i)).toBeInTheDocument();
+  });
+
+  it('leads each tier card with its main allowances, from the same figures as the schedule', async () => {
+    answer();
+    renderPage();
+
+    const joins = await screen.findAllByRole('button', { name: /^join$/i });
+    const folio = joins[0]!.closest('.offer') as HTMLElement;
+    const registry = joins[1]!.closest('.offer') as HTMLElement;
+
+    expect(within(folio).getByText('Items in storage').nextElementSibling).toHaveTextContent('60');
+    expect(within(folio).getByText('Items booked in (a month)').nextElementSibling).toHaveTextContent('4');
+    expect(within(folio).getByText('Postage credit (a month)').nextElementSibling).toHaveTextContent('$10.00');
+    expect(within(registry).getByText('Items in storage').nextElementSibling).toHaveTextContent('200');
+  });
+
+  it('marks the card of the tier you are on, and no other', async () => {
+    answer({
+      tier: 'registry',
+      status: 'active',
+      cycleLive: true,
+      currentPeriodStart: '2026-09-01T00:00:00.000Z',
+      currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+      cancelledAt: null,
+      perCycle: { intake: { allowed: 10, used: 2, remaining: 8 } },
+      storedItems: 200,
+      insuredShipments: { allowed: 3, used: 0, capMinor: 100_000 },
+      postage: { creditMinor: 3_000, usedMinor: 0 },
+      commission: { waivedOnMinor: 100_000, usedMinor: 0 },
+      perks: ['storage_clock_stops'],
+    });
+    renderPage();
+
+    const mine = (await screen.findByText('Your tier')).closest('.offer');
+    expect(mine).toHaveAttribute('data-current', 'true');
+    expect(document.querySelectorAll('.offer[data-current="true"]')).toHaveLength(1);
   });
 
   it('does not offer to join the tier you are already on', async () => {

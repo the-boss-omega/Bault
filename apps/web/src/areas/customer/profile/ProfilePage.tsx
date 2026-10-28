@@ -8,6 +8,7 @@ import {
   isValidNamePart,
   normalizeNamePart,
 } from '../../../shared/names';
+import { isolate } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import { countryName, lacksRegion, regionRequired, useShippingCountries } from '../../../shared/countries';
 import {
@@ -22,6 +23,8 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { Code } from '../../../shared/ui/Serial';
 import { TwoFactorPanel } from './TwoFactorPanel';
 import { IconLocation, IconPlus, IconUser } from '../../../shared/ui/icons';
 
@@ -151,81 +154,82 @@ export function ProfilePage() {
 
       {tab === 'details' && (
         <TabPanel tab="details">
-          <Panel title={t('profile.details.heading')}>
-            {profile && (
-              <dl className="detail-list" style={{ maxWidth: 560 }}>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.email')}</dt>
-                  <dd className="detail-value" dir="ltr">
-                    {profile.email}
-                  </dd>
-                </div>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.username')}</dt>
-                  <dd className="detail-value">
-                    <code dir="ltr">{profile.username}</code>
-                    <span className="detail-value-sub">{t('profile.details.usernameImmutable')}</span>
-                  </dd>
-                </div>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.fullName')}</dt>
-                  <dd className="detail-value">
-                    {fullName(profile.firstName, profile.lastName) || (
-                      <span className="muted">{t('profile.details.noName')}</span>
-                    )}
-                  </dd>
-                </div>
-                <div className="detail-row">
-                  <dt className="detail-label">{t('profile.details.role')}</dt>
-                  <dd className="detail-value">
-                    <StatusBadge tone="info">{roleKey ? t(roleKey) : profile.role}</StatusBadge>
-                  </dd>
-                </div>
-              </dl>
-            )}
-          </Panel>
-
           <Panel title={t('profile.nameLabel')} subtitle={t('profile.nameSubtitle')}>
-            <div className="stack stack--tight" style={{ maxWidth: 560 }}>
-              {profile?.nameReviewRequired && (
-                <SuccessNote tone="warning">{t('profile.nameReviewRequired')}</SuccessNote>
-              )}
+            <div className="request-form">
+              <div className="stack stack--tight request-form-fields">
+                {profile?.nameReviewRequired && (
+                  <SuccessNote tone="warning">{t('profile.nameReviewRequired')}</SuccessNote>
+                )}
 
-              <div className="form-grid">
-                <Field
-                  label={t('auth.firstName')}
-                  error={firstName.length > 0 && !firstOk ? t('auth.nameInvalid') : undefined}
-                >
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    autoComplete="given-name"
-                    maxLength={NAME_PART_MAX}
-                    aria-invalid={firstName.length > 0 && !firstOk}
-                  />
-                </Field>
+                <div className="form-grid">
+                  <Field
+                    label={t('auth.firstName')}
+                    error={firstName.length > 0 && !firstOk ? t('auth.nameInvalid') : undefined}
+                  >
+                    <input
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      autoComplete="given-name"
+                      maxLength={NAME_PART_MAX}
+                      aria-invalid={firstName.length > 0 && !firstOk}
+                      dir="auto"
+                    />
+                  </Field>
 
-                <Field
-                  label={t('auth.lastName')}
-                  error={lastName.length > 0 && !lastOk ? t('auth.nameInvalid') : undefined}
-                >
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    autoComplete="family-name"
-                    maxLength={NAME_PART_MAX}
-                    aria-invalid={lastName.length > 0 && !lastOk}
-                  />
-                </Field>
+                  <Field
+                    label={t('auth.lastName')}
+                    error={lastName.length > 0 && !lastOk ? t('auth.nameInvalid') : undefined}
+                  >
+                    <input
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      autoComplete="family-name"
+                      maxLength={NAME_PART_MAX}
+                      aria-invalid={lastName.length > 0 && !lastOk}
+                      dir="auto"
+                    />
+                  </Field>
+                </div>
               </div>
 
-              <p className="field-hint">
-                {t('profile.namePreview', {
-                  name: fullName(firstName, lastName) || t('profile.details.noName'),
-                })}
-              </p>
+              {/* The account as it is read: the name as it is being written, and what cannot be written here. */}
+              {profile && (
+                <aside className="request-slip">
+                  <DrawerTag
+                    kicker={t('profile.details.heading')}
+                    title={
+                      <>
+                        <span className="sr-only">{t('profile.details.fullName')} </span>
+                        {fullName(firstName, lastName) || (
+                          <span className="drawer-tag-quiet">{t('profile.details.noName')}</span>
+                        )}
+                      </>
+                    }
+                    lines={[
+                      {
+                        label: t('profile.details.email'),
+                        value: <span dir="ltr">{profile.email}</span>,
+                      },
+                      {
+                        label: t('profile.details.username'),
+                        value: (
+                          <>
+                            <Code value={`@${profile.username}`} />
+                            <small className="drawer-tag-sub">
+                              {t('profile.details.usernameImmutable')}
+                            </small>
+                          </>
+                        ),
+                      },
+                    ]}
+                    status={
+                      <StatusBadge tone="info">{roleKey ? t(roleKey) : profile.role}</StatusBadge>
+                    }
+                  />
+                </aside>
+              )}
 
-              <div className="row">
+              <div className="row request-form-actions">
                 <Button variant="gold" disabled={!firstOk || !lastOk || !nameDirty} onClick={saveName}>
                   {t('profile.saveName')}
                 </Button>
@@ -249,19 +253,18 @@ export function ProfilePage() {
                 icon={<IconLocation />}
               />
             ) : (
-              <ul className="card-grid">
+              <ul className="tag-grid">
                 {addresses.map((address) => (
-                  <li key={address.id}>
-                    <AddressCard
-                      address={address}
-                      onDelete={() => setDeleting(address)}
-                      onSaved={async () => {
-                        setStatus(t('profile.address.updated'));
-                        await load();
-                      }}
-                      onError={setError}
-                    />
-                  </li>
+                  <AddressCard
+                    key={address.id}
+                    address={address}
+                    onDelete={() => setDeleting(address)}
+                    onSaved={async () => {
+                      setStatus(t('profile.address.updated'));
+                      await load();
+                    }}
+                    onError={setError}
+                  />
                 ))}
               </ul>
             )}
@@ -279,15 +282,17 @@ export function ProfilePage() {
 
       {tab === 'security' && (
         <TabPanel tab="security">
-          <PasswordPanel onStatus={setStatus} onError={setError} />
-          <TwoFactorPanel />
+          <div className="security-grid">
+            <PasswordPanel onStatus={setStatus} onError={setError} />
+            <TwoFactorPanel />
+          </div>
         </TabPanel>
       )}
 
       {deleting && (
         <ConfirmationModal
           title={t('profile.address.deleteTitle')}
-          body={<p>{t('profile.address.deleteBody', { label: deleting.label })}</p>}
+          body={<p>{t('profile.address.deleteBody', { label: isolate(deleting.label) })}</p>}
           confirmLabel={t('profile.addresses.delete')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
@@ -442,22 +447,8 @@ function AddressCard({
 
   if (!editing) {
     return (
-      <div className="card">
-        <div className="card-meta">
-          <h3 className="card-title" style={{ flex: '1 1 auto' }}>
-            {address.label}
-          </h3>
-          {address.isDefault && <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>}
-          {lacksRegion(address, countries) && (
-            <StatusBadge tone="warning">{t('profile.addresses.regionMissing')}</StatusBadge>
-          )}
-        </div>
-        <p className="card-desc">{address.recipient}</p>
-        <p className="card-desc">
-          {address.line1}, {address.city}
-          {address.region ? `, ${address.region}` : ''}, {countryName(address.country, countries)}{' '}
-          {address.postalCode}
-        </p>
+      <li className="tag-item">
+        <AddressLabel item address={address} kicker={address.label} />
         <div className="actions">
           <Button
             size="sm"
@@ -473,22 +464,79 @@ function AddressCard({
             {t('profile.addresses.delete')}
           </Button>
         </div>
-      </div>
+      </li>
     );
   }
 
   return (
-    <div className="card">
-      <AddressFields draft={draft} onChange={(next) => setDraft({ ...draft, ...next })} />
-      <div className="actions">
-        <Button size="sm" variant="gold" disabled={!valid} onClick={save}>
-          {t('profile.address.save')}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-          {t('profile.address.cancel')}
-        </Button>
+    <li className="tag-item is-editing">
+      <div className="request-form">
+        <div className="request-form-fields">
+          <AddressFields draft={draft} onChange={(next) => setDraft({ ...draft, ...next })} />
+        </div>
+        <aside className="request-slip">
+          <AddressLabel address={draft} kicker={draft.label.trim() || t('profile.address.edit')} />
+        </aside>
+        <div className="actions request-form-actions">
+          <Button size="sm" variant="gold" disabled={!valid} onClick={save}>
+            {t('profile.address.save')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            {t('profile.address.cancel')}
+          </Button>
+        </div>
       </div>
-    </div>
+    </li>
+  );
+}
+
+/**
+ * An address as it is written on a parcel: whose it is, and where it goes. What has not been written yet is
+ * asked for in the quieter ink, so a label being filled in reads as one, and a saved one as it will be sent.
+ */
+function AddressLabel({
+  address,
+  kicker,
+  item,
+}: {
+  address: AddressDraft;
+  kicker: string;
+  item?: boolean;
+}) {
+  const { t } = useI18n();
+  const countries = useShippingCountries();
+  const quiet = (text: string) => <span className="drawer-tag-quiet">{text}</span>;
+  const town = [address.city.trim(), address.region?.trim()].filter(Boolean).join(', ');
+  const townLine = [town, address.postalCode.trim()].filter(Boolean).join(' ');
+
+  return (
+    <DrawerTag
+      kicker={kicker}
+      item={item}
+      title={address.recipient.trim() || quiet(t('profile.addressForm.recipient'))}
+      status={
+        (address.isDefault || lacksRegion(address, countries)) && (
+          <>
+            {address.isDefault && (
+              <StatusBadge tone="gold">{t('profile.addresses.default')}</StatusBadge>
+            )}
+            {lacksRegion(address, countries) && (
+              <StatusBadge tone="warning">{t('profile.addresses.regionMissing')}</StatusBadge>
+            )}
+          </>
+        )
+      }
+    >
+      <address className="address-lines">
+        <span>{address.line1.trim() || quiet(t('profile.addressForm.line1'))}</span>
+        <span>{townLine || quiet(t('profile.addressForm.city'))}</span>
+        <span>
+          {address.country
+            ? countryName(address.country, countries)
+            : quiet(t('profile.addressForm.country'))}
+        </span>
+      </address>
+    </DrawerTag>
   );
 }
 
@@ -510,7 +558,12 @@ function AddressFields({
   return (
     <div className="form-grid">
       <Field label={t('profile.addressForm.label')} htmlFor={`${id}-label`}>
-        <input id={`${id}-label`} value={draft.label} onChange={(e) => set({ label: e.target.value })} />
+        <input
+          id={`${id}-label`}
+          value={draft.label}
+          onChange={(e) => set({ label: e.target.value })}
+          dir="auto"
+        />
       </Field>
       <Field label={t('profile.addressForm.recipient')} htmlFor={`${id}-recipient`}>
         <input
@@ -518,6 +571,7 @@ function AddressFields({
           value={draft.recipient}
           onChange={(e) => set({ recipient: e.target.value })}
           autoComplete="name"
+          dir="auto"
         />
       </Field>
       <Field label={t('profile.addressForm.line1')} htmlFor={`${id}-line1`}>
@@ -526,6 +580,7 @@ function AddressFields({
           value={draft.line1}
           onChange={(e) => set({ line1: e.target.value })}
           autoComplete="address-line1"
+          dir="auto"
         />
       </Field>
       <Field label={t('profile.addressForm.city')} htmlFor={`${id}-city`}>
@@ -534,6 +589,7 @@ function AddressFields({
           value={draft.city}
           onChange={(e) => set({ city: e.target.value })}
           autoComplete="address-level2"
+          dir="auto"
         />
       </Field>
       <Field
@@ -585,6 +641,7 @@ function AddressFields({
             maxLength={60}
             onChange={(e) => set({ region: e.target.value })}
             autoComplete="address-level1"
+            dir="auto"
           />
         )}
       </Field>
@@ -651,9 +708,17 @@ function AddressForm({
 
   return (
     <Panel title={t('profile.addressForm.legend')}>
-      <div className="stack stack--tight">
-        <AddressFields draft={draft} onChange={setDraft} />
-        <div className="row">
+      <div className="request-form">
+        <div className="request-form-fields">
+          <AddressFields draft={draft} onChange={setDraft} />
+        </div>
+        <aside className="request-slip">
+          <AddressLabel
+            address={draft}
+            kicker={draft.label.trim() || t('profile.addressForm.legend')}
+          />
+        </aside>
+        <div className="row request-form-actions">
           <Button variant="gold" icon={<IconPlus />} disabled={!valid} onClick={add}>
             {t('profile.addressForm.submit')}
           </Button>

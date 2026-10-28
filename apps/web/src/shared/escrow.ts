@@ -123,3 +123,30 @@ export interface WhiteGloveTerms {
   quoteWithinHours: number;
   travelQuotedSeparately: boolean;
 }
+
+/**
+ * What an entry in a deal's history says, in the words the product already uses for the states and the steps.
+ * An event the product does not know is shown as it was recorded, so a new one is never hidden.
+ */
+export function escrowEventLabel(t: TranslateFn, event: { eventType: string }, deal: Pick<EscrowDeal, 'inspectionMatches'>): string {
+  switch (event.eventType) {
+    case 'raised':
+      return t('esc.status.proposed');
+    case 'agreed':
+      return t('esc.status.agreed');
+    case 'funded':
+      return t('esc.status.funded');
+    case 'item_received':
+      return t('esc.next.inspecting');
+    case 'inspected':
+      return deal.inspectionMatches === 'no' ? t('esc.inspectFailed') : t('esc.inspectPassed');
+    case 'settled':
+      return t('esc.status.settled');
+    case 'returned':
+      return t('esc.status.returned');
+    case 'cancelled':
+      return t('esc.status.cancelled');
+    default:
+      return event.eventType.replace(/_/g, ' ');
+  }
+}

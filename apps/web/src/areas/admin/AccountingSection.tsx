@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { api } from '../../shared/api';
 import { formatDateTime, formatUsd } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import { Button, EmptyState, MetricCard, Panel, StatusBadge } from '../../shared/ui/primitives';
-import { IconAlert, IconCheckCircle, IconChart, IconDownload, IconReceipt, IconWallet } from '../../shared/ui/icons';
+import { Button, EmptyState, Panel, StatusBadge } from '../../shared/ui/primitives';
+import { IconAlert, IconCheckCircle, IconChart, IconDownload, IconReceipt } from '../../shared/ui/icons';
 
 export interface AccountingSummary {
   month: string;
@@ -169,71 +169,84 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
   );
 }
 
+/**
+ * The month as a statement, on paper: what Bault earned, what customers put in and took out, and what it
+ * holds for them. Each block is a figure, named, with the lines it is made of under it, and the sentence
+ * that says what the figure leaves out. The tables under it are the ledger by type.
+ */
 function SummaryView({ summary, locale }: { summary: AccountingSummary; locale: string }) {
   const { t } = useI18n();
   const held = summary.balancesHeld;
   return (
     <>
-      <div className="metric-grid">
-        <MetricCard
-          label={t('admin.accounting.summary.revenue')}
-          value={formatUsd(summary.revenue.totalMinor)}
-          icon={<IconChart />}
-          tone="green"
-          footer={t('admin.accounting.summary.revenueNote', {
-            refunds: formatUsd(summary.revenue.refundsMinor),
-            feesReturned: formatUsd(summary.revenue.cashOutFeesReturnedMinor),
-          })}
-        />
-        <MetricCard
-          label={t('admin.accounting.summary.moneyIn')}
-          value={formatUsd(summary.customerMoney.inMinor)}
-          icon={<IconWallet />}
-          tone="blue"
-          footer={t('admin.accounting.summary.moneyOut', {
-            out: formatUsd(summary.customerMoney.outMinor),
-            returned: formatUsd(summary.customerMoney.payoutsReturnedMinor),
-            reversed: formatUsd(summary.customerMoney.reversedMinor),
-          })}
-        />
-        <MetricCard
-          label={t('admin.accounting.summary.held')}
-          value={formatUsd(held.customerTotalMinor)}
-          icon={<IconWallet />}
-          tone="violet"
-          footer={t('admin.accounting.summary.heldNote', {
-            date: formatDateTime(held.asOf, locale),
-            owedTo: formatUsd(held.owedToCustomersMinor),
-            owedBy: formatUsd(held.owedByCustomersMinor),
-          })}
-        />
-      </div>
+      <section className="ledger-sheet" aria-label={t('admin.accounting.summary.title')}>
+        <div className="ledger-cols">
+          <dl className="ledger-col">
+            <dt className="ledger-kicker">{t('admin.accounting.summary.revenue')}</dt>
+            <dd className="ledger-figure">
+              <span className="amount" dir="ltr">
+                {formatUsd(summary.revenue.totalMinor)}
+              </span>
+            </dd>
+            <dd className="ledger-lines-wrap">
+              <dl className="ledger-lines">
+                {summary.revenue.lines.map((line) => (
+                  <div className="ledger-line" key={line.key}>
+                    <dt>{REVENUE_LABEL[line.key] ? t(REVENUE_LABEL[line.key]!) : line.key}</dt>
+                    <dd className="amount" dir="ltr">
+                      {formatUsd(line.totalMinor)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </dd>
+            <dd className="ledger-note">
+              {t('admin.accounting.summary.revenueNote', {
+                refunds: formatUsd(summary.revenue.refundsMinor),
+                feesReturned: formatUsd(summary.revenue.cashOutFeesReturnedMinor),
+              })}
+            </dd>
+          </dl>
 
-      <div className="dt-wrap">
-        <table className="data-table">
-          <caption className="sr-only">{t('admin.accounting.summary.revenueLines')}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t('admin.accounting.summary.revenueLines')}</th>
-              <th scope="col" className="td-end">
-                {t('admin.accounting.col.total')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.revenue.lines.map((line) => (
-              <tr key={line.key}>
-                <td>{REVENUE_LABEL[line.key] ? t(REVENUE_LABEL[line.key]!) : line.key}</td>
-                <td className="td-end num">{formatUsd(line.totalMinor)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="hint">
-        {t('admin.accounting.summary.carrier', { amount: formatUsd(summary.revenue.carrierCostOnShippingChargesMinor) })}{' '}
-        {t('admin.accounting.summary.platform', { amount: formatUsd(held.platformAccountMinor) })}
-      </p>
+          <dl className="ledger-col">
+            <dt className="ledger-kicker">{t('admin.accounting.summary.moneyIn')}</dt>
+            <dd className="ledger-figure">
+              <span className="amount" dir="ltr">
+                {formatUsd(summary.customerMoney.inMinor)}
+              </span>
+            </dd>
+            <dd className="ledger-note">
+              {t('admin.accounting.summary.moneyOut', {
+                out: formatUsd(summary.customerMoney.outMinor),
+                returned: formatUsd(summary.customerMoney.payoutsReturnedMinor),
+                reversed: formatUsd(summary.customerMoney.reversedMinor),
+              })}
+            </dd>
+          </dl>
+
+          <dl className="ledger-col">
+            <dt className="ledger-kicker">{t('admin.accounting.summary.held')}</dt>
+            <dd className="ledger-figure">
+              <span className="amount" dir="ltr">
+                {formatUsd(held.customerTotalMinor)}
+              </span>
+            </dd>
+            <dd className="ledger-note">
+              {t('admin.accounting.summary.heldNote', {
+                date: formatDateTime(held.asOf, locale),
+                owedTo: formatUsd(held.owedToCustomersMinor),
+                owedBy: formatUsd(held.owedByCustomersMinor),
+              })}
+            </dd>
+          </dl>
+        </div>
+        <p className="ledger-foot">
+          {t('admin.accounting.summary.carrier', {
+            amount: formatUsd(summary.revenue.carrierCostOnShippingChargesMinor),
+          })}{' '}
+          {t('admin.accounting.summary.platform', { amount: formatUsd(held.platformAccountMinor) })}
+        </p>
+      </section>
 
       <div className="dt-wrap">
         <table className="data-table">
@@ -323,7 +336,7 @@ function ReconciliationView({ recon, locale }: { recon: Reconciliation; locale: 
                     {m.recordedMinor === null ? '—' : formatUsd(m.recordedMinor)}
                   </td>
                   <td data-label={t('admin.accounting.col.when')}>
-                    <span dir="ltr">{formatDateTime(m.at, locale)}</span>
+                    <span className="date">{formatDateTime(m.at, locale)}</span>
                   </td>
                 </tr>
               ))}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
+import { slabLeave, slabMove } from '../../../shared/ui/slabTilt';
 import { BarcodeLabel } from '../../../shared/Barcode';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
 import { itemClassLabel, itemName } from '../../../shared/itemClasses';
@@ -14,7 +15,7 @@ import {
   type Departure,
   type TimelineEvent,
 } from '../../../shared/itemTimeline';
-import { formatDate, formatUsd } from '../../../shared/money';
+import { formatDate, formatUsd, isolate } from '../../../shared/money';
 import { navigate, useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -444,7 +445,6 @@ export function VaultPage() {
           />
         ) : (
           <ul className="card-grid card-grid--register">
-            <RegisterHead t={t} scope={scope} />
             {items.map((item) => (
               <CardTile
                 key={item.id}
@@ -503,13 +503,15 @@ function CardTile({
       ]
         .filter(Boolean)
         .join(' ')}
+      onPointerMove={slabMove}
+      onPointerLeave={slabLeave}
     >
       <button type="button" className="card-hit" onClick={onOpen}>
         <span className="sr-only">{t('vault.openCard', { name })}</span>
       </button>
 
       <div className="card-art">
-        <CardPhotoThumb serialNumber={item.serialNumber} title={name} />
+        <CardPhotoThumb serialNumber={item.serialNumber} title={name} decorative />
         {historical && (
           <span className="card-archive-mark" aria-hidden="true">
             <IconArchive />
@@ -569,18 +571,6 @@ function CardTile({
   );
 }
 
-function RegisterHead({ t, scope }: { t: TranslateFn; scope: Scope }) {
-  return (
-    <li className="register-head" aria-hidden="true">
-      <span />
-      <span>{t('vault.col.item')}</span>
-      <span>{t('vault.col.state')}</span>
-      <span>{scope === 'history' ? t('vault.historical.dateLabel') : t('vault.col.where')}</span>
-      <span className="register-head-end">{scope === 'history' ? '' : t('vault.col.cost')}</span>
-    </li>
-  );
-}
-
 function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
   const value = row.estimatedValueMinor;
   const known = value !== null && value > 0;
@@ -590,6 +580,7 @@ function Watch({ row, t }: { row: BreakEvenRow; t: TranslateFn }) {
   return (
     <div className="watch">
       <div className="watch-line">
+        <span className="money-label">{t('vault.col.cost')}</span>
         <span className="watch-amount">{formatUsd(row.totalSpentMinor)}</span>
       </div>
       {known ? (
@@ -719,7 +710,7 @@ function StoragePanel({
             <dd className="detail-value">
               <StatusBadge tone="success">{t('vault.storage.freeNow')}</StatusBadge>
               {storage.freeUntil && (
-                <span className="detail-value-sub" dir="ltr">
+                <span className="detail-value-sub">
                   {t('vault.storage.until', { date: formatDate(storage.freeUntil, locale) })}
                 </span>
               )}
@@ -795,6 +786,13 @@ function ItemDrawer({
 
   useEffect(() => {
     setMedia(null);
+    // A card that has left the vault has no card page to ask for (the server answers 404): there are no
+    // photographs of it to load and nothing open on it.
+    if (historical) {
+      setMedia([]);
+      setOpenRequests([]);
+      return;
+    }
     void (async () => {
       try {
         const card = await api.get<{ images: ItemMedia[]; openRequests?: OpenServiceRequest[] }>(
@@ -807,7 +805,7 @@ function ItemDrawer({
         setOpenRequests([]);
       }
     })();
-  }, [item.id]);
+  }, [item.id, historical]);
 
   useEffect(() => {
     setStorage(null);
@@ -1094,7 +1092,7 @@ function ItemDrawer({
             <>
               <p>
                 {t(confirming.confirmBody ?? 'services.donation.confirmBody', {
-                  item: `\u2068${itemName(t, item)}\u2069`,
+                  item: isolate(itemName(t, item)),
                 })}
               </p>
               {(() => {

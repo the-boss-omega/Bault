@@ -1,14 +1,18 @@
 The fonts in this directory are served by Bault from /fonts and are used under
 the SIL Open Font License, Version 1.1, reproduced below as the licence requires.
 
-IBM Plex Sans, IBM Plex Sans Hebrew, IBM Plex Mono
-  (plex-sans-*.woff2, plex-sans-hebrew-*.woff2, plex-mono-*.woff2)
-  Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+Geist, Geist Mono
+  (geist-*.woff2, geist-mono-*.woff2)
+  Copyright 2023 The Geist Project Authors (https://github.com/vercel/geist-font)
 
 Frank Ruhl Libre
   (frank-ruhl-*.woff2)
   Copyright 2015 The Frank Ruhl Libre Project Authors
   (https://github.com/fontef/frankruhllibre)
+
+IBM Plex Sans Hebrew
+  (plex-sans-hebrew-*.woff2)
+  Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
 
 The files are the latin, latin-ext and hebrew subsets served by Google Fonts,
 fetched by scripts/fetch-fonts.mjs.

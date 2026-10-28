@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
+import { audit, auditFocus, auditForced, auditTheme, inspect } from './lib/audit-checks.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -30,15 +31,38 @@ Options:
   --personas <list>  anonymous,collector,seller,suspended,operator,admin (default all)
   --locales <list>   he,en (default both)
   --widths <list>    390,1440 (default both)
-  --theme <name>     light or dark (default light)
+  --theme <name>     dark or light (default dark, the product's default). The choice is
+                     stored the way the app's own switch stores it, so this is the
+                     theme the pages render, not only the browser's preference
+  --axe              also run axe-core's WCAG 2.x A and AA rules (contrast, names,
+                     labels, ARIA) on every screen, and walk the keyboard focus order
+                     of every screen, in both languages and at both widths, to measure
+                     every focus ring against what is behind it and to see whether
+                     the box it sits in cuts it off (axe does not check focus
+                     indicators); what it finds is listed as flags
+  --focus-stops <n>  how many stops the focus walk takes on each screen (default 40)
+  --motion           run with motion as a visitor who has not asked for less sees it.
+                     Without it every page is captured with reduced motion, so that
+                     nothing is mid-fade; the overlays are opened with motion either way
+  --forced           capture with forced colours on too, and check that the current
+                     page, the selected tab and the selected row are still drawn
+  --no-overlays      skip opening the header's menus, a drawer, the photograph and a
+                     confirmation, and measuring that each one is on screen, covers
+                     what it should and can be reached
   --only <text>      capture only screens whose name contains this text
   --browser <path>   Chromium or Chrome to drive (default /opt/pw-browsers/chromium
                      when it exists, otherwise the installed Google Chrome)
   --password <pw>    the seeded accounts' password (default 11111111)
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
-cents, an enum name or English words on a Hebrew page, sideways scrolling at
-phone width, a console error or a failed API call) are listed first.`;
+cents, an enum name or English words on a Hebrew page, an English phrase, a date,
+a price or a figure drawn out of order on a Hebrew page, English text in a Hebrew
+cell that nothing isolates, a page that is not in the theme it was asked for, sideways
+scrolling or content cut off at the edge at phone width, a menu, a drawer or the
+photograph that is off screen, does not cover what it should or cannot be clicked,
+a console error, a failed API call or, with --axe, an accessibility violation or a
+focus ring that is absent, faint or cut off) are listed first. The emails are looked
+at the same way, as the two-language messages they are.`;
 
 const PERSONAS = {
   anonymous: { login: null },
@@ -83,7 +107,12 @@ function parseArgs(argv) {
     personas: Object.keys(PERSONAS),
     locales: ['he', 'en'],
     widths: [390, 1440],
-    theme: 'light',
+    theme: 'dark',
+    axe: false,
+    focusStops: 40,
+    motion: false,
+    forced: false,
+    overlays: true,
     only: null,
     browser: null,
     password: '11111111',
@@ -106,6 +135,11 @@ function parseArgs(argv) {
     else if (flag === '--locales') out.locales = list();
     else if (flag === '--widths') out.widths = list().map(Number);
     else if (flag === '--theme') out.theme = value();
+    else if (flag === '--axe') out.axe = true;
+    else if (flag === '--focus-stops') out.focusStops = Number(value());
+    else if (flag === '--motion') out.motion = true;
+    else if (flag === '--forced') out.forced = true;
+    else if (flag === '--no-overlays') out.overlays = false;
     else if (flag === '--only') out.only = value();
     else if (flag === '--browser') out.browser = value();
     else if (flag === '--password') out.password = value();
@@ -280,6 +314,10 @@ async function open(page, url) {
   await page.goto(url);
 }
 
+// How long a page is given to finish arriving before it is looked at: with motion on, its entrances are
+// part of it.
+let settleMs = 250;
+
 async function settle(page) {
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page
@@ -289,45 +327,133 @@ async function settle(page) {
   await page
     .waitForFunction(() => [...globalThis.document.images].every((img) => img.complete), null, { timeout: 10000 })
     .catch(() => {});
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(settleMs);
 }
 
-async function inspect(page, locale, width) {
-  return page.evaluate(
-    ({ locale, width }) => {
-      const { document, window, NodeFilter } = globalThis;
-      const ISOLATES = '.serial, .amount, .ltr-run, .code-inline, .bidi, [dir="ltr"], code, kbd, input, textarea, select, script, style';
-      const flags = [];
-      const text = document.body.innerText;
-      const uuid = text.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i);
-      if (uuid) flags.push(`id on screen: ${uuid[0]}`);
-      const cents = text.match(/\b\d[\d,]*\s*cents\b/i);
-      if (cents) flags.push(`minor units on screen: ${cents[0]}`);
-      const enums = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])].filter((w) => !w.includes('@'));
-      if (enums.length) flags.push(`enum names on screen: ${enums.slice(0, 6).join(', ')}`);
-      if (document.documentElement.scrollWidth > window.innerWidth + 1 && width < 800) {
-        flags.push(`scrolls sideways: ${document.documentElement.scrollWidth}px wide at ${window.innerWidth}px`);
-      }
-      const foreign = [];
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const el = node.parentElement;
-        if (!el || el.closest(ISOLATES) || !el.checkVisibility?.()) continue;
-        const value = node.textContent ?? '';
-        if (locale === 'he') {
-          for (const word of value.match(/(?<![\p{L}\d])[a-z][a-z'’]{2,}(?![\p{L}\d])/gu) ?? []) foreign.push(word);
-        } else if (/[֐-׿]/.test(value)) {
-          foreign.push(value.trim().slice(0, 40));
-        }
-      }
-      if (foreign.length) {
-        const sample = [...new Set(foreign)].slice(0, 8).join(', ');
-        flags.push(locale === 'he' ? `English words on a Hebrew page: ${sample}` : `Hebrew on an English page: ${sample}`);
-      }
-      return { flags, title: document.title };
+/**
+ * Opens what a visitor opens, with motion on, and measures it where it is: each menu in the header, the
+ * drawer a card opens, the photograph, and that each is on screen, covers what it should and can be reached
+ * (a menu that is drawn but cannot be clicked, a backdrop that is a box inside a tile, a sheet that starts
+ * off the edge of a phone). A static capture sees none of this: an entrance that is still in flight, or a
+ * box that moves what is fixed inside it, only shows when the thing is opened.
+ */
+async function auditOverlays(state, browser, persona, locale, width) {
+  const mobile = width < 800;
+  const context = await browser.newContext({
+    viewport: { width, height: mobile ? 844 : 900 },
+    deviceScaleFactor: 1,
+    isMobile: mobile,
+    hasTouch: mobile,
+    colorScheme: state.opts.theme,
+    reducedMotion: 'no-preference',
+    locale: locale === 'he' ? 'he-IL' : 'en-US',
+  });
+  await context.addInitScript(
+    ([l, t]) => {
+      try {
+        globalThis.localStorage.setItem('bault.locale', l);
+        globalThis.localStorage.setItem('bault.theme', t);
+      } catch {}
     },
-    { locale, width },
+    [locale, state.opts.theme],
   );
+  const page = await context.newPage();
+  const record = async (name, flags) => {
+    const file = `${slug(`${persona}-${name}`)}-${locale}-${width}.png`;
+    await page.screenshot({ path: join(state.outDir, file) });
+    state.shots.push({ name: `${persona}-${name}`, persona, locale, width, file, title: name, flags });
+    process.stdout.write(flags.length ? '!' : '.');
+  };
+  // Where something that is open actually is: on screen, as large as it should be, and the thing under a
+  // point inside it is it (and not what it is drawn over).
+  const measure = (selector, { covers = false, label }) =>
+    page.evaluate(
+      ({ selector, covers, label }) => {
+        const { document, window, getComputedStyle } = globalThis;
+        const el = [...document.querySelectorAll(selector)].find((node) => node.checkVisibility?.({ checkVisibilityCSS: true }));
+        if (!el) return [`${label}: nothing visible matches ${selector}`];
+        const out = [];
+        const box = el.getBoundingClientRect();
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (covers) {
+          if (box.width < w - 1 || box.height < h - 1 || box.left > 1 || box.top > 1) {
+            out.push(`${label} covers ${Math.round(box.width)}x${Math.round(box.height)} of a ${w}x${h} window, from (${Math.round(box.left)}, ${Math.round(box.top)})`);
+          }
+        } else {
+          const scrolls = ['auto', 'scroll'].includes(getComputedStyle(el).overflowY) && box.height <= h + 1;
+          if (box.left < -1 || box.right > w + 1 || box.top < -1 || (box.bottom > h + 1 && !scrolls)) {
+            out.push(`${label} is not on screen: (${Math.round(box.left)}, ${Math.round(box.top)}) to (${Math.round(box.right)}, ${Math.round(box.bottom)}) in a ${w}x${h} window`);
+          }
+        }
+        const x = Math.min(w - 2, Math.max(2, box.left + Math.min(box.width, w) / 2));
+        const y = Math.min(h - 2, Math.max(2, box.top + Math.min(box.height, h) / 2));
+        const top = document.elementFromPoint(x, y);
+        // A backdrop is behind what it backs: the middle of it is the dialog's, not its own.
+        if (!covers && (!top || !(el.contains(top) || top.contains(el)))) {
+          out.push(`${label} cannot be reached: at (${Math.round(x)}, ${Math.round(y)}) there is ${top ? `${top.tagName.toLowerCase()}${top.className && typeof top.className === 'string' ? '.' + top.className.trim().split(/\s+/)[0] : ''}` : 'nothing'}`);
+        }
+        return out;
+      },
+      { selector, covers, label },
+    );
+  try {
+    await page.goto(`${state.baseUrl}/#/`);
+    await settle(page);
+    await signIn(page, persona, state.opts, state.secrets);
+    await open(page, `${state.baseUrl}/#/vault`);
+    await settle(page);
+
+    // The header's menus: the language, the notifications, the account.
+    const triggers = [];
+    for (const handle of await page.$$('[aria-haspopup]')) if (await handle.isVisible()) triggers.push(handle);
+    for (let index = 0; index < triggers.length; index += 1) {
+      const trigger = triggers[index];
+      const label = (await trigger.getAttribute('aria-label')) || (await trigger.innerText()).trim().slice(0, 20) || `menu ${index + 1}`;
+      await trigger.click();
+      await page.waitForTimeout(900);
+      const flags = await measure('.pop, [role="menu"], [role="dialog"]:not(.modal):not(.drawer)', { label: `the "${label}" menu` });
+      await record(`menu-${index + 1}`, flags);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      const closed = await page.evaluate(() => !globalThis.document.querySelector('.pop') && globalThis.document.activeElement?.getAttribute('aria-haspopup') !== null);
+      if (!closed) state.shots[state.shots.length - 1].flags.push(`the "${label}" menu does not close on Escape, or does not give focus back`);
+    }
+
+    // The drawer a card opens, and the photograph in it.
+    const card = await page.$('.card-hit');
+    if (card) {
+      await card.click({ force: true });
+      await page.waitForSelector('[role="dialog"]', { timeout: 4000 }).catch(() => {});
+      await page.waitForTimeout(1000);
+      const drawerFlags = [
+        ...(await measure('.drawer-backdrop', { covers: true, label: 'the drawer\'s backdrop' })),
+        ...(await measure('.drawer', { label: 'the drawer' })),
+      ];
+      await record('drawer', drawerFlags);
+      const photo = await page.$('.drawer .photo-btn, .drawer .photo-thumb');
+      if (photo) {
+        await photo.click({ force: true });
+        await page.waitForSelector('.lightbox', { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(1000);
+        const lightFlags = [
+          ...(await measure('.lightbox', { covers: true, label: 'the photograph\'s room' })),
+          ...(await measure('.lightbox-close', { label: 'the photograph\'s close button' })),
+          ...(await measure('.lightbox .modal-slab, .lightbox .photo-thumb', { label: 'the photograph' })),
+        ];
+        await record('photograph', lightFlags);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        const stillOpen = await page.evaluate(() => !!globalThis.document.querySelector('.lightbox') );
+        if (stillOpen) state.shots[state.shots.length - 1].flags.push('the photograph does not close on Escape');
+      }
+      await page.keyboard.press('Escape');
+    }
+  } catch (error) {
+    state.shots.push({ name: `${persona}-overlays`, persona, locale, width, file: '', title: 'overlays', flags: [`the overlay pass failed: ${error.message.slice(0, 140)}`] });
+  } finally {
+    await context.close();
+  }
 }
 
 function slug(value) {
@@ -340,7 +466,11 @@ async function capture(state, page, name, ctx) {
   const file = `${slug(name)}-${ctx.locale}-${ctx.width}.png`;
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
   const found = await inspect(page, ctx.locale, ctx.width);
-  const flags = [...found.flags, ...ctx.problems.splice(0)];
+  const accessibility = state.opts.axe ? await audit(page, { forced: state.opts.forced }) : [];
+  if (state.opts.axe) accessibility.push(...(await auditFocus(page, state.opts.focusStops)));
+  if (ctx.forced) accessibility.push(...(await auditForced(page)));
+  const theme = await auditTheme(page, state.opts.theme);
+  const flags = [...found.flags, ...theme, ...accessibility, ...ctx.problems.splice(0)];
   state.shots.push({ name, persona: ctx.persona, locale: ctx.locale, width: ctx.width, file, title: found.title, flags });
   process.stdout.write(flags.length ? '!' : '.');
 }
@@ -376,6 +506,28 @@ async function visitItems(state, page, ctx) {
   }
 }
 
+/**
+ * What the management console opens: an account and an item, each in the drawer it is changed in (by the link
+ * that names it, as the roll's own names are), so that what is drawn there is held to what the pages are.
+ */
+async function visitAdminRecords(state, page, ctx) {
+  const users = await apiCall(page, 'GET', '/admin/users');
+  const items = await apiCall(page, 'GET', '/admin/items');
+  const me = await apiCall(page, 'GET', '/me/profile');
+  // An enrolled account that is not the one signed in: the drawer of one's own account has no reset button, and
+  // the reset (its button, its confirmation, where focus goes after) is what an administrator's drawer is for.
+  const others = Array.isArray(users.json) ? users.json.filter((u) => u.id !== me.json?.id) : [];
+  const records = [
+    ['users', 'user', others.find((u) => u.mfaEnabled) ?? others[0] ?? null],
+    ['items', 'item', Array.isArray(items.json) ? items.json[0] : null],
+  ];
+  for (const [tab, param, record] of records) {
+    if (!record) continue;
+    await page.goto(`${state.baseUrl}/#/admin/${tab}?${param}=${encodeURIComponent(record.id)}`);
+    await capture(state, page, `${ctx.persona}-${tab}-drawer`, ctx);
+  }
+}
+
 async function runPersona(state, browser, persona, locale, width) {
   const mobile = width < 800;
   const context = await browser.newContext({
@@ -384,16 +536,21 @@ async function runPersona(state, browser, persona, locale, width) {
     isMobile: mobile,
     hasTouch: mobile,
     colorScheme: state.opts.theme,
-    reducedMotion: 'reduce',
+    reducedMotion: state.opts.motion ? 'no-preference' : 'reduce',
+    forcedColors: state.opts.forced ? 'active' : 'none',
     locale: locale === 'he' ? 'he-IL' : 'en-US',
   });
-  await context.addInitScript((l) => {
-    try {
-      globalThis.localStorage.setItem('bault.locale', l);
-    } catch {}
-  }, locale);
+  await context.addInitScript(
+    ([l, t]) => {
+      try {
+        globalThis.localStorage.setItem('bault.locale', l);
+        globalThis.localStorage.setItem('bault.theme', t);
+      } catch {}
+    },
+    [locale, state.opts.theme],
+  );
   const page = await context.newPage();
-  const ctx = { persona, locale, width, problems: [], expected: [] };
+  const ctx = { persona, locale, width, problems: [], expected: [], forced: state.opts.forced };
   page.on('console', (msg) => {
     if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) {
       ctx.problems.push(`console: ${msg.text().slice(0, 160)}`);
@@ -450,8 +607,12 @@ async function runPersona(state, browser, persona, locale, width) {
     await settle(page);
     for (const section of spec.sections ?? SECTIONS) await visitSection(state, page, section, ctx);
     if (persona === 'collector') await visitItems(state, page, ctx);
+    if (persona === 'admin') await visitAdminRecords(state, page, ctx);
   } finally {
     await context.close();
+  }
+  if (persona !== 'anonymous' && state.opts.overlays && (!state.opts.only || state.opts.only === 'overlay')) {
+    await auditOverlays(state, browser, persona, locale, width);
   }
 }
 
@@ -467,12 +628,19 @@ async function captureEmails(state, browser) {
     for (const width of state.opts.widths) {
       const name = `email-${template.replace(/_/g, '-')}`;
       if (state.opts.only && !name.includes(state.opts.only)) continue;
-      const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
-      await page.setContent(`<!doctype html><meta charset="utf-8"><body style="margin:0;background:#ffffff">${renderEmail(template, { link }).html}</body>`);
+      const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      const email = renderEmail(template, { link });
+      // The harness is a document with a language and a title, so that what the audit says is about the message.
+      await page.setContent(`<!doctype html><html lang="en"><meta charset="utf-8"><title>${email.subject ?? template}</title><body style="margin:0;background:#ffffff">${email.html}</body></html>`);
       const file = `${name}-he-en-${width}.png`;
       await page.screenshot({ path: join(state.outDir, file), fullPage: true });
-      state.shots.push({ name, persona: 'email', locale: 'he+en', width, file, title: template, flags: [] });
-      await page.close();
+      // Both languages are in the one message by design, so what is looked for is the layout and, in the
+      // Hebrew, the order of what is drawn; not English words on a Hebrew page.
+      const found = await inspect(page, 'mixed', width);
+      const accessibility = state.opts.axe ? await audit(page, { forced: state.opts.forced }) : [];
+      state.shots.push({ name, persona: 'email', locale: 'he+en', width, file, title: template, flags: [...found.flags, ...accessibility] });
+      await context.close();
       process.stdout.write('.');
     }
   }
@@ -534,6 +702,7 @@ ${sections}
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  settleMs = opts.motion ? 1400 : 250;
   const outDir = resolve(repoRoot, opts.out);
   assertLocal(opts.baseUrl ?? opts.api);
   mkdirSync(outDir, { recursive: true });
@@ -566,7 +735,11 @@ async function main() {
   console.log(`\n${state.shots.length} captures, ${flagged} with flags. Open ${join(opts.out, 'index.html')}`);
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Run when it is the script being run, not when its checks are imported (the tests that plant a mistake
+// and see whether it is flagged do that).
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

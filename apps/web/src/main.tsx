@@ -5,6 +5,14 @@ import { I18nProvider } from './shared/i18n';
 import { ThemeProvider } from './shared/theme';
 import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import './index.css';
+import './theme.css';
+import './slab.css';
+import './components.css';
+import './landing.css';
+import './app.css';
+import './gallery.css';
+import './screens.css';
+import './motion.css';
 
 try {
   localStorage.removeItem('bault.railPinned');

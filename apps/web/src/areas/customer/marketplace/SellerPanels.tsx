@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../shared/api';
-import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
+import { dollarsToCents, formatDate, formatUsd, isolate } from '../../../shared/money';
 import { Amount, Code, Serial } from '../../../shared/ui/Serial';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { useI18n, type TranslateFn } from '../../../shared/i18n';
@@ -20,6 +20,7 @@ import { Button, EmptyState, Panel, SkeletonTable, StatusBadge } from '../../../
 import { ConfirmationModal } from '../../../shared/ui/DetailDrawer';
 import { IconMarketplace, IconTag } from '../../../shared/ui/icons';
 import { navigate } from '../../../shared/routing';
+import { SwapGlyph, TradeSide } from './TradeSides';
 
 export function MyListingsPanel({
   onChanged,
@@ -105,108 +106,102 @@ export function MyListingsPanel({
             }
           />
         ) : (
-          <div className="dt-wrap dt-wrap--stack">
-            <table className="data-table">
-              <caption>{t('market.mine.title')}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t('market.mine.col.item')}</th>
-                  <th scope="col">{t('market.mine.col.price')}</th>
-                  <th scope="col">{t('market.mine.col.offers')}</th>
-                  <th scope="col">{t('support.col.status')}</th>
-                  <th scope="col">{t('market.mine.col.listed')}</th>
-                  <th scope="col" className="td-tight" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td data-label={t('market.mine.col.item')} className="dt-primary">
-                      {itemName(t, row)}
-                      <span className="dt-sub" dir="ltr">
-                        {row.serialNumber}
-                      </span>
-                    </td>
-                    <td data-label={t('market.mine.col.price')} dir="ltr">
+          <ul className="slips" aria-label={t('market.mine.title')}>
+            {rows.map((row) => (
+              <li className="slip slip--listing" key={row.id}>
+                <div className="slip-item">
+                  <span className="slip-thumb">
+                    <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
+                  </span>
+                  <span className="slip-name">
+                    <Serial value={row.serialNumber} />
+                    <span className="slip-desc ltr-run">{itemName(t, row)}</span>
+                  </span>
+                </div>
+
+                <div className="slip-money">
+                  <span className="money-label">{t('market.mine.col.price')}</span>
+                  {editing === row.id ? (
+                    <div className="money-input">
+                      <span aria-hidden="true">$</span>
+                      <input
+                        inputMode="decimal"
+                        aria-label={t('market.mine.col.price')}
+                        value={price}
+                        autoFocus
+                        onChange={(e) => setPrice(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <Amount size="lead">{formatUsd(row.askingPrice)}</Amount>
+                  )}
+                  <span className="slip-asking">
+                    {t('market.mine.col.listed')} {formatDate(row.publishedAt, locale)}
+                  </span>
+                </div>
+
+                <div className="slip-side">
+                  <span className="slip-label">{t('market.mine.col.offers')}</span>
+                  {row.pendingOffers > 0 ? (
+                    <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
+
+                <div className="slip-state">
+                  <StatusBadge tone={LISTING_TONE[row.status] ?? 'neutral'}>
+                    {listingStatusLabel(t, row.status)}
+                  </StatusBadge>
+                </div>
+
+                <div className="slip-actions">
+                  {row.status === 'active' && (
+                    <div className="actions">
                       {editing === row.id ? (
-                        <div className="money-input">
-                          <span aria-hidden="true">$</span>
-                          <input
-                            inputMode="decimal"
-                            value={price}
-                            autoFocus
-                            onChange={(e) => setPrice(e.target.value)}
-                            style={{ width: '6rem' }}
-                          />
-                        </div>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="gold"
+                            disabled={busy || dollarsToCents(price) === null}
+                            onClick={() => void reprice(row)}
+                          >
+                            {t('market.mine.save')}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                            {t('ui.cancel')}
+                          </Button>
+                        </>
                       ) : (
-                        formatUsd(row.askingPrice)
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setEditing(row.id);
+                              setPrice((row.askingPrice / 100).toFixed(2));
+                            }}
+                          >
+                            {t('market.mine.reprice')}
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => setRemoving(row)}>
+                            {t('market.mine.delist')}
+                          </Button>
+                        </>
                       )}
-                    </td>
-                    <td data-label={t('market.mine.col.offers')}>
-                      {row.pendingOffers > 0 ? (
-                        <StatusBadge tone="warning">{row.pendingOffers}</StatusBadge>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td data-label={t('support.col.status')}>
-                      <StatusBadge tone={LISTING_TONE[row.status] ?? 'neutral'}>
-                        {listingStatusLabel(t, row.status)}
-                      </StatusBadge>
-                    </td>
-                    <td data-label={t('market.mine.col.listed')}>
-                      {formatDate(row.publishedAt, locale)}
-                    </td>
-                    <td className="td-tight">
-                      {row.status === 'active' && (
-                        <div className="actions">
-                          {editing === row.id ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="gold"
-                                disabled={busy || dollarsToCents(price) === null}
-                                onClick={() => void reprice(row)}
-                              >
-                                {t('market.mine.save')}
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                                {t('ui.cancel')}
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => {
-                                  setEditing(row.id);
-                                  setPrice((row.askingPrice / 100).toFixed(2));
-                                }}
-                              >
-                                {t('market.mine.reprice')}
-                              </Button>
-                              <Button size="sm" variant="danger" onClick={() => setRemoving(row)}>
-                                {t('market.mine.delist')}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </Panel>
 
       {removing && (
         <ConfirmationModal
           title={t('market.mine.delistTitle')}
-          body={<p>{t('market.mine.delistBody', { item: itemName(t, removing) })}</p>}
+          body={<p>{t('market.mine.delistBody', { item: isolate(itemName(t, removing)) })}</p>}
           confirmLabel={t('market.mine.delist')}
           cancelLabel={t('ui.cancel')}
           tone="danger"
@@ -284,85 +279,78 @@ export function OffersPanel({
       ) : rows.length === 0 ? (
         <EmptyState title={t('market.offers.empty')} text={t('market.offers.emptyText')} />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <caption>{t('market.offers.title')}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t('market.mine.col.item')}</th>
-                <th scope="col">{t('market.offers.col.side')}</th>
-                <th scope="col">{t('market.offers.col.offer')}</th>
-                <th scope="col">{t('support.col.status')}</th>
-                <th scope="col">{t('support.col.activity')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td data-label={t('market.mine.col.item')} className="dt-primary">
-                    <span className="dt-cell">
-                      <span className="dt-thumb">
-                        <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
-                      </span>
-                      <span>
-                        <Serial value={row.serialNumber} />
-                        <span className="dt-sub ltr-run">{itemName(t, row)}</span>
-                      </span>
+        <ul className="slips" aria-label={t('market.offers.title')}>
+          {rows.map((row) => {
+            const live = row.status === 'pending' && row.listingStatus === 'active';
+            const against = row.askingPrice > 0 ? Math.min(1, row.amount / row.askingPrice) : 0;
+            return (
+              <li className="slip" key={row.id}>
+                <div className="slip-item">
+                  <span className="slip-thumb">
+                    <CardPhotoThumb serialNumber={row.serialNumber} title={row.description} />
+                  </span>
+                  <span className="slip-name">
+                    <Serial value={row.serialNumber} />
+                    <span className="slip-desc ltr-run">{itemName(t, row)}</span>
+                  </span>
+                </div>
+
+                <div className="slip-side">
+                  <StatusBadge tone={row.direction === 'incoming' ? 'gold' : 'info'} plain>
+                    {t(row.direction === 'incoming' ? 'market.offers.incoming' : 'market.offers.outgoing')}
+                  </StatusBadge>
+                  {row.direction === 'incoming' && row.buyerUsername && (
+                    <span className="slip-turn">
+                      <Code value={`@${row.buyerUsername}`} />
                     </span>
-                  </td>
-                  <td data-label={t('market.offers.col.side')}>
-                    <StatusBadge tone={row.direction === 'incoming' ? 'gold' : 'info'} plain>
-                      {t(row.direction === 'incoming' ? 'market.offers.incoming' : 'market.offers.outgoing')}
-                    </StatusBadge>
-                    {row.direction === 'incoming' && row.buyerUsername && (
-                      <span className="dt-sub">
-                        <Code value={`@${row.buyerUsername}`} />
-                      </span>
-                    )}
-                    {row.status === 'pending' && row.listingStatus === 'active' && (
-                      <span className="dt-sub">
-                        {t(row.yourTurn ? 'market.offers.turnYours' : 'market.offers.turnTheirs')}
-                      </span>
-                    )}
-                  </td>
-                  <td data-label={t('market.offers.col.offer')} className="num">
-                    <Amount size="lead">{formatUsd(row.amount)}</Amount>
-                    <span className="dt-sub">
-                      {t('market.offers.asking', { amount: formatUsd(row.askingPrice) })}
+                  )}
+                  {live && (
+                    <span className="slip-turn">
+                      {t(row.yourTurn ? 'market.offers.turnYours' : 'market.offers.turnTheirs')}
                     </span>
-                  </td>
-                  <td data-label={t('support.col.status')}>
-                    <StatusBadge tone={OFFER_TONE[row.status] ?? 'neutral'}>
-                      {offerStatusLabel(t, row.status)}
-                    </StatusBadge>
-                  </td>
-                  <td data-label={t('support.col.activity')} className="td-tight">
-                    <span className="date">{formatDate(row.createdAt, locale)}</span>
-                  </td>
-                  <td className="td-tight">
-                    {row.status === 'pending' && row.listingStatus === 'active' && (
-                      <OfferActions
-                        offer={row}
-                        countering={countering === row.id}
-                        amount={amount}
-                        busy={busy}
-                        t={t}
-                        onCounterStart={() => {
-                          setCountering(row.id);
-                          setAmount((row.amount / 100).toFixed(2));
-                        }}
-                        onCounterCancel={() => setCountering(null)}
-                        onAmount={setAmount}
-                        onRespond={(action) => void respond(row, action)}
-                      />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </div>
+
+                <div className="slip-money">
+                  <span className="money-label">{t('market.offers.col.offer')}</span>
+                  <Amount size="lead">{formatUsd(row.amount)}</Amount>
+                  <span className="slip-asking">
+                    {t('market.offers.asking', { amount: formatUsd(row.askingPrice) })}
+                  </span>
+                  <span className="slip-gauge" aria-hidden="true">
+                    <span style={{ inlineSize: `${Math.round(against * 100)}%` }} />
+                  </span>
+                </div>
+
+                <div className="slip-state">
+                  <StatusBadge tone={OFFER_TONE[row.status] ?? 'neutral'}>
+                    {offerStatusLabel(t, row.status)}
+                  </StatusBadge>
+                  <span className="date">{formatDate(row.createdAt, locale)}</span>
+                </div>
+
+                <div className="slip-actions">
+                  {live && (
+                    <OfferActions
+                      offer={row}
+                      countering={countering === row.id}
+                      amount={amount}
+                      busy={busy}
+                      t={t}
+                      onCounterStart={() => {
+                        setCountering(row.id);
+                        setAmount((row.amount / 100).toFixed(2));
+                      }}
+                      onCounterCancel={() => setCountering(null)}
+                      onAmount={setAmount}
+                      onRespond={(action) => void respond(row, action)}
+                    />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </Panel>
   );
@@ -402,7 +390,6 @@ function OfferActions({
                 value={amount}
                 autoFocus
                 onChange={(e) => onAmount(e.target.value)}
-                style={{ width: '6rem' }}
               />
             </div>
           </label>
@@ -433,7 +420,7 @@ function OfferActions({
         <Button size="sm" variant="secondary" disabled={busy} onClick={onCounterStart}>
           {t('market.offers.change')}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => onRespond('reject')}>
+        <Button size="sm" variant="danger" disabled={busy} onClick={() => onRespond('reject')}>
           {t('market.offers.withdraw')}
         </Button>
       </div>
@@ -492,9 +479,6 @@ export function SwapsPanel({
     }
   }
 
-  const names = (items: MySwap['offeredItems']) =>
-    items.map((i) => i.description || (i.typeClass ? itemName(t, { typeClass: i.typeClass }) : i.id)).join(', ') || '—';
-
   return (
     <Panel title={t('market.swaps.title')} subtitle={t('market.swaps.subtitle')} flush>
       {rows === null ? (
@@ -502,64 +486,56 @@ export function SwapsPanel({
       ) : rows.length === 0 ? (
         <EmptyState title={t('market.swaps.empty')} text={t('market.swaps.emptyText')} icon={<IconMarketplace />} />
       ) : (
-        <div className="dt-wrap dt-wrap--stack">
-          <table className="data-table">
-            <caption>{t('market.swaps.title')}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t('market.swaps.col.kind')}</th>
-                <th scope="col">{t('market.swaps.col.with')}</th>
-                <th scope="col">{t('market.swaps.col.theyGet')}</th>
-                <th scope="col">{t('market.swaps.col.youGet')}</th>
-                <th scope="col">{t('support.col.status')}</th>
-                <th scope="col" className="td-tight" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const incoming = row.direction === 'incoming';
-                const theyGet = incoming ? row.requestedItems : row.offeredItems;
-                const youGet = incoming ? row.offeredItems : row.requestedItems;
-                return (
-                  <tr key={row.id}>
-                    <td data-label={t('market.swaps.col.kind')} className="dt-primary">
-                      {t(row.kind === 'transfer' ? 'market.swaps.gift' : 'market.swaps.swap')}
-                      <span className="dt-sub" dir="ltr">
-                        {formatDate(row.createdAt, locale)}
-                      </span>
-                    </td>
-                    <td data-label={t('market.swaps.col.with')} dir="ltr">
-                      <code>{(incoming ? row.proposerUsername : row.responderUsername) ?? '—'}</code>
-                    </td>
-                    <td data-label={t('market.swaps.col.theyGet')}>{names(theyGet)}</td>
-                    <td data-label={t('market.swaps.col.youGet')}>
-                      {row.kind === 'transfer' && incoming ? names(row.offeredItems) : names(youGet)}
-                    </td>
-                    <td data-label={t('support.col.status')}>
-                      <StatusBadge tone={SWAP_TONE[row.status] ?? 'neutral'}>
-                        {swapStatusLabel(t, row.status)}
-                      </StatusBadge>
-                    </td>
-                    <td className="td-tight">
-                      {row.awaitingMe ? (
-                        <div className="actions">
-                          <Button size="sm" variant="gold" disabled={busy} onClick={() => void act(row, 'approve')}>
-                            {t('market.swaps.approve')}
-                          </Button>
-                          <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(row, 'reject')}>
-                            {t('market.swaps.reject')}
-                          </Button>
-                        </div>
-                      ) : row.status === 'pending' ? (
-                        <span className="hint">{t('market.swaps.awaitingThem')}</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ul className="slips" aria-label={t('market.swaps.title')}>
+          {rows.map((row) => {
+            const incoming = row.direction === 'incoming';
+            const gift = row.kind === 'transfer';
+            const theyGet = incoming ? row.requestedItems : row.offeredItems;
+            const youGet = incoming ? row.offeredItems : row.requestedItems;
+            const other = incoming ? row.proposerUsername : row.responderUsername;
+            return (
+              <li className="slip slip--trade" key={row.id}>
+                <div className="slip-side">
+                  <StatusBadge tone={gift ? 'gold' : 'info'} plain>
+                    {t(gift ? 'market.swaps.gift' : 'market.swaps.swap')}
+                  </StatusBadge>
+                  {other && (
+                    <span className="slip-turn">
+                      {t('market.swaps.col.with')} <Code value={`@${other}`} />
+                    </span>
+                  )}
+                  <span className="date">{formatDate(row.createdAt, locale)}</span>
+                </div>
+
+                <TradeSide label={t('market.swaps.col.theyGet')} items={theyGet} area="give" t={t} />
+                <SwapGlyph oneWay={gift} towardStart={theyGet.length > 0} />
+                <TradeSide label={t('market.swaps.col.youGet')} items={youGet} area="get" t={t} />
+
+                <div className="slip-state">
+                  <StatusBadge tone={SWAP_TONE[row.status] ?? 'neutral'}>
+                    {swapStatusLabel(t, row.status)}
+                  </StatusBadge>
+                  {!row.awaitingMe && row.status === 'pending' && (
+                    <span className="slip-turn">{t('market.swaps.awaitingThem')}</span>
+                  )}
+                </div>
+
+                <div className="slip-actions">
+                  {row.awaitingMe && (
+                    <div className="actions">
+                      <Button size="sm" variant="gold" disabled={busy} onClick={() => void act(row, 'approve')}>
+                        {t('market.swaps.approve')}
+                      </Button>
+                      <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(row, 'reject')}>
+                        {t('market.swaps.reject')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </Panel>
   );

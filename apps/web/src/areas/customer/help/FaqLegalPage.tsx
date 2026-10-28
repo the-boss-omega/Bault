@@ -12,6 +12,7 @@ import {
   TabPanel,
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
+import { Amount } from '../../../shared/ui/Serial';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS } from './legalContent';
@@ -72,7 +73,11 @@ export function FaqLegalPage() {
           <FaqPanel />
         </TabPanel>
       )}
-      {tab === 'policy' && <IntakePolicyPanel />}
+      {tab === 'policy' && (
+        <TabPanel tab="policy">
+          <IntakePolicyPanel />
+        </TabPanel>
+      )}
 
       {tab === 'prices' && (
         <TabPanel tab="prices">
@@ -576,11 +581,13 @@ function CurrentFiguresPanel() {
     };
   }, []);
 
-  const rows: Array<[string, string]> = terms
+  // A figure on its own is an Amount, drawn left to right whatever the page reads: the suspension
+  // threshold is negative, and in Hebrew a bare "-$20.00" is drawn with its minus after the number.
+  const rows: Array<[string, ReactNode]> = terms
     ? [
         [t('legal.figures.graceDays'), t('legal.figures.days', { days: terms.debt.graceDays })],
         [t('legal.figures.interest'), t('legal.figures.perDay', { rate: bpsToPercent(terms.debt.interestBpsPerDay) })],
-        [t('legal.figures.suspend'), formatUsd(terms.debt.suspendBelowMinor)],
+        [t('legal.figures.suspend'), <Amount>{formatUsd(terms.debt.suspendBelowMinor)}</Amount>],
         [
           t('legal.figures.cashOut'),
           t('legal.figures.cashOutValue', {
@@ -591,8 +598,8 @@ function CurrentFiguresPanel() {
             largePct: bpsToPercent(terms.cashOut.largeBps),
           }),
         ],
-        [t('legal.figures.chargeback'), formatUsd(terms.chargebackFeeMinor)],
-        [t('legal.figures.restocking'), formatUsd(terms.shipping.restockingFeeMinor)],
+        [t('legal.figures.chargeback'), <Amount>{formatUsd(terms.chargebackFeeMinor)}</Amount>],
+        [t('legal.figures.restocking'), <Amount>{formatUsd(terms.shipping.restockingFeeMinor)}</Amount>],
         [t('legal.figures.paymentWindow'), t('legal.figures.days', { days: terms.shipping.paymentWindowDays })],
         [
           t('legal.figures.insurance'),

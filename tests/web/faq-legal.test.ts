@@ -252,8 +252,8 @@ describe('Legal documents', () => {
     expect(shipped.length).toBeGreaterThan(0);
     const families: Record<string, string> = {
       'plex-sans-hebrew-': 'IBM Plex Sans Hebrew',
-      'plex-sans-': 'IBM Plex Sans',
-      'plex-mono-': 'IBM Plex Mono',
+      'geist-mono-': 'Geist Mono',
+      'geist-': 'Geist',
       'frank-ruhl-': 'Frank Ruhl Libre',
     };
     for (const file of shipped) {

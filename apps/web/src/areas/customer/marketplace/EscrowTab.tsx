@@ -4,6 +4,7 @@ import { useI18n } from '../../../shared/i18n';
 import { dollarsToCents, formatDate, formatUsd } from '../../../shared/money';
 import {
   ESCROW_TONE,
+  escrowEventLabel,
   escrowStatusLabel,
   nextStep,
   type EscrowDeal,
@@ -11,6 +12,8 @@ import {
 } from '../../../shared/escrow';
 import { Button, EmptyState, ErrorState, Field, MoneyField, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { DetailDrawer } from '../../../shared/ui/DetailDrawer';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
+import { Amount } from '../../../shared/ui/Serial';
 import { IconAlert, IconShield, IconUsers } from '../../../shared/ui/icons';
 
 interface Terms {
@@ -204,13 +207,15 @@ export function EscrowTab({ meId }: { meId: string | null }) {
         ) : deals.length === 0 ? (
           <EmptyState title={t('esc.none')} text={t('esc.noneText')} icon={<IconShield />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>
                   <th scope="col">{t('esc.col.deal')}</th>
                   <th scope="col">{t('esc.col.what')}</th>
-                  <th scope="col">{t('esc.col.value')}</th>
+                  <th scope="col" className="td-end">
+                    {t('esc.col.value')}
+                  </th>
                   <th scope="col">{t('esc.col.status')}</th>
                   <th scope="col">{t('esc.col.next')}</th>
                 </tr>
@@ -221,18 +226,33 @@ export function EscrowTab({ meId }: { meId: string | null }) {
                     (d.raiserRole === 'buyer' && d.raisedBy === meId) ||
                     (d.raiserRole === 'seller' && d.counterpartyUserId === meId);
                   return (
-                    <tr key={d.id} className="is-clickable" tabIndex={0} onClick={() => setOpenId(d.id)}>
-                      <td dir="ltr" className="dt-primary">
-                        <code>{d.code}</code>
+                    <tr
+                      key={d.id}
+                      className="is-clickable"
+                      tabIndex={0}
+                      onClick={() => setOpenId(d.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setOpenId(d.id);
+                        }
+                      }}
+                    >
+                      <td data-label={t('esc.col.deal')} className="dt-primary">
+                        <code dir="ltr">{d.code}</code>
                       </td>
-                      <td>{d.description}</td>
-                      <td dir="ltr">{formatUsd(d.valueMinor)}</td>
-                      <td>
+                      <td data-label={t('esc.col.what')}>{d.description}</td>
+                      <td data-label={t('esc.col.value')} className="td-end num">
+                        <Amount>{formatUsd(d.valueMinor)}</Amount>
+                      </td>
+                      <td data-label={t('esc.col.status')}>
                         <StatusBadge tone={ESCROW_TONE[d.status] ?? 'neutral'}>
                           {escrowStatusLabel(t, d.status)}
                         </StatusBadge>
                       </td>
-                      <td className="hint">{nextStep(t, d, viewerIsBuyer)}</td>
+                      <td data-label={t('esc.col.next')} className="hint">
+                        {nextStep(t, d, viewerIsBuyer)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -316,7 +336,6 @@ function DealDrawer({
   return (
     <DetailDrawer
       title={deal.code}
-      subtitle={escrowStatusLabel(t, deal.status)}
       onClose={onClose}
       footer={
         <Button variant="ghost" onClick={onClose}>
@@ -324,24 +343,30 @@ function DealDrawer({
         </Button>
       }
     >
+      <DrawerTag
+        kicker={t('esc.col.value')}
+        amount={formatUsd(deal.valueMinor)}
+        status={<StatusBadge tone={ESCROW_TONE[deal.status] ?? 'neutral'}>{escrowStatusLabel(t, deal.status)}</StatusBadge>}
+        note={t('esc.feeLine', { amount: formatUsd(deal.feeMinor) })}
+      />
+
       <dl className="detail-list">
         <div className="detail-row">
           <dt className="detail-label">{t('esc.col.what')}</dt>
-          <dd className="detail-value">{deal.description}</dd>
-        </div>
-        <div className="detail-row">
-          <dt className="detail-label">{t('esc.col.value')}</dt>
-          <dd className="detail-value" dir="ltr">
-            {formatUsd(deal.valueMinor)}
-            <span className="detail-value-sub">{t('esc.feeLine', { amount: formatUsd(deal.feeMinor) })}</span>
+          <dd className="detail-value">
+            <bdi dir="auto">{deal.description}</bdi>
           </dd>
         </div>
         <div className="detail-row">
           <dt className="detail-label">{t('esc.otherSide')}</dt>
           <dd className="detail-value">
-            {deal.counterpartyUserId
-              ? t('esc.otherAccount')
-              : `${deal.counterpartyName ?? '—'} (${deal.counterpartyEmail ?? ''})`}
+            {deal.counterpartyUserId ? (
+              t('esc.otherAccount')
+            ) : (
+              <>
+                <bdi dir="auto">{deal.counterpartyName ?? '—'}</bdi> <bdi dir="ltr">({deal.counterpartyEmail ?? ''})</bdi>
+              </>
+            )}
           </dd>
         </div>
         {deal.fundedAt && (
@@ -440,19 +465,23 @@ function DealDrawer({
       )}
 
       <h3 className="drawer-heading">{t('esc.trail')}</h3>
-      <ul className="timeline">
+      <ul className="timeline timeline--drawer">
         {events.map((e) => (
-          <li key={e.id} className="detail-row" style={{ display: 'block' }}>
-            <div className="row" style={{ gap: 'var(--sp-2)' }}>
-              <StatusBadge tone="info" plain>
-                {e.eventType.replace(/_/g, ' ')}
-              </StatusBadge>
-              <span className="hint" dir="ltr">
-                {formatDate(e.occurredAt, locale)}
-              </span>
-              {e.onBehalfOf && <StatusBadge tone="neutral" plain>{t('esc.onBehalf')}</StatusBadge>}
+          <li key={e.id}>
+            <span className="hint date">{formatDate(e.occurredAt, locale)}</span>
+            <div className="register-text">
+              <span className="register-kind">{escrowEventLabel(t, e, deal)}</span>
+              {e.onBehalfOf && (
+                <StatusBadge tone="neutral" plain>
+                  {t('esc.onBehalf')}
+                </StatusBadge>
+              )}
+              {e.notes && (
+                <p className="register-entry">
+                  <bdi dir="auto">{e.notes}</bdi>
+                </p>
+              )}
             </div>
-            {e.notes && <p style={{ marginBlockStart: 4, fontSize: 13.5 }}>{e.notes}</p>}
           </li>
         ))}
       </ul>

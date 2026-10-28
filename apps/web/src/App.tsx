@@ -12,6 +12,7 @@ import {
 import { useMediaQuery, useNotificationFeed } from './shared/hooks';
 import { eventLabel, renderContent } from './shared/notifications';
 import { NavigationRail, type NavDestination } from './shared/ui/NavigationRail';
+import { useScrollableRegions } from './shared/ui/useScrollableRegions';
 import {
   AccountPill,
   LanguageSwitcher,
@@ -150,8 +151,9 @@ const AUTH_ROUTES: Record<string, AuthMode> = {
 const LANDING_ROUTES = ['', 'welcome'];
 
 export default function App() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const route = useRoute();
+  useScrollableRegions(locale);
   const [boot, setBoot] = useState<BootState>({ status: 'loading' });
 
   const loadSession = useCallback(async () => {

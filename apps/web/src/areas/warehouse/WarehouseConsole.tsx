@@ -22,6 +22,8 @@ import {
   TabPanel,
   ViewAllLink,
 } from '../../shared/ui/primitives';
+import { scrollBehavior } from '../../shared/ui/motionPreference';
+import { ShelfMap } from './ShelfMap';
 import {
   IconAlert,
   IconBox,
@@ -211,13 +213,17 @@ export function WarehouseConsole() {
             flush
             footer={<ViewAllLink onClick={() => goTab('inventory')}>{t('warehouse.viewInventory')}</ViewAllLink>}
           >
-            <InventoryRows
-              rows={(shelfRows ?? []).slice(0, 6)}
-              loading={shelfRows === null}
-              cut="shelf"
-              bins={bins}
-              t={t}
-            />
+            {bins.length > 0 && shelfRows !== null ? (
+              <ShelfMap bins={bins} counts={shelfRows} t={t} />
+            ) : (
+              <InventoryRows
+                rows={(shelfRows ?? []).slice(0, 6)}
+                loading={shelfRows === null}
+                cut="shelf"
+                bins={bins}
+                t={t}
+              />
+            )}
           </Panel>
 
           <Panel title={t('warehouse.log.title')} flush>
@@ -246,7 +252,7 @@ export function WarehouseConsole() {
               requestAnimationFrame(() => {
                 document
                   .getElementById('intake-bench')
-                  ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+                  ?.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' });
               });
             }}
           />
@@ -1115,8 +1121,8 @@ function BinsPanel({
               <tbody>
                 {bins.map((b) => (
                   <tr key={b.id}>
-                    <td dir="ltr">
-                      <div className="barcode-label">
+                    <td>
+                      <div className="barcode-label" dir="ltr">
                         <Barcode value={b.barcode} options={{ moduleWidth: 1, height: 34 }} />
                         <code>{b.serialNumber}</code>
                         <BarcodePrintButton value={b.barcode} caption={`Zone ${b.zone}`} />

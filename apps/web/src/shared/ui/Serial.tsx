@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { CardSlab } from '../CardPhoto';
+import { useT } from '../i18n';
 
 export function Serial({
   value,
@@ -24,10 +26,24 @@ export function Serial({
   );
 }
 
+/**
+ * A card to choose among: the card in its case, then its serial and its name.
+ * Inside a checkbox's label it is a tile (see "Choosing cards" in components.css);
+ * on its own, in a list, it is a row. The photograph is decoration: the serial and
+ * the name beside it are what the control is called.
+ */
 export function ItemPick({ serial, name }: { serial?: string | null; name: string }) {
+  const t = useT();
   return (
-    <span>
-      {serial && <Serial value={serial} quiet />} <span className="ltr-run">{name}</span>
+    <span className="item-pick">
+      {serial && (
+        <span className="item-pick-art">
+          <CardSlab as="span" serialNumber={serial} title={name} noneLabel={t('photo.none')} />
+        </span>
+      )}
+      <span className="item-pick-text">
+        {serial && <Serial value={serial} quiet />} <span className="item-pick-name ltr-run">{name}</span>
+      </span>
     </span>
   );
 }

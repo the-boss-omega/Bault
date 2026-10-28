@@ -1,0 +1,517 @@
+/* ============================================================
+   The signed-in product
+
+   The shell and the shared surfaces, in the same hand as the public page: a
+   serif voice for titles and figures, hairlines for structure, a lit edge
+   where something is active, and a grain over everything so black is a
+   material and not a void. Reads theme tokens only; loaded after
+   components.css.
+   ============================================================ */
+
+/* ---- The room: grain, and a ceiling light that is barely there ----
+   The grain is the foreground colour, cut to a noise mask, so it is light specks
+   on dark and dark specks on light from one rule. It is a plain layer, not a
+   blend: a blend mode makes the compositor read the whole viewport back on every
+   frame. Phones skip it; it costs most where it is seen least. */
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  contain: strict;
+  background: var(--foreground);
+  opacity: 0.045;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.4 0 0 0 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.4 0 0 0 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  -webkit-mask-size: 200px 200px;
+  mask-size: 200px 200px;
+}
+
+@media (max-width: 899px) {
+  body::before {
+    content: none;
+  }
+}
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: -1;
+  height: 360px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--foreground) 5%, transparent), transparent);
+  pointer-events: none;
+}
+
+/* ---- Brand mark: the paper label ---- */
+
+/* design-lint-allow: the brand mark; its ring is drawn outside it, on the rail. */
+.rail-mark {
+  background:
+    var(--foil) bottom / 100% 3px no-repeat,
+    var(--paper);
+  color: var(--paper-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  border-radius: var(--r-md);
+  box-shadow: inset 0 -3px 0 -1px oklch(0 0 0 / 14%), 0 0 0 1px oklch(1 0 0 / 10%);
+}
+
+/* ---- Navigation rail ---- */
+
+.rail {
+  background: var(--background);
+  border-inline-end-color: var(--border);
+}
+
+.rail-word,
+.rail-word-mini {
+  font-family: var(--font-display);
+}
+
+.rail-word-mini {
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.rail-item {
+  border-inline-start: 0;
+  border-radius: 0;
+  color: var(--muted-foreground);
+  transition: color var(--dur) var(--ease-out-expo), background var(--dur) var(--ease-out-expo);
+}
+
+.rail-item:hover {
+  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+}
+
+.rail-item.is-active {
+  color: var(--foreground);
+  background: linear-gradient(calc(90deg * var(--dir)), color-mix(in oklab, var(--foreground) 8%, transparent), transparent 90%);
+}
+
+.rail-item.is-active::before {
+  content: '';
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  border-start-end-radius: var(--r-bar);
+  border-end-end-radius: var(--r-bar);
+  background: var(--foil);
+  background-size: 100% 300%;
+  /* Once, as the page opens: the foil passes and settles. A bar that never stops moving at the edge of every
+     product page is movement the reader cannot turn off, and the page they are on is not news after a moment. */
+  animation: foil-rise 4s var(--ease-out-expo) 1;
+}
+
+.rail-item.is-active .rail-icon {
+  color: var(--foreground);
+  filter: none;
+}
+
+.rail-count {
+  border-color: var(--input);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.rail-dot {
+  background: var(--custody);
+  box-shadow: 0 0 0 2px var(--background), 0 0 10px var(--custody);
+}
+
+/* ---- Page head ---- */
+
+.page-header {
+  margin-block-end: var(--sp-8);
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 3.4vw, 48px);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+:lang(he) .page-title {
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.breadcrumb {
+  margin-block-start: 10px;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* A button resets text-transform and letter-spacing to its own, so the crumbs that
+   are links stayed sentence case beside the uppercase one that is not. */
+.breadcrumb button {
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.breadcrumb-sep {
+  opacity: 0.5;
+}
+
+.ph-controls {
+  border-color: var(--border);
+  border-radius: var(--r-capsule);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
+.ph-controls > * {
+  border-inline-start-color: var(--border);
+}
+
+/* The capsule does not clip, because a menu opens out of it; the two ends take its corners instead. */
+.ph-controls > :first-child,
+.ph-controls > :first-child > .icon-btn {
+  border-start-start-radius: inherit;
+  border-end-start-radius: inherit;
+}
+
+.ph-controls > :last-child,
+.ph-controls > :last-child > .icon-btn {
+  border-start-end-radius: inherit;
+  border-end-end-radius: inherit;
+}
+
+/* On a phone the header's controls are below the title, wherever the page has scrolled to, and a menu
+   opened out of one of them runs off the edge of the screen. There each drops from the top bar,
+   the width of the screen. */
+@media (max-width: 767px) {
+  .pop {
+    position: fixed;
+    inset-block-start: 64px;
+    inset-inline: var(--sp-4);
+    width: auto;
+    min-width: 0;
+    max-block-size: calc(100svh - 80px);
+    overflow-y: auto;
+  }
+}
+
+.avatar {
+  background: linear-gradient(calc(135deg * var(--dir)), var(--secondary), var(--accent));
+  color: var(--foreground);
+  border: var(--border-w) solid var(--border);
+}
+
+/* ---- Figures: money and counts are set in the display face ---- */
+
+.amount--display,
+.hero-value {
+  font-family: var(--font-display);
+  font-size: clamp(56px, 7vw, 104px);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.amount--lead {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Statistics are columns divided by hairlines, not boxes. */
+
+.metric-grid {
+  gap: 0;
+  border-block: var(--border-w) solid var(--border);
+}
+
+.metric-card,
+.metric-card:first-child {
+  padding: var(--sp-5) var(--sp-6);
+  border: 0;
+  border-inline-start: var(--border-w) solid var(--border);
+  border-radius: 0;
+  background: none;
+  transition: background var(--dur-enter);
+}
+
+.metric-card:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+
+.metric-card:hover {
+  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--foreground) 3%, transparent));
+  transform: none;
+}
+
+.metric-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+}
+
+.metric-value {
+  margin-block-start: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: clamp(34px, 3.2vw, 48px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.metric-foot {
+  margin-block-start: var(--sp-3);
+  color: var(--muted-foreground);
+}
+
+/* ---- Rows that are surfaces you can use: a lit mark, not a box ---- */
+
+.hint {
+  color: var(--muted-foreground);
+}
+
+/* ---- The mobile bar and parcel markers take the kit's surfaces ---- */
+
+.mobile-bar {
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  color: var(--foreground);
+  border-block-end: var(--border-w) solid var(--border);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.parcel-row-index {
+  background: var(--secondary);
+  color: var(--foreground);
+  border: var(--border-w) solid var(--border);
+}
+
+/* ---- Page sections arrive in sequence ---- */
+
+.page > :not(.drawer, .drawer-backdrop, .modal-backdrop) {
+  animation: rise 640ms var(--ease-out-expo) backwards;
+}
+
+.page > :nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.page > :nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.page > :nth-child(4) {
+  animation-delay: 210ms;
+}
+
+.page > :nth-child(n + 5) {
+  animation-delay: 280ms;
+}
+
+@keyframes foil-rise {
+  to {
+    background-position: 0 300%;
+  }
+}
+
+/* ---- Sign in, sign up, reset: the room on one side, the door on the other ---- */
+
+.auth-shell {
+  background: var(--background);
+}
+
+@media (min-width: 900px) {
+  .auth-shell:not(.auth-shell--bare) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(440px, 0.8fr);
+  }
+}
+
+.auth-stage {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  align-items: center;
+  align-content: center;
+  gap: clamp(24px, 3vw, 48px);
+  padding: clamp(40px, 5vw, 80px) clamp(24px, 4vw, 64px);
+  background:
+    radial-gradient(60% 50% at 30% 0%, color-mix(in oklab, var(--foreground) 7%, transparent), transparent 70%),
+    var(--card);
+  border-inline-end: var(--border-w) solid var(--border);
+  color: var(--foreground);
+  overflow: clip;
+}
+
+.auth-pitch {
+  display: grid;
+  gap: 24px;
+  max-width: 34rem;
+}
+
+.auth-headline {
+  margin: 0;
+  font: 500 clamp(32px, 3.5vw, 52px) / 1.04 var(--font-display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+:lang(he) .auth-headline {
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.auth-lede {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--muted-foreground);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+}
+
+.auth-fan {
+  width: min(100%, 440px);
+  margin-inline: auto;
+  aspect-ratio: 1 / 1.08;
+}
+
+.auth-fan .lp-shelf {
+  inset-inline: 4%;
+  gap: 12px 20px;
+  padding: 12px 16px 16px;
+}
+
+.auth-box {
+  max-width: 480px;
+  padding-block: clamp(40px, 7vw, 96px);
+}
+
+.auth-brand-word {
+  font-weight: 600;
+  font-size: 26px;
+}
+
+.auth-card h2 {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3vw, 40px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+:lang(he) .auth-card h2 {
+  letter-spacing: 0;
+}
+
+@media (max-width: 899px) {
+  .auth-stage {
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 32px 28px;
+    border-inline-end: 0;
+    border-block-end: var(--border-w) solid var(--border);
+  }
+
+  .auth-fan {
+    display: none;
+  }
+
+  .auth-lede {
+    display: none;
+  }
+
+  .auth-box {
+    padding-block: 32px 48px;
+  }
+}
+
+/* ---- The language switch: a globe and the code, side by side ---- */
+
+.icon-btn:has(.lang-code) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding-inline: 12px;
+}
+
+.icon-btn:has(.lang-code) svg {
+  transform: none;
+  width: 16px;
+  height: 16px;
+}
+
+.lang-code {
+  position: static;
+  color: inherit;
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+/* ---- Details: the boot mark breathes, selection and scrollbars belong to the room ---- */
+
+.boot .rail-mark {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--r-lg);
+  font-size: 38px;
+  animation: boot-breathe 1.8s var(--ease-in-out-quart) infinite alternate;
+}
+
+@keyframes boot-breathe {
+  from {
+    transform: translateY(0);
+    box-shadow: inset 0 -3px 0 -1px oklch(0 0 0 / 14%), 0 0 0 1px oklch(1 0 0 / 10%), 0 12px 24px -12px oklch(0 0 0 / 60%);
+  }
+  to {
+    transform: translateY(-5px);
+    box-shadow: inset 0 -3px 0 -1px oklch(0 0 0 / 14%), 0 0 0 1px oklch(1 0 0 / 10%), 0 24px 34px -14px oklch(0 0 0 / 70%);
+  }
+}
+
+::selection {
+  background: color-mix(in oklab, var(--foreground) 24%, transparent);
+  color: inherit;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+
+/* ---- Right-to-left: a chevron points the way you are reading ---- */
+
+.breadcrumb-sep {
+  display: inline-block;
+  transform: scaleX(var(--dir));
+}
+
+/* ---- Money is set in the display face; it needs no accent colour ---- */
+
+.amount--brass {
+  color: var(--foreground);
+}
+
+/* ---- A button that sits beside a labelled field lines up with the field, not its hint ---- */
+
+.btn--field-aligned {
+  margin-block-start: calc(var(--fs-base) * var(--lh-snug) + var(--gap-field) + 1px);
+}

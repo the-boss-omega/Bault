@@ -66,7 +66,7 @@ export function IntakePolicyPanel() {
         {policy.acceptedClasses.length === 0 ? (
           <EmptyState title={t('policy.accepted.empty')} text="" icon={<IconBox />} />
         ) : (
-          <div className="dt-wrap">
+          <div className="dt-wrap dt-wrap--stack">
             <table className="data-table">
               <thead>
                 <tr>

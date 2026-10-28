@@ -1,6 +1,8 @@
-import { cloneElement, isValidElement, useId } from 'react';
+import { cloneElement, isValidElement, useId, useLayoutEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
+import { CountUp } from './CountUp';
 import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
+import { scrollBehavior } from './motionPreference';
 
 type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
 
@@ -84,7 +86,7 @@ export function Field({
       {control}
       {error ? (
         <span className="field-error" id={`${id}-error`} role="alert">
-          {error}
+          <bdi dir="auto">{error}</bdi>
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${id}-hint`}>
@@ -138,7 +140,7 @@ export function MoneyField({
       </div>
       {error ? (
         <span className="field-error" id={`${controlId}-error`} role="alert">
-          {error}
+          <bdi dir="auto">{error}</bdi>
         </span>
       ) : hint ? (
         <span className="field-hint" id={`${controlId}-hint`}>
@@ -260,7 +262,10 @@ export function ErrorState({
       <IconAlert />
       <div className="errorbox-body">
         {title && <p className="errorbox-title">{title}</p>}
-        <p>{message}</p>
+        {/* What the server wrote is its own island: an English sentence keeps its full stop at its end. */}
+        <p>
+          <bdi dir="auto">{message}</bdi>
+        </p>
       </div>
       {onRetry && retryLabel && (
         <Button size="sm" variant="secondary" onClick={onRetry}>
@@ -331,7 +336,7 @@ export function MetricCard({
       <span className={`metric-icon metric-icon--${tone}`}>{icon}</span>
       <div>
         <p className="metric-label">{label}</p>
-        <p className="metric-value">{value}</p>
+        <p className="metric-value">{typeof value === 'string' ? <CountUp value={value} /> : value}</p>
       </div>
       {footer && <p className="metric-foot">{footer}</p>}
     </article>
@@ -356,6 +361,57 @@ export function ContextTabs({
   actions?: ReactNode;
   label: string;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const count = tabs.length;
+  const labels = tabs.map((t) => t.label).join('\u0000');
+
+  // Position the gliding indicator under the active tab. Offsets are measured
+  // from the inline-start edge, so the same maths serves LTR and RTL. A tab's
+  // width changes when the webfont arrives, when the language changes and when
+  // the bar is resized, so it is measured again for each of those; measuring
+  // once would leave the indicator where the fallback font put the tab.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    let live = true;
+    const place = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!live || !tab) return;
+      const l = list.getBoundingClientRect();
+      const t = tab.getBoundingClientRect();
+      const rtl = document.documentElement.dir === 'rtl';
+      const x = rtl ? t.right - l.right : t.left - l.left;
+      list.style.setProperty('--tab-x', `${x + list.scrollLeft}px`);
+      list.style.setProperty('--tab-w', `${t.width}px`);
+      list.dataset.ready = 'true';
+    };
+    // On a phone the strip scrolls sideways, and the page can open on a tab that is out of sight (a link to
+    // the storefront or to escrow). Bring it into view: only when the selection changes, so a person
+    // who scrolls the strip by hand is not pulled back by a resize.
+    const reveal = () => {
+      const tab = list.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!live || !tab) return;
+      const room = 16;
+      const l = list.getBoundingClientRect();
+      const t = tab.getBoundingClientRect();
+      const past = t.left - room < l.left ? t.left - room - l.left : t.right + room > l.right ? t.right + room - l.right : 0;
+      if (past) list.scrollTo?.({ left: list.scrollLeft + past, behavior: scrollBehavior() });
+    };
+    place();
+    reveal();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    observer?.observe(list);
+    list.querySelectorAll('[role="tab"]').forEach((el) => observer?.observe(el));
+    void document.fonts?.ready.then(() => {
+      place();
+      reveal();
+    });
+    return () => {
+      live = false;
+      observer?.disconnect();
+    };
+  }, [active, count, labels]);
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = tabs.findIndex((t) => t.key === active);
     if (index < 0) return;
@@ -370,12 +426,15 @@ export function ContextTabs({
     if (next === null) return;
     event.preventDefault();
     const target = tabs[next];
-    if (target) onSelect(target.key);
+    if (!target) return;
+    onSelect(target.key);
+    // Focus goes with the selection, so what the ring is on is what is selected.
+    listRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   }
 
   return (
     <div className="ctx-bar">
-      <div className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      <div ref={listRef} className="ctx-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
         {tabs.map((tab) => {
           const isActive = tab.key === active;
           return (

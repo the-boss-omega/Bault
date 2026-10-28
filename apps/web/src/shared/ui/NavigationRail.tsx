@@ -1,4 +1,4 @@
-import { useReducer, type ReactNode } from 'react';
+import { useEffect, useReducer, useRef, type ReactNode } from 'react';
 import { useT } from '../i18n';
 import {
   INITIAL_NAV_RAIL_STATE,
@@ -33,6 +33,31 @@ export function NavigationRail({
   const [state, dispatch] = useReducer(navRailReducer, INITIAL_NAV_RAIL_STATE);
 
   const expanded = mobile ? mobileOpen : isExpanded(state);
+  const navRef = useRef<HTMLElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+
+  // On a phone the rail is a sheet: it takes focus when it opens, Escape closes it, and focus goes back to
+  // the button that opened it. Closed, it is out of the tab order (index.css), so nothing else reaches it.
+  useEffect(() => {
+    if (!mobile) return;
+    if (mobileOpen) {
+      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const nav = navRef.current;
+      (nav?.querySelector<HTMLElement>('.rail-item.is-active') ?? nav?.querySelector<HTMLElement>('.rail-item'))?.focus();
+      return;
+    }
+    opener.current?.focus?.();
+    opener.current = null;
+  }, [mobile, mobileOpen]);
+
+  useEffect(() => {
+    if (!mobile || !mobileOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onRequestClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobile, mobileOpen, onRequestClose]);
 
   const primary = destinations.filter((d) => !d.secondary);
   const secondary = destinations.filter((d) => d.secondary);
@@ -47,6 +72,7 @@ export function NavigationRail({
     <>
       {mobile && mobileOpen && <div className="rail-scrim" role="presentation" onClick={onRequestClose} />}
       <nav
+        ref={navRef}
         className={`rail${expanded ? ' is-open' : ''}`}
         aria-label={t('nav.primary')}
         onMouseEnter={mobile ? undefined : () => dispatch({ type: 'pointerEnter' })}

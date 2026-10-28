@@ -1,0 +1,2689 @@
+/* ============================================================
+   The money and operations screens
+
+   The pieces that give the signed-in product faces of its own, beyond the shared
+   panel and table: a statement for the wallet, slips for offers, tier cards for
+   membership, a shelf map for the warehouse, labels for parcels. They are made of
+   what the public page is made of: paper where the page is the record, hairlines
+   everywhere else, the display face for figures, and foil kept for what is alive.
+
+   Reads theme tokens only; loaded after gallery.css.
+   ============================================================ */
+
+/* ---- The wallet: a statement ---- */
+
+.statement-sheet {
+  --focus-color: var(--paper-ink);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(64px, 8vw, 112px);
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    0 0 0 1px var(--paper-line),
+    0 36px 64px -36px oklch(0 0 0 / 70%);
+  overflow: clip;
+}
+
+.statement-sheet::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 2;
+  block-size: 5px;
+  background: var(--foil);
+}
+
+.statement-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: var(--paper-grain);
+}
+
+.statement-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  padding: clamp(24px, 3.4vw, 40px) clamp(24px, 3.6vw, 48px) clamp(24px, 3vw, 36px);
+}
+
+.statement-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 24px;
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .statement-head {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.statement-label {
+  margin: clamp(24px, 3vw, 36px) 0 0;
+  color: var(--paper-ink-2);
+  font-size: var(--fs-base);
+  font-weight: 500;
+}
+
+.statement-balance {
+  margin: 4px 0 0;
+  font: 500 clamp(56px, 8.6vw, 128px) / 0.95 var(--font-display);
+  letter-spacing: -0.03em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper-ink);
+}
+
+/* The sum the ledger keeps: credited, less debited, is the balance. */
+
+.statement-sum {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.72fr);
+  margin: clamp(24px, 3vw, 36px) 0 0;
+  padding-block-start: clamp(16px, 2vw, 24px);
+  border-block-start: 1px dashed var(--paper-rule);
+  animation: statement-print 700ms var(--ease-out-expo) backwards;
+}
+
+.statement-term {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-inline-size: 0;
+  margin: 0;
+  padding-inline: clamp(12px, 2.2vw, 32px);
+}
+
+.statement-term:first-child {
+  padding-inline-start: 0;
+}
+
+.statement-term dt {
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .statement-term dt {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.statement-term dd {
+  margin: 0;
+}
+
+.statement-term dd:nth-of-type(1) {
+  font: 500 clamp(22px, 2.5vw, 34px) / 1.1 var(--font-display);
+  letter-spacing: -0.01em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.statement-note {
+  color: var(--paper-ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* The operators sit in the gutter before the term they act on. */
+
+.statement-term--minus::before,
+.statement-term--equals::before {
+  position: absolute;
+  /* design-lint-allow: the operator is placed from its own glyph, which is the em it is set in */
+  inset-inline-start: -0.45em;
+  inset-block-start: 0.92em;
+  font: 400 26px/1 var(--font-display);
+  color: var(--paper-ink-3);
+}
+
+.statement-term--minus::before {
+  content: '\2212';
+  content: '\2212' / '';
+}
+
+.statement-term--equals::before {
+  content: '=';
+  content: '=' / '';
+}
+
+/* The total, double-ruled, as a statement's total is. */
+
+.statement-term--equals dd:nth-of-type(1) {
+  text-decoration: underline double;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 7px;
+}
+
+.statement-term--count {
+  border-inline-start: 1px dashed var(--paper-rule);
+}
+
+/* The stub: the perforated end of a slip, with a barcode and the house mark. */
+
+.statement-stub {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 36px 16px 24px;
+  border-inline-start: 1px dashed var(--paper-rule);
+}
+
+.statement-stub::before,
+.statement-stub::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -12px;
+  z-index: 3;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--background);
+}
+
+.statement-stub::before {
+  inset-block-start: -12px;
+}
+
+.statement-stub::after {
+  inset-block-end: -12px;
+}
+
+.statement-bars {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  max-inline-size: 56px;
+  min-block-size: 110px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--paper-ink) 0 2px,
+    transparent 2px 5px,
+    var(--paper-ink) 5px 6px,
+    transparent 6px 9px,
+    var(--paper-ink) 9px 12px,
+    transparent 12px 14px,
+    var(--paper-ink) 14px 15px,
+    transparent 15px 19px
+  );
+  opacity: 0.78;
+}
+
+.statement-wordmark::before {
+  content: 'BAULT';
+  content: 'BAULT' / '';
+  display: block;
+  writing-mode: vertical-rl;
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: 0.32em;
+  color: var(--paper-ink-3);
+}
+
+@keyframes statement-print {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@media (max-width: 640px) {
+  .statement-sheet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .statement-stub {
+    display: none;
+  }
+
+  /* One column, a line to a term: the name and its note, the figure at the far end, and the
+     operators in a gutter of their own, so credited, less debited, is still visibly the balance. */
+
+  .statement-sum {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline-start: 28px;
+  }
+
+  .statement-term,
+  .statement-term:first-child {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    align-items: center;
+    padding-block: 12px;
+    padding-inline: 0;
+    border-block-end: 1px dashed var(--paper-rule);
+  }
+
+  .statement-term:last-child {
+    border-block-end: 0;
+  }
+
+  .statement-term dt,
+  .statement-term .statement-note {
+    grid-column: 1;
+  }
+
+  .statement-term dd:nth-of-type(1) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .statement-term--minus::before,
+  .statement-term--equals::before {
+    inset-inline-start: -28px;
+    inset-block: 0;
+    display: grid;
+    place-items: center;
+    inline-size: 24px;
+  }
+
+  .statement-term--count {
+    border-inline-start: 0;
+  }
+}
+
+/* Money that has been asked for and has not moved: two slips, not statistics. */
+
+.transit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.transit-slip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--r-md);
+}
+
+.transit-slip::before {
+  content: '';
+  align-self: center;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.transit-label {
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+:lang(he) .transit-label {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.transit-amount {
+  font: 500 22px/1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.transit-note {
+  flex: 1 1 22rem;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+}
+
+/* ---- A ledger on a phone is a list of lines, not a stack of cards ----
+   Type and what it was for on the start side, the amount and the balance after it
+   on the end side, the date under the type. The balance keeps its name; the amount
+   is named by the line it sits on. */
+
+@media (max-width: 767px) {
+  .dt-wrap--stack .data-table--ledger tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'type amount'
+      'ref balance'
+      'date balance';
+    column-gap: var(--sp-4);
+    row-gap: 4px;
+    align-items: baseline;
+    padding-block: 16px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td {
+    display: block;
+    min-inline-size: 0;
+    padding: 0;
+  }
+
+  .dt-wrap--stack .data-table--ledger td::before {
+    content: none;
+  }
+
+  /* The selected-row bar belongs to the line, not to the date cell that happens to be first. */
+  .dt-wrap--stack .data-table--ledger tbody tr > td:first-child {
+    border-inline-start: 0;
+  }
+
+  .dt-wrap--stack .data-table--ledger tr.is-selected {
+    --bar: 3px;
+    border-inline-start: var(--bar) solid var(--foreground);
+    padding-inline-start: calc(var(--sp-4) - var(--bar));
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(1) {
+    grid-area: date;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(2) {
+    grid-area: type;
+    font-size: var(--fs-md, 16px);
+    font-weight: 500;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(3) {
+    grid-area: ref;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(4) {
+    grid-area: amount;
+    text-align: end;
+    font: 500 20px/1.1 var(--font-display);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(5) {
+    grid-area: balance;
+    align-self: start;
+    text-align: end;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+
+  .dt-wrap--stack .data-table--ledger td:nth-child(5)::before {
+    content: attr(data-label);
+    display: block;
+    font: 500 10px/1.4 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  :lang(he) .dt-wrap--stack .data-table--ledger td:nth-child(5)::before {
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+/* ---- Membership: the tiers are cards, the schedule is under them ---- */
+
+.mem-offers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 16px;
+  margin: 0 0 var(--sp-8);
+  padding: 0;
+  border: 0;
+  counter-reset: tier;
+}
+
+.mem-offers .offer {
+  counter-increment: tier;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 24px;
+  padding: 28px 28px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  overflow: clip;
+  transition:
+    border-color var(--dur-slow),
+    transform var(--dur-surface) var(--ease-out-expo);
+}
+
+.mem-offers .offer:hover {
+  border-color: var(--input);
+  transform: translateY(-3px);
+}
+
+/* The ordinal is outlined and behind the text: a watermark, not content. */
+
+.mem-offers .offer::before {
+  content: counter(tier, decimal-leading-zero);
+  content: counter(tier, decimal-leading-zero) / '';
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 20px;
+  z-index: -1;
+  font: 500 112px/1 var(--font-display);
+  color: transparent;
+  -webkit-text-stroke: 1px var(--border);
+  pointer-events: none;
+}
+
+/* The tier you are on carries the foil. */
+
+.mem-offers .offer[data-current='true'] {
+  border-color: var(--input);
+}
+
+.mem-offers .offer[data-current='true']::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 3px;
+  background: var(--foil);
+}
+
+.mem-offers .offer-what {
+  display: grid;
+  gap: 8px;
+}
+
+.mem-offers .offer-name {
+  font: 500 clamp(32px, 3.2vw, 42px) / 1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+:lang(he) .mem-offers .offer-name {
+  letter-spacing: 0;
+}
+
+.mem-offers .offer-price {
+  display: block;
+  font: 500 24px/1.15 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+
+.mem-offers .offer-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.offer-facts {
+  display: grid;
+  margin: 0;
+  border-block-start: 1px dashed var(--control-border);
+}
+
+.offer-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--border);
+}
+
+.offer-facts dt {
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+
+.offer-facts dd {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block-start: auto;
+}
+
+.offer-actions .btn {
+  flex: 1 1 auto;
+}
+
+/* The schedule under the cards: the full list, set quietly. The cards already
+   say who each tier is for and what it costs, so its header is just the names. */
+
+.mem-table .mem-tier-for {
+  display: none;
+}
+
+/* Labels start-aligned and plain; each tier's values centred under its name, so
+   a row reads across instead of leaving a gap the width of the page. */
+
+.mem-table tbody th[scope='row'] {
+  text-align: start;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.mem-table :is(th, td).num {
+  text-align: center;
+}
+
+.mem-table tbody td.num .amount {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* A row's label is ruled like its cells, so the line runs the width of the table. */
+
+.mem-table tbody th[scope='row'] {
+  border-block-end: 1px solid var(--border);
+}
+
+@media (max-width: 767px) {
+  /* On a phone each row is a small stack: its label, then a line for each tier. */
+  .dt-wrap--stack .mem-table tbody th[scope='row'] {
+    display: block;
+    padding: 0 0 6px;
+    border: 0;
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  /* One line per tier: its name at the start, its value at the end. (A second,
+     older rule at 640px makes every cell a block; this one is more specific.) */
+  .dt-wrap--stack .mem-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 4px;
+  }
+
+  .dt-wrap--stack .mem-table td.num {
+    direction: inherit;
+    text-align: end;
+  }
+
+  .dt-wrap--stack .mem-table .mem-perks {
+    justify-items: end;
+    text-align: end;
+  }
+}
+
+/* The tiers' headers are sentences, not figures: they read the way the page does. */
+.mem-table th.num {
+  direction: inherit;
+  unicode-bidi: normal;
+}
+
+.mem-table .mem-tier-price {
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+/* What no tier covers: the fine print, as numbered clauses on paper. */
+
+.mem-uncovered {
+  --focus-color: var(--paper-ink);
+  position: relative;
+  isolation: isolate;
+  display: block;
+  margin: 0;
+  padding: 28px clamp(20px, 3vw, 36px) 16px;
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    0 0 0 1px var(--paper-line),
+    0 30px 50px -34px oklch(0 0 0 / 65%);
+  counter-reset: clause;
+  overflow: clip;
+}
+
+.mem-uncovered::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 4px;
+  background: var(--foil);
+}
+
+.mem-uncovered li {
+  counter-increment: clause;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border: 0;
+  border-block-end: 1px dashed var(--paper-rule);
+  color: var(--paper-ink);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+.mem-uncovered li:last-child {
+  border-block-end: 0;
+}
+
+.mem-uncovered li::before {
+  content: '\200E§' counter(clause, decimal-leading-zero) '\200E';
+  content: '\200E§' counter(clause, decimal-leading-zero) '\200E' / '';
+  padding-block-start: 4px;
+  font: 500 12px/1.5 var(--font-mono);
+  letter-spacing: 0.12em;
+  color: var(--paper-ink-3);
+}
+
+/* ---- Offers: a bid slip each ----
+   The card in its case, who made the offer and whose move it is, the offer in the
+   display face with its name and how it stands against the asking price, then
+   the state and the actions. */
+
+.slips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, auto);
+  grid-template-areas: 'item side money state actions';
+  align-items: center;
+  column-gap: 28px;
+  padding: 24px 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.slip-item {
+  grid-area: item;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-inline-size: 0;
+}
+
+.slip-thumb {
+  flex: 0 0 auto;
+  inline-size: 78px;
+}
+
+.slip-name {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.slip-desc {
+  display: -webkit-box;
+  max-inline-size: 48ch;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.slip-side {
+  grid-area: side;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.slip-turn {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.slip-money {
+  grid-area: money;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+/* An amount typed into a slip is in the display size: it needs room for seven digits and the dollar sign. */
+.slip .money-input input {
+  inline-size: 12ch;
+  max-inline-size: 100%;
+}
+
+.slip-money .amount--lead {
+  font: 500 clamp(26px, 2.4vw, 32px) / 1 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+.slip-asking {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+/* How the offer stands against the asking price: a rule, filled to the fraction. */
+
+.slip-gauge {
+  display: block;
+  inline-size: min(100%, 150px);
+  block-size: 3px;
+  margin-block-start: 4px;
+  border-radius: var(--r-bar);
+  background: var(--border);
+  overflow: hidden;
+}
+
+.slip-gauge > span {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--r-bar);
+  background: var(--foreground);
+}
+
+.slip-state {
+  grid-area: state;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.slip-actions {
+  grid-area: actions;
+  display: flex;
+  justify-content: flex-end;
+  min-inline-size: 0;
+}
+
+.slip-actions .actions {
+  justify-content: flex-end;
+}
+
+/* The answer that cannot be taken back stands apart from the ones that can be, by space as well as by colour. */
+.slip-actions .btn--danger {
+  margin-inline-start: var(--sp-3);
+}
+
+/* A listing is the same slip, with the price first and the offers waiting on it beside it. */
+.slip--listing {
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.8fr) minmax(0, auto);
+  grid-template-areas: 'item money side state actions';
+}
+
+@media (max-width: 1179px) {
+  .slip {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'item item'
+      'side money'
+      'state actions';
+    row-gap: 20px;
+  }
+}
+
+@media (max-width: 767px) {
+  .slip {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'item'
+      'money'
+      'side'
+      'state'
+      'actions';
+    row-gap: 16px;
+  }
+
+  .slip-actions,
+  .slip-actions .actions {
+    justify-content: flex-start;
+  }
+
+  .slip-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ---- Trade: the same slip, with the two sides facing each other ----
+   What they receive and what you receive, each card in its case beside its
+   serial, and between them the way the cards travel: both ways for a swap, one
+   way for a gift, toward whoever is receiving. */
+
+.slip--trade {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr) auto minmax(0, 1.5fr) minmax(0, 0.8fr) minmax(0, auto);
+  grid-template-areas: 'side give swap get state actions';
+}
+
+.trade-side {
+  display: grid;
+  align-content: start;
+  align-self: start;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.trade-side--give {
+  grid-area: give;
+}
+
+.trade-side--get {
+  grid-area: get;
+}
+
+.trade-items {
+  list-style: none;
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.trade-items > li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+}
+
+.slip--trade .slip-thumb {
+  inline-size: 56px;
+}
+
+.trade-nothing {
+  color: var(--muted-foreground);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.trade-swap {
+  grid-area: swap;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  color: var(--muted-foreground);
+  transform: scaleX(var(--dir));
+}
+
+.trade-swap--back {
+  transform: scaleX(calc(var(--dir) * -1));
+}
+
+@media (max-width: 1179px) {
+  .slip--trade {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas:
+      'side side state'
+      'give swap get'
+      'actions actions actions';
+    row-gap: 20px;
+  }
+}
+
+@media (max-width: 767px) {
+  .slip--trade {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'side'
+      'give'
+      'swap'
+      'get'
+      'state'
+      'actions';
+    row-gap: 16px;
+  }
+
+  /* Stacked, the cards travel down (or up), so the glyph turns a quarter. */
+  .trade-swap,
+  .trade-swap--back {
+    inline-size: 56px;
+    block-size: 32px;
+    transform: none;
+  }
+
+  .trade-swap svg {
+    transform: rotate(90deg);
+  }
+
+  .trade-swap--back svg {
+    transform: rotate(-90deg);
+  }
+}
+
+/* ---- Shipping and services: the departures ----
+   Three things happen here, each a line on a board: how many cards are ready to go,
+   a lookup for the ones that have gone, and the requests raised against the ones that
+   stay. The figure leads, in the display face; what it is, what to do about it and
+   the way in follow. */
+
+.departures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.departure {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.55fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  column-gap: 32px;
+  padding: 32px 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.departure:last-child {
+  border-block-end: 0;
+}
+
+/* The title comes first in the document, so a reader who jumps by heading lands on it and meets its figure
+   next; the board still reads figure, words, way in. */
+.departure-figure {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin: 0;
+}
+
+.departure-text {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.departure-action {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.departure-number {
+  font: 500 clamp(48px, 5vw, 72px) / 1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.departure-aside {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.departure-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 56px;
+  block-size: 56px;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  color: var(--muted-foreground);
+}
+
+.departure-icon svg {
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.departure-text {
+  min-inline-size: 0;
+}
+
+.departure-title {
+  margin: 0 0 8px;
+  font: 500 clamp(22px, 2vw, 28px) / 1.2 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.departure-desc {
+  margin: 0;
+  max-inline-size: 56ch;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+@media (max-width: 767px) {
+  .departure {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 16px;
+    padding: 24px 0;
+  }
+
+  .departure-figure,
+  .departure-text,
+  .departure-action {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .departure-figure {
+    order: -1;
+  }
+
+  .departure-action .btn {
+    inline-size: 100%;
+  }
+}
+
+/* A register whose entries are stamped with the time gives the stamp room; the day is a heading on the rule. */
+@media (min-width: 640px) {
+  .timeline--stamped > li {
+    grid-template-columns: 7rem minmax(0, 1fr);
+  }
+}
+
+/* A time has no letters to say which way it reads, so it was set from the left whatever the page reads and, in
+   Hebrew, sat at the far side of its column. It hangs from the edge the page starts at. */
+.timeline--stamped > li > .date {
+  text-align: var(--text-start);
+}
+
+/* ---- A drawer's tag: the sum it is about, on paper ---- */
+
+.drawer-tag,
+.ledger-sheet {
+  --focus-color: var(--paper-ink);
+  position: relative;
+  isolation: isolate;
+  margin-block-end: var(--sp-6);
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    0 0 0 1px var(--paper-line),
+    0 24px 40px -28px oklch(0 0 0 / 70%);
+  overflow: clip;
+}
+
+.drawer-tag {
+  display: grid;
+  gap: var(--sp-1);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+}
+
+.drawer-tag::before,
+.ledger-sheet::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 2;
+  block-size: 3px;
+  background: var(--foil);
+}
+
+.drawer-tag::after,
+.ledger-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: var(--paper-grain);
+}
+
+.drawer-tag > *,
+.ledger-sheet > * {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+}
+
+.drawer-tag-kicker,
+.ledger-kicker {
+  /* design-lint-allow: a small label in the mono face, as the statement's is */
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .drawer-tag-kicker,
+:lang(he) .ledger-kicker {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.drawer-tag-amount {
+  font: 500 clamp(36px, 5vw, 48px) / 1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper-ink);
+}
+
+/* Words where the amount would be: what a person typed, read as the language it is in, hung from that language's edge. */
+.drawer-tag-title {
+  font: 500 clamp(24px, 3.2vw, 30px) / 1.2 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--paper-ink);
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+/* A tag in a list stays the size of its neighbours whatever was typed on it: the words are cut at three lines. */
+.tag-item .drawer-tag-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* The card in its case, laid on the tag: the object the tag is about, a little larger than a list's thumbnail. */
+.drawer-tag-art {
+  display: grid;
+  justify-items: center;
+  margin-block-end: var(--sp-3);
+}
+
+.drawer-tag-art > * {
+  inline-size: 96px;
+}
+
+/* The figure is an amount (left to right, tabular), and an amount takes the theme's ink: on paper it is paper's. */
+.drawer-tag .amount,
+.ledger-sheet .amount,
+.drawer-tag .serial,
+.drawer-tag .code-inline,
+.ledger-sheet .code-inline {
+  color: inherit;
+}
+
+.drawer-tag-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-4);
+  margin-block-start: var(--sp-3);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px dashed var(--paper-rule);
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A status on paper is read in ink: the light is the state's, the word is not. */
+.drawer-tag .pill,
+.drawer-tag .badge {
+  color: var(--paper-ink);
+}
+
+.drawer-tag-note {
+  color: var(--paper-ink-2);
+}
+
+/* ---- A form with its slip: the request as it will be read, written while it is typed ---- */
+
+.request-form {
+  display: grid;
+  gap: var(--sp-6);
+  max-inline-size: 560px;
+}
+
+.request-form-fields,
+.request-form-actions {
+  min-inline-size: 0;
+}
+
+.request-slip .drawer-tag {
+  margin-block-end: 0;
+}
+
+/* A line of the slip is a name and what was typed against it; a long value takes the room of the leader. */
+.drawer-tag-lines .ledger-line dd {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+/* ---- The shipment: its panels, and the parcel as it will be sent, written beside them while it is chosen ---- */
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--sp-6);
+}
+
+.composer-slip .drawer-tag {
+  margin-block-end: 0;
+}
+
+@media (min-width: 1180px) {
+  .composer {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    column-gap: var(--sp-12);
+    align-items: start;
+  }
+
+  .composer > .panel {
+    grid-column: 1;
+  }
+
+  .composer-slip {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+    position: sticky;
+    inset-block-start: var(--sp-6);
+  }
+}
+
+@media (min-width: 1100px) {
+  .request-form {
+    grid-template-columns: minmax(0, 560px) minmax(280px, 380px);
+    /* Where the slip is taller than the fields, the room is below the button, not between it and the fields. */
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: var(--sp-12);
+    max-inline-size: none;
+    align-items: start;
+  }
+
+  .request-form-fields,
+  .request-form-actions {
+    grid-column: 1;
+  }
+
+  .request-slip {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    inset-block-start: var(--sp-6);
+  }
+}
+
+/* ---- A parcel's label as it is typed: what is in it, where it goes, and its number as a barcode ---- */
+
+/* What was left unsaid is said in the quieter ink, so the tag never looks like it was filled in. */
+.drawer-tag-quiet {
+  color: var(--paper-ink-3);
+}
+
+.parcel-stub {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-2);
+  margin-block: var(--sp-3);
+  padding-block: var(--sp-3);
+  border-block: 1px dashed var(--paper-rule);
+}
+
+/* The barcode is its own white label, laid on the paper: it is printed black on white whichever way the page is. */
+.parcel-stub .barcode {
+  max-inline-size: 100%;
+}
+
+.parcel-stub-empty {
+  color: var(--paper-ink-3);
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Hebrew has no capitals and the mono face has no Hebrew: the words are in the UI face, not spaced out. */
+:lang(he) .parcel-stub-empty {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---- A ticket as it is written: its subject in the display face, its kind, and how its message begins ---- */
+
+.ticket-note {
+  display: grid;
+  gap: var(--sp-1);
+  margin-block: var(--sp-2) var(--sp-3);
+}
+
+.ticket-note p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+/* A register's entry that opens something: the words are the control, and they read as what they are until pointed at. */
+.register-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.register-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The subject of a ticket is what the entry is: it leads its line in the size of the text around the register. */
+.register-entry .register-link {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+
+li.is-clickable {
+  cursor: pointer;
+}
+
+/* ---- A trade as it is composed: the two sides on the tag, one above the other, and the way the cards travel between them ---- */
+
+.trade-slip {
+  display: grid;
+  gap: var(--sp-3);
+  padding-block: var(--sp-3) var(--sp-2);
+}
+
+.trade-slip .trade-side,
+.trade-slip .trade-swap {
+  grid-area: auto;
+}
+
+/* The glyph sits under the thumbnails, turned a quarter: the cards go down (a swap, both ways) or up (a gift to them). */
+.trade-slip .trade-swap {
+  justify-self: start;
+  inline-size: 48px;
+  block-size: 24px;
+  transform: none;
+}
+
+.trade-slip .trade-swap svg {
+  transform: rotate(90deg);
+}
+
+.trade-slip .trade-swap--back svg {
+  transform: rotate(-90deg);
+}
+
+/* What the row of a trade draws in the theme's greys is drawn in the paper's inks when it is on a tag. */
+.drawer-tag .slip-label,
+.drawer-tag .trade-swap {
+  color: var(--paper-ink-3);
+}
+
+.drawer-tag .slip-desc,
+.drawer-tag .trade-nothing {
+  color: var(--paper-ink-2);
+}
+
+.drawer-tag .slip-thumb {
+  inline-size: 48px;
+}
+
+/* ---- The account, and where it ships: a card for who it is, a label for each place ---- */
+
+/* What the card says of one of its lines, a size down: the username is permanent. */
+.drawer-tag-sub {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--paper-ink-3);
+  font-size: var(--fs-caption);
+  font-weight: 400;
+}
+
+/* Plain words on paper: what a tag says about itself, in the paper's second ink. */
+.drawer-tag-text {
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-8) var(--sp-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-item {
+  flex: 0 1 340px;
+  min-inline-size: 0;
+}
+
+/* A tag being edited is the form beside the tag it makes: it takes the whole row, not the width of the tags it
+   was among (three to a row are two to a row at 1180, and two columns of tags are too narrow for a form). */
+.tag-item.is-editing {
+  flex: 1 0 100%;
+}
+
+.tag-item > .drawer-tag {
+  margin-block-end: 0;
+}
+
+.tag-item > .actions {
+  margin-block-start: var(--sp-3);
+}
+
+.address-lines {
+  display: grid;
+  gap: 2px;
+  margin-block: var(--sp-2) var(--sp-1);
+  color: var(--paper-ink-2);
+  font-style: normal;
+  font-size: var(--fs-base);
+  line-height: 1.45;
+}
+
+/* A line is what a person typed: read as the language it is in, hung from that language's edge. */
+.address-lines > span {
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+/* ---- The accounts, as a roll: who each is, what they may do, where the account stands ---- */
+
+.roll-account {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+.roll-account .avatar {
+  flex: none;
+}
+
+.roll-account-text {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-inline-size: 0;
+}
+
+.roll-status {
+  gap: var(--sp-2);
+}
+
+/* An account is opened by its name or by its line; the line says so to a pointer. */
+.data-table tbody tr.is-clickable {
+  cursor: pointer;
+}
+
+.data-table tbody tr.is-clickable:hover .register-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The note a drawer carries with a button of its own: the words, and the button at the end of the line. */
+.drawer-note > .btn {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.account-fields {
+  margin-block-start: var(--sp-5);
+}
+
+/* In a drawer, which is narrow, a tag's words are a size down: a catalogue name is a line or two, not four. */
+.drawer .drawer-tag-title {
+  font-size: clamp(22px, 2.4vw, 26px);
+}
+
+/* What is done with an item besides changing it: print its barcode, look at its photograph. Under the card, on the page. */
+.item-tools {
+  align-items: center;
+  gap: var(--sp-4);
+  margin-block: calc(var(--sp-2) * -1) 0;
+}
+
+.item-photo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ---- The storage sweep's runs: a statement, a line to each run ---- */
+
+.fee-sheet {
+  max-inline-size: 720px;
+  margin-block-end: 0;
+  padding: var(--sp-2) var(--sp-6);
+}
+
+.fee-runs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fee-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-4);
+  align-items: last baseline;
+  padding-block: var(--sp-4);
+  border-block-start: 1px dashed var(--paper-rule-soft);
+}
+
+.fee-run:first-child {
+  border-block-start: 0;
+}
+
+.fee-run-date {
+  font: 500 var(--fs-xl) / 1.2 var(--font-display);
+  color: var(--paper-ink);
+}
+
+/* What a run charged, named: a figure on paper does not travel without its name. */
+.fee-run-sum {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.ledger-sheet .money-label {
+  color: var(--paper-ink-3);
+}
+
+.fee-run-total {
+  font: 500 var(--fs-2xl) / 1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.fee-run-meta {
+  grid-column: 1 / -1;
+  color: var(--paper-ink-3);
+  font-size: var(--fs-caption);
+}
+
+/* ---- A dispute as a case file: the ruling, the transaction, the note, and under it the controls that move it on ---- */
+
+/* What was written on the file is quoted, in the paper's second ink, hung from the edge of the language it is in. */
+.case-note {
+  margin: var(--sp-2) 0 var(--sp-1);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--paper-rule);
+  color: var(--paper-ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.case-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-3);
+}
+
+.case-controls input {
+  grid-column: 1 / -1;
+}
+
+/* ---- Two-factor sign-in: where it stands on a card, the key to scan on a card, the codes to keep on a sheet ---- */
+
+.mfa-qr {
+  justify-self: center;
+  margin-block: var(--sp-2);
+}
+
+.barcode img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.mfa-key {
+  display: grid;
+  gap: var(--sp-1);
+  margin-block-end: var(--sp-1);
+}
+
+.mfa-key .code-inline {
+  font-size: var(--fs-md);
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+/* The sheet of codes is as wide as a sheet is: the codes are read down it, two to a line where there is room. */
+.mfa-codes {
+  max-inline-size: 460px;
+}
+
+.drawer-tag .recovery-codes {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--sp-2) var(--sp-6);
+  margin-block: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-color: var(--paper-rule);
+  color: var(--paper-ink);
+}
+
+.drawer-tag .recovery-codes li::marker {
+  color: var(--paper-ink-3);
+  font-family: var(--font-mono);
+}
+
+.drawer-tag .recovery-codes .code-inline {
+  color: inherit;
+}
+
+/* Code on paper is ink on paper: the chip the page draws around code is the page's, not the tag's. */
+.drawer-tag code,
+.ledger-sheet code {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/*
+ * A form with its slip where there is not the room for them side by side (half a page, a column of 600px,
+ * whatever the window): the slip goes above what it is about, and keeps the shape of a slip.
+ */
+.request-form.request-form--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  max-inline-size: none;
+}
+
+.request-form--stacked > .request-slip {
+  grid-column: 1;
+  grid-row: auto;
+  position: static;
+  max-inline-size: 380px;
+}
+
+.request-form--stacked > .request-form-fields,
+.request-form--stacked > .request-form-actions {
+  grid-column: 1;
+  max-inline-size: 460px;
+}
+
+/* The security tab: the password and the second factor, a half of the page each where the page is wide. */
+.security-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-8) var(--sp-12);
+}
+
+@media (min-width: 1100px) {
+  .security-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+/* ---- The rate card: every rule in force on one sheet, a group to each action and a line to each rule ---- */
+
+.rate-card {
+  margin-block-end: 0;
+  padding: var(--sp-6) var(--sp-6) var(--sp-2);
+}
+
+/* The groups run down the card in as many columns as it has room for, as a printed price list does. */
+.rate-columns {
+  columns: 340px;
+  column-gap: var(--sp-12);
+}
+
+.rate-group {
+  break-inside: avoid;
+  margin-block-end: var(--sp-6);
+}
+
+.rate-group-title {
+  margin: 0 0 var(--sp-1);
+  padding-block-end: var(--sp-1);
+  border-block-end: 1px solid var(--paper-rule);
+  font: 500 var(--fs-xl) / 1.2 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--paper-ink);
+}
+
+.rate-group-title {
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.rate-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rate-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-4);
+  align-items: baseline;
+  padding-block: var(--sp-2);
+  border-block-start: 1px dashed var(--paper-rule-soft);
+}
+
+.rate-line:first-child {
+  border-block-start: 0;
+}
+
+.rate-line-name,
+.rate-line-meta {
+  grid-column: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* What a rule is called is what somebody typed, and is read as the language it is in. What is said about it
+   is the page's own, composed from parts: it reads the way the page does, whatever its first letter is. */
+.rate-line-name {
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
+}
+
+.rate-line-name {
+  color: var(--paper-ink);
+  font-size: var(--fs-base);
+  line-height: 1.4;
+}
+
+.rate-line-meta {
+  color: var(--paper-ink-3);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+.rate-line-value {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font: 500 var(--fs-lg) / 1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+
+/* A rule that has been replaced stays on the card, quiet, its figure struck through, under the one that replaced it;
+   one that has not begun yet is as quiet, and not struck. */
+.rate-line.is-replaced .rate-line-name,
+.rate-line.is-upcoming .rate-line-name,
+.rate-line.is-replaced .rate-line-value,
+.rate-line.is-upcoming .rate-line-value {
+  color: var(--paper-ink-3);
+}
+
+.rate-line.is-replaced .rate-line-value {
+  text-decoration-thickness: 1px;
+}
+
+/* ---- The month's statement: three figures on one sheet of paper ---- */
+
+/* The sheet is the container: how many figures sit side by side is the sheet's width, not the window's. */
+.ledger-sheet {
+  container: ledger / inline-size;
+}
+
+.ledger-cols {
+  --ledger-figure: clamp(30px, 9cqi, 44px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ledger-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-inline-size: 0;
+  padding: var(--sp-5);
+}
+
+.ledger-col + .ledger-col {
+  border-block-start: 1px dashed var(--paper-rule);
+}
+
+.ledger-col > * {
+  margin: 0;
+}
+
+.ledger-figure {
+  font: 500 var(--ledger-figure) / 1.05 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper-ink);
+}
+
+/* What the figure is made of: a name, a leader of dots, an amount, as a menu or a receipt sets them. */
+.ledger-lines {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-block-start: var(--sp-2);
+}
+
+.ledger-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--paper-ink-2);
+}
+
+.ledger-line dt {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-inline-size: 0;
+}
+
+.ledger-line dt::after {
+  content: '';
+  flex: 1 1 var(--sp-4);
+  min-inline-size: var(--sp-4);
+  border-block-end: 1px dotted var(--paper-rule);
+}
+
+.ledger-line dd {
+  flex: none;
+  margin: 0;
+  color: var(--paper-ink);
+}
+
+.ledger-note,
+.ledger-foot {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--paper-ink-2);
+}
+
+.ledger-note {
+  margin-block-start: var(--sp-1);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px dashed var(--paper-rule);
+}
+
+.ledger-foot {
+  padding: var(--sp-3) var(--sp-5);
+  border-block-start: 1px dashed var(--paper-rule);
+}
+
+/* Wide enough, the revenue and its lines stand on one side, and what customers put in and what is held for them are stacked on the other. */
+@container ledger (min-width: 736px) {
+  .ledger-cols {
+    --ledger-figure: clamp(28px, 5cqi, 44px);
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+
+  .ledger-col:first-child {
+    grid-row: span 2;
+  }
+
+  .ledger-col + .ledger-col {
+    border-block-start: 0;
+    border-inline-start: 1px dashed var(--paper-rule);
+  }
+
+  .ledger-col:last-child {
+    border-block-start: 1px dashed var(--paper-rule);
+  }
+
+  /* Figures of a kind (the sign-in log's three counts) are columns of the same width, side by side. */
+  .ledger-cols--even {
+    --ledger-figure: clamp(26px, 4.4cqi, 40px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ledger-cols--even .ledger-col:first-child {
+    grid-row: auto;
+  }
+
+  .ledger-cols--even .ledger-col:last-child {
+    border-block-start: 0;
+  }
+}
+
+/* An entry that has a button of its own (a parked message, to be requeued) gives it a column at the end of the line. */
+@media (min-width: 640px) {
+  .timeline--stamped.timeline--actions > li {
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+
+/* What needs attention is marked at its node, in the amber, and what went wrong is said in its own ink. */
+.timeline > li.is-attention::before {
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+.register-error .code-inline {
+  color: var(--error-strong);
+  font-size: var(--fs-caption);
+}
+
+/* The register inside a drawer, which is narrow whatever the window is: the date over what it says. */
+.timeline--drawer > li {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+/* ---- Notifications: a register in days ---- */
+
+.register-days {
+  display: grid;
+  gap: var(--sp-8);
+}
+
+.register-day {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  /* design-lint-allow: a small label in the mono face, as the breadcrumb is */
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.register-day::after {
+  content: '';
+  flex: 1 1 auto;
+  border-block-start: 1px dashed var(--border);
+}
+
+:lang(he) .register-day {
+  font: 500 13px/1.3 var(--font-ui);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The second line of an entry of the sign-in log: where from, and on what. */
+.register-meta {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted-foreground);
+}
+
+/* A log is read down, a line to an attempt: what happened, to whom, from where. */
+@media (min-width: 900px) {
+  .timeline--log > li {
+    padding-block: var(--sp-2);
+  }
+
+  .timeline--log .register-text {
+    grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: baseline;
+    justify-items: stretch;
+    column-gap: var(--sp-4);
+  }
+
+  .timeline--log .register-entry,
+  .timeline--log .register-meta {
+    margin: 0;
+  }
+}
+
+/* An entry that is about a card shows the card, in its case, beside what it says. */
+.register-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+.register-thumb {
+  flex: none;
+  inline-size: 44px;
+}
+
+/* An entry about no card in particular carries the kind of thing it is, in a tile the width of the card's case. */
+.register-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--muted-foreground);
+}
+
+.register-glyph svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
+/* The same register, small, in the bell's menu: each entry has its mark, its words, and when. */
+.register-day--pop {
+  padding: var(--sp-3) var(--sp-4) var(--sp-1);
+}
+
+.pop-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pop-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: var(--sp-3);
+  align-items: start;
+}
+
+.pop-row .register-thumb,
+.pop-row .register-glyph {
+  inline-size: 36px;
+}
+
+.pop-row .register-glyph {
+  block-size: 36px;
+}
+
+.pop-row-body {
+  min-inline-size: 0;
+}
+
+.register-text {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-inline-size: 0;
+}
+
+/* The departures keep one set of columns down the board, so the titles line up whatever the buttons say. */
+@supports (grid-template-columns: subgrid) {
+  .departures {
+    display: grid;
+    grid-template-columns: minmax(160px, 0.55fr) minmax(0, 1.6fr) auto;
+    column-gap: 32px;
+  }
+
+  .departure {
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+  }
+
+  @media (max-width: 767px) {
+    .departures {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+/* ---- Inbound: a label for each parcel ----
+   What is in it and where it is on the start side; on the end side, past the
+   perforation, the tracking number as a barcode, the way it is on the box. Under
+   the contents, how far it has got, with the date of each stop it has reached. */
+
+.labels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.label-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(132px, 15vw, 200px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  overflow: clip;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-slow),
+    transform var(--dur-surface) var(--ease-out-expo);
+}
+
+.label-card:hover,
+.label-card.is-selected {
+  border-color: var(--input);
+}
+
+.label-card:hover {
+  transform: translateY(-2px);
+}
+
+.label-main {
+  display: grid;
+  gap: 16px;
+  min-inline-size: 0;
+  padding: 24px 28px;
+}
+
+.label-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.label-code {
+  font: 500 12px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+}
+
+.label-what {
+  margin: 0;
+  max-inline-size: 52ch;
+  font: 500 clamp(20px, 2vw, 26px) / 1.25 var(--font-display);
+  color: var(--foreground);
+  text-wrap: balance;
+  /* What the sender wrote: its own language sets its own direction. */
+  unicode-bidi: plaintext;
+}
+
+.label-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+
+.label-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The journey: four stops on a rule, filled as far as it has got. */
+
+.label-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.label-track li {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding-block-start: 20px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.label-track li::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  inline-size: 10px;
+  block-size: 10px;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--card);
+}
+
+.label-track li::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline: 16px 4px;
+  block-size: 1px;
+  background: var(--border);
+}
+
+.label-track li:last-child::after {
+  content: none;
+}
+
+.label-track li[data-reached='true']::before {
+  border-color: var(--foreground);
+  background: var(--foreground);
+}
+
+.label-track li[data-reached='true']:has(+ li[data-reached='true'])::after {
+  background: var(--foreground);
+}
+
+.label-track li[aria-current='step'] {
+  color: var(--foreground);
+}
+
+.label-track li[aria-current='step'] .label-stop {
+  font-weight: 600;
+}
+
+.label-track li[aria-current='step']::before {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.label-when {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+/* The stub: past the perforation, the barcode and the tracking number. */
+
+.label-stub {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  border-inline-start: 1px dashed var(--control-border);
+}
+
+.label-stub::before,
+.label-stub::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -12px;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.label-stub::before {
+  inset-block-start: -12px;
+}
+
+.label-stub::after {
+  inset-block-end: -12px;
+}
+
+.label-bars {
+  inline-size: 100%;
+  block-size: 46px;
+  /* design-lint-allow: a barcode is read the same way whichever way the page is */
+  background: repeating-linear-gradient(
+    90deg,
+    var(--foreground) 0 2px,
+    transparent 2px 4px,
+    var(--foreground) 4px 5px,
+    transparent 5px 8px,
+    var(--foreground) 8px 11px,
+    transparent 11px 13px,
+    var(--foreground) 13px 14px,
+    transparent 14px 18px
+  );
+  opacity: 0.75;
+}
+
+.label-tracking {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.label-tracking code {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0;
+  color: var(--foreground);
+}
+
+.label-carrier {
+  color: var(--muted-foreground);
+  font: 500 11px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .label-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .label-main {
+    padding: 20px 20px 20px;
+  }
+
+  .label-stub {
+    border-inline-start: 0;
+    border-block-start: 1px dashed var(--control-border);
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-items: start;
+    align-content: center;
+    padding: 16px 20px;
+  }
+
+  .label-stub::before,
+  .label-stub::after {
+    inset-block-start: -12px;
+    inset-block-end: auto;
+  }
+
+  .label-stub::before {
+    inset-inline-start: -12px;
+  }
+
+  .label-stub::after {
+    inset-inline-start: auto;
+    inset-inline-end: -12px;
+  }
+
+  .label-bars {
+    grid-column: 1 / -1;
+    block-size: 34px;
+  }
+
+  .label-tracking {
+    text-align: start;
+  }
+
+  :lang(he) .label-carrier {
+    font-family: var(--font-ui);
+    letter-spacing: 0;
+  }
+}
+
+/* ---- Inbound, the processing floor ----
+   The two places a parcel waits, along the line it travels (the same line as a
+   label's journey): a place with parcels in it is lit, the line runs on past the
+   last one, and under them is how long the oldest has waited. */
+
+.queue-board {
+  padding-block: 8px 4px;
+}
+
+.queue {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-stop {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-block: 28px 8px;
+  padding-inline-end: 24px;
+}
+
+.queue-stop::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  inline-size: 10px;
+  block-size: 10px;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--background);
+}
+
+.queue-stop::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline: 20px 8px;
+  block-size: 1px;
+  background: var(--border);
+}
+
+.queue-stop:last-child::after {
+  inset-inline-end: 0;
+  background: none;
+  border-block-start: 1px dashed var(--control-border);
+  block-size: 0;
+}
+
+.queue-stop[data-waiting='true']::before {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.queue-figure {
+  font: 500 clamp(48px, 6vw, 80px) / 1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.queue-note {
+  max-inline-size: 36ch;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.queue-oldest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 24px;
+  margin-block: 28px 20px;
+  padding-block-start: 20px;
+  border-block-start: 1px solid var(--border);
+}
+
+.queue-hours {
+  font: 500 28px / 1.1 var(--font-display);
+  letter-spacing: -0.01em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+@media (max-width: 767px) {
+  .queue-stop {
+    padding-inline-end: 16px;
+  }
+}
+
+/* ---- The warehouse: the floor as a map ----
+   Shelves in their zones, as racks. Each slot is a shelf: its barcode, how many
+   items stand on it, and a mark for each. */
+
+.shelf-map {
+  display: grid;
+  gap: 24px;
+  padding: var(--pad-panel);
+}
+
+.shelf-zone {
+  display: grid;
+  gap: 10px;
+}
+
+/* The zone is an aisle sign: a strip of paper with the zone's letter on it and what stands in it. */
+.shelf-zone-head {
+  --focus-color: var(--paper-ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 16px;
+  border-radius: var(--r-xs);
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow: 0 0 0 1px var(--paper-line);
+}
+
+.shelf-zone-name {
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--paper-ink-3);
+}
+
+:lang(he) .shelf-zone-name {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.shelf-zone-name b {
+  margin-inline-start: 4px;
+  font: 500 28px/1 var(--font-display);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--paper-ink);
+}
+
+.shelf-zone-total {
+  font: 500 22px/1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper-ink);
+}
+
+/* The rack runs the width of the panel and its shelves share it out; a shelf is never narrower than its barcode and its count. */
+
+.shelf-rack {
+  list-style: none;
+  margin: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px;
+  border-radius: var(--r-md);
+  background: var(--muted);
+  box-shadow: inset 0 -4px 0 -1px var(--border);
+}
+
+.shelf-slot {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  min-block-size: 108px;
+  padding: 12px 16px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-sm);
+  background: var(--card);
+}
+
+/* An oversized shelf takes two places in the rack. */
+.shelf-slot[data-wide='true'] {
+  grid-column: span 2;
+}
+
+.shelf-slot[data-state='empty'] {
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+}
+
+.shelf-slot[data-state='out'] {
+  border-color: var(--border);
+  /* design-lint-allow: a hatch: either diagonal reads the same */
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 7px,
+    color-mix(in oklab, var(--foreground) 9%, transparent) 7px 8px
+  );
+}
+
+.shelf-slot[data-state='tray'] {
+  min-block-size: 56px;
+  border-style: dashed;
+  border-color: var(--amber);
+  background: transparent;
+}
+
+.shelf-bin {
+  /* The count sits at the end edge; the label stays clear of it. */
+  /* design-lint-allow: room for the count, which is set in this face */
+  padding-inline-end: 2.4em;
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.shelf-count {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 16px;
+  font: 500 28px/1 var(--font-display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--foreground);
+}
+
+.shelf-slot[data-state='empty'] .shelf-count,
+.shelf-slot[data-state='out'] .shelf-count {
+  color: var(--muted-foreground);
+}
+
+.shelf-pips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px;
+  min-block-size: 15px;
+}
+
+.shelf-pip {
+  inline-size: 9px;
+  block-size: 14px;
+  border-radius: var(--r-bar);
+  background: var(--foreground);
+  opacity: 0.85;
+}
+
+.shelf-more {
+  align-self: center;
+  margin-inline-start: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.shelf-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}

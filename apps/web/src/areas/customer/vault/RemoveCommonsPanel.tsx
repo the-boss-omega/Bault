@@ -94,7 +94,7 @@ export function RemoveCommonsPanel({
         <>
           <ul className="check-list">
             {rows.map(({ it, reason }) => (
-              <li key={it.id}>
+              <li key={it.id} className="check-row">
                 <label className={`check${reason ? ' is-disabled' : ''}`}>
                   <input
                     type="checkbox"
@@ -103,11 +103,16 @@ export function RemoveCommonsPanel({
                     onChange={() => toggle(it.id)}
                   />
                   <span>
-                    {itemName(t, it)}
-                    <span className="hint" dir="ltr">
+                    <bdi dir="auto">{itemName(t, it)}</bdi>
+                    <span className="hint">
                       {' '}
-                      {it.serialNumber}
-                      {it.receivedAt ? ` · ${formatDate(it.receivedAt, locale)}` : ''}
+                      <bdi dir="ltr">{it.serialNumber}</bdi>
+                      {it.receivedAt && (
+                        <>
+                          {' · '}
+                          <span className="date">{formatDate(it.receivedAt, locale)}</span>
+                        </>
+                      )}
                     </span>
                   </span>
                 </label>
@@ -172,10 +177,10 @@ export function RemoveCommonsPanel({
                 {selected.map((it) => (
                   <li key={it.id}>
                     <span>
-                      {itemName(t, it)}
-                      <span className="hint" dir="ltr">
+                      <bdi dir="auto">{itemName(t, it)}</bdi>
+                      <span className="hint">
                         {' '}
-                        {it.serialNumber}
+                        <bdi dir="ltr">{it.serialNumber}</bdi>
                       </span>
                     </span>
                   </li>

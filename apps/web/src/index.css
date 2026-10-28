@@ -1,8 +1,6 @@
 @import './fonts.css';
 
 :root {
-  color-scheme: light dark;
-
   --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Hebrew', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Frank Ruhl Libre', Georgia, 'Times New Roman', serif;
@@ -531,11 +529,26 @@ time,
 .ltr-run {
   direction: ltr;
   unicode-bidi: isolate;
-  text-align: start;
+  text-align: var(--text-start);
 }
 
+/* What a person wrote (a message, a note) is read as the language it is in, and hangs from that language's edge. */
 .bidi {
   unicode-bidi: plaintext;
+}
+
+/* The blocks of the product that take the direction of their own text hang from the page's edge (theme.css: --text-start),
+   so a serial, a code or an English name sits with the labels and statuses around it. */
+.card-title,
+.card-desc,
+.drawer-title,
+.drawer-subtitle,
+.detail-value,
+.dt-sub,
+.dt-primary,
+.identity-name,
+.ask-line {
+  text-align: var(--text-start);
 }
 
 .date {
@@ -751,7 +764,8 @@ time,
   background: var(--surface-page);
 }
 
-.rail-item:focus-visible {
+.rail-item:focus-visible,
+.rail-brand:focus-visible {
   outline: var(--focus-width) solid var(--focus-color);
   outline-offset: calc(-1 * var(--focus-width));
 }
@@ -788,7 +802,7 @@ time,
   margin-inline-start: auto;
   margin-inline-end: var(--sp-4);
   min-width: 20px;
-  padding-inline: 5px;
+  padding-inline: 6px;
   border: var(--border-w) solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-page);
@@ -883,7 +897,6 @@ time,
   align-items: stretch;
   border: var(--border-w) solid var(--line-strong);
   border-radius: var(--radius);
-  overflow: hidden;
   background: var(--surface-input);
 }
 
@@ -952,6 +965,8 @@ time,
   position: relative;
   display: inline-grid;
   place-items: center;
+  /* A control of a size keeps it: in a row with a long title it does not give its room up (it was 22px wide, under the 24 a target needs). */
+  flex: none;
   width: 36px;
   height: 36px;
   padding: 0;
@@ -988,7 +1003,7 @@ time,
 
 .lang-code {
   position: absolute;
-  inset-block-end: 3px;
+  inset-block-end: 4px;
   inset-inline-end: 4px;
   font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
@@ -1009,8 +1024,8 @@ time,
 
 .bell-badge {
   position: absolute;
-  inset-block-start: 5px;
-  inset-inline-end: 5px;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
   min-width: 16px;
   height: 16px;
   padding-inline: 4px;
@@ -1031,7 +1046,8 @@ time,
   align-items: center;
   gap: var(--sp-2);
   height: 40px;
-  padding: 3px 10px 3px 3px;
+  padding: 2px;
+  padding-inline-end: 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   background: var(--surface);
@@ -1039,10 +1055,6 @@ time,
   font: inherit;
   cursor: pointer;
   transition: background var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease);
-}
-
-[dir='rtl'] .user-trigger {
-  padding: 3px 3px 3px 10px;
 }
 
 .user-trigger:hover {
@@ -1061,6 +1073,11 @@ time,
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
+}
+
+/* Centred in 34px of room, the avatar is 4px from the pill's edge above and below; this is the same 4px at its end. */
+.user-trigger .avatar {
+  margin-inline-start: 1px;
 }
 
 .user-trigger svg {
@@ -1211,6 +1228,10 @@ time,
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* What the server wrote is usually English: its own run, which keeps its punctuation and is cut off at
+     its end, not at the other end of the line. It hangs from the page's edge, like what is around it. */
+  unicode-bidi: plaintext;
+  text-align: var(--text-start);
 }
 
 .pop-row-date {
@@ -1228,14 +1249,6 @@ time,
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
-  animation: page-in var(--dur-sm) var(--ease-out);
-}
-
-@keyframes page-in {
-  from {
-    opacity: 0.96;
-    transform: translateY(8px);
-  }
 }
 
 .stack {
@@ -1287,7 +1300,7 @@ time,
 }
 
 .panel-subtitle {
-  margin-block-start: 3px;
+  margin-block-start: 4px;
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
   color: var(--ink-2);
@@ -1335,10 +1348,19 @@ time,
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* A box that scrolls clips what is drawn outside it, and a focus ring is drawn outside its tab:
+     the room for it is padding, taken back from the margin so that nothing moves. */
+  padding: var(--sp-1);
+  margin: calc(-1 * var(--sp-1));
 }
 
 .ctx-tabs::-webkit-scrollbar {
   display: none;
+}
+
+/* A scrolling box does not count its end padding in how far it scrolls: the last tab's ring needs its room as a margin. */
+.ctx-tabs > .ctx-tab:last-child {
+  margin-inline-end: var(--sp-1);
 }
 
 .ctx-tab {
@@ -1533,10 +1555,7 @@ time,
 .link-more svg {
   width: 16px;
   height: 16px;
-}
-
-[dir='rtl'] .link-more svg {
-  transform: scaleX(-1);
+  transform: scaleX(var(--dir));
 }
 
 .control {
@@ -1616,7 +1635,7 @@ textarea {
   font: inherit;
   font-size: var(--fs-base);
   min-height: 36px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: var(--border-w) solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-input);
@@ -1724,7 +1743,7 @@ input[type='search'] {
 }
 
 .consent .check input {
-  margin-block-start: 3px;
+  margin-block-start: 2px;
 }
 
 .terms-reader {
@@ -1740,15 +1759,18 @@ input[type='search'] {
   margin-block-start: var(--sp-5);
 }
 
+/* A price is typed left to right, so its sign stands before the figure on the left in either language
+   (the figure is an island on a Hebrew page, and the sign belongs to it). */
 .money-input {
   position: relative;
   display: flex;
   align-items: center;
+  direction: ltr;
 }
 
 .money-input span {
   position: absolute;
-  inset-inline-start: 13px;
+  inset-inline-start: 12px;
   font-size: var(--fs-md);
   font-weight: var(--fw-semibold);
   color: var(--text-muted);
@@ -1987,6 +2009,7 @@ input[type='search'] {
   vertical-align: middle;
   color: var(--ink-body);
   unicode-bidi: plaintext;
+  text-align: var(--text-start);
 }
 
 .data-table tbody tr:last-child td,
@@ -2303,22 +2326,12 @@ input[type='search'] {
   border-radius: 0;
   box-shadow: var(--shadow-overlay);
   overscroll-behavior: contain;
-  animation: drawer-in var(--dur-slow) var(--ease);
+  /* The entrance and exit are in motion.css; this is the side it comes from. */
+  --drawer-from: calc(24px * var(--dir));
 }
 
 .drawer--sheet {
   width: min(var(--sheet-w), 100vw);
-}
-
-@keyframes drawer-in {
-  from {
-    transform: translateX(var(--drawer-from, 24px));
-    opacity: 0.6;
-  }
-}
-
-[dir='rtl'] .drawer {
-  --drawer-from: -24px;
 }
 
 .drawer-head {
@@ -2342,7 +2355,7 @@ input[type='search'] {
 }
 
 .drawer-subtitle {
-  margin-block-start: 3px;
+  margin-block-start: 4px;
   font-size: var(--fs-sm);
   color: var(--ink-2);
   unicode-bidi: plaintext;
@@ -2361,6 +2374,7 @@ input[type='search'] {
 
 .drawer-foot {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--pad-panel);
   padding-block-end: max(var(--sp-4), env(safe-area-inset-bottom));
@@ -2370,6 +2384,12 @@ input[type='search'] {
 
 .drawer-foot .btn {
   flex: 1 1 auto;
+}
+
+/* What the last action came to, on a row of its own above the buttons. */
+.drawer-notice {
+  flex: 1 0 100%;
+  min-width: 0;
 }
 
 .stage {
@@ -2715,6 +2735,7 @@ input[type='search'] {
 
 .skel {
   border-radius: var(--r-xs);
+  /* design-lint-allow: a skeleton shimmer: it reads as waiting whichever way round it sweeps */
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
@@ -2758,23 +2779,6 @@ input[type='search'] {
 
 .card-grid--register {
   --register-cols: 56px minmax(12rem, 1fr) 13rem 13rem 12rem;
-}
-
-.register-head {
-  display: grid;
-  grid-template-columns: var(--register-cols);
-  align-items: baseline;
-  column-gap: var(--sp-4);
-  padding: var(--sp-2) var(--sp-4);
-  padding-inline-start: calc(var(--sp-4) + 3px);
-  border-block-end: var(--border-w) solid var(--line-strong);
-  background: var(--surface-sunken);
-  color: var(--ink-2);
-  font-size: var(--fs-caption);
-}
-
-.register-head-end {
-  text-align: end;
 }
 
 .card {
@@ -2853,7 +2857,7 @@ input[type='search'] {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   font-size: var(--fs-sm);
   color: var(--ink-body);
@@ -2866,6 +2870,10 @@ input[type='search'] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A line that ellipsises hides its overflow, and a focus ring (a link in it has one) is drawn outside: the
+     room for it is padding, taken back from the margin. */
+  padding: var(--sp-1);
+  margin: calc(-1 * var(--sp-1));
 }
 
 .card-meta {
@@ -2880,10 +2888,6 @@ input[type='search'] {
 @media (max-width: 1099px) {
   .card-grid--register {
     --register-cols: 56px minmax(0, 1fr);
-  }
-
-  .register-head {
-    display: none;
   }
 
   .card-grid--register .card,
@@ -2906,43 +2910,6 @@ input[type='search'] {
   }
 }
 
-.photo-thumb {
-  display: block;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--surface-stage);
-  cursor: pointer;
-}
-
-.photo-thumb-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  transition: transform var(--dur) var(--ease);
-}
-
-.photo-thumb:hover .photo-thumb-img {
-  transform: none;
-}
-
-.photo-thumb-empty {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  padding: var(--sp-2);
-  font-size: var(--fs-caption);
-  line-height: var(--lh-snug);
-  text-align: center;
-  color: var(--ink-on-dark-2);
-  opacity: 1;
-}
 
 .photo-btn {
   display: inline-grid;
@@ -3019,125 +2986,6 @@ input[type='search'] {
   place-content: center;
   place-items: center;
   padding: var(--sp-8) var(--sp-6);
-}
-
-.auth-stage {
-  display: grid;
-  gap: var(--sp-8);
-  align-content: center;
-  padding: var(--sp-16) var(--sp-8);
-  padding-inline-start: max(var(--sp-8), env(safe-area-inset-left));
-  background: var(--surface-stage);
-  color: var(--ink-on-dark);
-}
-
-@media (min-width: 900px) {
-  .auth-stage {
-    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
-    align-items: center;
-    gap: var(--sp-12);
-  }
-}
-
-.auth-stage-photo .photo-thumb {
-  inline-size: min(240px, 45vw);
-  aspect-ratio: 4 / 5;
-  background: transparent;
-  border: 0;
-}
-
-.auth-stage-photo .photo-thumb-img {
-  object-fit: contain;
-}
-
-.auth-pitch {
-  display: grid;
-  gap: var(--sp-5);
-  min-width: 0;
-}
-
-@media (max-width: 899px) {
-  .auth-stage {
-    grid-template-columns: 132px minmax(0, 1fr);
-    align-items: start;
-    gap: var(--sp-5);
-    padding: var(--sp-8) var(--sp-5);
-    padding-block-start: max(var(--sp-8), env(safe-area-inset-top));
-  }
-
-  .auth-stage-photo .photo-thumb {
-    inline-size: 132px;
-  }
-
-  .auth-pitch {
-    grid-column: 2;
-    gap: var(--sp-3);
-  }
-
-  .auth-lede,
-  .auth-custody,
-  .auth-caption {
-    grid-column: 1 / -1;
-  }
-
-  .auth-box {
-    padding-block: var(--sp-8);
-  }
-}
-
-.auth-headline {
-  font-family: var(--font-display);
-  font-size: clamp(28px, 3.2vw, 48px);
-  font-weight: 500;
-  line-height: var(--lh-tight);
-  letter-spacing: var(--track-tight);
-  color: var(--ink-on-dark);
-  text-wrap: balance;
-  max-width: 20ch;
-}
-
-.auth-lede {
-  font-size: var(--fs-md);
-  line-height: var(--lh-normal);
-  color: var(--ink-on-dark-2);
-  max-width: 54ch;
-}
-
-.auth-custody {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-8);
-  margin: 0;
-  padding-block-start: var(--sp-4);
-  border-block-start: var(--border-w) solid var(--line-on-dark);
-}
-
-.auth-custody dt {
-  color: var(--ink-on-dark-3);
-  font-size: var(--fs-caption);
-}
-
-.auth-custody dd {
-  margin: 0;
-  margin-block-start: 2px;
-  color: var(--ink-on-dark);
-  font-size: var(--fs-base);
-}
-
-.auth-custody .serial {
-  color: var(--ink-on-dark);
-}
-
-.auth-custody .pill--success {
-  border-inline-start-color: var(--custody-on-dark);
-  color: var(--custody-on-dark);
-}
-
-.auth-caption {
-  color: var(--ink-on-dark-3);
-  font-size: var(--fs-caption);
-  line-height: var(--lh-snug);
-  max-width: 60ch;
 }
 
 .auth-box {
@@ -3224,314 +3072,6 @@ input[type='search'] {
   gap: var(--sp-3);
   width: min(560px, calc(100vw - 2 * var(--sp-4)));
   text-align: start;
-}
-
-.landing {
-  min-height: 100vh;
-  display: grid;
-  align-content: start;
-  background: var(--surface-page);
-  color: var(--ink-body);
-}
-
-.landing-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-3);
-  padding-block: var(--sp-4);
-  padding-inline: max(var(--sp-6), env(safe-area-inset-left)) max(var(--sp-6), env(safe-area-inset-right));
-  border-block-end: var(--border-w) solid var(--line);
-}
-
-.landing-word {
-  font-family: var(--font-display);
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-semibold);
-  letter-spacing: 0;
-  color: var(--ink);
-}
-
-.landing-bar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-inline-start: auto;
-}
-
-.landing-stage {
-  display: grid;
-  gap: var(--sp-8);
-  align-content: center;
-  overflow: clip;
-  padding-block: var(--sp-16);
-  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
-  background: var(--surface-stage);
-  color: var(--ink-on-dark);
-}
-
-@media (min-width: 900px) {
-  .landing-stage {
-    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-    align-items: center;
-    gap: var(--sp-12);
-    padding-block: var(--sp-24);
-  }
-}
-
-.landing-stage-photo .photo-thumb {
-  inline-size: min(280px, 56vw);
-  aspect-ratio: 4 / 5;
-  background: transparent;
-  border: 0;
-}
-
-.landing-stage-photo .photo-thumb-img {
-  object-fit: contain;
-}
-
-@keyframes landing-card-in {
-  from {
-    opacity: 0;
-    transform: translateX(var(--card-enter-from)) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.landing-stage-photo {
-  --card-enter-from: -24px;
-  animation: landing-card-in var(--dur-slow) var(--ease) both;
-}
-
-.landing-stage-photo:dir(rtl) {
-  --card-enter-from: 24px;
-}
-
-.landing-pitch {
-  display: grid;
-  gap: var(--sp-5);
-  min-width: 0;
-}
-
-.landing-headline {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(36px, 4.4vw, 64px);
-  font-weight: var(--fw-medium);
-  line-height: var(--lh-tight);
-  letter-spacing: var(--track-tight);
-  color: var(--ink-on-dark);
-  text-wrap: balance;
-  max-width: 18ch;
-}
-
-.landing-lede {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-normal);
-  color: var(--ink-on-dark-2);
-  max-width: 62ch;
-}
-
-.landing-custody {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-8);
-  margin: 0;
-  padding-block-start: var(--sp-4);
-  border-block-start: var(--border-w) solid var(--line-on-dark);
-}
-
-.landing-custody dt {
-  color: var(--ink-on-dark-3);
-  font-size: var(--fs-caption);
-}
-
-.landing-custody dd {
-  margin: 0;
-  margin-block-start: 2px;
-  color: var(--ink-on-dark);
-  font-size: var(--fs-base);
-}
-
-.landing-custody .serial {
-  color: var(--ink-on-dark);
-}
-
-.landing-custody .pill--success {
-  border-inline-start-color: var(--custody-on-dark);
-  color: var(--custody-on-dark);
-}
-
-.landing-caption {
-  margin: 0;
-  color: var(--ink-on-dark-3);
-  font-size: var(--fs-caption);
-  line-height: var(--lh-snug);
-  max-width: 64ch;
-}
-
-.landing-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  padding-block-start: var(--sp-2);
-}
-
-.landing-stage .btn--secondary {
-  background: transparent;
-  border-color: var(--line-on-dark);
-  color: var(--ink-on-dark);
-}
-
-.landing-stage .btn--secondary:hover:not(:disabled) {
-  background: transparent;
-  border-color: var(--ink-on-dark-3);
-}
-
-.landing-section,
-.landing-close {
-  display: grid;
-  gap: var(--sp-4);
-  align-content: start;
-  width: 100%;
-  max-width: 1120px;
-  margin-inline: auto;
-  padding-block: var(--gap-section);
-  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
-  border-block-end: var(--border-w) solid var(--line);
-}
-
-.landing-h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-2xl);
-  font-weight: var(--fw-medium);
-  line-height: var(--lh-tight);
-  letter-spacing: var(--track-tight);
-  color: var(--ink);
-  text-wrap: balance;
-}
-
-.landing-sub {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-normal);
-  color: var(--ink-2);
-  max-width: 68ch;
-}
-
-.landing-claims {
-  display: grid;
-  gap: var(--sp-8);
-  padding-block-start: var(--sp-4);
-}
-
-@media (min-width: 720px) {
-  .landing-claims {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.landing-claims article {
-  display: grid;
-  align-content: start;
-  gap: var(--sp-2);
-  padding-block-start: var(--sp-4);
-  border-block-start: 2px solid var(--custody);
-}
-
-.landing-claims h3 {
-  margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-semibold);
-  line-height: var(--lh-snug);
-  color: var(--ink);
-}
-
-.landing-claims p {
-  margin: 0;
-  font-size: var(--fs-base);
-  line-height: var(--lh-normal);
-  color: var(--ink-body);
-}
-
-.landing-price-table {
-  margin-block-start: var(--sp-4);
-}
-
-.landing-price-what {
-  display: block;
-  font-weight: var(--fw-medium);
-  color: var(--ink);
-}
-
-.landing-terms {
-  display: block;
-  margin-block-start: 2px;
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-regular);
-  line-height: var(--lh-snug);
-  color: var(--ink-2);
-}
-
-.landing-included {
-  font-size: var(--fs-sm);
-  color: var(--ink-2);
-}
-
-.landing-footnote {
-  margin: 0;
-  font-size: var(--fs-caption);
-  color: var(--ink-2);
-}
-
-.landing-steps {
-  padding-block-start: var(--sp-4);
-}
-
-.landing-close {
-  gap: var(--sp-5);
-  border-block-end: 0;
-}
-
-.landing-foot {
-  width: 100%;
-  max-width: 1120px;
-  margin-inline: auto;
-  padding-block: var(--sp-8);
-  padding-inline: max(var(--sp-8), env(safe-area-inset-left)) max(var(--sp-8), env(safe-area-inset-right));
-  padding-block-end: max(var(--sp-8), env(safe-area-inset-bottom));
-  border-block-start: var(--border-w) solid var(--line);
-}
-
-@media (max-width: 719px) {
-  .landing-bar {
-    padding-inline: var(--sp-5);
-  }
-
-  .landing-bar-actions {
-    flex-basis: 100%;
-    margin-inline-start: 0;
-    justify-content: start;
-  }
-
-  .landing-stage {
-    gap: var(--sp-6);
-    padding-block: var(--sp-12);
-    padding-inline: var(--sp-5);
-  }
-
-  .landing-section,
-  .landing-close,
-  .landing-foot {
-    padding-block: var(--sp-12);
-    padding-inline: var(--sp-5);
-  }
 }
 
 .mem-allowances {
@@ -3682,6 +3222,15 @@ input[type='search'] {
   background: var(--surface-2);
 }
 
+/* A choice with a note of its own beside it (why it cannot be chosen): the note is at the far end, never against the choice. */
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+}
+
 .stepper {
   display: inline-flex;
   align-items: center;
@@ -3747,10 +3296,8 @@ input[type='search'] {
 }
 
 @media (max-width: 767px) {
-  :root {
-    --rail-w: 0px;
-  }
-
+  /* The rail's own measures (its icons are a rail wide, its dot sits over the middle of one) stay what they
+     are: it is a sheet on a phone, but the same rail. The workspace is what stops making room for it. */
   .workspace {
     margin-inline-start: 0;
   }
@@ -3782,20 +3329,21 @@ input[type='search'] {
     font-weight: var(--fw-semibold);
   }
 
+  /* Closed, the sheet is off screen and also out of the way of the keyboard and of a screen reader: hidden
+     once it has slid out (the delay is the slide), and visible again the instant it opens. */
   .rail {
     width: min(280px, 82vw);
-    transform: translateX(var(--rail-off, -100%));
+    transform: translateX(calc(-100% * var(--dir)));
     box-shadow: var(--shadow-rail);
-    transition: transform var(--dur-lg) var(--ease-out);
-  }
-
-  [dir='rtl'] .rail {
-    --rail-off: 100%;
+    visibility: hidden;
+    transition: transform var(--dur-lg) var(--ease-out), visibility 0s linear var(--dur-lg);
   }
 
   .rail.is-open {
     width: min(280px, 82vw);
     transform: none;
+    visibility: visible;
+    transition: transform var(--dur-lg) var(--ease-out), visibility 0s;
   }
 
   .rail-brand-text,
@@ -3910,7 +3458,7 @@ input[type='search'] {
     justify-content: space-between;
     gap: var(--sp-4);
     height: auto;
-    padding: 5px 0;
+    padding: 6px 0;
     border: 0;
   }
 
@@ -4419,16 +3967,10 @@ input[type='search'] {
   margin-block-start: 0;
 }
 
+/* The node's size, place and colour are the register's (gallery.css). */
 .timeline > li::before {
   content: '';
   position: absolute;
-  inset-block-start: calc(var(--sp-3) + 7px);
-  inset-inline-start: -3px;
-  width: 5px;
-  height: 5px;
-  border-radius: 0;
-  background: var(--line-strong);
-  box-shadow: none;
 }
 
 .timeline > li:last-child {
@@ -4446,6 +3988,14 @@ input[type='search'] {
 .ask-notice {
   background: var(--info-bg);
   color: var(--info);
+}
+
+/* What the customer wrote is in whatever language it was written in: a block of its own, so its full stop is at
+   its end, hung from the page's edge like the labels around it. */
+.ask-notice-text {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
 }
 
 .ask-log {
@@ -4960,6 +4510,7 @@ textarea[aria-invalid='true'] {
 .skel,
 .skel-block,
 .skel-metric {
+  /* design-lint-allow: a skeleton shimmer: it reads as waiting whichever way round it sweeps */
   background: linear-gradient(
     90deg,
     var(--surface-2) 0%,
@@ -5268,8 +4819,8 @@ textarea[aria-invalid='true'] {
 
 .data-table .step {
   flex: 1 1 auto;
-  padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
-  padding-inline-start: var(--sp-3);
+  padding-block: var(--sp-1);
+  padding-inline: var(--sp-3) 0;
   border-block-start: 0;
   border-inline-start: 2px solid var(--line);
   margin-block-start: 0;
@@ -5450,23 +5001,6 @@ textarea[aria-invalid='true'] {
 
 .drawer .stage {
   padding: var(--sp-8) var(--sp-6);
-}
-
-.drawer .stage .photo-thumb,
-.drawer .stage .photo-thumb-empty {
-  inline-size: 260px;
-  max-inline-size: 60vw;
-  aspect-ratio: 4 / 5;
-  border-radius: var(--radius);
-  background: transparent;
-}
-
-.drawer .stage .photo-thumb-img {
-  object-fit: contain;
-}
-
-.drawer .stage .photo-thumb-empty {
-  font-size: var(--fs-sm);
 }
 
 .stage--departed .photo-thumb-img {

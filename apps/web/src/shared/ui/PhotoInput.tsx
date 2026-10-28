@@ -141,7 +141,7 @@ export function PhotoInput({
 
       {error ? (
         <span className="field-error" role="alert">
-          <IconAlert /> {error}
+          <IconAlert /> <bdi dir="auto">{error}</bdi>
         </span>
       ) : (
         <span className="field-hint" id={`${id}-hint`}>

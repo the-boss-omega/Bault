@@ -1,0 +1,240 @@
+/* ============================================================
+   shadcn/ui theme
+
+   Part 1 is the theme itself, in shadcn's own variable names: the shadcndesign
+   plugin's "Export variables -> CSS" output pastes straight over it. Part 2 maps
+   those names onto Bault's tokens, so nothing in index.css has to know a theme
+   exists. Loaded after index.css (see main.tsx).
+
+   The values in part 1 are the shadcn/ui kit's Nova style on its neutral
+   palette (read from the owner's Figma copy), light and dark.
+   ============================================================ */
+
+/* ---- Part 1: theme variables (paste target) ---- */
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #5f5f68;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --destructive: #c70010;
+  --border: #e5e5e5;
+  --input: #d4d4d4;
+  --ring: #a1a1a1;
+  --radius: 0.625rem;
+
+  --font-sans: 'Geist';
+  --font-mono-face: 'Geist Mono';
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --card: #141414;
+    --card-foreground: #fafafa;
+    --popover: #171717;
+    --popover-foreground: #fafafa;
+    --primary: #e5e5e5;
+    --primary-foreground: #171717;
+    --secondary: #262626;
+    --secondary-foreground: #fafafa;
+    --muted: #1c1c1c;
+    --muted-foreground: #a3a3a3;
+    --accent: #262626;
+    --accent-foreground: #fafafa;
+    --destructive: #ff6467;
+    --border: #ffffff1a;
+    --input: #ffffff26;
+    --ring: #737373;
+  }
+}
+
+:root[data-theme='dark'] {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
+  --primary: #e5e5e5;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #1c1c1c;
+  --muted-foreground: #a3a3a3;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #ff6467;
+  --border: #ffffff1a;
+  --input: #ffffff26;
+  --ring: #737373;
+}
+
+/* ---- The theme's native controls ----
+   A checkbox, a date picker, a select's list and a scrollbar are drawn by the browser in the
+   scheme it is told, and it is told the theme that is on the page, not the system's: dark is the
+   default, so a light system would otherwise get dark text on dark in a calendar icon and a white
+   checkbox on a dark page. Outside part 1, so pasting the kit's export does not take it away. */
+
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* ---- Part 2: mapping onto Bault's tokens ----
+   `:root:root` ties in specificity with the dark blocks in index.css and wins
+   by coming later, so one mapping serves light and dark: each var() below
+   resolves against whichever theme block is active. The five status accents
+   (custody, brass, frost, amber, and the destructive tint) keep their own
+   hues, so "verified" never turns white when the theme's primary is neutral. */
+
+:root:root {
+  --surface-page: var(--background);
+  --surface-raised: var(--card);
+  --surface-sunken: var(--muted);
+  --surface-sunken-2: var(--accent);
+  --surface-input: var(--background);
+
+  --line: var(--border);
+  --line-strong: var(--input);
+
+  --ink: var(--foreground);
+  --ink-body: var(--foreground);
+  --ink-2: var(--muted-foreground);
+  --ink-on-accent: var(--primary-foreground);
+
+  --oxblood: var(--destructive);
+  --oxblood-mark: var(--destructive);
+  --oxblood-wash: color-mix(in oklab, var(--destructive) 12%, var(--background));
+  --error-strong: color-mix(in oklab, var(--destructive) 85%, var(--foreground));
+
+  /* The kit's own ring is #a1a1a1 in light, about 2.6:1 on white. WCAG 1.4.11
+     asks 3:1 of a focus indicator and of the edge that identifies a field, so
+     both are drawn from the foreground instead of from --ring. design-lint
+     measures them against every surface in both themes. */
+  --focus-color: color-mix(in oklab, var(--foreground) 72%, var(--background));
+  --control-border: color-mix(in oklab, var(--foreground) 46%, var(--background));
+
+  --r-xs: max(2px, calc(var(--radius) - 4px));
+  --r-sm: max(2px, calc(var(--radius) - 2px));
+  --r-md: var(--radius);
+  --r-lg: calc(var(--radius) + 4px);
+  --r-pill: var(--radius);
+  /* The sizes the kit has no name for: a ticket's corner, the corner of the landing's
+     one large stage, and the end of a bar only a few pixels thick. The capsule is the
+     product's one pill, used on purpose: the header's controls, the landing's buttons
+     and the journey's chips. */
+  --r-xl: calc(var(--radius) + 8px);
+  --r-2xl: calc(var(--radius) + 14px);
+  --r-bar: 3px;
+  --r-capsule: 999px;
+
+  --shadow-xs: 0 1px 2px oklch(0 0 0 / 5%);
+  --shadow-overlay: 0 4px 6px -1px oklch(0 0 0 / 10%), 0 12px 32px oklch(0 0 0 / 14%);
+  --shadow-card: var(--shadow-xs);
+
+  --font-ui: var(--font-sans), 'IBM Plex Sans Hebrew', system-ui, sans-serif;
+  /* Geist Mono has no Hebrew, and a missing glyph falls to whatever monospace the
+     system has. Plex Sans Hebrew sits second so Hebrew in a label is its own face
+     while serials and digits stay Geist Mono. */
+  --font-mono: var(--font-mono-face), 'IBM Plex Sans Hebrew', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-display: 'Frank Ruhl Libre', 'Times New Roman', serif;
+}
+
+/* ---- Part 3: Bault's own layer on top of the kit ----
+   The kit supplies structure and geometry. These tokens are what make the
+   product itself: a foil spectrum (the sheen on a holographic card), the paper
+   of a grading label, and one easing family for all motion. */
+
+:root {
+  --foil-a: oklch(0.82 0.13 18);
+  --foil-b: oklch(0.88 0.12 88);
+  --foil-c: oklch(0.86 0.12 160);
+  --foil-d: oklch(0.82 0.12 235);
+  --foil-e: oklch(0.8 0.14 305);
+  /* design-lint-allow: a band of foil colour: it reads the same either way round */
+  --foil: linear-gradient(115deg, var(--foil-a), var(--foil-b), var(--foil-c), var(--foil-d), var(--foil-e), var(--foil-a));
+
+  --paper: #f3efe6;
+  --paper-ink: #15130f;
+  --paper-line: #d6d0c2;
+  --paper-bright: #fffdf8;
+
+  /* Printed ink on the paper: body copy, labels, the rules, the shadow under a
+     slip and the one amber mark. The paper is cream in both themes, so none of
+     these follow the theme. */
+  --paper-ink-2: oklch(0.36 0.012 80);
+  --paper-ink-3: oklch(0.4 0.01 80);
+  --paper-rule: oklch(0.55 0.02 80 / 55%);
+  --paper-rule-soft: oklch(0.5 0.01 80 / 40%);
+  --paper-shadow: oklch(0.2 0.02 80 / 55%);
+  --paper-amber: oklch(0.62 0.15 60);
+  /* The fibre of the paper: fractal noise, laid over it with multiply. */
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .46 0 0 0 0 .38 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* The room: the dark a card is photographed against (the slab's case, the
+     item drawer's stage, the journey's shelf). A photograph does not change with
+     the page, so it is dark in both themes, and --room-ink is what reads on it. */
+  --room-deep: oklch(0.11 0.004 260);
+  --room: oklch(0.145 0.004 260);
+  --room-raised: oklch(0.18 0.004 260);
+  --room-case: oklch(0.21 0.004 260);
+  --room-pool: oklch(0.27 0.006 260);
+  --room-glass: oklch(0.2 0.004 260 / 80%);
+  --room-ink: oklch(0.93 0 0);
+
+  /* The long motions of the public page and the shell. The short ones are the
+     --dur family in index.css and motion.css; the delays that stagger one thing
+     after another are written beside the thing they time. */
+  --dur-surface: 400ms;
+  --dur-colour: 600ms;
+  --dur-reveal: 900ms;
+  --dur-hero: 1400ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+/* Direction, declared once. Logical properties place things, but they cannot turn
+   a gradient, a transform origin or a background position around. Anything that
+   has to face the way the page is read multiplies by --dir (1 left to right, -1
+   right to left). This is the only place the stylesheet asks which way the page
+   reads: design-lint forbids [dir='rtl'] and :dir(rtl) in every other rule. */
+:root {
+  --dir: 1;
+  /* The edge a block of text hangs from. A block that takes the direction of its own text
+     (unicode-bidi: plaintext, so an English sentence keeps its full stop) would hang from that
+     text's edge, and `start` follows it: a serial or an English name at the left of a Hebrew
+     tile, under a status at the right. The order of the letters is the text's; the edge is the page's. */
+  --text-start: left;
+}
+
+:root[dir='rtl'] {
+  --dir: -1;
+  --text-start: right;
+}
+
+/* Hebrew sets tight and wide tracking badly; the Latin display tracking is Latin-only. */
+:lang(he) {
+  --track-tight: 0;
+  --track-label: 0.02em;
+}

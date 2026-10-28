@@ -1,0 +1,713 @@
+/* ============================================================
+   Components
+
+   The kit's building blocks (buttons, fields, panels, tables, tabs, overlays)
+   in Bault's own hand: the kit supplies geometry, colour and rhythm; Bault
+   supplies the foil, the LED status mark and the register rule. Layouts,
+   routes and copy are untouched; this file changes appearance only and reads
+   only theme tokens. Loaded after theme.css and slab.css.
+   ============================================================ */
+
+/* ---- Buttons ---- */
+
+.btn {
+  position: relative;
+  isolation: isolate;
+  min-height: 40px;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  border-color: var(--input);
+  color: var(--foreground);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--input);
+  color: var(--accent-foreground);
+}
+
+.btn--gold,
+.btn--navy {
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--primary-foreground);
+}
+
+.btn--gold:hover:not(:disabled),
+.btn--navy:hover:not(:disabled) {
+  background: var(--foreground);
+  border-color: transparent;
+  color: var(--background);
+}
+
+/* A primary button, when it is reached for, throws a little holographic light under itself. */
+
+.btn--gold::after,
+.btn--navy::after {
+  content: '';
+  position: absolute;
+  inset-inline: 12%;
+  inset-block-start: 100%;
+  block-size: 10px;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--foil);
+  background-size: 300% 100%;
+  filter: blur(10px);
+  /* The glow begins at the button's lower edge and is clipped there, after the
+     blur, so the light is under the button and never a haze on its face. */
+  clip-path: inset(0 -40px -40px -40px);
+  opacity: 0;
+  transform: scaleX(0.7);
+  transition: opacity var(--dur-surface) var(--ease-out-expo), transform var(--dur-surface) var(--ease-out-expo);
+}
+
+.btn--gold:hover:not(:disabled)::after,
+.btn--navy:hover:not(:disabled)::after,
+.btn--gold:focus-visible::after,
+.btn--navy:focus-visible::after {
+  opacity: 0.85;
+  transform: scaleX(1);
+}
+
+.btn--ghost {
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted-foreground);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.btn--danger {
+  background: color-mix(in oklab, var(--destructive) 14%, transparent);
+  border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
+  color: var(--destructive);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: var(--background);
+}
+
+.btn--link {
+  min-height: 0;
+  box-shadow: none;
+  background: none;
+  border: 0;
+  color: var(--foreground);
+  text-decoration-color: var(--muted-foreground);
+}
+
+.btn--sm {
+  min-height: 32px;
+  border-radius: var(--r-md);
+}
+
+/* ---- Focus: one crisp two-pixel ring that holds 3:1 on every surface ----
+   The kit's soft halo (ring at half strength) measures about 1.5:1 in light and
+   2:1 in dark, which is a decoration, not an indicator. An outline also follows
+   the element's radius and leaves its own shadow alone. */
+
+:focus-visible {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--focus-color);
+}
+
+/* A jump link focuses the heading it lands on so the jump arrives somewhere;
+   the heading is not a control and is not in the tab order. */
+:is(h1, h2, h3)[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
+/* ---- Fields ---- */
+
+input,
+select,
+textarea {
+  min-height: 38px;
+  border-radius: var(--r-md);
+  border-color: var(--control-border);
+  background: color-mix(in oklab, var(--foreground) 3.5%, transparent);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--dur), background var(--dur), box-shadow var(--dur);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--control-border) 70%, var(--foreground));
+}
+
+/* The search boxes draw their own edge around an input that has none. */
+.control,
+.search,
+.search--wide,
+.vault-search {
+  border-color: var(--control-border);
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 36px;
+  /* design-lint-allow: the two halves of one symmetric chevron: mirrored it is the same chevron, only which half comes first depends on the page (--arrow-first) */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  /* The arrow is two half triangles, the first 18px and the second 13px from the end edge. Read
+     from the other side the two change places, or the halves would swap and it would be a
+     notch instead of an arrow. */
+  --arrow-first: calc(15.5px + 2.5px * var(--dir));
+  --arrow-second: calc(15.5px - 2.5px * var(--dir));
+  background-position:
+    calc(50% + var(--dir) * (50% - var(--arrow-first))) 50%,
+    calc(50% + var(--dir) * (50% - var(--arrow-second))) 50%;
+}
+
+select option {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  /* A select shows the chosen option the way that option reads: an English address on a
+     Hebrew page starts at its beginning, where it would otherwise be cut off at it. */
+  unicode-bidi: plaintext;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--foreground);
+  box-shadow: none;
+}
+
+.field-label {
+  color: var(--foreground);
+  font-weight: var(--fw-medium);
+}
+
+.field-hint {
+  color: var(--muted-foreground);
+}
+
+/* ---- Panels: a section of a printed statement ----
+   A heading, a rule, the content. Not a floating rectangle: grouping is done
+   with space and a hairline, which is what grouping is. */
+
+.panel {
+  position: relative;
+  padding: var(--sp-6) 0 var(--sp-2);
+  background: none;
+  color: inherit;
+  border: 0;
+  border-block-start: var(--border-w) solid var(--input);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline-start: 0;
+  inline-size: 32px;
+  block-size: 2px;
+  background: color-mix(in oklab, var(--foreground) 55%, transparent);
+}
+
+.panel-head {
+  padding: 0 0 var(--sp-4);
+  border-block-end: 0;
+}
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--track-tight);
+}
+
+.panel-subtitle {
+  color: var(--muted-foreground);
+}
+
+.panel-body {
+  padding: var(--gap-group) 0 0;
+}
+
+.panel-body--flush {
+  padding: 0;
+}
+
+.panel-foot {
+  padding-inline: 0;
+}
+
+.panel .dt-wrap {
+  border: 0;
+  border-radius: 0;
+  /* The cells at the two ends of a table in a panel start and end on its edges, and a focus ring is drawn
+     outside what it rings: the room for it is padding on the box that scrolls, taken back from the margin
+     (and added to the width) so that nothing moves. */
+  padding-inline: var(--sp-1);
+  margin-inline: calc(-1 * var(--sp-1));
+  inline-size: calc(100% + 2 * var(--sp-1));
+}
+
+/* ---- Status: an LED and a word. State is a light, not a chip. ---- */
+
+.pill,
+.badge,
+.status-badge {
+  --led: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--foreground);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+}
+
+.pill::before,
+.badge::before,
+.status-badge::before {
+  content: '';
+  flex: 0 0 auto;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--led);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--led) 20%, transparent), 0 0 10px color-mix(in oklab, var(--led) 55%, transparent);
+}
+
+.pill--success,
+.badge--success,
+.badge--done,
+.badge--stored,
+.status-badge--success {
+  --led: var(--custody);
+}
+
+.pill--warning,
+.badge--pending,
+.status-badge--warning {
+  --led: var(--amber);
+}
+
+.pill--error,
+.badge--denied,
+.badge--danger,
+.status-badge--error {
+  --led: var(--oxblood);
+}
+
+.pill--info,
+.badge--info,
+.badge--accepted,
+.badge--listed,
+.pill--frozen,
+.badge--hold {
+  --led: var(--frost);
+}
+
+.pill--gold,
+.badge--sold {
+  --led: var(--brass);
+}
+
+.pill--departed,
+.badge--departed,
+.pill--plain,
+.pill--violet {
+  --led: var(--muted-foreground);
+}
+
+.pill--departed::before,
+.badge--departed::before {
+  box-shadow: none;
+  background: transparent;
+  border: 1px solid var(--led);
+}
+
+/* ---- Tables: hairline rows, quiet header, a mark on the row you point at ---- */
+
+.dt-wrap {
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-lg);
+  /* A table that is wider than its room scrolls sideways, as it always has; the corners are still cut. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* A box that scrolls brings a control that takes focus to its edge, and the ring is drawn outside the control:
+   the browser keeps this much of the box clear of it. */
+.dt-wrap,
+.drawer-body,
+.confirm-body,
+.modal--wide,
+.pop,
+.pop-list,
+.check-list,
+.media-strip,
+.state-controls,
+.terms-reader {
+  scroll-padding: var(--sp-2);
+}
+
+.data-table thead th,
+.table thead th {
+  background: transparent;
+  color: var(--muted-foreground);
+  border-block-end-color: var(--input);
+}
+
+/* A cell takes the direction of its own text (index.css: plaintext), so an English sentence keeps its
+   full stop. A cell that holds only a badge, a date, a code or a button has no text of its own to take a
+   direction from, so it fell back to left to right and, in Hebrew, hung from the left under a header on
+   the right (and, stacked, under its own label). Such a cell reads the page's way. */
+.data-table tbody td:has(> :is(.pill, .badge, .status-badge, .date, .amount, .code-inline, .serial, code, kbd, bdi, .btn, button, input, select)),
+.table tbody td:has(> :is(.pill, .badge, .status-badge, .date, .amount, .code-inline, .serial, code, kbd, bdi, .btn, button, input, select)) {
+  unicode-bidi: normal;
+}
+
+/* A numeric column hangs from one edge, its header and its figures alike. The figures are left to
+   right (their decimals line up at the right-hand edge in either language), so the header is set
+   the same way: read in the page's direction it hangs from the opposite edge in Hebrew, and the
+   word sits a whole column away from the numbers it names. */
+.data-table th.td-end,
+.data-table th.num {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* The actions beside a tab bar wrap rather than run off a narrow phone. */
+@media (max-width: 640px) {
+  .ctx-actions {
+    flex-wrap: wrap;
+  }
+
+  /* A cell of figures reads left to right whatever the page does, which, stacked, would swap its label
+     to the other side from every other cell's in Hebrew. The order puts the label back at the page's start. */
+  .dt-wrap--stack .data-table td.num::before {
+    order: calc(var(--dir) * -1);
+  }
+}
+
+/* A code is read whole, on one line. */
+.data-table code {
+  white-space: nowrap;
+}
+
+/* The steps of a request inside a cell are prose, not a label: they wrap, or a long detail makes the whole table wider than a phone. */
+.data-table .steps {
+  white-space: normal;
+}
+
+.data-table tbody tr,
+.table tbody tr {
+  transition: background var(--dur);
+}
+
+.data-table tbody tr.is-clickable:hover,
+.table tbody tr:hover {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
+.data-table tbody td:first-child,
+.table tbody td:first-child {
+  position: relative;
+}
+
+.data-table tbody tr.is-clickable td:first-child::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  background: var(--foil);
+  transform: scaleY(0);
+  transition: transform var(--dur-slow) var(--ease-out-expo);
+}
+
+.data-table tbody tr.is-clickable:hover td:first-child::before {
+  transform: scaleY(1);
+}
+
+/* ---- Tabs ---- */
+
+.ctx-tab {
+  font-size: var(--fs-base);
+}
+
+/* ---- Overlays ---- */
+
+.drawer {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-inline-start-color: var(--border);
+}
+
+.modal {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+  border-radius: var(--r-xl);
+}
+
+.drawer-title,
+.modal-head h4 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-medium);
+}
+
+/* ---- Notices ---- */
+
+.errorbox {
+  border-radius: var(--r-lg);
+  border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
+  background: var(--oxblood-wash);
+}
+
+/* ---- Tables inside a statement start and end on the statement's edges ---- */
+
+.panel .data-table th:first-child,
+.panel .data-table td:first-child {
+  padding-inline-start: 0;
+}
+
+.panel .data-table th:last-child,
+.panel .data-table td:last-child {
+  padding-inline-end: 0;
+}
+
+/* A cell that ends the row and holds a control keeps the room for the control's ring: a table that scrolls
+   sideways does not count the padding of the box that scrolls it, so the room is in the table itself. */
+.panel .data-table td:last-child:has(:is(button, input, select, textarea, a[href])) {
+  padding-inline-end: var(--sp-1);
+}
+
+/* The tab bar already draws the rule; the first section does not draw it twice.
+   General sibling, not adjacent: a status region can sit between the bar and the panel. */
+
+.ctx-bar ~ [role='tabpanel'] > .panel:first-child,
+.ctx-bar ~ [role='tabpanel'] > .stack > .panel:first-child {
+  border-block-start-color: transparent;
+}
+
+/* ---- A figure on a card never travels without its name ----
+   The register header that names the column is hidden in every card layout, so
+   the name goes on the card. Hebrew has no capitals and Geist Mono has no Hebrew
+   glyphs, so there the label is the UI face. */
+
+.money-label,
+.slip-label {
+  font: 500 11px/1.2 var(--font-mono);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+:lang(he) .money-label,
+:lang(he) .slip-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---- Choosing cards ----
+   A list of cards to choose among is the cards: each in its case with its serial
+   and name under it, and choosing one is pulling it from the shelf, so it gets a
+   foil edge and a filled mark. The checkbox is still the control, the one the
+   keyboard and a screen reader reach; it is only drawn differently. Outside a label,
+   in a list of cards already chosen, an `.item-pick` is a row. */
+
+/* A set of cards to choose one from is a fieldset with its name as a legend. */
+fieldset.field--cards {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+fieldset.field--cards > legend {
+  padding: 0;
+  margin-block-end: var(--sp-3);
+}
+
+.item-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.item-pick-art {
+  flex: 0 0 auto;
+  inline-size: 44px;
+}
+
+.item-pick-text {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.item-pick-name {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.check-list:has(> li > .check > .item-pick) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+  gap: var(--sp-4);
+  /* A big collection scrolls inside its own room, so what comes after the list stays within reach.
+     The padding is for the focus ring, which would otherwise be cut at the edge. */
+  max-block-size: 640px;
+  overflow-y: auto;
+  padding: var(--sp-1);
+  border: 0;
+  border-radius: 0;
+}
+
+.check-list:has(> li > .check > .item-pick) > li {
+  padding: 0;
+  border-radius: var(--r-lg);
+}
+
+/* On a phone the page is what scrolls; a second scroller inside it takes the thumb that was going down the page. */
+@media (max-width: 767px) {
+  .check-list:has(> li > .check > .item-pick) {
+    max-block-size: none;
+    overflow-y: visible;
+  }
+}
+
+.check-list:has(> li > .check > .item-pick) > li:hover {
+  background: none;
+}
+
+.check:has(> .item-pick) {
+  position: relative;
+  display: block;
+  block-size: 100%;
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  overflow: clip;
+  transition: border-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.check:has(> .item-pick):hover {
+  border-color: color-mix(in oklab, var(--foreground) 45%, var(--border));
+}
+
+.check:has(> .item-pick) > .item-pick {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-3);
+}
+
+.check:has(> .item-pick) .item-pick-art {
+  inline-size: min(100%, 104px);
+  justify-self: center;
+}
+
+.check:has(> .item-pick) .item-pick-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']) {
+  position: absolute;
+  inset-block-start: var(--sp-2);
+  inset-inline-end: var(--sp-2);
+  z-index: 1;
+  inline-size: 24px;
+  block-size: 24px;
+  min-block-size: 0;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--card) 72%, transparent);
+  cursor: pointer;
+}
+
+.check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):checked {
+  border-color: var(--foreground);
+  background: var(--foreground);
+}
+
+.check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--background);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12.5l3.5 3.5L17 9' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12.5l3.5 3.5L17 9' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat;
+}
+
+.check:has(> .item-pick):has(> input:checked) {
+  border-color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--foreground);
+}
+
+.check:has(> .item-pick):has(> input:checked)::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 4px;
+  background: var(--foil);
+}
+
+/* The ring goes round the card, not round the small mark in its corner. */
+.check:has(> .item-pick):has(> input:focus-visible) {
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):focus-visible {
+  outline: none;
+}
+
+/* In forced colours the system draws the page's colours; a chosen card still has to look chosen. */
+@media (forced-colors: active) {
+  .check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):checked {
+    border-color: Highlight;
+    background: Highlight;
+  }
+
+  .check:has(> .item-pick) > input:is([type='checkbox'], [type='radio']):checked::after {
+    background: HighlightText;
+  }
+
+  .check:has(> .item-pick):has(> input:checked) {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
+}
