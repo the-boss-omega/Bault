@@ -287,7 +287,7 @@ function AccountDrawer({
         footer={
           <>
             <Button
-              variant="gold"
+              variant="primary"
               disabled={!namesOk || !dirty}
               onClick={() => void send({ ...changes })}
             >
@@ -295,7 +295,6 @@ function AccountDrawer({
             </Button>
             {canResetMfa && (
               <Button
-                variant="ghost"
                 aria-label={t('admin.users.mfaResetLabel', { email: user.email })}
                 onClick={() => setResetting(true)}
               >

@@ -118,7 +118,12 @@ export function HouseStoreSection({
             </Field>
           </div>
           <div className="row row--end">
-            <Button variant="gold" icon={<IconPlus />} disabled={!ready} onClick={() => void create()}>
+            <Button
+              variant="primary"
+              icon={<IconPlus />}
+              disabled={!ready}
+              onClick={() => void create()}
+            >
               {t('house.admin.create')}
             </Button>
           </div>

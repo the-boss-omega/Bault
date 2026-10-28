@@ -254,7 +254,7 @@ function ItemDrawer({
       }
       footer={
         <>
-          <Button variant="gold" disabled={!dirty} onClick={() => void save()}>
+          <Button variant="primary" disabled={!dirty} onClick={() => void save()}>
             {t('admin.action.save')}
           </Button>
           <Button variant="ghost" onClick={onClose}>

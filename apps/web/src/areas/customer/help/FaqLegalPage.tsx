@@ -185,7 +185,7 @@ function AskPanel() {
             aria-label={t('faq.ask.inputLabel')}
           />
         </label>
-        <Button type="submit" variant="gold" disabled={!draft.trim() || busy}>
+        <Button type="submit" variant="primary" disabled={!draft.trim() || busy}>
           {t('faq.ask.send')}
         </Button>
       </form>

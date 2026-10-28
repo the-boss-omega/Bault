@@ -81,7 +81,7 @@ export function GradingSubmissions() {
         </label>
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           icon={<IconBox />}
           disabled={body.trim() === ''}
           onClick={() =>
@@ -296,7 +296,7 @@ function OpenSubmission({
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           icon={<IconShipping />}
           disabled={busy || tracking.trim() === '' || notes.trim() === ''}
           onClick={() => void ship()}

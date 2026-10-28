@@ -42,7 +42,7 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       <section className="auth-card">
         <h2>{t('auth.resetTitle')}</h2>
         <ErrorState message={t('auth.resetNoToken')} />
-        <Button variant="gold" block onClick={goToSignIn}>
+        <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
       </section>
@@ -54,7 +54,7 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
       <section className="auth-card">
         <h2>{t('auth.resetTitle')}</h2>
         <SuccessNote>{t('auth.resetDone')}</SuccessNote>
-        <Button variant="gold" block onClick={goToSignIn}>
+        <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
       </section>
@@ -98,14 +98,14 @@ export function ResetPasswordPage({ token }: { token: string | null }) {
 
       {error && <ErrorState message={error} />}
 
-      <Button variant="gold" type="submit" block disabled={busy || !ready}>
+      <Button variant="primary" type="submit" block disabled={busy || !ready}>
         {t('auth.resetSubmit')}
       </Button>
 
       <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={goToSignIn}>
+        <Button variant="link" onClick={goToSignIn}>
           {t('auth.backToSignIn')}
-        </button>
+        </Button>
       </p>
     </form>
   );

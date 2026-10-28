@@ -141,9 +141,7 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
               <div className="row request-form-actions">
                 <Button onClick={() => setMode({ kind: 'regenerate' })}>{t('mfa.recovery.new')}</Button>
                 {!status.required && (
-                  <Button variant="ghost" onClick={() => setMode({ kind: 'disable' })}>
-                    {t('mfa.disable')}
-                  </Button>
+                  <Button onClick={() => setMode({ kind: 'disable' })}>{t('mfa.disable')}</Button>
                 )}
               </div>
             )}
@@ -191,7 +189,7 @@ export function TwoFactorPanel({ onEnabled }: { onEnabled?: () => void }) {
               </DrawerTag>
             </aside>
             <div className="row request-form-actions">
-              <Button variant="gold" loading={busy} onClick={() => void begin()}>
+              <Button variant="primary" loading={busy} onClick={() => void begin()}>
                 {t('mfa.setup')}
               </Button>
             </div>
@@ -249,7 +247,7 @@ function CodeForm({
       </Field>
       <div className="row">
         <Button
-          variant="gold"
+          variant="primary"
           type="submit"
           loading={busy}
           disabled={digits(code).length !== 6 || (withPassword && !password)}
@@ -337,7 +335,7 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
         {t('mfa.recovery.saved')}
       </label>
       <div className="row">
-        <Button variant="gold" disabled={!saved} onClick={onDone}>
+        <Button variant="primary" disabled={!saved} onClick={onDone}>
           {t('mfa.recovery.done')}
         </Button>
       </div>

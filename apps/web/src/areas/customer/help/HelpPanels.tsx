@@ -54,16 +54,11 @@ export function GuidesPanel() {
       </div>
 
       <div className="row" style={{ gap: 'var(--sp-2)', flexWrap: 'wrap', marginBlock: 'var(--sp-3)' }}>
-        <Button size="sm" variant={category === 'all' ? 'secondary' : 'ghost'} onClick={() => setCategory('all')}>
+        <Button size="sm" pressed={category === 'all'} onClick={() => setCategory('all')}>
           {t('guide.cat.all')}
         </Button>
         {GUIDE_CATEGORIES.map((c) => (
-          <Button
-            key={c}
-            size="sm"
-            variant={category === c ? 'secondary' : 'ghost'}
-            onClick={() => setCategory(c)}
-          >
+          <Button key={c} size="sm" pressed={category === c} onClick={() => setCategory(c)}>
             {t(`guide.cat.${c}` as MessageKey)}
           </Button>
         ))}
@@ -294,7 +289,13 @@ export function ContactPanel() {
           <div>
             <StatusBadge tone="gold">{t('contact.best')}</StatusBadge>
             <p style={{ marginBlockStart: 'var(--sp-2)' }}>{t('contact.helpdeskBody')}</p>
-            <Button variant="gold" size="sm" onClick={() => { window.location.hash = '#/support/tickets'; }}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                window.location.hash = '#/support/tickets';
+              }}
+            >
               {t('contact.openHelpdesk')}
             </Button>
           </div>

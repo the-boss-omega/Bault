@@ -108,7 +108,7 @@ export function SharedParcelsTab({
             </Field>
             <div className="row">
               <Button
-                variant="gold"
+                variant="primary"
                 icon={<IconUsers />}
                 disabled={busy || !openShipmentId}
                 onClick={() =>
@@ -222,7 +222,7 @@ export function SharedParcelsTab({
                   <div className="row">
                     <Button
                       size="sm"
-                      variant="gold"
+                      variant="primary"
                       disabled={busy || g.memberCount < 2}
                       onClick={() => void act(() => api.post(`/shipping/groups/${g.id}/lock`), t('grp.locked'))}
                     >

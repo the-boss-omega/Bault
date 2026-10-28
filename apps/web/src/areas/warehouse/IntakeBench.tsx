@@ -413,7 +413,13 @@ export function IntakeBench({
         </Button>
 
         <span className="spacer" />
-        <Button variant="gold" icon={<IconPlus />} loading={busy} disabled={!ready} onClick={() => void submit()}>
+        <Button
+          variant="primary"
+          icon={<IconPlus />}
+          loading={busy}
+          disabled={!ready}
+          onClick={() => void submit()}
+        >
           {filled.length > 1
             ? t('warehouse.intake.submitMany', { count: filled.length })
             : t('warehouse.intake.submit')}

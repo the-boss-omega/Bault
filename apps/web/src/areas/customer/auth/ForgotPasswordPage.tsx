@@ -30,7 +30,7 @@ export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void 
         <h2>{t('auth.forgotTitle')}</h2>
         <SuccessNote>{t('auth.forgotSent', { email: email.trim() })}</SuccessNote>
         <p className="field-hint">{t('auth.forgotSentHint')}</p>
-        <Button variant="gold" block onClick={onGoToSignIn}>
+        <Button variant="primary" block onClick={onGoToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
       </section>
@@ -56,14 +56,14 @@ export function ForgotPasswordPage({ onGoToSignIn }: { onGoToSignIn: () => void 
 
       {error && <ErrorState message={error} />}
 
-      <Button variant="gold" type="submit" block disabled={busy || !email.trim()}>
+      <Button variant="primary" type="submit" block disabled={busy || !email.trim()}>
         {t('auth.forgotSubmit')}
       </Button>
 
       <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={onGoToSignIn}>
+        <Button variant="link" onClick={onGoToSignIn}>
           {t('auth.backToSignIn')}
-        </button>
+        </Button>
       </p>
     </form>
   );

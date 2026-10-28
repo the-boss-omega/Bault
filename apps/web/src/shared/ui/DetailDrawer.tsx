@@ -86,7 +86,7 @@ export function ConfirmationModal({
   body,
   confirmLabel,
   cancelLabel,
-  tone = 'gold',
+  tone = 'primary',
   busy,
   onConfirm,
   onCancel,
@@ -95,7 +95,7 @@ export function ConfirmationModal({
   body: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
-  tone?: 'gold' | 'danger';
+  tone?: 'primary' | 'danger';
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -128,7 +128,11 @@ export function ConfirmationModal({
           <Button variant="secondary" disabled={busy} onClick={requestCancel}>
             {cancelLabel}
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'gold'} loading={busy} onClick={onConfirm}>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            loading={busy}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </div>

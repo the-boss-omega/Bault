@@ -249,7 +249,7 @@ export function WalletRequestForm({
         {done && <SuccessNote>{done}</SuccessNote>}
 
         <Button
-          variant="gold"
+          variant="primary"
           block
           icon={type === 'cash_in' ? <IconArrowDown /> : <IconUpload />}
           disabled={busy || Boolean(duplicate)}

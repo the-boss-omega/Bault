@@ -260,7 +260,7 @@ export function ShipmentComposer({
             action={
               <Button
                 size="sm"
-                variant="gold"
+                variant="primary"
                 onClick={() => navigate({ section: 'profile', tab: 'addresses' })}
               >
                 {t('shipping.addAnAddress')}
@@ -456,7 +456,7 @@ export function ShipmentComposer({
                     {r.recommended && <StatusBadge tone="gold">{t('ship.recommended')}</StatusBadge>}
                     <div className="actions">
                       <Button
-                        variant={r.recommended ? 'gold' : 'secondary'}
+                        variant={r.recommended ? 'primary' : 'secondary'}
                         size="sm"
                         block
                         disabled={busy || blocked}
@@ -473,7 +473,7 @@ export function ShipmentComposer({
             {eligible.length > 0 && (
               <div className="row stack-top">
                 <Button
-                  variant="gold"
+                  variant="primary"
                   icon={<IconShipping />}
                   disabled={busy || blocked}
                   onClick={() => void commit('recommended')}

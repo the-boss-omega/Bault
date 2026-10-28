@@ -279,7 +279,7 @@ export function MarketplacePage() {
                     </div>
 
                     <div className="actions">
-                      <Button variant="gold" size="sm" onClick={() => setBuying(listing)}>
+                      <Button variant="primary" size="sm" onClick={() => setBuying(listing)}>
                         {t('market.buy')}
                       </Button>
                       <Button variant="secondary" size="sm" onClick={() => setOffering(listing)}>
@@ -525,7 +525,12 @@ export function SellPanel({
           </aside>
 
           <div className="stack stack--tight request-form-actions">
-            <Button variant="gold" block disabled={busy || !itemId || cents === null} onClick={sell}>
+            <Button
+              variant="primary"
+              block
+              disabled={busy || !itemId || cents === null}
+              onClick={sell}
+            >
               {t('market.listForSale')}
             </Button>
           </div>
@@ -573,7 +578,7 @@ function OfferDrawer({
       dirty
       footer={
         <>
-          <Button variant="gold" disabled={busy || cents === null} onClick={send}>
+          <Button variant="primary" disabled={busy || cents === null} onClick={send}>
             {t('market.offer.submit')}
           </Button>
           <Button variant="ghost" onClick={onClose}>

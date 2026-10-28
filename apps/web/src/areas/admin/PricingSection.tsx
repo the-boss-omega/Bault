@@ -291,7 +291,7 @@ export function PricingSection({
 
           <div className="row request-form-actions">
             <Button
-              variant="gold"
+              variant="primary"
               icon={<IconPlus />}
               disabled={value === null || description.trim() === '' || !ready}
               onClick={create}

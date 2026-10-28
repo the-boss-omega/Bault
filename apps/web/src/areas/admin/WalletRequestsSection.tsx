@@ -356,7 +356,9 @@ function WalletRequestDrawer({
           {actions.map((action) => (
             <Button
               key={action}
-              variant={action === 'complete' ? 'gold' : action === 'reject' ? 'danger' : 'secondary'}
+              variant={
+                action === 'complete' ? 'primary' : action === 'reject' ? 'danger' : 'secondary'
+              }
               disabled={busy}
               onClick={() => {
                 if (action === 'reject') onRequestReject();

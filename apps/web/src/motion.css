@@ -12,22 +12,7 @@
   --lift: -2px;
 }
 
-/* Buttons and cards: hover lifts, press settles. */
-
-.btn,
-.icon-btn {
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
-    transform var(--dur-fast) var(--ease);
-}
-
-.btn:hover:not(:disabled) {
-  box-shadow: var(--shadow-xs);
-}
-
-.btn:not(:disabled):active {
-  transform: scale(0.98);
-}
+/* Cards: hover lifts. (Buttons press themselves: buttons.css.) */
 
 .card--interactive {
   transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease),

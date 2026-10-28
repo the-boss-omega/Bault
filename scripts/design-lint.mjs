@@ -602,6 +602,12 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
       const entry = themes[theme].get(ref[1]) ?? mapping.get(ref[1]) ?? bault.get(ref[1]);
       return entry ? resolve(entry.value, theme, depth + 1) : null;
     }
+    // light-dark(a, b) is a, in the light theme, and b, in the dark: the theme.css declares color-scheme per theme.
+    const lightDark = /^light-dark\((.+)\)$/s.exec(v);
+    if (lightDark) {
+      const [light, dark] = splitTop(lightDark[1], ',');
+      return light && dark ? resolve(theme === 'light' ? light : dark, theme, depth + 1) : null;
+    }
     const mix = /^color-mix\(\s*in oklab\s*,\s*(.+?)\s+([\d.]+)%\s*,\s*(.+)\)$/.exec(v);
     if (mix) {
       const [, a, pct, b] = mix;
@@ -647,6 +653,39 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
     for (const [fg, bgs, min, why] of THEME_PAIRS) measure(fg, bgs, min, why, theme);
   }
 
+  // The buttons (buttons.css): the primary one is the paper's own pair of inks, a quiet one is its line, and
+  // each of them is read on the page, on the paper and on the room.
+  const BUTTON_PAIRS = [
+    [
+      '--btn-primary-ink',
+      ['--btn-primary', '--btn-primary-hover'],
+      TEXT,
+      'the label of a primary button',
+    ],
+    [
+      '--btn-primary',
+      ['--background', '--card', '--popover'],
+      BOUNDARY,
+      'the edge of a primary button',
+    ],
+    ['--btn-danger', ['--btn-danger-wash'], TEXT, 'the label of a danger button'],
+    [
+      '--btn-danger-ink',
+      ['--btn-danger'],
+      TEXT,
+      'the label of a danger button when it is reached for',
+    ],
+    [
+      '--btn-off-ink',
+      ['--background', '--card', '--popover'],
+      BOUNDARY,
+      'a disabled button (exempt, but not to vanish)',
+    ],
+  ];
+  for (const theme of Object.keys(themes)) {
+    for (const [fg, bgs, min, why] of BUTTON_PAIRS) measure(fg, bgs, min, why, theme);
+  }
+
   // Two surfaces keep their palette in both themes: the paper and the room.
   const PAPER = ['--paper', '--paper-bright'];
   const ROOM = ['--room-deep', '--room', '--room-raised', '--room-case', '--room-pool'];
@@ -655,6 +694,39 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
     measure('--paper-ink-2', PAPER, TEXT, 'copy on the paper', theme);
     measure('--paper-ink-3', PAPER, TEXT, 'labels on the paper', theme);
     measure('--room-ink', ROOM, 7, 'text and focus rings on the room', theme);
+    // Buttons on the paper: the print is the primary, the lightest paper its label, the ink's second its hover.
+    measure(
+      '--paper-bright',
+      ['--paper-ink'],
+      7,
+      'the label of a primary button on the paper',
+      theme,
+    );
+    measure(
+      '--paper-bright',
+      ['--paper-ink-2'],
+      TEXT,
+      'the label of a primary button on the paper, reached for',
+      theme,
+    );
+    measure('--paper-oxblood', PAPER, TEXT, 'the label of a danger button on the paper', theme);
+    measure(
+      '--paper-ink',
+      ['--paper-bright'],
+      7,
+      'a quiet button on the paper, reached for',
+      theme,
+    );
+    measure('--paper-edge', PAPER, 3, 'the line of a button on the paper', theme);
+    // Buttons on the room: the primary is the paper, and its edge is the paper against the room.
+    measure('--paper', ROOM, 3, 'the edge of a primary button on the room', theme);
+    measure(
+      '--paper-ink',
+      ['--paper', '--paper-bright'],
+      7,
+      'the label of a primary button on the room',
+      theme,
+    );
   }
 }
 

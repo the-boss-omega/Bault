@@ -186,7 +186,7 @@ export function MembershipPage() {
 
           {mine.status === 'active' && (
             <div className="actions">
-              <Button variant="ghost" loading={busy === 'cancel'} onClick={() => void cancel()}>
+              <Button loading={busy === 'cancel'} onClick={() => void cancel()}>
                 {t('membership.cancel')}
               </Button>
             </div>
@@ -230,7 +230,11 @@ export function MembershipPage() {
                     <span className="pill pill--success">{t('membership.yourTier')}</span>
                   ) : confirming === tier.key ? (
                     <>
-                      <Button variant="gold" loading={busy === tier.key} onClick={() => void subscribe(tier)}>
+                      <Button
+                        variant="primary"
+                        loading={busy === tier.key}
+                        onClick={() => void subscribe(tier)}
+                      >
                         {t('membership.confirmYes')}
                       </Button>
                       <Button variant="ghost" onClick={() => setConfirming(null)}>
@@ -238,7 +242,7 @@ export function MembershipPage() {
                       </Button>
                     </>
                   ) : (
-                    <Button variant="gold" onClick={() => setConfirming(tier.key)}>
+                    <Button variant="primary" onClick={() => setConfirming(tier.key)}>
                       {action.kind === 'join'
                         ? t('membership.join')
                         : action.kind === 'keep'

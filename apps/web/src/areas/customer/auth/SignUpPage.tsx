@@ -94,7 +94,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
 
         {error && <ErrorState message={error} />}
 
-        <Button variant="gold" block onClick={onGoToSignIn}>
+        <Button variant="primary" block onClick={onGoToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
       </section>
@@ -200,15 +200,14 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
         </label>
         <p className="field-hint" id="signup-consent-hint">
           {t('auth.consentHint')}{' '}
-          <button
-            className="btn--link"
-            type="button"
+          <Button
+            variant="link"
             aria-expanded={showTerms}
             aria-controls="signup-terms"
             onClick={() => setShowTerms((v) => !v)}
           >
             {showTerms ? t('auth.consentHide') : t('auth.consentRead')}
-          </button>
+          </Button>
         </p>
         {showTerms && <TermsReader id="signup-terms" />}
       </div>
@@ -216,7 +215,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       {error && <ErrorState message={error} />}
 
       <Button
-        variant="gold"
+        variant="primary"
         type="submit"
         block
         loading={busy}
@@ -227,9 +226,9 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
 
       <p className="auth-switch">
         {t('auth.haveAccount')}{' '}
-        <button className="btn--link" type="button" onClick={onGoToSignIn}>
+        <Button variant="link" onClick={onGoToSignIn}>
           {t('auth.signIn')}
-        </button>
+        </Button>
       </p>
     </form>
   );

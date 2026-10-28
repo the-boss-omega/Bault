@@ -130,7 +130,7 @@ export function ShowPickupPanel({
 
           <div className="row">
             <Button
-              variant="gold"
+              variant="primary"
               icon={<IconCalendar />}
               disabled={busy || chosen.length === 0 || !show?.open}
               onClick={() => void book()}
@@ -299,7 +299,7 @@ export function WhiteGlovePanel({
         </label>
 
         <div className="row">
-          <Button variant="gold" disabled={busy || !ready} onClick={() => void request()}>
+          <Button variant="primary" disabled={busy || !ready} onClick={() => void request()}>
             {t('ff.wg.ask')}
           </Button>
           <span className="field-hint">{t('ff.wg.nothingCharged')}</span>
@@ -354,7 +354,7 @@ export function WhiteGloveQuotes({
                   <strong dir="ltr">{formatUsd(r.quoteMinor)}</strong>
                   <Button
                     size="sm"
-                    variant="gold"
+                    variant="primary"
                     disabled={busy}
                     onClick={() => {
                       setBusy(true);

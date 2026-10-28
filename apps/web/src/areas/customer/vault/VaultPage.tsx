@@ -387,7 +387,7 @@ export function VaultPage() {
           <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
         )}
         {scope === 'active' && cullWindowDays !== null && (
-          <Button size="sm" variant={culling ? 'secondary' : 'ghost'} onClick={() => setCulling((v) => !v)}>
+          <Button size="sm" onClick={() => setCulling((v) => !v)}>
             {culling ? t('cull.close') : t('cull.open')}
           </Button>
         )}
@@ -435,7 +435,7 @@ export function VaultPage() {
               ) : scope === 'active' ? (
                 <Button
                   size="sm"
-                  variant="gold"
+                  variant="primary"
                   onClick={() => navigate({ section: 'inbound', tab: 'addresses' })}
                 >
                   {t('vault.empty.getStarted')}

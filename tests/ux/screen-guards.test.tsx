@@ -15,7 +15,7 @@ const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { VerifyEmailPage } = await import('../../apps/web/src/areas/customer/auth/VerifyEmailPage');
 const { ErrorBoundary } = await import('../../apps/web/src/shared/ui/ErrorBoundary');
 const { TwoFactorPanel } = await import('../../apps/web/src/areas/customer/profile/TwoFactorPanel');
-const STYLESHEET = 'apps/web/src/index.css';
+const STYLESHEETS = ['apps/web/src/index.css', 'apps/web/src/buttons.css'];
 
 function renderIn(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>);
@@ -91,7 +91,7 @@ describe('the render-failure fallback', () => {
       </ErrorBoundary>,
     );
 
-    const css = readFileSync(STYLESHEET, 'utf8');
+    const css = STYLESHEETS.map((file) => readFileSync(file, 'utf8')).join('\n');
     const buttons = [
       screen.getByRole('button', { name: /try again/i }),
       screen.getByRole('button', { name: /reload the page/i }),
@@ -99,10 +99,10 @@ describe('the render-failure fallback', () => {
     for (const button of buttons) {
       for (const cls of button.classList) {
         const selector = new RegExp(`\\.${cls.replace(/[-]/g, '\\-')}(?![\\w-])`);
-        expect(css, `.${cls} is not defined in index.css`).toMatch(selector);
+        expect(css, `.${cls} is not defined in the stylesheets`).toMatch(selector);
       }
     }
-    expect(buttons[0]).toHaveClass('btn--gold');
+    expect(buttons[0]).toHaveClass('btn--primary');
   });
 });
 

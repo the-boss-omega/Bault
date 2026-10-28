@@ -134,7 +134,7 @@ export function ConsignmentForm({
       )}
 
       <div className="row">
-        <Button variant="gold" disabled={busy || !ready} onClick={() => void submit()}>
+        <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
           {t('consign.submit')}
         </Button>
         <Button variant="ghost" onClick={onCancel}>

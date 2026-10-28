@@ -77,7 +77,12 @@ export function CustomRequestForm({
         <Button variant="ghost" onClick={onCancel}>
           {t('ui.cancel')}
         </Button>
-        <Button variant="gold" loading={busy} disabled={!summaryOk || !detailOk} onClick={() => void submit()}>
+        <Button
+          variant="primary"
+          loading={busy}
+          disabled={!summaryOk || !detailOk}
+          onClick={() => void submit()}
+        >
           {t('custom.submit')}
         </Button>
       </div>

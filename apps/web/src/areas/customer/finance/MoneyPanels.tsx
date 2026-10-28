@@ -184,7 +184,12 @@ export function TopUpPanel({
               </aside>
               <div className="stack stack--tight request-form-actions">
                 <div className="row">
-                  <Button variant="gold" icon={<IconWallet />} disabled={busy || !withinLimits} onClick={() => void pay()}>
+                  <Button
+                    variant="primary"
+                    icon={<IconWallet />}
+                    disabled={busy || !withinLimits}
+                    onClick={() => void pay()}
+                  >
                     {t('money.payNow')}
                   </Button>
                   <span className="field-hint">{t('money.instantHint')}</span>

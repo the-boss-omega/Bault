@@ -11,6 +11,7 @@ import { useRoute, useNavigation } from '../../shared/routing';
 import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
 import {
   Button,
+  ButtonLink,
   ContextTabs,
   EmptyState,
   ErrorState,
@@ -379,15 +380,16 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
               ))}
             </select>
           </label>
-          <a
-            className="btn btn--gold btn--sm"
+          <ButtonLink
+            variant="primary"
+            size="sm"
+            icon={<IconDownload />}
             href={`/api/v1/custody/report.pdf?cut=${cut}`}
             target="_blank"
             rel="noopener noreferrer"
           >
-            <IconDownload />
             {t('warehouse.report.exportPdf')}
-          </a>
+          </ButtonLink>
         </>
       }
     >
@@ -513,7 +515,7 @@ function RelocatePanel({
           &nbsp;
         </span>
         <Button
-          variant="navy"
+          variant="primary"
           icon={<IconScan />}
           disabled={!scanItem.trim() || !scanBin.trim()}
           onClick={relocate}
@@ -583,7 +585,7 @@ function HoldPanel({
           >
             {t('warehouse.hold.place')}
           </Button>
-          <Button variant="ghost" disabled={busy || !scanItem.trim()} onClick={() => void act(false)}>
+          <Button disabled={busy || !scanItem.trim()} onClick={() => void act(false)}>
             {t('warehouse.hold.release')}
           </Button>
         </div>
@@ -863,7 +865,7 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
           <input value={shipmentId} onChange={(e) => setShipmentId(e.target.value)} dir="ltr" />
         </label>
         <Button
-          variant="navy"
+          variant="primary"
           icon={<IconShipping />}
           disabled={!shipmentId}
           onClick={load}
@@ -984,7 +986,7 @@ function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
           {!complete && <p className="field-hint">{t('warehouse.required')}</p>}
 
           <div className="row row--end">
-            <Button variant="gold" disabled={!complete} onClick={completeShipment}>
+            <Button variant="primary" disabled={!complete} onClick={completeShipment}>
               {t('warehouse.complete')}
             </Button>
           </div>
@@ -1093,7 +1095,7 @@ function BinsPanel({
             <span className="field-label" aria-hidden="true">
               &nbsp;
             </span>
-            <Button variant="gold" icon={<IconPlus />} disabled={!zone} onClick={create}>
+            <Button variant="primary" icon={<IconPlus />} disabled={!zone} onClick={create}>
               {t('warehouse.bins.create')}
             </Button>
           </div>

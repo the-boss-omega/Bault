@@ -118,21 +118,21 @@ export function SignInPage({
           </Button>
         ))}
 
-      <Button variant="gold" type="submit" block loading={busy}>
+      <Button variant="primary" type="submit" block loading={busy}>
         {t('auth.signIn')}
       </Button>
 
       <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={onGoToForgotPassword}>
+        <Button variant="link" onClick={onGoToForgotPassword}>
           {t('auth.forgotLink')}
-        </button>
+        </Button>
       </p>
 
       <p className="auth-switch">
         {t('auth.noAccount')}{' '}
-        <button className="btn--link" type="button" onClick={onGoToSignUp}>
+        <Button variant="link" onClick={onGoToSignUp}>
           {t('auth.signUp')}
-        </button>
+        </Button>
       </p>
 
       {import.meta.env.DEV && <p className="auth-demo">{DEMO_USERS}</p>}

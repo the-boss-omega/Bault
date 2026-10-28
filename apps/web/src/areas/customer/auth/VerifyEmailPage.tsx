@@ -71,7 +71,7 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
       <section className="auth-card">
         <h2>{t('auth.verifyTitle')}</h2>
         <SuccessNote>{t('auth.verifyDone')}</SuccessNote>
-        <Button variant="gold" block onClick={goToSignIn}>
+        <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
       </section>
@@ -85,9 +85,9 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
       <p className="field-hint">{t('auth.verifyFailedHint')}</p>
       <ResendForm />
       <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={goToSignIn}>
+        <Button variant="link" onClick={goToSignIn}>
           {t('auth.backToSignIn')}
-        </button>
+        </Button>
       </p>
     </section>
   );

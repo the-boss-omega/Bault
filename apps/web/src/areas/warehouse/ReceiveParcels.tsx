@@ -137,7 +137,13 @@ export function ReceiveParcels({
             {t('inbound.register.international')}
           </label>
           <span className="spacer" />
-          <Button variant="gold" icon={<IconPlus />} loading={busy} disabled={!ready} onClick={() => void receive()}>
+          <Button
+            variant="primary"
+            icon={<IconPlus />}
+            loading={busy}
+            disabled={!ready}
+            onClick={() => void receive()}
+          >
             {t('parcelQueue.receive.submit')}
           </Button>
         </div>

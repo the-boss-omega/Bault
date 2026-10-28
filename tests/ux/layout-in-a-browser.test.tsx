@@ -47,7 +47,18 @@ const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as
  * CSS, which is where each of these was wrong.
  */
 const SRC = join(__dirname, '..', '..', 'apps', 'web', 'src');
-const CSS = ['index', 'theme', 'slab', 'components', 'landing', 'app', 'gallery', 'screens', 'motion']
+const CSS = [
+  'index',
+  'theme',
+  'slab',
+  'components',
+  'buttons',
+  'landing',
+  'app',
+  'gallery',
+  'screens',
+  'motion',
+]
   .map((name) => readFileSync(join(SRC, `${name}.css`), 'utf8'))
   .join('\n');
 const BROWSER = '/opt/pw-browsers/chromium';
@@ -141,9 +152,9 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       for (const width of [1440, 390]) {
         const page = await inBrowser(width, 'en', 'dark', false);
         const close = await page.$eval('.drawer-head .icon-btn', (el) => el.getBoundingClientRect().toJSON());
-        // WCAG 2.2, 2.5.8: a target is at least 24 by 24 CSS pixels (this one is 36).
-        expect(close.width).toBeGreaterThanOrEqual(36);
-        expect(close.height).toBeGreaterThanOrEqual(36);
+        // WCAG 2.2, 2.5.8: a target is at least 24 by 24 CSS pixels (this one is a control, 40).
+        expect(close.width).toBeGreaterThanOrEqual(40);
+        expect(close.height).toBeGreaterThanOrEqual(40);
         await page.close();
       }
     });

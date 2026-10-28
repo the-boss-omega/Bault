@@ -191,7 +191,12 @@ export function EscrowTab({ meId }: { meId: string | null }) {
           </Field>
 
           <div className="row">
-            <Button variant="gold" icon={<IconUsers />} disabled={busy || !ready} onClick={() => void raise()}>
+            <Button
+              variant="primary"
+              icon={<IconUsers />}
+              disabled={busy || !ready}
+              onClick={() => void raise()}
+            >
               {t('esc.raiseAction')}
             </Button>
             <span className="field-hint">{t('esc.feeOnYou')}</span>
@@ -398,7 +403,7 @@ function DealDrawer({
       {deal.status === 'proposed' && deal.counterpartyUserId === meId && (
         <div className="row stack-top">
           <Button
-            variant="gold"
+            variant="primary"
             size="sm"
             disabled={busy}
             onClick={() => void act(() => api.post(`/escrow/${dealId}/agree`, {}), t('esc.agreed'))}
@@ -411,7 +416,7 @@ function DealDrawer({
       {deal.status === 'agreed' && iAmBuyer && (
         <div className="row stack-top">
           <Button
-            variant="gold"
+            variant="primary"
             size="sm"
             disabled={busy}
             onClick={() => void act(() => api.post(`/escrow/${dealId}/fund`, {}), t('esc.funded'))}
@@ -429,7 +434,7 @@ function DealDrawer({
           ) : (
             <div className="row">
               <Button
-                variant="gold"
+                variant="primary"
                 size="sm"
                 disabled={busy}
                 onClick={() => void act(() => api.post(`/escrow/${dealId}/release`, {}), t('esc.released'))}

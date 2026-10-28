@@ -224,7 +224,10 @@ accent: it is the primary button.
 
 ### Foil
 `--foil` — a 115° ramp of five light hues (`--foil-a` … `--foil-e`, rose → amber → mint → sky →
-violet). Hairlines and bands only. It is still, except for the loops listed in section 2.
+violet). Hairlines and bands only: the top edge of a paper piece, a tab's underline, the foot of a
+primary button (3 px; it marks a thing that can be pressed, so a disabled button has none). It is
+still, except for the loops listed in section 2 (a button's foil slides on to its other half once when
+the button is reached for, and rests).
 
 ### Paper
 `--paper` `#f3efe6`, `--paper-bright` `#fffdf8`, `--paper-line` `#d6d0c2`, the inks `--paper-ink`,
@@ -311,7 +314,7 @@ over 450–1000 ms); a transition on a state (hover, selected) reads the tokens.
 | Landing, journey | One card moves through four states while you read (unidentified → booked in, with a flash → shelved → decided) | Argue |
 | Shell | A page's own sections rise in sequence (the page container itself does not move); cards in a gallery arrive in sequence; figures count up; the tab indicator is foil and glides to the active tab | Orient |
 | Wallet | The statement's sum prints in when the overview opens; the balance counts up | Orient |
-| Controls | Press settles (`scale(.98)`); a primary button throws a little foil light under itself, clipped at its lower edge so it never hazes the face | Confirm |
+| Controls | A press puts a button down onto its edge (a pixel; the primary's foil thins); a primary button's foil, twice the button's width, slides on to its other half and thickens when it is reached for (only where a pointer can hover) | Confirm |
 | Overlays | Drawers slide, dialogs and the photo lightbox rise, all *exit* (`.is-closing` for `--dur-exit`) | Confirm |
 | Loading | Placeholders hold the room of what is coming (an empty case for a card, rows for a table) with a shimmer; the boot mark breathes | Orient |
 
@@ -494,6 +497,45 @@ pieces. Each keeps the old markup's contracts and message keys.
   in the drawer of another enrolled account, and asked about first; when it is done, focus is in the
   drawer, not on the page behind. A name an account is flagged for is confirmed by sending it as it is,
   which is not an edit to be guarded: the backdrop still shuts the drawer.
+
+### Buttons (`Button`, `ButtonLink`, `IconButton`; `buttons.css`)
+One family, in one file. A button is a piece of the paper put to work, and it stands on its lower edge the
+way a key does: a quiet button on a line a pixel heavier at the foot, the primary one on a strip of foil.
+The foil marks a thing that can be pressed, so a disabled button has none: it is a dashed outline, a blank
+key, which is not a field either. A button that is working keeps its face (it has not stopped being the
+button) and takes a spinner in the place of its glyph.
+
+| Variant | For | Drawn |
+| --- | --- | --- |
+| `primary` | the one thing to do next: a screen, a drawer or a form has one | the paper's own ink on the page (the ink in the light theme, the paper itself in the dark), with 3 px of foil at its foot |
+| `secondary` (the default) | another thing one may do | a line (`--control-border`, 3:1) and nothing else |
+| `ghost` | the way out (Cancel, Close) and what is only sometimes wanted | words; a line only when it is reached for |
+| `danger` | what cannot be taken back | the destructive red on its wash; filled when it is reached for |
+| `link` | an action inside a sentence | set as the words around it, underlined |
+
+The hierarchy is the screen's, not the button's. One primary to a view; Cancel and Close are ghost; what
+destroys is `danger` and stands apart from what saves; an action that is a switch (a filter that is on) is
+a secondary with `pressed`, and its state is its foot, a heavy line, not its label; "clear the filters" in an
+empty state is a secondary, and in a toolbar it is ghost. A button that is only a glyph is an `IconButton`,
+named by its `label` (a screen reader's name and the tooltip); the header's three are one capsule, which is
+their outline. A link that goes somewhere (a download, a file) is a `ButtonLink`: an `<a>` that is drawn as
+one, so that it is announced as the link it is.
+
+**Size.** A control is `--control-h`: 40 px under a pointer and 44 px where the pointer is a finger
+(`pointer: coarse`), for a field and a button alike, so a button beside a field lines up with it. A small
+button (`size="sm"`) is 32 px under a pointer and 44 under a finger: it is small in what it says, not in
+what it asks of a thumb. Hover is for a pointer that can hover (`hover: hover`), so a tap does not leave a
+button lit.
+
+**Where it stands.** Colour is the `--btn-*` tokens of `theme.css`, written with `light-dark()` so one line
+serves both themes (the lint resolves it and measures every pair). The paper and the room are not the page's
+and say which they want (`.on-paper`, `.on-room`, and the surfaces `buttons.css` lists): on paper the
+primary is the print (`--paper-ink`) and a line is `--paper-edge`; on the room the primary is the paper. A
+new surface that is paper adds its class to that list or wears `.on-paper`; the audit measures a button where
+it is drawn and finds the one that is not.
+
+**Forced colours.** The system draws the colours, so the difference is in the lines: the primary has a heavy
+foot (4 px), a danger button a dashed line, a ghost a dotted one, and a switch that is on a highlight.
 
 ### Choosing cards (`ItemPick`; `components.css`)
 Wherever the list is of cards to choose among (the items to ship, to offer in a trade, to hand over
@@ -681,7 +723,7 @@ like.
 | What | By | When |
 | --- | --- | --- |
 | Contrast of every pair the interface draws text or a boundary in, in both themes (table in section 4) | `design-lint` reads `theme.css` | `pnpm test:web` (CI) and by hand |
-| The two dark blocks stay one theme | `design-lint` | same |
+| The two dark blocks stay one theme; the buttons' colour pairs (the primary's label on it, its edge against the page, danger's red on its wash, the paper's and the room's primaries) | `design-lint` | same |
 | Physical properties (including `float`, `clear`, four-value shorthands that name a side, corners that are not mirrored); `left`/`right` keywords, angles and horizontal moves that point one way in both languages; any `[dir]` / `:dir()` outside `theme.css`; a block that takes its own text's direction and is aligned to `start` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
 | Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid, with no `em` that is not declared (section 6); a font size in `index.css` is a step of the scale or relative (section 3) | `design-lint` | same |
@@ -690,6 +732,7 @@ like.
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
 | WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account and an item in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
 | What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
@@ -704,7 +747,8 @@ like.
 | `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--dir` and `--text-start`, and Bault's own: foil, paper, the room, easing |
 | `fonts.css` | Generated by `scripts/fetch-fonts.mjs`: one `@font-face` per variable subset |
 | `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
-| `components.css` | Buttons, focus, fields, selects, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
+| `components.css` | Focus, fields, selects, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
+| `buttons.css` | Every button: `.btn` and its variants, `.icon-btn`, the header's capsule of them, the spinner, the paper's and the room's own, what forced colours draw |
 | `landing.css` | The public page |
 | `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
 | `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |

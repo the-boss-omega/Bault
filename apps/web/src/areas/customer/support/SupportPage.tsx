@@ -123,7 +123,7 @@ function TicketList({
       subtitle={t('support.list.subtitle')}
       flush
       tools={
-        <Button size="sm" variant="gold" icon={<IconPlus />} onClick={onNew}>
+        <Button size="sm" variant="primary" icon={<IconPlus />} onClick={onNew}>
           {t('support.new')}
         </Button>
       }
@@ -278,7 +278,7 @@ function NewTicketForm({
         </aside>
 
         <div className="row request-form-actions">
-          <Button variant="gold" disabled={busy || !ready} onClick={() => void submit()}>
+          <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
             {t('support.submit')}
           </Button>
         </div>
@@ -354,7 +354,11 @@ export function ThreadDrawer({
       dirty={reply.trim() !== ''}
       footer={
         <>
-          <Button variant="gold" disabled={busy || reply.trim() === ''} onClick={() => void send()}>
+          <Button
+            variant="primary"
+            disabled={busy || reply.trim() === ''}
+            onClick={() => void send()}
+          >
             {t('support.send')}
           </Button>
           {staff && !resolved && (

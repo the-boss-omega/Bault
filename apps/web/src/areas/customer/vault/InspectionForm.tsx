@@ -65,7 +65,11 @@ export function InspectionForm({
       </ul>
 
       <div className="row">
-        <Button variant="gold" disabled={busy || chosen.length === 0} onClick={() => void submit()}>
+        <Button
+          variant="primary"
+          disabled={busy || chosen.length === 0}
+          onClick={() => void submit()}
+        >
           {t('inspect.submit')}
         </Button>
         <Button variant="ghost" onClick={onCancel}>

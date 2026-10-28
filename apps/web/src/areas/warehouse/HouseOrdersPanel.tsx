@@ -48,7 +48,8 @@ export function HouseOrdersPanel({ onLog }: { onLog: (line: string) => void }) {
       tools={
         <BarcodePrintAllButton
           labels={orders.map((o) => ({ value: o.barcode, caption: o.description || o.barcode }))}
-          className="btn btn--secondary btn--sm"
+          variant="secondary"
+          size="sm"
         />
       }
     >
@@ -147,7 +148,13 @@ function HouseOrderRowView({
       />
 
       <div className="row row--end">
-        <Button variant="gold" icon={<IconBox />} loading={busy} disabled={busy} onClick={() => void stow()}>
+        <Button
+          variant="primary"
+          icon={<IconBox />}
+          loading={busy}
+          disabled={busy}
+          onClick={() => void stow()}
+        >
           {t('house.queue.stow')}
         </Button>
       </div>

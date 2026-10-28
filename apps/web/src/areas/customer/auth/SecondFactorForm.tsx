@@ -74,26 +74,25 @@ export function SecondFactorForm({
 
       {error && <ErrorState message={error} />}
 
-      <Button variant="gold" type="submit" block loading={busy}>
+      <Button variant="primary" type="submit" block loading={busy}>
         {t('mfa.verify')}
       </Button>
 
       <p className="auth-switch">
-        <button
-          className="btn--link"
-          type="button"
+        <Button
+          variant="link"
           onClick={() => {
             setUseRecovery(!useRecovery);
             setError(null);
           }}
         >
           {useRecovery ? t('mfa.useApp') : t('mfa.useRecovery')}
-        </button>
+        </Button>
       </p>
       <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={() => onRestart(null)}>
+        <Button variant="link" onClick={() => onRestart(null)}>
           {t('auth.backToSignIn')}
-        </button>
+        </Button>
       </p>
     </form>
   );

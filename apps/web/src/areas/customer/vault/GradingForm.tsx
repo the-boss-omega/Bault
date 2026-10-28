@@ -114,7 +114,7 @@ export function GradingForm({
       <p className="field-hint">{t('grade.awayNote')}</p>
 
       <div className="row">
-        <Button variant="gold" disabled={busy || !ready} onClick={() => void submit()}>
+        <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
           {t('grade.submit')}
         </Button>
         <Button variant="ghost" onClick={onCancel}>

@@ -199,7 +199,7 @@ export function WalletPage() {
         onSelect={(key) => goTab(key)}
         actions={
           <>
-            <Button variant="gold" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
+            <Button variant="primary" icon={<IconPlus />} onClick={() => goTab('cash-in')}>
               {t('wallet.action.cashIn')}
             </Button>
             <Button variant="secondary" icon={<IconUpload />} onClick={() => goTab('cash-out')}>

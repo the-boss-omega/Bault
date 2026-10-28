@@ -230,7 +230,11 @@ export function ProfilePage() {
               )}
 
               <div className="row request-form-actions">
-                <Button variant="gold" disabled={!firstOk || !lastOk || !nameDirty} onClick={saveName}>
+                <Button
+                  variant="primary"
+                  disabled={!firstOk || !lastOk || !nameDirty}
+                  onClick={saveName}
+                >
                   {t('profile.saveName')}
                 </Button>
               </div>
@@ -392,7 +396,7 @@ function PasswordPanel({
         </Field>
 
         <div className="row">
-          <Button variant="gold" disabled={busy || !ready} onClick={() => void save()}>
+          <Button variant="primary" disabled={busy || !ready} onClick={() => void save()}>
             {t('profile.password.submit')}
           </Button>
         </div>
@@ -478,7 +482,7 @@ function AddressCard({
           <AddressLabel address={draft} kicker={draft.label.trim() || t('profile.address.edit')} />
         </aside>
         <div className="actions request-form-actions">
-          <Button size="sm" variant="gold" disabled={!valid} onClick={save}>
+          <Button size="sm" variant="primary" disabled={!valid} onClick={save}>
             {t('profile.address.save')}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
@@ -719,7 +723,7 @@ function AddressForm({
           />
         </aside>
         <div className="row request-form-actions">
-          <Button variant="gold" icon={<IconPlus />} disabled={!valid} onClick={add}>
+          <Button variant="primary" icon={<IconPlus />} disabled={!valid} onClick={add}>
             {t('profile.addressForm.submit')}
           </Button>
         </div>

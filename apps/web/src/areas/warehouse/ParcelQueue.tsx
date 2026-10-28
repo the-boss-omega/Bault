@@ -170,7 +170,7 @@ function ParcelActions({
     if (!claiming) {
       return (
         <div className="actions">
-          <Button size="sm" variant="gold" onClick={() => setClaiming(true)}>
+          <Button size="sm" variant="primary" onClick={() => setClaiming(true)}>
             {t('parcelQueue.action.attribute')}
           </Button>
           {needsForwarding && (
@@ -197,7 +197,7 @@ function ParcelActions({
         <div className="actions">
           <Button
             size="sm"
-            variant="gold"
+            variant="primary"
             disabled={!ok}
             onClick={() =>
               void onAct(
@@ -229,7 +229,7 @@ function ParcelActions({
         <div className="actions">
           <Button
             size="sm"
-            variant="gold"
+            variant="primary"
             icon={<IconShipping />}
             onClick={() => void onAct(() => api.post(`/parcels/${row.id}/forward`), t('parcelQueue.forwarded'))}
           >
@@ -241,7 +241,7 @@ function ParcelActions({
     if (!opening) {
       return (
         <div className="actions">
-          <Button size="sm" variant="gold" icon={<IconBox />} onClick={() => setOpening(true)}>
+          <Button size="sm" variant="primary" icon={<IconBox />} onClick={() => setOpening(true)}>
             {t('parcelQueue.action.open')}
           </Button>
         </div>
@@ -276,7 +276,7 @@ function ParcelActions({
         <div className="actions">
           <Button
             size="sm"
-            variant="gold"
+            variant="primary"
             disabled={!complete}
             onClick={() =>
               void onAct(
@@ -303,7 +303,12 @@ function ParcelActions({
 
   return (
     <div className="actions">
-      <Button size="sm" variant="gold" icon={<IconBox />} onClick={() => onBookContents?.(row.id)}>
+      <Button
+        size="sm"
+        variant="primary"
+        icon={<IconBox />}
+        onClick={() => onBookContents?.(row.id)}
+      >
         {t('parcelQueue.action.bookContents')}
       </Button>
       <span className="field-hint">

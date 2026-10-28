@@ -129,7 +129,7 @@ export function ShippingServicesPage() {
                   <span className="slip-label">{t('ss.metric.shippable')}</span>
                 </p>
                 <div className="departure-action">
-                  <Button variant="gold" onClick={() => goTab('shipping')}>
+                  <Button variant="primary" onClick={() => goTab('shipping')}>
                     {t('ss.overview.goShipping')}
                   </Button>
                 </div>
@@ -698,7 +698,7 @@ export function ShipmentDrawer({
         <div className="row stack-top">
           {payable && (
             <Button
-              variant="gold"
+              variant="primary"
               size="sm"
               disabled={busy}
               onClick={() =>
@@ -911,7 +911,7 @@ function RequestTable({
                         <div className="actions actions--row">
                           <Button
                             size="sm"
-                            variant="gold"
+                            variant="primary"
                             disabled={busy}
                             onClick={() => void answerCustomQuote(request, 'accept')}
                           >
@@ -923,7 +923,6 @@ function RequestTable({
                           </Button>
                           <Button
                             size="sm"
-                            variant="ghost"
                             disabled={busy}
                             onClick={() => void answerCustomQuote(request, 'decline')}
                           >
@@ -945,7 +944,7 @@ function RequestTable({
                           </span>
                           <Button
                             size="sm"
-                            variant="gold"
+                            variant="primary"
                             disabled={busy}
                             onClick={() => void answerQuote(request, 'accept')}
                           >
