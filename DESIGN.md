@@ -389,9 +389,11 @@ pieces. Each keeps the old markup's contracts and message keys.
   with its letter and what stands in it; its rack is a grid that fills the panel. Each slot is a
   shelf with its barcode, its count from the shelf report and a mark per item (twelve, then `+n`).
   Empty shelves are dashed, shelves out of service are hatched, an oversized shelf takes two places,
-  and items on no shelf stand on a tray. The product declares no capacity for a shelf and the API has
-  no list of a shelf's items, so there is no fill bar and no hover that names a serial. The table is
-  still on the Inventory tab.
+  and items on no shelf stand on a tray. A shelf is a button that opens what is on it (`ShelfContents`,
+  read only, from `GET /custody/bins/:id/items`): in a drawer, the shelf's count as the figure of a tag
+  (with its zone, its kind and whether it is in use) and under it each item by its number, its name
+  and where it stands. The product declares no capacity for a shelf, so there is still no fill bar:
+  the pips are a count, not a measure of room. The table is still on the Inventory tab.
 - **Shipping and services — the departures.** Three lines on a board, the figure first in the display
   face and counted up: how many cards are ready to ship, a lookup for the shipments that have gone
   (an icon, because a lookup has no count), and the requests that are open, with those closed under
@@ -536,6 +538,19 @@ it is drawn and finds the one that is not.
 
 **Forced colours.** The system draws the colours, so the difference is in the lines: the primary has a heavy
 foot (4 px), a danger button a dashed line, a ghost a dotted one, and a switch that is on a highlight.
+
+### The emails (`renderEmail`, in `packages/adapters`)
+The account emails (the address to confirm, the password to reset) and the update on a vault are one
+slip of paper on the room's grey: foil along the top edge, the wordmark, and for each language a kicker,
+a heading in the serif, the sentence, one ink button with a strip of foil at its foot, the link a button
+hides on a line of its own (left to right in either language) and the fine print. The two languages are
+one slip with a tear line between them, the Hebrew first and read right to left; a Hebrew kicker is not
+spaced out as capitals are. It is made for a mail client and not a browser: every style inline, every
+layout a table, the foil a row of five coloured cells (a gradient is not promised), the button a cell
+with a colour of its own (a client that drops styles still draws it), the reader's own fonts (no web
+font is loaded or named) and a preheader for the inbox. The hues are `--foil-*` and the paper inks of
+`theme.css`, written as the hex a mail client reads. The audit inspects each as a document in every
+engine; the contract test says the rest.
 
 ### Choosing cards (`ItemPick`; `components.css`)
 Wherever the list is of cards to choose among (the items to ship, to offer in a trade, to hand over
@@ -709,7 +724,6 @@ like.
   not are the kit's fields in a column: signing in and up, changing the password, the code of the
   second factor, the warehouse's benches, the Bault store's listing, grading, consignment, an
   inspection, raising an escrow deal and a shared parcel's group.
-- The transactional emails come from `packages/`, outside this change, and keep the first edition's look.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 

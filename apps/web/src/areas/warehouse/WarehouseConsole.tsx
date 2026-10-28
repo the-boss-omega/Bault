@@ -24,7 +24,8 @@ import {
   ViewAllLink,
 } from '../../shared/ui/primitives';
 import { scrollBehavior } from '../../shared/ui/motionPreference';
-import { ShelfMap } from './ShelfMap';
+import { ShelfMap, type ShelfBin } from './ShelfMap';
+import { ShelfContents } from './ShelfContents';
 import {
   IconAlert,
   IconBox,
@@ -89,6 +90,7 @@ export function WarehouseConsole() {
   const [error, setError] = useState<string | null>(null);
   const [focusParcelId, setFocusParcelId] = useState<string>('');
   const [queueVersion, setQueueVersion] = useState(0);
+  const [openShelf, setOpenShelf] = useState<ShelfBin | null>(null);
 
   const tab: WarehouseTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as WarehouseTab)
@@ -215,7 +217,7 @@ export function WarehouseConsole() {
             footer={<ViewAllLink onClick={() => goTab('inventory')}>{t('warehouse.viewInventory')}</ViewAllLink>}
           >
             {bins.length > 0 && shelfRows !== null ? (
-              <ShelfMap bins={bins} counts={shelfRows} t={t} />
+              <ShelfMap bins={bins} counts={shelfRows} onOpen={setOpenShelf} t={t} />
             ) : (
               <InventoryRows
                 rows={(shelfRows ?? []).slice(0, 6)}
@@ -336,6 +338,8 @@ export function WarehouseConsole() {
           <SupportQueue onChanged={loadSummary} />
         </TabPanel>
       )}
+
+      {openShelf && <ShelfContents bin={openShelf} onClose={() => setOpenShelf(null)} />}
     </div>
   );
 }

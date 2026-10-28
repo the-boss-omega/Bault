@@ -97,8 +97,8 @@ describe('the warehouse shelf map', () => {
   it('takes a shelf’s count from the shelf report, not from the bin record', () => {
     renderT((t) => <ShelfMap bins={bins} counts={counts} t={t} />);
 
-    const slot = screen.getByText('BIN-AAAA1111').closest('li')!;
-    expect(within(slot).getByText('3', { selector: '.shelf-count' })).toBeInTheDocument();
+    const slot = screen.getByText('BIN-AAAA1111').closest('.shelf-slot')!;
+    expect(within(slot as HTMLElement).getByText('3', { selector: '.shelf-count' })).toBeInTheDocument();
     expect(slot).toHaveAttribute('data-state', 'stocked');
     expect(screen.queryByText('99')).not.toBeInTheDocument();
   });
@@ -106,11 +106,11 @@ describe('the warehouse shelf map', () => {
   it('says in words when a shelf is empty, out of service or oversized, as well as drawing it', () => {
     renderT((t) => <ShelfMap bins={bins} counts={counts} t={t} />);
 
-    const empty = screen.getByText('BIN-AAAA2222').closest('li')!;
+    const empty = screen.getByText('BIN-AAAA2222').closest('.shelf-slot')!;
     expect(empty).toHaveAttribute('data-state', 'empty');
     expect(empty).toHaveTextContent(/empty/i);
 
-    const out = screen.getByText('BIN-BBBB4444').closest('li')!;
+    const out = screen.getByText('BIN-BBBB4444').closest('.shelf-slot')!;
     expect(out).toHaveAttribute('data-state', 'out');
     expect(out).toHaveTextContent(/out of service/i);
 

@@ -285,6 +285,40 @@ export class InventoryService {
     return this.stow.listWithCounts();
   }
 
+  /**
+   * What is on one shelf, read only: each item by the number it carries and what it is, and where it stands.
+   * The shelf's count (listBins) and this list are the same rows, counted and read.
+   */
+  async binItems(binId: string) {
+    const [shelf] = await this.db
+      .select({
+        id: bin.id,
+        barcode: bin.barcode,
+        zone: bin.zone,
+        oversized: bin.oversized,
+        active: bin.active,
+      })
+      .from(bin)
+      .where(eq(bin.id, binId))
+      .limit(1);
+    if (!shelf) throw AppError.notFound('Bin not found');
+    const items = await this.db
+      .select({
+        id: item.id,
+        serialNumber: item.serialNumber,
+        barcode: item.barcode,
+        typeClass: item.typeClass,
+        description: item.description,
+        conditionGrade: item.conditionGrade,
+        lifecycleState: item.lifecycleState,
+        holdFlag: item.holdFlag,
+      })
+      .from(item)
+      .where(eq(item.binId, binId))
+      .orderBy(item.serialNumber);
+    return { bin: shelf, items };
+  }
+
   async reconcile() {
     const [row] = await this.db.select({ total: sql<number>`count(*)::int` }).from(item);
     return { totalItems: row?.total ?? 0, checkedAt: new Date().toISOString() };
