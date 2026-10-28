@@ -16,6 +16,7 @@ import { useScrollableRegions } from './shared/ui/useScrollableRegions';
 import {
   AccountPill,
   LanguageSwitcher,
+  MobileBar,
   NotificationBell,
   PageHeader,
   ThemeToggle,
@@ -23,7 +24,7 @@ import {
   type Crumb,
 } from './shared/ui/PageHeader';
 import { fullName, initialsFrom } from './shared/names';
-import { ErrorState, IconButton } from './shared/ui/primitives';
+import { ErrorState } from './shared/ui/primitives';
 import {
   IconAsk,
   IconBell,
@@ -31,7 +32,6 @@ import {
   IconLegal,
   IconManagement,
   IconMarketplace,
-  IconMenu,
   IconShield,
   IconShippingServices,
   IconVault,
@@ -383,17 +383,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
       />
 
       <div className="workspace">
-        {isMobile && (
-          <div className="mobile-bar">
-            <IconButton label={t('nav.openMenu')} bare onClick={() => setRailOpen(true)} style={{ color: '#fff' }}>
-              <IconMenu />
-            </IconButton>
-            <span className="rail-mark" aria-hidden="true">
-              B
-            </span>
-            <span className="mobile-bar-title">{pageTitle}</span>
-          </div>
-        )}
+        {isMobile && <MobileBar title={pageTitle} onOpenMenu={() => setRailOpen(true)} />}
 
         <div className="workspace-inner">
           <PageHeader

@@ -16,7 +16,7 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 const { I18nProvider, useT } = await import('../../apps/web/src/shared/i18n');
 const { DetailDrawer } = await import('../../apps/web/src/shared/ui/DetailDrawer');
 const { CardPhotoThumb } = await import('../../apps/web/src/shared/CardPhoto');
-const { PageHeader, NotificationBell, LanguageSwitcher } = await import('../../apps/web/src/shared/ui/PageHeader');
+const { PageHeader, NotificationBell, LanguageSwitcher, MobileBar } = await import('../../apps/web/src/shared/ui/PageHeader');
 const { NavigationRail } = await import('../../apps/web/src/shared/ui/NavigationRail');
 const { ContextTabs } = await import('../../apps/web/src/shared/ui/primitives');
 const { StatementSlip } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
@@ -37,6 +37,7 @@ const { MEMBERSHIP_TIERS } = await import('../../apps/api/src/modules/mem/tiers'
 const { revealField } = await import('../../apps/web/src/shared/ui/revealField');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
+  auditButtons: (page: Page) => Promise<string[]>;
 };
 
 /**
@@ -305,6 +306,29 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       expect(labelBox.left).toBeGreaterThanOrEqual(iconBox.right - 1);
       await page.close();
     });
+  });
+
+  describe('the bar across the top of a phone', () => {
+    for (const theme of ['dark', 'light'] as const) {
+      it(`its menu button can be seen against the bar, which is the colour of the page in either theme: ${theme}`, async () => {
+        render(
+          <I18nProvider>
+            <MobileBar title="My vault" onOpenMenu={() => {}} />
+          </I18nProvider>,
+        );
+        const page = await inBrowser(390, 'en', theme, false);
+        // The audit's own question of every icon button: its glyph against what it stands on (3:1).
+        expect(await audit.auditButtons(page)).toEqual([]);
+        // It was a glyph made white in the markup, for a bar that was dark, and was gone on the light one.
+        const [glyph, bar] = await page.$eval('.mobile-bar', (el) => [
+          getComputedStyle(el.querySelector('.icon-btn')!).color,
+          getComputedStyle(el).backgroundColor,
+        ]);
+        expect(glyph).not.toBe('rgb(255, 255, 255)');
+        expect(glyph).not.toBe(bar);
+        await page.close();
+      });
+    }
   });
 
   describe('a strip of tabs', () => {

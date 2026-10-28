@@ -11,6 +11,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconGlobe,
+  IconMenu,
   IconMonitor,
   IconMoon,
   IconSun,
@@ -60,6 +61,26 @@ export function PageHeader({
       </div>
       <div className="ph-actions">{actions}</div>
     </header>
+  );
+}
+
+/**
+ * The bar across the top of a phone: the button that opens the rail, the mark and the name of the page. It is the
+ * colour of the page's ground in either theme, so its button takes its colour from the system's inks and not
+ * from a bar that was dark in the first edition.
+ */
+export function MobileBar({ title, onOpenMenu }: { title: string; onOpenMenu: () => void }) {
+  const t = useT();
+  return (
+    <div className="mobile-bar">
+      <IconButton label={t('nav.openMenu')} bare onClick={onOpenMenu}>
+        <IconMenu />
+      </IconButton>
+      <span className="rail-mark" aria-hidden="true">
+        B
+      </span>
+      <span className="mobile-bar-title">{title}</span>
+    </div>
   );
 }
 
