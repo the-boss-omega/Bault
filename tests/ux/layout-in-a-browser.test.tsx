@@ -31,6 +31,9 @@ const { RegisterParcelForm } = await import('../../apps/web/src/areas/customer/i
 const { SupportPage } = await import('../../apps/web/src/areas/customer/support/SupportPage');
 const { ProfilePage } = await import('../../apps/web/src/areas/customer/profile/ProfilePage');
 const { api } = await import('../../apps/web/src/shared/api');
+const { billableActions, coverage } =
+  await import('../../apps/api/src/modules/prc/billable-actions');
+const { MEMBERSHIP_TIERS } = await import('../../apps/api/src/modules/mem/tiers');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
 };
@@ -642,6 +645,28 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
         Promise.resolve(
           path in more ? more[path] : path === '/me/profile' ? PROFILE : [],
         )) as never);
+    // What the two management forms are given to show: the price list's actions, and a transaction to open a dispute on.
+    const PRICING = {
+      '/admin/pricing/coverage': JSON.parse(JSON.stringify(coverage(billableActions(), []))),
+      '/membership/tiers': {
+        tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
+        uncovered: [],
+        cycleDays: 30,
+        currency: 'USD',
+      },
+    };
+    const DISPUTES = {
+      '/admin/transactions': [
+        {
+          id: 'c5013f0a-0000-4000-8000-000000000000',
+          type: 'sale',
+          price: 260,
+          buyerId: 'b',
+          sellerId: 's',
+          createdAt: '2026-10-27T12:00:00.000Z',
+        },
+      ],
+    };
 
     function Sell() {
       const t = useT();
@@ -649,20 +674,37 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       return <SellPanel items={items} t={t} onListed={async () => {}} onError={() => {}} />;
     }
 
-    const forms: { name: string; ui: () => React.ReactElement; hash?: string }[] = [
+    const forms: {
+      name: string;
+      ui: () => React.ReactElement;
+      hash?: string;
+      data?: Record<string, unknown>;
+    }[] = [
       { name: 'selling an item', ui: () => <Sell /> },
       { name: 'proposing a trade', ui: () => <ProposeTradePanel onProposed={async () => {}} onError={() => {}} /> },
       { name: 'registering a parcel', ui: () => <RegisterParcelForm onRegistered={async () => {}} onError={() => {}} /> },
       { name: 'a new ticket', ui: () => <SupportPage />, hash: '#/support/new' },
       { name: 'the name on the account', ui: () => <ProfilePage />, hash: '#/profile/details' },
       { name: 'an address being added', ui: () => <ProfilePage />, hash: '#/profile/addresses' },
+      {
+        name: 'a pricing rule',
+        ui: () => <AdminConsole currentUserId="me" />,
+        hash: '#/admin/pricing',
+        data: PRICING,
+      },
+      {
+        name: 'a dispute being opened',
+        ui: () => <AdminConsole currentUserId="me" />,
+        hash: '#/admin/disputes',
+        data: DISPUTES,
+      },
     ];
 
     for (const form of forms) {
       for (const locale of ['en', 'he'] as const) {
         it(`${form.name}: the slip is beside the fields on a wide window, between the fields and the button on a phone, in ${locale}`, async () => {
           localStorage.setItem('bault.locale', locale);
-          answers();
+          answers(form.data);
           window.location.hash = form.hash ?? '';
           render(<I18nProvider>{form.ui()}</I18nProvider>);
           // The slip is there once the form is: in whatever language the page is.
