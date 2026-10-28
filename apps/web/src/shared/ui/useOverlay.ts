@@ -7,6 +7,12 @@ const FOCUSABLE =
 
 const overlays: symbol[] = [];
 const panels = new Map<symbol, HTMLElement>();
+/**
+ * The page's own `overflow`, kept while any overlay is open. Whichever overlay closes last gives it back, in whatever
+ * order they close: two that are removed in one commit (a drawer and the dialog over it, when the route changes)
+ * are cleaned up parent first, and each putting back what it found would leave the page locked.
+ */
+let pageOverflow = '';
 
 function pushOverlay(token: symbol, panel: HTMLElement | null): () => void {
   overlays.push(token);
@@ -56,6 +62,7 @@ export function useOverlay(ref: RefObject<HTMLElement | null>, onEscape: () => v
     const opener = document.activeElement as HTMLElement | null;
     const panel = ref.current;
     const token = Symbol('overlay');
+    if (overlays.length === 0) pageOverflow = document.body.style.overflow;
     const popOverlay = pushOverlay(token, panel);
     panel?.focus();
 
@@ -85,15 +92,14 @@ export function useOverlay(ref: RefObject<HTMLElement | null>, onEscape: () => v
     }
 
     document.addEventListener('keydown', onKeyDown, true);
-    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
       panel?.removeEventListener('focusin', reveal);
       keepFocus.disconnect();
-      document.body.style.overflow = previousOverflow;
       popOverlay();
+      if (overlays.length === 0) document.body.style.overflow = pageOverflow;
       if (opener?.isConnected) opener.focus?.();
       else panels.get(overlays[overlays.length - 1]!)?.focus();
     };

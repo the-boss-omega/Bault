@@ -735,7 +735,8 @@ ink; what stands beside the paper on the page (the controls under a case file) i
 ### Overlays (`useOverlay`, `useExit`)
 Drawers, confirmation dialogs and the photo lightbox share one behaviour: while it is the topmost it
 is all the keyboard reaches (Tab stays inside, Escape closes it and nothing under it), the page
-behind does not scroll, focus goes back to what opened it (or, if that is gone because the answer
+behind does not scroll (until the last of them has gone, whichever order they close in: two removed
+in one commit, a drawer and the dialog over it, would otherwise leave the page locked), focus goes back to what opened it (or, if that is gone because the answer
 removed it, to the dialog it was opened over, so the keyboard is not left on the page behind), a
 control that the dialog itself removes (the button that was pressed, whose answer replaces it) does not
 leave focus on the page behind it: the dialog takes it back, a field that takes focus is shown whole

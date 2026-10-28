@@ -268,6 +268,42 @@ describe('useOverlay', () => {
     opener.remove();
   });
 
+  it('leaves the page free to scroll when two overlays are removed in one commit, as a route change removes a drawer and its dialog', () => {
+    const stay = () => {};
+    const { unmount } = render(
+      <>
+        <Dialog onEscape={stay} label="drawer" />
+        <Dialog onEscape={stay} label="dialog" />
+      </>,
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+
+    unmount();
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('keeps the page locked while any overlay is open, whichever of them was opened first', () => {
+    const stay = () => {};
+    const { rerender } = render(<Dialog onEscape={stay} label="a" />);
+    rerender(
+      <>
+        <Dialog onEscape={stay} label="a" />
+        <Dialog onEscape={stay} label="b" />
+      </>,
+    );
+    // The first goes, and the second is still open over the page.
+    rerender(
+      <>
+        {null}
+        <Dialog onEscape={stay} label="b" />
+      </>,
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+
+    rerender(<>{null}</>);
+    expect(document.body.style.overflow).toBe('');
+  });
+
   it('gives focus to the dialog it was opened over when what opened it is gone', () => {
     // The handlers are stable, as they have to be: a dialog whose handler changes takes focus again.
     const stay = () => {};
