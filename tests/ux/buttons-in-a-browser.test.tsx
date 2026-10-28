@@ -76,7 +76,7 @@ async function inBrowser({
     forcedColors: forced ? 'active' : 'none',
   });
   await page.setContent(
-    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><style>${CSS}</style></head>` +
+    `<!doctype html><html lang="${locale}" dir="${locale === 'he' ? 'rtl' : 'ltr'}" data-theme="${theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>` +
       `<body>${html}</body></html>`,
   );
   return page;

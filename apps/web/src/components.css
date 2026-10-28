@@ -60,6 +60,10 @@ textarea:hover:not(:disabled) {
 select {
   appearance: none;
   -webkit-appearance: none;
+  /* Safari draws the chosen option as text inside the box and lets it run out of it, into the scrollable
+     width of the page, when the option is longer than the box (an address, on a phone). */
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding-inline-end: 36px;
   /* design-lint-allow: the two halves of one symmetric chevron: mirrored it is the same chevron, only which half comes first depends on the page (--arrow-first) */
   background-image:
