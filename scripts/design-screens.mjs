@@ -467,7 +467,8 @@ async function auditOverlays(state, browser, persona, locale, width) {
         const lightFlags = [
           ...(await measure('.lightbox', { covers: true, label: 'the photograph\'s room' })),
           ...(await measure('.lightbox-close', { label: 'the photograph\'s close button' })),
-          ...(await measure('.lightbox .modal-slab, .lightbox .photo-thumb', { label: 'the photograph' })),
+          // A card with no photograph has the words that say so in its place: the room is measured either way.
+          ...(await measure('.lightbox .modal-slab, .lightbox .photo-thumb, .lightbox .modal-empty', { label: 'the photograph (or the words that say there is none)' })),
         ];
         await record('photograph', lightFlags);
         await page.keyboard.press('Escape');
