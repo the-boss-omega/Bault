@@ -70,7 +70,8 @@ describe('selling an item, written on a slip while it is priced', () => {
     const price = screen.getByRole('textbox', { name: 'Asking price' });
     await user.clear(price);
     await user.type(price, 'abc');
-    expect(slip.querySelector('.drawer-tag-amount')).toHaveTextContent('$0.00');
+    // A dash: the listing is for no price yet, and the slip does not make one up.
+    expect(slip.querySelector('.drawer-tag-amount')?.textContent).toBe('—');
     expect(screen.getByRole('button', { name: 'List for sale' })).toBeDisabled();
   });
 

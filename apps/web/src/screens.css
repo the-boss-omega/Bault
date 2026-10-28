@@ -1208,7 +1208,8 @@
 .drawer-tag .amount,
 .ledger-sheet .amount,
 .drawer-tag .serial,
-.drawer-tag .code-inline {
+.drawer-tag .code-inline,
+.ledger-sheet .code-inline {
   color: inherit;
 }
 
@@ -1776,6 +1777,11 @@ li.is-clickable {
   grid-column: 1;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* What a rule is called is what somebody typed, and is read as the language it is in. What is said about it
+   is the page's own, composed from parts: it reads the way the page does, whatever its first letter is. */
+.rate-line-name {
   unicode-bidi: plaintext;
   text-align: var(--text-start);
 }
@@ -1799,6 +1805,19 @@ li.is-clickable {
   font: 500 var(--fs-lg) / 1 var(--font-display);
   font-variant-numeric: lining-nums tabular-nums;
   white-space: nowrap;
+}
+
+/* A rule that has been replaced stays on the card, quiet, its figure struck through, under the one that replaced it;
+   one that has not begun yet is as quiet, and not struck. */
+.rate-line.is-replaced .rate-line-name,
+.rate-line.is-upcoming .rate-line-name,
+.rate-line.is-replaced .rate-line-value,
+.rate-line.is-upcoming .rate-line-value {
+  color: var(--paper-ink-3);
+}
+
+.rate-line.is-replaced .rate-line-value {
+  text-decoration-thickness: 1px;
 }
 
 /* ---- The month's statement: three figures on one sheet of paper ---- */

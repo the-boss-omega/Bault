@@ -52,7 +52,8 @@ describe('a request for money, written on a slip while it is typed', () => {
   it('shows the amount typed, named, in the display face, and a dash for what is not typed yet', async () => {
     cashOut();
     const slip = screen.getByRole('region', { name: 'Request cash out' });
-    expect(slip).toHaveTextContent('$0.00');
+    // Nothing is typed, so nothing is written: not a zero made up, a dash, as for every other line.
+    expect(slip.querySelector('.drawer-tag-amount')?.textContent).toBe('—');
     expect(within(slip).getByText('Destination account').nextElementSibling).toHaveTextContent('—');
 
     const user = userEvent.setup();

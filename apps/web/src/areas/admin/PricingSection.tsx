@@ -5,6 +5,7 @@ import { useI18n, type MessageKey } from '../../shared/i18n';
 import type { MembershipTier, TierCatalogue } from '../../shared/membership';
 import { Button, EmptyState, Panel, SkeletonTable } from '../../shared/ui/primitives';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
+import { Code } from '../../shared/ui/Serial';
 import { IconPlus, IconReceipt } from '../../shared/ui/icons';
 import { PricingCoveragePanel, type PricingCoverage } from './PricingCoveragePanel';
 
@@ -18,6 +19,7 @@ interface PricingRule {
   currency: string;
   billingTrigger: string;
   effectiveFrom: string;
+  effectiveTo?: string | null;
 }
 
 const BILLING_TRIGGERS = ['per_event', 'daily', 'weekly', 'monthly'];
@@ -57,12 +59,6 @@ function percentToBasisPoints(input: string): number | null {
   const value = Number(cleaned);
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.round(value * 100);
-}
-
-/** What the price list calls an action the code names with a word of its own: `service_fee:video_review`, said in words. */
-function actionWords(type: string): string {
-  const words = type.replace(/_/g, ' ').replace(/:/g, ' · ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** A rule's value as it is read: dollars for a flat amount, a percentage (held in basis points) for a share. */
@@ -139,10 +135,13 @@ export function PricingSection({
     }
   }
 
-  const actionLabel = (type: string) => {
+  const actionText = (type: string) => {
     const key = ACTION_LABEL[type];
     return key ? t(key) : type;
   };
+  // An action the product has no word for is its code, as the coverage table above shows it.
+  const actionLabel = (type: string) =>
+    ACTION_LABEL[type] ? actionText(type) : <Code value={type} />;
   const billingKey = BILLING_LABEL[billingTrigger];
 
   return (
@@ -188,7 +187,7 @@ export function PricingSection({
                       <optgroup key={label} label={t(label)}>
                         {actions.map((a) => (
                           <option key={a.actionType} value={a.actionType}>
-                            {actionLabel(a.actionType)}
+                            {actionText(a.actionType)}
                           </option>
                         ))}
                       </optgroup>
@@ -271,7 +270,7 @@ export function PricingSection({
                   </span>
                 )
               }
-              amount={ruleValue(model, value ?? 0)}
+              amount={value === null ? '—' : ruleValue(model, value)}
               lines={[
                 { label: t('admin.pricing.col.action'), value: actionLabel(actionType) },
                 {
@@ -317,9 +316,12 @@ export function PricingSection({
 }
 
 /**
- * Every rule in force, on one card: a group for each action, in the order the price list is read in (what the
- * code charges for), and a line to each rule, with what it is, what it is for, and what it charges. A rate
- * card is read, not edited: a rule is added, and takes effect, but is not changed.
+ * Every rule, on one card: a group for each action, in the order the price list is read in (what the code
+ * charges for), and a line to each rule, with what it is, what it is for, and what it charges. A rate card is
+ * read, not edited: a rule is added, and takes effect, but is not changed. For an action and a class the
+ * newest rule that has begun and not ended is the one in force (the server's own choice); the rules it
+ * replaced stay under it, quiet, with their figures struck through, so what was charged can still be read,
+ * and one that has not begun yet is quiet, not struck.
  */
 function RateCard({
   rules,
@@ -339,15 +341,35 @@ function RateCard({
       const at = order.indexOf(type);
       return at === -1 ? order.length : at;
     };
+    const now = Date.now();
+    const begun = (r: PricingRule) =>
+      Date.parse(r.effectiveFrom) <= now && (!r.effectiveTo || Date.parse(r.effectiveTo) > now);
+    // The rule in force, for each class of each action: the newest of those that have begun and not ended.
+    const inForce = new Map<string, string>();
+    for (const rule of [...rules].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))) {
+      const key = `${rule.actionType}\u0000${rule.itemClass ?? ''}`;
+      if (begun(rule) && !inForce.has(key)) inForce.set(key, rule.id);
+    }
     return [...byAction.entries()]
       .sort(([a], [b]) => rank(a) - rank(b))
       .map(([type, list]) => ({
         type,
-        rules: [...list].sort(
-          (a, b) =>
-            (a.itemClass ?? '').localeCompare(b.itemClass ?? '') ||
-            b.effectiveFrom.localeCompare(a.effectiveFrom),
-        ),
+        rules: [...list]
+          .sort(
+            (a, b) =>
+              (a.itemClass ?? '').localeCompare(b.itemClass ?? '') ||
+              b.effectiveFrom.localeCompare(a.effectiveFrom),
+          )
+          .map((rule) => ({
+            rule,
+            // In force; or not begun yet; or replaced (by a newer rule, or by its own end).
+            state:
+              inForce.get(`${rule.actionType}\u0000${rule.itemClass ?? ''}`) === rule.id
+                ? ('current' as const)
+                : Date.parse(rule.effectiveFrom) > now
+                  ? ('upcoming' as const)
+                  : ('replaced' as const),
+          })),
       }));
   }, [rules, order]);
 
@@ -365,24 +387,43 @@ function RateCard({
               data-action={group.type}
             >
               <h3 className="rate-group-title" id={id}>
-                {labelKey ? t(labelKey) : actionWords(group.type)}
+                {labelKey ? t(labelKey) : <Code value={group.type} />}
               </h3>
               <ul className="rate-lines">
-                {group.rules.map((rule) => {
+                {group.rules.map(({ rule, state }) => {
                   const billing = BILLING_LABEL[rule.billingTrigger];
+                  const from = t('admin.pricing.col.effectiveFrom');
+                  const value = ruleValue(rule.model, rule.value);
                   return (
-                    <li key={rule.id} className="rate-line">
+                    <li
+                      key={rule.id}
+                      className={state === 'current' ? 'rate-line' : `rate-line is-${state}`}
+                    >
                       <p className="rate-line-name">{rule.description ?? '—'}</p>
+                      {/* Said in the order the page reads, a class that is a code set apart as the code it is. */}
                       <p className="rate-line-meta">
-                        {[
-                          rule.itemClass ?? t('admin.pricing.allClasses'),
-                          billing ? t(billing) : rule.billingTrigger,
-                          `${t('admin.pricing.col.effectiveFrom')} ${formatDate(rule.effectiveFrom, locale)}`,
-                        ].join(' · ')}
+                        {rule.itemClass ? (
+                          <Code value={rule.itemClass} />
+                        ) : (
+                          t('admin.pricing.allClasses')
+                        )}
+                        {' · '}
+                        {billing ? t(billing) : rule.billingTrigger}
+                        {' · '}
+                        {/* A label that ends in a maqaf joins what follows it. */}
+                        {from}
+                        {from.endsWith('\u05BE') ? '' : ' '}
+                        <span className="date">{formatDate(rule.effectiveFrom, locale)}</span>
                       </p>
-                      <span className="rate-line-value amount" dir="ltr">
-                        {ruleValue(rule.model, rule.value)}
-                      </span>
+                      {state === 'replaced' ? (
+                        <del className="rate-line-value amount" dir="ltr">
+                          {value}
+                        </del>
+                      ) : (
+                        <span className="rate-line-value amount" dir="ltr">
+                          {value}
+                        </span>
+                      )}
                     </li>
                   );
                 })}

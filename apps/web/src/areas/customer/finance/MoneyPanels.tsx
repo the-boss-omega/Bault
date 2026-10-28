@@ -173,7 +173,7 @@ export function TopUpPanel({
               <aside className="request-slip">
                 <DrawerTag
                   kicker={t('money.topUp')}
-                  amount={formatUsd(cents !== null && cents > 0 ? cents : 0)}
+                  amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
                   lines={[{ label: t('money.how'), value: t(`money.route.${chosen.key}` as MessageKey) }]}
                   status={
                     <StatusBadge tone="success" plain>

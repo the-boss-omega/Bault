@@ -508,7 +508,7 @@ export function SellPanel({
                   <CardPhotoThumb serialNumber={chosen.serialNumber} title={itemName(t, chosen)} decorative />
                 ) : undefined
               }
-              amount={formatUsd(cents !== null && cents > 0 ? cents : 0)}
+              amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
               lines={
                 chosen
                   ? [

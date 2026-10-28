@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { billableActions, coverage } from '../../apps/api/src/modules/prc/billable-actions';
@@ -84,6 +84,10 @@ beforeEach(() => {
   localStorage.setItem('bault.locale', 'en');
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 async function pricing() {
   window.location.hash = '#/admin/pricing';
   const view = render(
@@ -109,12 +113,23 @@ describe('a pricing rule, written on a slip as it is typed', () => {
     expect(slip().querySelector('.drawer-tag-title .drawer-tag-quiet')).toHaveTextContent(
       'Rule description',
     );
-    expect(slip().querySelector('.drawer-tag-amount')).toHaveTextContent('$0.00');
+    // No figure is typed, so none is written (not a zero: a rule that charges nothing is a rule).
+    expect(slip().querySelector('.drawer-tag-amount')?.textContent).toBe('—');
     const line = (name: string) => within(slip()).getByText(name).nextElementSibling;
     expect(line('Action')).toHaveTextContent('Intake');
     expect(line('Class')).toHaveTextContent('All');
     expect(line('Model')).toHaveTextContent('Flat amount');
     expect(line('Billing')).toHaveTextContent('Per event');
+    expect(screen.getByRole('button', { name: /add rule/i })).toBeDisabled();
+  });
+
+  it('writes no figure for what is not a price, a zero among it: a dash, and the rule is not added', async () => {
+    api();
+    const user = userEvent.setup();
+    await pricing();
+    await user.type(screen.getByPlaceholderText('Rule description'), 'Something free');
+    await user.type(screen.getByLabelText('Flat amount'), '0');
+    expect(slip().querySelector('.drawer-tag-amount')?.textContent).toBe('—');
     expect(screen.getByRole('button', { name: /add rule/i })).toBeDisabled();
   });
 
@@ -201,20 +216,76 @@ describe('the rules in force, a rate card', () => {
     expect(lines[1]).toHaveTextContent('$1.00');
   });
 
-  it('says a share as a percentage, an action with no word of its own in words, and when a rule began', async () => {
+  it('says a share as a percentage, an action with no word of its own as the code it is, and when a rule began', async () => {
     api();
     await pricing();
     const share = document.querySelector('[data-action="marketplace_fee"]') as HTMLElement;
     expect(within(share).getByRole('heading', { level: 3 })).toHaveTextContent('Marketplace fee');
     expect(share).toHaveTextContent('5.00%');
+    // The product has no word for this action: the heading is its code, not a phrase the page made up from it.
     const forwarding = document.querySelector('[data-action="parcel_forwarding"]') as HTMLElement;
-    expect(within(forwarding).getByRole('heading', { level: 3 })).toHaveTextContent(
-      'Parcel forwarding',
-    );
+    const title = within(forwarding).getByRole('heading', { level: 3 });
+    expect(title).toHaveTextContent('parcel_forwarding');
+    expect(title.querySelector('.code-inline[dir="ltr"]')).not.toBeNull();
     expect(forwarding).toHaveTextContent(/Effective from Oct 2[67], 2026/);
     expect(
       (document.querySelector('[data-action="storage"]') as HTMLElement).textContent,
     ).toContain('Daily');
+  });
+
+  it('shows the rule in force, and keeps the ones it replaced under it, quiet and struck through', async () => {
+    // A newer rule for the same action and class: the one that is charged. (The clock is set: rules are
+    // dated, and which one is in force is a matter of what day it is.)
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-01T00:00:00.000Z') });
+    api([
+      ...RULES,
+      rule('r6', 'intake', 'Intake handling fee, raised', 600, {
+        effectiveFrom: '2026-10-28T10:00:00.000Z',
+      }),
+    ]);
+    await pricing();
+    const intake = document.querySelector('[data-action="intake"]') as HTMLElement;
+    const lines = within(intake).getAllByRole('listitem');
+    expect(lines).toHaveLength(3);
+    // All classes: the newer rule first, in force; then the one it replaced. Then the class of its own.
+    expect(lines[0]).toHaveTextContent('Intake handling fee, raised');
+    expect(lines[0]).not.toHaveClass('is-replaced');
+    expect(lines[0].querySelector('del')).toBeNull();
+    expect(lines[1]).toHaveTextContent('Intake handling fee per received item');
+    expect(lines[1]).toHaveClass('is-replaced');
+    expect(lines[1].querySelector('del')).toHaveTextContent('$5.00');
+    // Another class is its own rule: nothing replaced it.
+    expect(lines[2]).not.toHaveClass('is-replaced');
+    expect(lines[2].querySelector('del')).toBeNull();
+    // The count is of the rules there are.
+    expect(screen.getByRole('heading', { name: 'Pricing rules (6)' })).toBeInTheDocument();
+  });
+
+  it('does not strike a rule that has not begun yet, and does not count it as the one in force', async () => {
+    api([
+      ...RULES,
+      rule('r7', 'intake', 'Intake from next year', 900, { effectiveFrom: '2099-01-01T00:00:00.000Z' }),
+    ]);
+    await pricing();
+    const intake = document.querySelector('[data-action="intake"]') as HTMLElement;
+    const lines = within(intake).getAllByRole('listitem');
+    const next = lines.find((l) => l.textContent?.includes('Intake from next year'))!;
+    expect(next).toHaveClass('is-upcoming');
+    expect(next.querySelector('del')).toBeNull();
+    // The rule that is charged now is still the one before it.
+    const now = lines.find((l) => l.textContent?.includes('Intake handling fee per received item'))!;
+    expect(now).not.toHaveClass('is-replaced');
+    expect(now).not.toHaveClass('is-upcoming');
+  });
+
+  it('says a line about a rule in the order the page reads, a class as the code it is and a date as a date', async () => {
+    api();
+    await pricing();
+    const meta = document.querySelector('[data-action="intake"] .rate-line:nth-child(2) .rate-line-meta') as HTMLElement;
+    expect(meta.querySelector('.code-inline[dir="ltr"]')).toHaveTextContent('trading_card');
+    expect(meta.querySelector('.date')).not.toBeNull();
+    // Not a sentence made by joining strings, which a browser would read in the direction of its first letter.
+    expect(getComputedStyle(meta).unicodeBidi).not.toBe('plaintext');
   });
 
   it('counts its rules in its heading, and says when there are none', async () => {

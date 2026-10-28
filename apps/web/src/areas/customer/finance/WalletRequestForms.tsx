@@ -237,7 +237,7 @@ export function WalletRequestForm({
       <aside className="request-slip">
         <DrawerTag
           kicker={t(type === 'cash_in' ? 'wallet.cashIn.title' : 'wallet.cashOut.title')}
-          amount={formatUsd(cents !== null && cents > 0 ? cents : 0)}
+          amount={cents !== null && cents > 0 ? formatUsd(cents) : '—'}
           lines={slipLines}
           note={slipNote}
         />
