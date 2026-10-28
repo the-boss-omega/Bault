@@ -298,6 +298,11 @@
   display: inline-flex;
   align-items: center;
   min-block-size: 24px;
+  /* Three letters of Hebrew are 18px: a crumb is 24px wide at least, and the room is padding taken back from the
+     margin, so that the word stays where the page puts it (the first crumb under the first letter of the title). */
+  min-inline-size: 24px;
+  padding-inline: 2px;
+  margin-inline: -2px;
 }
 
 @media (pointer: coarse) {
@@ -305,8 +310,14 @@
     content: '';
     position: absolute;
     inset-block: -10px;
-    inset-inline: -6px;
+    inset-inline: -4px;
   }
+}
+
+/* ---- A tab: a word with a line under it, and as wide as a target where the word is short ("עיון" is 20px) ---- */
+
+.ctx-tab {
+  min-inline-size: 24px;
 }
 
 /* ---- A button that is a switch: the state it is in is the state of its edge ---- */

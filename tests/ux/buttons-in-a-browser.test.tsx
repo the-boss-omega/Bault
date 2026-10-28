@@ -7,7 +7,10 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 // The first page a browser gives is slow on a busy runner, and the files that use one run side by side, each with its own.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
-const { Button, ButtonLink, IconButton } = await import('../../apps/web/src/shared/ui/primitives');
+const { Button, ButtonLink, IconButton, ContextTabs } =
+  await import('../../apps/web/src/shared/ui/primitives');
+const { PageHeader } = await import('../../apps/web/src/shared/ui/PageHeader');
+const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditButtons: (page: Page) => Promise<string[]>;
 };
@@ -348,6 +351,78 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
       expect(await page.$eval('#primary', (el) => getComputedStyle(el).borderTopStyle)).toBe(
         'solid',
       );
+      await page.close();
+    });
+  });
+
+  describe('a control that is not a Button', () => {
+    // Home, Market and Browse are three letters in Hebrew: 19, 21 and 20 pixels of text, and a target is 24.
+    const header = (
+      <I18nProvider>
+        <PageHeader
+          title="שוק"
+          crumbs={[
+            { label: 'בית', onClick: () => {} },
+            { label: 'שוק', onClick: () => {} },
+            { label: 'עיון' },
+          ]}
+          actions={null}
+        />
+        <ContextTabs
+          label="חלקים"
+          active="browse"
+          onSelect={() => {}}
+          tabs={[
+            { key: 'browse', label: 'עיון' },
+            { key: 'sell', label: 'מכירה' },
+          ]}
+        />
+      </I18nProvider>
+    );
+
+    for (const [locale, width] of [
+      ['he', 1440],
+      ['he', 390],
+      ['en', 390],
+    ] as const) {
+      it(`a crumb and a tab are 24px wide and tall whatever the word is: ${locale}, ${width}px`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        render(header);
+        const page = await inBrowser({ locale, width });
+        const boxes = await page.$$eval('.breadcrumb button, .ctx-tab', (els) =>
+          els.map((el) => ({
+            word: el.textContent,
+            width: el.getBoundingClientRect().width,
+            height: el.getBoundingClientRect().height,
+          })),
+        );
+        expect(boxes.length).toBe(4);
+        for (const box of boxes) {
+          expect(box.width, `${box.word} is wide enough`).toBeGreaterThanOrEqual(24);
+          expect(box.height, `${box.word} is tall enough`).toBeGreaterThanOrEqual(24);
+        }
+        // The audit asks the same of every button on every screen: it has nothing to say.
+        expect((await audit.auditButtons(page)).filter((f) => f.startsWith('target'))).toEqual([]);
+        await page.close();
+      });
+    }
+
+    it('a crumb that is widened to be a target does not move its word: the first is still where the title starts', async () => {
+      localStorage.setItem('bault.locale', 'he');
+      render(header);
+      const page = await inBrowser({ locale: 'he', width: 1440 });
+      const { title, crumb } = await page.evaluate(() => {
+        const text = (el: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return range.getBoundingClientRect();
+        };
+        return {
+          title: text(document.querySelector('.page-title')!).right,
+          crumb: text(document.querySelector('.breadcrumb button')!).right,
+        };
+      });
+      expect(Math.abs(title - crumb)).toBeLessThanOrEqual(1);
       await page.close();
     });
   });
