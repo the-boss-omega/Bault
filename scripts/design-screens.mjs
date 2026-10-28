@@ -5,8 +5,15 @@ import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright-core';
-import { audit, auditFocus, auditForced, auditTheme, inspect } from './lib/audit-checks.mjs';
+import { chromium, firefox, webkit } from 'playwright-core';
+import {
+  audit,
+  auditButtons,
+  auditFocus,
+  auditForced,
+  auditTheme,
+  inspect,
+} from './lib/audit-checks.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -50,8 +57,13 @@ Options:
                      confirmation, and measuring that each one is on screen, covers
                      what it should and can be reached
   --only <text>      capture only screens whose name contains this text
-  --browser <path>   Chromium or Chrome to drive (default /opt/pw-browsers/chromium
-                     when it exists, otherwise the installed Google Chrome)
+  --engine <name>    chromium, firefox or webkit (default chromium): the engines of Chrome,
+                     of Firefox and of Safari. The other two have to be installed first
+                     (playwright install firefox webkit). Firefox has no mobile viewport, so
+                     at phone width it is a narrow window with touch, not a phone
+  --browser <path>   Chromium or Chrome to drive with --engine chromium (default
+                     /opt/pw-browsers/chromium when it exists, otherwise the installed
+                     Google Chrome)
   --password <pw>    the seeded accounts' password (default 11111111)
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
@@ -114,6 +126,7 @@ function parseArgs(argv) {
     forced: false,
     overlays: true,
     only: null,
+    engine: 'chromium',
     browser: null,
     password: '11111111',
   };
@@ -141,6 +154,7 @@ function parseArgs(argv) {
     else if (flag === '--forced') out.forced = true;
     else if (flag === '--no-overlays') out.overlays = false;
     else if (flag === '--only') out.only = value();
+    else if (flag === '--engine') out.engine = value();
     else if (flag === '--browser') out.browser = value();
     else if (flag === '--password') out.password = value();
     else throw new Error(`Unknown option ${flag}. Run with --help.`);
@@ -153,6 +167,8 @@ function parseArgs(argv) {
   }
   if (out.widths.some((w) => !Number.isInteger(w) || w < 320)) throw new Error('--widths takes whole pixel widths');
   if (out.theme !== 'light' && out.theme !== 'dark') throw new Error('--theme is light or dark');
+  if (!ENGINES[out.engine])
+    throw new Error(`Unknown engine "${out.engine}". Known: ${Object.keys(ENGINES).join(', ')}`);
   return out;
 }
 
@@ -249,10 +265,31 @@ function stopPreview(child) {
   } catch {}
 }
 
-function launchOptions(browserPath) {
+const ENGINES = { chromium, firefox, webkit };
+
+function launchOptions(engine, browserPath) {
+  if (engine !== 'chromium') return {};
   if (browserPath) return { executablePath: browserPath };
   if (existsSync('/opt/pw-browsers/chromium')) return { executablePath: '/opt/pw-browsers/chromium' };
   return { channel: 'chrome' };
+}
+
+/**
+ * The context a page is looked at in. At phone width it is a phone's: a mobile viewport with touch, where the
+ * engine has one (Firefox's does not exist, so there it is the narrow window alone).
+ */
+function contextOptions(state, width, locale, { motion, forced = false }) {
+  const mobile = width < 800;
+  return {
+    viewport: { width, height: mobile ? 844 : 900 },
+    deviceScaleFactor: 1,
+    ...(state.opts.engine === 'firefox' ? {} : { isMobile: mobile }),
+    hasTouch: mobile,
+    colorScheme: state.opts.theme,
+    reducedMotion: motion ? 'no-preference' : 'reduce',
+    forcedColors: forced ? 'active' : 'none',
+    locale: locale === 'he' ? 'he-IL' : 'en-US',
+  };
 }
 
 async function apiCall(page, method, path, body) {
@@ -338,16 +375,7 @@ async function settle(page) {
  * box that moves what is fixed inside it, only shows when the thing is opened.
  */
 async function auditOverlays(state, browser, persona, locale, width) {
-  const mobile = width < 800;
-  const context = await browser.newContext({
-    viewport: { width, height: mobile ? 844 : 900 },
-    deviceScaleFactor: 1,
-    isMobile: mobile,
-    hasTouch: mobile,
-    colorScheme: state.opts.theme,
-    reducedMotion: 'no-preference',
-    locale: locale === 'he' ? 'he-IL' : 'en-US',
-  });
+  const context = await browser.newContext(contextOptions(state, width, locale, { motion: true }));
   await context.addInitScript(
     ([l, t]) => {
       try {
@@ -470,7 +498,8 @@ async function capture(state, page, name, ctx) {
   if (state.opts.axe) accessibility.push(...(await auditFocus(page, state.opts.focusStops)));
   if (ctx.forced) accessibility.push(...(await auditForced(page)));
   const theme = await auditTheme(page, state.opts.theme);
-  const flags = [...found.flags, ...theme, ...accessibility, ...ctx.problems.splice(0)];
+  const buttons = await auditButtons(page);
+  const flags = [...found.flags, ...theme, ...buttons, ...accessibility, ...ctx.problems.splice(0)];
   state.shots.push({ name, persona: ctx.persona, locale: ctx.locale, width: ctx.width, file, title: found.title, flags });
   process.stdout.write(flags.length ? '!' : '.');
 }
@@ -529,17 +558,9 @@ async function visitAdminRecords(state, page, ctx) {
 }
 
 async function runPersona(state, browser, persona, locale, width) {
-  const mobile = width < 800;
-  const context = await browser.newContext({
-    viewport: { width, height: mobile ? 844 : 900 },
-    deviceScaleFactor: 1,
-    isMobile: mobile,
-    hasTouch: mobile,
-    colorScheme: state.opts.theme,
-    reducedMotion: state.opts.motion ? 'no-preference' : 'reduce',
-    forcedColors: state.opts.forced ? 'active' : 'none',
-    locale: locale === 'he' ? 'he-IL' : 'en-US',
-  });
+  const context = await browser.newContext(
+    contextOptions(state, width, locale, { motion: state.opts.motion, forced: state.opts.forced }),
+  );
   await context.addInitScript(
     ([l, t]) => {
       try {
@@ -712,7 +733,7 @@ async function main() {
   if (!opts.baseUrl) preview = await startPreview(opts.api);
   const baseUrl = (opts.baseUrl ?? 'http://localhost:4173').replace(/\/+$/, '');
   const state = { opts, outDir, baseUrl, secrets, secretsFile, shots: [] };
-  const browser = await chromium.launch(launchOptions(opts.browser));
+  const browser = await ENGINES[opts.engine].launch(launchOptions(opts.engine, opts.browser));
   try {
     for (const file of ['index.html', 'shots.json']) rmSync(join(outDir, file), { force: true });
     for (const persona of opts.personas) {

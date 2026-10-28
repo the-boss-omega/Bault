@@ -402,6 +402,117 @@ async function auditFocus(page, stops = 40) {
 }
 
 /**
+ * The buttons on a page, seen as a visitor sees them: each one's label against its own face, its edge (the face
+ * where it is filled, its line where it is outlined) against what it stands on, and its size as a target. The
+ * colours of a button come from tokens that the surface it is on may change (the paper and the room have their
+ * own), so what is measured is what is drawn, where it is drawn. A button with no face and no line (a ghost)
+ * has the page for a face; a link set in a sentence is text and is held to the text's rules, not these.
+ */
+async function auditButtons(page) {
+  return page.evaluate(() => {
+    const { document, getComputedStyle, matchMedia } = globalThis;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const rgba = (css) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return { r, g, b, a: a / 255 };
+    };
+    const lum = ({ r, g, b }) => {
+      const f = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const over = (top, under) => ({
+      r: top.r * top.a + under.r * (1 - top.a),
+      g: top.g * top.a + under.g * (1 - top.a),
+      b: top.b * top.a + under.b * (1 - top.a),
+      a: 1,
+    });
+    const ratio = (a, b) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // What a button stands on: the nearest opaque background above it. null where it is a picture or a gradient.
+    const behind = (el) => {
+      const layers = [];
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        const bg = rgba(style.backgroundColor);
+        if (style.backgroundImage !== 'none' && bg.a < 1) return null;
+        if (bg.a > 0) layers.push(bg);
+        if (bg.a >= 1) break;
+      }
+      return layers.reduceRight((acc, layer) => over(layer, acc), { r: 255, g: 255, b: 255, a: 1 });
+    };
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const flags = [];
+    const seen = new Set();
+    for (const el of document.querySelectorAll('.btn:not(.btn--link), .icon-btn')) {
+      if (!el.checkVisibility?.({ checkVisibilityCSS: true })) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const style = getComputedStyle(el);
+      const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 28);
+      const kind =
+        [...el.classList].find((c) => /^(?:btn|icon-btn)--/.test(c)) ??
+        (el.classList.contains('icon-btn') ? 'icon-btn' : 'btn');
+      const stand = behind(el);
+      // One report for the same button on the same ground: the row of twenty Cancels is one finding, and the
+      // same button on the paper and on the page is two.
+      const key = `${kind}|${name}|${el.disabled}|${stand ? [stand.r, stand.g, stand.b].map(Math.round).join(',') : 'picture'}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const say = (message) => flags.push(`button "${name}" (${kind}): ${message}`);
+      // A target a finger or a pointer has to hit.
+      if (!el.disabled && (box.width < 24 || box.height < 24))
+        say(`${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
+      else if (
+        !el.disabled &&
+        coarse &&
+        (box.width < 44 || box.height < 44) &&
+        !el.closest('.ph-controls')
+      ) {
+        say(
+          `${Math.round(box.width)}x${Math.round(box.height)}px, under 44px where the pointer is a finger`,
+        );
+      }
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      if (!stand) continue;
+      const own = rgba(style.backgroundColor);
+      const face = own.a > 0 ? over(own, stand) : stand;
+      const label = over(rgba(style.color), face);
+      const need = el.classList.contains('icon-btn') ? 3 : 4.5;
+      const labelRatio = ratio(label, face);
+      if (labelRatio < need)
+        say(`its label is ${labelRatio.toFixed(2)}:1 on its own face, which needs ${need}:1`);
+      // The shape: filled, it is the face against what it stands on; outlined, it is the line.
+      const line = rgba(style.borderTopColor);
+      const lineVisible =
+        style.borderTopStyle !== 'none' && parseFloat(style.borderTopWidth) > 0 && line.a > 0;
+      const filled = own.a > 0 && ratio(face, stand) >= 1.2;
+      if (filled || lineVisible) {
+        const edge = Math.max(
+          filled ? ratio(face, stand) : 0,
+          lineVisible ? ratio(over(line, stand), stand) : 0,
+        );
+        if (
+          edge < 3 &&
+          !el.classList.contains('btn--ghost') &&
+          !el.classList.contains('icon-btn--bare')
+        ) {
+          say(`its edge is ${edge.toFixed(2)}:1 against what it stands on, which needs 3:1`);
+        }
+      }
+    }
+    return flags;
+  });
+}
+
+/**
  * Forced colours: the system paints the page in its own palette, so what said "this one" by a tint or a
  * gradient says nothing unless it was drawn in the system's highlight. The selected tab and the current page
  * are checked for a mark that survives it.
@@ -462,4 +573,4 @@ async function auditTheme(page, expected) {
   }, expected);
 }
 
-export { audit, auditFocus, auditForced, auditTheme, inspect };
+export { audit, auditButtons, auditFocus, auditForced, auditTheme, inspect };
