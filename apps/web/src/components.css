@@ -442,15 +442,17 @@ input[type='radio'] {
    keyboard and a screen reader reach; it is only drawn differently. Outside a label,
    in a list of cards already chosen, an `.item-pick` is a row. */
 
-/* A set of cards to choose one from is a fieldset with its name as a legend. */
-fieldset.field--cards {
+/* A set of cards to choose one from is a fieldset with its name as a legend; so is a short set of choices. */
+fieldset.field--cards,
+fieldset.choice-set {
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-fieldset.field--cards > legend {
+fieldset.field--cards > legend,
+fieldset.choice-set > legend {
   padding: 0;
   margin-block-end: var(--sp-3);
 }

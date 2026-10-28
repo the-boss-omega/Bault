@@ -3572,24 +3572,6 @@ input[type='search'] {
   font-size: var(--fs-md);
 }
 
-.drawer-actions {
-  display: grid;
-  gap: var(--sp-3);
-  list-style: none;
-}
-
-.drawer-actions .hint {
-  margin-block-start: 4px;
-}
-
-.action-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  inline-size: 100%;
-}
-
 .intake-labels {
   padding-block-start: var(--sp-4);
   margin-block-start: var(--sp-2);
@@ -3737,13 +3719,6 @@ input[type='search'] {
 .field--grow {
   flex: 1 1 14rem;
   min-inline-size: 0;
-}
-
-.action-price {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-sm);
-  opacity: 0.75;
 }
 
 .drawer-note,

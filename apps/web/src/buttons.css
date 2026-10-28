@@ -214,6 +214,81 @@
   text-wrap: balance;
 }
 
+/* ---- A row that is a button: one of a menu of things to ask for ----
+   Its icon, what it is called and what it will do, and at the far end its price or the way on. The whole row is the
+   target. Its words start where the page starts (a button's are centred), and the way on turns with the page. */
+
+.btn--row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--sp-3);
+  inline-size: 100%;
+  padding-block: var(--sp-3);
+  padding-inline: var(--sp-4);
+  text-align: start;
+  white-space: normal;
+}
+
+.btn--row > svg {
+  margin-block-start: 2px;
+  color: var(--btn-ink-2);
+}
+
+.btn--row .btn-label {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.btn-row-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.btn-row-name {
+  font-weight: var(--fw-semibold);
+}
+
+.btn-row-end {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--btn-ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-row-end svg {
+  inline-size: 14px;
+  block-size: 14px;
+  transform: scaleX(var(--dir));
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.btn-row-desc {
+  color: var(--btn-ink-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+}
+
+@media (hover: hover) {
+  .btn--row:hover:not(:disabled, [aria-disabled='true']) .btn-row-end svg {
+    transform: translateX(calc(3px * var(--dir))) scaleX(var(--dir));
+  }
+}
+
+/* What a row says is in the colour of the row where that colour is the message: what cannot be taken back, and what
+   is not there to press. */
+.btn--row:is(.btn--danger, :disabled, [aria-disabled='true']) :is(.btn-row-end, .btn-row-desc),
+.btn--row:is(.btn--danger, :disabled, [aria-disabled='true']) > svg {
+  color: inherit;
+}
+
 /* ---- A crumb: a button set as small text, with the room of a target ----
    17px of text is not a target. A crumb is 24px tall at least (WCAG 2.5.8), and where the pointer is a finger
    it reaches 10px above and below itself without moving anything. */

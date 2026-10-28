@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../shared/api';
 import { dollarsToCents, formatUsd } from '../../../shared/money';
 import { useI18n } from '../../../shared/i18n';
 import { tierLabel, type GradingTier } from '../../../shared/grading';
+import { DrawerTag } from '../../../shared/ui/DrawerTag';
 import { Button, MoneyField, StatusBadge } from '../../../shared/ui/primitives';
 
 export function GradingForm({
@@ -17,11 +18,15 @@ export function GradingForm({
   onError: (m: string) => void;
 }) {
   const { t } = useI18n();
+  const heading = useRef<HTMLHeadingElement>(null);
   const [tiers, setTiers] = useState<GradingTier[]>([]);
   const [threshold, setThreshold] = useState(0);
   const [tierKey, setTierKey] = useState('');
   const [declared, setDeclared] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // The menu this form took the place of is gone, and with it the control that was focused.
+  useEffect(() => heading.current?.focus(), []);
 
   useEffect(() => {
     void (async () => {
@@ -66,60 +71,93 @@ export function GradingForm({
     }
   }
 
+  // What has not been chosen or typed yet is a dash, never a figure made up.
+  const quiet = <span className="drawer-tag-quiet">—</span>;
+  const fee = tier?.feeMinor ?? null;
+
   return (
     <div className="stack stack--tight stack-top">
-      <h3 className="drawer-heading">{t('grade.title')}</h3>
+      <h3 className="drawer-heading" ref={heading} tabIndex={-1}>
+        {t('grade.title')}
+      </h3>
 
-      <label className="field">
-        <span className="field-label">{t('grade.tier')}</span>
-        <select value={tierKey} onChange={(e) => setTierKey(e.target.value)}>
-          {tiers.map((x) => (
-            <option key={x.key} value={x.key}>
-              {tierLabel(t, x)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="request-form request-form--stacked">
+        {/* The request as it will be read by the grader's desk: the fee, what the tier is, what was declared. */}
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('grade.slip.fee')}
+            amount={fee !== null ? formatUsd(fee) : '—'}
+            lines={[
+              { label: t('grade.tier'), value: tier ? tierLabel(t, tier) : quiet },
+              {
+                label: t('grade.slip.turnaround'),
+                value: tier
+                  ? t('grade.slip.days', {
+                      min: tier.turnaroundDaysMin,
+                      max: tier.turnaroundDaysMax,
+                    })
+                  : quiet,
+              },
+              {
+                label: t('grade.slip.ceiling'),
+                value: tier ? formatUsd(tier.maxDeclaredMinor) : quiet,
+              },
+              {
+                label: t('grade.declared'),
+                value: cents !== null && cents > 0 ? formatUsd(cents) : quiet,
+              },
+            ]}
+            status={
+              tier && fee === null ? (
+                <StatusBadge tone="warning">{t('grade.feeUnknown')}</StatusBadge>
+              ) : tier?.requiresApproval ? (
+                <StatusBadge tone="info">{t('grade.slip.approval')}</StatusBadge>
+              ) : undefined
+            }
+            note={t('grade.awayNote')}
+          />
+        </aside>
 
-      {tier && (
-        <p className="field-hint">
-          <strong>
-            {tier.feeMinor === null ? t('grade.feeUnknown') : t('grade.fee', { amount: formatUsd(tier.feeMinor) })}
-          </strong>
-          {` · ${t('grade.turnaround', { min: tier.turnaroundDaysMin, max: tier.turnaroundDaysMax })}`}
-          {` · ${t('grade.ceiling', { amount: formatUsd(tier.maxDeclaredMinor) })}`}
-          {tier.requiresApproval && ` · ${t('grade.needsApproval')}`}
-        </p>
-      )}
+        <div className="stack stack--tight request-form-fields">
+          <label className="field">
+            <span className="field-label">{t('grade.tier')}</span>
+            <select value={tierKey} onChange={(e) => setTierKey(e.target.value)}>
+              {tiers.map((x) => (
+                <option key={x.key} value={x.key}>
+                  {tierLabel(t, x)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <MoneyField
-        label={t('grade.declared')}
-        value={declared}
-        onChange={setDeclared}
-        hint={t('grade.declaredHint')}
-      />
+          <MoneyField
+            label={t('grade.declared')}
+            value={declared}
+            onChange={setDeclared}
+            hint={t('grade.declaredHint')}
+          />
 
-      {problems.length > 0 && (
-        <ul className="check-list list-unbounded">
-          {problems.map((p) => (
-            <li key={p}>
-              <StatusBadge tone="error" plain>
-                {p}
-              </StatusBadge>
-            </li>
-          ))}
-        </ul>
-      )}
+          {problems.length > 0 && (
+            <ul className="check-list list-unbounded">
+              {problems.map((p) => (
+                <li key={p}>
+                  <StatusBadge tone="error" plain>
+                    {p}
+                  </StatusBadge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <p className="field-hint">{t('grade.awayNote')}</p>
-
-      <div className="row">
-        <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
-          {t('grade.submit')}
-        </Button>
-        <Button variant="ghost" onClick={onCancel}>
-          {t('ui.cancel')}
-        </Button>
+        <div className="row request-form-actions">
+          <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
+            {t('grade.submit')}
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            {t('ui.cancel')}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -452,10 +452,23 @@ pieces. Each keeps the old markup's contracts and message keys.
   dash, never a zero or any other value made up (a listing for no price is not "$0.00 · Active"); a label
   written for a list (`Email:`) loses its colon on a tag, which has a leader. The forms that have no slip
   are the ones in the warehouse's benches, and a few that are still the kit's fields in a column:
-  grading, consignment, an inspection, the Bault store's listing, raising an escrow deal and a shared
-  parcel's group. Whatever a person
+  the Bault store's listing, raising an escrow deal and a shared parcel's group. Whatever a person
   types as free text (a name, a subject, a message, an address) takes the direction of what is typed
   (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
+- **What can be asked for on a card — a menu and a slip.** The item's drawer lists what the warehouse can
+  do for it as a menu of rows (`btn--row`): photography, grading, a video, an inspection, consignment, a
+  buy-out, something else, and the donation in red, each with its price at its end. A request that has a
+  form (grading, an inspection, consignment, something else) takes the menu's place in the drawer, and the
+  keyboard goes to its heading; closing it gives back the menu and the keyboard to the row it came from.
+  The form is a slip over its fields, the width of the drawer's column: grading is the tier's fee (a
+  dash where it has no price yet, with that said), the tier, how long it takes, what it covers and what
+  was declared, and under a dashed rule what it means (the card cannot be sold, swapped or shipped while
+  it is away); consignment is the asking price (a dash until it is typed), where it goes, the show where
+  the channel wants one, when it pays, the minimum, that only graded cards are taken, and what asking
+  costs; an inspection is what it costs and, for each area asked for, a finding; something else is what
+  is wanted as the slip's title (in the quieter ink until it is written), how it is put and that asking is
+  free. The areas of an inspection are tiles (`choice-tiles`), the checkbox still the control: a chosen
+  one has the edge of a button that is down, and the ring goes round the tile.
 - **The doors — a slip with a stub.** Signing in and up, asking for a new password and setting it, the
   second factor's code, the link that was sent to confirm an address: each is a slip of paper in both
   themes (`AuthCard`). Foil runs along its top edge; over the heading is a kicker that says what the slip
@@ -541,6 +554,15 @@ one, so that it is announced as the link it is.
 button (`size="sm"`) is 32 px under a pointer and 44 under a finger: it is small in what it says, not in
 what it asks of a thumb. Hover is for a pointer that can hover (`hover: hover`), so a tap does not leave a
 button lit.
+
+**A row** (`className="btn--row"`) is a button that is one of a menu: its icon, what it is called (semibold)
+and what it will do (the quieter ink) beneath it, and at the far end its price and, where it opens a form,
+the way on (a chevron that turns with the page and moves a step on the way when reached for). The whole
+row is the target, its words start where the page starts (a button's are centred), and it is named by
+what it is called and described by what it does (`aria-labelledby`, `aria-describedby`), so a screen
+reader does not read a sentence as the name of a button. It has every state of the family: danger
+(what cannot be undone: the donation) is red through its text, and a row that is not there to press (a
+request already open on the card) is dashed and says where that request stands in place of its price.
 
 **Where it stands.** Colour is the `--btn-*` tokens of `theme.css`, written with `light-dark()` so one line
 serves both themes (the lint resolves it and measures every pair). The paper and the room are not the page's
@@ -735,8 +757,7 @@ like.
   storage fees (a statement) and the accounts and items (rolls opened in a drawer).
 - Of the forms, those that make a request or a record have their slip (section 8), and the doors are
   slips with a stub. The ones that do not are the kit's fields in a column: changing the password, the
-  warehouse's benches, the Bault store's listing, grading, consignment, an inspection, raising an
-  escrow deal and a shared parcel's group.
+  warehouse's benches, the Bault store's listing, raising an escrow deal and a shared parcel's group.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 
@@ -757,6 +778,7 @@ like.
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
 | WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account and an item in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
 | The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
+| The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
 | What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
@@ -772,11 +794,11 @@ like.
 | `fonts.css` | Generated by `scripts/fetch-fonts.mjs`: one `@font-face` per variable subset |
 | `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
 | `components.css` | Focus, fields, selects, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
-| `buttons.css` | Every button: `.btn` and its variants, `.icon-btn`, the header's capsule of them, the spinner, the paper's and the room's own, what forced colours draw |
+| `buttons.css` | Every button: `.btn` and its variants, the row of a menu, `.icon-btn`, the header's capsule of them, the spinner, the paper's and the room's own, what forced colours draw |
 | `landing.css` | The public page |
 | `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
 | `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |
-| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag and the form that has one, address labels, the key card and the recovery sheet, case files, the rate card, the fee statement, the month's statement, the rolls |
+| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag and the form that has one, address labels, the key card and the recovery sheet, case files, the rate card, the fee statement, the month's statement, the rolls, the doors, the service menu and the tiles of a choice |
 | `motion.css` | Transitions and keyframes shared by all of the above, the reduced-motion switch, and what forced colours draw in place of the foil |
 
 Loaded in that order after `index.css` (`main.tsx`). Components and hooks: `shared/CardPhoto.tsx`
