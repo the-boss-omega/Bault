@@ -3289,7 +3289,7 @@ code.ask-words {
 /* ---- The wallet-requests desk: a roll grouped by what each request needs of the person at it ---- */
 
 /* Each group opens with a rule: its name, how many it holds, and the money in them, the sum a desk weighs first. */
-.data-table--desk .roll-group-head th {
+.roll-group-head th {
   padding: var(--sp-5) var(--sp-4) var(--sp-2);
   border-block-end: var(--border-w) solid var(--line-strong);
   font-weight: var(--fw-regular);
@@ -3372,13 +3372,13 @@ code.ask-words {
 }
 
 @media (max-width: 767px) {
-  .dt-wrap--stack .data-table--desk .roll-group-head th,
+  .dt-wrap--stack :is(.data-table--desk, .data-table--coverage) .roll-group-head th,
   .dt-wrap--stack .data-table--desk .roll-group-none td {
     display: block;
     inline-size: 100%;
   }
 
-  .dt-wrap--stack .data-table--desk .roll-group-head {
+  .dt-wrap--stack :is(.data-table--desk, .data-table--coverage) .roll-group-head {
     padding: 0;
     border-block-end: 0;
   }
@@ -3409,6 +3409,7 @@ code.ask-words {
   .dt-wrap--stack .data-table--desk .roll-line > td {
     display: block;
     inline-size: auto;
+    min-block-size: 0;
     padding: 0;
     border: 0;
   }
@@ -3685,4 +3686,141 @@ code.ask-words {
 /* The chart sits level with the tables it is above and below it, not in from their edge. */
 .chart-wrap {
   margin-block-end: var(--sp-4);
+}
+
+/* ---- The pricing check: the verdict on a sheet, what is wrong beside it, what is fine folded under it ---- */
+
+.coverage {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-areas:
+    'sheet gaps'
+    'rest rest';
+  align-items: start;
+  gap: var(--sp-6) var(--sp-8);
+}
+
+.coverage-sheet {
+  grid-area: sheet;
+}
+
+.coverage-sheet .drawer-tag {
+  margin-block-end: 0;
+}
+
+.coverage-gaps {
+  display: grid;
+  grid-area: gaps;
+  gap: var(--sp-4);
+  min-inline-size: 0;
+}
+
+.coverage-rest {
+  display: grid;
+  grid-area: rest;
+  min-inline-size: 0;
+}
+
+@media (max-width: 1099px) {
+  .coverage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'sheet'
+      'gaps'
+      'rest';
+  }
+}
+
+/* What is fine is a line that opens: its name and how many, with a chevron that turns down when it is open. */
+.coverage-fold {
+  border-block-end: var(--border-w) solid var(--line);
+}
+
+.coverage-fold:first-child {
+  border-block-start: var(--border-w) solid var(--line);
+}
+
+.coverage-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: 48px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.coverage-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.coverage-fold > summary svg {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  color: var(--ink-2);
+  transform: scaleX(var(--dir));
+  transition: transform var(--dur) var(--ease);
+}
+
+.coverage-fold[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.coverage-fold > summary:hover .roll-group-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  /* An action is a card on a phone: its code and its rule's figure, what it is priced by, and what it is for. */
+  .dt-wrap--stack .data-table--coverage tbody tr:not(.roll-group-head) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'action rule'
+      'status status'
+      'note note';
+    align-items: center;
+    gap: var(--sp-1) var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-inline-start: 3px solid transparent;
+  }
+
+  .dt-wrap--stack .data-table--coverage tbody tr.is-alert:not(.roll-group-head) {
+    border-inline-start-color: var(--oxblood-mark);
+  }
+
+  .dt-wrap--stack .data-table--coverage tbody tr.is-attention:not(.roll-group-head) {
+    border-inline-start-color: var(--amber-mark);
+  }
+
+  .dt-wrap--stack .data-table--coverage tbody tr:not(.roll-group-head) > td {
+    display: block;
+    inline-size: auto;
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .dt-wrap--stack .data-table--coverage tbody tr:not(.roll-group-head) > td::before {
+    display: none;
+  }
+
+  .dt-wrap--stack .data-table--coverage .coverage-cell--action {
+    grid-area: action;
+  }
+
+  .dt-wrap--stack .data-table--coverage .coverage-cell--rule {
+    grid-area: rule;
+    color: var(--ink);
+    font-weight: var(--fw-medium);
+  }
+
+  .dt-wrap--stack .data-table--coverage .coverage-cell--status {
+    grid-area: status;
+  }
+
+  .dt-wrap--stack .data-table--coverage .coverage-cell--note {
+    grid-area: note;
+  }
 }

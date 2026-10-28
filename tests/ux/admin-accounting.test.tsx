@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const get = vi.fn();
@@ -153,9 +153,15 @@ describe('admin pricing coverage', () => {
 
     expect(await screen.findByText('Prices are missing')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/admin/pricing/coverage');
-    const rows = screen.getAllByRole('row').slice(1);
+    // What is missing is in view, first, under its own heading; what is priced is folded under the sheet.
+    const rows = screen.getAllByRole('row').filter((r) => r.querySelector('td'));
     expect(rows[0]).toHaveTextContent('storage');
     expect(rows[0]).toHaveTextContent('Missing — the action fails');
-    expect(rows[1]).toHaveTextContent('$5.00');
+    expect(screen.getByText('Needs a rule')).toBeInTheDocument();
+    const priced = screen.getByText('Priced', { selector: '.roll-group-name' });
+    expect(priced.closest('details')).not.toHaveAttribute('open');
+    await userEvent.setup().click(priced);
+    expect(priced.closest('details')).toHaveAttribute('open');
+    expect(within(priced.closest('details') as HTMLElement).getByText('$5.00')).toBeInTheDocument();
   });
 });
