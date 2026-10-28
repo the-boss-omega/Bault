@@ -1,15 +1,20 @@
 import { useEffect, type RefObject } from 'react';
+import { scrollBehavior } from './motionPreference';
+import { revealField } from './revealField';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const overlays: symbol[] = [];
+const panels = new Map<symbol, HTMLElement>();
 
-function pushOverlay(token: symbol): () => void {
+function pushOverlay(token: symbol, panel: HTMLElement | null): () => void {
   overlays.push(token);
+  if (panel) panels.set(token, panel);
   return () => {
     const at = overlays.indexOf(token);
     if (at >= 0) overlays.splice(at, 1);
+    panels.delete(token);
   };
 }
 
@@ -39,15 +44,26 @@ function trapTab(event: KeyboardEvent, container: HTMLElement | null): void {
  * What every dialog shares. While it is the topmost one it is all the keyboard
  * reaches: Tab stays inside it and Escape asks it to close (and nothing under
  * it). The page behind does not scroll, and focus goes back to whatever opened
- * it. `onEscape` must be stable; the effect re-runs when it changes.
+ * it; if that is gone (the button that asked was the thing the answer removed),
+ * to the dialog it was opened over, so the keyboard is not left on the page
+ * behind. A field that takes focus in a dialog that scrolls is shown whole: the
+ * browser reveals only its caret, so a text area half under the fold stayed half
+ * under it, with its ring cut off. `onEscape` must be stable; the effect re-runs
+ * when it changes.
  */
 export function useOverlay(ref: RefObject<HTMLElement | null>, onEscape: () => void): void {
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const panel = ref.current;
     const token = Symbol('overlay');
-    const popOverlay = pushOverlay(token);
+    const popOverlay = pushOverlay(token, panel);
     panel?.focus();
+
+    function reveal(event: FocusEvent) {
+      if (event.target instanceof HTMLElement && panel)
+        revealField(event.target, panel, scrollBehavior());
+    }
+    panel?.addEventListener('focusin', reveal);
 
     function onKeyDown(event: KeyboardEvent) {
       if (!isTopOverlay(token)) return;
@@ -65,9 +81,11 @@ export function useOverlay(ref: RefObject<HTMLElement | null>, onEscape: () => v
 
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
+      panel?.removeEventListener('focusin', reveal);
       document.body.style.overflow = previousOverflow;
       popOverlay();
-      opener?.focus?.();
+      if (opener?.isConnected) opener.focus?.();
+      else panels.get(overlays[overlays.length - 1]!)?.focus();
     };
   }, [ref, onEscape]);
 }

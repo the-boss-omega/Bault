@@ -12,6 +12,7 @@ export function DetailDrawer({
   lead,
   onClose,
   footer,
+  notice,
   dirty,
   flush,
   wide,
@@ -22,6 +23,12 @@ export function DetailDrawer({
   lead?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  /**
+   * What the last thing done in the drawer came to (a note that it was saved, or why it was refused), above the
+   * buttons, where it is in view whatever the body has scrolled to, and inside the dialog, where it is read out.
+   * A message the page shows is behind the drawer's backdrop.
+   */
+  notice?: ReactNode;
   dirty?: boolean;
   flush?: boolean;
   wide?: boolean;
@@ -63,7 +70,12 @@ export function DetailDrawer({
           </IconButton>
         </header>
         <div className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>{children}</div>
-        {footer && <footer className="drawer-foot">{footer}</footer>}
+        {(footer || notice) && (
+          <footer className="drawer-foot">
+            {notice && <div className="drawer-notice">{notice}</div>}
+            {footer}
+          </footer>
+        )}
       </aside>
     </>,
   );

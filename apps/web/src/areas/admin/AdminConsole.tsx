@@ -15,7 +15,6 @@ import { UsersSection, type AdminUser } from './UsersSection';
 import { ItemsSection, type AdminItem } from './ItemsSection';
 import { StorageFeesSection } from './StorageFeesSection';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
-import { ConfirmationModal } from '../../shared/ui/DetailDrawer';
 
 const TABS = [
   'yield',
@@ -55,8 +54,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
   const [items, setItems] = useState<AdminItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [resetting, setResetting] = useState<AdminUser | null>(null);
-  const [resetBusy, setResetBusy] = useState(false);
   const [parkedCount, setParkedCount] = useState<number | null>(null);
 
   const section: SectionKey = (TABS as readonly string[]).includes(route.tab ?? '')
@@ -90,21 +87,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       .catch(() => setParkedCount(null));
   }, []);
 
-  async function resetMfa(target: AdminUser) {
-    setResetBusy(true);
-    try {
-      const res = await api.post<{ sessionsEnded: number }>(`/admin/users/${target.id}/mfa/reset`);
-      setMessage(t('admin.users.mfaResetDone', { email: target.email, count: res.sessionsEnded }));
-      setError(null);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setResetBusy(false);
-      setResetting(null);
-    }
-  }
-
   const tabs = TABS.map((key) => ({
     key,
     label:
@@ -118,7 +100,9 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       <ContextTabs label={t('admin.title')} tabs={tabs} active={section} onSelect={goTab} />
 
       {message && <SuccessNote>{message}</SuccessNote>}
-      {error && <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />}
+      {error && (
+        <ErrorState message={error} onRetry={() => void load()} retryLabel={t('ui.retry')} />
+      )}
 
       {section === 'yield' && (
         <TabPanel tab="yield">
@@ -131,10 +115,11 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
           <UsersSection
             users={users}
             currentUserId={currentUserId}
-            onChanged={(saved) => setUsers((list) => list?.map((u) => (u.id === saved.id ? saved : u)) ?? list)}
+            onChanged={(saved) =>
+              setUsers((list) => list?.map((u) => (u.id === saved.id ? saved : u)) ?? list)
+            }
             onSaved={setMessage}
             onError={setError}
-            onResetMfa={setResetting}
           />
         </TabPanel>
       )}
@@ -143,19 +128,6 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
         <TabPanel tab="outbox">
           <OutboxSection onMsg={setMessage} onError={setError} onCount={setParkedCount} />
         </TabPanel>
-      )}
-
-      {resetting && (
-        <ConfirmationModal
-          title={t('admin.users.mfaResetTitle')}
-          body={<p>{t('admin.users.mfaResetBody', { email: resetting.email })}</p>}
-          confirmLabel={t('admin.users.mfaResetConfirm')}
-          cancelLabel={t('ui.cancel')}
-          tone="danger"
-          busy={resetBusy}
-          onConfirm={() => void resetMfa(resetting)}
-          onCancel={() => setResetting(null)}
-        />
       )}
 
       {section === 'house' && (
@@ -185,7 +157,9 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
           <ItemsSection
             items={items}
             users={users ?? []}
-            onChanged={(saved) => setItems((list) => list?.map((i) => (i.id === saved.id ? saved : i)) ?? list)}
+            onChanged={(saved) =>
+              setItems((list) => list?.map((i) => (i.id === saved.id ? saved : i)) ?? list)
+            }
             onSaved={setMessage}
             onError={setError}
           />

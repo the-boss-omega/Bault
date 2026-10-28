@@ -13,12 +13,14 @@ import { useNavigation, useRoute } from '../../shared/routing';
 import {
   Button,
   EmptyState,
+  ErrorState,
   Panel,
   SkeletonTable,
   StatusBadge,
+  SuccessNote,
   type StatusTone,
 } from '../../shared/ui/primitives';
-import { DetailDrawer } from '../../shared/ui/DetailDrawer';
+import { ConfirmationModal, DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
 import { IconUsers } from '../../shared/ui/icons';
@@ -59,14 +61,12 @@ export function UsersSection({
   onChanged,
   onSaved,
   onError,
-  onResetMfa,
   currentUserId,
 }: {
   users: AdminUser[] | null;
   onChanged: (user: AdminUser) => void;
   onSaved: (message: string) => void;
   onError: (message: string) => void;
-  onResetMfa: (user: AdminUser) => void;
   currentUserId: string;
 }) {
   const { t } = useI18n();
@@ -119,8 +119,8 @@ export function UsersSection({
                           >
                             {fullName(u.firstName, u.lastName) || u.email}
                           </button>
-                          <span className="dt-sub" dir="ltr">
-                            @{u.username} · {u.email}
+                          <span className="dt-sub">
+                            <Code value={`@${u.username}`} /> · <span dir="ltr">{u.email}</span>
                           </span>
                           {u.nameReviewRequired && (
                             <span className="dt-sub">{t('admin.users.nameReviewRequired')}</span>
@@ -159,9 +159,7 @@ export function UsersSection({
           onChanged={onChanged}
           onSaved={onSaved}
           onError={onError}
-          onResetMfa={
-            open.mfaEnabled && open.id !== currentUserId ? () => onResetMfa(open) : undefined
-          }
+          canResetMfa={open.mfaEnabled && open.id !== currentUserId}
         />
       )}
     </>
@@ -174,20 +172,24 @@ function AccountDrawer({
   onChanged,
   onSaved,
   onError,
-  onResetMfa,
+  canResetMfa,
 }: {
   user: AdminUser;
   onClose: () => void;
   onChanged: (user: AdminUser) => void;
   onSaved: (message: string) => void;
   onError: (message: string) => void;
-  onResetMfa?: () => void;
+  canResetMfa: boolean;
 }) {
   const { t } = useI18n();
   const [firstName, setFirstName] = useState(user.firstName ?? '');
   const [lastName, setLastName] = useState(user.lastName ?? '');
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status);
+  // What the last thing done here came to is told here, in the drawer: the page's own line is behind its backdrop.
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   const namesOk =
     isValidNamePart(normalizeNamePart(firstName)) &&
@@ -204,9 +206,16 @@ function AccountDrawer({
   }
   if (role !== user.role) changes.role = role;
   if (status !== user.status) changes.status = status;
+  // Confirming a name is something to send, not something typed: it is not an edit to be guarded.
+  const edited =
+    normalizeNamePart(firstName) !== (user.firstName ?? '') ||
+    (lastName.trim() !== '' && normalizeNamePart(lastName) !== (user.lastName ?? '')) ||
+    role !== user.role ||
+    status !== user.status;
   const dirty = Object.keys(changes).length > 0;
 
   async function send(sent: Changes) {
+    setNotice(null);
     try {
       const updated = await api.patch<Partial<AdminUser> | null>(`/admin/users/${user.id}`, sent);
       onChanged({
@@ -225,9 +234,30 @@ function AccountDrawer({
               ? false
               : user.nameReviewRequired,
       });
-      onSaved(t('admin.users.saved', { email: user.email }));
+      const text = t('admin.users.saved', { email: user.email });
+      onSaved(text);
+      setNotice({ ok: true, text });
     } catch (e) {
       onError((e as Error).message);
+      setNotice({ ok: false, text: (e as Error).message });
+    }
+  }
+
+  async function resetMfa() {
+    setResetBusy(true);
+    setNotice(null);
+    try {
+      const res = await api.post<{ sessionsEnded: number }>(`/admin/users/${user.id}/mfa/reset`);
+      const text = t('admin.users.mfaResetDone', { email: user.email, count: res.sessionsEnded });
+      onChanged({ ...user, mfaEnabled: false });
+      onSaved(text);
+      setNotice({ ok: true, text });
+    } catch (e) {
+      onError((e as Error).message);
+      setNotice({ ok: false, text: (e as Error).message });
+    } finally {
+      setResetBusy(false);
+      setResetting(false);
     }
   }
 
@@ -240,143 +270,165 @@ function AccountDrawer({
   const statusLabel = (key: string) => t(`account.status.${key}` as MessageKey);
 
   return (
-    <DetailDrawer
-      title={fullName(user.firstName, user.lastName) || user.email}
-      subtitle={<Code value={`@${user.username}`} />}
-      onClose={onClose}
-      dirty={dirty}
-      footer={
-        <>
-          <Button
-            variant="gold"
-            disabled={!namesOk || !dirty}
-            onClick={() => void send({ ...changes })}
-          >
-            {t('admin.action.save')}
-          </Button>
-          {onResetMfa && (
-            <Button
-              variant="ghost"
-              aria-label={t('admin.users.mfaResetLabel', { email: user.email })}
-              onClick={onResetMfa}
-            >
-              {t('admin.users.mfaReset')}
-            </Button>
-          )}
-          <Button variant="ghost" onClick={onClose}>
-            {t('ui.close')}
-          </Button>
-        </>
-      }
-    >
-      {/* The account as it will stand once saved: the name as it is typed, and the role and status as chosen. */}
-      <DrawerTag
-        kicker={t('admin.signIns.col.account')}
-        title={name || <span className="drawer-tag-quiet">{user.email}</span>}
-        lines={[
-          {
-            label: t('admin.users.col.email'),
-            value: (
-              <>
-                <span dir="ltr">{user.email}</span>
-                {user.intakeId && (
-                  <small
-                    className="drawer-tag-sub"
-                    dir="ltr"
-                    title={t('admin.users.legacyIntakeIdTitle')}
-                  >
-                    {user.intakeId}
-                  </small>
-                )}
-              </>
-            ),
-          },
-          { label: t('admin.users.col.username'), value: <Code value={`@${user.username}`} /> },
-        ]}
-        status={
+    <>
+      <DetailDrawer
+        title={fullName(user.firstName, user.lastName) || user.email}
+        subtitle={<Code value={`@${user.username}`} />}
+        onClose={onClose}
+        dirty={edited}
+        notice={
+          notice &&
+          (notice.ok ? (
+            <SuccessNote>{notice.text}</SuccessNote>
+          ) : (
+            <ErrorState message={notice.text} />
+          ))
+        }
+        footer={
           <>
-            <StatusBadge tone={ACCOUNT_STATUS_TONE[status] ?? 'neutral'}>
-              {statusLabel(status)}
-            </StatusBadge>
-            {user.mfaEnabled && (
-              <span title={t('admin.users.mfaOnTitle')}>
-                <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
-              </span>
+            <Button
+              variant="gold"
+              disabled={!namesOk || !dirty}
+              onClick={() => void send({ ...changes })}
+            >
+              {t('admin.action.save')}
+            </Button>
+            {canResetMfa && (
+              <Button
+                variant="ghost"
+                aria-label={t('admin.users.mfaResetLabel', { email: user.email })}
+                onClick={() => setResetting(true)}
+              >
+                {t('admin.users.mfaReset')}
+              </Button>
             )}
+            <Button variant="ghost" onClick={onClose}>
+              {t('ui.close')}
+            </Button>
           </>
         }
-        note={t(`role.${role}` as MessageKey)}
-      />
+      >
+        {/* The account as it will stand once saved: the name as it is typed, and the role and status as chosen. */}
+        <DrawerTag
+          kicker={t('admin.signIns.col.account')}
+          title={name || <span className="drawer-tag-quiet">{user.email}</span>}
+          lines={[
+            {
+              label: t('admin.users.col.email'),
+              value: (
+                <>
+                  <span dir="ltr">{user.email}</span>
+                  {user.intakeId && (
+                    <small
+                      className="drawer-tag-sub"
+                      dir="ltr"
+                      title={t('admin.users.legacyIntakeIdTitle')}
+                    >
+                      {user.intakeId}
+                    </small>
+                  )}
+                </>
+              ),
+            },
+            { label: t('admin.users.col.username'), value: <Code value={`@${user.username}`} /> },
+          ]}
+          status={
+            <>
+              <StatusBadge tone={ACCOUNT_STATUS_TONE[status] ?? 'neutral'}>
+                {statusLabel(status)}
+              </StatusBadge>
+              {user.mfaEnabled && (
+                <span title={t('admin.users.mfaOnTitle')}>
+                  <StatusBadge tone="info">{t('admin.users.mfaOn')}</StatusBadge>
+                </span>
+              )}
+            </>
+          }
+          note={t(`role.${role}` as MessageKey)}
+        />
 
-      {user.status === 'suspended' && user.autoSuspended && (
-        <div className="drawer-note drawer-note--hold">
-          <span>{t('admin.users.autoSuspended')}</span>
-          <Button
-            size="sm"
-            variant="secondary"
-            aria-label={t('admin.users.keepSuspendedLabel', { email: user.email })}
-            onClick={() => void keepSuspended()}
-          >
-            {t('admin.users.keepSuspended')}
-          </Button>
-        </div>
-      )}
-
-      <div className="stack stack--tight account-fields">
-        {user.nameReviewRequired && (
-          <p className="field-hint">{t('admin.users.nameReviewRequired')}</p>
+        {user.status === 'suspended' && user.autoSuspended && (
+          <div className="drawer-note drawer-note--hold">
+            <span>{t('admin.users.autoSuspended')}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={t('admin.users.keepSuspendedLabel', { email: user.email })}
+              onClick={() => void keepSuspended()}
+            >
+              {t('admin.users.keepSuspended')}
+            </Button>
+          </div>
         )}
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">{t('auth.firstName')}</span>
-            <input
-              value={firstName}
-              maxLength={NAME_PART_MAX}
-              aria-label={t('auth.firstName')}
-              onChange={(e) => setFirstName(e.target.value)}
-              dir="auto"
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('auth.lastName')}</span>
-            <input
-              value={lastName}
-              maxLength={NAME_PART_MAX}
-              aria-label={t('auth.lastName')}
-              onChange={(e) => setLastName(e.target.value)}
-              dir="auto"
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">{t('admin.users.col.role')}</span>
-            <select
-              value={role}
-              aria-label={t('admin.users.col.role')}
-              onChange={(e) => setRole(e.target.value)}
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {t(`role.${r}` as MessageKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">{t('admin.col.status')}</span>
-            <select
-              value={status}
-              aria-label={t('admin.col.status')}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {statusLabel(s)}
-                </option>
-              ))}
-            </select>
-          </label>
+
+        <div className="stack stack--tight account-fields">
+          {user.nameReviewRequired && (
+            <p className="field-hint">{t('admin.users.nameReviewRequired')}</p>
+          )}
+          <div className="form-grid">
+            <label className="field">
+              <span className="field-label">{t('auth.firstName')}</span>
+              <input
+                value={firstName}
+                maxLength={NAME_PART_MAX}
+                aria-label={t('auth.firstName')}
+                onChange={(e) => setFirstName(e.target.value)}
+                dir="auto"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">{t('auth.lastName')}</span>
+              <input
+                value={lastName}
+                maxLength={NAME_PART_MAX}
+                aria-label={t('auth.lastName')}
+                onChange={(e) => setLastName(e.target.value)}
+                dir="auto"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">{t('admin.users.col.role')}</span>
+              <select
+                value={role}
+                aria-label={t('admin.users.col.role')}
+                onChange={(e) => setRole(e.target.value)}
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {t(`role.${r}` as MessageKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">{t('admin.col.status')}</span>
+              <select
+                value={status}
+                aria-label={t('admin.col.status')}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {statusLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
-      </div>
-    </DetailDrawer>
+      </DetailDrawer>
+      {resetting && (
+        <ConfirmationModal
+          title={t('admin.users.mfaResetTitle')}
+          body={<p>{t('admin.users.mfaResetBody', { email: user.email })}</p>}
+          confirmLabel={t('admin.users.mfaResetConfirm')}
+          cancelLabel={t('ui.cancel')}
+          tone="danger"
+          busy={resetBusy}
+          onConfirm={() => void resetMfa()}
+          onCancel={() => setResetting(false)}
+        />
+      )}
+    </>
   );
 }

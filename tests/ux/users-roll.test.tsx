@@ -108,7 +108,11 @@ describe('the accounts, a roll', () => {
   it('keeps the account figures, the usernames and emails, read left to right', async () => {
     users();
     await screen.findByRole('button', { name: 'Dana Okonkwo' });
-    for (const row of rows()) expect(row.querySelector('.dt-sub[dir="ltr"]')).not.toBeNull();
+    for (const row of rows()) {
+      // The username is a code, and the email is read as the characters it is.
+      expect(row.querySelector('.dt-sub .code-inline[dir="ltr"]')).not.toBeNull();
+      expect(row.querySelector('.dt-sub span[dir="ltr"]')).not.toBeNull();
+    }
   });
 });
 
@@ -188,6 +192,49 @@ describe('an account, opened', () => {
         within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }),
       ).toBeDisabled(),
     );
+  });
+
+  it('tells what a save came to inside the drawer, where it is seen, as well as on the page behind it', async () => {
+    const user = userEvent.setup();
+    window.location.hash = '#/admin/users?user=u1';
+    patch.mockRejectedValueOnce(new Error('You cannot suspend or close your own account here.'));
+    users();
+    const drawer = await screen.findByRole('dialog');
+    await user.selectOptions(within(drawer).getByRole('combobox', { name: 'Role' }), 'admin');
+    await user.click(within(drawer).getByRole('button', { name: 'Save' }));
+    // In the drawer's own footer, in the dialog, so a screen reader reads it out and a phone shows it.
+    const alert = await within(drawer).findByRole('alert');
+    expect(alert).toHaveTextContent('You cannot suspend or close your own account here.');
+    expect(drawer.querySelector('.drawer-foot')).toContainElement(alert);
+
+    patch.mockResolvedValueOnce({ ...USERS[0], role: 'admin' });
+    await user.click(within(drawer).getByRole('button', { name: 'Save' }));
+    const saved = await within(drawer).findByRole('status');
+    expect(saved).toHaveTextContent('dana@bault.dev');
+    // The refusal is no longer there: what the drawer says is the last thing done.
+    expect(within(drawer).queryByRole('alert')).toBeNull();
+  });
+
+  it('does not count confirming a name as an edit: nothing was typed, so the backdrop still shuts it', async () => {
+    const user = userEvent.setup();
+    window.location.hash = '#/admin/users?user=u3';
+    users();
+    const drawer = await screen.findByRole('dialog');
+    // Something is to be sent (the name, as it is, confirmed), so Save is on ...
+    expect(within(drawer).getByRole('button', { name: 'Save' })).toBeEnabled();
+    // ... but nothing was changed by hand, so a click beside the drawer is not a discarded edit.
+    await user.click(document.querySelector('.drawer-backdrop') as HTMLElement);
+    await waitFor(() => expect(window.location.hash).toBe('#/admin/users'));
+  });
+
+  it('does keep a drawer open, under a click beside it, once something has been typed in it', async () => {
+    const user = userEvent.setup();
+    window.location.hash = '#/admin/users?user=u3';
+    users();
+    const drawer = await screen.findByRole('dialog');
+    await user.type(within(drawer).getByRole('textbox', { name: 'First name' }), 'x');
+    await user.click(document.querySelector('.drawer-backdrop') as HTMLElement);
+    expect(window.location.hash).toBe('#/admin/users?user=u3');
   });
 
   it('is shut by its close button, and the link goes back to the roll', async () => {

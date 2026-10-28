@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const get = vi.fn();
@@ -103,6 +103,16 @@ describe('the inventory, a roll', () => {
     expect(within(grader).getByText(/grader/i)).toBeInTheDocument();
   });
 
+  it('says the number as a code and the condition beside it, so grades can be read down the roll', async () => {
+    items();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    for (const row of rows()) {
+      const sub = row.querySelector('.dt-sub') as HTMLElement;
+      expect(sub.querySelector('.code-inline[dir="ltr"]')).not.toBeNull();
+      expect(sub).toHaveTextContent(/SN-[ABC]-0001 · Raw/);
+    }
+  });
+
   it('keeps no field of an item in its line', async () => {
     items();
     await waitFor(() => expect(rows()).toHaveLength(3));
@@ -157,6 +167,40 @@ describe('an item, opened', () => {
     const card = within(drawer).getByRole('region', { name: 'SN-A-0001' });
     expect(within(drawer).getByRole('button', { name: /print the barcode SN-A-0001/i })).toBeInTheDocument();
     expect(within(card).queryByRole('button')).toBeNull();
+  });
+
+  it('does not say the number three times: the subtitle is left out when it is the serial the card already carries', async () => {
+    window.location.hash = '#/admin/items?item=A';
+    items();
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer.querySelector('.drawer-subtitle')).toBeNull();
+    // It is said when it is another number than the serial.
+    cleanup();
+    get.mockImplementation(async (path: string) =>
+      path === '/admin/users'
+        ? USERS
+        : path === '/admin/items'
+          ? [item('A', { barcode: 'BLT-9000' })]
+          : [],
+    );
+    window.location.hash = '#/admin/items?item=A';
+    items();
+    expect(await screen.findByText('BLT-9000', { selector: '.drawer-subtitle *' })).toBeInTheDocument();
+  });
+
+  it('tells inside the drawer why a save was refused, in the footer, where it is seen and read out', async () => {
+    const user = userEvent.setup();
+    window.location.hash = '#/admin/items?item=A';
+    patch.mockRejectedValueOnce(new Error('Unknown item class "tradng_card".'));
+    items();
+    const drawer = await screen.findByRole('dialog');
+    const type = within(drawer).getByRole('textbox', { name: 'Type' });
+    await user.clear(type);
+    await user.type(type, 'tradng_card');
+    await user.click(within(drawer).getByRole('button', { name: 'Save' }));
+    const alert = await within(drawer).findByRole('alert');
+    expect(alert).toHaveTextContent('Unknown item class');
+    expect(drawer.querySelector('.drawer-foot')).toContainElement(alert);
   });
 
   it('offers the state the item is in even when it is one the list does not carry', async () => {

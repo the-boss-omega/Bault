@@ -5,7 +5,15 @@ import { CardPhotoButton, CardPhotoThumb } from '../../shared/CardPhoto';
 import { useI18n } from '../../shared/i18n';
 import { STATE_META, stateLabel } from '../../shared/itemTimeline';
 import { useNavigation, useRoute } from '../../shared/routing';
-import { Button, EmptyState, Panel, SkeletonTable, StatusBadge } from '../../shared/ui/primitives';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Panel,
+  SkeletonTable,
+  StatusBadge,
+  SuccessNote,
+} from '../../shared/ui/primitives';
 import { DetailDrawer } from '../../shared/ui/DetailDrawer';
 import { DrawerTag } from '../../shared/ui/DrawerTag';
 import { Code } from '../../shared/ui/Serial';
@@ -106,8 +114,14 @@ export function ItemsSection({
                           >
                             {nameOf(item.description, item.typeClass)}
                           </button>
-                          <span className="dt-sub" dir="ltr">
-                            {item.barcode}
+                          <span className="dt-sub">
+                            <Code value={item.barcode} />
+                            {item.conditionGrade && (
+                              <>
+                                {' · '}
+                                <span dir="auto">{item.conditionGrade}</span>
+                              </>
+                            )}
                           </span>
                         </div>
                       </td>
@@ -170,6 +184,8 @@ function ItemDrawer({
   const [ownerId, setOwnerId] = useState(item.ownerId);
   const [lifecycleState, setLifecycleState] = useState(item.lifecycleState);
   const [holdFlag, setHoldFlag] = useState(item.holdFlag);
+  // What the last save came to is told here, in the drawer: the page's own line is behind its backdrop.
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Only what was changed is sent: the state the item was showing is not a change to it.
   const current = { description, typeClass, conditionGrade, ownerId, lifecycleState, holdFlag };
@@ -190,6 +206,7 @@ function ItemDrawer({
   async function save() {
     if (!dirty) return;
     const sent = { ...changes };
+    setNotice(null);
     try {
       const updated = await api.patch<{ lifecycleState?: string } | null>(
         `/admin/items/${item.id}`,
@@ -206,9 +223,12 @@ function ItemDrawer({
         lifecycleState: state,
         ownerEmail: owner?.email ?? item.ownerEmail,
       });
-      onSaved(t('admin.items.saved', { barcode: item.barcode }));
+      const text = t('admin.items.saved', { barcode: item.barcode });
+      onSaved(text);
+      setNotice({ ok: true, text });
     } catch (e) {
       onError((e as Error).message);
+      setNotice({ ok: false, text: (e as Error).message });
     }
   }
 
@@ -221,9 +241,17 @@ function ItemDrawer({
   return (
     <DetailDrawer
       title={nameOf(item.description, item.typeClass)}
-      subtitle={<Code value={item.barcode} />}
+      subtitle={item.barcode === item.serialNumber ? undefined : <Code value={item.barcode} />}
       onClose={onClose}
       dirty={dirty}
+      notice={
+        notice &&
+        (notice.ok ? (
+          <SuccessNote>{notice.text}</SuccessNote>
+        ) : (
+          <ErrorState message={notice.text} />
+        ))
+      }
       footer={
         <>
           <Button variant="gold" disabled={!dirty} onClick={() => void save()}>

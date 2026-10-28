@@ -2374,6 +2374,7 @@ input[type='search'] {
 
 .drawer-foot {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--pad-panel);
   padding-block-end: max(var(--sp-4), env(safe-area-inset-bottom));
@@ -2383,6 +2384,12 @@ input[type='search'] {
 
 .drawer-foot .btn {
   flex: 1 1 auto;
+}
+
+/* What the last action came to, on a row of its own above the buttons. */
+.drawer-notice {
+  flex: 1 0 100%;
+  min-width: 0;
 }
 
 .stage {

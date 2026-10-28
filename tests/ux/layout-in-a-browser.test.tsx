@@ -34,6 +34,7 @@ const { api } = await import('../../apps/web/src/shared/api');
 const { billableActions, coverage } =
   await import('../../apps/api/src/modules/prc/billable-actions');
 const { MEMBERSHIP_TIERS } = await import('../../apps/api/src/modules/mem/tiers');
+const { revealField } = await import('../../apps/web/src/shared/ui/revealField');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
 };
@@ -506,6 +507,69 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
         });
       }
     }
+    }
+  });
+  describe('an account or an item, opened in a drawer', () => {
+    const account = (id: string, username: string, more: Record<string, unknown> = {}) => ({
+      id,
+      email: `${username}@bault.dev`,
+      username,
+      firstName: username[0]!.toUpperCase() + username.slice(1),
+      lastName: 'Cohen',
+      nameReviewRequired: false,
+      role: 'user',
+      status: 'active',
+      autoSuspended: false,
+      intakeId: null,
+      mfaEnabled: true,
+      ...more,
+    });
+    const card = {
+      id: 'i1',
+      serialNumber: 'SN-ROS105-0008',
+      barcode: 'SN-ROS105-0008',
+      typeClass: 'trading_card',
+      description: '2015 Pokémon XY Roaring Skies — M Rayquaza-EX (Full Art, Δ Evolution) #105/108',
+      conditionGrade: 'Raw',
+      lifecycleState: 'stored',
+      holdFlag: true,
+      binId: null,
+      ownerId: 'u1',
+      ownerEmail: 'eldar@bault.dev',
+    };
+
+    // A drawer scrolls. Whichever control takes the keyboard in it, it is shown with its ring: the ring is drawn
+    // outside the control, and what the drawer scrolls it to is the edge of its body.
+    for (const record of ['user', 'item'] as const) {
+      for (const locale of ['en', 'he'] as const) {
+        for (const width of [1440, 390]) {
+          it(`keeps the ring of every control in the ${record} drawer inside it, ${locale}, ${width}px`, async () => {
+            localStorage.setItem('bault.locale', locale);
+            window.location.hash = record === 'user' ? '#/admin/users?user=u1' : '#/admin/items?item=i1';
+            vi.mocked(api.get).mockImplementation(async (path: string) =>
+              path === '/admin/users'
+                ? [account('u1', 'eldar', { autoSuspended: true, status: 'suspended' }), account('u2', 'hermon')]
+                : path === '/admin/items'
+                  ? [card]
+                  : [],
+            );
+            render(
+              <I18nProvider>
+                <AdminConsole currentUserId="me" />
+              </I18nProvider>,
+            );
+            await waitFor(() => expect(document.querySelector('.drawer')).not.toBeNull());
+            const page = await inBrowser(width, locale, 'dark', false);
+            // What the app does when a field takes focus in a dialog (the page's script is not here, but its function is).
+            await page.evaluate(
+              `(() => { const reveal = ${revealField.toString()}; const panel = document.querySelector('.drawer'); panel.addEventListener('focusin', (e) => reveal(e.target, panel, 'auto')); })()`,
+            );
+            const cut = (await audit.auditFocus(page, 40)).filter((flag) => /cut off/.test(flag));
+            expect(cut).toEqual([]);
+            await page.close();
+          });
+        }
+      }
     }
   });
   describe('the sign-in log', () => {

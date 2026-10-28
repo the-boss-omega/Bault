@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 const { CountUp } = await import('../../apps/web/src/shared/ui/CountUp');
 const { useExit } = await import('../../apps/web/src/shared/ui/useExit');
@@ -266,6 +266,85 @@ describe('useOverlay', () => {
     expect(document.body.style.overflow).toBe('');
     expect(opener).toHaveFocus();
     opener.remove();
+  });
+
+  it('gives focus to the dialog it was opened over when what opened it is gone', () => {
+    // The handlers are stable, as they have to be: a dialog whose handler changes takes focus again.
+    const stay = () => {};
+    function Over() {
+      const [asked, setAsked] = useState(false);
+      const [gone, setGone] = useState(false);
+      const close = useCallback(() => setAsked(false), []);
+      return (
+        <>
+          <Dialog onEscape={stay} label="under" />
+          {!gone && (
+            <button type="button" onClick={() => setAsked(true)}>
+              ask
+            </button>
+          )}
+          {asked && <Dialog onEscape={close} label="over" />}
+          <button type="button" onClick={() => setGone(true)}>
+            remove the button that asked
+          </button>
+        </>
+      );
+    }
+    render(<Over />);
+    const ask = screen.getByText('ask');
+    ask.focus();
+    act(() => ask.click());
+    expect(screen.getByRole('dialog', { name: 'over' })).toHaveFocus();
+    // What asked is removed while the answer is still open, and then the answer closes.
+    act(() => screen.getByText('remove the button that asked').click());
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(screen.queryByRole('dialog', { name: 'over' })).toBeNull();
+    // Focus is in the dialog that is still open, not on the page behind it.
+    expect(screen.getByRole('dialog', { name: 'under' })).toHaveFocus();
+  });
+
+  it('shows a field that takes focus whole when it is half under the fold of a dialog that scrolls, with room for its ring', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    function Scrolling() {
+      const ref = useRef<HTMLDivElement>(null);
+      useOverlay(ref, () => {});
+      return (
+        <div ref={ref} tabIndex={-1} role="dialog" aria-label="scrolls">
+          <div data-testid="body" style={{ overflowY: 'auto' }}>
+            <textarea aria-label="description" />
+            <textarea aria-label="visible" />
+          </div>
+        </div>
+      );
+    }
+    render(<Scrolling />);
+    const body = screen.getByTestId('body');
+    // jsdom lays nothing out: the box has more to scroll than it shows, and these are where the fields are.
+    Object.defineProperty(body, 'scrollHeight', { value: 900, configurable: true });
+    Object.defineProperty(body, 'clientHeight', { value: 400, configurable: true });
+    body.getBoundingClientRect = () => ({ top: 100, bottom: 500, left: 0, right: 300, width: 300, height: 400, x: 0, y: 100, toJSON: () => ({}) });
+    const place = (el: HTMLElement, top: number, bottom: number) => {
+      el.getBoundingClientRect = () => ({ top, bottom, left: 0, right: 300, width: 300, height: bottom - top, x: 0, y: top, toJSON: () => ({}) });
+    };
+    const half = screen.getByLabelText('description');
+    place(half, 460, 560);
+    act(() => half.focus());
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest' }));
+
+    // A field whole in the room, but with its ring touching the edge, is shown with room too; one well inside is left alone.
+    scrollIntoView.mockClear();
+    const inside = screen.getByLabelText('visible');
+    place(inside, 200, 300);
+    act(() => inside.focus());
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    place(inside, 200, 497);
+    act(() => half.focus());
+    act(() => inside.focus());
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
   });
 
   it('answers Escape in the topmost dialog only', () => {
