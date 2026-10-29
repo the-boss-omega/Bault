@@ -492,6 +492,9 @@ function slug(value) {
 async function capture(state, page, name, ctx) {
   if (state.opts.only && !name.includes(state.opts.only)) return;
   await settle(page);
+  // Every screen is looked at from its top, as a visitor arrives at it: a page that has been left scrolled (by the
+  // one before it) has its sticky bar over its header, and a target that is under the bar is "partially obscured".
+  await page.evaluate(() => globalThis.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   const file = `${slug(name)}-${ctx.locale}-${ctx.width}.png`;
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
   const found = await inspect(page, ctx.locale, ctx.width);
