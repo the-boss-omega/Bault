@@ -3,7 +3,7 @@ import { api } from '../../../shared/api';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
 import { itemClassLabel } from '../../../shared/itemClasses';
 import { Amount, Serial } from '../../../shared/ui/Serial';
-import { formatUsd } from '../../../shared/money';
+import { formatUsd, isolateLtr } from '../../../shared/money';
 import { storefrontHref } from '../../../shared/market';
 import { useI18n } from '../../../shared/i18n';
 import { isValidUsername, normalizeUsername } from '../../../shared/names';
@@ -78,7 +78,7 @@ export function StorefrontPanel({
 
         {myUsername && (
           <SuccessNote>
-            {t('market.store.yourLink', { link: storefrontHref(myUsername) })}
+            {t('market.store.yourLink', { link: isolateLtr(storefrontHref(myUsername)) })}
           </SuccessNote>
         )}
       </Panel>
