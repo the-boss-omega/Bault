@@ -393,6 +393,43 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
       await page.close();
     });
 
+    it('and measures a control where it comes to rest, not a word that is still fading out of it', async () => {
+      render(
+        <div id="page" style={{ width: 300 }}>
+          <button
+            type="button"
+            id="rail"
+            className="rail-item"
+            style={{ width: 71, display: 'inline-flex', whiteSpace: 'nowrap' }}
+          >
+            <span style={{ width: 40 }} />
+            <span id="count" style={{ transition: 'opacity 600ms linear' }}>
+              Notifications 12
+            </span>
+          </button>
+          <button type="button" id="beside" style={{ width: 120 }}>
+            Open
+          </button>
+        </div>,
+      );
+      const page = await inBrowser({ width: 390 });
+      // The page is reduced-motion like the rest; this one transition has to be seen in flight.
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      // The count has just been told to go, as it is when focus has left the rail: it is on its way out.
+      await page.evaluate(() => {
+        (globalThis.document.getElementById('count') as HTMLElement).style.opacity = '0';
+      });
+      expect(
+        await page.evaluate(
+          () => Number(getComputedStyle(globalThis.document.getElementById('count')!).opacity) > 0,
+        ),
+      ).toBe(true);
+      expect((await audit.auditButtons(page)).filter((flag) => /words run out/.test(flag))).toEqual(
+        [],
+      );
+      await page.close();
+    });
+
     it('and is quiet about a strip that keeps each tab as wide as its word and scrolls', async () => {
       render(
         <div id="page" style={{ width: 200 }}>

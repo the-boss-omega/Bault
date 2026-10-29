@@ -411,6 +411,19 @@ async function auditFocus(page, stops = 40) {
  * the text's, which axe measures.
  */
 async function auditButtons(page) {
+  // A button is measured where it comes to rest. A transition still in flight (the count that is fading out of the
+  // rail as focus leaves it) is a word that is, for a moment, where it is not going to stay. What never ends is left.
+  await page.evaluate(async () => {
+    const { document } = globalThis;
+    const moving = () =>
+      document
+        .getAnimations()
+        .filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity);
+    await Promise.race([
+      Promise.allSettled(moving().map((a) => a.finished)),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  });
   return page.evaluate(() => {
     const { document, getComputedStyle, matchMedia } = globalThis;
     const canvas = document.createElement('canvas');
