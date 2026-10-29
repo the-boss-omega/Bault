@@ -12,8 +12,15 @@ async function inspect(page, locale, width) {
       const ISOLATES = '.serial, .amount, .ltr-run, .code-inline, .bidi, [dir="ltr"], code, kbd, input, textarea, select, script, style';
       const flags = [];
       const text = document.body.innerText;
-      const uuid = text.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i);
-      if (uuid) flags.push(`id on screen: ${uuid[0]}`);
+      // An id that is shown as nothing but an id (a record's own number, in the face of a code, beside its label)
+      // is what it is there to be; one in a name or a sentence has got there by mistake.
+      const alone = new Set(
+        [...document.querySelectorAll('code, .code-inline')]
+          .filter((el) => el.checkVisibility?.() ?? true)
+          .map((el) => (el.textContent ?? '').trim().toLowerCase()),
+      );
+      const uuid = (text.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi) ?? []).find((id) => !alone.has(id.toLowerCase()));
+      if (uuid) flags.push(`id on screen: ${uuid}`);
       const cents = text.match(/\b\d[\d,]*\s*cents\b/i);
       if (cents) flags.push(`minor units on screen: ${cents[0]}`);
       const enums = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])].filter((w) => !w.includes('@'));
@@ -31,6 +38,17 @@ async function inspect(page, locale, width) {
         }
       }
       if (repeated.length) flags.push(`a kicker that says its heading again: ${[...new Set(repeated)].slice(0, 3).join(', ')}`);
+      // An icon is the size of a letter. One that has been given no size is as large as the box it is in: the
+      // chevron beside a link, two hundred pixels tall, which nothing else on the page would say was wrong.
+      const oversized = [];
+      for (const icon of document.querySelectorAll('svg[aria-hidden="true"]')) {
+        if (!icon.checkVisibility?.() || icon.closest('.landing, .slab, .barcode')) continue;
+        const box = icon.getBoundingClientRect();
+        if (box.width > 96 || box.height > 96) {
+          oversized.push(`${Math.round(box.width)}x${Math.round(box.height)} beside "${(icon.parentElement?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 28)}"`);
+        }
+      }
+      if (oversized.length) flags.push(`an icon drawn larger than text: ${[...new Set(oversized)].slice(0, 3).join('; ')}`);
       if (document.documentElement.scrollWidth > window.innerWidth + 1 && width < 800) {
         flags.push(`scrolls sideways: ${document.documentElement.scrollWidth}px wide at ${window.innerWidth}px`);
       }

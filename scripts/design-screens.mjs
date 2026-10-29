@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { createHmac } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, firefox, webkit } from 'playwright-core';
@@ -66,6 +66,10 @@ Options:
                      Google Chrome)
   --password <pw>    the seeded accounts' password (default 11111111)
 
+The first record each screen opens (a guide, a question, a ticket, a parcel, a shipment, a
+transaction, a request) is opened and captured as a screen of its own, named <screen>-record
+(--only record asks for those alone), and the run says which kinds of record it did not reach.
+
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
 cents, an enum name or English words on a Hebrew page, an English phrase, a date,
 a price or a figure drawn out of order on a Hebrew page, English text in a Hebrew
@@ -110,6 +114,37 @@ const ANONYMOUS_ROUTES = [
 ];
 
 const VAULT_SCOPES = ['active', 'hold', 'history'];
+
+/**
+ * What a screen opens. A list is one page and the record it opens is another: a guide opens its steps, a question
+ * its answer, and a ticket, a parcel, a shipment, a transaction or a request its record, each named in the
+ * address (`?g=`, `?ticket=`). A capture of a list says nothing about what it opens: the steps of a guide were
+ * drawn with every full stop at the wrong end of its line for as long as the audit did not open one.
+ */
+const RECORD_OPENERS = ['tr.is-clickable', 'li.label-card', '.register-link', '.faq-trigger', '.card-hit'];
+
+/**
+ * Every kind of record the app opens, and the audit opens each one: by the first row, label, card or question a
+ * screen has, or (an account, an item, a ticket in the operator's queue) by its address. A kind the app gains is a
+ * screen the audit does not see until it is added here and there is a way to reach it; a test reads the app's
+ * source for the kinds it opens and fails until this list says the same.
+ */
+export const RECORD_KINDS = ['g', 'item', 'parcel', 'q', 'request', 'shipment', 'ticket', 'transaction', 'user'];
+
+/** The kinds of record a source opens, read from where it opens them: `openRecord('ticket', id)`. */
+export function recordKindsOf(source) {
+  return [...new Set([...source.matchAll(/openRecord\(\s*'([a-z]+)'/g)].map((m) => m[1]))].sort();
+}
+
+export function recordKindsOfTheApp() {
+  const root = join(repoRoot, 'apps/web/src');
+  const kinds = new Set();
+  for (const file of readdirSync(root, { recursive: true })) {
+    if (typeof file !== 'string' || !/\.tsx?$/.test(file)) continue;
+    for (const kind of recordKindsOf(readFileSync(join(root, file), 'utf8'))) kinds.add(kind);
+  }
+  return [...kinds].sort();
+}
 
 function parseArgs(argv) {
   const out = {
@@ -508,6 +543,35 @@ async function capture(state, page, name, ctx) {
   process.stdout.write(flags.length ? '!' : '.');
 }
 
+/**
+ * Opens the first record the screen has (a row of a roll, a parcel's label, a guide, a question) and captures it
+ * as the screen it then is. What the click adds to the address says what was opened; a click that adds nothing
+ * opened nothing the address names (a menu, a card with no record behind it) and is let go.
+ */
+async function visitRecord(state, page, name, ctx) {
+  const recordName = `${name}-record`;
+  if (state.opts.only && !recordName.includes(state.opts.only)) return;
+  // What a screen lists arrives after the screen does.
+  await settle(page);
+  const keysOf = () =>
+    page.evaluate(() => [...new globalThis.URLSearchParams(globalThis.location.hash.split('?')[1] ?? '').keys()]);
+  const before = await keysOf();
+  for (const selector of RECORD_OPENERS) {
+    const opener = page.locator(`main ${selector}`).first();
+    if (!(await opener.count())) continue;
+    await opener.click({ force: true, timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const added = (await keysOf()).filter((key) => !before.includes(key));
+    if (added.length === 0) {
+      await page.keyboard.press('Escape');
+      continue;
+    }
+    for (const kind of added) state.opened.add(kind);
+    await capture(state, page, recordName, ctx);
+    return;
+  }
+}
+
 async function visitSection(state, page, section, ctx) {
   await page.goto(`${state.baseUrl}/#/${section}`);
   await settle(page);
@@ -521,11 +585,13 @@ async function visitSection(state, page, section, ctx) {
   );
   if (tabs.length === 0) {
     await capture(state, page, `${ctx.persona}-${section}`, ctx);
+    await visitRecord(state, page, `${ctx.persona}-${section}`, ctx);
     return;
   }
   for (const tab of tabs) {
     await page.goto(`${state.baseUrl}/#/${section}/${tab}`);
     await capture(state, page, `${ctx.persona}-${section}-${tab}`, ctx);
+    await visitRecord(state, page, `${ctx.persona}-${section}-${tab}`, ctx);
   }
 }
 
@@ -535,6 +601,7 @@ async function visitItems(state, page, ctx) {
     const first = Array.isArray(list.json) ? list.json[0] : null;
     if (!first) continue;
     await page.goto(`${state.baseUrl}/#/vault/${scope}?item=${encodeURIComponent(first.id)}`);
+    state.opened.add('item');
     await capture(state, page, `${ctx.persona}-item-${scope}`, ctx);
   }
 }
@@ -569,8 +636,19 @@ async function visitAdminRecords(state, page, ctx) {
   for (const [tab, param, record] of records) {
     if (!record) continue;
     await page.goto(`${state.baseUrl}/#/admin/${tab}?${param}=${encodeURIComponent(record.id)}`);
+    state.opened.add(param);
     await capture(state, page, `${ctx.persona}-${tab}-drawer`, ctx);
   }
+}
+
+/** A ticket in the operator's queue, in the drawer it is answered in (a queue's rows are not what opens it). */
+async function visitQueueTicket(state, page, ctx) {
+  const queue = await apiCall(page, 'GET', '/support/queue');
+  const first = Array.isArray(queue.json) ? queue.json[0] : null;
+  if (!first) return;
+  await page.goto(`${state.baseUrl}/#/warehouse/support?ticket=${encodeURIComponent(first.id)}`);
+  state.opened.add('ticket');
+  await capture(state, page, `${ctx.persona}-support-ticket`, ctx);
 }
 
 async function runPersona(state, browser, persona, locale, width) {
@@ -644,6 +722,7 @@ async function runPersona(state, browser, persona, locale, width) {
     await settle(page);
     for (const section of spec.sections ?? SECTIONS) await visitSection(state, page, section, ctx);
     if (persona === 'collector') await visitItems(state, page, ctx);
+    if (persona === 'operator') await visitQueueTicket(state, page, ctx);
     if (persona === 'admin') await visitAdminRecords(state, page, ctx);
   } finally {
     await context.close();
@@ -748,7 +827,7 @@ async function main() {
   let preview = null;
   if (!opts.baseUrl) preview = await startPreview(opts.api);
   const baseUrl = (opts.baseUrl ?? 'http://localhost:4173').replace(/\/+$/, '');
-  const state = { opts, outDir, baseUrl, secrets, secretsFile, shots: [] };
+  const state = { opts, outDir, baseUrl, secrets, secretsFile, shots: [], opened: new Set() };
   const browser = await ENGINES[opts.engine].launch(launchOptions(opts.engine, opts.browser));
   try {
     for (const file of ['index.html', 'shots.json']) rmSync(join(outDir, file), { force: true });
@@ -769,7 +848,13 @@ async function main() {
     writeFileSync(join(outDir, 'index.html'), contactSheet(state.shots));
   }
   const flagged = state.shots.filter((s) => s.flags.length).length;
-  console.log(`\n${state.shots.length} captures, ${flagged} with flags. Open ${join(opts.out, 'index.html')}`);
+  // The kinds of record the app opens against the kinds this run opened. A run of some of the accounts opens some
+  // of them; the runs of all the accounts, together, have to open every one (records.json is what they add up).
+  const known = recordKindsOfTheApp();
+  const opened = [...state.opened].sort();
+  writeFileSync(join(outDir, 'records.json'), JSON.stringify({ known, opened }, null, 2));
+  console.log(`\nRecords opened: ${opened.join(', ') || 'none'}; the app opens: ${known.join(', ')}.`);
+  console.log(`${state.shots.length} captures, ${flagged} with flags. Open ${join(opts.out, 'index.html')}`);
 }
 
 // Run when it is the script being run, not when its checks are imported (the tests that plant a mistake
