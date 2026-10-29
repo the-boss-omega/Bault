@@ -322,6 +322,60 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
     });
   });
 
+  describe('words that run out of their control', () => {
+    it('the audit is not blind to a tab shrunk below its word, or to a button that does the same', async () => {
+      render(
+        <div id="page" style={{ display: 'flex', width: 200 }}>
+          <ContextTabs
+            label="sections"
+            active="a"
+            onSelect={() => {}}
+            tabs={[
+              { key: 'a', label: 'Wallet requests' },
+              { key: 'b', label: 'Parked messages' },
+            ]}
+          />
+          <Button id="narrow" style={{ width: 40, whiteSpace: 'nowrap' }}>
+            Request cash in
+          </Button>
+        </div>,
+      );
+      const page = await inBrowser({ width: 390 });
+      // Let the tabs shrink, as a tab with a minimum width of its own is let: the words are drawn on one another.
+      await page.addStyleTag({
+        content:
+          '.ctx-tab { flex: 0 1 auto; min-inline-size: 24px; } .ctx-tabs { overflow: visible; width: 100px; }',
+      });
+      const flags = await audit.auditButtons(page);
+      expect(flags.some((flag) => /ctx-tab/.test(flag) && /words run out/.test(flag))).toBe(true);
+      expect(flags.some((flag) => /Request cash in/.test(flag) && /words run out/.test(flag))).toBe(
+        true,
+      );
+      await page.close();
+    });
+
+    it('and is quiet about a strip that keeps each tab as wide as its word and scrolls', async () => {
+      render(
+        <div id="page" style={{ width: 200 }}>
+          <ContextTabs
+            label="sections"
+            active="a"
+            onSelect={() => {}}
+            tabs={[
+              { key: 'a', label: 'Wallet requests' },
+              { key: 'b', label: 'Parked messages' },
+            ]}
+          />
+        </div>,
+      );
+      const page = await inBrowser({ width: 390 });
+      expect((await audit.auditButtons(page)).filter((flag) => /words run out/.test(flag))).toEqual(
+        [],
+      );
+      await page.close();
+    });
+  });
+
   describe('a visitor whose system paints the colours', () => {
     it('still sees which button is the one: its foot is a heavy line, and a switch that is on is a highlight', async () => {
       render(

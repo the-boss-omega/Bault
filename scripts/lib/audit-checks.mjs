@@ -469,6 +469,9 @@ async function auditButtons(page) {
       seen.add(key);
       const say = (message) => flags.push(`button "${name}" (${kind}): ${message}`);
       // A target a finger or a pointer has to hit.
+      // Its words are in it: text wider than the box it is in, where nothing clips it, is drawn on what is beside it.
+      if (style.overflowX === 'visible' && el.scrollWidth > el.clientWidth + 1)
+        say(`its words run out of it: ${el.scrollWidth}px of them in ${el.clientWidth}px`);
       if (!el.disabled && (box.width < 24 || box.height < 24))
         say(`${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
       else if (
@@ -516,12 +519,22 @@ async function auditButtons(page) {
     for (const el of document.querySelectorAll('button:not(.btn, .icon-btn), [role="button"]:not(.btn, .icon-btn)')) {
       if (!el.checkVisibility?.({ checkVisibilityCSS: true }) || el.disabled) continue;
       const box = el.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0 || (box.width >= 24 && box.height >= 24)) continue;
+      if (box.width === 0 || box.height === 0) continue;
       const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 28);
+      const kind = `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''}`;
+      // Its words are in it: a tab that is let shrink below its word draws the word on the next tab.
+      if (getComputedStyle(el).overflowX === 'visible' && el.scrollWidth > el.clientWidth + 1) {
+        const runs = `words|${el.tagName}|${el.className}|${name}`;
+        if (!seen.has(runs)) {
+          seen.add(runs);
+          flags.push(`target "${name}" (${kind}): its words run out of it: ${el.scrollWidth}px of them in ${el.clientWidth}px`);
+        }
+      }
+      if (box.width >= 24 && box.height >= 24) continue;
       const key = `target|${el.tagName}|${el.className}|${name}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      flags.push(`target "${name}" (${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''}): ${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
+      flags.push(`target "${name}" (${kind}): ${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
     }
     return flags;
   });
