@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { isolateLtr } from '../../../shared/money';
 import {
   NAME_PART_MAX,
   PASSWORD_MIN,
@@ -206,7 +207,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
             required
             aria-describedby="signup-consent-hint"
           />
-          <span>{t('auth.consentLabel', { version: TERMS_VERSION })}</span>
+          <span>{t('auth.consentLabel', { version: isolateLtr(TERMS_VERSION) })}</span>
         </label>
         <p className="field-hint" id="signup-consent-hint">
           {t('auth.consentHint')}{' '}

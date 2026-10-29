@@ -81,11 +81,20 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
       await page.close();
     });
 
+    it('a version whose numbers and word swap places, in a list and in a sentence', async () => {
+      const page = await hebrewPage(
+        '<p>גרסת התנאים בתוקף 2026-10-draft-1</p><p>אני מסכים (גרסה 2026-10-draft-1).</p>',
+      );
+      expect((await flagsOf(page)).join()).toMatch(/out of order.*2026-10-draft-1/);
+      await page.close();
+    });
+
     it('lets through what is set in an island, a code, or the text that is its own language', async () => {
       const page = await hebrewPage(
         [
           '<p>הכרטיס <bdi dir="auto">2011 Pokémon Call of Legends</bdi> נמכר</p>',
           '<p>הקישור לחנות שלכם: \u2066#/marketplace/store?seller=red\u2069</p>',
+          '<p>גרסת התנאים בתוקף \u20662026-10-draft-1\u2069</p><p>אני מסכים (גרסה \u20662026-10-draft-1\u2069).</p>',
           '<p>הפנו ל־<bdi dir="ltr">@red</bdi> את הבקשה</p>',
           '<p>השעיה אוטומטית מתחת ל <span dir="ltr" style="unicode-bidi: isolate">-$20.00</span> לחשבון</p>',
           '<p>קוד <bdi dir="ltr">SN-CL10-0005</bdi> · 27 באוק׳ 2026</p>',

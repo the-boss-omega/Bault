@@ -798,7 +798,7 @@ stands on in the drawer; `.offer` is a membership tier's card.
   `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month", a
   weight, `10 g`, in the total of a parcel) is isolated where it stands (`isolateLtr()` in `money.ts`), so
   the phrase keeps its own order: in a right-to-left line the space between a figure and its unit takes
-  the line's direction, and "10 g" is drawn "g 10". A
+  the line's direction, and "10 g" is drawn "g 10"; a version, "2026-10-draft-1", is drawn "draft-1-2026-10". A
   cell that holds only a pill, a date or a code is set `unicode-bidi: normal`, or it would fall back
   to left to right and hang from the wrong edge. A select shows the chosen option the way that option
   reads (`option { unicode-bidi: plaintext }`), so an English address on a Hebrew page starts at its

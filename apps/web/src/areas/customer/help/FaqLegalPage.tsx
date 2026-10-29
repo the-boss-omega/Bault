@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { bpsToPercent, formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd, isolateLtr } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -493,7 +493,7 @@ function LegalPanel() {
         {doc.draft && <DraftBanner doc={doc} />}
         <p className="hint">
           {t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}
-          {doc.version && <> · {t('legal.version', { version: doc.version })}</>}
+          {doc.version && <> · {t('legal.version', { version: isolateLtr(doc.version) })}</>}
         </p>
 
         {LEGAL_DOCUMENTS.length > 1 && (
@@ -627,7 +627,8 @@ function CurrentFiguresPanel() {
             floor: formatUsd(terms.escrow.minimumValueMinor),
           }),
         ],
-        [t('legal.figures.termsVersion'), terms.termsVersion],
+        // A version is a code (2026-10-draft-1): in a right-to-left line its numbers and its word swap places.
+        [t('legal.figures.termsVersion'), isolateLtr(terms.termsVersion)],
       ]
     : [];
 

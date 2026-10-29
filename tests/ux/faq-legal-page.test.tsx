@@ -65,7 +65,8 @@ describe('FAQ & Legal', () => {
     const banner = within(panel).getByRole('note');
     expect(banner).toHaveTextContent('DRAFT — must be reviewed by a lawyer before launch');
     expect(banner).toHaveTextContent(TERMS_VERSION);
-    expect(within(panel).getByText(new RegExp(`Version ${TERMS_VERSION}`))).toBeInTheDocument();
+    // The version is set in an island of its own (invisible where the line reads the same way as it does).
+    expect(within(panel).getByText(new RegExp(`Version \u2066?${TERMS_VERSION}\u2069?`))).toBeInTheDocument();
   });
 
   it('shows the figures the documents point at, from the API', async () => {
@@ -74,6 +75,18 @@ describe('FAQ & Legal', () => {
     expect(screen.getByText('0.05% a day, compounding')).toBeInTheDocument();
     expect(screen.getByText('-$20.00')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/content/account-terms');
+  });
+
+  it('sets the version of the terms in an island of its own, so its numbers and its word keep their order in Hebrew', async () => {
+    localStorage.setItem('bault.locale', 'he');
+    renderAt('#/faq/legal');
+    await screen.findByText('-$20.00');
+    // In a right-to-left line "2026-10-draft-1" is drawn "draft-1-2026-10": the figures list and the line under the title.
+    const versions = [...document.querySelectorAll('dd, p.hint')]
+      .map((el) => el.textContent ?? '')
+      .filter((text) => text.includes(TERMS_VERSION));
+    expect(versions.length).toBeGreaterThanOrEqual(2);
+    for (const text of versions) expect(text).toContain(`\u2066${TERMS_VERSION}\u2069`);
   });
 
   it('draws the suspension threshold as an amount of its own, so its minus stays in front of it in Hebrew', async () => {

@@ -11,6 +11,8 @@ const { I18nProvider } = await import('../../apps/web/src/shared/i18n');
 const { AuthShell } = await import('../../apps/web/src/areas/customer/auth/AuthPage');
 const { SecondFactorForm } =
   await import('../../apps/web/src/areas/customer/auth/SecondFactorForm');
+const { SignUpPage } = await import('../../apps/web/src/areas/customer/auth/SignUpPage');
+const { TERMS_VERSION } = await import('../../apps/web/src/areas/customer/help/legalContent');
 
 /**
  * What the other engines did that Chromium did not. Firefox's and Safari's are run on the real stylesheets,
@@ -121,6 +123,49 @@ describe.each(engines.map((e) => e.name))('in %s', (name) => {
       });
       // The year is where the line begins, as English reads: left of the name.
       expect(order.year).toBeLessThan(order.name);
+      await page.close();
+    },
+  );
+
+  it.skipIf(!browser)(
+    'the version of the terms in the consent line of the sign-up is drawn as it is written, in Hebrew',
+    async () => {
+      localStorage.setItem('bault.locale', 'he');
+      render(
+        <I18nProvider>
+          <AuthShell bare>
+            <SignUpPage onGoToSignIn={() => {}} />
+          </AuthShell>
+        </I18nProvider>,
+      );
+      const html = document.body.innerHTML;
+      const page = await browser!.newPage({ viewport: { width: 1100, height: 900 } });
+      await page.setContent(
+        `<!doctype html><html lang="he" dir="rtl" data-theme="dark"><head><meta charset="utf-8"><style>${CSS}</style></head><body>${html}</body></html>`,
+      );
+      const drawn = await page.evaluate((version) => {
+        const label = document.querySelector('.consent label > span, .consent span')!;
+        const text = [...label.childNodes].find((n) => n.nodeType === 3) as Text;
+        const at = text.data.indexOf(version);
+        const place = (i: number) => {
+          const range = document.createRange();
+          range.setStart(text, i);
+          range.setEnd(text, i + 1);
+          const box = range.getClientRects()[0]!;
+          return { top: Math.round(box.top), left: box.left };
+        };
+        // The first and the last character of the version, and the first of its word.
+        return {
+          year: place(at),
+          word: place(at + version.indexOf('draft')),
+          last: place(at + version.length - 1),
+        };
+      }, TERMS_VERSION);
+      // As written it is read left to right: the year, then the word, then the 1 (a line may end between them, never reorder them).
+      const before = (a: { top: number; left: number }, b: { top: number; left: number }) =>
+        a.top < b.top - 2 || (Math.abs(a.top - b.top) <= 2 && a.left < b.left);
+      expect(before(drawn.year, drawn.word)).toBe(true);
+      expect(before(drawn.word, drawn.last)).toBe(true);
       await page.close();
     },
   );
