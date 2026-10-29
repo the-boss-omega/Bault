@@ -160,6 +160,35 @@ describe('an item, opened', () => {
     expect(within(card).getAllByText('On hold').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('names the type on the card as every other screen does, and keeps its code in the field beside it', async () => {
+    const user = userEvent.setup();
+    window.location.hash = '#/admin/items?item=A';
+    items();
+    const drawer = await screen.findByRole('dialog');
+    const card = within(drawer).getByRole('region', { name: 'SN-A-0001' });
+    expect(within(card).getByText('Type').nextElementSibling).toHaveTextContent('Trading card');
+    expect(card).not.toHaveTextContent('trading_card');
+    const type = within(drawer).getByRole('textbox', { name: 'Type' });
+    expect(type).toHaveValue('trading_card');
+
+    // A class the product does not know is what it is: the code, as typed, in the face of a code.
+    await user.clear(type);
+    await user.type(type, 'tradng_card');
+    const typed = within(card).getByText('Type').nextElementSibling as HTMLElement;
+    expect(typed).toHaveTextContent('tradng_card');
+    expect(typed.querySelector('.code-inline')).not.toBeNull();
+  });
+
+  it('names the type in Hebrew too', async () => {
+    localStorage.setItem('bault.locale', 'he');
+    window.location.hash = '#/admin/items?item=A';
+    items();
+    const drawer = await screen.findByRole('dialog');
+    const card = within(drawer).getByRole('region', { name: 'SN-A-0001' });
+    expect(card).toHaveTextContent('כרטיס אספנות');
+    expect(card).not.toHaveTextContent('trading_card');
+  });
+
   it('prints the barcode and shows the photograph from under the card, not from the paper', async () => {
     window.location.hash = '#/admin/items?item=A';
     items();

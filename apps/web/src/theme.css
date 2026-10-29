@@ -134,6 +134,9 @@
      measures them against every surface in both themes. */
   --focus-color: color-mix(in oklab, var(--foreground) 72%, var(--background));
   --control-border: color-mix(in oklab, var(--foreground) 46%, var(--background));
+  /* The same line a step heavier, for a button that stands on the wash a selected row is tinted with: the wash is
+     lighter than the page in the dark theme, and the field's line is 2.7:1 on it. */
+  --control-border-on-wash: color-mix(in oklab, var(--foreground) 54%, var(--background));
 
   --r-xs: max(2px, calc(var(--radius) - 4px));
   --r-sm: max(2px, calc(var(--radius) - 2px));
@@ -186,9 +189,14 @@
   --paper-ink-2: oklch(0.36 0.012 80);
   --paper-ink-3: oklch(0.4 0.01 80);
   --paper-rule: oklch(0.55 0.02 80 / 55%);
+  /* A line that has to be seen on the paper (a button's, a control's): the rules above are for drawing, not for finding. */
+  --paper-edge: color-mix(in oklab, var(--paper-ink) 58%, var(--paper));
   --paper-rule-soft: oklch(0.5 0.01 80 / 40%);
   --paper-shadow: oklch(0.2 0.02 80 / 55%);
   --paper-amber: oklch(0.62 0.15 60);
+  /* The red of a thing that cannot be taken back, and the green of one that went right, printed on the paper. */
+  --paper-oxblood: oklch(0.42 0.14 28);
+  --paper-custody: oklch(0.4 0.08 165);
   /* The fibre of the paper: fractal noise, laid over it with multiply. */
   --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .46 0 0 0 0 .38 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
@@ -202,6 +210,33 @@
   --room-pool: oklch(0.27 0.006 260);
   --room-glass: oklch(0.2 0.004 260 / 80%);
   --room-ink: oklch(0.93 0 0);
+
+  /* Buttons (buttons.css). A button is a piece of the paper put to work. On the page the primary
+     one is the paper's own pair of inks, the ink in the light theme and the paper itself in the
+     dark, so it reads as the same object as the slips beside it; it stands on its lower edge, and
+     the foil along that edge marks a thing that can be pressed (a disabled one has none).
+     light-dark() follows the colour-scheme each theme declares above, so one line serves both. */
+  --btn-primary: light-dark(var(--paper-ink), var(--paper));
+  --btn-primary-ink: light-dark(var(--paper-bright), var(--paper-ink));
+  --btn-primary-hover: light-dark(oklch(0.3 0.012 80), var(--paper-bright));
+  /* A quiet button's ink, its line (and the lower edge, the same line a pixel heavier) and the
+     one thing it is filled with when it is reached for. The danger one says what it is in its own red. */
+  --btn-ink: var(--foreground);
+  --btn-ink-2: var(--muted-foreground);
+  --btn-line: var(--control-border);
+  --btn-hover: var(--accent);
+  --btn-danger: var(--destructive);
+  --btn-danger-wash: var(--oxblood-wash);
+  --btn-danger-ink: var(--background);
+  /* A button that is not there to press: no foil, no edge, the surface it is on. */
+  --btn-off: var(--muted);
+  --btn-off-ink: color-mix(in oklab, var(--muted-foreground) 70%, var(--muted));
+  --btn-off-line: var(--border);
+
+  /* The height of a control: a field and a button are one height, and a finger gets a full
+     44px (buttons.css raises it where the pointer is coarse). */
+  --control-h: 40px;
+  --control-h-sm: 32px;
 
   /* The long motions of the public page and the shell. The short ones are the
      --dur family in index.css and motion.css; the delays that stagger one thing

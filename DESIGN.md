@@ -224,7 +224,10 @@ accent: it is the primary button.
 
 ### Foil
 `--foil` — a 115° ramp of five light hues (`--foil-a` … `--foil-e`, rose → amber → mint → sky →
-violet). Hairlines and bands only. It is still, except for the loops listed in section 2.
+violet). Hairlines and bands only: the top edge of a paper piece, a tab's underline, the foot of a
+primary button (3 px; it marks a thing that can be pressed, so a disabled button has none). It is
+still, except for the loops listed in section 2 (a button's foil slides on to its other half once when
+the button is reached for, and rests).
 
 ### Paper
 `--paper` `#f3efe6`, `--paper-bright` `#fffdf8`, `--paper-line` `#d6d0c2`, the inks `--paper-ink`,
@@ -311,7 +314,7 @@ over 450–1000 ms); a transition on a state (hover, selected) reads the tokens.
 | Landing, journey | One card moves through four states while you read (unidentified → booked in, with a flash → shelved → decided) | Argue |
 | Shell | A page's own sections rise in sequence (the page container itself does not move); cards in a gallery arrive in sequence; figures count up; the tab indicator is foil and glides to the active tab | Orient |
 | Wallet | The statement's sum prints in when the overview opens; the balance counts up | Orient |
-| Controls | Press settles (`scale(.98)`); a primary button throws a little foil light under itself, clipped at its lower edge so it never hazes the face | Confirm |
+| Controls | A press puts a button down onto its edge (a pixel; the primary's foil thins); a primary button's foil, twice the button's width, slides on to its other half and thickens when it is reached for (only where a pointer can hover) | Confirm |
 | Overlays | Drawers slide, dialogs and the photo lightbox rise, all *exit* (`.is-closing` for `--dur-exit`) | Confirm |
 | Loading | Placeholders hold the room of what is coming (an empty case for a card, rows for a table) with a shimmer; the boot mark breathes | Orient |
 
@@ -386,9 +389,11 @@ pieces. Each keeps the old markup's contracts and message keys.
   with its letter and what stands in it; its rack is a grid that fills the panel. Each slot is a
   shelf with its barcode, its count from the shelf report and a mark per item (twelve, then `+n`).
   Empty shelves are dashed, shelves out of service are hatched, an oversized shelf takes two places,
-  and items on no shelf stand on a tray. The product declares no capacity for a shelf and the API has
-  no list of a shelf's items, so there is no fill bar and no hover that names a serial. The table is
-  still on the Inventory tab.
+  and items on no shelf stand on a tray. A shelf is a button that opens what is on it (`ShelfContents`,
+  read only, from `GET /custody/bins/:id/items`): in a drawer, the shelf's count as the figure of a tag
+  (with its zone, its kind and whether it is in use) and under it each item by its number, its name
+  and where it stands. The product declares no capacity for a shelf, so there is still no fill bar:
+  the pips are a count, not a measure of room. The table is still on the Inventory tab.
 - **Shipping and services — the departures.** Three lines on a board, the figure first in the display
   face and counted up: how many cards are ready to ship, a lookup for the shipments that have gone
   (an icon, because a lookup has no count), and the requests that are open, with those closed under
@@ -446,11 +451,76 @@ pieces. Each keeps the old markup's contracts and message keys.
   not been written is asked for in the quieter ink, as the name of the field, and a sum not yet typed is a
   dash, never a zero or any other value made up (a listing for no price is not "$0.00 · Active"); a label
   written for a list (`Email:`) loses its colon on a tag, which has a leader. The forms that have no slip
-  are the doors (signing in and up, the password, the code), the ones in the warehouse's benches, and a
-  few that are still the kit's fields in a column: grading, consignment, an inspection, the Bault store's
-  listing, raising an escrow deal and a shared parcel's group. Whatever a person
+  is the Bault store's listing, which is still the kit's fields in a column. Whatever a person
   types as free text (a name, a subject, a message, an address) takes the direction of what is typed
   (`dir="auto"`), so an English sentence in a Hebrew page keeps its full stop where it belongs.
+- **What can be asked for on a card — a menu and a slip.** The item's drawer lists what the warehouse can
+  do for it as a menu of rows (`btn--row`): photography, grading, a video, an inspection, consignment, a
+  buy-out, something else, and the donation in red, each with its price at its end. A request that has a
+  form (grading, an inspection, consignment, something else) takes the menu's place in the drawer, and the
+  keyboard goes to its heading; closing it gives back the menu and the keyboard to the row it came from.
+  The form is a slip over its fields, the width of the drawer's column: grading is the tier's fee (a
+  dash where it has no price yet, with that said), the tier, how long it takes, what it covers and what
+  was declared, and under a dashed rule what it means (the card cannot be sold, swapped or shipped while
+  it is away); consignment is the asking price (a dash until it is typed), where it goes, the show where
+  the channel wants one, when it pays, the minimum, that only graded cards are taken, and what asking
+  costs; an inspection is what it costs and, for each area asked for, a finding; something else is what
+  is wanted as the slip's title (in the quieter ink until it is written), how it is put and that asking is
+  free. The areas of an inspection are tiles (`choice-tiles`), the checkbox still the control: a chosen
+  one has the edge of a button that is down, and the ring goes round the tile.
+- **An escrow deal being opened, a shared parcel being opened or joined — the deal and the parcel as they
+  will be read.** The deal is its agreed price (a dash until it is typed), and under it your side, who
+  the other side is (an account by its username, or a person by name and address), what is being sold, what
+  the fee will be, how it ends, and under a dashed rule that the fee is charged to whoever opens it. A parcel
+  being opened is the address it goes to as the slip's title, the request that starts it, the notes, that
+  the person opening it pays, and that it will stand as *Forming*; one being joined is the code as it is
+  typed, the request that would be brought and where it goes. The parcels a collector is in are tags in a
+  row (`tag-grid`, a `DrawerTag` each, an article and not a landmark): its number, who it is for, where it
+  goes, a line for each collector in it (their name, whether they pay, where their request stands, its
+  number, items and weight), and where the parcel stands; what can be done to it (close it to new members,
+  cancel it) is under the tag, not on it.
+- **The question put to the assistant — a slip for what was asked, a slip for what came back.** The log
+  (still a `role="log"`) is a slip for each question, set at the end of the line, and for each answer a
+  slip with foil along its top, set at the start (it comes from the house); the answer is printed on the
+  paper, not in the pill a code is elsewhere. The question is written on the doors' slip (paper in both
+  themes, the paper's field, the one button, with the person's own direction), and under a dashed rule
+  it says what an answer is worth (the assistant is not connected, and every answer is a placeholder),
+  which the field is described by.
+- **The warehouse's benches — the fields, and a docket.** Every form in the warehouse is what the operator
+  does with a scanner in the other hand, so each is its fields and, beside them (above the button on a
+  phone), a *docket*: the job in hand, written on paper as it is scanned or typed (`Docket`, a `DrawerTag`
+  with a live foot). Moving an item is the item as the title and, once a shelf is scanned, the shelf read
+  back (its zone, its kind, what is on it, whether it is out of service) before anything is moved; a hold
+  is the item; a refusal to accept an arrival is the record as it will be kept, line by line; a new shelf is
+  its zone, its kind and where it stands, with its serial said to be minted; a shipment being packed is its
+  pick list, a line for each card to be scanned, ticked as it is, anything scanned that is not in the
+  shipment shown as wrong with the way to take it back, and how many are done of how many as the figure;
+  an arrival is the name as it was written on the parcel (the only clue there is), who brought it, how it
+  is traced and how many photographs; an intake is how many units, whose, from which box, to which shelf
+  (and where that shelf stands, under the rule), and a line for each unit described. A sale from the store
+  is a tag (an article, in a `tag-grid`): its number, the card in its case, its serial, who bought it, from
+  which listing and when, and under it the label to stick on, the shelf to scan, the photographs and the one
+  button.
+  A scan field (`ScanField`) is read in the code's face, left to right, with the glyph of what fills it at
+  its start; a scanner ends with Enter, which goes on to the next field, and from the last does the job; once
+  it is done the first field is ready for the next. The foot of the docket is a live region that is always
+  there (so nothing under it moves when it speaks): it says how the last press came out (*Moved*, *On hold*,
+  *Recorded*, *Booked in*, *Dispatched*, or *Not done* and why) with the time, where the hands are, not in a
+  log on another tab; the bench keeps what was typed when it was refused. The fields have more room than a
+  request's (`request-form--bench`).
+- **The doors — a slip with a stub.** Signing in and up, asking for a new password and setting it, the
+  second factor's code, the link that was sent to confirm an address: each is a slip of paper in both
+  themes (`AuthCard`). Foil runs along its top edge; over the heading is a kicker that says what the slip
+  is (*Members’ entrance*, *New account*, *Getting back in*, *New password*, *Second factor*, *Address
+  confirmation*); then the fields and the one button, which is the ink with foil at its foot in either
+  theme. Under a perforation (a dashed rule with a notch cut out at each end of it) is the stub, where
+  what else one may do is: sign up instead, ask for a new password, go back to signing in. It comes after
+  the button in the tab order too. The fields, their labels and notes, a mistake (in the paper's
+  oxblood, the field it is about in a line of the same red) and a confirmation (in the paper's green) are
+  the paper's own; the code that is typed from a phone is set large, in the code's face, spaced as
+  digits are read. A page that has said what it came for (the link was sent) is the same slip with its
+  sentence on it, named by its heading. A person who signs in on a phone is held to the same targets
+  as everywhere: the button 44 px, the text buttons on the stub 24.
 - **Support — a register in days, a ticket's stub.** The tickets are the notifications' register: a
   heading per day, an entry for each with its time, whose turn it is, its subject (the control that
   opens it), its number and its kind.
@@ -460,6 +530,9 @@ pieces. Each keeps the old markup's contracts and message keys.
   room of a form. A tag that is one of a list is an article, named by its kicker, not a landmark (`item`
   on `DrawerTag`): forty disputes are not forty regions of the page. A tag on its own is a region.
 - **Security — cards and a sheet.** The password and the second factor are a half of the page each. The
+  password is a slip over its fields that checks what is typed against the three things a new one has
+  to be (long enough, not the current one, the same as its confirmation), each *Met* or *Not yet*, and
+  says when it is ready; nothing that is typed is ever written on it. The
   second factor says where it stands on a card (on, what it asks for, what is left of the way back in);
   the key to scan is a card, the QR in its own white label (printed black on white, whichever way the
   page is) and the key to type; the recovery codes are a sheet of paper that is a heading of its own,
@@ -484,7 +557,8 @@ pieces. Each keeps the old markup's contracts and message keys.
 - **Accounts and items — rolls, opened in a drawer.** Nothing in a line is a field. An account is
   its initials, its name, its username and email, what it may do and where it stands; an item is its
   name, its number, whose it is and where it stands (a hold in red). The name is the control (and the
-  line says so to a pointer), and the link that names a record opens it. The drawer is the record as a
+  line says so to a pointer; it is a target of 24 px, though its text is 21), and the link that names a
+  record opens it. The drawer is the record as a
   card that is written as it is changed (the name as typed, the role, the status, the owner; for an item
   its card in its case and its barcode as a printed label), then the sweep's suspension and what is
   offered about it, and the fields. *Save* sends only what was changed; what was saved is in the roll
@@ -494,6 +568,129 @@ pieces. Each keeps the old markup's contracts and message keys.
   in the drawer of another enrolled account, and asked about first; when it is done, focus is in the
   drawer, not on the page behind. A name an account is flagged for is confirmed by sending it as it is,
   which is not an edit to be guarded: the backdrop still shuts the drawer.
+- **Wallet requests — a desk.** The roll is grouped by what each request needs of the person at it:
+  *Needs a decision*, *In progress*, *Closed*, in that order, one table whose column heads they share
+  (the group heads are `rowgroup` headers). Each head has its count and, for the two in hand, the money
+  in it by the kind of money (*Cash in $1,200.00*, *Cash out $500.00*): the sum a desk weighs first. What
+  is waiting is in the order it came (the longest first, as a queue is served); what is closed is the
+  latest first. A desk with nothing to decide says so, which is an answer, unless the list is filtered (a
+  group that is empty and has nothing to say is not shown), and a status the page has not heard of is
+  work in hand, not filed with what is closed. A line leads with a mark for the way the money goes (down
+  into the wallet for cash in, up and out of it for cash out; decoration, the words say it), the number
+  as the link that opens it, what it is for (the funding source, or who is to be paid), whose it is,
+  the sum, the date with how long ago while it waits (the browser's own words for it, so Hebrew has its
+  *שלשום*), and where it stands; what needs a decision has the amber on its edge, a payout that failed
+  the red. The filters are named in the open and cleared by a button that is there only when something
+  is set; a filter that leaves nothing says so and offers to clear it, and a desk that has no requests
+  says that. On a phone a request is a card (its number and its sum, whose it is and where it stands,
+  and when), not five labelled rows.
+  A request is opened by its address (`?request=`), so the way back closes it, and the keyboard goes
+  back to its line, wherever the line has moved to. The drawer is the request as a tag (the kind as its
+  kicker, whose it is as its title, the sum, everything it was written with, the customer's note and the
+  reason for a refusal read whole, where it stands and the currency in its foot), then what the next step
+  does to the money, said before it is pressed (for each status, and for no status that is unknown), and
+  the register. The steps are in the foot, the way on first and in the foil, to turn a request down in
+  the danger's red; a request that was raised by the person at the desk is offered to no one but another
+  administrator, and says so. What a step came to (done, or why it was refused) is said in the drawer,
+  where a phone shows it and a screen reader reads it out; the page keeps its line of what was done.
+- **The Bault store — the product as buyers see it.** A new product is written on a slip beside its fields
+  (the card in its case, its name in the display face as it is typed, the price, its code — which is the
+  store's to give, and says so — its condition, its class, how many copies and that it will be on sale),
+  and the button is under the slip on a phone. The photograph is looked for by the name of the file once
+  the name has stopped changing, not for each letter of it, and a card with no name asks for none. The
+  products in the store are that tag, a card each in a `tag-grid`, each named by its own name for a screen
+  reader (`label` on `DrawerTag`: forty products are not forty articles called *Store product*), with where
+  it stands in its foot (on sale, sold out, taken off sale, and what is left). Under each is what the store
+  does with it: how many copies there are, which is changed and then saved (a button, or Enter; not by
+  leaving the field, and not when it is the same or is not a count), and whether it is on sale. A save that
+  was refused because the stock had changed shows what it now is.
+- **Shelf yield — the zones as bars from a zero.** What each zone earns (per shelf-month once any has
+  accrued time, revenue until then, and the axis says which) is a bar each, from one zero, to a scale of
+  round whole-dollar steps (a ceiling that holds the largest, so that no bar runs to the edge), with a
+  hairline at every step. The worst is first, the zones that earn from the least up and those with nothing
+  on their shelves last. Every value is written at the end of its bar, and what the zone is made of (how
+  many of its shelves are occupied) at its start, so nothing is behind a hover and the table under the chart
+  is its twin. The weakest of the zones that earn is marked in the amber and in a word (*Lowest*, in the
+  text's own ink: the amber is only the key to it), and none is where they earn the same or only one earns.
+  The marks are thin (16 px), square at the zero and rounded at the end they grow toward. It reads from the
+  end its zero is at (from the right, in Hebrew, with its scale), and on a phone the name is above the bar,
+  which then has the width, and the scale is left to the values beside the bars. In forced colours the bars
+  (a background, which the system does not draw) are drawn in its text and the weakest in its highlight. Where
+  nothing has been earned there is no chart: the table has the zeros.
+- **Pricing coverage — a launch check on a sheet.** The check made before launch (is a price in force for
+  every action the code charges for) is a sheet of paper whose title is the verdict (*Every price is loaded*,
+  *Prices are missing*), whose figure is how many of the actions are covered out of all of them (the
+  server's own meaning of ready: a price of its own, or none needed), whose lines count what is priced by a
+  rule, what is fixed in the code, what is missing a rule and what is on a fallback, and whose foot says
+  *Ready* or *Not ready* and how many actions there are. Beside it is what is wrong: what is missing first
+  (it makes the action fail), then what is priced by something that is not its own rule (a fallback, a
+  default in the code, free without one), a group each with its count in one table, the red on the edge of
+  a line that fails or is free and the amber on one that falls back, and, where nothing is wrong, a note that
+  says so. A rule that the code never reads is named beside them (it is probably a typo). What is fine is
+  folded under the sheet, a line each that opens (*Priced*, *Fixed in the code*, with how many they hold):
+  thirty-five lines to read had hidden the one that was not fine. On a phone an action is a card (its code
+  and its rule's figure, what it is priced by, what it is for).
+
+### Buttons (`Button`, `ButtonLink`, `IconButton`; `buttons.css`)
+One family, in one file. A button is a piece of the paper put to work, and it stands on its lower edge the
+way a key does: a quiet button on a line a pixel heavier at the foot, the primary one on a strip of foil.
+The foil marks a thing that can be pressed, so a disabled button has none: it is a dashed outline, a blank
+key, which is not a field either. A button that is working keeps its face (it has not stopped being the
+button) and takes a spinner in the place of its glyph.
+
+| Variant | For | Drawn |
+| --- | --- | --- |
+| `primary` | the one thing to do next: a screen, a drawer or a form has one | the paper's own ink on the page (the ink in the light theme, the paper itself in the dark), with 3 px of foil at its foot |
+| `secondary` (the default) | another thing one may do | a line (`--control-border`, 3:1) and nothing else |
+| `ghost` | the way out (Cancel, Close) and what is only sometimes wanted | words; a line only when it is reached for |
+| `danger` | what cannot be taken back | the destructive red on its wash; filled when it is reached for |
+| `link` | an action inside a sentence | set as the words around it, underlined |
+
+The hierarchy is the screen's, not the button's. One primary to a view; Cancel and Close are ghost; what
+destroys is `danger` and stands apart from what saves; an action that is a switch (a filter that is on) is
+a secondary with `pressed`, and its state is its foot, a heavy line, not its label; "clear the filters" in an
+empty state is a secondary, and in a toolbar it is ghost. A button that is only a glyph is an `IconButton`,
+named by its `label` (a screen reader's name and the tooltip); the header's three are one capsule, which is
+their outline. A link that goes somewhere (a download, a file) is a `ButtonLink`: an `<a>` that is drawn as
+one, so that it is announced as the link it is.
+
+**Size.** A control is `--control-h`: 40 px under a pointer and 44 px where the pointer is a finger
+(`pointer: coarse`), for a field and a button alike, so a button beside a field lines up with it. A small
+button (`size="sm"`) is 32 px under a pointer and 44 under a finger: it is small in what it says, not in
+what it asks of a thumb. Hover is for a pointer that can hover (`hover: hover`), so a tap does not leave a
+button lit.
+
+**A row** (`className="btn--row"`) is a button that is one of a menu: its icon, what it is called (semibold)
+and what it will do (the quieter ink) beneath it, and at the far end its price and, where it opens a form,
+the way on (a chevron that turns with the page and moves a step on the way when reached for). The whole
+row is the target, its words start where the page starts (a button's are centred), and it is named by
+what it is called and described by what it does (`aria-labelledby`, `aria-describedby`), so a screen
+reader does not read a sentence as the name of a button. It has every state of the family: danger
+(what cannot be undone: the donation) is red through its text, and a row that is not there to press (a
+request already open on the card) is dashed and says where that request stands in place of its price.
+
+**Where it stands.** Colour is the `--btn-*` tokens of `theme.css`, written with `light-dark()` so one line
+serves both themes (the lint resolves it and measures every pair). The paper and the room are not the page's
+and say which they want (`.on-paper`, `.on-room`, and the surfaces `buttons.css` lists): on paper the
+primary is the print (`--paper-ink`) and a line is `--paper-edge`; on the room the primary is the paper. A
+new surface that is paper adds its class to that list or wears `.on-paper`; the audit measures a button where
+it is drawn and finds the one that is not.
+
+**Forced colours.** The system draws the colours, so the difference is in the lines: the primary has a heavy
+foot (4 px), a danger button a dashed line, a ghost a dotted one, and a switch that is on a highlight.
+
+### The emails (`renderEmail`, in `packages/adapters`)
+The account emails (the address to confirm, the password to reset) and the update on a vault are one
+slip of paper on the room's grey: foil along the top edge, the wordmark, and for each language a kicker,
+a heading in the serif, the sentence, one ink button with a strip of foil at its foot, the link a button
+hides on a line of its own (left to right in either language) and the fine print. The two languages are
+one slip with a tear line between them, the Hebrew first and read right to left; a Hebrew kicker is not
+spaced out as capitals are. It is made for a mail client and not a browser: every style inline, every
+layout a table, the foil a row of five coloured cells (a gradient is not promised), the button a cell
+with a colour of its own (a client that drops styles still draws it), the reader's own fonts (no web
+font is loaded or named) and a preheader for the inbox. The hues are `--foil-*` and the paper inks of
+`theme.css`, written as the hex a mail client reads. The audit inspects each as a document in every
+engine; the contract test says the rest.
 
 ### Choosing cards (`ItemPick`; `components.css`)
 Wherever the list is of cards to choose among (the items to ship, to offer in a trade, to hand over
@@ -538,15 +735,25 @@ ink; what stands beside the paper on the page (the controls under a case file) i
 ### Overlays (`useOverlay`, `useExit`)
 Drawers, confirmation dialogs and the photo lightbox share one behaviour: while it is the topmost it
 is all the keyboard reaches (Tab stays inside, Escape closes it and nothing under it), the page
-behind does not scroll, focus goes back to what opened it (or, if that is gone because the answer
-removed it, to the dialog it was opened over, so the keyboard is not left on the page behind), a field
-that takes focus is shown whole with room for its ring (the browser reveals only a text field's
-caret), and it plays its exit before it closes.
+behind does not scroll (until the last of them has gone, whichever order they close in: two removed
+in one commit, a drawer and the dialog over it, would otherwise leave the page locked), focus goes back to what opened it (or, if that is gone because the answer
+removed it, to the dialog it was opened over, so the keyboard is not left on the page behind), a
+control that the dialog itself removes (the button that was pressed, whose answer replaces it) does not
+leave focus on the page behind it: the dialog takes it back, a field that takes focus is shown whole
+with room for its ring (the browser reveals only a text field's caret), and it plays its exit before it
+closes.
 They are drawn into `<body>`, so a transform or a clip on an ancestor can neither trap a fixed overlay
 nor cut it off, and an open one covers the window (`tests/ux/layout-in-a-browser.test.tsx` measures
 it). The photograph opens in the room: the dark a card is photographed against, the card large in its
 case with a plate that names it. On a phone the rail is one too: it takes focus when it opens, on the
 page you are on, Escape closes it, and while it is closed it is out of the keyboard's way.
+
+A drawer whose body scrolls, down or sideways, and has nothing in it to stop on (a request that has been
+settled, a closed case) is a stop itself, named for the drawer, for as long as it overflows and has no control
+of its own (`useKeyboardScroll`: a keyboard cannot scroll a box it cannot stop on). A row of a drawer lets a
+date break at its space (`.detail-value .date`), so that it is not what makes the body scroll sideways. Where there is a control in it, the
+controls are the way, and the body is left out of the tab order; its ring is drawn inside its edge, where the
+head and the foot do not cover it.
 
 A strip of tabs that scrolls brings the selected tab into view and moves focus with the arrow keys; it
 keeps room for the ring of the tab at either end.
@@ -581,14 +788,28 @@ stands on in the drawer; `.offer` is a membership tier's card.
   of them go through `.serial`, `.code-inline`, `.amount`, `.ltr-run` or a `<bdi dir="ltr">` inside a
   block that keeps the page's direction (so the run is isolated but its label still sits at the start
   edge). What a sender wrote (a parcel's contents) sets its own direction (`unicode-bidi: plaintext`).
+  A code too long for its line breaks after a colon (`<Code>` leaves a place for it), so `service_fee:` is
+  on one line and `condition_inspection` on the next; inside a word only when a part is longer than the line.
+- **`unicode-bidi: plaintext` goes on a block, not on a flex or grid container.** The words of a flex
+  container are in a box of their own that takes none of its `unicode-bidi` (the property is not inherited),
+  so Firefox reads "2021 Pokémon" in the page's direction and draws the year at the wrong end: the register
+  link is an `inline-block` with a 24px line (`tests/ux/other-engines.test.tsx` asks it in every engine).
 - **A date is not an island.** A locale-formatted date reads in the page's direction (`.date`, which
   is `unicode-bidi: plaintext`), so its day, month and year keep the order the language gives them; a
-  `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month")
-  is isolated where it stands (`isolateLtr()` in `money.ts`), so the phrase keeps its own order. A
+  `dir="ltr"` around one reads `27 2026 באוק׳`. A figure inside a phrase (`$39.00` before "a month", a
+  weight, `10 g`, in the total of a parcel) is isolated where it stands (`isolateLtr()` in `money.ts`), so
+  the phrase keeps its own order: in a right-to-left line the space between a figure and its unit takes
+  the line's direction, and "10 g" is drawn "g 10"; a version, "2026-10-draft-1", is drawn "draft-1-2026-10". A
   cell that holds only a pill, a date or a code is set `unicode-bidi: normal`, or it would fall back
   to left to right and hang from the wrong edge. A select shows the chosen option the way that option
   reads (`option { unicode-bidi: plaintext }`), so an English address on a Hebrew page starts at its
   beginning instead of being cut off at it.
+- **English on a Hebrew page is marked as English.** The guides, the answers of the FAQ and the legal text are
+  written in English only. Each passage is `lang="en" dir="ltr"` (`ENGLISH`, in `areas/customer/help/english.ts`),
+  so that it is read as English and set from the left: a sentence of English in a right-to-left paragraph has the
+  full stop that ends it drawn at the start of the line (`.Confirm your email address…`), and a screen reader reads
+  it in Hebrew. A block of it is left-aligned, as the FAQ's answers are; a title or a summary on a card is an inline
+  island and stays at the edge the card starts at.
 - **Icons that flip**: chevrons, back/forward arrows, the "view all" caret — anything expressing
   *direction of travel through the interface*. **Icons that do not flip**: the external-link arrow
   (it means "leaves this site", not "goes right"), clocks, checkmarks, the camera, the box.
@@ -657,20 +878,13 @@ like.
 
 ## 13. Not in this edition
 
-- Some of the management consoles are restyled to the kit and the statement language, not redesigned:
-  the wallet requests, the Bault store and the shelf yield chart, and the pricing coverage check, which
-  is a table because it is a check. The rest are made of the system's pieces: the accounting summary (a
-  statement on paper), the sign-in log (a statement and a register), the shelf map (aisle signs over
-  racks), pricing (a rate card), the disputes (case files), the parked messages (a register), the
-  storage fees (a statement) and the accounts and items (rolls opened in a drawer).
-- Of the forms, those that make a request or a record have their slip (section 8). The ones that do
-  not are the kit's fields in a column: signing in and up, changing the password, the code of the
-  second factor, the warehouse's benches, the Bault store's listing, grading, consignment, an
-  inspection, raising an escrow deal and a shared parcel's group.
-- The transactional emails come from `packages/`, outside this change, and keep the first edition's look.
-- Two strings in `shared/i18n.tsx`, which the design did not touch, still describe the bundled
-  fonts as "IBM Plex and Frank Ruhl Libre" (`legal.provenance.ofl`, Hebrew and English). The licence
-  page's own text (`legalContent.ts`) and `assets/fonts/OFL.txt` list all four families.
+- None of the product's screens is left in the first edition's look. Every management console is made of the
+  system's pieces: the accounting summary (a statement on paper), the sign-in log (a statement and a
+  register), the shelf map (aisle signs over racks), the shelf yield (bars from a zero), pricing (a rate card,
+  and a launch check on a sheet), the disputes (case files), the parked messages (a register), the storage
+  fees (a statement), the accounts and items (rolls opened in a drawer), the wallet requests (a desk) and the
+  Bault store (the product as buyers see it). Every form that makes a request or a record has its slip
+  (section 8), the doors are slips with a stub, and the warehouse's benches have their docket.
 - `docs/design/type-specimen.html` is the first edition's IBM Plex specimen, kept as a record; it no
   longer renders as it did.
 
@@ -681,18 +895,36 @@ like.
 | What | By | When |
 | --- | --- | --- |
 | Contrast of every pair the interface draws text or a boundary in, in both themes (table in section 4) | `design-lint` reads `theme.css` | `pnpm test:web` (CI) and by hand |
-| The two dark blocks stay one theme | `design-lint` | same |
+| The two dark blocks stay one theme; the buttons' colour pairs (the primary's label on it, its edge against the page, danger's red on its wash, the paper's and the room's primaries) | `design-lint` | same |
 | Physical properties (including `float`, `clear`, four-value shorthands that name a side, corners that are not mirrored); `left`/`right` keywords, angles and horizontal moves that point one way in both languages; any `[dir]` / `:dir()` outside `theme.css`; a block that takes its own text's direction and is aligned to `start` | `design-lint` | same |
 | Every colour literal in the layers is a named token (pure black and white shades excepted); every radius is from the family, with no arithmetic on a token | `design-lint` | same |
 | Every padding, margin, gap and inset in `index.css` (after its token block) and in the layers is on the 4 px grid, with no `em` that is not declared (section 6); a font size in `index.css` is a step of the scale or relative (section 3) | `design-lint` | same |
-| In a component: no physical utility class or inline style, no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
+| In a component: no physical utility class or inline style, no colour written into a style (the stylesheets name every colour; a glyph made white for a bar that was dark was gone on the light one), no timer that never stops, and no date (made by `toLocale…`, `Intl.DateTimeFormat` or the app's own formatter) forced left to right (section 9) | `design-lint` | same |
 | A rule that paints the paper or the room names its focus ring; a rule for what is drawn on paper uses a paper ink, not a colour of the theme's | `design-lint` | same |
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
-| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), on every screen, with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account and an item in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
-| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
+| What the other engines draw that Chromium does not (a chosen option longer than a phone does not widen the page in Safari's engine; the page of the second factor, whose code is set large, is no wider than a phone in Firefox's; a name that begins with a number is drawn as it is written in a Hebrew register); and the whole audit below, in either engine (`--engine firefox` or `webkit`; where an engine has no phone it is a narrow window with touch) | `tests/ux/other-engines.test.tsx` (each engine that is installed; the others are skipped), `pnpm design:screens --engine firefox` / `webkit` | `pnpm test:ux`, `pnpm design:screens` |
+| Every record a screen opens, looked at as the screen it then is and not only as the list that opens it (a guide's steps, a question's answer, a ticket, a parcel, a shipment, a transaction, a request, an account, an item): the first of each is opened (`visitRecord`), and a run says which kinds it did not reach. The steps of a guide were drawn with every full stop at the wrong end of their line for as long as nobody opened one | `scripts/design-screens.mjs`; `tests/web/design-screens-records.test.ts` reads the app's source for the kinds it opens and fails until the audit's list says the same | `pnpm design:screens`, `pnpm test:web` |
+| WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (once what has focus has come to rest, since focus scrolls it into view smoothly where motion is allowed; the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price, version or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), and in either language a kicker that says its heading again, on every screen (each looked at from its top, as a visitor arrives at it), with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account, an item and a wallet request in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
+| The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room; and every other button (a crumb, a tab, the link that opens a line of a roll) its 24 px, wide as well as tall (three letters of Hebrew are 18 px), and that its words are in it, not drawn on the control beside it (a tab that is let shrink below its word draws the word on the next tab); each is measured where it comes to rest, after the transitions that are still in flight have ended | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
+| The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |
+| An escrow deal and a shared parcel as slips (each fact written as it is typed, a dash for what is not known, the parcel as a tag with a line for each collector), and the question put to the assistant (a slip each way, the answer printed on its paper, the composer as paper in both themes) | `tests/ux/more-slips.test.tsx` | `pnpm test:ux` |
+| The warehouse's benches: the docket writes what is scanned and typed (the shelf read back, the pick list ticked), an Enter from a scanner goes on and then does it, the outcome is said on the docket and cleared by the next scan, a refused parcel keeps what was typed, the docket is paper in both themes, the foot does not change the docket's height, the fields have their room beside it | `tests/ux/benches.test.tsx` | `pnpm test:ux` |
+| The wallet-requests desk: the groups and their order, the money in each, a line's marks and age, a desk with nothing to decide, the named filters and what they ask the server, a request opened by its address and everything on its tag, what the next step does said for every status, the steps in the foot (the way on first, the danger last), what a step came to said in the drawer and not behind it, the keyboard kept in the dialog when the button that was pressed is removed and returned to the line that was opened (in another group by now), the roll and the drawer without a flag in both themes and both languages, a request a card on a phone, a long account number whole under its name | `tests/ux/wallet-desk.test.tsx` | `pnpm test:ux` |
+| The Bault store: the slip a product is written on (what is typed, a blank where nothing is, a code said not to be known yet, copies that are not a count refused and said so, the photograph looked for only once the name has stopped changing), what was refused kept, a tag each named by its own name, the stock saved by a button or Enter and not by leaving the field or when it is the same or not a count, what the stock now is where a save was refused, on and off sale, in Hebrew; paper in both themes and languages, the slip beside the fields or between them and the button, three tags to a row and one to a phone | `tests/ux/store-listing.test.tsx` | `pnpm test:ux` |
+| The yield chart: the scale (round whole-dollar steps from zero, a ceiling that holds the largest), the zones worst first and those with nothing last, every value beside its bar, each bar to the scale, the weakest marked in a colour and a word and none where they are equal, nothing drawn where nothing was earned; the bars thin, rounded at the end they grow toward, from the end the zero is at and the scale with them (both languages), the name above the bar on a phone, the bars still drawn in forced colours, no flag from the audit in both themes | `tests/ux/yield-chart.test.tsx` | `pnpm test:ux` |
+| The pricing check: the verdict and the figure on the sheet (covered is what has a price of its own and what needs none), what is missing before what falls back, the red and the amber on the edge, a note where nothing is wrong, a rule the code never reads named, what is fine folded and shut (opened by Enter and by Space), the sheet as paper and beside what is wrong where there is room, an action a card on a phone, the audit clean with the folds open and shut | `tests/ux/pricing-coverage.test.tsx` | `pnpm test:ux` |
+| What jsdom cannot see: an overlay covers the window and is clickable, a closed sheet is out of the keyboard's way, a ring is not cut off at either end of a strip of tabs or of a table that scrolls, or at the foot of a drawer that scrolls (every control in an account's and an item's drawer, run through the same function the page runs when a field takes focus); the month's statement, every form with its slip (beside the fields on a wide window with the button under them, between the fields and the button on a phone, in both languages; a pricing rule and a dispute among them; an address being edited at the width where its fields were squeezed), the security tab (its fields no wider than the password's), the shipment and the sign-in log are where they should be at their widths; a register's time hangs from the edge the page starts at, in Hebrew too; a case file is cut at three lines; a rate card's heading that is a code breaks at its colon and never inside a word, at both widths and in both languages; the first frame, before the application starts, is in the visitor's theme, language and direction; the audit's own detectors, shown a mistake planted in a page and a page without | `tests/ux/layout-in-a-browser.test.tsx`, `tests/web/first-frame.test.ts`, `tests/web/design-screens-detectors.test.ts` (each needs a browser, and the first-frame one the production build; they skip without) | `pnpm test:web`, `pnpm test:ux` |
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
+
+A test that measures a layout in a browser is given a page made from the markup: it has no script (what the app does to
+a drawer whose body scrolls, `useKeyboardScroll`, does not run in it) and it does not load the application's fonts, so
+it is drawn in the machine's own: Inter on a development machine, DejaVu on a CI runner, which is wider and taller. Such
+a test asks what it means (two cells share a line, a window is tall enough that a body does not scroll) and not for a
+number of pixels that a font decides; three tests of the wallet desk asked for the other and failed on a runner. A
+fontconfig that offers only DejaVu and Liberation, given to the run as `FONTCONFIG_FILE`, reproduces a runner's fonts
+here.
 
 ---
 
@@ -704,11 +936,12 @@ like.
 | `theme.css` | The kit's variables (paste target), the mapping onto Bault's tokens (incl. `--focus-color`, `--control-border`, the radius family), `--dir` and `--text-start`, and Bault's own: foil, paper, the room, easing |
 | `fonts.css` | Generated by `scripts/fetch-fonts.mjs`: one `@font-face` per variable subset |
 | `slab.css` | The slab, its sheen, its idle breathing, small-slab rules, the lightbox |
-| `components.css` | Buttons, focus, fields, selects, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
+| `components.css` | Focus, fields, selects, the scan field, panels, status LEDs, tables, tabs, overlays, `.money-label`, the card picker |
+| `buttons.css` | Every button: `.btn` and its variants, the row of a menu, `.icon-btn`, the header's capsule of them, the spinner, the paper's and the room's own, what forced colours draw |
 | `landing.css` | The public page |
 | `app.css` | Grain, the shell (rail, page head, language switch, avatar), figures and statistics, the sign-in stage, details |
 | `gallery.css` | The gallery, the item drawer's stage, loading and empty states, the register, filters |
-| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag and the form that has one, address labels, the key card and the recovery sheet, case files, the rate card, the fee statement, the month's statement, the rolls |
+| `screens.css` | The statement, tier cards, bid, trade and listing slips, parcel labels, the shelf map, the departures, the notifications register, the drawer tag and the form that has one, address labels, the key card and the recovery sheet, case files, the rate card, the fee statement, the month's statement, the rolls, the doors, the service menu and the tiles of a choice |
 | `motion.css` | Transitions and keyframes shared by all of the above, the reduced-motion switch, and what forced colours draw in place of the foil |
 
 Loaded in that order after `index.css` (`main.tsx`). Components and hooks: `shared/CardPhoto.tsx`
@@ -717,9 +950,11 @@ scroll reveal, journey, parallax, progress), `shared/ui/useOverlay.ts` and `useE
 `shared/ui/motionPreference.ts` (`prefersReducedMotion`, `scrollBehavior`), `shared/ui/SplitWords.tsx`,
 `shared/ui/CountUp.tsx`, `shared/ui/useScrollableRegions.ts` (a table wider than its room scrolls
 sideways, and while it does it is in the tab order, with a name, so a keyboard can reach its far
-columns), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
+columns), `shared/ui/useKeyboardScroll.ts` (the same for a drawer's body that scrolls and has no control
+in it), `shared/ui/Serial.tsx` (`ItemPick`), `areas/customer/marketing/LandingArt.tsx`,
 `areas/customer/finance/StatementSlip.tsx`, `areas/warehouse/ShelfMap.tsx`, `shared/ui/DrawerTag.tsx`,
-`shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
+`shared/ui/Docket.tsx`, `areas/warehouse/Benches.tsx`, `areas/admin/WalletRequestsSection.tsx`,
+`areas/admin/HouseStoreSection.tsx`, `areas/admin/YieldChart.tsx`, `areas/admin/PricingCoveragePanel.tsx`, `shared/ui/NotificationMark.tsx`. The audit's checks are in `scripts/lib/audit-checks.mjs`, apart from the
 script that walks the app (`scripts/design-screens.mjs`), so that the tests can show them a planted mistake.
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px

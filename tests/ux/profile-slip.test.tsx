@@ -281,6 +281,67 @@ describe('the addresses, a label for each place', () => {
   });
 });
 
+describe('the password, a slip that checks what is typed against what a new one has to be', () => {
+  async function open() {
+    answer();
+    await profile('security');
+    const user = userEvent.setup();
+    const slip = (await screen.findByRole('region', { name: 'New password' })) as HTMLElement;
+    const state = (rule: string) =>
+      (
+        within(slip).getByText(rule, { selector: 'dt' }).closest('.ledger-line') as HTMLElement
+      ).querySelector('dd')!.textContent;
+    return { user, slip, state };
+  }
+
+  it('says, for each of the three things a new password has to be, whether what is typed is that yet', async () => {
+    const { user, slip, state } = await open();
+    expect(state('At least 8 characters')).toBe('Not yet');
+    expect(state('Different from the current one')).toBe('Not yet');
+    expect(state('Matches the confirmation')).toBe('Not yet');
+    expect(within(slip).queryByText('Ready to update')).toBeNull();
+
+    await user.type(screen.getByLabelText('Current password'), 'hunter22');
+    await user.type(screen.getByLabelText('New password', { selector: 'input' }), 'short');
+    expect(state('At least 8 characters')).toBe('Not yet');
+    expect(state('Different from the current one')).toBe('Met');
+
+    await user.type(screen.getByLabelText('New password', { selector: 'input' }), 'er-and-longer');
+    expect(state('At least 8 characters')).toBe('Met');
+    await user.type(screen.getByLabelText('Confirm password'), 'shorter-and-longer');
+    expect(state('Matches the confirmation')).toBe('Met');
+    expect(within(slip).getByText('Ready to update')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update password' })).toBeEnabled();
+  });
+
+  it('is not the same as the current one, and says so on the slip as well as at the field', async () => {
+    const { user, state } = await open();
+    await user.type(screen.getByLabelText('Current password'), 'hunter22');
+    await user.type(screen.getByLabelText('New password', { selector: 'input' }), 'hunter22');
+    expect(state('Different from the current one')).toBe('Not yet');
+    expect(
+      screen.getByText('The new password is the same as the current one.'),
+    ).toBeInTheDocument();
+  });
+
+  it('never writes a password on the slip, and sends them as they were typed', async () => {
+    post.mockResolvedValue({});
+    const { user, slip } = await open();
+    await user.type(screen.getByLabelText('Current password'), 'hunter22');
+    await user.type(screen.getByLabelText('New password', { selector: 'input' }), 'a-better-one-1');
+    await user.type(screen.getByLabelText('Confirm password'), 'a-better-one-1');
+    expect(slip).not.toHaveTextContent('hunter22');
+    expect(slip).not.toHaveTextContent('a-better-one-1');
+    await user.click(screen.getByRole('button', { name: 'Update password' }));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/auth/password/change', {
+        currentPassword: 'hunter22',
+        newPassword: 'a-better-one-1',
+      }),
+    );
+  });
+});
+
 describe('the second factor, on cards and a sheet', () => {
   it('has the security tab as the password beside the second factor', async () => {
     answer();

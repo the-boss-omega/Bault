@@ -23,15 +23,18 @@ const MAX_PIPS = 12;
  * for each. An empty shelf is dashed, a shelf out of service is hatched, and an
  * oversized shelf is twice as wide. Items that are on no shelf stand on a tray of
  * their own. The counts are the shelf report's; the table of the same figures is
- * on the Inventory tab.
+ * on the Inventory tab. A shelf opens, where the screen says what to do with it
+ * (`onOpen`), to what is on it.
  */
 export function ShelfMap({
   bins,
   counts,
+  onOpen,
   t,
 }: {
   bins: readonly ShelfBin[];
   counts: readonly ShelfCount[];
+  onOpen?: (bin: ShelfBin) => void;
   t: TranslateFn;
 }) {
   const { zones, unshelved } = useMemo(() => {
@@ -66,13 +69,8 @@ export function ShelfMap({
             <ul className="shelf-rack">
               {slots.map(({ bin, count }) => {
                 const state = !bin.active ? 'out' : count === 0 ? 'empty' : 'stocked';
-                return (
-                  <li
-                    className="shelf-slot"
-                    key={bin.id}
-                    data-state={state}
-                    data-wide={bin.oversized ? 'true' : undefined}
-                  >
+                const face = (
+                  <>
                     <span className="shelf-bin">
                       <bdi dir="ltr">{bin.barcode}</bdi>
                     </span>
@@ -89,6 +87,30 @@ export function ShelfMap({
                             : 'warehouse.status.inStock',
                       )}
                     </span>
+                  </>
+                );
+                return (
+                  <li
+                    className="shelf-cell"
+                    key={bin.id}
+                    data-wide={bin.oversized ? 'true' : undefined}
+                  >
+                    {onOpen ? (
+                      <button
+                        type="button"
+                        className="shelf-slot"
+                        data-state={state}
+                        aria-haspopup="dialog"
+                        title={t('warehouse.shelf.open', { bin: bin.barcode })}
+                        onClick={() => onOpen(bin)}
+                      >
+                        {face}
+                      </button>
+                    ) : (
+                      <div className="shelf-slot" data-state={state}>
+                        {face}
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -104,8 +126,10 @@ export function ShelfMap({
             <span className="shelf-zone-total">{unshelved.toLocaleString()}</span>
           </header>
           <ul className="shelf-rack">
-            <li className="shelf-slot" data-state="tray">
-              <Pips count={unshelved} />
+            <li className="shelf-cell">
+              <div className="shelf-slot" data-state="tray">
+                <Pips count={unshelved} />
+              </div>
             </li>
           </ul>
         </section>

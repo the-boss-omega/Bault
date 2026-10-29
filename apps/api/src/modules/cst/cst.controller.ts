@@ -146,6 +146,12 @@ export class CstController {
   }
 
   @Roles('warehouse_operator', 'admin')
+  @Get('bins/:binId/items')
+  binItems(@Param('binId') binId: string) {
+    return this.inventory.binItems(binId);
+  }
+
+  @Roles('warehouse_operator', 'admin')
   @Patch('bins/:binId')
   setBinActive(@Param('binId') binId: string, @Body() dto: BinActiveDto) {
     return this.inventory.setBinActive(binId, dto.active);

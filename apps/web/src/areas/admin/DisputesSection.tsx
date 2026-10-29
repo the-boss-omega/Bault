@@ -163,7 +163,12 @@ export function DisputesSection({
             </aside>
 
             <div className="row request-form-actions">
-              <Button variant="gold" icon={<IconGavel />} disabled={!transactionId} onClick={open}>
+              <Button
+                variant="primary"
+                icon={<IconGavel />}
+                disabled={!transactionId}
+                onClick={open}
+              >
                 {t('admin.disputes.openButton')}
               </Button>
             </div>

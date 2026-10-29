@@ -3,6 +3,7 @@ import { ApiError, api, apiErrorKey } from '../../../shared/api';
 import { useT, type TranslateFn } from '../../../shared/i18n';
 import { navigate } from '../../../shared/routing';
 import { Button, ErrorState, SuccessNote } from '../../../shared/ui/primitives';
+import { AuthCard } from './AuthCard';
 
 type State =
   | { status: 'working' }
@@ -59,37 +60,40 @@ export function VerifyEmailPage({ token }: { token: string | null }) {
 
   if (state.status === 'working') {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.verifyTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.verify')} title={t('auth.verifyTitle')}>
         <p className="field-hint">{t('auth.verifyWorking')}</p>
-      </section>
+      </AuthCard>
     );
   }
 
   if (state.status === 'verified') {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.verifyTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.verify')} title={t('auth.verifyTitle')}>
         <SuccessNote>{t('auth.verifyDone')}</SuccessNote>
-        <Button variant="gold" block onClick={goToSignIn}>
+        <Button variant="primary" block onClick={goToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   return (
-    <section className="auth-card">
-      <h2>{t('auth.verifyTitle')}</h2>
+    <AuthCard
+      as="section"
+      kicker={t('auth.kicker.verify')}
+      title={t('auth.verifyTitle')}
+      stub={
+        <p className="auth-switch">
+          <Button variant="link" onClick={goToSignIn}>
+            {t('auth.backToSignIn')}
+          </Button>
+        </p>
+      }
+    >
       <ErrorState message={token ? failure(t, state.error) : t('auth.verifyNoToken')} />
       <p className="field-hint">{t('auth.verifyFailedHint')}</p>
       <ResendForm />
-      <p className="auth-switch">
-        <button className="btn--link" type="button" onClick={goToSignIn}>
-          {t('auth.backToSignIn')}
-        </button>
-      </p>
-    </section>
+    </AuthCard>
   );
 }
 

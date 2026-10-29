@@ -117,7 +117,7 @@ export function HouseStorePanel({
 
               <div className="actions">
                 <Button
-                  variant="gold"
+                  variant="primary"
                   size="sm"
                   disabled={busy}
                   onClick={() => setBuying({ product: p, key: crypto.randomUUID() })}

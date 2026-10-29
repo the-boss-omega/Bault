@@ -232,7 +232,7 @@ export function LandingPage() {
           <Button variant="ghost" onClick={goSignIn}>
             {t('landing.nav.signIn')}
           </Button>
-          <Button variant="gold" onClick={goSignUp}>
+          <Button variant="primary" onClick={goSignUp}>
             {t('landing.nav.signUp')}
           </Button>
         </div>
@@ -247,7 +247,7 @@ export function LandingPage() {
             </h1>
             <p className="lp-lede">{t('landing.hero.lede')}</p>
             <div className="lp-cta">
-              <Button variant="gold" onClick={goSignUp}>
+              <Button variant="primary" onClick={goSignUp}>
                 {t('landing.hero.primary')}
               </Button>
               <Button variant="secondary" onClick={goSignIn}>
@@ -475,7 +475,7 @@ export function LandingPage() {
             </h2>
             <p className="lp-sub">{t('landing.close.body')}</p>
             <div className="lp-cta">
-              <Button variant="gold" onClick={goSignUp}>
+              <Button variant="primary" onClick={goSignUp}>
                 {t('landing.close.cta')}
               </Button>
               <Button variant="secondary" onClick={goSignIn}>

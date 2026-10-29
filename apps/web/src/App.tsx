@@ -16,6 +16,7 @@ import { useScrollableRegions } from './shared/ui/useScrollableRegions';
 import {
   AccountPill,
   LanguageSwitcher,
+  MobileBar,
   NotificationBell,
   PageHeader,
   ThemeToggle,
@@ -23,7 +24,7 @@ import {
   type Crumb,
 } from './shared/ui/PageHeader';
 import { fullName, initialsFrom } from './shared/names';
-import { ErrorState, IconButton } from './shared/ui/primitives';
+import { ErrorState } from './shared/ui/primitives';
 import {
   IconAsk,
   IconBell,
@@ -31,7 +32,6 @@ import {
   IconLegal,
   IconManagement,
   IconMarketplace,
-  IconMenu,
   IconShield,
   IconShippingServices,
   IconVault,
@@ -290,11 +290,12 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const route = useRoute();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [railOpen, setRailOpen] = useState(false);
-  const notifications = useNotificationFeed();
+  const suspended = user.status === 'suspended';
+  // A suspended account is refused the feed (and has only the support desk to go to): it is not asked for it.
+  const notifications = useNotificationFeed(!suspended);
 
   const isStaff = user.role === 'warehouse_operator' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
-  const suspended = user.status === 'suspended';
 
   const allowed = useMemo(
     () =>
@@ -383,17 +384,7 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
       />
 
       <div className="workspace">
-        {isMobile && (
-          <div className="mobile-bar">
-            <IconButton label={t('nav.openMenu')} bare onClick={() => setRailOpen(true)} style={{ color: '#fff' }}>
-              <IconMenu />
-            </IconButton>
-            <span className="rail-mark" aria-hidden="true">
-              B
-            </span>
-            <span className="mobile-bar-title">{pageTitle}</span>
-          </div>
-        )}
+        {isMobile && <MobileBar title={pageTitle} onOpenMenu={() => setRailOpen(true)} />}
 
         <div className="workspace-inner">
           <PageHeader
@@ -409,17 +400,19 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                 <span className="ph-controls">
                   <ThemeToggle />
                   <LanguageSwitcher />
-                  <NotificationBell
-                    items={notifications.items}
-                    unseen={notifications.unseen}
-                    onOpen={() => {
-                      void notifications.reload();
-                      notifications.markSeen();
-                    }}
-                    onViewAll={() => goto('notifications')}
-                    renderTitle={(n) => eventLabel(t, n.eventType)}
-                    renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
-                  />
+                  {!suspended && (
+                    <NotificationBell
+                      items={notifications.items}
+                      unseen={notifications.unseen}
+                      onOpen={() => {
+                        void notifications.reload();
+                        notifications.markSeen();
+                      }}
+                      onViewAll={() => goto('notifications')}
+                      renderTitle={(n) => eventLabel(t, n.eventType)}
+                      renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+                    />
+                  )}
                 </span>
                 <UserMenu
                   initials={initialsFrom(user.firstName, user.lastName, user.email)}

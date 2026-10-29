@@ -255,7 +255,7 @@ export function ProposeTradePanel({
 
         <div className="row request-form-actions">
           <Button
-            variant="gold"
+            variant="primary"
             disabled={busy || !counterparty || offeredIds.length === 0 || (!gift && wanted.length === 0)}
             onClick={() => void propose()}
           >

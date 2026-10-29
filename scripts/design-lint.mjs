@@ -462,7 +462,7 @@ const FIXED_SURFACE = /background(?:-color)?\s*:[^;]*var\(--(?:paper(?:-bright)?
  * its class to the list; what stands beside the paper on the page (the controls under a case file, the codes' own
  * page) is not on it and is not in the list.
  */
-const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|request-slip|ledger-|rate-|fee-|case-note|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-key|mfa-qr)/;
+const ON_PAPER = /(?:^|[\s>+~,(])\.(?:drawer-tag|request-slip|ledger-|rate-|fee-|case-note|address-lines|ticket-note|trade-slip|parcel-stub|recovery-codes|mfa-key|mfa-qr|auth-card|auth-slip|auth-stub|auth-kicker|auth-switch|auth-demo|ask-composer|ask-slip|ask-who|ask-words)/;
 const THEME_INKS = 'foreground|muted-foreground|card-foreground|popover-foreground|secondary-foreground|accent-foreground|primary|ink(?:-[\\w-]+)?|text(?:-[\\w-]+)?|body|link';
 const THEME_INK = new RegExp(
   `(?:^|[;\\s{])(?:color|(?:border|outline|text-decoration|caret|column-rule)(?:-[a-z]+)*|fill|stroke)\\s*:[^;{}]*var\\(--(?:${THEME_INKS})\\)`,
@@ -602,6 +602,12 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
       const entry = themes[theme].get(ref[1]) ?? mapping.get(ref[1]) ?? bault.get(ref[1]);
       return entry ? resolve(entry.value, theme, depth + 1) : null;
     }
+    // light-dark(a, b) is a, in the light theme, and b, in the dark: the theme.css declares color-scheme per theme.
+    const lightDark = /^light-dark\((.+)\)$/s.exec(v);
+    if (lightDark) {
+      const [light, dark] = splitTop(lightDark[1], ',');
+      return light && dark ? resolve(theme === 'light' ? light : dark, theme, depth + 1) : null;
+    }
     const mix = /^color-mix\(\s*in oklab\s*,\s*(.+?)\s+([\d.]+)%\s*,\s*(.+)\)$/.exec(v);
     if (mix) {
       const [, a, pct, b] = mix;
@@ -647,6 +653,39 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
     for (const [fg, bgs, min, why] of THEME_PAIRS) measure(fg, bgs, min, why, theme);
   }
 
+  // The buttons (buttons.css): the primary one is the paper's own pair of inks, a quiet one is its line, and
+  // each of them is read on the page, on the paper and on the room.
+  const BUTTON_PAIRS = [
+    [
+      '--btn-primary-ink',
+      ['--btn-primary', '--btn-primary-hover'],
+      TEXT,
+      'the label of a primary button',
+    ],
+    [
+      '--btn-primary',
+      ['--background', '--card', '--popover'],
+      BOUNDARY,
+      'the edge of a primary button',
+    ],
+    ['--btn-danger', ['--btn-danger-wash'], TEXT, 'the label of a danger button'],
+    [
+      '--btn-danger-ink',
+      ['--btn-danger'],
+      TEXT,
+      'the label of a danger button when it is reached for',
+    ],
+    [
+      '--btn-off-ink',
+      ['--background', '--card', '--popover'],
+      BOUNDARY,
+      'a disabled button (exempt, but not to vanish)',
+    ],
+  ];
+  for (const theme of Object.keys(themes)) {
+    for (const [fg, bgs, min, why] of BUTTON_PAIRS) measure(fg, bgs, min, why, theme);
+  }
+
   // Two surfaces keep their palette in both themes: the paper and the room.
   const PAPER = ['--paper', '--paper-bright'];
   const ROOM = ['--room-deep', '--room', '--room-raised', '--room-case', '--room-pool'];
@@ -655,6 +694,40 @@ if (!lightBlock || !darkMedia || !darkExplicit || !mapping || !bault) {
     measure('--paper-ink-2', PAPER, TEXT, 'copy on the paper', theme);
     measure('--paper-ink-3', PAPER, TEXT, 'labels on the paper', theme);
     measure('--room-ink', ROOM, 7, 'text and focus rings on the room', theme);
+    // Buttons on the paper: the print is the primary, the lightest paper its label, the ink's second its hover.
+    measure(
+      '--paper-bright',
+      ['--paper-ink'],
+      7,
+      'the label of a primary button on the paper',
+      theme,
+    );
+    measure(
+      '--paper-bright',
+      ['--paper-ink-2'],
+      TEXT,
+      'the label of a primary button on the paper, reached for',
+      theme,
+    );
+    measure('--paper-oxblood', PAPER, TEXT, 'the label of a danger button, and an error, on the paper', theme);
+    measure('--paper-custody', PAPER, TEXT, 'a note that something went right, on the paper', theme);
+    measure(
+      '--paper-ink',
+      ['--paper-bright'],
+      7,
+      'a quiet button on the paper, reached for',
+      theme,
+    );
+    measure('--paper-edge', PAPER, 3, 'the line of a button on the paper', theme);
+    // Buttons on the room: the primary is the paper, and its edge is the paper against the room.
+    measure('--paper', ROOM, 3, 'the edge of a primary button on the room', theme);
+    measure(
+      '--paper-ink',
+      ['--paper', '--paper-bright'],
+      7,
+      'the label of a primary button on the room',
+      theme,
+    );
   }
 }
 
@@ -709,6 +782,12 @@ const PHYSICAL_CLASS = /\b(?:ml|mr|pl|pr)-\d|\btext-(?:left|right)\b/;
 const PHYSICAL_STYLE = /\b(?:marginLeft|marginRight|paddingLeft|paddingRight|border(?:Top|Bottom)(?:Left|Right)Radius|textAlign:\s*['"](?:left|right)['"]|float:\s*['"](?:left|right)['"])/;
 
 /**
+ * A colour written into a component is one that no theme can change. A glyph made white, for a bar that was dark,
+ * is gone on the bar that is light: the stylesheets name every colour, and a component names a token or inherits.
+ */
+const LITERAL_COLOUR_STYLE = /\b(?:color|background|backgroundColor|borderColor|outlineColor|fill|stroke)\s*:\s*['"](?:#[0-9a-f]{3,8}\b|(?:rgba?|hsla?|oklch|oklab|color-mix)\(|(?:white|black)['"])/i;
+
+/**
  * A locale-formatted date is not a left-to-right island. Forced left to right, a Hebrew date
  * (day, month, year) is drawn the other way round; read in the page's direction it keeps the
  * order its language gives it. Serials, codes and amounts are islands; dates are not.
@@ -730,6 +809,9 @@ for (const file of walk(webSrc)) {
     if (PHYSICAL_CLASS.test(line)) report(short, i + 1, `physical utility class: ${line.trim()}`);
     if (PHYSICAL_STYLE.test(line)) {
       report(short, i + 1, `physical inline style — use marginInlineStart / textAlign: 'start': ${line.trim()}`);
+    }
+    if (LITERAL_COLOUR_STYLE.test(line) && !line.includes('design-lint-allow')) {
+      report(short, i + 1, `a colour written into a component is one no theme can change — name a token (var(--ink)) or let it inherit: ${line.trim()}`);
     }
     if (/behavior\s*:\s*['"]smooth['"]/.test(line)) {
       report(short, i + 1, `smooth scrolling that ignores prefers-reduced-motion — choose 'auto' when it is set: ${line.trim()}`);

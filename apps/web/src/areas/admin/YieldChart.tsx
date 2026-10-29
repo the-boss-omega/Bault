@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type CSSProperties } from 'react';
 import { useI18n } from '../../shared/i18n';
 import { formatUsd } from '../../shared/money';
 
@@ -10,23 +10,65 @@ export interface YieldBar {
   shelves: number;
 }
 
-export function YieldChart({ rows, title, subtitle }: { rows: readonly YieldBar[]; title: string; subtitle: string }) {
-  const { t, locale } = useI18n();
+/**
+ * Round steps from zero to a ceiling that holds the largest value, in whole dollars (0 / 20 / 40 / 60): the scale
+ * the bars are drawn to, so that the longest does not run to the edge and the zero is where a bar begins.
+ */
+export function niceTicks(maxMinor: number, want = 4): number[] {
+  const top = Math.max(maxMinor, 1);
+  const rough = top / want;
+  const power = Math.max(100, 10 ** Math.floor(Math.log10(rough)));
+  const step = [1, 2, 5, 10].map((m) => m * power).find((s) => s >= rough) ?? power * 10;
+  const count = Math.max(1, Math.ceil(top / step));
+  return Array.from({ length: count + 1 }, (_, i) => i * step);
+}
+
+/** A tick on the axis, short: $0, $20, $1.5K. */
+export function formatTick(minor: number): string {
+  const dollars = minor / 100;
+  if (dollars < 1000) return `$${dollars}`;
+  return `$${Number((dollars / 1000).toFixed(1))}K`;
+}
+
+const props = (values: Record<string, number>) => values as unknown as CSSProperties;
+
+/**
+ * What each zone earns, as bars from a zero they all begin at: the worst first (the one worth looking at is the
+ * one at the top), each with its value at the end of its bar and what it is made of (how many of its shelves are
+ * occupied) at its start, the weakest of the zones that are occupied marked in the amber and in words, and a
+ * scale of round steps under them. Every value is written beside its bar, so the table under the chart is its
+ * twin and nothing is behind a hover. It reads from the end its zero is at: from the right, in Hebrew.
+ */
+export function YieldChart({
+  rows,
+  title,
+  subtitle,
+}: {
+  rows: readonly YieldBar[];
+  title: string;
+  subtitle: string;
+}) {
+  const { t } = useI18n();
   const captionId = useId();
-  // The bars grow from the end the axis starts at ($0), which is the right-hand end when read from the right.
-  const fromRight = locale === 'he';
 
   const perSlot = rows.some((r) => r.perSlotMonthMinor !== null);
   const measure = (row: YieldBar) => (perSlot ? (row.perSlotMonthMinor ?? 0) : row.revenueMinor);
-  const max = Math.max(1, ...rows.map(measure));
-  const worst = rows
-    .filter((r) => r.occupied > 0)
-    .reduce<YieldBar | null>((low, r) => (low === null || measure(r) < measure(low) ? r : low), null);
+  const largest = Math.max(0, ...rows.map(measure));
+  // Where nothing has been earned there is nothing to compare: the table has the zeros.
+  if (largest <= 0) return null;
 
-  const rowHeight = 40;
-  const height = rows.length * rowHeight;
-  const labelWidth = 132;
-  const valueWidth = 92;
+  const ticks = niceTicks(largest);
+  const scale = ticks[ticks.length - 1]!;
+  // The zones that earn, from the least up (that is the order to look in), then those with nothing on their shelves.
+  const ranked = [...rows].sort(
+    (a, b) => Number(b.occupied > 0) - Number(a.occupied > 0) || measure(a) - measure(b),
+  );
+  const occupied = ranked.filter((r) => r.occupied > 0);
+  // One zone is not "the lowest" of anything, and neither is one of several that earn the same.
+  const lowest =
+    occupied.length > 0 && measure(occupied[0]!) < measure(occupied[occupied.length - 1]!)
+      ? occupied[0]!
+      : null;
 
   return (
     <figure className="chart" aria-labelledby={captionId}>
@@ -35,53 +77,50 @@ export function YieldChart({ rows, title, subtitle }: { rows: readonly YieldBar[
         <span className="chart-sub">{subtitle}</span>
       </figcaption>
 
-      <svg
-        className="chart-svg"
-        viewBox={`0 0 100 ${height}`}
-        preserveAspectRatio="none"
-        height={height}
-        aria-hidden="true"
-        focusable="false"
-      >
-        <g transform={fromRight ? 'translate(100 0) scale(-1 1)' : undefined} data-from={fromRight ? 'end' : 'start'}>
-          {rows.map((row, index) => {
-            const value = measure(row);
-            const width = (value / max) * 100;
-            const y = index * rowHeight + (rowHeight - 12) / 2;
-            return (
-              <rect
-                key={row.label}
-                x={0}
-                y={y}
-                width={Math.max(width, value > 0 ? 0.6 : 0)}
-                height={12}
-                className={row.label === worst?.label ? 'chart-bar chart-bar--mark' : 'chart-bar'}
-              />
-            );
-          })}
-        </g>
-      </svg>
-
-      <div className="chart-rows" style={{ '--chart-label': `${labelWidth}px`, '--chart-value': `${valueWidth}px` } as React.CSSProperties}>
-        {rows.map((row) => (
-          <div className="chart-row" key={row.label} style={{ height: rowHeight }}>
-            <span className="chart-label">
-              <span className="ltr-run">{row.label}</span>
-              <span className="chart-note">
-                {t('yield.chart.occupancy', { occupied: row.occupied, shelves: row.shelves })}
+      <ul className="chart-rows" style={props({ '--steps': ticks.length - 1 })}>
+        {ranked.map((row) => {
+          const ratio = measure(row) / scale;
+          const marked = row === lowest;
+          return (
+            <li className="chart-row" key={row.label}>
+              <span className="chart-label">
+                <span className="ltr-run">{row.label}</span>
+                <span className="chart-note">
+                  {t('yield.chart.occupancy', { occupied: row.occupied, shelves: row.shelves })}
+                </span>
               </span>
-            </span>
-            <span className="chart-value amount">{formatUsd(measure(row))}</span>
-          </div>
-        ))}
-      </div>
+              <span className="chart-track" style={props({ '--ratio': ratio })}>
+                <span
+                  className={marked ? 'chart-bar chart-bar--mark' : 'chart-bar'}
+                  aria-hidden="true"
+                />
+                <span className="chart-value">
+                  <span className="amount">{formatUsd(measure(row))}</span>
+                  {marked && (
+                    <span className="chart-flag">
+                      <span className="chart-flag-key" aria-hidden="true" />
+                      {t('yield.chart.lowest')}
+                    </span>
+                  )}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
 
-      <p className="chart-axis">
-        <span className="amount">{formatUsd(0)}</span>
-        <span className="chart-axis-label">
-          {perSlot ? t('yield.col.perSlotMonth') : t('yield.chart.revenueAxis')}
+      <div className="chart-axis" aria-hidden="true">
+        <span className="chart-ticks">
+          {ticks.map((tick) => (
+            // The tick is placed by the page's direction and its figure is read left to right: two elements.
+            <span key={tick} className="chart-tick" style={props({ '--at': tick / scale })}>
+              <span dir="ltr">{formatTick(tick)}</span>
+            </span>
+          ))}
         </span>
-        <span className="amount">{formatUsd(max)}</span>
+      </div>
+      <p className="chart-axis-label">
+        {perSlot ? t('yield.col.perSlotMonth') : t('yield.chart.revenueAxis')}
       </p>
     </figure>
   );

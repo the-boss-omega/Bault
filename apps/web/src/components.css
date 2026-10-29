@@ -1,112 +1,12 @@
 /* ============================================================
    Components
 
-   The kit's building blocks (buttons, fields, panels, tables, tabs, overlays)
-   in Bault's own hand: the kit supplies geometry, colour and rhythm; Bault
+   The kit's building blocks (fields, panels, tables, tabs, overlays; the buttons
+   are buttons.css) in Bault's own hand: the kit supplies geometry, colour and rhythm; Bault
    supplies the foil, the LED status mark and the register rule. Layouts,
    routes and copy are untouched; this file changes appearance only and reads
    only theme tokens. Loaded after theme.css and slab.css.
    ============================================================ */
-
-/* ---- Buttons ---- */
-
-.btn {
-  position: relative;
-  isolation: isolate;
-  min-height: 40px;
-  border-radius: var(--r-md);
-  background: color-mix(in oklab, var(--foreground) 4%, transparent);
-  border-color: var(--input);
-  color: var(--foreground);
-  box-shadow: var(--shadow-xs);
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--input);
-  color: var(--accent-foreground);
-}
-
-.btn--gold,
-.btn--navy {
-  background: var(--primary);
-  border-color: transparent;
-  color: var(--primary-foreground);
-}
-
-.btn--gold:hover:not(:disabled),
-.btn--navy:hover:not(:disabled) {
-  background: var(--foreground);
-  border-color: transparent;
-  color: var(--background);
-}
-
-/* A primary button, when it is reached for, throws a little holographic light under itself. */
-
-.btn--gold::after,
-.btn--navy::after {
-  content: '';
-  position: absolute;
-  inset-inline: 12%;
-  inset-block-start: 100%;
-  block-size: 10px;
-  z-index: -1;
-  border-radius: 50%;
-  background: var(--foil);
-  background-size: 300% 100%;
-  filter: blur(10px);
-  /* The glow begins at the button's lower edge and is clipped there, after the
-     blur, so the light is under the button and never a haze on its face. */
-  clip-path: inset(0 -40px -40px -40px);
-  opacity: 0;
-  transform: scaleX(0.7);
-  transition: opacity var(--dur-surface) var(--ease-out-expo), transform var(--dur-surface) var(--ease-out-expo);
-}
-
-.btn--gold:hover:not(:disabled)::after,
-.btn--navy:hover:not(:disabled)::after,
-.btn--gold:focus-visible::after,
-.btn--navy:focus-visible::after {
-  opacity: 0.85;
-  transform: scaleX(1);
-}
-
-.btn--ghost {
-  background: transparent;
-  box-shadow: none;
-  color: var(--muted-foreground);
-}
-
-.btn--ghost:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.btn--danger {
-  background: color-mix(in oklab, var(--destructive) 14%, transparent);
-  border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
-  color: var(--destructive);
-}
-
-.btn--danger:hover:not(:disabled) {
-  background: var(--destructive);
-  border-color: var(--destructive);
-  color: var(--background);
-}
-
-.btn--link {
-  min-height: 0;
-  box-shadow: none;
-  background: none;
-  border: 0;
-  color: var(--foreground);
-  text-decoration-color: var(--muted-foreground);
-}
-
-.btn--sm {
-  min-height: 32px;
-  border-radius: var(--r-md);
-}
 
 /* ---- Focus: one crisp two-pixel ring that holds 3:1 on every surface ----
    The kit's soft halo (ring at half strength) measures about 1.5:1 in light and
@@ -135,7 +35,7 @@ textarea:focus-visible {
 input,
 select,
 textarea {
-  min-height: 38px;
+  min-height: var(--control-h);
   border-radius: var(--r-md);
   border-color: var(--control-border);
   background: color-mix(in oklab, var(--foreground) 3.5%, transparent);
@@ -160,6 +60,10 @@ textarea:hover:not(:disabled) {
 select {
   appearance: none;
   -webkit-appearance: none;
+  /* Safari draws the chosen option as text inside the box and lets it run out of it, into the scrollable
+     width of the page, when the option is longer than the box (an address, on a phone). */
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding-inline-end: 36px;
   /* design-lint-allow: the two halves of one symmetric chevron: mirrored it is the same chevron, only which half comes first depends on the page (--arrow-first) */
   background-image:
@@ -463,6 +367,12 @@ input[type='radio'] {
   border-inline-start-color: var(--border);
 }
 
+/* A body that scrolls and has nothing in it to stop on is a stop itself (useKeyboardScroll): its ring is drawn inside
+   its edge, where the head above it and the foot below it do not cover it. */
+.drawer-body[data-scrollable='true']:focus-visible {
+  outline-offset: calc(-1 * var(--focus-width));
+}
+
 .modal {
   background: var(--popover);
   color: var(--popover-foreground);
@@ -531,6 +441,34 @@ input[type='radio'] {
   text-transform: none;
 }
 
+/* ---- A field a scanner fills ----
+   A serial or a shelf is a code, read left to right in the code's face; the glyph at its start says what fills it. */
+
+.scan-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  direction: ltr;
+}
+
+.scan-input svg {
+  position: absolute;
+  inset-inline-start: 12px;
+  inline-size: 18px;
+  block-size: 18px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.scan-input input {
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding-inline-start: 40px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  letter-spacing: 0.04em;
+}
+
 /* ---- Choosing cards ----
    A list of cards to choose among is the cards: each in its case with its serial
    and name under it, and choosing one is pulling it from the shelf, so it gets a
@@ -538,15 +476,17 @@ input[type='radio'] {
    keyboard and a screen reader reach; it is only drawn differently. Outside a label,
    in a list of cards already chosen, an `.item-pick` is a row. */
 
-/* A set of cards to choose one from is a fieldset with its name as a legend. */
-fieldset.field--cards {
+/* A set of cards to choose one from is a fieldset with its name as a legend; so is a short set of choices. */
+fieldset.field--cards,
+fieldset.choice-set {
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-fieldset.field--cards > legend {
+fieldset.field--cards > legend,
+fieldset.choice-set > legend {
   padding: 0;
   margin-block-end: var(--sp-3);
 }

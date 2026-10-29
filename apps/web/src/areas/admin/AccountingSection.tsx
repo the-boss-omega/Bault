@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../../shared/api';
 import { formatDateTime, formatUsd } from '../../shared/money';
 import { useI18n, type MessageKey } from '../../shared/i18n';
-import { Button, EmptyState, Panel, StatusBadge } from '../../shared/ui/primitives';
+import { Button, ButtonLink, EmptyState, Panel, StatusBadge } from '../../shared/ui/primitives';
 import { IconAlert, IconCheckCircle, IconChart, IconDownload, IconReceipt } from '../../shared/ui/icons';
 
 export interface AccountingSummary {
@@ -114,10 +114,15 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
             <span className="field-label">{t('admin.accounting.ledger.to')}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" />
           </label>
-          <a className="btn btn--gold btn--sm" href={exportHref} download>
-            <IconDownload />
+          <ButtonLink
+            variant="primary"
+            size="sm"
+            icon={<IconDownload />}
+            href={exportHref}
+            download
+          >
             {t('admin.accounting.ledger.download')}
-          </a>
+          </ButtonLink>
         </div>
       </Panel>
 
@@ -136,7 +141,13 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
                 dir="ltr"
               />
             </label>
-            <Button size="sm" variant="gold" icon={<IconChart />} loading={busy === 'summary'} onClick={() => void loadSummary()}>
+            <Button
+              size="sm"
+              variant="primary"
+              icon={<IconChart />}
+              loading={busy === 'summary'}
+              onClick={() => void loadSummary()}
+            >
               {t('admin.accounting.summary.show')}
             </Button>
           </div>
@@ -153,7 +164,13 @@ export function AccountingSection({ onError }: { onError: (m: string) => void })
         title={t('admin.accounting.recon.title')}
         subtitle={t('admin.accounting.recon.subtitle')}
         tools={
-          <Button size="sm" variant="gold" icon={<IconReceipt />} loading={busy === 'recon'} onClick={() => void loadRecon()}>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<IconReceipt />}
+            loading={busy === 'recon'}
+            onClick={() => void loadRecon()}
+          >
             {t('admin.accounting.recon.run')}
           </Button>
         }

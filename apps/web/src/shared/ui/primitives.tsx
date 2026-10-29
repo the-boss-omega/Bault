@@ -1,12 +1,25 @@
 import { cloneElement, isValidElement, useId, useLayoutEffect, useRef } from 'react';
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactElement, ReactNode } from 'react';
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactElement,
+  ReactNode,
+  Ref,
+} from 'react';
 import { CountUp } from './CountUp';
-import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox } from './icons';
+import { IconAlert, IconCheckCircle, IconChevronRight, IconInbox, IconScan } from './icons';
 import { scrollBehavior } from './motionPreference';
 
-type ButtonVariant = 'gold' | 'navy' | 'secondary' | 'ghost' | 'danger';
+/**
+ * What a button is for, in the order a screen asks for it:
+ * primary is the one thing to do next (a view has one, and it is the one with foil on its edge);
+ * secondary is another thing one may do; ghost is the way out and what is only sometimes wanted;
+ * danger is what cannot be taken back; link is an action that sits inside a sentence.
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonStyle {
   variant?: ButtonVariant;
   size?: 'md' | 'sm';
   block?: boolean;
@@ -14,19 +27,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
 }
 
-export function Button({
+function buttonClass({
   variant = 'secondary',
   size = 'md',
   block,
-  icon,
   loading,
-  children,
   className = '',
-  type = 'button',
-  disabled,
-  ...rest
-}: ButtonProps) {
-  const classes = [
+}: ButtonStyle & { className?: string }) {
+  return [
     'btn',
     `btn--${variant}`,
     size === 'sm' ? 'btn--sm' : '',
@@ -36,17 +44,58 @@ export function Button({
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, ButtonStyle {
+  /** The state of a button that is a switch (a filter that is on, a mode that is set). */
+  pressed?: boolean;
+}
+
+export function Button({
+  variant,
+  size,
+  block,
+  icon,
+  loading,
+  pressed,
+  children,
+  className,
+  type = 'button',
+  disabled,
+  ...rest
+}: ButtonProps) {
   return (
     <button
       type={type}
-      className={classes}
+      className={buttonClass({ variant, size, block, loading, className })}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
+      aria-pressed={pressed}
       {...rest}
     >
       {loading ? <span className="btn-spinner" aria-hidden="true" /> : icon}
-      {children}
+      {children !== undefined && children !== null && children !== false ? (
+        <span className="btn-label">{children}</span>
+      ) : null}
     </button>
+  );
+}
+
+/** A link that is drawn as a button: a download, a file, a page that is somewhere else. */
+export function ButtonLink({
+  variant,
+  size,
+  block,
+  icon,
+  children,
+  className,
+  ...rest
+}: AnchorHTMLAttributes<HTMLAnchorElement> & Omit<ButtonStyle, 'loading'>) {
+  return (
+    <a className={buttonClass({ variant, size, block, className })} {...rest}>
+      {icon}
+      <span className="btn-label">{children}</span>
+    </a>
   );
 }
 
@@ -151,18 +200,90 @@ export function MoneyField({
   );
 }
 
+/**
+ * A field that a scanner fills: a serial, a shelf, a parcel. What is read is a code, so it is set in the code's face,
+ * left to right, with the glyph of what reads it at its start. A scanner ends what it reads with Enter, and `onScan`
+ * is what that does (go to the next field; do the job): without it, Enter is left to the form.
+ */
+export function ScanField({
+  label,
+  hint,
+  error,
+  value,
+  onChange,
+  onScan,
+  inputRef,
+  id,
+  ...rest
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  onScan?: () => void;
+  inputRef?: Ref<HTMLInputElement>;
+  id?: string;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'id' | 'ref'>) {
+  const generated = useId();
+  const controlId = id ?? generated;
+  const describedBy = error ? `${controlId}-error` : hint ? `${controlId}-hint` : undefined;
+
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={controlId}>
+        {label}
+      </label>
+      <div className="scan-input">
+        <IconScan />
+        <input
+          {...rest}
+          ref={inputRef}
+          id={controlId}
+          dir="ltr"
+          autoComplete="off"
+          spellCheck={false}
+          enterKeyHint={onScan ? 'next' : undefined}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            rest.onKeyDown?.(e);
+            if (e.key === 'Enter' && onScan && !e.defaultPrevented) {
+              e.preventDefault();
+              onScan();
+            }
+          }}
+        />
+      </div>
+      {error ? (
+        <span className="field-error" id={`${controlId}-error`} role="alert">
+          <bdi dir="auto">{error}</bdi>
+        </span>
+      ) : hint ? (
+        <span className="field-hint" id={`${controlId}-hint`}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function IconButton({
   label,
   children,
   className = '',
   bare,
+  pressed,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; bare?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; bare?: boolean; pressed?: boolean }) {
   return (
     <button
       type="button"
       className={`icon-btn${bare ? ' icon-btn--bare' : ''} ${className}`.trim()}
       aria-label={label}
+      aria-pressed={pressed}
       title={label}
       {...rest}
     >

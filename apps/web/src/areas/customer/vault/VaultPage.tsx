@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { SERVICE_FEE_ACTION, priceLabel, useServicePrices } from '../../../shared/servicePrices';
 import { CardPhotoThumb } from '../../../shared/CardPhoto';
@@ -34,6 +34,7 @@ import {
   IconArchive,
   IconBox,
   IconChart,
+  IconChevronRight,
   IconClock,
   IconReceipt,
   IconSearch,
@@ -387,7 +388,7 @@ export function VaultPage() {
           <span className="vault-count">{t('vault.assetsCount', { count: items.length })}</span>
         )}
         {scope === 'active' && cullWindowDays !== null && (
-          <Button size="sm" variant={culling ? 'secondary' : 'ghost'} onClick={() => setCulling((v) => !v)}>
+          <Button size="sm" onClick={() => setCulling((v) => !v)}>
             {culling ? t('cull.close') : t('cull.open')}
           </Button>
         )}
@@ -435,7 +436,7 @@ export function VaultPage() {
               ) : scope === 'active' ? (
                 <Button
                   size="sm"
-                  variant="gold"
+                  variant="primary"
                   onClick={() => navigate({ section: 'inbound', tab: 'addresses' })}
                 >
                   {t('vault.empty.getStarted')}
@@ -768,6 +769,8 @@ function ItemDrawer({
   const prices = useServicePrices();
   const [confirming, setConfirming] = useState<CardAction | null>(null);
   const [formOpen, setFormOpen] = useState<FormKind | null>(null);
+  // The row a form was opened from: the form takes the menu's place, and when it is closed the keyboard goes back to that row.
+  const returnTo = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const meta = STATE_META[item.lifecycleState];
   const historical = Boolean(item.historical);
@@ -817,6 +820,13 @@ function ItemDrawer({
       }
     })();
   }, [item.id, historical]);
+
+  useEffect(() => {
+    if (formOpen !== null || returnTo.current === null) return;
+    const key = returnTo.current;
+    returnTo.current = null;
+    document.querySelector<HTMLElement>(`[data-action="${key}"]`)?.focus();
+  }, [formOpen]);
 
   const graded = Boolean(item.conditionGrade && !/^raw$/i.test(item.conditionGrade));
   const actions = historical || item.holdFlag
@@ -950,50 +960,59 @@ function ItemDrawer({
 
         {media !== null && media.length > 0 && <ItemMediaGallery media={media} title={name} t={t} />}
 
-        {actions.length > 0 && (
+        {/* What can be asked for: a menu of rows, not a wall of buttons. A form takes the menu's place. */}
+        {actions.length > 0 && formOpen === null && (
           <>
             <h3 className="drawer-heading">{t('vault.actions.title')}</h3>
-            <ul className="drawer-actions">
+            <ul className="service-menu">
               {actions.map((action) => {
                 const price = priceLabel(prices.get(SERVICE_FEE_ACTION[action.key] ?? ''));
                 const pending = action.serviceType
                   ? openRequests.find((r) => r.type === action.serviceType)
                   : undefined;
+                const nameId = `svc-${action.key}-name`;
+                const descId = `svc-${action.key}-desc`;
                 return (
                   <li key={action.key}>
                     <Button
-                      size="sm"
+                      className="btn--row"
                       variant={action.confirm ? 'danger' : 'secondary'}
                       icon={action.icon}
                       disabled={busy || Boolean(pending)}
-                      block
-                      onClick={() =>
-                        action.form
-                          ? setFormOpen(action.form)
-                          : action.confirm
-                            ? setConfirming(action)
-                            : void run(action)
-                      }
+                      data-action={action.key}
+                      aria-labelledby={nameId}
+                      aria-describedby={descId}
+                      onClick={() => {
+                        if (action.form) {
+                          returnTo.current = action.key;
+                          setFormOpen(action.form);
+                        } else if (action.confirm) {
+                          setConfirming(action);
+                        } else {
+                          void run(action);
+                        }
+                      }}
                     >
-                      <span className="action-line">
-                        <span>{t(action.label)}</span>
-                        {price && !pending && (
-                          <span className="action-price" dir="ltr">
-                            {price}
-                          </span>
-                        )}
+                      <span className="btn-row-line">
+                        <span className="btn-row-name" id={nameId}>
+                          {t(action.label)}
+                        </span>
+                        <span className="btn-row-end">
+                          {price && !pending && <span dir="ltr">{price}</span>}
+                          {action.form && !pending && <IconChevronRight />}
+                        </span>
+                      </span>
+                      <span className="btn-row-desc" id={descId}>
+                        {pending
+                          ? t(
+                              pending.status === 'in_progress'
+                                ? 'services.pending.underway'
+                                : 'services.pending.queued',
+                              { code: pending.code },
+                            )
+                          : t(action.description)}
                       </span>
                     </Button>
-                    <p className="hint">
-                      {pending
-                        ? t(
-                            pending.status === 'in_progress'
-                              ? 'services.pending.underway'
-                              : 'services.pending.queued',
-                            { code: pending.code },
-                          )
-                        : t(action.description)}
-                    </p>
                   </li>
                 );
               })}
@@ -1004,6 +1023,7 @@ function ItemDrawer({
         {formOpen === 'consignment' && (
           <ConsignmentForm
             item={item}
+            fee={priceLabel(prices.get(SERVICE_FEE_ACTION.consignment ?? ''))}
             onCancel={() => setFormOpen(null)}
             onDone={(message) => {
               setFormOpen(null);
@@ -1043,6 +1063,7 @@ function ItemDrawer({
         {formOpen === 'inspection' && (
           <InspectionForm
             item={item}
+            fee={priceLabel(prices.get(SERVICE_FEE_ACTION.inspection ?? ''))}
             onCancel={() => setFormOpen(null)}
             onDone={(message) => {
               setFormOpen(null);

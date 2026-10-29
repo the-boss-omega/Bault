@@ -42,6 +42,49 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
     await browser?.close();
   });
 
+  describe('an icon drawn larger than text', () => {
+    const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><path d="m9.5 6 6 6-6 6" /></svg>';
+    const iconFlags = async (page: Page) => (await audit.inspect(page, 'he', 1440)).flags.filter((f) => /^an icon drawn larger/.test(f));
+
+    it('a chevron that has been given no size, beside a link', async () => {
+      const page = await hebrewPage(`<div style="width: 500px"><a href="#">פתיחה ${CHEVRON}</a></div>`);
+      expect((await iconFlags(page)).join()).toMatch(/an icon drawn larger than text: \d+x\d+ beside "פתיחה"/);
+      await page.close();
+    });
+
+    it('the same chevron at the size of a letter, and a large picture that is not an icon', async () => {
+      const page = await hebrewPage(
+        `<div style="width: 500px"><a href="#">פתיחה ${CHEVRON.replace('<svg ', '<svg width="16" height="16" ')}</a>` +
+          `<svg role="img" aria-label="a barcode" width="300" height="120" viewBox="0 0 10 4"><rect width="10" height="4" /></svg></div>`,
+      );
+      expect(await iconFlags(page)).toEqual([]);
+      await page.close();
+    });
+  });
+
+  describe('an id on screen', () => {
+    const ID = '1e7a2e35-1fbd-4871-b4c9-17b5fc69d9ef';
+    const idFlags = async (page: Page) => (await audit.inspect(page, 'he', 1440)).flags.filter((f) => /^id on screen/.test(f));
+
+    it('an id that has got into a sentence', async () => {
+      const page = await hebrewPage(`<p>הבקשה ${ID} אושרה</p>`);
+      expect(await idFlags(page)).toEqual([`id on screen: ${ID}`]);
+      await page.close();
+    });
+
+    it('an id that is a record\'s own number, alone in the face of a code beside its label, is what it is there to be', async () => {
+      const page = await hebrewPage(`<dl><dt>מזהה רשומה</dt><dd><code dir="ltr">${ID}</code></dd></dl>`);
+      expect(await idFlags(page)).toEqual([]);
+      await page.close();
+    });
+
+    it('but not one in a code that is part of a sentence', async () => {
+      const page = await hebrewPage(`<p>הבקשה <code dir="ltr">${ID} was approved</code></p>`);
+      expect(await idFlags(page)).toEqual([`id on screen: ${ID}`]);
+      await page.close();
+    });
+  });
+
   describe('an English phrase or a figure drawn out of order on a Hebrew page', () => {
     it('an English name with a year in front, which the bidirectional algorithm sends to the other end', async () => {
       const page = await hebrewPage('<p>הכרטיס 2011 Pokémon Call of Legends נמכר</p>');
@@ -75,10 +118,27 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
       await page.close();
     });
 
+    it('an address in a sentence, whose leading "#/" and "?" are drawn at the wrong end of it', async () => {
+      const page = await hebrewPage('<p>הקישור לחנות שלכם: #/marketplace/store?seller=red</p>');
+      expect((await flagsOf(page)).join()).toMatch(/out of order.*#\/marketplace/);
+      await page.close();
+    });
+
+    it('a version whose numbers and word swap places, in a list and in a sentence', async () => {
+      const page = await hebrewPage(
+        '<p>גרסת התנאים בתוקף 2026-10-draft-1</p><p>אני מסכים (גרסה 2026-10-draft-1).</p>',
+      );
+      expect((await flagsOf(page)).join()).toMatch(/out of order.*2026-10-draft-1/);
+      await page.close();
+    });
+
     it('lets through what is set in an island, a code, or the text that is its own language', async () => {
       const page = await hebrewPage(
         [
           '<p>הכרטיס <bdi dir="auto">2011 Pokémon Call of Legends</bdi> נמכר</p>',
+          '<p>הקישור לחנות שלכם: \u2066#/marketplace/store?seller=red\u2069</p>',
+          '<p>גרסת התנאים בתוקף \u20662026-10-draft-1\u2069</p><p>אני מסכים (גרסה \u20662026-10-draft-1\u2069).</p>',
+          '<p>הפנו ל־<bdi dir="ltr">@red</bdi> את הבקשה</p>',
           '<p>השעיה אוטומטית מתחת ל <span dir="ltr" style="unicode-bidi: isolate">-$20.00</span> לחשבון</p>',
           '<p>קוד <bdi dir="ltr">SN-CL10-0005</bdi> · 27 באוק׳ 2026</p>',
           '<p><bdi dir="auto">Password must be at least 8 characters.</bdi></p>',
@@ -95,6 +155,21 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
       );
       expect(await flagsOf(page)).toEqual([]);
       await page.close();
+    });
+  });
+
+  describe('a kicker that says its heading again', () => {
+    it('is flagged, and is not when the line over the heading says something else', async () => {
+      const page = await hebrewPage(
+        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">אימות דו־שלבי</p><h2>אימות דו־שלבי</h2></div></form>',
+      );
+      expect((await audit.inspect(page, 'he', 1440)).flags.join()).toMatch(/a kicker that says its heading again: "אימות דו־שלבי"/);
+      await page.close();
+      const fine = await hebrewPage(
+        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">שלב שני</p><h2>אימות דו־שלבי</h2></div></form>',
+      );
+      expect((await audit.inspect(fine, 'he', 1440)).flags.filter((flag) => /kicker/.test(flag))).toEqual([]);
+      await fine.close();
     });
   });
 

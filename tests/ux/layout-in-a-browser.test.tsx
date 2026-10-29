@@ -16,9 +16,9 @@ vi.mock('../../apps/web/src/shared/api', () => ({
 const { I18nProvider, useT } = await import('../../apps/web/src/shared/i18n');
 const { DetailDrawer } = await import('../../apps/web/src/shared/ui/DetailDrawer');
 const { CardPhotoThumb } = await import('../../apps/web/src/shared/CardPhoto');
-const { PageHeader, NotificationBell, LanguageSwitcher } = await import('../../apps/web/src/shared/ui/PageHeader');
+const { PageHeader, NotificationBell, LanguageSwitcher, MobileBar } = await import('../../apps/web/src/shared/ui/PageHeader');
 const { NavigationRail } = await import('../../apps/web/src/shared/ui/NavigationRail');
-const { ContextTabs } = await import('../../apps/web/src/shared/ui/primitives');
+const { ContextTabs, DetailRow } = await import('../../apps/web/src/shared/ui/primitives');
 const { StatementSlip } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
 const { AccountingSection } = await import('../../apps/web/src/areas/admin/AccountingSection');
 const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
@@ -29,6 +29,7 @@ const { SellPanel } = await import('../../apps/web/src/areas/customer/marketplac
 const { ProposeTradePanel } = await import('../../apps/web/src/areas/customer/marketplace/ProposeTradePanel');
 const { RegisterParcelForm } = await import('../../apps/web/src/areas/customer/inbound/InboundPage');
 const { SupportPage } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+const { FaqLegalPage } = await import('../../apps/web/src/areas/customer/help/FaqLegalPage');
 const { ProfilePage } = await import('../../apps/web/src/areas/customer/profile/ProfilePage');
 const { api } = await import('../../apps/web/src/shared/api');
 const { billableActions, coverage } =
@@ -37,6 +38,8 @@ const { MEMBERSHIP_TIERS } = await import('../../apps/api/src/modules/mem/tiers'
 const { revealField } = await import('../../apps/web/src/shared/ui/revealField');
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
+  auditButtons: (page: Page) => Promise<string[]>;
+  inspect: (page: Page, locale: string, width: number) => Promise<{ flags: string[]; title: string }>;
 };
 
 /**
@@ -47,7 +50,18 @@ const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as
  * CSS, which is where each of these was wrong.
  */
 const SRC = join(__dirname, '..', '..', 'apps', 'web', 'src');
-const CSS = ['index', 'theme', 'slab', 'components', 'landing', 'app', 'gallery', 'screens', 'motion']
+const CSS = [
+  'index',
+  'theme',
+  'slab',
+  'components',
+  'buttons',
+  'landing',
+  'app',
+  'gallery',
+  'screens',
+  'motion',
+]
   .map((name) => readFileSync(join(SRC, `${name}.css`), 'utf8'))
   .join('\n');
 const BROWSER = '/opt/pw-browsers/chromium';
@@ -141,9 +155,9 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
       for (const width of [1440, 390]) {
         const page = await inBrowser(width, 'en', 'dark', false);
         const close = await page.$eval('.drawer-head .icon-btn', (el) => el.getBoundingClientRect().toJSON());
-        // WCAG 2.2, 2.5.8: a target is at least 24 by 24 CSS pixels (this one is 36).
-        expect(close.width).toBeGreaterThanOrEqual(36);
-        expect(close.height).toBeGreaterThanOrEqual(36);
+        // WCAG 2.2, 2.5.8: a target is at least 24 by 24 CSS pixels (this one is a control, 40).
+        expect(close.width).toBeGreaterThanOrEqual(40);
+        expect(close.height).toBeGreaterThanOrEqual(40);
         await page.close();
       }
     });
@@ -296,6 +310,29 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     });
   });
 
+  describe('the bar across the top of a phone', () => {
+    for (const theme of ['dark', 'light'] as const) {
+      it(`its menu button can be seen against the bar, which is the colour of the page in either theme: ${theme}`, async () => {
+        render(
+          <I18nProvider>
+            <MobileBar title="My vault" onOpenMenu={() => {}} />
+          </I18nProvider>,
+        );
+        const page = await inBrowser(390, 'en', theme, false);
+        // The audit's own question of every icon button: its glyph against what it stands on (3:1).
+        expect(await audit.auditButtons(page)).toEqual([]);
+        // It was a glyph made white in the markup, for a bar that was dark, and was gone on the light one.
+        const [glyph, bar] = await page.$eval('.mobile-bar', (el) => [
+          getComputedStyle(el.querySelector('.icon-btn')!).color,
+          getComputedStyle(el).backgroundColor,
+        ]);
+        expect(glyph).not.toBe('rgb(255, 255, 255)');
+        expect(glyph).not.toBe(bar);
+        await page.close();
+      });
+    }
+  });
+
   describe('a strip of tabs', () => {
     const tabs = Array.from({ length: 9 }, (_, i) => ({ key: `t${i}`, label: `Section number ${i}` }));
 
@@ -320,6 +357,245 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
         }
       }
     });
+  });
+
+  describe('the contents of a legal document', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`say each number once and read it first, as the headings are written, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/legal';
+        // The figures the page quotes, as the server gives them (a page without them is not the page).
+        vi.mocked(api.get).mockImplementation(((path: string) =>
+          Promise.resolve(
+            path === '/content/account-terms'
+              ? {
+                  termsVersion: '2026-10-draft-1',
+                  debt: { graceDays: 14, interestBpsPerDay: 5, suspendBelowMinor: -2000 },
+                  cashOut: { bandMinor: 10_000, smallBps: 600, smallMinimumMinor: 99, largeFixedMinor: 500, largeBps: 100 },
+                  chargebackFeeMinor: 2_500,
+                  escrow: { feeBps: 100, minimumFeeMinor: 2_500, minimumValueMinor: 50_000 },
+                  shipping: {
+                    restockingFeeMinor: 2_500,
+                    paymentWindowDays: 7,
+                    insurancePremiumBps: 150,
+                    insuranceMinimumPremiumMinor: 200,
+                    maxInsuredValueMinor: 500_000,
+                    signatureRequiredAboveMinor: 50_000,
+                  },
+                  removeCommonsWindowDays: 30,
+                }
+              : [],
+          )) as never);
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await screen.findByText(/14 days|14 ימים/);
+        await waitFor(() => expect(document.querySelector('.legal-toc a')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        const rows = await page.evaluate(() =>
+          [...document.querySelectorAll('.legal-toc li')].map((li) => {
+            const text = li.querySelector('a')!.firstChild as Text;
+            const at = (i: number) => {
+              const range = document.createRange();
+              range.setStart(text, i);
+              range.setEnd(text, i + 1);
+              return range.getBoundingClientRect().left;
+            };
+            return {
+              text: text.data.slice(0, 14),
+              marker: getComputedStyle(li).listStyleType,
+              number: at(0),
+              word: at(text.data.search(/[A-Za-z]/)),
+            };
+          }),
+        );
+        expect(rows.length).toBeGreaterThan(5);
+        for (const row of rows) {
+          // The heading begins with its number: a marker of the list's own would say it twice, and in a
+          // right-to-left line the number is drawn after the words ("About these terms .1").
+          expect(row.marker, row.text).toBe('none');
+          expect(row.number, row.text).toBeLessThan(row.word);
+        }
+        await page.close();
+      });
+    }
+  });
+
+  describe('the rows of a drawer', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`keep inside it on a phone, a date wrapping at its space where the column is narrower than it: ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        render(
+          <I18nProvider>
+            <DetailDrawer title="Transaction details" onClose={() => {}}>
+              <dl className="detail-list">
+                <DetailRow label="Type">Service charge</DetailRow>
+                <DetailRow label="Date">
+                  <span className="date">
+                    {locale === 'he' ? '28 באוקטובר 2026 בשעה 13:00' : 'October 28, 2026 at 1:00 PM'}
+                  </span>
+                </DetailRow>
+                <DetailRow label="Record ID">
+                  <code dir="ltr">1e7a2e35-1fbd-4871-b4c9-17b5fc69d9ef</code>
+                </DetailRow>
+              </dl>
+            </DetailDrawer>
+          </I18nProvider>,
+        );
+        const page = await inBrowser(390, locale);
+        const body = await page.$eval('.drawer-body', (el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(body.scrollWidth).toBeLessThanOrEqual(body.clientWidth);
+        await page.close();
+      });
+    }
+  });
+
+  describe('the guides', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`are English, read from the left, with the full stop of a sentence at its end, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/guides?g=first-week';
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.timeline li p')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        // A guide is written in English only. On a Hebrew page a paragraph of it that nothing says is English reads
+        // from the right, and the full stop that ends each sentence is drawn at the start of the line.
+        const marked = await page.$$eval('.timeline li p', (ps) =>
+          ps.map((p) => `${p.getAttribute('lang')} ${p.getAttribute('dir')}`),
+        );
+        expect(marked.length).toBeGreaterThan(3);
+        expect(new Set(marked)).toEqual(new Set(['en ltr']));
+        const { flags } = await audit.inspect(page, locale, 1440);
+        expect(flags.filter((f) => /wrong way round|out of order/.test(f))).toEqual([]);
+        await page.close();
+      });
+
+      it(`show what is related with a chevron the size of a letter, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/guides?g=first-week';
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.check-list li svg')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        // An icon is given its size by where it stands; the chevron of a related guide had none, and was as large
+        // as the page was wide.
+        const icons = await page.$$eval('.check-list li svg', (els) =>
+          els.map((el) => Math.max(el.getBoundingClientRect().width, el.getBoundingClientRect().height)),
+        );
+        expect(icons.length).toBeGreaterThan(0);
+        expect(Math.max(...icons)).toBeLessThanOrEqual(24);
+        await page.close();
+      });
+
+      it(`name each guide in English where they are listed, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/guides';
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.card-grid .card-title')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        const names = await page.$$eval('.card-grid li', (cards) =>
+          cards.flatMap((card) =>
+            [...card.querySelectorAll('.card-title span, .card-desc span, .card-hit span')].map(
+              (el) => `${el.getAttribute('lang')} ${el.getAttribute('dir')}`,
+            ),
+          ),
+        );
+        expect(names.length).toBeGreaterThan(9);
+        expect(new Set(names)).toEqual(new Set(['en ltr']));
+        await page.close();
+      });
+    }
+  });
+
+  describe('a ring measured on the way', () => {
+    it('is measured once what has focus has come to rest: a box that scrolls it into view smoothly is not caught half way', async () => {
+      render(
+        <div
+          id="box"
+          style={{
+            height: 120,
+            padding: 8,
+            overflowY: 'auto',
+            scrollBehavior: 'smooth',
+            scrollPaddingBlock: 12,
+          }}
+        >
+          <div style={{ height: 600 }} />
+          <textarea aria-label="Description" rows={2} />
+        </div>,
+      );
+      const page = await inBrowser(390);
+      // As the drawer does when a field takes focus (revealField), and as the browser does of its own accord.
+      await page.evaluate(() => {
+        document.querySelector('textarea')!.addEventListener('focus', (event) => {
+          (event.target as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        });
+      });
+      const flags = await audit.auditFocus(page, 2);
+      expect(flags.filter((flag) => /cut off/.test(flag))).toEqual([]);
+      await page.close();
+    });
+  });
+
+  describe('a strip of tabs that is wider than a phone', () => {
+    // The admin console has eleven of them. A tab keeps the width of its word and the strip scrolls: a tab that is
+    // given a minimum width of its own may shrink below its word, and the words are then drawn on one another.
+    const tabs = [
+      'Shelf yield',
+      'Users',
+      'Sign-ins',
+      'Parked messages',
+      'Wallet requests',
+      'Accounting',
+      'Items',
+      'Bault store',
+      'Pricing',
+      'Disputes',
+      'Storage fees',
+    ].map((label, i) => ({ key: `t${i}`, label }));
+
+    for (const [locale, width] of [
+      ['en', 390],
+      ['he', 390],
+      ['en', 320],
+    ] as const) {
+      it(`keeps each tab as wide as its word, and one after the other: ${locale}, ${width}px`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        render(<ContextTabs label="sections" tabs={tabs} active="t0" onSelect={() => {}} />);
+        const page = await inBrowser(width, locale);
+        const boxes = await page.$$eval('.ctx-tab', (els) =>
+          els.map((el) => {
+            const box = el.getBoundingClientRect();
+            return { word: el.textContent, left: box.left, right: box.right, fits: el.scrollWidth <= el.clientWidth + 0.5 };
+          }),
+        );
+        expect(boxes).toHaveLength(tabs.length);
+        for (const box of boxes) expect(box.fits, `${box.word} is as wide as its word`).toBe(true);
+        // Each tab starts where the one before it ended (the strip is read from the right in Hebrew).
+        for (let i = 1; i < boxes.length; i += 1) {
+          const [before, after] = [boxes[i - 1]!, boxes[i]!];
+          const apart = locale === 'he' ? before.left - after.right : after.left - before.right;
+          expect(apart, `${before.word} and ${after.word} do not overlap`).toBeGreaterThanOrEqual(-0.5);
+        }
+        await page.close();
+      });
+    }
   });
 
   describe('the wallet statement on a phone', () => {
@@ -507,6 +783,70 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
         });
       }
     }
+    }
+  });
+  describe('the rate card', () => {
+    const RULE = (id: string, actionType: string, description: string) => ({
+      id,
+      actionType,
+      itemClass: null,
+      description,
+      model: 'fixed',
+      value: 1500,
+      currency: 'USD',
+      billingTrigger: 'per_event',
+      effectiveFrom: '2026-10-27T12:00:00.000Z',
+    });
+    const RULES = [
+      RULE('r1', 'service_fee:condition_inspection', 'Per-area condition report against a fixed severity scale'),
+      RULE('r2', 'consignment_fee:auction_house', 'Commission on an auction-house consignment sale'),
+      RULE('r3', 'shipping_addon:gps_tracker', 'A tracker placed in the parcel'),
+    ];
+
+    for (const locale of ['en', 'he'] as const) {
+      it(`breaks the name of an action that has none of its own where it is made of parts, never inside a word, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/admin/pricing';
+        vi.mocked(api.get).mockImplementation(((path: string) =>
+          Promise.resolve(
+            path === '/pricing/rules'
+              ? RULES
+              : path === '/admin/pricing/coverage'
+                ? JSON.parse(JSON.stringify(coverage(billableActions(), [])))
+                : path === '/membership/tiers'
+                  ? {
+                      tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
+                      uncovered: [],
+                      cycleDays: 30,
+                      currency: 'USD',
+                    }
+                  : [],
+          )) as never);
+        render(
+          <I18nProvider>
+            <AdminConsole currentUserId="me" />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.rate-group-title .code-inline')).not.toBeNull());
+        for (const width of [1440, 390]) {
+          const page = await inBrowser(width, locale);
+          const broken = await page.evaluate(() => {
+            const out: string[] = [];
+            for (const code of document.querySelectorAll('.rate-group-title .code-inline')) {
+              const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+              for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                // A word that is drawn on two lines is drawn in two boxes, one to a line.
+                if (range.getClientRects().length > 1) out.push(node.textContent ?? '');
+              }
+            }
+            return out;
+          });
+          expect(broken, `${locale} ${width}px`).toEqual([]);
+          await page.close();
+        }
+      });
     }
   });
   describe('an account or an item, opened in a drawer', () => {

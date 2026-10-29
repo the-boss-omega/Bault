@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 import { useExit } from './useExit';
 import { inBody } from './inBody';
 import { useOverlay } from './useOverlay';
+import { useKeyboardScroll } from './useKeyboardScroll';
 
 export function DetailDrawer({
   title,
@@ -37,8 +38,11 @@ export function DetailDrawer({
   const t = useT();
   const { closing, requestClose } = useExit(onClose);
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useOverlay(panelRef, requestClose);
+  // A body that scrolls and has nothing in it to stop on (a request that is settled) is a stop itself.
+  useKeyboardScroll(bodyRef, titleId);
 
   return inBody(
     <>
@@ -69,7 +73,9 @@ export function DetailDrawer({
             <IconClose />
           </IconButton>
         </header>
-        <div className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>{children}</div>
+        <div ref={bodyRef} className={`drawer-body${flush ? ' drawer-body--flush' : ''}`}>
+          {children}
+        </div>
         {(footer || notice) && (
           <footer className="drawer-foot">
             {notice && <div className="drawer-notice">{notice}</div>}
@@ -86,7 +92,7 @@ export function ConfirmationModal({
   body,
   confirmLabel,
   cancelLabel,
-  tone = 'gold',
+  tone = 'primary',
   busy,
   onConfirm,
   onCancel,
@@ -95,7 +101,7 @@ export function ConfirmationModal({
   body: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
-  tone?: 'gold' | 'danger';
+  tone?: 'primary' | 'danger';
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -128,7 +134,11 @@ export function ConfirmationModal({
           <Button variant="secondary" disabled={busy} onClick={requestCancel}>
             {cancelLabel}
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'gold'} loading={busy} onClick={onConfirm}>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            loading={busy}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </div>

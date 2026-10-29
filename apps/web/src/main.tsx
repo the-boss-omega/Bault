@@ -8,6 +8,7 @@ import './index.css';
 import './theme.css';
 import './slab.css';
 import './components.css';
+import './buttons.css';
 import './landing.css';
 import './app.css';
 import './gallery.css';

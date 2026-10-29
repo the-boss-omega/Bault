@@ -2,11 +2,18 @@
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { createHmac } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright-core';
-import { audit, auditFocus, auditForced, auditTheme, inspect } from './lib/audit-checks.mjs';
+import { chromium, firefox, webkit } from 'playwright-core';
+import {
+  audit,
+  auditButtons,
+  auditFocus,
+  auditForced,
+  auditTheme,
+  inspect,
+} from './lib/audit-checks.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -50,9 +57,18 @@ Options:
                      confirmation, and measuring that each one is on screen, covers
                      what it should and can be reached
   --only <text>      capture only screens whose name contains this text
-  --browser <path>   Chromium or Chrome to drive (default /opt/pw-browsers/chromium
-                     when it exists, otherwise the installed Google Chrome)
+  --engine <name>    chromium, firefox or webkit (default chromium): the engines of Chrome,
+                     of Firefox and of Safari. The other two have to be installed first
+                     (playwright install firefox webkit). Firefox has no mobile viewport, so
+                     at phone width it is a narrow window with touch, not a phone
+  --browser <path>   Chromium or Chrome to drive with --engine chromium (default
+                     /opt/pw-browsers/chromium when it exists, otherwise the installed
+                     Google Chrome)
   --password <pw>    the seeded accounts' password (default 11111111)
+
+The first record each screen opens (a guide, a question, a ticket, a parcel, a shipment, a
+transaction, a request) is opened and captured as a screen of its own, named <screen>-record
+(--only record asks for those alone), and the run says which kinds of record it did not reach.
 
 Open <out>/index.html when it finishes. Screens with automatic flags (an id,
 cents, an enum name or English words on a Hebrew page, an English phrase, a date,
@@ -99,6 +115,37 @@ const ANONYMOUS_ROUTES = [
 
 const VAULT_SCOPES = ['active', 'hold', 'history'];
 
+/**
+ * What a screen opens. A list is one page and the record it opens is another: a guide opens its steps, a question
+ * its answer, and a ticket, a parcel, a shipment, a transaction or a request its record, each named in the
+ * address (`?g=`, `?ticket=`). A capture of a list says nothing about what it opens: the steps of a guide were
+ * drawn with every full stop at the wrong end of its line for as long as the audit did not open one.
+ */
+const RECORD_OPENERS = ['tr.is-clickable', 'li.label-card', '.register-link', '.faq-trigger', '.card-hit'];
+
+/**
+ * Every kind of record the app opens, and the audit opens each one: by the first row, label, card or question a
+ * screen has, or (an account, an item, a ticket in the operator's queue) by its address. A kind the app gains is a
+ * screen the audit does not see until it is added here and there is a way to reach it; a test reads the app's
+ * source for the kinds it opens and fails until this list says the same.
+ */
+export const RECORD_KINDS = ['g', 'item', 'parcel', 'q', 'request', 'shipment', 'ticket', 'transaction', 'user'];
+
+/** The kinds of record a source opens, read from where it opens them: `openRecord('ticket', id)`. */
+export function recordKindsOf(source) {
+  return [...new Set([...source.matchAll(/openRecord\(\s*'([a-z]+)'/g)].map((m) => m[1]))].sort();
+}
+
+export function recordKindsOfTheApp() {
+  const root = join(repoRoot, 'apps/web/src');
+  const kinds = new Set();
+  for (const file of readdirSync(root, { recursive: true })) {
+    if (typeof file !== 'string' || !/\.tsx?$/.test(file)) continue;
+    for (const kind of recordKindsOf(readFileSync(join(root, file), 'utf8'))) kinds.add(kind);
+  }
+  return [...kinds].sort();
+}
+
 function parseArgs(argv) {
   const out = {
     api: 'http://127.0.0.1:3000',
@@ -114,6 +161,7 @@ function parseArgs(argv) {
     forced: false,
     overlays: true,
     only: null,
+    engine: 'chromium',
     browser: null,
     password: '11111111',
   };
@@ -141,6 +189,7 @@ function parseArgs(argv) {
     else if (flag === '--forced') out.forced = true;
     else if (flag === '--no-overlays') out.overlays = false;
     else if (flag === '--only') out.only = value();
+    else if (flag === '--engine') out.engine = value();
     else if (flag === '--browser') out.browser = value();
     else if (flag === '--password') out.password = value();
     else throw new Error(`Unknown option ${flag}. Run with --help.`);
@@ -153,6 +202,8 @@ function parseArgs(argv) {
   }
   if (out.widths.some((w) => !Number.isInteger(w) || w < 320)) throw new Error('--widths takes whole pixel widths');
   if (out.theme !== 'light' && out.theme !== 'dark') throw new Error('--theme is light or dark');
+  if (!ENGINES[out.engine])
+    throw new Error(`Unknown engine "${out.engine}". Known: ${Object.keys(ENGINES).join(', ')}`);
   return out;
 }
 
@@ -249,10 +300,31 @@ function stopPreview(child) {
   } catch {}
 }
 
-function launchOptions(browserPath) {
+const ENGINES = { chromium, firefox, webkit };
+
+function launchOptions(engine, browserPath) {
+  if (engine !== 'chromium') return {};
   if (browserPath) return { executablePath: browserPath };
   if (existsSync('/opt/pw-browsers/chromium')) return { executablePath: '/opt/pw-browsers/chromium' };
   return { channel: 'chrome' };
+}
+
+/**
+ * The context a page is looked at in. At phone width it is a phone's: a mobile viewport with touch, where the
+ * engine has one (Firefox's does not exist, so there it is the narrow window alone).
+ */
+function contextOptions(state, width, locale, { motion, forced = false }) {
+  const mobile = width < 800;
+  return {
+    viewport: { width, height: mobile ? 844 : 900 },
+    deviceScaleFactor: 1,
+    ...(state.opts.engine === 'firefox' ? {} : { isMobile: mobile }),
+    hasTouch: mobile,
+    colorScheme: state.opts.theme,
+    reducedMotion: motion ? 'no-preference' : 'reduce',
+    forcedColors: forced ? 'active' : 'none',
+    locale: locale === 'he' ? 'he-IL' : 'en-US',
+  };
 }
 
 async function apiCall(page, method, path, body) {
@@ -338,16 +410,7 @@ async function settle(page) {
  * box that moves what is fixed inside it, only shows when the thing is opened.
  */
 async function auditOverlays(state, browser, persona, locale, width) {
-  const mobile = width < 800;
-  const context = await browser.newContext({
-    viewport: { width, height: mobile ? 844 : 900 },
-    deviceScaleFactor: 1,
-    isMobile: mobile,
-    hasTouch: mobile,
-    colorScheme: state.opts.theme,
-    reducedMotion: 'no-preference',
-    locale: locale === 'he' ? 'he-IL' : 'en-US',
-  });
+  const context = await browser.newContext(contextOptions(state, width, locale, { motion: true }));
   await context.addInitScript(
     ([l, t]) => {
       try {
@@ -439,7 +502,8 @@ async function auditOverlays(state, browser, persona, locale, width) {
         const lightFlags = [
           ...(await measure('.lightbox', { covers: true, label: 'the photograph\'s room' })),
           ...(await measure('.lightbox-close', { label: 'the photograph\'s close button' })),
-          ...(await measure('.lightbox .modal-slab, .lightbox .photo-thumb', { label: 'the photograph' })),
+          // A card with no photograph has the words that say so in its place: the room is measured either way.
+          ...(await measure('.lightbox .modal-slab, .lightbox .photo-thumb, .lightbox .modal-empty', { label: 'the photograph (or the words that say there is none)' })),
         ];
         await record('photograph', lightFlags);
         await page.keyboard.press('Escape');
@@ -463,6 +527,9 @@ function slug(value) {
 async function capture(state, page, name, ctx) {
   if (state.opts.only && !name.includes(state.opts.only)) return;
   await settle(page);
+  // Every screen is looked at from its top, as a visitor arrives at it: a page that has been left scrolled (by the
+  // one before it) has its sticky bar over its header, and a target that is under the bar is "partially obscured".
+  await page.evaluate(() => globalThis.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   const file = `${slug(name)}-${ctx.locale}-${ctx.width}.png`;
   await page.screenshot({ path: join(state.outDir, file), fullPage: true });
   const found = await inspect(page, ctx.locale, ctx.width);
@@ -470,9 +537,39 @@ async function capture(state, page, name, ctx) {
   if (state.opts.axe) accessibility.push(...(await auditFocus(page, state.opts.focusStops)));
   if (ctx.forced) accessibility.push(...(await auditForced(page)));
   const theme = await auditTheme(page, state.opts.theme);
-  const flags = [...found.flags, ...theme, ...accessibility, ...ctx.problems.splice(0)];
+  const buttons = await auditButtons(page);
+  const flags = [...found.flags, ...theme, ...buttons, ...accessibility, ...ctx.problems.splice(0)];
   state.shots.push({ name, persona: ctx.persona, locale: ctx.locale, width: ctx.width, file, title: found.title, flags });
   process.stdout.write(flags.length ? '!' : '.');
+}
+
+/**
+ * Opens the first record the screen has (a row of a roll, a parcel's label, a guide, a question) and captures it
+ * as the screen it then is. What the click adds to the address says what was opened; a click that adds nothing
+ * opened nothing the address names (a menu, a card with no record behind it) and is let go.
+ */
+async function visitRecord(state, page, name, ctx) {
+  const recordName = `${name}-record`;
+  if (state.opts.only && !recordName.includes(state.opts.only)) return;
+  // What a screen lists arrives after the screen does.
+  await settle(page);
+  const keysOf = () =>
+    page.evaluate(() => [...new globalThis.URLSearchParams(globalThis.location.hash.split('?')[1] ?? '').keys()]);
+  const before = await keysOf();
+  for (const selector of RECORD_OPENERS) {
+    const opener = page.locator(`main ${selector}`).first();
+    if (!(await opener.count())) continue;
+    await opener.click({ force: true, timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const added = (await keysOf()).filter((key) => !before.includes(key));
+    if (added.length === 0) {
+      await page.keyboard.press('Escape');
+      continue;
+    }
+    for (const kind of added) state.opened.add(kind);
+    await capture(state, page, recordName, ctx);
+    return;
+  }
 }
 
 async function visitSection(state, page, section, ctx) {
@@ -488,11 +585,13 @@ async function visitSection(state, page, section, ctx) {
   );
   if (tabs.length === 0) {
     await capture(state, page, `${ctx.persona}-${section}`, ctx);
+    await visitRecord(state, page, `${ctx.persona}-${section}`, ctx);
     return;
   }
   for (const tab of tabs) {
     await page.goto(`${state.baseUrl}/#/${section}/${tab}`);
     await capture(state, page, `${ctx.persona}-${section}-${tab}`, ctx);
+    await visitRecord(state, page, `${ctx.persona}-${section}-${tab}`, ctx);
   }
 }
 
@@ -502,17 +601,20 @@ async function visitItems(state, page, ctx) {
     const first = Array.isArray(list.json) ? list.json[0] : null;
     if (!first) continue;
     await page.goto(`${state.baseUrl}/#/vault/${scope}?item=${encodeURIComponent(first.id)}`);
+    state.opened.add('item');
     await capture(state, page, `${ctx.persona}-item-${scope}`, ctx);
   }
 }
 
 /**
- * What the management console opens: an account and an item, each in the drawer it is changed in (by the link
- * that names it, as the roll's own names are), so that what is drawn there is held to what the pages are.
+ * What the management console opens: an account, an item and a wallet request, each in the drawer it is
+ * changed in (by the link that names it, as the roll's own names are), so that what is drawn there is held to
+ * what the pages are.
  */
 async function visitAdminRecords(state, page, ctx) {
   const users = await apiCall(page, 'GET', '/admin/users');
   const items = await apiCall(page, 'GET', '/admin/items');
+  const requests = await apiCall(page, 'GET', '/admin/wallet-requests');
   const me = await apiCall(page, 'GET', '/me/profile');
   // An enrolled account that is not the one signed in: the drawer of one's own account has no reset button, and
   // the reset (its button, its confirmation, where focus goes after) is what an administrator's drawer is for.
@@ -520,26 +622,39 @@ async function visitAdminRecords(state, page, ctx) {
   const records = [
     ['users', 'user', others.find((u) => u.mfaEnabled) ?? others[0] ?? null],
     ['items', 'item', Array.isArray(items.json) ? items.json[0] : null],
+    // A request that waits for a decision, where there is one: its drawer has the steps (approve, reject) that a closed one has not.
+    [
+      'requests',
+      'request',
+      Array.isArray(requests.json)
+        ? (requests.json.find((r) => r.status === 'submitted' || r.status === 'pending_review') ??
+          requests.json[0] ??
+          null)
+        : null,
+    ],
   ];
   for (const [tab, param, record] of records) {
     if (!record) continue;
     await page.goto(`${state.baseUrl}/#/admin/${tab}?${param}=${encodeURIComponent(record.id)}`);
+    state.opened.add(param);
     await capture(state, page, `${ctx.persona}-${tab}-drawer`, ctx);
   }
 }
 
+/** A ticket in the operator's queue, in the drawer it is answered in (a queue's rows are not what opens it). */
+async function visitQueueTicket(state, page, ctx) {
+  const queue = await apiCall(page, 'GET', '/support/queue');
+  const first = Array.isArray(queue.json) ? queue.json[0] : null;
+  if (!first) return;
+  await page.goto(`${state.baseUrl}/#/warehouse/support?ticket=${encodeURIComponent(first.id)}`);
+  state.opened.add('ticket');
+  await capture(state, page, `${ctx.persona}-support-ticket`, ctx);
+}
+
 async function runPersona(state, browser, persona, locale, width) {
-  const mobile = width < 800;
-  const context = await browser.newContext({
-    viewport: { width, height: mobile ? 844 : 900 },
-    deviceScaleFactor: 1,
-    isMobile: mobile,
-    hasTouch: mobile,
-    colorScheme: state.opts.theme,
-    reducedMotion: state.opts.motion ? 'no-preference' : 'reduce',
-    forcedColors: state.opts.forced ? 'active' : 'none',
-    locale: locale === 'he' ? 'he-IL' : 'en-US',
-  });
+  const context = await browser.newContext(
+    contextOptions(state, width, locale, { motion: state.opts.motion, forced: state.opts.forced }),
+  );
   await context.addInitScript(
     ([l, t]) => {
       try {
@@ -607,6 +722,7 @@ async function runPersona(state, browser, persona, locale, width) {
     await settle(page);
     for (const section of spec.sections ?? SECTIONS) await visitSection(state, page, section, ctx);
     if (persona === 'collector') await visitItems(state, page, ctx);
+    if (persona === 'operator') await visitQueueTicket(state, page, ctx);
     if (persona === 'admin') await visitAdminRecords(state, page, ctx);
   } finally {
     await context.close();
@@ -711,8 +827,8 @@ async function main() {
   let preview = null;
   if (!opts.baseUrl) preview = await startPreview(opts.api);
   const baseUrl = (opts.baseUrl ?? 'http://localhost:4173').replace(/\/+$/, '');
-  const state = { opts, outDir, baseUrl, secrets, secretsFile, shots: [] };
-  const browser = await chromium.launch(launchOptions(opts.browser));
+  const state = { opts, outDir, baseUrl, secrets, secretsFile, shots: [], opened: new Set() };
+  const browser = await ENGINES[opts.engine].launch(launchOptions(opts.engine, opts.browser));
   try {
     for (const file of ['index.html', 'shots.json']) rmSync(join(outDir, file), { force: true });
     for (const persona of opts.personas) {
@@ -732,7 +848,13 @@ async function main() {
     writeFileSync(join(outDir, 'index.html'), contactSheet(state.shots));
   }
   const flagged = state.shots.filter((s) => s.flags.length).length;
-  console.log(`\n${state.shots.length} captures, ${flagged} with flags. Open ${join(opts.out, 'index.html')}`);
+  // The kinds of record the app opens against the kinds this run opened. A run of some of the accounts opens some
+  // of them; the runs of all the accounts, together, have to open every one (records.json is what they add up).
+  const known = recordKindsOfTheApp();
+  const opened = [...state.opened].sort();
+  writeFileSync(join(outDir, 'records.json'), JSON.stringify({ known, opened }, null, 2));
+  console.log(`\nRecords opened: ${opened.join(', ') || 'none'}; the app opens: ${known.join(', ')}.`);
+  console.log(`${state.shots.length} captures, ${flagged} with flags. Open ${join(opts.out, 'index.html')}`);
 }
 
 // Run when it is the script being run, not when its checks are imported (the tests that plant a mistake

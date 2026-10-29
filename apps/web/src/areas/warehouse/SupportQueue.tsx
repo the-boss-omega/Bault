@@ -101,7 +101,11 @@ export function SupportQueue({ onChanged }: { onChanged?: () => Promise<void> | 
                     <td>{formatDateTime(row.lastMessageAt, locale)}</td>
                     <td className="td-tight">
                       <div className="actions">
-                        <Button size="sm" variant="gold" onClick={() => openRecord('ticket', row.id)}>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => openRecord('ticket', row.id)}
+                        >
                           {t('support.open')}
                         </Button>
                         {!row.assignedTo && (

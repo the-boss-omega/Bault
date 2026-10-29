@@ -194,7 +194,7 @@ function AddressesTab({ onError }: { onError: (m: string) => void }) {
               <div className="actions">
                 <Button
                   size="sm"
-                  variant={copied === address.code ? 'secondary' : 'gold'}
+                  variant={copied === address.code ? 'secondary' : 'primary'}
                   icon={copied === address.code ? <IconCheck /> : undefined}
                   onClick={() => void copy(address)}
                 >
@@ -490,7 +490,12 @@ export function RegisterParcelForm({
         </aside>
 
         <div className="row request-form-actions">
-          <Button variant="gold" icon={<IconPlus />} disabled={busy || !facilityCode} onClick={() => void submit()}>
+          <Button
+            variant="primary"
+            icon={<IconPlus />}
+            disabled={busy || !facilityCode}
+            onClick={() => void submit()}
+          >
             {t('inbound.register.submit')}
           </Button>
         </div>

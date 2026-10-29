@@ -12,12 +12,43 @@ async function inspect(page, locale, width) {
       const ISOLATES = '.serial, .amount, .ltr-run, .code-inline, .bidi, [dir="ltr"], code, kbd, input, textarea, select, script, style';
       const flags = [];
       const text = document.body.innerText;
-      const uuid = text.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i);
-      if (uuid) flags.push(`id on screen: ${uuid[0]}`);
+      // An id that is shown as nothing but an id (a record's own number, in the face of a code, beside its label)
+      // is what it is there to be; one in a name or a sentence has got there by mistake.
+      const alone = new Set(
+        [...document.querySelectorAll('code, .code-inline')]
+          .filter((el) => el.checkVisibility?.() ?? true)
+          .map((el) => (el.textContent ?? '').trim().toLowerCase()),
+      );
+      const uuid = (text.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi) ?? []).find((id) => !alone.has(id.toLowerCase()));
+      if (uuid) flags.push(`id on screen: ${uuid}`);
       const cents = text.match(/\b\d[\d,]*\s*cents\b/i);
       if (cents) flags.push(`minor units on screen: ${cents[0]}`);
       const enums = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])].filter((w) => !w.includes('@'));
       if (enums.length) flags.push(`enum names on screen: ${enums.slice(0, 6).join(', ')}`);
+      // The line over a heading says what the paper is (a kicker); it is not the heading again.
+      const repeated = [];
+      for (const kicker of document.querySelectorAll('[class*="kicker"]')) {
+        if (!kicker.checkVisibility?.()) continue;
+        const said = (kicker.textContent ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+        if (!said) continue;
+        const room = kicker.closest('.drawer-tag, .auth-slip, .request-slip, article, section, li, form') ?? kicker.parentElement;
+        for (const heading of room?.querySelectorAll('h1, h2, h3, h4, [class*="title"]') ?? []) {
+          if (heading === kicker || kicker.contains(heading) || !heading.checkVisibility?.()) continue;
+          if ((heading.textContent ?? '').trim().replace(/\s+/g, ' ').toLowerCase() === said) repeated.push(`"${said.slice(0, 40)}"`);
+        }
+      }
+      if (repeated.length) flags.push(`a kicker that says its heading again: ${[...new Set(repeated)].slice(0, 3).join(', ')}`);
+      // An icon is the size of a letter. One that has been given no size is as large as the box it is in: the
+      // chevron beside a link, two hundred pixels tall, which nothing else on the page would say was wrong.
+      const oversized = [];
+      for (const icon of document.querySelectorAll('svg[aria-hidden="true"]')) {
+        if (!icon.checkVisibility?.() || icon.closest('.landing, .slab, .barcode')) continue;
+        const box = icon.getBoundingClientRect();
+        if (box.width > 96 || box.height > 96) {
+          oversized.push(`${Math.round(box.width)}x${Math.round(box.height)} beside "${(icon.parentElement?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 28)}"`);
+        }
+      }
+      if (oversized.length) flags.push(`an icon drawn larger than text: ${[...new Set(oversized)].slice(0, 3).join('; ')}`);
       if (document.documentElement.scrollWidth > window.innerWidth + 1 && width < 800) {
         flags.push(`scrolls sideways: ${document.documentElement.scrollWidth}px wide at ${window.innerWidth}px`);
       }
@@ -163,7 +194,9 @@ async function inspect(page, locale, width) {
             // Pokémon") to the next Hebrew letter, or to the end of its context.
             // (An isolate or a direction mark written into the text, as t() strings carry them, ends a phrase:
             // what is inside is its own run, and what is outside is the sentence's.)
-            const phrase = /(?:\b\d{1,4}\s+)?[A-Za-z\u00C0-\u024F][^\p{Script=Hebrew}\p{Script=Arabic}\u2066-\u2069\u200E\u200F]*/gu;
+            // (The "#/" of an address and the "@" of a name that stand against the first letter are part of it,
+            // and so are the numbers a name or a version begins with: "2011 Pokémon", "2026-10-draft-1".)
+            const phrase = /(?:\b\d{1,4}[\s\-./]+)*[#@/]{0,2}[A-Za-z\u00C0-\u024F][^\p{Script=Hebrew}\p{Script=Arabic}\u2066-\u2069\u200E\u200F]*/gu;
             const hebrew = /\p{Script=Hebrew}/u.test(flat);
             for (const m of flat.matchAll(phrase)) {
               let core = m[0];
@@ -285,6 +318,23 @@ async function auditFocus(page, stops = 40) {
   const seen = new Set();
   for (let i = 0; i < stops; i += 1) {
     await page.keyboard.press('Tab');
+    // Focus scrolls what it lands on into view, and smoothly where the person allows motion: the ring is measured
+    // once what has focus has come to rest, not on the way to its place.
+    await page.evaluate(async () => {
+      const { document, matchMedia, performance, requestAnimationFrame } = globalThis;
+      const el = document.activeElement;
+      if (!el || el === document.body || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const began = performance.now();
+      let last = '';
+      let still = 0;
+      while (still < 2 && performance.now() - began < 1200) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const box = el.getBoundingClientRect();
+        const now = `${box.top}|${box.left}`;
+        still = now === last ? still + 1 : 0;
+        last = now;
+      }
+    });
     const stop = await page.evaluate(() => {
       const { document, getComputedStyle } = globalThis;
       const el = document.activeElement;
@@ -402,6 +452,201 @@ async function auditFocus(page, stops = 40) {
 }
 
 /**
+ * The buttons on a page, seen as a visitor sees them: each one's label against its own face, its edge (the face
+ * where it is filled, its line where it is outlined) against what it stands on, and its size as a target. The
+ * colours of a button come from tokens that the surface it is on may change (the paper and the room have their
+ * own), so what is measured is what is drawn, where it is drawn. A button with no face and no line (a ghost)
+ * has the page for a face; a text button (a link set in a sentence) is asked only for its size, and its colours are
+ * the text's, which axe measures.
+ */
+async function auditButtons(page) {
+  // A button is measured where it comes to rest. A transition still in flight (the count that is fading out of the
+  // rail as focus leaves it) is a word that is, for a moment, where it is not going to stay. What never ends is left.
+  await page.evaluate(async () => {
+    const { document } = globalThis;
+    const moving = () =>
+      document
+        .getAnimations()
+        .filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity);
+    await Promise.race([
+      Promise.allSettled(moving().map((a) => a.finished)),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  });
+  return page.evaluate(() => {
+    const { document, getComputedStyle, matchMedia, NodeFilter } = globalThis;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const rgba = (css) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return { r, g, b, a: a / 255 };
+    };
+    const lum = ({ r, g, b }) => {
+      const f = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const over = (top, under) => ({
+      r: top.r * top.a + under.r * (1 - top.a),
+      g: top.g * top.a + under.g * (1 - top.a),
+      b: top.b * top.a + under.b * (1 - top.a),
+      a: 1,
+    });
+    const ratio = (a, b) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // What a button stands on: the nearest opaque background above it. null where it is a picture or a gradient.
+    const behind = (el) => {
+      const layers = [];
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        const bg = rgba(style.backgroundColor);
+        if (style.backgroundImage !== 'none' && bg.a < 1) return null;
+        if (bg.a > 0) layers.push(bg);
+        if (bg.a >= 1) break;
+      }
+      return layers.reduceRight((acc, layer) => over(layer, acc), { r: 255, g: 255, b: 255, a: 1 });
+    };
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    // Whether the words of a control are drawn on something beside it: the text that can be seen (not what is clear,
+    // hidden or clipped by the control or what is inside it) that lies outside the control's box, and a control
+    // that it lies over (the next tab, the next button). Words that run a few pixels out into empty space are not drawn on anything.
+    const CONTROLS = 'button, a[href], [role="tab"], [role="button"], input, select, textarea, summary';
+    const wordsOutside = (control) => {
+      const box = control.getBoundingClientRect();
+      const walker = document.createTreeWalker(control, NodeFilter.SHOW_TEXT);
+      const outside = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent.trim()) continue;
+        let seenAndFree = true;
+        for (let up = node.parentElement; up; up = up.parentElement) {
+          const style = getComputedStyle(up);
+          if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0 || style.overflowX !== 'visible') {
+            seenAndFree = false;
+            break;
+          }
+          if (up === control) break;
+        }
+        if (!seenAndFree) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width === 0) continue;
+          if (rect.left < box.left - 1) outside.push({ left: rect.left, right: Math.min(rect.right, box.left), top: rect.top, bottom: rect.bottom });
+          if (rect.right > box.right + 1) outside.push({ left: Math.max(rect.left, box.right), right: rect.right, top: rect.top, bottom: rect.bottom });
+        }
+      }
+      if (outside.length === 0) return null;
+      for (const other of document.querySelectorAll(CONTROLS)) {
+        if (other === control || control.contains(other) || other.contains(control)) continue;
+        if (!other.checkVisibility?.({ checkVisibilityCSS: true })) continue;
+        const at = other.getBoundingClientRect();
+        if (at.width === 0 || at.height === 0) continue;
+        const over = outside.find((o) => o.left < at.right - 1 && o.right > at.left + 1 && o.top < at.bottom - 1 && o.bottom > at.top + 1);
+        if (over) {
+          const name = (other.getAttribute('aria-label') || other.textContent || '').trim().slice(0, 24);
+          return { by: Math.round(Math.max(...outside.map((o) => o.right - o.left))), over: name };
+        }
+      }
+      return null;
+    };
+    const flags = [];
+    const seen = new Set();
+    for (const el of document.querySelectorAll('.btn, .icon-btn')) {
+      if (!el.checkVisibility?.({ checkVisibilityCSS: true })) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const style = getComputedStyle(el);
+      const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 28);
+      const kind =
+        [...el.classList].find((c) => /^(?:btn|icon-btn)--/.test(c)) ??
+        (el.classList.contains('icon-btn') ? 'icon-btn' : 'btn');
+      const stand = behind(el);
+      // One report for the same button on the same ground: the row of twenty Cancels is one finding, and the
+      // same button on the paper and on the page is two.
+      const key = `${kind}|${name}|${el.disabled}|${stand ? [stand.r, stand.g, stand.b].map(Math.round).join(',') : 'picture'}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const say = (message) => flags.push(`button "${name}" (${kind}): ${message}`);
+      // A target a finger or a pointer has to hit.
+      // Its words are in it: text that is drawn outside the box it is in, where nothing clips it, is drawn on what is beside it.
+      const out = wordsOutside(el);
+      if (out) say(`its words run out of it, ${out.by}px, over "${out.over}"`);
+      if (!el.disabled && (box.width < 24 || box.height < 24))
+        say(`${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
+      else if (
+        !el.disabled &&
+        coarse &&
+        (box.width < 44 || box.height < 44) &&
+        // A text button set in a sentence or under a form has the 24px of a target; it is not a block to press.
+        !el.classList.contains('btn--link') &&
+        !el.closest('.ph-controls')
+      ) {
+        say(
+          `${Math.round(box.width)}x${Math.round(box.height)}px, under 44px where the pointer is a finger`,
+        );
+      }
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      // Text set in a sentence is held to the text's rules (axe), not to a button's: only its size, above, is asked of it.
+      if (!stand || el.classList.contains('btn--link')) continue;
+      const own = rgba(style.backgroundColor);
+      const face = own.a > 0 ? over(own, stand) : stand;
+      const label = over(rgba(style.color), face);
+      const need = el.classList.contains('icon-btn') ? 3 : 4.5;
+      const labelRatio = ratio(label, face);
+      if (labelRatio < need)
+        say(`its label is ${labelRatio.toFixed(2)}:1 on its own face, which needs ${need}:1`);
+      // The shape: filled, it is the face against what it stands on; outlined, it is the line.
+      const line = rgba(style.borderTopColor);
+      const lineVisible =
+        style.borderTopStyle !== 'none' && parseFloat(style.borderTopWidth) > 0 && line.a > 0;
+      const filled = own.a > 0 && ratio(face, stand) >= 1.2;
+      if (filled || lineVisible) {
+        const edge = Math.max(
+          filled ? ratio(face, stand) : 0,
+          lineVisible ? ratio(over(line, stand), stand) : 0,
+        );
+        if (
+          edge < 3 &&
+          !el.classList.contains('btn--ghost') &&
+          !el.classList.contains('icon-btn--bare')
+        ) {
+          say(`its edge is ${edge.toFixed(2)}:1 against what it stands on, which needs 3:1`);
+        }
+      }
+    }
+    // Every other button (a crumb, a tab, a card that opens): not the family's, but a target all the same.
+    for (const el of document.querySelectorAll('button:not(.btn, .icon-btn), [role="button"]:not(.btn, .icon-btn)')) {
+      if (!el.checkVisibility?.({ checkVisibilityCSS: true }) || el.disabled) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 28);
+      const kind = `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''}`;
+      // Its words are in it: a tab that is let shrink below its word draws the word on the next tab.
+      const out = wordsOutside(el);
+      if (out) {
+        const runs = `words|${el.tagName}|${el.className}|${name}`;
+        if (!seen.has(runs)) {
+          seen.add(runs);
+          flags.push(`target "${name}" (${kind}): its words run out of it, ${out.by}px, over "${out.over}"`);
+        }
+      }
+      if (box.width >= 24 && box.height >= 24) continue;
+      const key = `target|${el.tagName}|${el.className}|${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      flags.push(`target "${name}" (${kind}): ${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
+    }
+    return flags;
+  });
+}
+
+/**
  * Forced colours: the system paints the page in its own palette, so what said "this one" by a tint or a
  * gradient says nothing unless it was drawn in the system's highlight. The selected tab and the current page
  * are checked for a mark that survives it.
@@ -462,4 +707,4 @@ async function auditTheme(page, expected) {
   }, expected);
 }
 
-export { audit, auditFocus, auditForced, auditTheme, inspect };
+export { audit, auditButtons, auditFocus, auditForced, auditTheme, inspect };

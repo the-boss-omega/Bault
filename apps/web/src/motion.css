@@ -12,22 +12,7 @@
   --lift: -2px;
 }
 
-/* Buttons and cards: hover lifts, press settles. */
-
-.btn,
-.icon-btn {
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
-    transform var(--dur-fast) var(--ease);
-}
-
-.btn:hover:not(:disabled) {
-  box-shadow: var(--shadow-xs);
-}
-
-.btn:not(:disabled):active {
-  transform: scale(0.98);
-}
+/* Cards: hover lifts. (Buttons press themselves: buttons.css.) */
 
 .card--interactive {
   transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
@@ -254,5 +239,28 @@ textarea {
 
   .label-track li[data-reached='true']:has(+ li[data-reached='true'])::after {
     background: Highlight;
+  }
+
+  /* A bar is a background, and a background is gone: the bars are drawn in the system's text, the weakest in its highlight. */
+  .chart-bar {
+    background: CanvasText;
+  }
+
+  .chart-bar--mark,
+  .chart-flag-key {
+    background: Highlight;
+  }
+
+  /* On a phone a request and an action are cards, and the edge of a card says what the edge of a line does. */
+  .data-table--desk tr.roll-line,
+  .data-table--coverage tbody tr {
+    border-inline-start-color: Canvas;
+  }
+
+  .data-table--desk tr.roll-line.is-attention,
+  .data-table--desk tr.roll-line.is-alert,
+  .data-table--coverage tbody tr.is-attention,
+  .data-table--coverage tbody tr.is-alert {
+    border-inline-start-color: Highlight;
   }
 }

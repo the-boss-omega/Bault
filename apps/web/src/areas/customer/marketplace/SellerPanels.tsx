@@ -98,7 +98,7 @@ export function MyListingsPanel({
             action={
               <Button
                 size="sm"
-                variant="gold"
+                variant="primary"
                 onClick={() => navigate({ section: 'marketplace', tab: 'sell' })}
               >
                 {t('market.mine.listOne')}
@@ -162,7 +162,7 @@ export function MyListingsPanel({
                         <>
                           <Button
                             size="sm"
-                            variant="gold"
+                            variant="primary"
                             disabled={busy || dollarsToCents(price) === null}
                             onClick={() => void reprice(row)}
                           >
@@ -397,7 +397,7 @@ function OfferActions({
         <div className="actions">
           <Button
             size="sm"
-            variant="gold"
+            variant="primary"
             disabled={busy || dollarsToCents(amount) === null}
             onClick={() => onRespond('counter')}
           >
@@ -429,7 +429,7 @@ function OfferActions({
 
   return (
     <div className="actions actions--row">
-      <Button size="sm" variant="gold" disabled={busy} onClick={() => onRespond('accept')}>
+      <Button size="sm" variant="primary" disabled={busy} onClick={() => onRespond('accept')}>
         {t('market.offers.accept')}
       </Button>
       <Button size="sm" variant="secondary" disabled={busy} onClick={onCounterStart}>
@@ -523,7 +523,12 @@ export function SwapsPanel({
                 <div className="slip-actions">
                   {row.awaitingMe && (
                     <div className="actions">
-                      <Button size="sm" variant="gold" disabled={busy} onClick={() => void act(row, 'approve')}>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => void act(row, 'approve')}
+                      >
                         {t('market.swaps.approve')}
                       </Button>
                       <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(row, 'reject')}>

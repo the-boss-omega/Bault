@@ -21,6 +21,19 @@ export function usePrefersReducedMotion(): boolean {
   return useMediaQuery('(prefers-reduced-motion: reduce)');
 }
 
+/**
+ * A value that follows another once that has held still for `ms`: what is being typed, for what a request is
+ * made of (a photograph is looked for by its name, and "SN-C", "SN-CL" and "SN-CL1" are not names).
+ */
+export function useDebounced<T>(value: T, ms = 400): T {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setHeld(value), ms);
+    return () => window.clearTimeout(timer);
+  }, [value, ms]);
+  return held;
+}
+
 export interface AppNotification {
   id: string;
   eventType: string;
@@ -40,13 +53,18 @@ function readSeenAt(): string {
   }
 }
 
-export function useNotificationFeed() {
+/** `enabled` is false for an account that is refused the feed (a suspended one): it is not asked for it. */
+export function useNotificationFeed(enabled = true) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [seenAt, setSeenAt] = useState<string>(readSeenAt);
 
   const reload = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       const list = await api.get<AppNotification[]>('/notifications');
       list.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
@@ -57,7 +75,7 @@ export function useNotificationFeed() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void reload();

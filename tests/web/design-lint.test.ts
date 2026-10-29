@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,6 +16,11 @@ function lint(src?: string): { status: number | null; out: string } {
   });
   return { status: run.status, out: `${run.stdout}${run.stderr}` };
 }
+
+// Each test copies the source and runs the lint to its end, synchronously. Back to back they hold the worker for more
+// than a minute, and the runner's report of them to the process that started it times out ("Timeout calling
+// onTaskUpdate") with every test passed. One turn of the event loop between them lets the report through.
+beforeEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
 describe('design-lint', () => {
   it('passes on the real stylesheets and sources', () => {
@@ -252,6 +257,32 @@ describe('design-lint', () => {
         ),
       );
       expect(r.out).toContain('design-lint: clean');
+    });
+
+    it('a colour written into a component, which no theme can change (a glyph made white on a bar that is light in one of them)', () => {
+      const write = (lines: string[]) =>
+        withChange((d) =>
+          writeFileSync(
+            join(d, 'probe.tsx'),
+            lines.map((l, i) => `export const A${i} = () => <b style={{ ${l} }} />;`).join('\n') + '\n',
+          ),
+        );
+      // Each way of writing a colour is a finding of its own.
+      const bad = write([
+        "color: '#fff'",
+        "background: 'rgba(0, 0, 0, .5)'",
+        "fill: 'white'",
+        "borderColor: 'oklch(0.7 0.1 200)'",
+      ]);
+      expect(bad.status).toBe(1);
+      expect(bad.out.match(/a colour written into a component/g)).toHaveLength(4);
+      // A token, an inherited colour, and a colour with its reason are let through.
+      const fine = write([
+        "color: 'var(--ink)'",
+        "color: 'inherit', fill: 'currentColor'",
+        "color: '#fff' }} /> /* design-lint-allow: a print label, always on white */ <b style={{ }",
+      ]);
+      expect(fine.out).toContain('design-lint: clean');
     });
 
     it('a physical utility class or inline style in a component', () => {

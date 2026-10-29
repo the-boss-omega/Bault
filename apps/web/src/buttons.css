@@ -1,0 +1,618 @@
+/* ============================================================
+   Buttons
+
+   One family, in one file: Button, ButtonLink and IconButton (shared/ui/primitives.tsx).
+
+   A button is a piece of the paper put to work. It stands on its lower edge, the way a key
+   does: a quiet button on a line a little heavier than the rest of its outline, the primary one
+   on a strip of foil, and the foil is the mark of a thing that can be pressed (a disabled
+   button is a blank, with none). Of everything on a screen only the one thing to do next is
+   foil-edged; the rest is the line. Pressing one puts it down onto its edge.
+
+   Colour comes from the --btn-* tokens of theme.css, and the surfaces that are not the page's
+   (the paper, the room) say which they want at the end of this file. Layout around a button
+   (its row, how far it grows) is written where the row is; this file is how a button looks.
+   Loaded after components.css.
+   ============================================================ */
+
+/* A control is as tall as a finger needs it: 40px under a pointer, 44px where the pointer is
+   a fingertip. A field and a button are one height, so a button beside a field lines up with it. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 44px;
+    --control-h-sm: 44px;
+  }
+}
+
+/* ---- The button ---- */
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-block-size: var(--control-h);
+  padding-block: var(--sp-2);
+  padding-inline: var(--sp-4);
+  border: var(--border-w) solid var(--btn-line);
+  border-radius: var(--r-md);
+  background-color: transparent;
+  background-repeat: no-repeat;
+  color: var(--btn-ink);
+  font: inherit;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* The edge it stands on: the outline, a pixel heavier at the foot. */
+  box-shadow: inset 0 -1px 0 var(--btn-line);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease),
+    background-size var(--dur) var(--ease),
+    background-position var(--dur-slow) var(--ease);
+}
+
+.btn svg {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.btn-label {
+  min-inline-size: 0;
+}
+
+/* Hover is for a pointer that can hover: on a touchscreen it would stay lit after the tap. */
+@media (hover: hover) {
+  .btn:hover:not(:disabled, [aria-disabled='true']) {
+    background-color: var(--btn-hover);
+    border-color: var(--btn-ink);
+    box-shadow: inset 0 -1px 0 var(--btn-ink);
+  }
+}
+
+.btn:active:not(:disabled, [aria-disabled='true']) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ---- Primary: the one thing to do next ---- */
+
+.btn--primary {
+  padding-block-end: 10px;
+  border-color: var(--btn-primary);
+  background-color: var(--btn-primary);
+  /* The foil, a strip of it on the lower edge, twice as wide as the button: what shows is half of it,
+     and it slides on to the other half when the button is reached for. */
+  background-image: var(--foil);
+  background-size: 200% 3px;
+  background-position: 0 100%;
+  color: var(--btn-primary-ink);
+  font-weight: var(--fw-semibold);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .btn--primary:hover:not(:disabled, [aria-disabled='true']) {
+    border-color: var(--btn-primary-hover);
+    background-color: var(--btn-primary-hover);
+    background-size: 200% 5px;
+    background-position: 100% 100%;
+    box-shadow: none;
+  }
+}
+
+.btn--primary:active:not(:disabled, [aria-disabled='true']) {
+  background-size: 200% 2px;
+}
+
+/* ---- Secondary: the other things one may do ---- */
+
+.btn--secondary {
+  color: var(--btn-ink);
+}
+
+/* ---- Ghost: the way out, and what is only sometimes wanted ---- */
+
+.btn--ghost {
+  border-color: transparent;
+  color: var(--btn-ink-2);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .btn--ghost:hover:not(:disabled, [aria-disabled='true']) {
+    border-color: transparent;
+    color: var(--btn-ink);
+    box-shadow: none;
+  }
+}
+
+/* ---- Danger: what cannot be taken back. Said in the line first; the fill is for the one that does it ---- */
+
+.btn--danger {
+  --btn-line: color-mix(in oklab, var(--btn-danger) 70%, transparent);
+  border-color: var(--btn-line);
+  background-color: var(--btn-danger-wash);
+  color: var(--btn-danger);
+  font-weight: var(--fw-semibold);
+}
+
+@media (hover: hover) {
+  .btn--danger:hover:not(:disabled, [aria-disabled='true']) {
+    border-color: var(--btn-danger);
+    background-color: var(--btn-danger);
+    color: var(--btn-danger-ink);
+    box-shadow: none;
+  }
+}
+
+/* ---- Text: an action inside a sentence, set as the words around it ---- */
+
+.btn--link {
+  /* Words in a sentence are not a target of their own (WCAG 2.5.8), but one that stands on its own line is. */
+  min-block-size: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--btn-ink);
+  font-weight: var(--fw-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--btn-ink-2);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  white-space: normal;
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .btn--link:hover:not(:disabled, [aria-disabled='true']) {
+    background: none;
+    border-color: transparent;
+    text-decoration-color: currentcolor;
+    box-shadow: none;
+  }
+}
+
+.btn--link:active:not(:disabled, [aria-disabled='true']) {
+  transform: none;
+}
+
+/* ---- Size ---- */
+
+.btn--sm {
+  min-block-size: var(--control-h-sm);
+  padding-block: var(--sp-1);
+  padding-inline: var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.btn--sm svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.btn--sm.btn--primary {
+  padding-block-end: 6px;
+  background-size: 200% 2px;
+}
+
+.btn--block {
+  inline-size: 100%;
+  white-space: normal;
+  text-wrap: balance;
+}
+
+/* ---- A row that is a button: one of a menu of things to ask for ----
+   Its icon, what it is called and what it will do, and at the far end its price or the way on. The whole row is the
+   target. Its words start where the page starts (a button's are centred), and the way on turns with the page. */
+
+.btn--row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--sp-3);
+  inline-size: 100%;
+  padding-block: var(--sp-3);
+  padding-inline: var(--sp-4);
+  text-align: start;
+  white-space: normal;
+}
+
+.btn--row > svg {
+  margin-block-start: 2px;
+  color: var(--btn-ink-2);
+}
+
+.btn--row .btn-label {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.btn-row-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.btn-row-name {
+  font-weight: var(--fw-semibold);
+}
+
+.btn-row-end {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--btn-ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-row-end svg {
+  inline-size: 14px;
+  block-size: 14px;
+  transform: scaleX(var(--dir));
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.btn-row-desc {
+  color: var(--btn-ink-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+}
+
+@media (hover: hover) {
+  .btn--row:hover:not(:disabled, [aria-disabled='true']) .btn-row-end svg {
+    transform: translateX(calc(3px * var(--dir))) scaleX(var(--dir));
+  }
+}
+
+/* What a row says is in the colour of the row where that colour is the message: what cannot be taken back, and what
+   is not there to press. */
+.btn--row:is(.btn--danger, :disabled, [aria-disabled='true']) :is(.btn-row-end, .btn-row-desc),
+.btn--row:is(.btn--danger, :disabled, [aria-disabled='true']) > svg {
+  color: inherit;
+}
+
+/* ---- A crumb: a button set as small text, with the room of a target ----
+   17px of text is not a target. A crumb is 24px tall at least (WCAG 2.5.8), and where the pointer is a finger
+   it reaches 10px above and below itself without moving anything. */
+
+.breadcrumb button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 24px;
+  /* Three letters of Hebrew are 18px: a crumb is 24px wide at least, with its word at the start, where the page puts
+     it (the first crumb under the first letter of the title). The room is the box's own: padding taken back from a
+     negative margin makes a flex container measure its crumbs a few pixels short, and they are shrunk to fit. */
+  min-inline-size: 24px;
+  justify-content: flex-start;
+}
+
+@media (pointer: coarse) {
+  .breadcrumb button::after {
+    content: '';
+    position: absolute;
+    inset-block: -10px;
+    inset-inline: -6px;
+  }
+}
+
+/* ---- A tab: a word with a line under it, and as wide as a target where the word is short ("עיון" is 20px) ----
+   It keeps the width of its word and the strip scrolls: a flex item with a minimum of its own (and not `auto`, which
+   is its word) is let shrink below it, and the words of the tabs of a phone were drawn on one another. */
+
+.ctx-tab {
+  flex: none;
+  min-inline-size: 24px;
+}
+
+/* ---- A button that is a switch: the state it is in is the state of its edge ---- */
+
+.btn[aria-pressed='true']:not(.btn--primary, .btn--danger) {
+  border-color: var(--btn-ink);
+  background-color: var(--btn-hover);
+  color: var(--btn-ink);
+  box-shadow: inset 0 -2px 0 var(--btn-ink);
+}
+
+/* ---- Not there to press ---- */
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  border-style: dashed;
+  border-color: var(--btn-off-line);
+  background-color: transparent;
+  background-image: none;
+  color: var(--btn-off-ink);
+  font-weight: var(--fw-medium);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn--ghost:disabled,
+.btn--ghost[aria-disabled='true'],
+.btn--link:disabled,
+.btn--link[aria-disabled='true'] {
+  border-color: transparent;
+  background-color: transparent;
+}
+
+.btn--link:disabled,
+.btn--link[aria-disabled='true'] {
+  text-decoration-color: transparent;
+}
+
+/* ---- Working: the button keeps its face (it is not "not there"), and says so ---- */
+
+.btn--loading,
+.btn--loading:disabled {
+  cursor: progress;
+}
+
+.btn--loading:disabled:not(.btn--primary, .btn--danger, .btn--ghost, .btn--link) {
+  border-style: solid;
+  border-color: var(--btn-line);
+  background-color: transparent;
+  color: var(--btn-ink);
+}
+
+.btn--primary.btn--loading:disabled {
+  border-style: solid;
+  border-color: var(--btn-primary);
+  background-color: var(--btn-primary);
+  background-image: var(--foil);
+  color: var(--btn-primary-ink);
+}
+
+.btn--danger.btn--loading:disabled {
+  border-style: solid;
+  border-color: var(--btn-line);
+  background-color: var(--btn-danger-wash);
+  color: var(--btn-danger);
+}
+
+.btn--ghost.btn--loading:disabled,
+.btn--link.btn--loading:disabled {
+  border-style: solid;
+  color: var(--btn-ink-2);
+}
+
+.btn-spinner {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  border: 2px solid currentcolor;
+  border-radius: 50%;
+  border-block-start-color: transparent;
+  animation: btn-spin 620ms linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- The icon button: a button that is only a glyph, and is named for what it does ---- */
+
+.icon-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  /* A control of a size keeps it: in a row with a long title it does not give its room up. */
+  flex: none;
+  inline-size: var(--control-h);
+  block-size: var(--control-h);
+  padding: 0;
+  border: var(--border-w) solid var(--btn-line);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--btn-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--btn-line);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.icon-btn svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
+@media (hover: hover) {
+  .icon-btn:hover:not(:disabled) {
+    background-color: var(--btn-hover);
+    border-color: var(--btn-ink);
+    box-shadow: inset 0 -1px 0 var(--btn-ink);
+  }
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* Bare: no outline until it is reached for, for a glyph that sits inside something that already has one. */
+.icon-btn--bare {
+  border-color: transparent;
+  color: var(--btn-ink-2);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .icon-btn--bare:hover:not(:disabled) {
+    border-color: transparent;
+    color: var(--btn-ink);
+    box-shadow: none;
+  }
+}
+
+/* On: a menu that is open, a switch that is set. */
+.icon-btn.is-on,
+.icon-btn[aria-pressed='true'] {
+  border-color: var(--btn-ink);
+  background-color: var(--btn-hover);
+  color: var(--btn-ink);
+  box-shadow: inset 0 -2px 0 var(--btn-ink);
+}
+
+.icon-btn:disabled {
+  border-style: dashed;
+  border-color: var(--btn-off-line);
+  background-color: transparent;
+  color: var(--btn-off-ink);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* ---- The header's controls: three glyphs in one capsule, which is their outline ---- */
+
+.ph-controls {
+  --header-btn: 36px;
+}
+
+@media (pointer: coarse) {
+  .ph-controls {
+    --header-btn: 44px;
+  }
+}
+
+.ph-controls .icon-btn {
+  inline-size: var(--header-btn);
+  block-size: var(--header-btn);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .ph-controls .icon-btn:hover:not(:disabled) {
+    background-color: var(--btn-hover);
+    box-shadow: none;
+  }
+}
+
+.ph-controls .icon-btn.is-on {
+  box-shadow: inset 0 -2px 0 var(--btn-ink);
+}
+
+/* ---- Pressing is a movement, and a visitor who has asked for none gets the button as it is ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled, [aria-disabled='true']),
+  .icon-btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ---- Forced colours: the system draws the colours, so the difference has to be in the lines ---- */
+
+@media (forced-colors: active) {
+  .btn,
+  .icon-btn {
+    border: var(--border-w) solid ButtonText;
+    box-shadow: none;
+  }
+
+  .btn--primary {
+    border-width: 2px;
+    border-block-end-width: 4px;
+  }
+
+  .btn--danger {
+    border-style: dashed;
+  }
+
+  .btn--ghost,
+  .icon-btn--bare {
+    border-style: dotted;
+  }
+
+  .btn--link {
+    border: 0;
+  }
+
+  .btn[aria-pressed='true'],
+  .icon-btn.is-on,
+  .icon-btn[aria-pressed='true'] {
+    border-block-end-width: 4px;
+    background-color: Highlight;
+    color: HighlightText;
+  }
+
+  .btn:disabled,
+  .btn[aria-disabled='true'],
+  .icon-btn:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+}
+
+/* ---- Not the page's: the paper and the room keep their own palette in both themes ---- */
+
+/* On paper the primary is the print: the paper's ink, whichever theme the page is in. */
+:is(
+  .on-paper,
+  .drawer-tag,
+  .ledger-sheet,
+  .statement-sheet,
+  .mem-uncovered,
+  .shelf-zone-head,
+  .lightbox-plate,
+  .lp-colophon,
+  .lp-paper,
+  .auth-card,
+  .ask-composer
+) {
+  --btn-primary: var(--paper-ink);
+  --btn-primary-ink: var(--paper-bright);
+  --btn-primary-hover: var(--paper-ink-2);
+  --btn-ink: var(--paper-ink);
+  --btn-ink-2: var(--paper-ink-2);
+  --btn-line: var(--paper-edge);
+  --btn-hover: var(--paper-bright);
+  --btn-danger: var(--paper-oxblood);
+  --btn-danger-wash: var(--paper-bright);
+  --btn-danger-ink: var(--paper-bright);
+  --btn-off: var(--paper-bright);
+  --btn-off-ink: var(--paper-ink-3);
+  --btn-off-line: var(--paper-rule-soft);
+}
+
+/* On the room (dark in both themes) the primary is the paper, and a line is the room's own ink. */
+:is(.on-room, .lightbox, .drawer .stage) {
+  --btn-primary: var(--paper);
+  --btn-primary-ink: var(--paper-ink);
+  --btn-primary-hover: var(--paper-bright);
+  --btn-ink: var(--room-ink);
+  --btn-ink-2: color-mix(in oklab, var(--room-ink) 70%, var(--room));
+  --btn-line: color-mix(in oklab, var(--room-ink) 46%, var(--room));
+  --btn-hover: var(--room-pool);
+  --btn-off: var(--room-raised);
+  --btn-off-ink: color-mix(in oklab, var(--room-ink) 55%, var(--room-raised));
+  --btn-off-line: var(--room-pool);
+}

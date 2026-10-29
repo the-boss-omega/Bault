@@ -1,20 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../shared/i18n';
-import { isValidUsername, normalizeUsername } from '../../shared/names';
-import {
-  DISPOSAL_CATEGORIES,
-  DISPOSAL_OUTCOMES,
-  itemName,
-} from '../../shared/itemClasses';
+import { itemName } from '../../shared/itemClasses';
 import { useRoute, useNavigation } from '../../shared/routing';
 import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
 import {
   Button,
+  ButtonLink,
   ContextTabs,
   EmptyState,
   ErrorState,
-  Field,
   MetricCard,
   Panel,
   SkeletonTable,
@@ -23,7 +18,8 @@ import {
   ViewAllLink,
 } from '../../shared/ui/primitives';
 import { scrollBehavior } from '../../shared/ui/motionPreference';
-import { ShelfMap } from './ShelfMap';
+import { ShelfMap, type ShelfBin } from './ShelfMap';
+import { ShelfContents } from './ShelfContents';
 import {
   IconAlert,
   IconBox,
@@ -33,17 +29,22 @@ import {
   IconPlus,
   IconScan,
   IconServices,
-  IconShipping,
 } from '../../shared/ui/icons';
 import { ServiceQueue } from './ServiceQueue';
 import { GradingSubmissions } from './GradingSubmissions';
 import { ParcelQueue } from './ParcelQueue';
 import { ReceiveParcels } from './ReceiveParcels';
+import {
+  DisposalBench,
+  FulfillmentBench,
+  HoldBench,
+  NewShelfBench,
+  RelocateBench,
+} from './Benches';
 import { IntakeBench } from './IntakeBench';
 import { HouseOrdersPanel } from './HouseOrdersPanel';
 import { SupportQueue } from './SupportQueue';
-import type { InboundAddress, ParcelWorkflow } from '../../shared/parcels';
-import { boxLabel } from '../../shared/carriers';
+import type { ParcelWorkflow } from '../../shared/parcels';
 
 interface Bin {
   id: string;
@@ -88,6 +89,7 @@ export function WarehouseConsole() {
   const [error, setError] = useState<string | null>(null);
   const [focusParcelId, setFocusParcelId] = useState<string>('');
   const [queueVersion, setQueueVersion] = useState(0);
+  const [openShelf, setOpenShelf] = useState<ShelfBin | null>(null);
 
   const tab: WarehouseTab = (TABS as readonly string[]).includes(route.tab ?? '')
     ? (route.tab as WarehouseTab)
@@ -214,7 +216,7 @@ export function WarehouseConsole() {
             footer={<ViewAllLink onClick={() => goTab('inventory')}>{t('warehouse.viewInventory')}</ViewAllLink>}
           >
             {bins.length > 0 && shelfRows !== null ? (
-              <ShelfMap bins={bins} counts={shelfRows} t={t} />
+              <ShelfMap bins={bins} counts={shelfRows} onOpen={setOpenShelf} t={t} />
             ) : (
               <InventoryRows
                 rows={(shelfRows ?? []).slice(0, 6)}
@@ -290,11 +292,11 @@ export function WarehouseConsole() {
       {tab === 'inventory' && (
         <TabPanel tab="inventory">
           <Panel title={t('warehouse.relocate.legend')} subtitle={t('warehouse.relocate.subtitle')}>
-            <RelocatePanel onLog={append} onDone={loadSummary} />
+            <RelocateBench shelves={bins} onLog={append} onDone={loadSummary} />
           </Panel>
 
           <Panel title={t('warehouse.hold.legend')} subtitle={t('warehouse.hold.subtitle')}>
-            <HoldPanel onLog={append} onDone={loadSummary} />
+            <HoldBench onLog={append} onDone={loadSummary} />
           </Panel>
 
           <Panel title={t('warehouse.lots.legend')} flush>
@@ -302,7 +304,7 @@ export function WarehouseConsole() {
           </Panel>
 
           <Panel title={t('warehouse.disposal.legend')} subtitle={t('warehouse.disposal.subtitle')}>
-            <DisposalPanel onLog={append} />
+            <DisposalBench onLog={append} />
           </Panel>
 
           <InventoryTab bins={bins} t={t} />
@@ -312,7 +314,7 @@ export function WarehouseConsole() {
       {tab === 'shipments' && (
         <TabPanel tab="shipments">
           <Panel title={t('warehouse.fulfillShipment')} subtitle={t('warehouse.shipments.subtitle')}>
-            <FulfillmentPanel onLog={append} />
+            <FulfillmentBench onLog={append} />
           </Panel>
         </TabPanel>
       )}
@@ -335,6 +337,8 @@ export function WarehouseConsole() {
           <SupportQueue onChanged={loadSummary} />
         </TabPanel>
       )}
+
+      {openShelf && <ShelfContents bin={openShelf} onClose={() => setOpenShelf(null)} />}
     </div>
   );
 }
@@ -379,15 +383,16 @@ function InventoryTab({ bins, t }: { bins: Bin[]; t: TranslateFn }) {
               ))}
             </select>
           </label>
-          <a
-            className="btn btn--gold btn--sm"
+          <ButtonLink
+            variant="primary"
+            size="sm"
+            icon={<IconDownload />}
             href={`/api/v1/custody/report.pdf?cut=${cut}`}
             target="_blank"
             rel="noopener noreferrer"
           >
-            <IconDownload />
             {t('warehouse.report.exportPdf')}
-          </a>
+          </ButtonLink>
         </>
       }
     >
@@ -475,123 +480,6 @@ function InventoryRows({
   );
 }
 
-function RelocatePanel({
-  onLog,
-  onDone,
-}: {
-  onLog: (line: string) => void;
-  onDone: () => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const [scanItem, setScanItem] = useState('');
-  const [scanBin, setScanBin] = useState('');
-
-  async function relocate() {
-    try {
-      await api.post(`/custody/items/${encodeURIComponent(scanItem.trim())}/relocate`, {
-        binId: scanBin.trim(),
-      });
-      onLog(t('warehouse.log.relocateDone', { item: scanItem, bin: scanBin }));
-      setScanItem('');
-      setScanBin('');
-      await onDone();
-    } catch (e) {
-      onLog(t('warehouse.log.relocateError', { message: (e as Error).message }));
-    }
-  }
-
-  return (
-    <div className="form-grid row-baseline">
-      <Field label={t('warehouse.relocate.scanItem')} hint={t('warehouse.relocate.scanItemHint')}>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="SN-…" dir="ltr" />
-      </Field>
-      <Field label={t('warehouse.relocate.scanShelf')} hint={t('warehouse.relocate.scanShelfHint')}>
-        <input value={scanBin} onChange={(e) => setScanBin(e.target.value)} placeholder="BIN-XXXXXXXX" dir="ltr" />
-      </Field>
-      <div className="field">
-        <span className="field-label" aria-hidden="true">
-          &nbsp;
-        </span>
-        <Button
-          variant="navy"
-          icon={<IconScan />}
-          disabled={!scanItem.trim() || !scanBin.trim()}
-          onClick={relocate}
-        >
-          {t('warehouse.relocate.submit')}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function HoldPanel({
-  onLog,
-  onDone,
-}: {
-  onLog: (line: string) => void;
-  onDone: () => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const [scanItem, setScanItem] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function act(hold: boolean) {
-    const id = scanItem.trim();
-    setBusy(true);
-    try {
-      const path = `/custody/items/${encodeURIComponent(id)}/hold`;
-      const res = hold
-        ? await api.post<{ changed: boolean }>(path)
-        : await api.del<{ changed: boolean }>(path);
-      onLog(
-        t(
-          res.changed
-            ? hold
-              ? 'warehouse.log.holdPlaced'
-              : 'warehouse.log.holdReleased'
-            : hold
-              ? 'warehouse.log.holdAlready'
-              : 'warehouse.log.holdNone',
-          { item: id },
-        ),
-      );
-      setScanItem('');
-      await onDone();
-    } catch (e) {
-      onLog(t('warehouse.log.holdError', { message: (e as Error).message }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="form-grid row-baseline">
-      <Field label={t('warehouse.hold.scanItem')} hint={t('warehouse.hold.scanItemHint')}>
-        <input value={scanItem} onChange={(e) => setScanItem(e.target.value)} placeholder="SN-…" dir="ltr" />
-      </Field>
-      <div className="field">
-        <span className="field-label" aria-hidden="true">
-          &nbsp;
-        </span>
-        <div className="actions">
-          <Button
-            variant="secondary"
-            icon={<IconAlert />}
-            disabled={busy || !scanItem.trim()}
-            onClick={() => void act(true)}
-          >
-            {t('warehouse.hold.place')}
-          </Button>
-          <Button variant="ghost" disabled={busy || !scanItem.trim()} onClick={() => void act(false)}>
-            {t('warehouse.hold.release')}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface OpenLot {
   id: string;
   serialNumber: string;
@@ -674,326 +562,6 @@ function LotsPanel({ onLog, onDone }: { onLog: (line: string) => void; onDone: (
   );
 }
 
-function DisposalPanel({ onLog }: { onLog: (line: string) => void }) {
-  const { t } = useI18n();
-  const [ownerUsername, setOwnerUsername] = useState('');
-  const [category, setCategory] = useState(DISPOSAL_CATEGORIES[0]?.key ?? 'gps_tracker');
-  const [outcome, setOutcome] = useState(DISPOSAL_OUTCOMES[0]?.key ?? 'destroyed');
-  const [description, setDescription] = useState('');
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const normalizedOwner = normalizeUsername(ownerUsername);
-  const ownerOk = isValidUsername(normalizedOwner);
-  const complete = ownerOk && description.trim() !== '' && notes.trim() !== '';
-
-  async function record() {
-    setBusy(true);
-    try {
-      const row = await api.post<{ code: string }>('/intake/disposals', {
-        ownerUsername: normalizedOwner,
-        category,
-        outcome,
-        description: description.trim(),
-        notes: notes.trim(),
-      });
-      onLog(t('warehouse.disposal.recorded', { code: row.code, owner: normalizedOwner }));
-      setDescription('');
-      setNotes('');
-    } catch (e) {
-      onLog(t('warehouse.disposal.error', { message: (e as Error).message }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="stack stack--tight">
-      <div className="form-grid">
-        <label className="field">
-          <span className="field-label">{t('warehouse.intake.ownerUsername')}</span>
-          <input
-            value={ownerUsername}
-            onChange={(e) => setOwnerUsername(e.target.value)}
-            aria-invalid={ownerUsername.length > 0 && !ownerOk}
-            dir="ltr"
-          />
-        </label>
-
-        <label className="field">
-          <span className="field-label">{t('warehouse.disposal.category')}</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            {DISPOSAL_CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {t(c.labelKey)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span className="field-label">{t('warehouse.disposal.outcome')}</span>
-          <select value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-            {DISPOSAL_OUTCOMES.map((o) => (
-              <option key={o.key} value={o.key}>
-                {t(o.labelKey)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span className="field-label">{t('warehouse.disposal.description')}</span>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        </label>
-
-        <label className="field">
-          <span className="field-label">{t('warehouse.disposal.notes')}</span>
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
-      </div>
-
-      <div className="row row--end">
-        {!complete && <span className="field-hint">{t('warehouse.required')}</span>}
-        <Button variant="danger" disabled={busy || !complete} onClick={() => void record()}>
-          {t('warehouse.disposal.submit')}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-interface ShipmentDetail {
-  id: string;
-  code: string | null;
-  status: string;
-  carrier: string | null;
-  serviceKey: string | null;
-  itemIds: string[];
-  items?: { id: string; serialNumber: string | null; barcode: string | null; description: string | null }[];
-  directParcel?: { code: string; trackingNumber: string | null } | null;
-  destinationAddress: string;
-  boxSize: string | null;
-}
-
-const sameCode = (a: string | null | undefined, b: string) => Boolean(a) && a!.trim().toUpperCase() === b.trim().toUpperCase();
-
-function FulfillmentPanel({ onLog }: { onLog: (line: string) => void }) {
-  const { t } = useI18n();
-  const [shipmentId, setShipmentId] = useState('');
-  const [detail, setDetail] = useState<ShipmentDetail | null>(null);
-  const [scans, setScans] = useState<string[]>([]);
-  const [scanInput, setScanInput] = useState('');
-  const [carrier, setCarrier] = useState('DHL');
-  const [weight, setWeight] = useState('500');
-  const [notes, setNotes] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function load() {
-    try {
-      const s = await api.get<ShipmentDetail>(`/shipping/shipments/${shipmentId}`);
-      setDetail(s);
-      setScans([]);
-      setScanInput('');
-      setError(null);
-      if (s.carrier) setCarrier(s.carrier);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  const direct = detail !== null && detail.itemIds.length === 0 && detail.serviceKey === 'direct_overnight';
-
-  const expected = useMemo(
-    () =>
-      detail
-        ? detail.itemIds.map(
-            (id) => detail.items?.find((i) => i.id === id) ?? { id, serialNumber: null, barcode: null, description: null },
-          )
-        : [],
-    [detail],
-  );
-
-  const itemFor = (code: string) =>
-    expected.find((i) => sameCode(i.id, code) || sameCode(i.barcode, code) || sameCode(i.serialNumber, code));
-  const parcelMatches = (code: string) =>
-    Boolean(detail?.directParcel) &&
-    (sameCode(detail!.directParcel!.code, code) || sameCode(detail!.directParcel!.trackingNumber, code));
-
-  const scannedIds = new Set(scans.map((c) => itemFor(c)?.id).filter((id): id is string => Boolean(id)));
-  const strays = direct ? scans.filter((c) => !parcelMatches(c)) : scans.filter((c) => !itemFor(c));
-  const allScanned = direct
-    ? scans.length === 1 && strays.length === 0
-    : expected.length > 0 && expected.every((i) => scannedIds.has(i.id)) && strays.length === 0;
-  const complete = allScanned && carrier !== '' && weight !== '' && notes.trim() !== '';
-
-  function addScan() {
-    const code = scanInput.trim();
-    setScanInput('');
-    if (!code) return;
-    if (direct) setScans([code]);
-    else setScans((prev) => (prev.some((c) => sameCode(c, code)) ? prev : [...prev, code]));
-  }
-
-  async function completeShipment() {
-    if (!detail || !complete) return;
-    try {
-      const res = await api.post<{ trackingNumber: string }>(`/shipping/shipments/${detail.id}/dispatch`, {
-        ...(direct ? { scannedParcel: scans[0] } : { scannedItemIds: scans }),
-        carrier,
-        packageWeightGrams: Number(weight),
-        fulfillmentNotes: notes,
-      });
-      onLog(t('warehouse.log.dispatchDone', { id: detail.code ?? detail.id, tracking: res.trackingNumber }));
-      setDetail(null);
-      setShipmentId('');
-      setNotes('');
-      setScans([]);
-    } catch (e) {
-      setError((e as Error).message);
-      onLog(t('warehouse.log.dispatchError', { message: (e as Error).message }));
-    }
-  }
-
-  return (
-    <div className="stack stack--tight">
-      <div className="row">
-        <label className="field" style={{ flex: '1 1 260px' }}>
-          <span className="field-label">{t('warehouse.dispatch.shipmentId')}</span>
-          <input value={shipmentId} onChange={(e) => setShipmentId(e.target.value)} dir="ltr" />
-        </label>
-        <Button
-          variant="navy"
-          icon={<IconShipping />}
-          disabled={!shipmentId}
-          onClick={load}
-          style={{ alignSelf: 'end' }}
-        >
-          {t('warehouse.fulfill')}
-        </Button>
-      </div>
-
-      {error && <ErrorState message={error} />}
-
-      {detail && (
-        <div className="stack stack--tight">
-          <p className="infobox" dir="auto">
-            {detail.destinationAddress}
-          </p>
-          {!direct && (
-            <p className="field-hint">
-              {detail.boxSize
-                ? t('warehouse.dispatch.packIn', { box: boxLabel(t, { key: detail.boxSize }) })
-                : t('warehouse.dispatch.anyBox')}
-            </p>
-          )}
-
-          <div className="row">
-            <Field
-              className="field--grow"
-              label={t(direct ? 'warehouse.dispatch.scanParcel' : 'warehouse.dispatch.scan')}
-              hint={
-                direct
-                  ? t('warehouse.dispatch.scanParcelHint', { code: detail.directParcel?.code ?? '—' })
-                  : t('warehouse.dispatch.scanHint')
-              }
-            >
-              <input
-                value={scanInput}
-                onChange={(e) => setScanInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addScan();
-                  }
-                }}
-                placeholder={direct ? 'PKG-…' : 'SN-…'}
-                dir="ltr"
-                autoComplete="off"
-              />
-            </Field>
-            <Button variant="secondary" disabled={!scanInput.trim()} onClick={addScan} style={{ alignSelf: 'end' }}>
-              {t('warehouse.dispatch.addScan')}
-            </Button>
-          </div>
-
-          <div className="field">
-            <span className="field-label">
-              {direct
-                ? detail.directParcel?.code
-                : t('warehouse.dispatch.progress', { scanned: scannedIds.size, total: expected.length })}
-            </span>
-            <ul className="check-list">
-              {!direct &&
-                expected.map((i) => (
-                  <li key={i.id}>
-                    <span>
-                      <code dir="ltr">{i.serialNumber ?? i.id}</code>
-                      {i.description && <span className="hint"> {i.description}</span>}
-                    </span>
-                    <StatusBadge tone={scannedIds.has(i.id) ? 'success' : 'neutral'}>
-                      {t(scannedIds.has(i.id) ? 'warehouse.dispatch.scanned' : 'warehouse.dispatch.notScanned')}
-                    </StatusBadge>
-                  </li>
-                ))}
-              {direct && scans.length === 1 && strays.length === 0 && (
-                <li>
-                  <code dir="ltr">{scans[0]}</code>
-                  <StatusBadge tone="success">{t('warehouse.dispatch.scanned')}</StatusBadge>
-                </li>
-              )}
-              {strays.map((code) => (
-                <li key={code}>
-                  <code dir="ltr">{code}</code>
-                  <StatusBadge tone="error">
-                    {t(direct ? 'warehouse.dispatch.wrongParcel' : 'warehouse.dispatch.notInShipment')}
-                  </StatusBadge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setScans((prev) => prev.filter((c) => c !== code))}
-                  >
-                    {t('warehouse.dispatch.removeScan', { code })}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="form-grid">
-            <label className="field">
-              <span className="field-label">{t('warehouse.carrier')}</span>
-              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field-label">{t('warehouse.packageWeight')}</span>
-              <input
-                type="number"
-                min={1}
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                dir="ltr"
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">{t('warehouse.notes')}</span>
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </label>
-          </div>
-
-          {!complete && <p className="field-hint">{t('warehouse.required')}</p>}
-
-          <div className="row row--end">
-            <Button variant="gold" disabled={!complete} onClick={completeShipment}>
-              {t('warehouse.complete')}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function BinsPanel({
   bins,
   reloadBins,
@@ -1005,39 +573,7 @@ function BinsPanel({
   onLog: (line: string) => void;
   t: TranslateFn;
 }) {
-  const [zone, setZone] = useState('');
-  const [oversized, setOversized] = useState(false);
-  const [facilityCode, setFacilityCode] = useState('');
-  const [facilities, setFacilities] = useState<InboundAddress[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const list = await api.get<InboundAddress[]>('/me/inbound-addresses');
-        const storing = list.filter((f) => f.role === 'primary');
-        setFacilities(storing);
-        if (storing[0]) setFacilityCode(storing[0].code);
-      } catch {
-      }
-    })();
-  }, []);
-
-  async function create() {
-    try {
-      const bin = await api.post<Bin>('/custody/bins', {
-        zone,
-        facilityCode: facilityCode || undefined,
-        oversized,
-      });
-      onLog(t('warehouse.log.binCreated', { serial: bin.serialNumber, zone: bin.zone }));
-      setZone('');
-      setOversized(false);
-      await reloadBins();
-    } catch (e) {
-      onLog(t('warehouse.log.binCreateError', { message: (e as Error).message }));
-    }
-  }
 
   async function setActive(b: Bin, active: boolean) {
     setBusy(b.id);
@@ -1059,45 +595,7 @@ function BinsPanel({
   return (
     <>
       <Panel title={t('warehouse.bins.legend')} subtitle={t('warehouse.bins.subtitle')}>
-        <div className="form-grid row-baseline">
-          <label className="field">
-            <span className="field-label">{t('warehouse.bins.zone')}</span>
-            <input value={zone} onChange={(e) => setZone(e.target.value)} />
-          </label>
-          {facilities.length > 1 && (
-            <label className="field">
-              <span className="field-label">{t('warehouse.bins.facility')}</span>
-              <select value={facilityCode} onChange={(e) => setFacilityCode(e.target.value)}>
-                {facilities.map((f) => (
-                  <option key={f.code} value={f.code}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <div className="field">
-            <span className="field-label" aria-hidden="true">
-              &nbsp;
-            </span>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={oversized}
-                onChange={(e) => setOversized(e.target.checked)}
-              />
-              {t('warehouse.bins.oversized')}
-            </label>
-          </div>
-          <div className="field">
-            <span className="field-label" aria-hidden="true">
-              &nbsp;
-            </span>
-            <Button variant="gold" icon={<IconPlus />} disabled={!zone} onClick={create}>
-              {t('warehouse.bins.create')}
-            </Button>
-          </div>
-        </div>
+        <NewShelfBench onLog={onLog} onCreated={reloadBins} />
       </Panel>
 
       <Panel title={t('warehouse.metric.locations')} subtitle={t('warehouse.bins.listSubtitle')} flush>

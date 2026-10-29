@@ -230,7 +230,11 @@ export function ProfilePage() {
               )}
 
               <div className="row request-form-actions">
-                <Button variant="gold" disabled={!firstOk || !lastOk || !nameDirty} onClick={saveName}>
+                <Button
+                  variant="primary"
+                  disabled={!firstOk || !lastOk || !nameDirty}
+                  onClick={saveName}
+                >
                   {t('profile.saveName')}
                 </Button>
               </div>
@@ -343,56 +347,96 @@ function PasswordPanel({
     }
   }
 
+  // What a new password has to be, and whether what has been typed is that yet. Nothing typed is echoed on the slip.
+  const rules = [
+    {
+      key: 'length',
+      label: t('profile.password.rule.length', { min: PASSWORD_MIN }),
+      met: next.length >= PASSWORD_MIN,
+    },
+    {
+      key: 'different',
+      label: t('profile.password.rule.different'),
+      met: next.length > 0 && next !== current,
+    },
+    {
+      key: 'match',
+      label: t('profile.password.rule.match'),
+      met: confirm.length > 0 && confirm === next,
+    },
+  ];
+
   return (
     <Panel title={t('profile.password.heading')} subtitle={t('profile.password.subtitle')}>
-      <div className="stack stack--tight" style={{ maxWidth: 460 }}>
-        <Field label={t('profile.password.current')}>
-          <input
-            type="password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            autoComplete="current-password"
-            dir="ltr"
+      <div className="request-form request-form--stacked">
+        <aside className="request-slip">
+          <DrawerTag
+            kicker={t('auth.newPassword')}
+            lines={rules.map((rule) => ({
+              label: rule.label,
+              value: (
+                <StatusBadge tone={rule.met ? 'success' : 'neutral'}>
+                  {t(rule.met ? 'profile.password.met' : 'profile.password.notYet')}
+                </StatusBadge>
+              ),
+            }))}
+            status={
+              ready ? (
+                <StatusBadge tone="success">{t('profile.password.ready')}</StatusBadge>
+              ) : undefined
+            }
           />
-        </Field>
+        </aside>
 
-        <Field
-          label={t('auth.newPassword')}
-          hint={t('auth.passwordHint')}
-          error={
-            unchanged
-              ? t('profile.password.sameAsCurrent')
-              : tooShort
-                ? t('auth.passwordTooShort', { min: PASSWORD_MIN })
-                : undefined
-          }
-        >
-          <input
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            autoComplete="new-password"
-            aria-invalid={tooShort || unchanged}
-            dir="ltr"
-          />
-        </Field>
+        <div className="stack stack--tight request-form-fields">
+          <Field label={t('profile.password.current')}>
+            <input
+              type="password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              autoComplete="current-password"
+              dir="ltr"
+            />
+          </Field>
 
-        <Field
-          label={t('auth.confirmPassword')}
-          error={mismatch ? t('auth.passwordMismatch') : undefined}
-        >
-          <input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-            aria-invalid={mismatch}
-            dir="ltr"
-          />
-        </Field>
+          <Field
+            label={t('auth.newPassword')}
+            hint={t('auth.passwordHint')}
+            error={
+              unchanged
+                ? t('profile.password.sameAsCurrent')
+                : tooShort
+                  ? t('auth.passwordTooShort', { min: PASSWORD_MIN })
+                  : undefined
+            }
+          >
+            <input
+              type="password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={tooShort || unchanged}
+              dir="ltr"
+            />
+          </Field>
 
-        <div className="row">
-          <Button variant="gold" disabled={busy || !ready} onClick={() => void save()}>
+          <Field
+            label={t('auth.confirmPassword')}
+            error={mismatch ? t('auth.passwordMismatch') : undefined}
+          >
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={mismatch}
+              dir="ltr"
+            />
+          </Field>
+        </div>
+
+        <div className="row request-form-actions">
+          <Button variant="primary" loading={busy} disabled={!ready} onClick={() => void save()}>
             {t('profile.password.submit')}
           </Button>
         </div>
@@ -478,7 +522,7 @@ function AddressCard({
           <AddressLabel address={draft} kicker={draft.label.trim() || t('profile.address.edit')} />
         </aside>
         <div className="actions request-form-actions">
-          <Button size="sm" variant="gold" disabled={!valid} onClick={save}>
+          <Button size="sm" variant="primary" disabled={!valid} onClick={save}>
             {t('profile.address.save')}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
@@ -719,7 +763,7 @@ function AddressForm({
           />
         </aside>
         <div className="row request-form-actions">
-          <Button variant="gold" icon={<IconPlus />} disabled={!valid} onClick={add}>
+          <Button variant="primary" icon={<IconPlus />} disabled={!valid} onClick={add}>
             {t('profile.addressForm.submit')}
           </Button>
         </div>

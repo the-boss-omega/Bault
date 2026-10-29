@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../../shared/api';
 import { useI18n, type MessageKey, type TranslateFn } from '../../../shared/i18n';
-import { bpsToPercent, formatDate, formatUsd } from '../../../shared/money';
+import { bpsToPercent, formatDate, formatUsd, isolateLtr } from '../../../shared/money';
 import { useNavigation, useRoute } from '../../../shared/routing';
 import {
   Button,
@@ -13,6 +13,7 @@ import {
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
 import { Amount } from '../../../shared/ui/Serial';
+import { ENGLISH } from './english';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS } from './legalContent';
@@ -144,11 +145,6 @@ function AskPanel() {
 
   return (
     <Panel title={t('faq.ask.title')} subtitle={t('faq.ask.subtitle')}>
-      <p className="ask-notice" role="note">
-        <IconAsk />
-        <span>{t('faq.ask.notConnected')}</span>
-      </p>
-
       <div className="ask-log" ref={logRef} role="log" aria-live="polite" aria-label={t('faq.ask.logLabel')}>
         {turns.length === 0 ? (
           <EmptyState title={t('faq.ask.emptyTitle')} text={t('faq.ask.emptyText')} icon={<IconAsk />} />
@@ -156,16 +152,20 @@ function AskPanel() {
           <ul className="ask-turns">
             {turns.map((turn) => (
               <li key={turn.id} className="ask-turn">
-                <p className="ask-bubble ask-bubble--you">
+                <p className="ask-slip ask-slip--you">
                   <span className="ask-who">{t('faq.ask.you')}</span>
-                  {turn.question}
+                  <span className="ask-words" dir="auto">
+                    {turn.question}
+                  </span>
                 </p>
-                <p className="ask-bubble ask-bubble--bot">
+                <p className="ask-slip ask-slip--bot">
                   <span className="ask-who">{t('faq.ask.assistant')}</span>
                   {turn.answer === null ? (
-                    <span className="hint">{t('faq.ask.thinking')}</span>
+                    <span className="ask-words">{t('faq.ask.thinking')}</span>
                   ) : (
-                    <code dir="ltr">{turn.answer}</code>
+                    <code className="ask-words" dir="ltr">
+                      {turn.answer}
+                    </code>
                   )}
                 </p>
               </li>
@@ -174,20 +174,30 @@ function AskPanel() {
         )}
       </div>
 
-      <form className="ask-form" onSubmit={submit}>
-        <label className="field">
-          <span className="sr-only">{t('faq.ask.inputLabel')}</span>
+      {/* The question is written on a slip of its own, and the slip says what an answer is worth before it is sent. */}
+      <form className="ask-composer" onSubmit={submit}>
+        <label className="ask-composer-label" htmlFor="ask-question">
+          {t('faq.ask.inputLabel')}
+        </label>
+        <div className="ask-composer-row">
           <input
+            id="ask-question"
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={t('faq.ask.placeholder')}
-            aria-label={t('faq.ask.inputLabel')}
+            dir="auto"
+            autoComplete="off"
+            aria-describedby="ask-question-note"
           />
-        </label>
-        <Button type="submit" variant="gold" disabled={!draft.trim() || busy}>
-          {t('faq.ask.send')}
-        </Button>
+          <Button type="submit" variant="primary" disabled={!draft.trim() || busy}>
+            {t('faq.ask.send')}
+          </Button>
+        </div>
+        <p className="ask-composer-note" id="ask-question-note">
+          <IconAsk />
+          <span>{t('faq.ask.notConnected')}</span>
+        </p>
       </form>
     </Panel>
   );
@@ -344,7 +354,7 @@ function FaqItem({
           <span className="faq-chevron" aria-hidden="true">
             <IconChevronDown />
           </span>
-          <span className="faq-q-text" lang="en" dir="ltr">
+          <span className="faq-q-text" {...ENGLISH}>
             {entry.question}
           </span>
           <StatusBadge tone={AVAILABILITY_TONE[entry.availability]} plain>
@@ -360,14 +370,14 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        <p className={`faq-note faq-note--${entry.availability}`} lang="en" dir="ltr">
+        <p className={`faq-note faq-note--${entry.availability}`} {...ENGLISH}>
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
 
-        <div className="faq-source-answer" lang="en" dir="ltr">
+        <div className="faq-source-answer" {...ENGLISH}>
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
           ))}
@@ -484,7 +494,7 @@ function LegalPanel() {
         {doc.draft && <DraftBanner doc={doc} />}
         <p className="hint">
           {t('legal.lastUpdated', { date: formatDate(doc.lastUpdated, locale) })}
-          {doc.version && <> · {t('legal.version', { version: doc.version })}</>}
+          {doc.version && <> · {t('legal.version', { version: isolateLtr(doc.version) })}</>}
         </p>
 
         {LEGAL_DOCUMENTS.length > 1 && (
@@ -497,7 +507,7 @@ function LegalPanel() {
                 aria-pressed={d.id === docId}
                 onClick={() => setDocId(d.id)}
               >
-                {d.title}
+                <span {...ENGLISH}>{d.title}</span>
               </button>
             ))}
           </div>
@@ -517,7 +527,8 @@ function LegalPanel() {
         <div className="legal-body">
           <nav className="legal-toc" aria-label={t('legal.tocLabel')}>
             <h3 className="legal-toc-title">{t('legal.toc')}</h3>
-            <ol>
+            {/* The headings are the document's, in its language, and carry their own numbers. */}
+            <ol {...ENGLISH}>
               {doc.sections.map((section) => (
                 <li key={section.id}>
                   <a href={`#legal-${section.id}`}>{section.heading}</a>
@@ -526,7 +537,7 @@ function LegalPanel() {
             </ol>
           </nav>
 
-          <div className="legal-text" lang="en" dir="ltr">
+          <div className="legal-text" {...ENGLISH}>
             {sections.length === 0 ? (
               <EmptyState title={t('legal.noMatches')} icon={<IconLegal />} />
             ) : (
@@ -618,7 +629,8 @@ function CurrentFiguresPanel() {
             floor: formatUsd(terms.escrow.minimumValueMinor),
           }),
         ],
-        [t('legal.figures.termsVersion'), terms.termsVersion],
+        // A version is a code (2026-10-draft-1): in a right-to-left line its numbers and its word swap places.
+        [t('legal.figures.termsVersion'), isolateLtr(terms.termsVersion)],
       ]
     : [];
 

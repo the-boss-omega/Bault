@@ -316,15 +316,15 @@ describe('a button that charges the wallet names the charge', () => {
 });
 
 describe('visual weight', () => {
-  it('gives the primitive one primary variant, not nine', () => {
+  it('gives the primitive one primary variant, and the rest are lines', () => {
     renderIn(
       <>
-        <Button variant="gold">Primary</Button>
+        <Button variant="primary">Primary</Button>
         <Button variant="secondary">Ordinary</Button>
         <Button variant="danger">Irreversible</Button>
       </>,
     );
-    expect(screen.getByRole('button', { name: 'Primary' })).toHaveClass('btn--gold');
+    expect(screen.getByRole('button', { name: 'Primary' })).toHaveClass('btn--primary');
     expect(screen.getByRole('button', { name: 'Ordinary' })).toHaveClass('btn--secondary');
     expect(screen.getByRole('button', { name: 'Irreversible' })).toHaveClass('btn--danger');
   });

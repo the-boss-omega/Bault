@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -283,6 +283,41 @@ export class InventoryService {
 
   listBins() {
     return this.stow.listWithCounts();
+  }
+
+  /**
+   * What is on one shelf, read only: each item by the number it carries and what it is, and where it stands.
+   * The shelf's count (listBins) and this list are the same rows, counted and read.
+   */
+  async binItems(binId: string) {
+    const [shelf] = await this.db
+      .select({
+        id: bin.id,
+        barcode: bin.barcode,
+        zone: bin.zone,
+        oversized: bin.oversized,
+        active: bin.active,
+      })
+      .from(bin)
+      .where(eq(bin.id, binId))
+      .limit(1);
+    if (!shelf) throw AppError.notFound('Bin not found');
+    const items = await this.db
+      .select({
+        id: item.id,
+        serialNumber: item.serialNumber,
+        barcode: item.barcode,
+        typeClass: item.typeClass,
+        description: item.description,
+        conditionGrade: item.conditionGrade,
+        lifecycleState: item.lifecycleState,
+        holdFlag: item.holdFlag,
+      })
+      .from(item)
+      // A lot that has been split is not on the shelf any more (its pieces are): the count leaves it out, and so does this.
+      .where(and(eq(item.binId, binId), eq(item.lotBroken, false)))
+      .orderBy(item.serialNumber);
+    return { bin: shelf, items };
   }
 
   async reconcile() {

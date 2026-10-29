@@ -133,7 +133,7 @@ function QueueActions({
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           icon={<IconCheck />}
           onClick={() => onAct(() => api.post(`/services/requests/${q.id}/accept`), t('queue.msg.approved'))}
         >
@@ -263,7 +263,7 @@ function InspectionFulfillment({
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           disabled={!complete}
           onClick={() =>
             onAct(() => api.post(`/services/inspection/${q.id}/complete`, payload()), t('queue.msg.inspectionDone'))
@@ -471,7 +471,7 @@ function FulfillmentForm({
       <div className="actions">
         <Button
           size="sm"
-          variant="gold"
+          variant="primary"
           disabled={!complete}
           onClick={() => onAct(() => api.post(spec.endpoint(q.id), payload()), t(spec.ok))}
         >

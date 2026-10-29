@@ -64,7 +64,7 @@ describe('what the server wrote is its own island on a page that reads the other
 });
 
 describe('the admin house store', () => {
-  it('sets a description beside its photo button in its own island, so the cell is not read as a button', async () => {
+  it('sets a description in its own island, so an English name keeps its order on a page that reads the other way', async () => {
     get.mockResolvedValue([
       {
         id: 'h1',
@@ -83,10 +83,10 @@ describe('the admin house store', () => {
     const description = await screen.findByText('2011 Pokémon Call of Legends — Rayquaza #SL10/95');
     expect(description.tagName).toBe('BDI');
     expect(description).toHaveAttribute('dir', 'auto');
-    // The cell that holds the button holds the words too: this is the cell a table rule that sets a
-    // cell with a button in it to the page's direction once scrambled ("… Hotta · 2011").
-    const cell = description.closest('td')!;
-    expect(within(cell).getByRole('button')).toBeInTheDocument();
+    // The name is the headline of the product's tag, and the card's photograph is a button of its own beside it:
+    // the words and the button are not one run of text (once a table cell that held both read "… Hotta · 2011").
+    const tag = description.closest('.drawer-tag')!;
+    expect(within(tag as HTMLElement).getByRole('button', { name: /הצג|תמונה/ })).toBeInTheDocument();
   });
 });
 

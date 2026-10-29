@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../../../shared/api';
 import { useT } from '../../../shared/i18n';
+import { isolateLtr } from '../../../shared/money';
 import {
   NAME_PART_MAX,
   PASSWORD_MIN,
@@ -10,6 +11,7 @@ import {
   normalizeUsername,
 } from '../../../shared/names';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
+import { AuthCard } from './AuthCard';
 import { TERMS_VERSION } from '../help/legalContent';
 import { TermsReader } from '../help/LegalDocumentView';
 
@@ -79,8 +81,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
 
   if (registered) {
     return (
-      <section className="auth-card">
-        <h2>{t('auth.signUpTitle')}</h2>
+      <AuthCard as="section" kicker={t('auth.kicker.signUp')} title={t('auth.signUpTitle')}>
         <SuccessNote>{registered}</SuccessNote>
         <p className="field-hint">{t('auth.verifySentHint')}</p>
 
@@ -94,17 +95,27 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
 
         {error && <ErrorState message={error} />}
 
-        <Button variant="gold" block onClick={onGoToSignIn}>
+        <Button variant="primary" block onClick={onGoToSignIn}>
           {t('auth.goToSignIn')}
         </Button>
-      </section>
+      </AuthCard>
     );
   }
 
   return (
-    <form className="auth-card" onSubmit={register}>
-      <h2>{t('auth.signUpTitle')}</h2>
-
+    <AuthCard
+      kicker={t('auth.kicker.signUp')}
+      title={t('auth.signUpTitle')}
+      onSubmit={register}
+      stub={
+        <p className="auth-switch">
+          {t('auth.haveAccount')}{' '}
+          <Button variant="link" onClick={onGoToSignIn}>
+            {t('auth.signIn')}
+          </Button>
+        </p>
+      }
+    >
       <Field
         label={t('auth.email')}
         htmlFor="signup-email"
@@ -196,19 +207,18 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
             required
             aria-describedby="signup-consent-hint"
           />
-          <span>{t('auth.consentLabel', { version: TERMS_VERSION })}</span>
+          <span>{t('auth.consentLabel', { version: isolateLtr(TERMS_VERSION) })}</span>
         </label>
         <p className="field-hint" id="signup-consent-hint">
           {t('auth.consentHint')}{' '}
-          <button
-            className="btn--link"
-            type="button"
+          <Button
+            variant="link"
             aria-expanded={showTerms}
             aria-controls="signup-terms"
             onClick={() => setShowTerms((v) => !v)}
           >
             {showTerms ? t('auth.consentHide') : t('auth.consentRead')}
-          </button>
+          </Button>
         </p>
         {showTerms && <TermsReader id="signup-terms" />}
       </div>
@@ -216,7 +226,7 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       {error && <ErrorState message={error} />}
 
       <Button
-        variant="gold"
+        variant="primary"
         type="submit"
         block
         loading={busy}
@@ -224,13 +234,6 @@ export function SignUpPage({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       >
         {t('auth.signUp')}
       </Button>
-
-      <p className="auth-switch">
-        {t('auth.haveAccount')}{' '}
-        <button className="btn--link" type="button" onClick={onGoToSignIn}>
-          {t('auth.signIn')}
-        </button>
-      </p>
-    </form>
+    </AuthCard>
   );
 }
