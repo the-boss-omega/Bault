@@ -18,7 +18,7 @@ const { DetailDrawer } = await import('../../apps/web/src/shared/ui/DetailDrawer
 const { CardPhotoThumb } = await import('../../apps/web/src/shared/CardPhoto');
 const { PageHeader, NotificationBell, LanguageSwitcher, MobileBar } = await import('../../apps/web/src/shared/ui/PageHeader');
 const { NavigationRail } = await import('../../apps/web/src/shared/ui/NavigationRail');
-const { ContextTabs } = await import('../../apps/web/src/shared/ui/primitives');
+const { ContextTabs, DetailRow } = await import('../../apps/web/src/shared/ui/primitives');
 const { StatementSlip } = await import('../../apps/web/src/areas/customer/finance/StatementSlip');
 const { AccountingSection } = await import('../../apps/web/src/areas/admin/AccountingSection');
 const { AdminConsole } = await import('../../apps/web/src/areas/admin/AdminConsole');
@@ -39,6 +39,7 @@ const { revealField } = await import('../../apps/web/src/shared/ui/revealField')
 const audit = (await import('../../scripts/lib/audit-checks.mjs')) as unknown as {
   auditFocus: (page: Page, stops?: number) => Promise<string[]>;
   auditButtons: (page: Page) => Promise<string[]>;
+  inspect: (page: Page, locale: string, width: number) => Promise<{ flags: string[]; title: string }>;
 };
 
 /**
@@ -417,6 +418,106 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
           expect(row.marker, row.text).toBe('none');
           expect(row.number, row.text).toBeLessThan(row.word);
         }
+        await page.close();
+      });
+    }
+  });
+
+  describe('the rows of a drawer', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`keep inside it on a phone, a date wrapping at its space where the column is narrower than it: ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        render(
+          <I18nProvider>
+            <DetailDrawer title="Transaction details" onClose={() => {}}>
+              <dl className="detail-list">
+                <DetailRow label="Type">Service charge</DetailRow>
+                <DetailRow label="Date">
+                  <span className="date">
+                    {locale === 'he' ? '28 באוקטובר 2026 בשעה 13:00' : 'October 28, 2026 at 1:00 PM'}
+                  </span>
+                </DetailRow>
+                <DetailRow label="Record ID">
+                  <code dir="ltr">1e7a2e35-1fbd-4871-b4c9-17b5fc69d9ef</code>
+                </DetailRow>
+              </dl>
+            </DetailDrawer>
+          </I18nProvider>,
+        );
+        const page = await inBrowser(390, locale);
+        const body = await page.$eval('.drawer-body', (el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(body.scrollWidth).toBeLessThanOrEqual(body.clientWidth);
+        await page.close();
+      });
+    }
+  });
+
+  describe('the guides', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`are English, read from the left, with the full stop of a sentence at its end, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/guides?g=first-week';
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.timeline li p')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        // A guide is written in English only. On a Hebrew page a paragraph of it that nothing says is English reads
+        // from the right, and the full stop that ends each sentence is drawn at the start of the line.
+        const marked = await page.$$eval('.timeline li p', (ps) =>
+          ps.map((p) => `${p.getAttribute('lang')} ${p.getAttribute('dir')}`),
+        );
+        expect(marked.length).toBeGreaterThan(3);
+        expect(new Set(marked)).toEqual(new Set(['en ltr']));
+        const { flags } = await audit.inspect(page, locale, 1440);
+        expect(flags.filter((f) => /wrong way round|out of order/.test(f))).toEqual([]);
+        await page.close();
+      });
+
+      it(`show what is related with a chevron the size of a letter, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/guides?g=first-week';
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.check-list li svg')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        // An icon is given its size by where it stands; the chevron of a related guide had none, and was as large
+        // as the page was wide.
+        const icons = await page.$$eval('.check-list li svg', (els) =>
+          els.map((el) => Math.max(el.getBoundingClientRect().width, el.getBoundingClientRect().height)),
+        );
+        expect(icons.length).toBeGreaterThan(0);
+        expect(Math.max(...icons)).toBeLessThanOrEqual(24);
+        await page.close();
+      });
+
+      it(`name each guide in English where they are listed, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/guides';
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.card-grid .card-title')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        const names = await page.$$eval('.card-grid li', (cards) =>
+          cards.flatMap((card) =>
+            [...card.querySelectorAll('.card-title span, .card-desc span, .card-hit span')].map(
+              (el) => `${el.getAttribute('lang')} ${el.getAttribute('dir')}`,
+            ),
+          ),
+        );
+        expect(names.length).toBeGreaterThan(9);
+        expect(new Set(names)).toEqual(new Set(['en ltr']));
         await page.close();
       });
     }

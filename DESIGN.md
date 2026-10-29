@@ -748,9 +748,10 @@ it). The photograph opens in the room: the dark a card is photographed against, 
 case with a plate that names it. On a phone the rail is one too: it takes focus when it opens, on the
 page you are on, Escape closes it, and while it is closed it is out of the keyboard's way.
 
-A drawer whose body scrolls and has nothing in it to stop on (a request that has been settled, a closed
-case) is a stop itself, named for the drawer, for as long as it overflows and has no control of its own
-(`useKeyboardScroll`: a keyboard cannot scroll a box it cannot stop on). Where there is a control in it, the
+A drawer whose body scrolls, down or sideways, and has nothing in it to stop on (a request that has been
+settled, a closed case) is a stop itself, named for the drawer, for as long as it overflows and has no control
+of its own (`useKeyboardScroll`: a keyboard cannot scroll a box it cannot stop on). A row of a drawer lets a
+date break at its space (`.detail-value .date`), so that it is not what makes the body scroll sideways. Where there is a control in it, the
 controls are the way, and the body is left out of the tab order; its ring is drawn inside its edge, where the
 head and the foot do not cover it.
 
@@ -803,6 +804,12 @@ stands on in the drawer; `.offer` is a membership tier's card.
   to left to right and hang from the wrong edge. A select shows the chosen option the way that option
   reads (`option { unicode-bidi: plaintext }`), so an English address on a Hebrew page starts at its
   beginning instead of being cut off at it.
+- **English on a Hebrew page is marked as English.** The guides, the answers of the FAQ and the legal text are
+  written in English only. Each passage is `lang="en" dir="ltr"` (`ENGLISH`, in `areas/customer/help/english.ts`),
+  so that it is read as English and set from the left: a sentence of English in a right-to-left paragraph has the
+  full stop that ends it drawn at the start of the line (`.Confirm your email address…`), and a screen reader reads
+  it in Hebrew. A block of it is left-aligned, as the FAQ's answers are; a title or a summary on a card is an inline
+  island and stays at the edge the card starts at.
 - **Icons that flip**: chevrons, back/forward arrows, the "view all" caret — anything expressing
   *direction of travel through the interface*. **Icons that do not flip**: the external-link arrow
   (it means "leaves this site", not "goes right"), clocks, checkmarks, the camera, the box.
@@ -897,6 +904,7 @@ like.
 | Every infinite animation, spelled however, is on the list in section 2 | `design-lint` | same |
 | The reduced-motion block silences animation, transition and smooth scrolling for everything; no script says `behavior: 'smooth'` | `design-lint` | same |
 | What the other engines draw that Chromium does not (a chosen option longer than a phone does not widen the page in Safari's engine; the page of the second factor, whose code is set large, is no wider than a phone in Firefox's; a name that begins with a number is drawn as it is written in a Hebrew register); and the whole audit below, in either engine (`--engine firefox` or `webkit`; where an engine has no phone it is a narrow window with touch) | `tests/ux/other-engines.test.tsx` (each engine that is installed; the others are skipped), `pnpm design:screens --engine firefox` / `webkit` | `pnpm test:ux`, `pnpm design:screens` |
+| Every record a screen opens, looked at as the screen it then is and not only as the list that opens it (a guide's steps, a question's answer, a ticket, a parcel, a shipment, a transaction, a request, an account, an item): the first of each is opened (`visitRecord`), and a run says which kinds it did not reach. The steps of a guide were drawn with every full stop at the wrong end of their line for as long as nobody opened one | `scripts/design-screens.mjs`; `tests/web/design-screens-records.test.ts` reads the app's source for the kinds it opens and fails until the audit's list says the same | `pnpm design:screens`, `pnpm test:web` |
 | WCAG 2.x A and AA rules (axe-core), every focus ring measured against what is behind it **and whether a box that scrolls cuts it off** (once what has focus has come to rest, since focus scrolls it into view smoothly where motion is allowed; the first 40 keyboard stops of each screen, in both languages at both widths; `--focus-stops` changes the number), anything cut off at the edge of a phone that is not in something that scrolls sideways, and on a Hebrew page any phrase, price, version or sentence that is drawn the wrong way round (measured from where the characters ended up, not from the markup), and in either language a kicker that says its heading again, on every screen (each looked at from its top, as a visitor arrives at it), with the drawers, menus and photograph a visitor opens opened first (and, for the manager, an account, an item and a wallet request in the drawers they are changed in); the transactional emails are inspected as documents. `--forced` also captures with forced colours on (axe is run without its contrast rule, which reads the colours the stylesheet asked for, not the ones the person's palette draws) and checks that the current page, the selected tab and the selected row are still drawn; `--motion` captures with motion on (otherwise every page is captured with reduced motion, so nothing is mid-fade, and the overlays are opened with motion either way) | `pnpm design:screens --axe` (both themes, every persona) | before a push that changes the look |
 | The buttons as they are drawn: each label against its own face, each edge (the face where it is filled, the line where it is outlined) against what it stands on, each target (24 px always, 44 px where the pointer is a finger), on the page, the paper and the room; and every other button (a crumb, a tab, the link that opens a line of a roll) its 24 px, wide as well as tall (three letters of Hebrew are 18 px), and that its words are in it, not drawn on the control beside it (a tab that is let shrink below its word draws the word on the next tab); each is measured where it comes to rest, after the transitions that are still in flight have ended | `auditButtons` in `scripts/lib/audit-checks.mjs`, run on every screen by `pnpm design:screens`, and on one of every kind, in both themes and both languages, by `tests/ux/buttons-in-a-browser.test.tsx` | `pnpm design:screens`, `pnpm test:ux` |
 | The menu of what can be asked for on a card and the slips of its forms: a row is named for what it is and described by what it does, a form takes the menu's place and the keyboard goes with it and comes back, each slip writes what is typed (and a dash for what is not), the tiles of an inspection, a slip the width of its fields, a row's words starting where the page starts and its chevron turning, a finger-high row read and edged in both themes and both languages | `tests/ux/service-forms.test.tsx` | `pnpm test:ux` |

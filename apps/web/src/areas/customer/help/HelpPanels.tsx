@@ -18,6 +18,7 @@ import {
   IconLocation,
   IconSearch,
 } from '../../../shared/ui/icons';
+import { ENGLISH } from './english';
 import { GUIDES, GUIDE_CATEGORIES, guide, matchesGuideSearch, type Guide } from './guideContent';
 
 export function GuidesPanel() {
@@ -71,10 +72,16 @@ export function GuidesPanel() {
           {shown.map((g) => (
             <li key={g.id} className="card card--interactive">
               <button type="button" className="card-hit" onClick={() => openRecord('g', g.id)}>
-                <span className="sr-only">{g.title}</span>
+                <span className="sr-only" {...ENGLISH}>
+                  {g.title}
+                </span>
               </button>
-              <h3 className="card-title">{g.title}</h3>
-              <p className="card-desc">{g.summary}</p>
+              <h3 className="card-title">
+                <span {...ENGLISH}>{g.title}</span>
+              </h3>
+              <p className="card-desc">
+                <span {...ENGLISH}>{g.summary}</span>
+              </p>
               <div className="card-meta">
                 <StatusBadge tone="info" plain>
                   {t(`guide.cat.${g.category}` as MessageKey)}
@@ -95,7 +102,11 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
   const related = (g.related ?? []).map((id) => guide(id)).filter((x): x is Guide => Boolean(x));
 
   return (
-    <Panel title={g.title} subtitle={g.summary} tools={<Button size="sm" variant="ghost" onClick={onBack}>{t('guide.back')}</Button>}>
+    <Panel
+      title={<span {...ENGLISH}>{g.title}</span>}
+      subtitle={<span {...ENGLISH}>{g.summary}</span>}
+      tools={<Button size="sm" variant="ghost" onClick={onBack}>{t('guide.back')}</Button>}
+    >
       {g.video === null && (
         <p className="drawer-note drawer-note--archive">
           <IconAlert />
@@ -116,8 +127,14 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
                 </a>
               )}
             </div>
-            <p style={{ marginBlockStart: 4 }}>{step.text}</p>
-            {step.note && <p className="hint">{step.note}</p>}
+            <p style={{ marginBlockStart: 4 }} {...ENGLISH}>
+              {step.text}
+            </p>
+            {step.note && (
+              <p className="hint" {...ENGLISH}>
+                {step.note}
+              </p>
+            )}
           </li>
         ))}
       </ol>
@@ -127,10 +144,11 @@ function GuideDetail({ g, onBack }: { g: Guide; onBack: () => void }) {
           <h3 className="drawer-heading">{t('guide.related')}</h3>
           <ul className="check-list list-unbounded">
             {related.map((r) => (
-              <li key={r.id}>
-                <span>{r.title}</span>
-                <a className="hint" href={`#/faq/guides?g=${r.id}`}>
-                  {t('guide.open')} <IconChevronRight />
+              <li key={r.id} className="check-row">
+                <span {...ENGLISH}>{r.title}</span>
+                <a className="link-more" href={`#/faq/guides?g=${r.id}`}>
+                  {t('guide.open')}
+                  <IconChevronRight />
                 </a>
               </li>
             ))}

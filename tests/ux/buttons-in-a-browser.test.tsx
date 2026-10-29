@@ -297,6 +297,29 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
       }
     }
 
+    for (const theme of ['dark', 'light'] as const) {
+      it(`a quiet button in the selected row of a roll is edged on the wash the row is tinted with: ${theme}`, async () => {
+        // The wash is lighter than the page in the dark theme, and the field's line was 2.7:1 on it.
+        render(
+          <div className="dt-wrap">
+            <table className="data-table">
+              <tbody>
+                <tr className="is-clickable is-selected" tabIndex={0}>
+                  <td className="dt-primary">SHP-SR5VFF8W</td>
+                  <td className="td-tight">
+                    <Button size="sm">Shipment details</Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>,
+        );
+        const page = await inBrowser({ theme });
+        expect(await audit.auditButtons(page)).toEqual([]);
+        await page.close();
+      });
+    }
+
     it('and under a finger, the audit asks for 44px of every one', async () => {
       render(grounds);
       const page = await inBrowser({ width: 390, touch: true });

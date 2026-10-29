@@ -63,9 +63,11 @@ const lines = Array.from({ length: 60 }, (_, i) => <p key={i}>Line number {i} of
 const body = () => document.querySelector<HTMLElement>('.drawer-body')!;
 
 /** jsdom has no layout, so how tall a body is, and how much room it has, is whatever the test says. */
-function size(el: HTMLElement, scrollHeight: number, clientHeight: number) {
+function size(el: HTMLElement, scrollHeight: number, clientHeight: number, scrollWidth = 400, clientWidth = 400) {
   Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scrollHeight });
   Object.defineProperty(el, 'clientHeight', { configurable: true, value: clientHeight });
+  Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
+  Object.defineProperty(el, 'clientWidth', { configurable: true, value: clientWidth });
 }
 
 /** The check runs on the next frame. */
@@ -94,6 +96,15 @@ describe('the body of a drawer that scrolls can be reached from the keyboard', (
     expect(body()).not.toHaveAttribute('tabindex');
 
     size(body(), 3000, 600);
+    await looked();
+
+    expect(body()).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('region', { name: 'Wallet request' })).toBe(body());
+  });
+
+  it('is a stop where it scrolls sideways too: what is past its edge cannot be read without a pointer either', async () => {
+    render(<Drawer>{lines.slice(0, 2)}</Drawer>);
+    size(body(), 120, 600, 398, 389);
     await looked();
 
     expect(body()).toHaveAttribute('tabindex', '0');

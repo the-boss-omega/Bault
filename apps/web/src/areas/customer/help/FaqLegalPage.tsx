@@ -13,6 +13,7 @@ import {
 } from '../../../shared/ui/primitives';
 import { IconAsk, IconChevronDown, IconDownload, IconLegal, IconPrint, IconSearch } from '../../../shared/ui/icons';
 import { Amount } from '../../../shared/ui/Serial';
+import { ENGLISH } from './english';
 import { FAQ, type FaqAvailability, type FaqBlock, type FaqEntry } from './faqContent';
 import { IntakePolicyPanel } from './IntakePolicyPanel';
 import { LEGAL_DOCUMENTS } from './legalContent';
@@ -353,7 +354,7 @@ function FaqItem({
           <span className="faq-chevron" aria-hidden="true">
             <IconChevronDown />
           </span>
-          <span className="faq-q-text" lang="en" dir="ltr">
+          <span className="faq-q-text" {...ENGLISH}>
             {entry.question}
           </span>
           <StatusBadge tone={AVAILABILITY_TONE[entry.availability]} plain>
@@ -369,14 +370,14 @@ function FaqItem({
         className="faq-a"
         hidden={!open}
       >
-        <p className={`faq-note faq-note--${entry.availability}`} lang="en" dir="ltr">
+        <p className={`faq-note faq-note--${entry.availability}`} {...ENGLISH}>
           <strong>
             {t(AVAILABILITY_NOTE[entry.availability])}
           </strong>{' '}
           {entry.baultNote}
         </p>
 
-        <div className="faq-source-answer" lang="en" dir="ltr">
+        <div className="faq-source-answer" {...ENGLISH}>
           {entry.blocks.map((block, i) => (
             <FaqBlockView key={i} block={block} />
           ))}
@@ -506,7 +507,7 @@ function LegalPanel() {
                 aria-pressed={d.id === docId}
                 onClick={() => setDocId(d.id)}
               >
-                {d.title}
+                <span {...ENGLISH}>{d.title}</span>
               </button>
             ))}
           </div>
@@ -527,7 +528,7 @@ function LegalPanel() {
           <nav className="legal-toc" aria-label={t('legal.tocLabel')}>
             <h3 className="legal-toc-title">{t('legal.toc')}</h3>
             {/* The headings are the document's, in its language, and carry their own numbers. */}
-            <ol lang="en" dir="ltr">
+            <ol {...ENGLISH}>
               {doc.sections.map((section) => (
                 <li key={section.id}>
                   <a href={`#legal-${section.id}`}>{section.heading}</a>
@@ -536,7 +537,7 @@ function LegalPanel() {
             </ol>
           </nav>
 
-          <div className="legal-text" lang="en" dir="ltr">
+          <div className="legal-text" {...ENGLISH}>
             {sections.length === 0 ? (
               <EmptyState title={t('legal.noMatches')} icon={<IconLegal />} />
             ) : (

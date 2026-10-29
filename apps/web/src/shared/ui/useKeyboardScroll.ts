@@ -10,10 +10,10 @@ const hasStop = (box: HTMLElement) =>
   );
 
 /**
- * A box that scrolls has to be reachable from the keyboard, or someone who does not use a pointer cannot read
- * what is below its fold. Where there is a control in the box, the controls are the way (focus brings each into
- * view). Where there is none (a request that is settled, a receipt, a case that is closed) the box is what takes
- * the stop, for as long as it overflows, and is named for what it holds.
+ * A box that scrolls, down or sideways, has to be reachable from the keyboard, or someone who does not use a
+ * pointer cannot read what is below its fold or past its edge. Where there is a control in the box, the controls
+ * are the way (focus brings each into view). Where there is none (a request that is settled, a receipt, a case
+ * that is closed) the box is what takes the stop, for as long as it overflows, and is named for what it holds.
  *
  * What is in a box comes and goes, and so does the room for it, so it is looked at again when either changes.
  */
@@ -43,7 +43,8 @@ export function useKeyboardScroll(ref: RefObject<HTMLElement | null>, labelledBy
         watched.add(child);
         sizes?.observe(child);
       }
-      const needed = box.scrollHeight > box.clientHeight + 1 && !hasStop(box);
+      const scrolls = box.scrollHeight > box.clientHeight + 1 || box.scrollWidth > box.clientWidth + 1;
+      const needed = scrolls && !hasStop(box);
       const set = box.dataset.scrollable === 'true';
       if (needed && !set) {
         box.tabIndex = 0;

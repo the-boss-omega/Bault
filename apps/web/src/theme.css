@@ -134,6 +134,9 @@
      measures them against every surface in both themes. */
   --focus-color: color-mix(in oklab, var(--foreground) 72%, var(--background));
   --control-border: color-mix(in oklab, var(--foreground) 46%, var(--background));
+  /* The same line a step heavier, for a button that stands on the wash a selected row is tinted with: the wash is
+     lighter than the page in the dark theme, and the field's line is 2.7:1 on it. */
+  --control-border-on-wash: color-mix(in oklab, var(--foreground) 54%, var(--background));
 
   --r-xs: max(2px, calc(var(--radius) - 4px));
   --r-sm: max(2px, calc(var(--radius) - 2px));

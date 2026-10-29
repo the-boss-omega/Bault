@@ -1859,6 +1859,8 @@ input[type='search'] {
 
 .data-table tbody tr.is-selected {
   background: var(--custody-wash);
+  /* A button in the row (a shipment's details) stands on the wash, not on the page. */
+  --btn-line: var(--control-border-on-wash);
 }
 
 .data-table tbody tr.is-clickable:focus-visible {
@@ -2279,6 +2281,12 @@ input[type='search'] {
   color: var(--ink);
   unicode-bidi: plaintext;
   overflow-wrap: anywhere;
+}
+
+/* A date and its time may break between them: on a phone, in English, "October 28, 2026 at 1:00 PM" is wider than
+   the column it is in, and a drawer that scrolls sideways is one that cuts its words off. */
+.detail-value .date {
+  white-space: normal;
 }
 
 .detail-value-sub {
