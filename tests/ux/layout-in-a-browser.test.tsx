@@ -357,6 +357,51 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     });
   });
 
+  describe('a strip of tabs that is wider than a phone', () => {
+    // The admin console has eleven of them. A tab keeps the width of its word and the strip scrolls: a tab that is
+    // given a minimum width of its own may shrink below its word, and the words are then drawn on one another.
+    const tabs = [
+      'Shelf yield',
+      'Users',
+      'Sign-ins',
+      'Parked messages',
+      'Wallet requests',
+      'Accounting',
+      'Items',
+      'Bault store',
+      'Pricing',
+      'Disputes',
+      'Storage fees',
+    ].map((label, i) => ({ key: `t${i}`, label }));
+
+    for (const [locale, width] of [
+      ['en', 390],
+      ['he', 390],
+      ['en', 320],
+    ] as const) {
+      it(`keeps each tab as wide as its word, and one after the other: ${locale}, ${width}px`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        render(<ContextTabs label="sections" tabs={tabs} active="t0" onSelect={() => {}} />);
+        const page = await inBrowser(width, locale);
+        const boxes = await page.$$eval('.ctx-tab', (els) =>
+          els.map((el) => {
+            const box = el.getBoundingClientRect();
+            return { word: el.textContent, left: box.left, right: box.right, fits: el.scrollWidth <= el.clientWidth + 0.5 };
+          }),
+        );
+        expect(boxes).toHaveLength(tabs.length);
+        for (const box of boxes) expect(box.fits, `${box.word} is as wide as its word`).toBe(true);
+        // Each tab starts where the one before it ended (the strip is read from the right in Hebrew).
+        for (let i = 1; i < boxes.length; i += 1) {
+          const [before, after] = [boxes[i - 1]!, boxes[i]!];
+          const apart = locale === 'he' ? before.left - after.right : after.left - before.right;
+          expect(apart, `${before.word} and ${after.word} do not overlap`).toBeGreaterThanOrEqual(-0.5);
+        }
+        await page.close();
+      });
+    }
+  });
+
   describe('the wallet statement on a phone', () => {
     function Slip() {
       const t = useT();

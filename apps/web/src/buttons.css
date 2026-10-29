@@ -314,9 +314,12 @@
   }
 }
 
-/* ---- A tab: a word with a line under it, and as wide as a target where the word is short ("עיון" is 20px) ---- */
+/* ---- A tab: a word with a line under it, and as wide as a target where the word is short ("עיון" is 20px) ----
+   It keeps the width of its word and the strip scrolls: a flex item with a minimum of its own (and not `auto`, which
+   is its word) is let shrink below it, and the words of the tabs of a phone were drawn on one another. */
 
 .ctx-tab {
+  flex: none;
   min-inline-size: 24px;
 }
 
