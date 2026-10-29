@@ -298,11 +298,11 @@
   display: inline-flex;
   align-items: center;
   min-block-size: 24px;
-  /* Three letters of Hebrew are 18px: a crumb is 24px wide at least, and the room is padding taken back from the
-     margin, so that the word stays where the page puts it (the first crumb under the first letter of the title). */
+  /* Three letters of Hebrew are 18px: a crumb is 24px wide at least, with its word at the start, where the page puts
+     it (the first crumb under the first letter of the title). The room is the box's own: padding taken back from a
+     negative margin makes a flex container measure its crumbs a few pixels short, and they are shrunk to fit. */
   min-inline-size: 24px;
-  padding-inline: 2px;
-  margin-inline: -2px;
+  justify-content: flex-start;
 }
 
 @media (pointer: coarse) {
@@ -310,7 +310,7 @@
     content: '';
     position: absolute;
     inset-block: -10px;
-    inset-inline: -4px;
+    inset-inline: -6px;
   }
 }
 

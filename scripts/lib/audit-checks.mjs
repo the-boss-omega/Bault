@@ -450,6 +450,48 @@ async function auditButtons(page) {
       return layers.reduceRight((acc, layer) => over(layer, acc), { r: 255, g: 255, b: 255, a: 1 });
     };
     const coarse = matchMedia('(pointer: coarse)').matches;
+    // Whether the words of a control are drawn on something beside it: the text that can be seen (not what is clear,
+    // hidden or clipped by the control or what is inside it) that lies outside the control's box, and a control
+    // that it lies over (the next tab, the next button). Words that run a few pixels out into empty space are not drawn on anything.
+    const CONTROLS = 'button, a[href], [role="tab"], [role="button"], input, select, textarea, summary';
+    const wordsOutside = (control) => {
+      const box = control.getBoundingClientRect();
+      const walker = document.createTreeWalker(control, NodeFilter.SHOW_TEXT);
+      const outside = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent.trim()) continue;
+        let seenAndFree = true;
+        for (let up = node.parentElement; up; up = up.parentElement) {
+          const style = getComputedStyle(up);
+          if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0 || style.overflowX !== 'visible') {
+            seenAndFree = false;
+            break;
+          }
+          if (up === control) break;
+        }
+        if (!seenAndFree) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width === 0) continue;
+          if (rect.left < box.left - 1) outside.push({ left: rect.left, right: Math.min(rect.right, box.left), top: rect.top, bottom: rect.bottom });
+          if (rect.right > box.right + 1) outside.push({ left: Math.max(rect.left, box.right), right: rect.right, top: rect.top, bottom: rect.bottom });
+        }
+      }
+      if (outside.length === 0) return null;
+      for (const other of document.querySelectorAll(CONTROLS)) {
+        if (other === control || control.contains(other) || other.contains(control)) continue;
+        if (!other.checkVisibility?.({ checkVisibilityCSS: true })) continue;
+        const at = other.getBoundingClientRect();
+        if (at.width === 0 || at.height === 0) continue;
+        const over = outside.find((o) => o.left < at.right - 1 && o.right > at.left + 1 && o.top < at.bottom - 1 && o.bottom > at.top + 1);
+        if (over) {
+          const name = (other.getAttribute('aria-label') || other.textContent || '').trim().slice(0, 24);
+          return { by: Math.round(Math.max(...outside.map((o) => o.right - o.left))), over: name };
+        }
+      }
+      return null;
+    };
     const flags = [];
     const seen = new Set();
     for (const el of document.querySelectorAll('.btn, .icon-btn')) {
@@ -469,9 +511,9 @@ async function auditButtons(page) {
       seen.add(key);
       const say = (message) => flags.push(`button "${name}" (${kind}): ${message}`);
       // A target a finger or a pointer has to hit.
-      // Its words are in it: text wider than the box it is in, where nothing clips it, is drawn on what is beside it.
-      if (style.overflowX === 'visible' && el.scrollWidth > el.clientWidth + 1)
-        say(`its words run out of it: ${el.scrollWidth}px of them in ${el.clientWidth}px`);
+      // Its words are in it: text that is drawn outside the box it is in, where nothing clips it, is drawn on what is beside it.
+      const out = wordsOutside(el);
+      if (out) say(`its words run out of it, ${out.by}px, over "${out.over}"`);
       if (!el.disabled && (box.width < 24 || box.height < 24))
         say(`${Math.round(box.width)}x${Math.round(box.height)}px, under the 24px a target needs`);
       else if (
@@ -523,11 +565,12 @@ async function auditButtons(page) {
       const name = (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 28);
       const kind = `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''}`;
       // Its words are in it: a tab that is let shrink below its word draws the word on the next tab.
-      if (getComputedStyle(el).overflowX === 'visible' && el.scrollWidth > el.clientWidth + 1) {
+      const out = wordsOutside(el);
+      if (out) {
         const runs = `words|${el.tagName}|${el.className}|${name}`;
         if (!seen.has(runs)) {
           seen.add(runs);
-          flags.push(`target "${name}" (${kind}): its words run out of it: ${el.scrollWidth}px of them in ${el.clientWidth}px`);
+          flags.push(`target "${name}" (${kind}): its words run out of it, ${out.by}px, over "${out.over}"`);
         }
       }
       if (box.width >= 24 && box.height >= 24) continue;

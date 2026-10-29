@@ -338,6 +338,7 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
           <Button id="narrow" style={{ width: 40, whiteSpace: 'nowrap' }}>
             Request cash in
           </Button>
+          <Button id="beside">Cancel</Button>
         </div>,
       );
       const page = await inBrowser({ width: 390 });
@@ -350,6 +351,44 @@ describe.skipIf(!browser)('the buttons, in a browser', () => {
       expect(flags.some((flag) => /ctx-tab/.test(flag) && /words run out/.test(flag))).toBe(true);
       expect(flags.some((flag) => /Request cash in/.test(flag) && /words run out/.test(flag))).toBe(
         true,
+      );
+      await page.close();
+    });
+
+    it('and is quiet about words that are not seen (clear, hidden or clipped by the control) and about words that run out into empty space', async () => {
+      render(
+        <div id="page" style={{ width: 300 }}>
+          <button
+            type="button"
+            id="rail"
+            className="rail-item"
+            style={{ width: 71, display: 'inline-flex' }}
+          >
+            <span className="rail-icon" style={{ width: 40 }} />
+            <span style={{ width: 0, overflow: 'hidden', opacity: 0 }}>Notifications</span>
+            <span style={{ opacity: 0 }}>12</span>
+          </button>
+          <button
+            type="button"
+            id="clip"
+            style={{
+              width: 60,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            A label that is cut short on purpose
+          </button>
+          {/* A few pixels out into empty space are not drawn on anything. */}
+          <button type="button" id="lone" style={{ width: 30, whiteSpace: 'nowrap' }}>
+            Support
+          </button>
+        </div>,
+      );
+      const page = await inBrowser({ width: 390 });
+      expect((await audit.auditButtons(page)).filter((flag) => /words run out/.test(flag))).toEqual(
+        [],
       );
       await page.close();
     });
