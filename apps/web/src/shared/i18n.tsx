@@ -672,7 +672,7 @@ const he = {
   'auth.kicker.signUp': 'חשבון חדש',
   'auth.kicker.forgot': 'שחזור גישה',
   'auth.kicker.reset': 'סיסמה חדשה',
-  'auth.kicker.mfa': 'אימות דו־שלבי',
+  'auth.kicker.mfa': 'שלב שני',
   'auth.kicker.verify': 'אימות כתובת',
   'auth.signUpTitle': 'הרשמה',
   'auth.identifier': 'אימייל או שם משתמש',

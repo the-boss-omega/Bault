@@ -122,7 +122,7 @@ describe('a door', () => {
     ['signIn', 'Members’ entrance', 'כניסת חברים'],
     ['signUp', 'New account', 'חשבון חדש'],
     ['forgot', 'Getting back in', 'שחזור גישה'],
-    ['mfa', 'Second factor', 'אימות דו־שלבי'],
+    ['mfa', 'Second factor', 'שלב שני'],
   ];
 
   for (const [which, en, he] of KICKERS) {
@@ -130,11 +130,18 @@ describe('a door', () => {
       const { container, unmount } = renderDoor(which);
       expect(container.querySelector('.auth-kicker')).toHaveTextContent(en);
       expect(container.querySelector('.auth-slip h2')).toBeInTheDocument();
+      // Over the heading, not the heading again.
+      expect(container.querySelector('.auth-kicker')!.textContent).not.toBe(
+        container.querySelector('.auth-slip h2')!.textContent,
+      );
       unmount();
 
       localStorage.setItem('bault.locale', 'he');
       const hebrew = renderDoor(which);
       expect(hebrew.container.querySelector('.auth-kicker')).toHaveTextContent(he);
+      expect(hebrew.container.querySelector('.auth-kicker')!.textContent).not.toBe(
+        hebrew.container.querySelector('.auth-slip h2')!.textContent,
+      );
     });
   }
 
