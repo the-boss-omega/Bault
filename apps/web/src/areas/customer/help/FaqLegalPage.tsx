@@ -526,7 +526,8 @@ function LegalPanel() {
         <div className="legal-body">
           <nav className="legal-toc" aria-label={t('legal.tocLabel')}>
             <h3 className="legal-toc-title">{t('legal.toc')}</h3>
-            <ol>
+            {/* The headings are the document's, in its language, and carry their own numbers. */}
+            <ol lang="en" dir="ltr">
               {doc.sections.map((section) => (
                 <li key={section.id}>
                   <a href={`#legal-${section.id}`}>{section.heading}</a>

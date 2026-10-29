@@ -4044,7 +4044,9 @@ input[type='search'] {
 .legal-toc ol {
   display: grid;
   gap: 6px;
-  padding-inline-start: var(--sp-4);
+  /* The headings begin with their numbers ("1. About these terms"): a marker of the list's own would say it twice. */
+  padding-inline-start: 0;
+  list-style: none;
 }
 
 .legal-section {

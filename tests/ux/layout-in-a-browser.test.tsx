@@ -29,6 +29,7 @@ const { SellPanel } = await import('../../apps/web/src/areas/customer/marketplac
 const { ProposeTradePanel } = await import('../../apps/web/src/areas/customer/marketplace/ProposeTradePanel');
 const { RegisterParcelForm } = await import('../../apps/web/src/areas/customer/inbound/InboundPage');
 const { SupportPage } = await import('../../apps/web/src/areas/customer/support/SupportPage');
+const { FaqLegalPage } = await import('../../apps/web/src/areas/customer/help/FaqLegalPage');
 const { ProfilePage } = await import('../../apps/web/src/areas/customer/profile/ProfilePage');
 const { api } = await import('../../apps/web/src/shared/api');
 const { billableActions, coverage } =
@@ -355,6 +356,70 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
         }
       }
     });
+  });
+
+  describe('the contents of a legal document', () => {
+    for (const locale of ['en', 'he'] as const) {
+      it(`say each number once and read it first, as the headings are written, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/faq/legal';
+        // The figures the page quotes, as the server gives them (a page without them is not the page).
+        vi.mocked(api.get).mockImplementation(((path: string) =>
+          Promise.resolve(
+            path === '/content/account-terms'
+              ? {
+                  termsVersion: '2026-10-draft-1',
+                  debt: { graceDays: 14, interestBpsPerDay: 5, suspendBelowMinor: -2000 },
+                  cashOut: { bandMinor: 10_000, smallBps: 600, smallMinimumMinor: 99, largeFixedMinor: 500, largeBps: 100 },
+                  chargebackFeeMinor: 2_500,
+                  escrow: { feeBps: 100, minimumFeeMinor: 2_500, minimumValueMinor: 50_000 },
+                  shipping: {
+                    restockingFeeMinor: 2_500,
+                    paymentWindowDays: 7,
+                    insurancePremiumBps: 150,
+                    insuranceMinimumPremiumMinor: 200,
+                    maxInsuredValueMinor: 500_000,
+                    signatureRequiredAboveMinor: 50_000,
+                  },
+                  removeCommonsWindowDays: 30,
+                }
+              : [],
+          )) as never);
+        render(
+          <I18nProvider>
+            <FaqLegalPage />
+          </I18nProvider>,
+        );
+        await screen.findByText(/14 days|14 ימים/);
+        await waitFor(() => expect(document.querySelector('.legal-toc a')).not.toBeNull());
+        const page = await inBrowser(1440, locale);
+        const rows = await page.evaluate(() =>
+          [...document.querySelectorAll('.legal-toc li')].map((li) => {
+            const text = li.querySelector('a')!.firstChild as Text;
+            const at = (i: number) => {
+              const range = document.createRange();
+              range.setStart(text, i);
+              range.setEnd(text, i + 1);
+              return range.getBoundingClientRect().left;
+            };
+            return {
+              text: text.data.slice(0, 14),
+              marker: getComputedStyle(li).listStyleType,
+              number: at(0),
+              word: at(text.data.search(/[A-Za-z]/)),
+            };
+          }),
+        );
+        expect(rows.length).toBeGreaterThan(5);
+        for (const row of rows) {
+          // The heading begins with its number: a marker of the list's own would say it twice, and in a
+          // right-to-left line the number is drawn after the words ("About these terms .1").
+          expect(row.marker, row.text).toBe('none');
+          expect(row.number, row.text).toBeLessThan(row.word);
+        }
+        await page.close();
+      });
+    }
   });
 
   describe('a ring measured on the way', () => {
