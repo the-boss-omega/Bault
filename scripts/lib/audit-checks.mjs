@@ -442,7 +442,7 @@ async function auditButtons(page) {
     ]);
   });
   return page.evaluate(() => {
-    const { document, getComputedStyle, matchMedia } = globalThis;
+    const { document, getComputedStyle, matchMedia, NodeFilter } = globalThis;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 1;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
