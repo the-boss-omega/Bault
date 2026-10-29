@@ -910,6 +910,14 @@ like.
 | The lint's own rules | `tests/web/design-lint.test.ts` plants a violation of each rule in a copy of the source (in `index.css`, in a layer, in a component, in `theme.css`), and checks that what is allowed is let through | `pnpm test:web` |
 | The behaviour of the motion and overlay code | `tests/ux/motion-and-overlays.test.tsx` | `pnpm test:ux` |
 
+A test that measures a layout in a browser is given a page made from the markup: it has no script (what the app does to
+a drawer whose body scrolls, `useKeyboardScroll`, does not run in it) and it does not load the application's fonts, so
+it is drawn in the machine's own: Inter on a development machine, DejaVu on a CI runner, which is wider and taller. Such
+a test asks what it means (two cells share a line, a window is tall enough that a body does not scroll) and not for a
+number of pixels that a font decides; three tests of the wallet desk asked for the other and failed on a runner. A
+fontconfig that offers only DejaVu and Liberation, given to the run as `FONTCONFIG_FILE`, reproduces a runner's fonts
+here.
+
 ---
 
 ## 15. Implementation map
