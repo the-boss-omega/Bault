@@ -1399,15 +1399,17 @@
 
 /* A register's entry that opens something: the words are the control, and they read as what they are until pointed at. */
 .register-link {
-  display: inline-flex;
-  align-items: center;
-  /* Its text is 21px tall; a link on a line of its own is a target, and a target is 24px (WCAG 2.5.8). */
-  min-block-size: 24px;
+  /* Not a flex container: the words of one are in a box of their own that takes none of the container's
+     `unicode-bidi`, and Firefox then reads "2021 Pokémon" in the page's direction, the year at the wrong end. */
+  display: inline-block;
   padding: 0;
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
+  /* A link on a line of its own is a target, and a target is 24px (WCAG 2.5.8): the line is as tall (its text is 21px). */
+  min-block-size: 24px;
+  line-height: 24px;
   cursor: pointer;
   unicode-bidi: plaintext;
   text-align: var(--text-start);

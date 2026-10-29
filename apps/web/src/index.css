@@ -2820,6 +2820,9 @@ input[type='search'] {
 
 .auth-box {
   display: grid;
+  /* One column that may be narrower than what is in it: the code of the second factor is a field set large
+     (twenty characters of it is wider than a phone), and an `auto` column is as wide as its widest content. */
+  grid-template-columns: minmax(0, 1fr);
   align-content: center;
   gap: var(--sp-6);
   width: 100%;
