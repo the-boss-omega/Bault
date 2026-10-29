@@ -3,6 +3,7 @@ import { api } from '../../shared/api';
 import { Barcode, BarcodePrintButton } from '../../shared/Barcode';
 import { CardPhotoButton, CardPhotoThumb } from '../../shared/CardPhoto';
 import { useI18n } from '../../shared/i18n';
+import { itemClassOption } from '../../shared/itemClasses';
 import { STATE_META, stateLabel } from '../../shared/itemTimeline';
 import { useNavigation, useRoute } from '../../shared/routing';
 import {
@@ -233,6 +234,7 @@ function ItemDrawer({
   }
 
   const name = nameOf(description, typeClass);
+  const known = itemClassOption(typeClass);
   const meta = STATE_META[lifecycleState];
   const owner = users.find((u) => u.id === ownerId);
   // A state the list does not offer (one the system set) is still the one the item is in, and is shown as such.
@@ -269,7 +271,11 @@ function ItemDrawer({
         kicker={item.serialNumber}
         title={name || <span className="drawer-tag-quiet">{t('admin.items.col.description')}</span>}
         lines={[
-          { label: t('admin.items.col.type'), value: <Code value={typeClass || '—'} /> },
+          {
+            label: t('admin.items.col.type'),
+            // What the type is called, as everywhere else; a class the product does not know is shown as the code it is.
+            value: known ? t(known.labelKey) : <Code value={typeClass || '—'} />,
+          },
           { label: t('admin.items.col.condition'), value: conditionGrade || '—' },
           {
             label: t('admin.items.col.owner'),
