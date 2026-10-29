@@ -115,6 +115,21 @@ describe.skipIf(!browser)('the audit sees what it exists to see', () => {
     });
   });
 
+  describe('a kicker that says its heading again', () => {
+    it('is flagged, and is not when the line over the heading says something else', async () => {
+      const page = await hebrewPage(
+        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">אימות דו־שלבי</p><h2>אימות דו־שלבי</h2></div></form>',
+      );
+      expect((await audit.inspect(page, 'he', 1440)).flags.join()).toMatch(/a kicker that says its heading again: "אימות דו־שלבי"/);
+      await page.close();
+      const fine = await hebrewPage(
+        '<form class="auth-card"><div class="auth-slip"><p class="auth-kicker">שלב שני</p><h2>אימות דו־שלבי</h2></div></form>',
+      );
+      expect((await audit.inspect(fine, 'he', 1440)).flags.filter((flag) => /kicker/.test(flag))).toEqual([]);
+      await fine.close();
+    });
+  });
+
   describe('a cell that reads the page’s way with English text nothing isolates', () => {
     const table = (cell: string) => `<table><tr><td>${cell}</td></tr></table>`;
     const sentence = 'Second leg, charged only to parcels sent to a foreign address.';

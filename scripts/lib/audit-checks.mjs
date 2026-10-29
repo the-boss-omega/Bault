@@ -18,6 +18,19 @@ async function inspect(page, locale, width) {
       if (cents) flags.push(`minor units on screen: ${cents[0]}`);
       const enums = [...new Set(text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])].filter((w) => !w.includes('@'));
       if (enums.length) flags.push(`enum names on screen: ${enums.slice(0, 6).join(', ')}`);
+      // The line over a heading says what the paper is (a kicker); it is not the heading again.
+      const repeated = [];
+      for (const kicker of document.querySelectorAll('[class*="kicker"]')) {
+        if (!kicker.checkVisibility?.()) continue;
+        const said = (kicker.textContent ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+        if (!said) continue;
+        const room = kicker.closest('.drawer-tag, .auth-slip, .request-slip, article, section, li, form') ?? kicker.parentElement;
+        for (const heading of room?.querySelectorAll('h1, h2, h3, h4, [class*="title"]') ?? []) {
+          if (heading === kicker || kicker.contains(heading) || !heading.checkVisibility?.()) continue;
+          if ((heading.textContent ?? '').trim().replace(/\s+/g, ' ').toLowerCase() === said) repeated.push(`"${said.slice(0, 40)}"`);
+        }
+      }
+      if (repeated.length) flags.push(`a kicker that says its heading again: ${[...new Set(repeated)].slice(0, 3).join(', ')}`);
       if (document.documentElement.scrollWidth > window.innerWidth + 1 && width < 800) {
         flags.push(`scrolls sideways: ${document.documentElement.scrollWidth}px wide at ${window.innerWidth}px`);
       }
