@@ -66,10 +66,15 @@ afterAll(async () => {
 
 type Locale = 'en' | 'he';
 
-async function inBrowser(width: number, locale: Locale, theme: 'dark' | 'light'): Promise<Page> {
+async function inBrowser(
+  width: number,
+  locale: Locale,
+  theme: 'dark' | 'light',
+  height = 1000,
+): Promise<Page> {
   const html = document.body.innerHTML;
   const context = await browser!.newContext({
-    viewport: { width, height: 1000 },
+    viewport: { width, height },
     reducedMotion: 'reduce',
     hasTouch: width < 800,
     isMobile: width < 800,
@@ -827,7 +832,12 @@ describe.skipIf(!browser)('the desk, in a browser', () => {
         await dialog('WR-1042');
         await waitFor(() => expect(document.querySelector('.desk-next')).not.toBeNull());
         for (const width of [1280, 390]) {
-          const page = await inBrowser(width, locale, theme);
+          // A page made from the markup has no script, so what the app does to a drawer whose body scrolls and has
+          // no control in it (it becomes the stop: drawer-scroll.test.tsx) does not run here. In a wider font than
+          // the page's own, which is not loaded in a page like this, a settled request is taller than a thousand
+          // pixels' room, and axe is right that its body is a box the keyboard cannot scroll. This is a test of
+          // paper, edges and reach, so the window is tall enough that the body does not scroll in any font.
+          const page = await inBrowser(width, locale, theme, 1800);
           const paper = await page.$eval('.drawer .drawer-tag', (el) => {
             const style = getComputedStyle(el);
             return { bg: style.backgroundColor, color: style.color };
@@ -872,12 +882,16 @@ describe.skipIf(!browser)('the desk, in a browser', () => {
       };
     });
     expect(card.display).toBe('grid');
+    // Beside one another is sharing a line: a name that wraps in a wider font is a taller cell with the status
+    // centred against it, which is not the status on a line of its own.
+    const beside = (a: { top: number; bottom: number }, b: { top: number; bottom: number }) =>
+      a.top < b.bottom && b.top < a.bottom;
     // First line: the number, and the sum at its end.
-    expect(Math.abs(card.request.top - card.amount.top)).toBeLessThanOrEqual(8);
+    expect(beside(card.request, card.amount)).toBe(true);
     expect(card.amount.left).toBeGreaterThan(card.request.left);
     // Second line: whose it is, and where it stands at its end; third: when.
     expect(card.customer.top).toBeGreaterThanOrEqual(card.request.bottom - 1);
-    expect(Math.abs(card.customer.top - card.status.top)).toBeLessThanOrEqual(8);
+    expect(beside(card.customer, card.status)).toBe(true);
     expect(card.status.left).toBeGreaterThan(card.customer.left);
     expect(card.created.top).toBeGreaterThanOrEqual(card.customer.bottom - 1);
     // A card, not a stack of five labelled rows: a request is about 140px, not 330, and there is no label per value.
