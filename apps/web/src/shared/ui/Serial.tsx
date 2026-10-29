@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { CardSlab } from '../CardPhoto';
 import { useT } from '../i18n';
 
@@ -48,10 +48,23 @@ export function ItemPick({ serial, name }: { serial?: string | null; name: strin
   );
 }
 
+/**
+ * A code, as a code is written. One that is too long for its line breaks where it is made of parts
+ * ("service_fee:" and "video_review"), and only inside a word when a part is longer than the line.
+ */
 export function Code({ value, className = '' }: { value: string; className?: string }) {
   return (
     <span className={`code-inline ${className}`.trim()} dir="ltr" translate="no">
-      {value}
+      {value.split(':').map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <>
+              :<wbr />
+            </>
+          )}
+          {part}
+        </Fragment>
+      ))}
     </span>
   );
 }

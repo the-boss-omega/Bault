@@ -589,6 +589,70 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     }
     }
   });
+  describe('the rate card', () => {
+    const RULE = (id: string, actionType: string, description: string) => ({
+      id,
+      actionType,
+      itemClass: null,
+      description,
+      model: 'fixed',
+      value: 1500,
+      currency: 'USD',
+      billingTrigger: 'per_event',
+      effectiveFrom: '2026-10-27T12:00:00.000Z',
+    });
+    const RULES = [
+      RULE('r1', 'service_fee:condition_inspection', 'Per-area condition report against a fixed severity scale'),
+      RULE('r2', 'consignment_fee:auction_house', 'Commission on an auction-house consignment sale'),
+      RULE('r3', 'shipping_addon:gps_tracker', 'A tracker placed in the parcel'),
+    ];
+
+    for (const locale of ['en', 'he'] as const) {
+      it(`breaks the name of an action that has none of its own where it is made of parts, never inside a word, in ${locale}`, async () => {
+        localStorage.setItem('bault.locale', locale);
+        window.location.hash = '#/admin/pricing';
+        vi.mocked(api.get).mockImplementation(((path: string) =>
+          Promise.resolve(
+            path === '/pricing/rules'
+              ? RULES
+              : path === '/admin/pricing/coverage'
+                ? JSON.parse(JSON.stringify(coverage(billableActions(), [])))
+                : path === '/membership/tiers'
+                  ? {
+                      tiers: MEMBERSHIP_TIERS.map((t) => ({ ...t, priceMinor: t.listPriceMinor })),
+                      uncovered: [],
+                      cycleDays: 30,
+                      currency: 'USD',
+                    }
+                  : [],
+          )) as never);
+        render(
+          <I18nProvider>
+            <AdminConsole currentUserId="me" />
+          </I18nProvider>,
+        );
+        await waitFor(() => expect(document.querySelector('.rate-group-title .code-inline')).not.toBeNull());
+        for (const width of [1440, 390]) {
+          const page = await inBrowser(width, locale);
+          const broken = await page.evaluate(() => {
+            const out: string[] = [];
+            for (const code of document.querySelectorAll('.rate-group-title .code-inline')) {
+              const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+              for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                // A word that is drawn on two lines is drawn in two boxes, one to a line.
+                if (range.getClientRects().length > 1) out.push(node.textContent ?? '');
+              }
+            }
+            return out;
+          });
+          expect(broken, `${locale} ${width}px`).toEqual([]);
+          await page.close();
+        }
+      });
+    }
+  });
   describe('an account or an item, opened in a drawer', () => {
     const account = (id: string, username: string, more: Record<string, unknown> = {}) => ({
       id,
