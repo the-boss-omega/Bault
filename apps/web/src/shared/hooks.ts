@@ -53,13 +53,18 @@ function readSeenAt(): string {
   }
 }
 
-export function useNotificationFeed() {
+/** `enabled` is false for an account that is refused the feed (a suspended one): it is not asked for it. */
+export function useNotificationFeed(enabled = true) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [seenAt, setSeenAt] = useState<string>(readSeenAt);
 
   const reload = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     try {
       const list = await api.get<AppNotification[]>('/notifications');
       list.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
@@ -70,7 +75,7 @@ export function useNotificationFeed() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void reload();

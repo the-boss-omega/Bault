@@ -290,11 +290,12 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
   const route = useRoute();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [railOpen, setRailOpen] = useState(false);
-  const notifications = useNotificationFeed();
+  const suspended = user.status === 'suspended';
+  // A suspended account is refused the feed (and has only the support desk to go to): it is not asked for it.
+  const notifications = useNotificationFeed(!suspended);
 
   const isStaff = user.role === 'warehouse_operator' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
-  const suspended = user.status === 'suspended';
 
   const allowed = useMemo(
     () =>
@@ -399,17 +400,19 @@ function Workspace({ user, onSignedOut }: { user: SessionUser; onSignedOut: () =
                 <span className="ph-controls">
                   <ThemeToggle />
                   <LanguageSwitcher />
-                  <NotificationBell
-                    items={notifications.items}
-                    unseen={notifications.unseen}
-                    onOpen={() => {
-                      void notifications.reload();
-                      notifications.markSeen();
-                    }}
-                    onViewAll={() => goto('notifications')}
-                    renderTitle={(n) => eventLabel(t, n.eventType)}
-                    renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
-                  />
+                  {!suspended && (
+                    <NotificationBell
+                      items={notifications.items}
+                      unseen={notifications.unseen}
+                      onOpen={() => {
+                        void notifications.reload();
+                        notifications.markSeen();
+                      }}
+                      onViewAll={() => goto('notifications')}
+                      renderTitle={(n) => eventLabel(t, n.eventType)}
+                      renderText={(n) => renderContent(n.content, eventLabel(t, n.eventType))}
+                    />
+                  )}
                 </span>
                 <UserMenu
                   initials={initialsFrom(user.firstName, user.lastName, user.email)}
