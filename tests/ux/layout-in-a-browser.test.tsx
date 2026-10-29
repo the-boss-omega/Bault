@@ -357,6 +357,36 @@ describe.skipIf(!browser)('the layout, in a browser', () => {
     });
   });
 
+  describe('a ring measured on the way', () => {
+    it('is measured once what has focus has come to rest: a box that scrolls it into view smoothly is not caught half way', async () => {
+      render(
+        <div
+          id="box"
+          style={{
+            height: 120,
+            padding: 8,
+            overflowY: 'auto',
+            scrollBehavior: 'smooth',
+            scrollPaddingBlock: 12,
+          }}
+        >
+          <div style={{ height: 600 }} />
+          <textarea aria-label="Description" rows={2} />
+        </div>,
+      );
+      const page = await inBrowser(390);
+      // As the drawer does when a field takes focus (revealField), and as the browser does of its own accord.
+      await page.evaluate(() => {
+        document.querySelector('textarea')!.addEventListener('focus', (event) => {
+          (event.target as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        });
+      });
+      const flags = await audit.auditFocus(page, 2);
+      expect(flags.filter((flag) => /cut off/.test(flag))).toEqual([]);
+      await page.close();
+    });
+  });
+
   describe('a strip of tabs that is wider than a phone', () => {
     // The admin console has eleven of them. A tab keeps the width of its word and the strip scrolls: a tab that is
     // given a minimum width of its own may shrink below its word, and the words are then drawn on one another.

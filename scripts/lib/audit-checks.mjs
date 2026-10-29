@@ -286,6 +286,23 @@ async function auditFocus(page, stops = 40) {
   const seen = new Set();
   for (let i = 0; i < stops; i += 1) {
     await page.keyboard.press('Tab');
+    // Focus scrolls what it lands on into view, and smoothly where the person allows motion: the ring is measured
+    // once what has focus has come to rest, not on the way to its place.
+    await page.evaluate(async () => {
+      const { document, matchMedia, performance, requestAnimationFrame } = globalThis;
+      const el = document.activeElement;
+      if (!el || el === document.body || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const began = performance.now();
+      let last = '';
+      let still = 0;
+      while (still < 2 && performance.now() - began < 1200) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const box = el.getBoundingClientRect();
+        const now = `${box.top}|${box.left}`;
+        still = now === last ? still + 1 : 0;
+        last = now;
+      }
+    });
     const stop = await page.evaluate(() => {
       const { document, getComputedStyle } = globalThis;
       const el = document.activeElement;
