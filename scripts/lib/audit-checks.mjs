@@ -163,7 +163,8 @@ async function inspect(page, locale, width) {
             // Pokémon") to the next Hebrew letter, or to the end of its context.
             // (An isolate or a direction mark written into the text, as t() strings carry them, ends a phrase:
             // what is inside is its own run, and what is outside is the sentence's.)
-            const phrase = /(?:\b\d{1,4}\s+)?[A-Za-z\u00C0-\u024F][^\p{Script=Hebrew}\p{Script=Arabic}\u2066-\u2069\u200E\u200F]*/gu;
+            // (The "#/" of an address and the "@" of a name that stand against the first letter are part of it.)
+            const phrase = /(?:\b\d{1,4}\s+)?[#@/]{0,2}[A-Za-z\u00C0-\u024F][^\p{Script=Hebrew}\p{Script=Arabic}\u2066-\u2069\u200E\u200F]*/gu;
             const hebrew = /\p{Script=Hebrew}/u.test(flat);
             for (const m of flat.matchAll(phrase)) {
               let core = m[0];
