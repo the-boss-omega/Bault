@@ -55,7 +55,7 @@ export function ItemPick({ serial, name }: { serial?: string | null; name: strin
 export function Code({ value, className = '' }: { value: string; className?: string }) {
   return (
     <span className={`code-inline ${className}`.trim()} dir="ltr" translate="no">
-      {value.split(':').map((part, i) => (
+      {(value ?? '').split(':').map((part, i) => (
         <Fragment key={i}>
           {i > 0 && (
             <>
