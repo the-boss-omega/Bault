@@ -5,6 +5,7 @@ import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
 import { userAccount } from '../acc/acc.schema';
+import { isPlaceholderAddress } from './facility-address';
 import { facility } from './facility.schema';
 
 export interface InboundAddress {
@@ -47,10 +48,6 @@ export class FacilityService {
     return row;
   }
 
-  private static isPlaceholder(line1: string): boolean {
-    return /placeholder|SET REAL ADDRESS/i.test(line1);
-  }
-
   async inboundAddressesFor(userId: string): Promise<InboundAddress[]> {
     const [account] = await this.db
       .select({ username: userAccount.username })
@@ -61,7 +58,7 @@ export class FacilityService {
 
     const inProduction = loadEnv().NODE_ENV === 'production';
     const facilities = (await this.listActive()).filter(
-      (f) => !inProduction || !FacilityService.isPlaceholder(f.line1),
+      (f) => !inProduction || !isPlaceholderAddress(f.line1),
     );
     return facilities.map((f) => ({
       facilityId: f.id,

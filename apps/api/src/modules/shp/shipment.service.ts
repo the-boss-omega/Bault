@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -12,6 +12,7 @@ import { WalletService } from '../pay/wallet.service';
 import { OutboxService } from '../not/outbox/outbox.service';
 import { charge } from '../pay/pay.schema';
 import { userAccount } from '../acc/acc.schema';
+import { isPlaceholderAddress } from '../inv/facility-address';
 import { facility } from '../inv/facility.schema';
 import { parcel, parcelEvent } from '../inv/parcel.schema';
 import { item } from '../cst/cst.schema';
@@ -324,15 +325,21 @@ export class ShipmentService {
       .sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.totalMinor - b.totalMinor);
   }
 
+  /**
+   * Where a label says the parcel comes from: the named facility, or else the oldest active primary one that has a
+   * real address (a facility still carrying the seed's placeholder is passed over, and so the order is a fixed one
+   * now that an administrator can add more than the seed's two).
+   */
   private async originAddress(code?: string) {
-    const [site] = await this.db
+    const sites = await this.db
       .select()
       .from(facility)
       .where(
         and(code ? eq(facility.code, code) : eq(facility.role, 'primary'), eq(facility.active, true)),
       )
-      .limit(1);
-    if (!site || /placeholder|SET REAL ADDRESS/i.test(site.line1)) return undefined;
+      .orderBy(asc(facility.createdAt), asc(facility.code));
+    const site = sites.find((s) => !isPlaceholderAddress(s.line1));
+    if (!site) return undefined;
     return {
       name: site.name,
       street1: site.line1,

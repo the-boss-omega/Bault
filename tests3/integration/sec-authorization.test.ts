@@ -34,6 +34,8 @@ const ADMIN_ONLY: readonly [string, string][] = [
   ['GET', '/admin/transactions'],
   ['GET', '/admin/storage-fee-runs'],
   ['GET', '/admin/wallet-requests'],
+  ['GET', '/admin/facilities'],
+  ['POST', '/admin/facilities'],
   ['POST', '/pricing/rules'],
   ['GET', '/finance/chargebacks/reversible'],
   ['GET', '/marketplace/house/manage'],
