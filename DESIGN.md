@@ -972,7 +972,11 @@ script that walks the app (`scripts/design-screens.mjs`), so that the tests can 
 
 `scripts/make-photo-derivatives.mjs` writes `assets/images/w640/*.webp` (the slab asks for the 640 px
 WebP first and falls back to the original; 7.8 MB of photographs became 1.2 MB). Re-run it when a
-photograph is added. `scripts/lib/color.mjs` is the colour maths the lint uses.
+photograph is added. The ten photographs are the whole catalogue, and each is named by the serial of the
+copy that was photographed; a further copy of a card has the first copy's serial and a copy number after it
+(`SN-DR97-0001-C2`) and is shown with the card's photograph (`shared/catalogue.ts`), which is how the seed puts
+a second copy of a card in another account's vault (`tests/web/rayquaza-only.test.ts`).
+`scripts/lib/color.mjs` is the colour maths the lint uses.
 
 **To re-theme:** take the kit's CSS export and put its `:root` block over part 1's `:root`, and its
 `.dark` block over **both** dark blocks (the export's selector is `.dark`; Bault's are the system's

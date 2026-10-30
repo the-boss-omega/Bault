@@ -27,6 +27,10 @@ pnpm dev                              # the API and the web app; add pnpm dev:wo
 pnpm test                             # all ten suites, in CI's order
 ```
 
+The demo accounts all have the password `11111111`: `red`, `golden`, `noam` and `veteran` are collectors (`noam` and
+`eldar` each hold four cards, two of them for sale), `hermon` is the warehouse operator, `eldar` is the administrator
+and `dana` is suspended.
+
 ## Run it in production
 
 - [Production runbook](infra/production/README.md): one server, from bootstrap to the nightly backup and the staging check.

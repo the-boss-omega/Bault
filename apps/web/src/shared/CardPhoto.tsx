@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { catalogueSerial } from './catalogue';
 import { useT } from './i18n';
 import { IconClose } from './ui/icons';
 import { inBody } from './ui/inBody';
@@ -22,7 +23,8 @@ const FULL_SOURCES = PHOTO_SOURCES.slice(1);
 export function cardPhotoUrl(serialNumber: string, attempt = 0, full = false): string {
   const sources = full ? FULL_SOURCES : PHOTO_SOURCES;
   const make = sources[Math.min(attempt, sources.length - 1)] ?? PHOTO_SOURCES[1];
-  return make(encodeURIComponent(serialNumber));
+  // A further copy of a card is shown with the card's photograph.
+  return make(encodeURIComponent(catalogueSerial(serialNumber)));
 }
 
 /**
