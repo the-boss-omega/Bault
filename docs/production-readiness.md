@@ -311,6 +311,9 @@ schema. Grading tiers carry a declared value; storage does not.
 `FacilityService` (`facility.service.ts:85`) filters placeholder addresses out in
 production, so collectors would be shown *no* address rather than a wrong one.
 But that means inbound shipping does not function until real addresses exist.
+*Since then:* an administrator writes the real addresses in Management → Facilities (and adds more), so
+this is a step of going live and not a change to the database. A facility that still carries the stand-in is
+marked *Address not set* there, and is passed over when a label's origin is chosen.
 
 ### C5. No 2FA.
 Not for collectors, and — more importantly — not for operators or admins, who can

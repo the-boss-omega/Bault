@@ -129,7 +129,7 @@ const RECORD_OPENERS = ['tr.is-clickable', 'li.label-card', '.register-link', '.
  * screen the audit does not see until it is added here and there is a way to reach it; a test reads the app's
  * source for the kinds it opens and fails until this list says the same.
  */
-export const RECORD_KINDS = ['g', 'item', 'parcel', 'q', 'request', 'shipment', 'ticket', 'transaction', 'user'];
+export const RECORD_KINDS = ['facility', 'g', 'item', 'parcel', 'q', 'request', 'shipment', 'ticket', 'transaction', 'user'];
 
 /** The kinds of record a source opens, read from where it opens them: `openRecord('ticket', id)`. */
 export function recordKindsOf(source) {

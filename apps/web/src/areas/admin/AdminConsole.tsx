@@ -15,6 +15,7 @@ import { UsersSection, type AdminUser } from './UsersSection';
 import { ItemsSection, type AdminItem } from './ItemsSection';
 import { StorageFeesSection } from './StorageFeesSection';
 import { OutboxSection, type ParkedMessage } from './OutboxSection';
+import { FacilitiesSection } from './FacilitiesSection';
 
 const TABS = [
   'yield',
@@ -28,6 +29,7 @@ const TABS = [
   'pricing',
   'disputes',
   'storage',
+  'facilities',
 ] as const;
 type SectionKey = (typeof TABS)[number];
 
@@ -43,6 +45,7 @@ const TAB_LABEL: Record<SectionKey, MessageKey> = {
   pricing: 'admin.section.pricing',
   disputes: 'admin.section.disputes',
   storage: 'admin.section.storage',
+  facilities: 'admin.section.facilities',
 };
 
 export function AdminConsole({ currentUserId }: { currentUserId: string }) {
@@ -187,6 +190,12 @@ export function AdminConsole({ currentUserId }: { currentUserId: string }) {
       {section === 'storage' && (
         <TabPanel tab="storage">
           <StorageFeesSection onError={setError} />
+        </TabPanel>
+      )}
+
+      {section === 'facilities' && (
+        <TabPanel tab="facilities">
+          <FacilitiesSection onMsg={setMessage} onError={setError} />
         </TabPanel>
       )}
     </>

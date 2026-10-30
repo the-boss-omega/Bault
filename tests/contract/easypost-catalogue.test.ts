@@ -77,7 +77,7 @@ function stubEasyPost(response: unknown) {
 }
 
 function service(adapter: ShippingAdapter): ShipmentService {
-  const db = { select: () => ({ from: () => ({ where: () => ({ limit: async () => [NJ] }) }) }) };
+  const db = { select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [NJ] }) }) }) };
   const pricing = {
     price: async () => ({ amount: { amount: 300, currency: 'USD' } }),
     tryPrice: async () => null,

@@ -41,6 +41,10 @@ camera, which is the point.
 > It is the only free serial with a photo — the other nine are already seeded.
 > **Type it exactly.** Leave the serial blank and the system mints one, which is
 > correct behaviour but shows the generated placeholder instead of the card.
+>
+> A *second copy* of a card that is seeded has that card's serial and `-C2` after it
+> (`SN-DR97-0001-C2`, which is how `noam` and `eldar` hold copies of their own) and is shown with
+> the same photograph; the serial on its label is its own.
 
 ### A label for the box
 

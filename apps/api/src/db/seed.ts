@@ -1242,17 +1242,135 @@ async function main(): Promise<void> {
     { dealId: deal, eventType: 'item_received', fromStatus: 'funded', toStatus: 'inspecting', actorId: hermon, notes: 'Card received at NJ and logged in. Inspection opens against the written description.', occurredAt: days(-1) },
   ]);
 
+  // ---- More cards: two more vaults (noam's and eldar's), and the marketplace ----
+  //
+  // The ten photographs in assets/images are the whole catalogue, and nine of them are already someone's. A further
+  // copy of a card is its serial with a copy number after it (SN-DR97-0001-C2), and is shown with the card's
+  // photograph (catalogueSerial, in the web app). Each of the two keeps two copies in the vault and has two for sale.
+  const noamAcc = await mkUser('noam@bault.dev', 'noam', 'user', 'Noam', null);
+  const noam = noamAcc.id;
+  await topup(noam, TOPUP);
+  await topup(eldar, TOPUP);
+
+  const shelve = async (itemId: string, ownerId: string, binId: string, serial: string) => {
+    await custody({ itemId, eventType: 'intake', newOwnerId: ownerId, newBinId: binId, newState: 'stored', actorId: hermon, reason: 'intake' });
+    await transfer(itemId, null, binId, hermon, 'intake');
+    await img(itemId, 'intake', 1, `images/${serial.toLowerCase()}-intake.jpg`);
+    await bill(ownerId, 'intake', INTAKE, itemId);
+  };
+  const listForSale = async (itemId: string, sellerId: string, askingPrice: number) => {
+    await custody({ itemId, eventType: 'state_change', prevState: 'stored', newState: 'listed', actorId: sellerId, reason: 'listed for sale' });
+    await db.insert(listing).values({ itemId, sellerId, askingPrice, currency: CUR, status: 'active' });
+  };
+
+  const noamDragon = await mkItem({
+    ownerId: noam, serialNumber: 'SN-DR97-0001-C2', barcode: 'SN-DR97-0001-C2',
+    typeClass: 'trading_card',
+    description: '2003 Pokémon EX Dragon — Rayquaza ex #97/97 · Rare Holo EX · art by Hikaru Koike · ex3-97',
+    conditionGrade: 'Near Mint', lifecycleState: 'stored', binId: binA1,
+  });
+  await shelve(noamDragon, noam, binA1, 'SN-DR97-0001-C2');
+
+  const noamLegends = await mkItem({
+    ownerId: noam, serialNumber: 'SN-CL10-0005-C2', barcode: 'SN-CL10-0005-C2',
+    typeClass: 'trading_card',
+    description: '2011 Pokémon Call of Legends — Rayquaza #SL10/95 · Rare Holo (Shiny Legendary subset) · art by Noriko Hotta · col1-SL10',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB1,
+  });
+  await shelve(noamLegends, noam, binB1, 'SN-CL10-0005-C2');
+
+  const noamFullArt = await mkItem({
+    ownerId: noam, serialNumber: 'SN-ROS104-0007-C2', barcode: 'SN-ROS104-0007-C2',
+    typeClass: 'trading_card',
+    description: '2015 Pokémon XY Roaring Skies — Rayquaza-EX (Full Art) #104/108 · Rare Ultra · art by Ryo Ueda · xy6-104',
+    conditionGrade: 'Near Mint', lifecycleState: 'listed', binId: binB2,
+  });
+  await shelve(noamFullArt, noam, binB2, 'SN-ROS104-0007-C2');
+  await listForSale(noamFullArt, noam, 8_500);
+
+  const noamLevelX = await mkItem({
+    ownerId: noam, serialNumber: 'SN-SV146-0006-C2', barcode: 'SN-SV146-0006-C2',
+    typeClass: 'trading_card',
+    description: '2009 Pokémon Supreme Victors — Rayquaza C LV.X #146/147 · Rare Holo LV.X (Pokémon SP) · art by Shizurow · pl3-146',
+    conditionGrade: 'Raw', lifecycleState: 'listed', binId: binA2,
+  });
+  await shelve(noamLevelX, noam, binA2, 'SN-SV146-0006-C2');
+  await listForSale(noamLevelX, noam, 4_200);
+
+  const eldarDeoxys = await mkItem({
+    ownerId: eldar, serialNumber: 'SN-DX102-0002-C2', barcode: 'SN-DX102-0002-C2',
+    typeClass: 'trading_card',
+    description: '2005 Pokémon EX Deoxys — Rayquaza ex #102/107 · Rare Holo EX · art by Shin-ichi Yoshikawa · ex8-102',
+    conditionGrade: 'Near Mint', lifecycleState: 'stored', binId: binA2,
+  });
+  await shelve(eldarDeoxys, eldar, binA2, 'SN-DX102-0002-C2');
+
+  const eldarDelta = await mkItem({
+    ownerId: eldar, serialNumber: 'SN-DF97-0004-C2', barcode: 'SN-DF97-0004-C2',
+    typeClass: 'trading_card',
+    description: '2006 Pokémon EX Dragon Frontiers — Rayquaza ex δ (Delta Species) #97/101 · Rare Holo EX · art by Ryo Ueda · ex15-97',
+    conditionGrade: 'Raw', lifecycleState: 'stored', binId: binB1,
+  });
+  await shelve(eldarDelta, eldar, binB1, 'SN-DF97-0004-C2');
+
+  const eldarMega = await mkItem({
+    ownerId: eldar, serialNumber: 'SN-ROS105-0008-C2', barcode: 'SN-ROS105-0008-C2',
+    typeClass: 'trading_card',
+    description: '2015 Pokémon XY Roaring Skies — M Rayquaza-EX (Full Art, Δ Evolution) #105/108 · Rare Ultra · art by 5ban Graphics · xy6-105',
+    conditionGrade: 'Near Mint', lifecycleState: 'listed', binId: binB2,
+  });
+  await shelve(eldarMega, eldar, binB2, 'SN-ROS105-0008-C2');
+  await listForSale(eldarMega, eldar, 24_000);
+
+  const eldarAltArt = await mkItem({
+    ownerId: eldar, serialNumber: 'SN-EVS194-0009-C2', barcode: 'SN-EVS194-0009-C2',
+    typeClass: 'trading_card',
+    description: '2021 Pokémon SWSH Evolving Skies — Rayquaza V (Alternate Full Art) #194/203 · Rare Ultra · art by Ryuta Fuse · swsh7-194',
+    conditionGrade: 'Near Mint', lifecycleState: 'listed', binId: binA1,
+  });
+  await shelve(eldarAltArt, eldar, binA1, 'SN-EVS194-0009-C2');
+  await listForSale(eldarAltArt, eldar, 12_500);
+
+  // The store's own stock, for the cards it has no listing for yet: the photographs are the catalogue's.
+  await db.insert(houseListing).values([
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2003 Pokémon EX Dragon — Rayquaza ex #97/97 · Rare Holo EX · art by Hikaru Koike · ex3-97',
+      conditionGrade: 'Raw', photoRef: 'SN-DR97-0001', askingPrice: 39_500, currency: CUR, stock: 1, createdBy: eldar,
+    },
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2005 Pokémon EX Deoxys — Rayquaza ex #102/107 · Rare Holo EX · art by Shin-ichi Yoshikawa · ex8-102',
+      conditionGrade: 'Raw', photoRef: 'SN-DX102-0002', askingPrice: 6_200, currency: CUR, stock: 2, createdBy: eldar,
+    },
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2009 Pokémon Supreme Victors — Rayquaza C LV.X #146/147 · Rare Holo LV.X (Pokémon SP) · art by Shizurow · pl3-146',
+      conditionGrade: 'Raw', photoRef: 'SN-SV146-0006', askingPrice: 4_800, currency: CUR, stock: 3, createdBy: eldar,
+    },
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2015 Pokémon XY Roaring Skies — M Rayquaza-EX (Full Art, Δ Evolution) #105/108 · Rare Ultra · art by 5ban Graphics · xy6-105',
+      conditionGrade: 'Raw', photoRef: 'SN-ROS105-0008', askingPrice: 21_000, currency: CUR, stock: 2, createdBy: eldar,
+    },
+    {
+      code: prefixedId(ID_PREFIX.houseListing), typeClass: 'trading_card',
+      description: '2021 Pokémon SWSH Evolving Skies — Rayquaza VMAX (Alternate Art secret) #218/203 · Rare Rainbow · art by Anesaki Dynamic · swsh7-218',
+      conditionGrade: 'Raw', photoRef: 'SN-EVS218-0010', askingPrice: 64_000, currency: CUR, stock: 1, createdBy: eldar,
+    },
+  ]);
+
   await pool.end();
   // eslint-disable-next-line no-console
   console.log(
-    '✔ seed complete: 7 users (1 suspended), 6 bins (4 standard, 2 oversized), 9 items (4 Red / 4 Golden / 1 donated to the custodian), ' +
-      '1 batch, 2 listings, 3 store products, 1 offer, 1 swap, 1 transaction, 1 dispute, 7 service requests, 1 shipment, ' +
+    '✔ seed complete: 8 users (1 suspended), 6 bins (4 standard, 2 oversized), 17 items (4 Red / 4 Golden / 4 Noam / 4 Eldar / 1 donated to the custodian), ' +
+      '1 batch, 6 listings, 8 store products, 1 offer, 1 swap, 1 transaction, 1 dispute, 7 service requests, 1 shipment, ' +
       '1 withdrawal, 4 wallet requests, 3 notifications, 2 addresses, 2 shows, 3 support tickets, ' +
       '3 parcels, 1 arrival disposal, 1 escrow deal.',
   );
   // eslint-disable-next-line no-console
   console.log(
-    `  usernames — ${redAcc.username} · ${goldenAcc.username} · ${hermonAcc.username} · ${eldarAcc.username} · ${veteranAcc.username}`,
+    `  usernames — ${redAcc.username} · ${goldenAcc.username} · ${hermonAcc.username} · ${eldarAcc.username} · ${veteranAcc.username} · ${noamAcc.username}`,
   );
   // eslint-disable-next-line no-console
   console.log(
@@ -1266,7 +1384,8 @@ async function main(): Promise<void> {
       '    PARCELS   one expected, one unopened on the bench, one addressed to nobody\n' +
       '    REFUSED   a lithium cell, destroyed and recorded\n' +
       '    CUSTOM    one request at each of the three steps\n' +
-      '    ESCROW    one deal stopped at the inspection gate',
+      '    ESCROW    one deal stopped at the inspection gate\n' +
+      '    COPIES    SN-…-C2 is a second copy of the card whose photograph SN-… is: noam and eldar keep two and sell two each',
   );
   console.log(
     '  NOT seeded (intake test material, photos already on disk):\n' +

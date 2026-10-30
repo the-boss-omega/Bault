@@ -1620,7 +1620,8 @@ li.is-clickable {
   margin-inline-start: auto;
 }
 
-.account-fields {
+.account-fields,
+.drawer-fields {
   margin-block-start: var(--sp-5);
 }
 

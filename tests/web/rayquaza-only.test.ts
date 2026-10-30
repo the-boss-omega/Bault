@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { catalogueSerial } from '../../apps/web/src/shared/catalogue';
 
 const FORBIDDEN = [
   'charizard',
@@ -62,9 +63,10 @@ describe('the catalogue is Rayquaza only', () => {
     const items = [...seed.matchAll(/serialNumber: '(SN-[^']+)'/g)].map((m) => m[1]!);
     expect(items.length).toBeGreaterThan(0);
 
+    // A further copy of a card (SN-DR97-0001-C2) is shown with the card's photograph.
     const photos = new Set(readdirSync(join(root, 'assets', 'images')));
     for (const serial of items) {
-      const found = [...photos].some((p) => p.startsWith(`${serial}.`));
+      const found = [...photos].some((p) => p.startsWith(`${catalogueSerial(serial)}.`));
       expect(found, `${serial} has no photograph in assets/images`).toBe(true);
     }
 
