@@ -20,7 +20,7 @@ COPY assets/ assets/
 
 RUN pnpm --filter @bault/web build
 
-FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
+FROM nginx:1.31-alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606 AS runtime
 
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
