@@ -59,6 +59,8 @@ const BaseSchema = z.object({
 
   PAYOUT_MODE: z.enum(['provider', 'manual']).default('provider'),
 
+  PAYPAL_CHECKOUT_ENABLED: booleanFromEnv(false),
+
   CORS_ORIGINS: z.string().optional().default(''),
 
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),

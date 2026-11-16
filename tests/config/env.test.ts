@@ -177,3 +177,21 @@ describe('two-factor configuration', () => {
     );
   });
 });
+
+describe('cash-in by PayPal checkout', () => {
+  it('leaves cash-in by PayPal checkout off until it is switched on', async () => {
+    expect((await load(DEV)).PAYPAL_CHECKOUT_ENABLED).toBe(false);
+    expect((await load(PROD)).PAYPAL_CHECKOUT_ENABLED).toBe(false);
+    expect((await load({ ...PROD, PAYPAL_CHECKOUT_ENABLED: 'ture' })).PAYPAL_CHECKOUT_ENABLED).toBe(false);
+    expect((await load({ ...PROD, PAYPAL_CHECKOUT_ENABLED: 'true' })).PAYPAL_CHECKOUT_ENABLED).toBe(true);
+  });
+
+  it('still wants PayPal itself, and its keys, in production once checkout is on', async () => {
+    const on = { ...PROD, PAYPAL_CHECKOUT_ENABLED: 'true' };
+    await expect(load({ ...on, PAYMENT_PROVIDER: 'sandbox' })).rejects.toThrow(/PAYMENT_PROVIDER/);
+    for (const key of ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID']) {
+      await expect(load({ ...on, [key]: '' }), key).rejects.toThrow(new RegExp(key));
+    }
+    await expect(load({ ...on, APP_BASE_URL: 'http://app.example.com' })).rejects.toThrow(/APP_BASE_URL/);
+  });
+});

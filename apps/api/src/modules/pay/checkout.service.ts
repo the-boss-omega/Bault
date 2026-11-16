@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
-import { loadEnv } from '@bault/config';
+import { loadEnv, type Env } from '@bault/config';
 import { DRIZZLE } from '../../db/db.module';
 import type { Database } from '../../db/client';
 import { AppError } from '../../shared/errors/app-error';
@@ -13,6 +13,13 @@ import { externalPayment } from './pay.schema';
 import { WALLET_REQUEST_LIMITS } from './wallet-request.rules';
 import { FUNDING_ROUTES, isInstantRoute } from './money-terms';
 import { formatMinor } from '../../shared/money';
+import { CHECKOUT_LANDING, paypalCheckoutOffered } from './paypal-checkout.service';
+
+/** What an instant route says when PayPal checkout takes it. */
+const PAYPAL_CHECKOUT_DESCRIPTION: Readonly<Record<string, string>> = {
+  card: "Pay by debit or credit card on PayPal's secure page; no PayPal account is needed. The balance moves as soon as PayPal confirms the payment.",
+  paypal_gs: "Pay from your PayPal account on PayPal's own page, with PayPal buyer protection. The balance moves as soon as PayPal confirms the payment.",
+};
 
 @Injectable()
 export class CheckoutService {
@@ -23,12 +30,15 @@ export class CheckoutService {
     private readonly outbox: OutboxService,
   ) {}
 
+  /**
+   * The direct top-up of `checkout`, which settles with no approved order at all. Only the sandbox
+   * provider takes it: with PayPal it would capture whatever order id it was handed, anybody's.
+   */
   private instantAvailable(): boolean {
     return loadEnv().PAYMENT_PROVIDER === 'sandbox';
   }
 
-  routes() {
-    const env = loadEnv();
+  routes(env: Env = loadEnv()) {
     const clean = (v: string) => (v.trim() === '' ? null : v.trim());
 
     const bank = {
@@ -45,14 +55,25 @@ export class CheckoutService {
     return {
       limits: WALLET_REQUEST_LIMITS.cash_in,
       routes: FUNDING_ROUTES.map((route) => {
-        if (route.instant) return { ...route, available: this.instantAvailable(), instructions: null };
+        if (route.instant && CHECKOUT_LANDING[route.key] && paypalCheckoutOffered(env)) {
+          return {
+            ...route,
+            description: PAYPAL_CHECKOUT_DESCRIPTION[route.key] ?? route.description,
+            available: true,
+            checkout: 'paypal' as const,
+            instructions: null,
+          };
+        }
+        if (route.instant) {
+          return { ...route, available: env.PAYMENT_PROVIDER === 'sandbox', checkout: 'direct' as const, instructions: null };
+        }
         if (route.key === 'bank_transfer') {
-          return { ...route, available: bankPublished, instructions: bankPublished ? bank : null };
+          return { ...route, available: bankPublished, checkout: null, instructions: bankPublished ? bank : null };
         }
         if (route.key === 'paypal_ff') {
-          return { ...route, available: paypalFf !== null, instructions: paypalFf ? { handle: paypalFf } : null };
+          return { ...route, available: paypalFf !== null, checkout: null, instructions: paypalFf ? { handle: paypalFf } : null };
         }
-        return { ...route, available: false, instructions: null };
+        return { ...route, available: false, checkout: null, instructions: null };
       }),
       referenceNote:
         'Put your username in the payment reference. It is the only thing that ties an arriving payment to your account.',
@@ -191,7 +212,21 @@ export class CheckoutService {
 
   listMine(userId: string) {
     return this.db
-      .select()
+      .select({
+        id: externalPayment.id,
+        userId: externalPayment.userId,
+        provider: externalPayment.provider,
+        providerRef: externalPayment.providerRef,
+        purpose: externalPayment.purpose,
+        status: externalPayment.status,
+        amount: externalPayment.amount,
+        currency: externalPayment.currency,
+        externalRef: externalPayment.externalRef,
+        captureRef: externalPayment.captureRef,
+        webhookEventId: externalPayment.webhookEventId,
+        createdAt: externalPayment.createdAt,
+        updatedAt: externalPayment.updatedAt,
+      })
       .from(externalPayment)
       .where(and(eq(externalPayment.userId, userId), eq(externalPayment.purpose, 'topup')))
       .orderBy(externalPayment.createdAt);
