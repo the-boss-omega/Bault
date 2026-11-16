@@ -58,7 +58,7 @@ export async function sendMfaEmailCode(
             (SELECT f.email_address FROM mfa_factor f
               WHERE f.user_id = c.user_id AND f.method = 'email' AND f.enabled_at IS NOT NULL) AS "boundTo"
        FROM mfa_email_code c
-       JOIN user_account u ON u.id::text = c.user_id
+       JOIN user_account u ON u.id = c.user_id
       WHERE c.id = $1
         AND c.code_hash IS NULL
         AND c.consumed_at IS NULL

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { TranslateFn } from './i18n';
 
 export type MfaMethod = 'totp' | 'email';
 
@@ -45,4 +46,9 @@ export function useSecondsUntil(at: number | null): number {
     return () => window.clearInterval(timer);
   }, [at]);
   return secondsLeft(at, now);
+}
+
+/** How long until another code may be asked for, said in seconds, or in minutes once it is more than a minute and a half. */
+export function waitText(t: TranslateFn, seconds: number): string {
+  return seconds > 90 ? t('mfa.email.waitMinutes', { minutes: Math.ceil(seconds / 60) }) : t('mfa.email.wait', { seconds });
 }

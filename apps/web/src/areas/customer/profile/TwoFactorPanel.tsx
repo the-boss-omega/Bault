@@ -3,8 +3,7 @@ import { api } from '../../../shared/api';
 import { useI18n } from '../../../shared/i18n';
 import { Button, ErrorState, Field, Panel, StatusBadge, SuccessNote } from '../../../shared/ui/primitives';
 import { DrawerTag } from '../../../shared/ui/DrawerTag';
-import { typedCode as digits, useSecondsUntil, type MfaMethod } from '../../../shared/twoFactor';
-import { waitText } from '../auth/SecondFactorForm';
+import { typedCode as digits, useSecondsUntil, waitText, type MfaMethod } from '../../../shared/twoFactor';
 
 interface MfaStatus {
   enabled: boolean;

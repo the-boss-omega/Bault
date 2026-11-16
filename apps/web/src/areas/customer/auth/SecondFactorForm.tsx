@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError, api } from '../../../shared/api';
-import { useT, type TranslateFn } from '../../../shared/i18n';
-import { typedCode, useSecondsUntil, type MfaMethod } from '../../../shared/twoFactor';
+import { useT } from '../../../shared/i18n';
+import { typedCode, useSecondsUntil, waitText, type MfaMethod } from '../../../shared/twoFactor';
 import { Button, ErrorState, Field, SuccessNote } from '../../../shared/ui/primitives';
 import type { SessionUser } from './AuthPage';
 import { AuthCard } from './AuthCard';
@@ -17,10 +17,6 @@ export interface SecondFactorChallenge {
 }
 
 const inSeconds = (seconds: number | undefined) => (seconds && seconds > 0 ? Date.now() + seconds * 1000 : null);
-
-export function waitText(t: TranslateFn, seconds: number): string {
-  return seconds > 90 ? t('mfa.email.waitMinutes', { minutes: Math.ceil(seconds / 60) }) : t('mfa.email.wait', { seconds });
-}
 
 export function SecondFactorForm({
   challenge,
